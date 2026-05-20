@@ -96,7 +96,12 @@ pub fn run() {
             // developer's local daemon process on the default 8787 port.
             let daemon_port = if cfg!(debug_assertions) { "8787" } else { "18787" };
             match app.shell().sidecar("cicd-daemon") {
-                Ok(cmd) => match cmd.env("RUNTIME_PORT", daemon_port).spawn() {
+                Ok(cmd) => match cmd
+                    // Pass port both ways: CLI arg is the most reliable mechanism for
+                    // sidecar processes; env var is the existing fallback.
+                    .args(["--port", daemon_port])
+                    .env("RUNTIME_PORT", daemon_port)
+                    .spawn() {
                     Ok((mut rx, child)) => {
                         *app.state::<DaemonProcess>().0.lock().unwrap() = Some(child);
                         log::info!("cicd-daemon started on port {daemon_port}");
