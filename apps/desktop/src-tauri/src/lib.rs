@@ -8,6 +8,7 @@ use tauri_plugin_shell::{process::CommandChild, ShellExt};
 
 /// Returns the list of local + remote branch names for the given repo path.
 /// Returns an empty vec if the path is not a git repository or git is unavailable.
+#[allow(dead_code)]
 #[tauri::command]
 fn list_git_branches(repo_path: String) -> Vec<String> {
     let result = std::process::Command::new("git")
