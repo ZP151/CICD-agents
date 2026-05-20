@@ -24,13 +24,18 @@ await build({
   // Replace import.meta.url with the CJS-compatible equivalent so that
   // ESM-compiled core files (profiles.ts, db/database.ts) don't crash at
   // module load time with "ERR_INVALID_ARG_TYPE: path must be string or URL".
+  // esbuild define values must be identifiers or JSON, so we inject the
+  // expression as a top-level variable via banner and reference it by name.
   define: {
-    "import.meta.url": "(require('url').pathToFileURL(__filename).href)",
+    "import.meta.url": "__importMetaUrl",
   },
   // Native addons must stay external; pkg will embed the .node binaries as assets
   external: ["better-sqlite3", "sqlite-vec", "web-tree-sitter"],
   banner: {
-    js: "// Bundled by esbuild for Tauri sidecar distribution",
+    js: [
+      "// Bundled by esbuild for Tauri sidecar distribution",
+      "const __importMetaUrl = require('url').pathToFileURL(__filename).href;",
+    ].join("\n"),
   },
   logLevel: "info",
 });
