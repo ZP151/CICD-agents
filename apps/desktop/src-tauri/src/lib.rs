@@ -6,13 +6,50 @@ use tauri::{
 };
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
 
+/// Returns the list of local + remote branch names for the given repo path.
+/// Returns an empty vec if the path is not a git repository or git is unavailable.
+#[tauri::command]
+fn list_git_branches(repo_path: String) -> Vec<String> {
+    let result = std::process::Command::new("git")
+        .args(["branch", "-a", "--format=%(refname:short)"])
+        .current_dir(&repo_path)
+        .output();
+
+    match result {
+        Ok(output) if output.status.success() => {
+            String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .map(|l| l.trim().to_string())
+                // normalise remote refs: "origin/main" → "main"; skip "origin/HEAD -> …"
+                .map(|l| {
+                    if let Some(stripped) = l.strip_prefix("origin/") {
+                        if stripped.contains(" -> ") {
+                            return String::new();
+                        }
+                        return stripped.to_string();
+                    }
+                    l
+                })
+                .filter(|l| !l.is_empty())
+                // deduplicate while preserving order
+                .fold(Vec::<String>::new(), |mut acc, b| {
+                    if !acc.contains(&b) { acc.push(b); }
+                    acc
+                })
+        }
+        _ => vec![],
+    }
+}
+
 /// Holds the running daemon child process so we can kill it on exit.
 struct DaemonProcess(Mutex<Option<CommandChild>>);
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(DaemonProcess(Mutex::new(None)))
+        .invoke_handler(tauri::generate_handler![list_git_branches])
         // Hide windows instead of quitting when the user closes them
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
