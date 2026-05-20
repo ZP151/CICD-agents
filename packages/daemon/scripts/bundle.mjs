@@ -21,9 +21,14 @@ await build({
   target: `node${nodeMajor}`,
   format: "cjs",
   outfile: resolve(root, "dist/bundle.cjs"),
+  // Replace import.meta.url with the CJS-compatible equivalent so that
+  // ESM-compiled core files (profiles.ts, db/database.ts) don't crash at
+  // module load time with "ERR_INVALID_ARG_TYPE: path must be string or URL".
+  define: {
+    "import.meta.url": "(require('url').pathToFileURL(__filename).href)",
+  },
   // Native addons must stay external; pkg will embed the .node binaries as assets
   external: ["better-sqlite3", "sqlite-vec", "web-tree-sitter"],
-  // Silence the "require() of ES module" dynamic-require warnings from fastify plugins
   banner: {
     js: "// Bundled by esbuild for Tauri sidecar distribution",
   },
