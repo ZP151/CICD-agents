@@ -7,11 +7,21 @@ import {
   cancelPlan,
   fetchChatHistory,
   fetchChatMessages,
-  listProfiles,
   type ChatEventPayload,
   type ChatHistoryEntry,
   type WorkspaceProfile,
 } from "../api.js";
+
+// ─── Profile source of truth: localStorage (same as Profiles page) ────────────
+// Profiles are stored locally; no daemon call needed to read them.
+const PROFILES_KEY = "cicd_agent_profiles_v1";
+function loadProfilesLocal(): WorkspaceProfile[] {
+  try {
+    const raw = localStorage.getItem(PROFILES_KEY);
+    if (raw) return JSON.parse(raw) as WorkspaceProfile[];
+  } catch { /* ignore */ }
+  return [];
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1080,12 +1090,19 @@ export default function Chat({ mini = false }: ChatProps) {
     }
   }, [mini]);
 
+  // Load profiles from localStorage (same source as Profiles page).
+  // Re-sync whenever the window regains focus (user may have added a profile
+  // on the Profiles page and navigated back here).
   useEffect(() => {
-    if (!mini) {
-      listProfiles()
-        .then(setAvailableProfiles)
-        .catch(() => undefined);
-    }
+    if (mini) return;
+    const sync = () => setAvailableProfiles(loadProfilesLocal());
+    sync(); // initial load
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", sync);
+    };
   }, [mini]);
 
   useEffect(() => {
