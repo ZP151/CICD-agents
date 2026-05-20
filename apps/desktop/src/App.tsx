@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import Dashboard from "./pages/Dashboard.js";
 import Repos from "./pages/Repos.js";
@@ -6,6 +6,7 @@ import TaskViewer from "./pages/TaskViewer.js";
 import ReviewFindings from "./pages/ReviewFindings.js";
 import Settings from "./pages/Settings.js";
 import Chat from "./pages/Chat.js";
+import Profiles from "./pages/Profiles.js";
 
 function useWindowState() {
   useEffect(() => {
@@ -89,6 +90,14 @@ function IconPipelines() {
   );
 }
 
+function IconProfiles() {
+  return (
+    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+    </svg>
+  );
+}
+
 function IconSettings() {
   return (
     <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -98,15 +107,85 @@ function IconSettings() {
   );
 }
 
+// ─── User footer ─────────────────────────────────────────────────────────────
+
+function UserFooter() {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // For now this is a placeholder — wire to real auth in the future
+  const isSignedIn = false;
+
+  if (!isSignedIn) {
+    return (
+      <div className="border-t border-zinc-800/60 p-2.5">
+        <button
+          className="flex w-full items-center gap-2 rounded-md border border-zinc-800 px-2 py-1.5 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-800/40"
+          onClick={() => {
+            // Microsoft login — placeholder
+            alert("Microsoft login coming soon");
+          }}
+        >
+          <svg className="h-4 w-4 shrink-0 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+          <span className="text-[12px] text-zinc-500">Sign in with Microsoft</span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative border-t border-zinc-800/60 p-2.5">
+      <button
+        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-zinc-800/60"
+        onClick={() => setMenuOpen((v) => !v)}
+      >
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600/80 text-xs font-semibold text-white">
+          P
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[12px] font-medium text-zinc-300">Ping Zhou</p>
+          <p className="truncate text-[10px] text-zinc-600">Azure DevOps connected</p>
+        </div>
+        <svg className="h-3 w-3 shrink-0 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {menuOpen && (
+        <div className="absolute bottom-full left-2.5 right-2.5 mb-1 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl">
+          {[
+            { label: "Account", href: "#" },
+            { label: "Connected providers", href: "#" },
+            { label: "Usage", href: "#" },
+          ].map((item) => (
+            <button
+              key={item.label}
+              className="flex w-full items-center px-3 py-1.5 text-left text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
+              onClick={() => setMenuOpen(false)}
+            >
+              {item.label}
+            </button>
+          ))}
+          <hr className="my-1 border-zinc-800" />
+          <button className="flex w-full items-center px-3 py-1.5 text-left text-xs text-red-400 hover:bg-zinc-800 transition-colors">
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Navigation groups ────────────────────────────────────────────────────────
 
 const NAV_GROUPS = [
   {
     label: "Workspace",
     items: [
-      { to: "/chat", label: "Chat", Icon: IconChat },
+      { to: "/chat", label: "New chat", Icon: IconChat },
       { to: "/tasks", label: "Tasks", Icon: IconTasks },
-      { to: "/repos", label: "Repositories", Icon: IconRepos },
+      { to: "/profiles", label: "Profiles", Icon: IconProfiles },
       { to: "/pulls", label: "Pull Requests", Icon: IconPR },
     ],
   },
@@ -186,18 +265,8 @@ function FullLayout() {
           ))}
         </nav>
 
-        {/* User info footer */}
-        <div className="border-t border-zinc-800/60 p-2.5">
-          <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-zinc-800/60">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600/80 text-xs font-semibold text-white">
-              P
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[12px] font-medium text-zinc-300">Ping Zhou</p>
-              <p className="truncate text-[10px] text-zinc-600">Azure DevOps</p>
-            </div>
-          </button>
-        </div>
+        {/* User / account footer */}
+        <UserFooter />
       </aside>
 
       {/* Main content area */}
@@ -211,6 +280,7 @@ function FullLayout() {
           <Route path="/pulls" element={<Placeholder title="Pull Requests" />} />
           <Route path="/findings" element={<div className="flex flex-1 overflow-auto p-6"><ReviewFindings /></div>} />
           <Route path="/pipelines" element={<Placeholder title="Pipelines" />} />
+          <Route path="/profiles" element={<div className="flex flex-1 overflow-auto p-6"><Profiles /></div>} />
           <Route path="/settings" element={<div className="flex flex-1 overflow-auto p-6"><Settings /></div>} />
         </Routes>
       </main>
