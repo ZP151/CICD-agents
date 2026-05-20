@@ -30,7 +30,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        node: [24]
+        node: [20]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
