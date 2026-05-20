@@ -272,189 +272,184 @@ function ProfileForm({ initial, onSave, onCancel, saving }: ProfileFormProps) {
   return (
     <form
       onSubmit={(e) => { e.preventDefault(); void onSave(form); }}
-      className="flex flex-col gap-5"
+      className="mx-auto max-w-xl space-y-6 py-2"
     >
       {/* ── Identity ── */}
-      <SectionHeader title="Identity" />
-      <Field
-        label="Profile name *"
-        value={form.name}
-        onChange={set("name")}
-        placeholder="my-project"
-      />
-
-      <Divider />
+      <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
+        <SectionHeader title="Identity" />
+        <Field
+          label="Profile name *"
+          value={form.name}
+          onChange={set("name")}
+          placeholder="my-project"
+        />
+      </section>
 
       {/* ── Repository ── */}
-      <SectionHeader
-        title="Repository"
-        subtitle="Local path to the Git working tree for this profile."
-      />
-      <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-zinc-400">Repo path</span>
-        <div className="relative flex items-center gap-2">
+      <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
+        <SectionHeader
+          title="Repository"
+          subtitle="Local path to the Git working tree for this profile."
+        />
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-zinc-400">Repo path</span>
           <input
             value={form.repoPath}
             onChange={(e) => set("repoPath")(e.target.value)}
             placeholder="C:\projects\my-app"
-            className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+            className={`w-full rounded-md border px-3 py-1.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition ${
+              !branchLoading && branches.length > 0
+                ? "border-emerald-600 bg-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-600"
+                : branchLoading
+                ? "border-zinc-600 bg-zinc-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 animate-pulse"
+                : "border-zinc-700 bg-zinc-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            }`}
           />
-          {branchLoading && (
-            <span className="shrink-0 text-[10px] text-zinc-600 animate-pulse">checking git…</span>
-          )}
-          {!branchLoading && branches.length > 0 && (
-            <span className="shrink-0 flex items-center gap-1 text-[10px] text-emerald-600">
-              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              git repo
-            </span>
-          )}
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <BranchSelect
-          label="Default branch"
-          value={form.defaultBranch}
-          onChange={set("defaultBranch")}
-        />
-        <BranchSelect
-          label="Target branch (for PRs)"
-          value={form.targetBranch}
-          onChange={set("targetBranch")}
-        />
-      </div>
-
-      <Divider />
+        <div className="grid grid-cols-2 gap-4">
+          <BranchSelect
+            label="Default branch"
+            value={form.defaultBranch}
+            onChange={set("defaultBranch")}
+          />
+          <BranchSelect
+            label="Target branch (for PRs)"
+            value={form.targetBranch}
+            onChange={set("targetBranch")}
+          />
+        </div>
+      </section>
 
       {/* ── Azure DevOps ── */}
-      <SectionHeader
-        title="Azure DevOps"
-        subtitle="Connection details used by ADO tools when this profile is active."
-      />
-      <Field
-        label="Organisation URL"
-        value={form.adoOrgUrl}
-        onChange={set("adoOrgUrl")}
-        placeholder="https://dev.azure.com/myorg"
-      />
-      <div className="grid grid-cols-2 gap-4">
-        <Field
-          label="Project"
-          value={form.adoProject}
-          onChange={set("adoProject")}
-          placeholder="MyProject"
+      <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
+        <SectionHeader
+          title="Azure DevOps"
+          subtitle="Connection details used by ADO tools when this profile is active."
         />
         <Field
-          label="Repository name"
-          value={form.adoRepoName}
-          onChange={set("adoRepoName")}
-          placeholder="my-repo"
+          label="Organisation URL"
+          value={form.adoOrgUrl}
+          onChange={set("adoOrgUrl")}
+          placeholder="https://dev.azure.com/myorg"
         />
-      </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Field
+            label="Project"
+            value={form.adoProject}
+            onChange={set("adoProject")}
+            placeholder="MyProject"
+          />
+          <Field
+            label="Repository name"
+            value={form.adoRepoName}
+            onChange={set("adoRepoName")}
+            placeholder="my-repo"
+          />
+        </div>
 
-      {/* PAT field + actions */}
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-zinc-400">Personal Access Token</span>
-          <div className="flex items-center gap-2">
-            {patStatus === "pending" && (
-              <span className="rounded-full bg-amber-900/30 px-2 py-0.5 text-[10px] font-medium text-amber-400 border border-amber-800/40">
-                Pending approval
-              </span>
-            )}
-            {patStatus === "verified" && (
-              <span className="rounded-full bg-emerald-900/30 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-800/40">
-                Verified
-              </span>
-            )}
-            {patStatus === "invalid" && (
-              <span className="rounded-full bg-red-900/30 px-2 py-0.5 text-[10px] font-medium text-red-400 border border-red-800/40">
-                Invalid
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={handleRequestPat}
-              className="text-[11px] text-zinc-500 hover:text-zinc-300 transition underline underline-offset-2"
-            >
-              Request PAT
-            </button>
-            {form.adoPat && form.adoOrgUrl && (
+        {/* PAT field + actions */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-400">Personal Access Token</span>
+            <div className="flex items-center gap-2">
+              {patStatus === "pending" && (
+                <span className="rounded-full bg-amber-900/30 px-2 py-0.5 text-[10px] font-medium text-amber-400 border border-amber-800/40">
+                  Pending approval
+                </span>
+              )}
+              {patStatus === "verified" && (
+                <span className="rounded-full bg-emerald-900/30 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-800/40">
+                  Verified
+                </span>
+              )}
+              {patStatus === "invalid" && (
+                <span className="rounded-full bg-red-900/30 px-2 py-0.5 text-[10px] font-medium text-red-400 border border-red-800/40">
+                  Invalid
+                </span>
+              )}
               <button
                 type="button"
-                onClick={() => void handleVerifyPat()}
-                disabled={verifying}
-                className="text-[11px] text-zinc-500 hover:text-zinc-300 transition underline underline-offset-2 disabled:opacity-50"
+                onClick={handleRequestPat}
+                className="text-[11px] text-zinc-500 hover:text-zinc-300 transition underline underline-offset-2"
               >
-                {verifying ? "Verifying…" : "Verify"}
+                Request PAT
               </button>
-            )}
+              {form.adoPat && form.adoOrgUrl && (
+                <button
+                  type="button"
+                  onClick={() => void handleVerifyPat()}
+                  disabled={verifying}
+                  className="text-[11px] text-zinc-500 hover:text-zinc-300 transition underline underline-offset-2 disabled:opacity-50"
+                >
+                  {verifying ? "Verifying…" : "Verify"}
+                </button>
+              )}
+            </div>
           </div>
+          <Field
+            type="password"
+            label=""
+            value={form.adoPat}
+            onChange={(v) => { set("adoPat")(v); }}
+            hint="Stored locally on this device — never committed or sent to any server."
+          />
+          {patStatus === "pending" && (
+            <p className="rounded-md bg-amber-950/20 border border-amber-900/30 px-3 py-2 text-[11px] text-amber-400/80 leading-relaxed">
+              A browser tab opened to your Azure DevOps token settings. Create a PAT with
+              <span className="font-mono mx-1 select-all">Code (Read &amp; Write), Build (Read &amp; Execute), Pull Request Threads (Read &amp; Write)</span>
+              scopes, paste it above, then click Verify.
+            </p>
+          )}
         </div>
-        <Field
-          type="password"
-          label=""
-          value={form.adoPat}
-          onChange={(v) => { set("adoPat")(v); }}
-          hint="Stored locally on this device — never committed or sent to any server."
-        />
-        {patStatus === "pending" && (
-          <p className="rounded-md bg-amber-950/20 border border-amber-900/30 px-3 py-2 text-[11px] text-amber-400/80 leading-relaxed">
-            A browser tab opened to your Azure DevOps token settings. Create a PAT with
-            <span className="font-mono mx-1 select-all">Code (Read &amp; Write), Build (Read &amp; Execute), Pull Request Threads (Read &amp; Write)</span>
-            scopes, paste it above, then click Verify.
-          </p>
-        )}
-      </div>
 
-      {/* Pipeline fields — disabled until pipeline integration is ready */}
-      <div className="grid grid-cols-2 gap-4">
-        <Field
-          label="Pipeline ID"
-          value={form.adoPipelineId}
-          onChange={set("adoPipelineId")}
-          placeholder="42"
-          disabled
-          hint="Pipeline integration coming soon"
-        />
-        <Field
-          label="Pipeline name"
-          value={form.adoPipelineName}
-          onChange={set("adoPipelineName")}
-          placeholder="CI"
-          disabled
-        />
-      </div>
-
-      <Divider />
+        {/* Pipeline fields — disabled until pipeline integration is ready */}
+        <div className="grid grid-cols-2 gap-4">
+          <Field
+            label="Pipeline ID"
+            value={form.adoPipelineId}
+            onChange={set("adoPipelineId")}
+            placeholder="42"
+            disabled
+            hint="Pipeline integration coming soon"
+          />
+          <Field
+            label="Pipeline name"
+            value={form.adoPipelineName}
+            onChange={set("adoPipelineName")}
+            placeholder="CI"
+            disabled
+          />
+        </div>
+      </section>
 
       {/* ── Build / Test — disabled ── */}
-      <SectionHeader
-        title="Build / Test"
-        subtitle="Custom overrides — coming soon."
-        disabled
-      />
-      <div className="grid grid-cols-2 gap-4">
-        <Field
-          label="Build command"
-          value={form.buildCommand}
-          onChange={set("buildCommand")}
-          placeholder="npm run build"
+      <section className="rounded-xl border border-zinc-800/50 bg-zinc-900/20 p-5 space-y-4 opacity-50">
+        <SectionHeader
+          title="Build / Test"
+          subtitle="Custom overrides — coming soon."
           disabled
         />
-        <Field
-          label="Test command"
-          value={form.testCommand}
-          onChange={set("testCommand")}
-          placeholder="npm test"
-          disabled
-        />
-      </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Field
+            label="Build command"
+            value={form.buildCommand}
+            onChange={set("buildCommand")}
+            placeholder="npm run build"
+            disabled
+          />
+          <Field
+            label="Test command"
+            value={form.testCommand}
+            onChange={set("testCommand")}
+            placeholder="npm test"
+            disabled
+          />
+        </div>
+      </section>
 
       {/* ── Actions ── */}
-      <div className="flex items-center gap-3 pt-2">
+      <div className="flex items-center gap-3 pb-6">
         <button
           type="submit"
           disabled={saving || !form.name.trim()}
@@ -581,11 +576,28 @@ export default function Profiles(): JSX.Element {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 shrink-0">
-        <div>
-          <h2 className="text-base font-semibold text-zinc-100">Profiles</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Each profile holds repo path, ADO connection, and branch defaults for one workspace.
-          </p>
+        <div className="flex items-center gap-3">
+          {mode !== "list" && (
+            <button
+              onClick={() => setMode("list")}
+              className="flex items-center justify-center w-7 h-7 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
+              title="Back to profiles"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          )}
+          <div>
+            <h2 className="text-base font-semibold text-zinc-100">
+              {mode === "new" ? "New profile" : typeof mode === "object" ? "Edit profile" : "Profiles"}
+            </h2>
+            {mode === "list" && (
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Each profile holds repo path, ADO connection, and branch defaults for one workspace.
+              </p>
+            )}
+          </div>
         </div>
         {mode === "list" && profiles.length > 0 && (
           <button
