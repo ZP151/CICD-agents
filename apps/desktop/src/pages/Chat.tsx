@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   chatStream,
   confirmAction as apiConfirmAction,
@@ -6,8 +7,10 @@ import {
   cancelPlan,
   fetchChatHistory,
   fetchChatMessages,
+  listProfiles,
   type ChatEventPayload,
   type ChatHistoryEntry,
+  type WorkspaceProfile,
 } from "../api.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -634,7 +637,7 @@ function MetaPanel({ meta }: { meta: NonNullable<Bubble["meta"]> }) {
   );
 }
 
-// ─── Task Status Panel ───────────────────────────────────────────────────────
+// ─── Workspace & Task Panel ───────────────────────────────────────────────────
 
 interface WorkflowStep {
   label: string;
@@ -648,90 +651,265 @@ interface TaskState {
   steps: WorkflowStep[];
   currentStepLabel: string;
   risk?: string;
-  branch?: string;
-  repo?: string;
 }
 
-function TaskStatusPanel({ task, busy }: { task: TaskState; busy: boolean }) {
-  const completedCount = task.steps.filter((s) => s.done).length;
-  const totalCount = task.steps.length;
-  const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+interface WorkspacePanelProps {
+  repoPath: string;
+  setRepoPath: (v: string) => void;
+  currentBranch: string | null;
+  branchList: string[];
+  taskState: TaskState | null;
+  busy: boolean;
+  profiles: WorkspaceProfile[];
+  activeProfileId: string | null;
+  setActiveProfileId: (id: string | null) => void;
+}
+
+function WorkspacePanel({ repoPath, setRepoPath, currentBranch, branchList, taskState, busy, profiles, activeProfileId, setActiveProfileId }: WorkspacePanelProps) {
+  const repoName = repoPath ? repoPath.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? "" : "";
+
+  const handleBrowse = async () => {
+    if (!("__TAURI__" in window)) return;
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const result = await open({ directory: true, multiple: false });
+      if (result && typeof result === "string") setRepoPath(result);
+    } catch { /* plugin not available */ }
+  };
+
+  const activeProfile = profiles.find((p) => p.id === activeProfileId) ?? null;
+
+  const handleProfileSelect = (id: string) => {
+    setActiveProfileId(id || null);
+    const p = profiles.find((pr) => pr.id === id);
+    if (p) {
+      if (p.repoPath) setRepoPath(p.repoPath);
+    }
+  };
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-l border-zinc-800/80 bg-zinc-950/60 overflow-y-auto">
-      <div className="border-b border-zinc-800/60 px-3 py-2.5">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600">Current Task</p>
-        <p className="mt-0.5 text-xs text-zinc-300 leading-snug line-clamp-2">{task.goal}</p>
-      </div>
+    <div className="flex flex-col h-full w-full bg-zinc-950/40">
 
-      {/* Progress bar */}
-      <div className="px-3 pt-3 pb-2">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] text-zinc-600">{completedCount} / {totalCount} steps</span>
-          <span className="text-[10px] text-zinc-700">{progressPct}%</span>
+      {/* Current Task section — pinned to top when active */}
+      {taskState && (
+        <div className="p-3 space-y-2.5 border-b border-zinc-800/60">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600">Current Task</p>
+          <p className="text-xs text-zinc-400 leading-snug line-clamp-2">{taskState.goal}</p>
+          <div className="space-y-1.5">
+            {taskState.steps.map((step, i) => (
+              <div key={i} className={`flex items-center gap-2 text-xs ${
+                step.done ? "text-zinc-600" : step.active ? "text-zinc-200" : "text-zinc-700"
+              }`}>
+                {step.done ? (
+                  <span className="shrink-0 text-emerald-600 text-[10px]">&#10003;</span>
+                ) : step.active ? (
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${busy ? "animate-pulse bg-indigo-400" : "bg-amber-400"}`} />
+                ) : (
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-700" />
+                )}
+                <span className={step.done ? "line-through text-zinc-700" : step.active ? "font-medium" : ""}>{step.label}</span>
+              </div>
+            ))}
+          </div>
+          {taskState.risk && (
+            <div className="flex items-center gap-1.5 pt-0.5">
+              <span className="text-[10px] text-zinc-600">Risk</span>
+              <span className={`rounded px-1 text-[10px] font-semibold ${
+                taskState.risk === "high" ? "bg-red-900/40 text-red-400" :
+                taskState.risk === "medium" ? "bg-amber-900/40 text-amber-400" :
+                "bg-emerald-900/30 text-emerald-600"
+              }`}>{taskState.risk}</span>
+            </div>
+          )}
         </div>
-        <div className="h-1 w-full rounded-full bg-zinc-800">
-          <div
-            className="h-1 rounded-full bg-indigo-500/70 transition-all duration-500"
-            style={{ width: `${progressPct}%` }}
-          />
-        </div>
-      </div>
+      )}
 
-      {/* Steps */}
-      <div className="flex-1 px-3 pb-3 space-y-1.5">
-        {task.steps.map((step, i) => (
-          <div key={i} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors ${
-            step.active ? "bg-indigo-900/20 border border-indigo-700/30" :
-            step.done ? "opacity-60" : "opacity-40"
-          }`}>
-            {step.done ? (
-              <span className="text-emerald-500 shrink-0">&#10003;</span>
-            ) : step.active ? (
-              busy ? <span className="h-2 w-2 shrink-0 rounded-full bg-indigo-400 animate-pulse" /> :
-                     <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" />
-            ) : (
-              <span className="h-2 w-2 shrink-0 rounded-full bg-zinc-700" />
+      {/* Context section */}
+      <div className="p-3 space-y-3.5">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600">Context</p>
+
+        {/* Profile selector */}
+        {profiles.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-[10px] text-zinc-600">Profile</p>
+            <select
+              className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[11px] text-zinc-300 focus:border-zinc-700 focus:outline-none"
+              value={activeProfileId ?? ""}
+              onChange={(e) => handleProfileSelect(e.target.value)}
+            >
+              <option value="">-- none --</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            {activeProfile?.adoProject && (
+              <p className="text-[10px] text-zinc-600 truncate pl-0.5">
+                {activeProfile.adoProject} / {activeProfile.adoRepoName}
+              </p>
             )}
-            <span className={step.done ? "text-zinc-500 line-through" : step.active ? "text-zinc-200 font-medium" : "text-zinc-600"}>
-              {step.label}
-            </span>
           </div>
-        ))}
-      </div>
+        )}
 
-      {/* Meta */}
-      <div className="border-t border-zinc-800/60 px-3 py-2.5 space-y-1.5">
-        {task.risk && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-zinc-600 w-10">Risk</span>
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-              task.risk === "high" ? "bg-red-900/40 text-red-400" :
-              task.risk === "medium" ? "bg-amber-900/40 text-amber-400" :
-              "bg-emerald-900/40 text-emerald-500"
-            }`}>{task.risk}</span>
+        {/* Repository */}
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-zinc-600">Repository</p>
+          <div className="flex items-center gap-1">
+            <input
+              className="min-w-0 flex-1 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[11px] text-zinc-300 placeholder-zinc-700 focus:border-zinc-700 focus:outline-none"
+              value={repoPath}
+              onChange={(e) => setRepoPath(e.target.value)}
+              placeholder="Path to repository"
+              title={repoPath}
+            />
+            <button
+              onClick={() => void handleBrowse()}
+              className="shrink-0 rounded-md border border-zinc-800 bg-zinc-900/60 p-1 text-zinc-600 hover:border-zinc-700 hover:text-zinc-400 transition-colors"
+              title="Browse for folder"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+              </svg>
+            </button>
           </div>
-        )}
-        {task.branch && (
-          <div className="flex items-start gap-1.5">
-            <span className="text-[10px] text-zinc-600 w-10 shrink-0">Branch</span>
-            <span className="text-[10px] text-zinc-500 break-all leading-tight">{task.branch}</span>
-          </div>
-        )}
-        {task.repo && (
-          <div className="flex items-start gap-1.5">
-            <span className="text-[10px] text-zinc-600 w-10 shrink-0">Repo</span>
-            <span className="text-[10px] text-zinc-500 break-all leading-tight">{task.repo}</span>
-          </div>
-        )}
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-zinc-600 w-10">Status</span>
-          <span className={`text-[10px] ${busy ? "text-indigo-400 animate-pulse" : "text-zinc-500"}`}>
-            {busy ? task.currentStepLabel : completedCount === totalCount ? "Complete" : "Waiting"}
-          </span>
+          {repoName && <p className="truncate text-[10px] text-zinc-700 pl-0.5">{repoName}</p>}
+        </div>
+
+        {/* Branch */}
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-zinc-600">Branch</p>
+          {branchList.length > 1 ? (
+            <select
+              className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[11px] text-zinc-300 focus:border-zinc-700 focus:outline-none"
+              value={currentBranch ?? ""}
+              onChange={() => {/* branch switching — future implementation */}}
+            >
+              {branchList.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          ) : (
+            <p className="truncate font-mono text-[11px] text-zinc-500">
+              {currentBranch ?? <span className="text-zinc-700">not detected</span>}
+            </p>
+          )}
         </div>
       </div>
-    </aside>
+
+    </div>
+  );
+}
+
+// ─── Panel toggle icons ───────────────────────────────────────────────────────
+
+function ToggleLeftPanelIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1.5" y="1.5" width="13" height="13" rx="2" />
+      <path d="M5.5 1.5v13" />
+      {active && <path d="M2.5 5h2M2.5 8h2M2.5 11h2" strokeOpacity="0.6" />}
+    </svg>
+  );
+}
+
+function ToggleRightPanelIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1.5" y="1.5" width="13" height="13" rx="2" />
+      <path d="M10.5 1.5v13" />
+      {active && <path d="M11.5 5h2M11.5 8h2M11.5 11h2" strokeOpacity="0.6" />}
+    </svg>
+  );
+}
+
+// ─── ConversationTopBar ────────────────────────────────────────────────────────
+// Spans the full workspace width. Three zones mirror the three panel columns:
+//   [history-width zone] [flex-1 title] [right-width zone]
+// When a panel collapses, its zone shrinks to button-only width (40px).
+
+interface ConversationTopBarProps {
+  historyOpen: boolean;
+  historyWidth: number;
+  onToggleHistory: () => void;
+  rightPanelOpen: boolean;
+  rightWidth: number;
+  onToggleRight: () => void;
+  titleEditing: boolean;
+  customTitle: string | null;
+  conversationTitle: string | null;
+  titleInputRef: React.RefObject<HTMLInputElement>;
+  onStartTitleEdit: () => void;
+  onConfirmTitle: (value: string) => void;
+  onCancelTitle: () => void;
+}
+
+function ConversationTopBar({
+  historyOpen, historyWidth, onToggleHistory,
+  rightPanelOpen, rightWidth, onToggleRight,
+  titleEditing, customTitle, conversationTitle,
+  titleInputRef, onStartTitleEdit, onConfirmTitle, onCancelTitle,
+}: ConversationTopBarProps) {
+  return (
+    <div className="flex shrink-0 items-center border-b border-zinc-800/80 min-h-[40px] bg-zinc-950/95">
+
+      {/* Left zone — width mirrors history panel, collapses to 40px */}
+      <div
+        className="flex shrink-0 items-center overflow-hidden"
+        style={{ width: historyOpen ? historyWidth : 40, transition: "width 180ms ease" }}
+      >
+        <button
+          onClick={onToggleHistory}
+          className={`ml-1.5 rounded p-1.5 transition-colors ${historyOpen ? "bg-zinc-800 text-zinc-300" : "text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"}`}
+          title={historyOpen ? "Collapse history" : "Expand history"}
+        >
+          <ToggleLeftPanelIcon active={historyOpen} />
+        </button>
+      </div>
+
+      {/* Middle zone — title, fills remaining space */}
+      <div className="flex flex-1 items-center min-w-0 px-2">
+        {titleEditing ? (
+          <input
+            ref={titleInputRef}
+            className="w-full rounded bg-zinc-800 border border-zinc-700 px-2 py-0.5 text-sm text-zinc-100 focus:outline-none focus:border-zinc-500"
+            defaultValue={customTitle ?? conversationTitle ?? ""}
+            onBlur={(e) => onConfirmTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onConfirmTitle((e.target as HTMLInputElement).value);
+              if (e.key === "Escape") onCancelTitle();
+            }}
+            autoFocus
+          />
+        ) : (
+          <button
+            className="group flex items-center gap-1.5 max-w-full"
+            title="Click to rename"
+            onClick={onStartTitleEdit}
+          >
+            <span className="truncate text-sm text-zinc-500 group-hover:text-zinc-300 transition-colors">
+              {customTitle ?? conversationTitle ?? <span className="text-zinc-700">New conversation</span>}
+            </span>
+            <svg className="h-3 w-3 shrink-0 text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Right zone — width mirrors right panel, collapses to 40px */}
+      <div
+        className="flex shrink-0 items-center justify-end overflow-hidden"
+        style={{ width: rightPanelOpen ? rightWidth : 40, transition: "width 180ms ease" }}
+      >
+        <button
+          onClick={onToggleRight}
+          className={`mr-1.5 rounded p-1.5 transition-colors ${rightPanelOpen ? "bg-zinc-800 text-zinc-300" : "text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"}`}
+          title={rightPanelOpen ? "Collapse context panel" : "Expand context panel"}
+        >
+          <ToggleRightPanelIcon active={rightPanelOpen} />
+        </button>
+      </div>
+
+    </div>
   );
 }
 
@@ -742,6 +920,7 @@ interface ChatProps {
 }
 
 export default function Chat({ mini = false }: ChatProps) {
+  const navigate = useNavigate();
   const [repoPath, setRepoPath] = useState(
     typeof window !== "undefined" ? (localStorage.getItem("chat_repo") ?? "") : "",
   );
@@ -751,11 +930,124 @@ export default function Chat({ mini = false }: ChatProps) {
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<ChatHistoryEntry[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [historyWidth, setHistoryWidth] = useState(220);
+  const [rightWidth, setRightWidth] = useState(240);
+  const historyDragRef = useRef<{ startX: number; startW: number } | null>(null);
+  const rightDragRef   = useRef<{ startX: number; startW: number } | null>(null);
+  // ref to the workspace div so drag handlers can read its live width
+  const workspaceRef   = useRef<HTMLDivElement>(null);
+
+  /** Middle panel must never be squeezed below this px — guards drag handlers and auto-collapse */
+  const MIDDLE_MIN = 520;
+  const HANDLE_GAP = 8; // px reserved for the two drag handle elements
+
+  const startHistoryDrag = useCallback((startX: number) => {
+    historyDragRef.current = { startX, startW: historyWidth };
+    const onMove = (e: MouseEvent) => {
+      if (!historyDragRef.current) return;
+      const workspaceW = workspaceRef.current?.clientWidth ?? 900;
+      const otherPanel = rightPanelOpen ? rightWidth : 0;
+      // Maximum history width = whatever is left after reserving middle min + other panel + handles
+      const maxHistory = Math.max(160, workspaceW - otherPanel - MIDDLE_MIN - HANDLE_GAP);
+      const delta = e.clientX - historyDragRef.current.startX;
+      setHistoryWidth(Math.max(160, Math.min(Math.min(400, maxHistory), historyDragRef.current.startW + delta)));
+    };
+    const onUp = () => {
+      historyDragRef.current = null;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [historyWidth, rightPanelOpen, rightWidth]);
+
+  const startRightDrag = useCallback((startX: number) => {
+    rightDragRef.current = { startX, startW: rightWidth };
+    const onMove = (e: MouseEvent) => {
+      if (!rightDragRef.current) return;
+      const workspaceW = workspaceRef.current?.clientWidth ?? 900;
+      const otherPanel = historyOpen ? historyWidth : 0;
+      const maxRight = Math.max(180, workspaceW - otherPanel - MIDDLE_MIN - HANDLE_GAP);
+      const delta = e.clientX - rightDragRef.current.startX;
+      setRightWidth(Math.max(180, Math.min(Math.min(420, maxRight), rightDragRef.current.startW - delta)));
+    };
+    const onUp = () => {
+      rightDragRef.current = null;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [rightWidth, historyOpen, historyWidth]);
   const [statusText, setStatusText] = useState<string | null>(null);
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [customTitle, setCustomTitle] = useState<string | null>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(
+    typeof window !== "undefined" ? (localStorage.getItem("chat_profile_id") ?? null) : null,
+  );
+  const [availableProfiles, setAvailableProfiles] = useState<WorkspaceProfile[]>([]);
   const cancelRef = useRef<(() => void) | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // ── Auto-expand the Tauri window when opening panels would clip content ───
+  useEffect(() => {
+    if (mini) return;
+
+    // Left sidebar ~192px (w-48) + open panels + 4px drag handles + MIDDLE_MIN + buffer
+    const required =
+      192 +
+      (historyOpen   ? historyWidth + 4 : 0) +
+      MIDDLE_MIN +
+      (rightPanelOpen ? rightWidth  + 4 : 0) +
+      32;
+
+    if (window.innerWidth >= required) return; // already wide enough
+
+    void (async () => {
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const { LogicalSize }      = await import("@tauri-apps/api/dpi");
+        const win = getCurrentWindow();
+        // window.innerHeight is already the logical CSS height of the content area.
+        // setSize(LogicalSize) also operates on the logical inner area, so this
+        // correctly expands only the width while keeping the height unchanged.
+        await win.setSize(new LogicalSize(required, window.innerHeight));
+      } catch (err) {
+        console.warn("[auto-expand]", err);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mini, historyOpen, rightPanelOpen, historyWidth, rightWidth]);
+
+  // ── Auto-collapse panels when workspace is too narrow ─────────────────────
+  useEffect(() => {
+    if (mini) return;
+    const checkFit = () => {
+      const w = workspaceRef.current?.clientWidth ?? 0;
+      if (w === 0) return;
+      // Collapse right first (less critical), then history
+      setRightPanelOpen((wasOpen) => {
+        if (wasOpen && w - rightWidth - (historyOpen ? historyWidth : 0) < MIDDLE_MIN) return false;
+        return wasOpen;
+      });
+      setHistoryOpen((wasOpen) => {
+        if (wasOpen && w - historyWidth < MIDDLE_MIN) return false;
+        return wasOpen;
+      });
+    };
+    const ro = new ResizeObserver(checkFit);
+    if (workspaceRef.current) ro.observe(workspaceRef.current);
+    checkFit(); // run once on mount / panel-state change
+    return () => ro.disconnect();
+  // historyWidth/rightWidth are stable between renders unless the user drags;
+  // re-registering then is intentional so the observer uses fresh widths.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mini, historyWidth, rightWidth]);
+
   // Track whether user is near the bottom so we don't hijack scroll when browsing history
   const atBottomRef = useRef(true);
   // Signal that new content was streamed/added (not just a toggle)
@@ -787,6 +1079,22 @@ export default function Chat({ mini = false }: ChatProps) {
         .catch(() => undefined);
     }
   }, [mini]);
+
+  useEffect(() => {
+    if (!mini) {
+      listProfiles()
+        .then(setAvailableProfiles)
+        .catch(() => undefined);
+    }
+  }, [mini]);
+
+  useEffect(() => {
+    if (activeProfileId) {
+      localStorage.setItem("chat_profile_id", activeProfileId);
+    } else {
+      localStorage.removeItem("chat_profile_id");
+    }
+  }, [activeProfileId]);
 
   useEffect(() => {
     localStorage.setItem("chat_repo", repoPath);
@@ -844,6 +1152,26 @@ export default function Chat({ mini = false }: ChatProps) {
     return null;
   }, [bubbles]);
 
+  // Derived: conversation title from first user message
+  const conversationTitle = useMemo(() => {
+    const first = bubbles.find((b) => b.kind === "user");
+    if (!first?.text) return null;
+    const t = first.text.trim();
+    return t.length > 55 ? t.slice(0, 55) + "…" : t;
+  }, [bubbles]);
+
+  // Derived: branch list from latest git_branch_list tool result
+  const branchList = useMemo(() => {
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i]!;
+      if (b.kind === "tool" && b.toolOk && b.toolName === "git_branch_list" && b.toolResult) {
+        const stdout = String((b.toolResult as Record<string, unknown>)["stdout"] ?? "");
+        return stdout.split("\n").filter(Boolean).map((l) => l.replace(/^\*\s*/, "").trim()).filter(Boolean);
+      }
+    }
+    return [] as string[];
+  }, [bubbles]);
+
   // Derived workflow task state for the right-side panel
   const taskState = useMemo((): TaskState | null => {
     if (bubbles.length === 0) return null;
@@ -865,9 +1193,6 @@ export default function Chat({ mini = false }: ChatProps) {
     // Extract risk from last assistant bubble meta
     const risk = [...bubbles].reverse().find((b) => b.meta?.riskLevel)?.meta?.riskLevel;
 
-    // Repo name from path
-    const repo = repoPath ? repoPath.replace(/\\/g, "/").split("/").filter(Boolean).pop() : undefined;
-
     // Active pending card
     const pending = activePendingBubble;
 
@@ -885,7 +1210,7 @@ export default function Chat({ mini = false }: ChatProps) {
     const activeStep = STEPS.find((s) => s.active);
     const currentStepLabel = activeStep ? `Waiting: ${activeStep.label}` : busy ? "Executing…" : "Thinking…";
 
-    return { goal: firstUserMsg.slice(0, 80), steps: STEPS, currentStepLabel, risk, branch, repo };
+    return { goal: firstUserMsg.slice(0, 80), steps: STEPS, currentStepLabel, risk };
   }, [bubbles, activePendingBubble, busy, repoPath]);
 
   const addBubble = useCallback((bubble: Bubble) => {
@@ -1019,7 +1344,7 @@ export default function Chat({ mini = false }: ChatProps) {
   const sendMessage = useCallback((msg: string) => {
     if (!msg || busy) return;
     setBusy(true);
-    setStatusText("Thinking...");
+    setStatusText("Thinking");
     addBubble({ id: uid(), kind: "user", text: msg });
 
     const repo = repoPath || ".";
@@ -1036,11 +1361,11 @@ export default function Chat({ mini = false }: ChatProps) {
 
         case "thinking":
           if (ev.delta) updateStreamingBubble(ev.delta);
-          setStatusText("Thinking...");
+          setStatusText("Thinking");
           break;
 
         case "tool_start":
-          setStatusText(`Running ${ev.name}...`);
+          setStatusText(`Running ${ev.name}`);
           stopStreaming();
           addBubble({ id: uid(), kind: "tool", toolName: ev.name, toolArgs: ev.args, toolOpen: false });
           break;
@@ -1058,7 +1383,7 @@ export default function Chat({ mini = false }: ChatProps) {
                 : b,
             );
           });
-          setStatusText("Processing...");
+          setStatusText("Processing");
           break;
 
         case "confirm_required": {
@@ -1068,13 +1393,13 @@ export default function Chat({ mini = false }: ChatProps) {
             id: confirmId, kind: "confirm", riskLevel: ev.riskLevel, plan: ev.plan,
             sessionId: resolvedSessionId ?? undefined, confirmed: null,
           });
-          setStatusText("Waiting for confirmation...");
+          setStatusText("Waiting for confirmation");
           break;
         }
 
         case "executing":
           addBubble({ id: uid(), kind: "system", text: "Executing actions..." });
-          setStatusText("Executing...");
+          setStatusText("Executing");
           break;
 
         case "message":
@@ -1114,9 +1439,9 @@ export default function Chat({ mini = false }: ChatProps) {
           setBusy(false); setStatusText(null); cancelRef.current = null;
           break;
       }
-    });
+    }, activeProfileId ?? undefined);
     cancelRef.current = cancel;
-  }, [busy, sessionId, repoPath, addBubble, updateStreamingBubble, stopStreaming, finaliseWithResponse, mini]);
+  }, [busy, sessionId, repoPath, activeProfileId, addBubble, updateStreamingBubble, stopStreaming, finaliseWithResponse, mini]);
 
   const send = useCallback(() => {
     const msg = input.trim();
@@ -1135,18 +1460,18 @@ export default function Chat({ mini = false }: ChatProps) {
     // Mark the card as executing (not cancelled, not waiting)
     setBubbles((prev) => prev.map((b) => b.id === bubbleId ? { ...b, pendingStatus: "executing" } : b));
     setBusy(true);
-    setStatusText("Executing...");
+    setStatusText("Executing");
 
     // Dispatch structured confirm — does NOT send a chat message
     const { cancel } = apiConfirmAction(sessionId, (ev: ChatEventPayload) => {
       switch (ev.type) {
         case "thinking":
           if (ev.delta) updateStreamingBubble(ev.delta);
-          setStatusText("Thinking...");
+          setStatusText("Thinking");
           break;
 
         case "tool_start":
-          setStatusText(`Running ${ev.name}...`);
+          setStatusText(`Running ${ev.name}`);
           stopStreaming();
           addBubble({ id: uid(), kind: "tool", toolName: ev.name, toolArgs: ev.args, toolOpen: false });
           break;
@@ -1168,7 +1493,7 @@ export default function Chat({ mini = false }: ChatProps) {
           setBubbles((prev) => prev.map((b) =>
             b.id === bubbleId && b.pendingStatus === "executing" ? { ...b, pendingStatus: "done" } : b,
           ));
-          setStatusText("Processing...");
+          setStatusText("Processing");
           break;
 
         case "done": {
@@ -1285,116 +1610,198 @@ export default function Chat({ mini = false }: ChatProps) {
     cancelRef.current?.();
     setBusy(false);
     setStatusText(null);
+    setCustomTitle(null);
+    setTitleEditing(false);
   }, []);
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className={`flex h-full flex-col bg-zinc-950 text-zinc-100 ${mini ? "rounded-xl" : ""}`}>
-      {/* Header — repo info bar */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800/80 px-3 py-2">
-        {!mini && (
-          <button
-            onClick={() => setHistoryOpen((v) => !v)}
-            className="shrink-0 rounded p-1 text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
-            title="Chat history"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
-            </svg>
-          </button>
-        )}
+    <div className={`flex flex-col overflow-hidden bg-zinc-950 text-zinc-100 ${mini ? "h-full rounded-xl" : "flex-1 min-w-0 h-full"}`}>
 
-        {/* Repo path + branch */}
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          {/* Folder icon + repo name */}
-          <div className="flex min-w-0 items-center gap-1.5">
-            <svg className="h-3.5 w-3.5 shrink-0 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-            </svg>
-            <input
-              className="min-w-0 max-w-[200px] truncate bg-transparent text-xs text-zinc-400 placeholder-zinc-700 focus:outline-none focus:text-zinc-200 transition"
-              placeholder="Set repo path…"
-              title={repoPath || "Click to set repo path"}
-              value={repoPath}
-              onChange={(e) => setRepoPath(e.target.value)}
-            />
-          </div>
-
-          {/* Branch chip */}
-          {currentBranch && (
-            <div className="flex shrink-0 items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900 px-2 py-0.5">
-              <svg className="h-3 w-3 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-              </svg>
-              <span className="max-w-[160px] truncate text-[11px] text-zinc-500">{currentBranch}</span>
-            </div>
-          )}
+      {/* ── Full-width top bar — zones mirror the three panel columns ─────── */}
+      {!mini ? (
+        <ConversationTopBar
+          historyOpen={historyOpen}
+          historyWidth={historyWidth}
+          onToggleHistory={() => setHistoryOpen((v) => !v)}
+          rightPanelOpen={rightPanelOpen}
+          rightWidth={rightWidth}
+          onToggleRight={() => setRightPanelOpen((v) => !v)}
+          titleEditing={titleEditing}
+          customTitle={customTitle}
+          conversationTitle={conversationTitle}
+          titleInputRef={titleInputRef}
+          onStartTitleEdit={() => { setTitleEditing(true); setTimeout(() => titleInputRef.current?.select(), 0); }}
+          onConfirmTitle={(v) => { setCustomTitle(v.trim() || null); setTitleEditing(false); }}
+          onCancelTitle={() => setTitleEditing(false)}
+        />
+      ) : (
+        /* Mini mode: simple title strip */
+        <div className="flex shrink-0 items-center border-b border-zinc-800/80 px-3 min-h-[36px]">
+          <span className="truncate text-xs text-zinc-500 flex-1">
+            {customTitle ?? conversationTitle ?? "Chat"}
+          </span>
         </div>
+      )}
 
-        {/* New chat */}
-        <button
-          onClick={newChat}
-          className="shrink-0 rounded p-1 text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
-          title="New conversation"
-        >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
-      </div>
+      {/* ── Flex workspace: [history] [drag] [middle] [drag] [right] ───────── */}
+      <div ref={workspaceRef} className={mini ? "flex flex-col flex-1 overflow-hidden" : "chat-workspace"}>
 
-      {/* Body */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* History sidebar */}
-        {!mini && historyOpen && (
-          <aside className="flex w-52 shrink-0 flex-col border-r border-zinc-800 overflow-y-auto">
-            <p className="px-3 pt-3 text-xs font-semibold uppercase tracking-wide text-zinc-600">
-              History
-            </p>
-            {history.length === 0 && (
-              <p className="px-3 py-2 text-xs text-zinc-700">No sessions yet.</p>
+        {/* ── History panel (col 1) ────────────────────────────────────────── */}
+        {!mini && (
+          <>
+            <aside
+              className="history-panel"
+              style={{
+                width: historyOpen ? historyWidth : 0,
+                opacity: historyOpen ? 1 : 0,
+                pointerEvents: historyOpen ? "auto" : "none",
+              }}
+            >
+              <p className="shrink-0 px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                History
+              </p>
+              {history.length === 0 && (
+                <p className="px-3 py-2 text-xs text-zinc-700">No sessions yet.</p>
+              )}
+              {history.map((h) => (
+                <button
+                  key={h.sessionId}
+                  onClick={() => void loadSession(h.sessionId)}
+                  className="px-3 py-2 text-left text-xs text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200 transition-colors"
+                >
+                  <p className="truncate">{h.preview || "(empty)"}</p>
+                  <p className="text-zinc-600 text-[10px]">
+                    {new Date(h.createdAt * 1000).toLocaleString()}
+                  </p>
+                </button>
+              ))}
+            </aside>
+
+            {/* Drag handle — history/middle boundary */}
+            {historyOpen && (
+              <div
+                className="panel-resize-handle"
+                onMouseDown={(e) => { e.preventDefault(); startHistoryDrag(e.clientX); }}
+              />
             )}
-            {history.map((h) => (
-              <button
-                key={h.sessionId}
-                onClick={() => void loadSession(h.sessionId)}
-                className="px-3 py-2 text-left text-xs text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200 transition-colors"
-              >
-                <p className="truncate">{h.preview || "(empty)"}</p>
-                <p className="text-zinc-600 text-[10px]">
-                  {new Date(h.createdAt * 1000).toLocaleString()}
-                </p>
-              </button>
-            ))}
-          </aside>
+          </>
         )}
 
-        {/* Conversation + Task panel wrapper */}
-        <div className="flex flex-1 overflow-hidden">
 
-        {/* Message list */}
-        <div
-          ref={scrollContainerRef}
-          onScroll={handleContainerScroll}
-          className="flex flex-1 flex-col overflow-y-auto px-3 py-3 chat-scroll"
-        >
+        {/* ── Col 2: Middle panel — header + messages + input ──────────────── */}
+        <div className={mini ? "flex flex-col flex-1 overflow-hidden" : "middle-panel"}>
+          <div className={mini ? "flex flex-col flex-1 overflow-hidden" : "middle-panel-inner"}>
+
+            {/* Message list */}
+            <div
+              ref={scrollContainerRef}
+              onScroll={handleContainerScroll}
+              className="message-panel px-4 py-4 flex flex-col"
+            >
           {bubbles.length === 0 && (
-            <div className="m-auto text-center">
-              <div className="mb-3 flex justify-center">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-800/60">
-                  <svg className="h-5 w-5 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                  </svg>
+            <div className="flex flex-1 flex-col items-center justify-center gap-6 w-full px-8">
+
+              {/* ── Profile gate ─────────────────────────────────────────── */}
+              {availableProfiles.length === 0 ? (
+                /* No profiles at all — guide user to create one first */
+                <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 flex flex-col items-center gap-3 text-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-800">
+                    <svg className="h-5 w-5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-zinc-300">Set up a profile first</p>
+                    <p className="mt-1 text-xs text-zinc-600 leading-relaxed">
+                      A profile stores your repo path, Azure DevOps connection, and pipeline settings.
+                      It will be reused for all chats in the same project.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => navigate("/profiles")}
+                    className="mt-1 rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-500 transition active:scale-95"
+                  >
+                    Create a profile
+                  </button>
                 </div>
-              </div>
-              <p className="text-sm font-medium text-zinc-500">Ask Dev Agent anything</p>
-              <p className="mt-1 text-xs text-zinc-700">
-                "help me review changes and go all the way to PR"
-              </p>
-              <p className="mt-0.5 text-xs text-zinc-700">
-                "what's changed since main?" · "run tests" · "create PR"
-              </p>
+              ) : (
+                /* Profiles exist — show selector if none active */
+                !activeProfileId ? (
+                  <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 flex flex-col gap-3">
+                    <div className="flex items-center gap-2">
+                      <svg className="h-4 w-4 shrink-0 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                      </svg>
+                      <p className="text-xs font-semibold text-zinc-400">Choose a profile for this chat</p>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      {availableProfiles.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            setActiveProfileId(p.id);
+                            if (p.repoPath) setRepoPath(p.repoPath);
+                            setTimeout(() => textareaRef.current?.focus(), 0);
+                          }}
+                          className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-left hover:border-zinc-700 hover:bg-zinc-800/60 transition group"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-zinc-200 truncate">{p.name}</p>
+                            {p.repoPath && (
+                              <p className="text-xs text-zinc-600 font-mono truncate">{p.repoPath}</p>
+                            )}
+                          </div>
+                          <svg className="h-3.5 w-3.5 shrink-0 text-zinc-700 group-hover:text-zinc-400 transition ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => navigate("/profiles")}
+                      className="text-xs text-zinc-600 hover:text-zinc-400 transition text-left pt-0.5"
+                    >
+                      + New profile
+                    </button>
+                  </div>
+                ) : (
+                  /* Profile selected — show the normal welcome + suggestions */
+                  <>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-800/60">
+                      <svg className="h-6 w-6 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                      </svg>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-base font-medium text-zinc-400">Ask Dev Agent anything</p>
+                      <p className="mt-2 text-xs text-zinc-600 leading-relaxed">
+                        "help me review changes and go all the way to PR"<br />
+                        "what's changed since main?" &nbsp;·&nbsp; "run tests" &nbsp;·&nbsp; "create PR"
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap justify-center gap-2 max-w-md">
+                      {[
+                        "Review my changes",
+                        "What's on this branch?",
+                        "Stage and commit",
+                        "Push and create PR",
+                        "Run tests",
+                      ].map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          onClick={() => { setInput(suggestion); setTimeout(() => textareaRef.current?.focus(), 0); }}
+                          className="rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs text-zinc-500 hover:border-zinc-700 hover:text-zinc-300 transition-colors"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )
+              )}
+
             </div>
           )}
 
@@ -1499,63 +1906,127 @@ export default function Chat({ mini = false }: ChatProps) {
             </div>
           )}
 
-          <div ref={bottomRef} />
-        </div>
+              <div ref={bottomRef} />
+            </div>{/* end message-panel */}
 
-        {/* Task Status panel — shown when an active workflow is detected */}
-        {!mini && taskState && (
-          <TaskStatusPanel task={taskState} busy={busy} />
+            {/* Input bar — scoped to middle column only */}
+            <div className="input-panel border-t border-zinc-800/80 px-3 py-2">
+              {/* Profile context chip */}
+              {!mini && (
+                <div className="flex items-center gap-1.5 px-1 pb-1.5">
+                  {availableProfiles.length > 0 ? (
+                    <>
+                      <svg className="h-3 w-3 shrink-0 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                      </svg>
+                      <select
+                        className="flex-1 min-w-0 bg-transparent text-[11px] text-zinc-500 focus:outline-none cursor-pointer hover:text-zinc-300 transition"
+                        value={activeProfileId ?? ""}
+                        onChange={(e) => {
+                          const id = e.target.value;
+                          setActiveProfileId(id || null);
+                          const p = availableProfiles.find((pr) => pr.id === id);
+                          if (p?.repoPath) setRepoPath(p.repoPath);
+                        }}
+                      >
+                        <option value="">No profile selected</option>
+                        {availableProfiles.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => navigate("/profiles")}
+                      className="text-[11px] text-zinc-700 hover:text-zinc-500 transition"
+                    >
+                      No profiles — create one
+                    </button>
+                  )}
+                </div>
+              )}
+              <div className="flex items-end gap-2 rounded-xl border border-zinc-700/60 bg-zinc-900/80 px-3 py-2 focus-within:border-zinc-600 transition">
+                <textarea
+                  ref={textareaRef}
+                  className="flex-1 resize-none bg-transparent text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none"
+                  placeholder="Ask Dev Agent… (Shift+Enter for new line)"
+                  rows={1}
+                  value={input}
+                  disabled={busy}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    e.target.style.height = "auto";
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      send();
+                    }
+                  }}
+                />
+                {busy ? (
+                  <button
+                    onClick={() => {
+                      cancelRef.current?.();
+                      setBusy(false);
+                      setStatusText(null);
+                    }}
+                    className="shrink-0 rounded-lg bg-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-600 transition active:scale-95"
+                  >
+                    Stop
+                  </button>
+                ) : (
+                  <button
+                    onClick={send}
+                    disabled={!input.trim()}
+                    className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40 transition active:scale-95"
+                  >
+                    Send
+                  </button>
+                )}
+              </div>
+            </div>{/* end input-panel */}
+
+          </div>{/* end middle-panel-inner */}
+        </div>{/* end middle-panel */}
+
+
+        {/* ── Right context panel (col 3) ──────────────────────────────────── */}
+        {!mini && (
+          <>
+            {/* Drag handle — middle/right boundary */}
+            {rightPanelOpen && (
+              <div
+                className="panel-resize-handle"
+                onMouseDown={(e) => { e.preventDefault(); startRightDrag(e.clientX); }}
+              />
+            )}
+
+            <aside
+              className="right-panel"
+              style={{
+                width: rightPanelOpen ? rightWidth : 0,
+                opacity: rightPanelOpen ? 1 : 0,
+                pointerEvents: rightPanelOpen ? "auto" : "none",
+              }}
+            >
+              <WorkspacePanel
+                repoPath={repoPath}
+                setRepoPath={setRepoPath}
+                currentBranch={currentBranch}
+                branchList={branchList}
+                taskState={taskState}
+                busy={busy}
+                profiles={availableProfiles}
+                activeProfileId={activeProfileId}
+                setActiveProfileId={setActiveProfileId}
+              />
+            </aside>
+          </>
         )}
 
-        </div>{/* end conversation+task wrapper */}
-      </div>
-
-      {/* Pending action context banner — intentionally removed; confirmation is handled by the in-chat PendingActionCard */}
-
-      {/* Input bar */}
-      <div className="shrink-0 border-t border-zinc-800/80 px-3 py-2">
-        <div className="flex items-end gap-2 rounded-xl border border-zinc-700/60 bg-zinc-900/80 px-3 py-2 focus-within:border-zinc-600 transition">
-          <textarea
-            ref={textareaRef}
-            className="flex-1 resize-none bg-transparent text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none"
-            placeholder="Ask Dev Agent… (Shift+Enter for new line)"
-            rows={1}
-            value={input}
-            disabled={busy}
-            onChange={(e) => {
-              setInput(e.target.value);
-              e.target.style.height = "auto";
-              e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-          />
-          {busy ? (
-            <button
-              onClick={() => {
-                cancelRef.current?.();
-                setBusy(false);
-                setStatusText(null);
-              }}
-              className="shrink-0 rounded-lg bg-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-600 transition active:scale-95"
-            >
-              Stop
-            </button>
-          ) : (
-            <button
-              onClick={send}
-              disabled={!input.trim()}
-              className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40 transition active:scale-95"
-            >
-              Send
-            </button>
-          )}
-        </div>
-      </div>
+      </div>{/* end chat-workspace flex */}
     </div>
   );
 }
