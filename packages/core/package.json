@@ -1,0 +1,43 @@
+{
+  "name": "@cicd-agent/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./db/schema.sql": "./src/db/schema.sql"
+  },
+  "files": ["dist", "src/db/schema.sql"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "@azure/data-tables": "^13.3.0",
+    "@azure/identity": "^4.4.0",
+    "@azure/keyvault-secrets": "^4.9.0",
+    "applicationinsights": "^3.2.0",
+    "better-sqlite3": "^11.2.0",
+    "fast-glob": "^3.3.2",
+    "openai": "^4.65.0",
+    "pino": "^9.4.0",
+    "sqlite-vec": "^0.1.6",
+    "web-tree-sitter": "^0.23.0",
+    "yaml": "^2.5.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^20.12.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

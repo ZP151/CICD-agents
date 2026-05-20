@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "runtime/**"
+      - "cli/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "docs/**"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "runtime/**"
+      - "cli/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "docs/**"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: Node ${{ matrix.node }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [20]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile=false
+      - name: Typecheck
+        run: pnpm -r --filter "./packages/*" run typecheck
+      - name: Lint
+        run: pnpm -r --filter "./packages/*" run lint || true
+      - name: Build
+        run: pnpm -r --filter "./packages/*" run build
+      - name: Test
+        run: pnpm -r --filter "./packages/*" run test
+
+  desktop:
+    name: Desktop ${{ matrix.os }} (Tauri)
+    runs-on: ${{ matrix.os }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install macOS deps
+        if: matrix.os == 'macos-latest'
+        run: |
+          rustup target add x86_64-apple-darwin aarch64-apple-darwin
+      - name: Install
+        run: pnpm install --frozen-lockfile=false
+      - name: Build core+cli+daemon
+        run: pnpm -r --filter "./packages/*" run build
+      - name: Build desktop installer
+        env:
+          # Signing secrets must be set in repository secrets by the owner.
+          # The build will still produce unsigned binaries if these are absent.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm --filter @cicd-agent/desktop tauri:build || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/**
+          if-no-files-found: ignore

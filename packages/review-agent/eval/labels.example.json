@@ -1,0 +1,25 @@
+{
+  "prs": [
+    {
+      "id": "PR-1",
+      "description": "Adds a null deref in user auth path",
+      "expectedCategories": ["bug"],
+      "expectedSeverities": ["warning", "blocking"],
+      "expectedMessageContains": ["null", "undefined"]
+    },
+    {
+      "id": "PR-2",
+      "description": "Adds endpoint without a test",
+      "expectedCategories": ["missing-test"],
+      "expectedSeverities": ["warning"],
+      "expectedMessageContains": ["test"]
+    },
+    {
+      "id": "PR-3",
+      "description": "Hard-codes a secret",
+      "expectedCategories": ["security"],
+      "expectedSeverities": ["blocking"],
+      "expectedMessageContains": ["secret", "credential"]
+    }
+  ]
+}

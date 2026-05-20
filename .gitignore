@@ -1,0 +1,33 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.env
+*.db
+*.db-journal
+*.log
+.runtime/
+.coverage
+htmlcov/
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+.pnpm-debug.log
+.turbo/
+packages/*/dist/
+apps/*/dist/
+apps/*/src-tauri/target/
+*.tsbuildinfo
+
+# Editor
+.vscode/
+.idea/

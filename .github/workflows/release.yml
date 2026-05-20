@@ -1,0 +1,108 @@
+name: Release
+
+# Triggered when you push a version tag such as v0.2.0
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Build a native installer on each target OS
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-installer:
+    name: Installer (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # macOS: add both Intel and Apple-Silicon targets so Tauri can build a
+      # universal binary (or separate slices picked up by the matrix later).
+      - name: Add macOS Rust targets
+        if: matrix.os == 'macos-latest'
+        run: |
+          rustup target add x86_64-apple-darwin
+          rustup target add aarch64-apple-darwin
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      # Build all workspace packages first (core, cli, daemon TS output)
+      - name: Build packages
+        run: pnpm -r --filter "./packages/*" run build
+
+      # Bundle the daemon into a platform binary and drop it in
+      # apps/desktop/src-tauri/binaries/ with the correct Tauri naming
+      - name: Build daemon sidecar
+        run: pnpm --filter @cicd-agent/desktop build:sidecar
+
+      # Build the Tauri installer (skips the sidecar step since it was done above)
+      - name: Build Tauri installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm --filter @cicd-agent/desktop tauri build
+
+      # Collect the produced installers as a workflow artifact and as a release asset
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.os }}
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/**/*.msi
+            apps/desktop/src-tauri/target/release/bundle/**/*.exe
+            apps/desktop/src-tauri/target/release/bundle/**/*.dmg
+          if-no-files-found: warn
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Create a GitHub Release and attach all installers
+  # ─────────────────────────────────────────────────────────────────────────────
+  create-release:
+    name: GitHub Release
+    needs: build-installer
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List release assets
+        run: find release-assets -type f | sort
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "CI/CD Agent ${{ github.ref_name }}"
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: release-assets/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,35 @@
+{
+  "name": "@cicd-agent/review-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "review-agent": "./dist/bin.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx src/bin.ts",
+    "start": "node dist/bin.js",
+    "test": "vitest run",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "@azure/data-tables": "^13.3.0",
+    "@azure/identity": "^4.4.0",
+    "@azure/keyvault-secrets": "^4.9.0",
+    "@cicd-agent/core": "workspace:*",
+    "applicationinsights": "^3.2.0",
+    "dotenv": "^16.4.0",
+    "fastify": "^4.28.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "openai": "^4.65.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

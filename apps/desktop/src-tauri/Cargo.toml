@@ -1,0 +1,26 @@
+[package]
+name = "cicd-agent-desktop"
+version = "0.1.0"
+edition = "2021"
+description = "Tauri shell for the CI/CD Agent"
+
+[lib]
+name = "cicd_agent_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png", "image-ico"] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+
+[package.metadata.bundle]
+identifier = "com.cicdagent.desktop"
+icon = ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"]

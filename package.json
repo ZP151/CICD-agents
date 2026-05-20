@@ -1,0 +1,36 @@
+{
+  "name": "cicd-agent-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.10.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter=./packages/* run build",
+    "test": "pnpm -r --filter=./packages/* run test",
+    "lint": "pnpm -r --filter=./packages/* run lint",
+    "typecheck": "pnpm -r --filter=./packages/* run typecheck",
+    "tui": "tsx packages/cli/src/bin.ts tui",
+    "dev:daemon": "pnpm --filter @cicd-agent/daemon run dev",
+    "dev:cli": "pnpm --filter @cicd-agent/cli run dev",
+    "format": "prettier --write \"packages/**/*.{ts,tsx,js,json,md}\"",
+    "format:check": "prettier --check \"packages/**/*.{ts,tsx,js,json,md}\""
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild": "0.21.5"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "eslint": "^9.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "prettier": "^3.3.0",
+    "typescript": "^5.5.0",
+    "tsx": "^4.16.0",
+    "vitest": "^2.0.0"
+  }
+}

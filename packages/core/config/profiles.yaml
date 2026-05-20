@@ -1,0 +1,77 @@
+# Per-repo profiles. Select via the `profile` field on POST /tasks/submit-pipeline.
+# Commands run with cwd pinned to repoPath. Use forward slashes; the executor
+# adapts to the host shell.
+
+profiles:
+  default:
+    description: "Generic profile (no language-specific build/test step)."
+    languages: [python, typescript, csharp, javascript]
+    build:
+      command: ""
+    test:
+      command: ""
+    azure_devops:
+      organization: ""
+      project: ""
+      repository: ""
+      default_target_branch: "main"
+      pipeline_id: null
+    ignored_globs:
+      - "**/node_modules/**"
+      - "**/bin/**"
+      - "**/obj/**"
+      - "**/dist/**"
+      - "**/.venv/**"
+
+  python-api:
+    description: "Python service with pytest."
+    languages: [python]
+    build:
+      command: "pip install -e ."
+    test:
+      command: "pytest -q"
+    azure_devops:
+      organization: ""
+      project: ""
+      repository: ""
+      default_target_branch: "main"
+      pipeline_id: null
+    ignored_globs:
+      - "**/.venv/**"
+      - "**/__pycache__/**"
+      - "**/dist/**"
+
+  dotnet-api:
+    description: "ASP.NET Core service."
+    languages: [csharp]
+    build:
+      command: "dotnet build --nologo"
+    test:
+      command: "dotnet test --nologo --logger trx"
+    azure_devops:
+      organization: ""
+      project: ""
+      repository: ""
+      default_target_branch: "develop"
+      pipeline_id: null
+    ignored_globs:
+      - "**/bin/**"
+      - "**/obj/**"
+
+  node-web:
+    description: "Node.js web app."
+    languages: [typescript, javascript]
+    build:
+      command: "npm run build"
+    test:
+      command: "npm test --silent"
+    azure_devops:
+      organization: ""
+      project: ""
+      repository: ""
+      default_target_branch: "main"
+      pipeline_id: null
+    ignored_globs:
+      - "**/node_modules/**"
+      - "**/dist/**"
+      - "**/.next/**"
