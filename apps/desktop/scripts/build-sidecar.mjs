@@ -34,13 +34,16 @@ function getRustTargetTriple() {
 
 // --------------------------------------------------------------------------
 // Map Rust triple → @yao-pkg/pkg target string
+// Uses the running Node major version so the pkg binary matches the runtime.
 // --------------------------------------------------------------------------
 function pkgTargetFor(triple) {
-  if (triple.includes("windows")) return "node24-win-x64";
-  if (triple.includes("aarch64") && triple.includes("apple")) return "node24-macos-arm64";
-  if (triple.includes("apple")) return "node24-macos-x64";
-  if (triple.includes("aarch64") && triple.includes("linux")) return "node24-linux-arm64";
-  return "node24-linux-x64";
+  const nodeMajor = process.versions.node.split(".")[0]; // e.g. "20"
+  const nodeTag = `node${nodeMajor}`;
+  if (triple.includes("windows")) return `${nodeTag}-win-x64`;
+  if (triple.includes("aarch64") && triple.includes("apple")) return `${nodeTag}-macos-arm64`;
+  if (triple.includes("apple")) return `${nodeTag}-macos-x64`;
+  if (triple.includes("aarch64") && triple.includes("linux")) return `${nodeTag}-linux-arm64`;
+  return `${nodeTag}-linux-x64`;
 }
 
 function run(cmd, opts = {}) {
