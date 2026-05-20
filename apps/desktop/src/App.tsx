@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Route, Routes, Navigate, useLocation } from "react-router-dom";
+import { fetchHealth } from "./api.js";
 import Dashboard from "./pages/Dashboard.js";
 import Repos from "./pages/Repos.js";
 import TaskViewer from "./pages/TaskViewer.js";
@@ -7,6 +8,78 @@ import ReviewFindings from "./pages/ReviewFindings.js";
 import Settings from "./pages/Settings.js";
 import Chat from "./pages/Chat.js";
 import Profiles from "./pages/Profiles.js";
+
+// ─── Daemon readiness ─────────────────────────────────────────────────────────
+
+type DaemonState = "starting" | "ready" | "failed";
+
+function useDaemonReady(): DaemonState {
+  const [state, setState] = useState<DaemonState>("starting");
+  const attempts = useRef(0);
+
+  useEffect(() => {
+    // Only poll in Tauri (installed app). In the browser / tauri dev the daemon
+    // is already running before the frontend loads.
+    if (!("__TAURI__" in window)) {
+      setState("ready");
+      return;
+    }
+
+    let cancelled = false;
+    const MAX = 30; // 30 × 1 000 ms = 30 s timeout
+
+    async function poll() {
+      while (attempts.current < MAX && !cancelled) {
+        try {
+          await fetchHealth();
+          if (!cancelled) setState("ready");
+          return;
+        } catch {
+          attempts.current += 1;
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
+      if (!cancelled) setState("failed");
+    }
+
+    void poll();
+    return () => { cancelled = true; };
+  }, []);
+
+  return state;
+}
+
+function DaemonGate({ children }: { children: React.ReactNode }) {
+  const state = useDaemonReady();
+
+  if (state === "starting") {
+    return (
+      <div className="flex h-screen w-screen flex-col items-center justify-center gap-3 bg-zinc-950 text-zinc-400">
+        <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+        </svg>
+        <span className="text-sm">Starting daemon…</span>
+      </div>
+    );
+  }
+
+  if (state === "failed") {
+    return (
+      <div className="flex h-screen w-screen flex-col items-center justify-center gap-3 bg-zinc-950 text-zinc-400">
+        <svg className="h-6 w-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+        <p className="text-sm font-medium text-zinc-300">Daemon failed to start</p>
+        <p className="max-w-xs text-center text-xs text-zinc-600">
+          The background service did not respond after 30 seconds. Try restarting the app.
+        </p>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
 
 function useWindowState() {
   useEffect(() => {
@@ -292,5 +365,9 @@ export default function App(): JSX.Element {
   const location = useLocation();
   useWindowState();
   if (location.pathname === "/chat-mini") return <MiniLayout />;
-  return <FullLayout />;
+  return (
+    <DaemonGate>
+      <FullLayout />
+    </DaemonGate>
+  );
 }

@@ -10,11 +10,15 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 
+// Match the esbuild target to the running Node version so the bundle is
+// compatible with the Node runtime embedded by pkg.
+const nodeMajor = process.versions.node.split(".")[0];
+
 await build({
   entryPoints: [resolve(root, "src/bin.ts")],
   bundle: true,
   platform: "node",
-  target: "node24",
+  target: `node${nodeMajor}`,
   format: "cjs",
   outfile: resolve(root, "dist/bundle.cjs"),
   // Native addons must stay external; pkg will embed the .node binaries as assets

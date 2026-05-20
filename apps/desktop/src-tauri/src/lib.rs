@@ -4,7 +4,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
-use tauri_plugin_shell::{process::CommandChild, ShellExt};
+use tauri_plugin_shell::{process::{CommandChild, CommandEvent}, ShellExt};
 
 /// Returns the list of local + remote branch names for the given repo path.
 /// Returns an empty vec if the path is not a git repository or git is unavailable.
@@ -97,9 +97,37 @@ pub fn run() {
             let daemon_port = if cfg!(debug_assertions) { "8787" } else { "18787" };
             match app.shell().sidecar("cicd-daemon") {
                 Ok(cmd) => match cmd.env("RUNTIME_PORT", daemon_port).spawn() {
-                    Ok((_rx, child)) => {
+                    Ok((mut rx, child)) => {
                         *app.state::<DaemonProcess>().0.lock().unwrap() = Some(child);
-                        log::info!("cicd-daemon started");
+                        log::info!("cicd-daemon started on port {daemon_port}");
+
+                        // Consume the output receiver on a background thread so
+                        // stdout/stderr are logged and early exits are detected.
+                        let handle = app.handle().clone();
+                        tauri::async_runtime::spawn(async move {
+                            while let Some(event) = rx.recv().await {
+                                match event {
+                                    CommandEvent::Stdout(line) => {
+                                        log::info!("[daemon] {}", String::from_utf8_lossy(&line));
+                                    }
+                                    CommandEvent::Stderr(line) => {
+                                        log::warn!("[daemon] {}", String::from_utf8_lossy(&line));
+                                    }
+                                    CommandEvent::Terminated(payload) => {
+                                        let code = payload.code.unwrap_or(-1);
+                                        log::error!("cicd-daemon exited with code {code}");
+                                        if code != 0 {
+                                            show_daemon_error(
+                                                &handle,
+                                                &format!("The daemon process exited unexpectedly (code {code}). Check that your LLM settings are configured in Settings."),
+                                            );
+                                        }
+                                        break;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        });
                     }
                     Err(e) => {
                         log::error!("Failed to spawn cicd-daemon: {e}");
