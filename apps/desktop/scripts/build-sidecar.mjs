@@ -36,11 +36,11 @@ function getRustTargetTriple() {
 // Map Rust triple → @yao-pkg/pkg target string
 // --------------------------------------------------------------------------
 function pkgTargetFor(triple) {
-  if (triple.includes("windows")) return "node20-win-x64";
-  if (triple.includes("aarch64") && triple.includes("apple")) return "node20-macos-arm64";
-  if (triple.includes("apple")) return "node20-macos-x64";
-  if (triple.includes("aarch64") && triple.includes("linux")) return "node20-linux-arm64";
-  return "node20-linux-x64";
+  if (triple.includes("windows")) return "node24-win-x64";
+  if (triple.includes("aarch64") && triple.includes("apple")) return "node24-macos-arm64";
+  if (triple.includes("apple")) return "node24-macos-x64";
+  if (triple.includes("aarch64") && triple.includes("linux")) return "node24-linux-arm64";
+  return "node24-linux-x64";
 }
 
 function run(cmd, opts = {}) {
@@ -68,7 +68,7 @@ run("pnpm build", { cwd: daemonRoot });
 
 // 2. esbuild: bundle all TS/JS into dist/bundle.cjs (native modules stay external)
 console.log("\n--- 2/3  esbuild bundle ---");
-run("node scripts/bundle.mjs", { cwd: daemonRoot });
+run("pnpm bundle", { cwd: daemonRoot });
 
 // 3. pkg: wrap dist/bundle.cjs + native assets into a standalone binary
 console.log("\n--- 3/3  pkg package ---");

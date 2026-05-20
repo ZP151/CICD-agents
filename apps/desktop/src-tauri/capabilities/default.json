@@ -10,6 +10,8 @@
       "allow": [{ "name": "binaries/cicd-daemon", "sidecar": true }]
     },
     "shell:allow-kill",
-    "shell:allow-stdin-write"
+    "shell:allow-stdin-write",
+    "dialog:allow-open",
+    "core:window:allow-set-size"
   ]
 }

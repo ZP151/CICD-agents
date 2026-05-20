@@ -136,7 +136,7 @@ export default function Settings(): JSX.Element {
         <div>
           <h2 className="text-xl font-semibold text-zinc-100">Settings</h2>
           <p className="mt-1 text-sm text-zinc-500">
-            Configure your LLM provider. Settings are saved automatically.
+            Configure your LLM provider.
           </p>
         </div>
         {saved && (

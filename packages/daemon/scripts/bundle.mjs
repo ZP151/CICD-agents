@@ -14,7 +14,7 @@ await build({
   entryPoints: [resolve(root, "src/bin.ts")],
   bundle: true,
   platform: "node",
-  target: "node20",
+  target: "node24",
   format: "cjs",
   outfile: resolve(root, "dist/bundle.cjs"),
   // Native addons must stay external; pkg will embed the .node binaries as assets

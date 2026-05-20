@@ -110,6 +110,38 @@ export interface ChatMessageEntry {
   timestamp: number;
 }
 
+// ─── localStorage config readers ─────────────────────────────────────────────
+// Read at call time so any changes the user makes in Settings / Profiles are
+// picked up immediately without a page reload.
+
+function readLlmConfig(): Record<string, unknown> | undefined {
+  try {
+    const raw = localStorage.getItem("dev_agent_settings");
+    if (!raw) return undefined;
+    const s = JSON.parse(raw) as Record<string, unknown>;
+    // Only include fields the daemon understands; omit empty strings.
+    const config: Record<string, unknown> = {};
+    if (s["llmProvider"]) config["llmProvider"] = s["llmProvider"];
+    if (s["azureEndpoint"]) config["azureEndpoint"] = s["azureEndpoint"];
+    if (s["azureApiKey"]) config["azureApiKey"] = s["azureApiKey"];
+    if (s["azureDeployment"]) config["azureDeployment"] = s["azureDeployment"];
+    if (s["azureApiVersion"]) config["azureApiVersion"] = s["azureApiVersion"];
+    if (s["openaiApiKey"]) config["openaiApiKey"] = s["openaiApiKey"];
+    if (s["openaiModel"]) config["openaiModel"] = s["openaiModel"];
+    return Object.keys(config).length > 0 ? config : undefined;
+  } catch { return undefined; }
+}
+
+function readProfileData(profileId: string | undefined): Record<string, unknown> | undefined {
+  if (!profileId) return undefined;
+  try {
+    const raw = localStorage.getItem("cicd_agent_profiles_v1");
+    if (!raw) return undefined;
+    const all = JSON.parse(raw) as Array<Record<string, unknown>>;
+    return all.find((p) => p["id"] === profileId);
+  } catch { return undefined; }
+}
+
 /**
  * POST /chat — streams a conversational turn via SSE.
  * Returns the sessionId (from the first "session" event) and a cancel function.
@@ -119,11 +151,20 @@ export function chatStream(
   repoPath: string,
   sessionId: string | null,
   onEvent: (payload: ChatEventPayload) => void,
+  profileId?: string,
 ): { cancel: () => void } {
   const controller = new AbortController();
 
   const body: Record<string, unknown> = { message, repoPath };
   if (sessionId) body["sessionId"] = sessionId;
+  if (profileId) body["profileId"] = profileId;
+
+  // Attach LLM config and full profile data so the daemon uses the user's
+  // UI-configured settings rather than requiring a .env file.
+  const llmConfig = readLlmConfig();
+  if (llmConfig) body["llmConfig"] = llmConfig;
+  const profile = readProfileData(profileId);
+  if (profile) body["profile"] = profile;
 
   fetch(`${RUNTIME_URL}/chat`, {
     method: "POST",
@@ -263,4 +304,64 @@ export async function fetchChatMessages(sessionId: string): Promise<ChatMessageE
   const r = await fetch(`${RUNTIME_URL}/chat/${sessionId}/messages`);
   if (!r.ok) throw new Error(`/chat/messages HTTP ${r.status}`);
   return (await r.json()) as ChatMessageEntry[];
+}
+
+// ─── Workspace profile API ────────────────────────────────────────────────────
+
+export interface WorkspaceProfile {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  repoPath: string;
+  defaultBranch: string;
+  targetBranch: string;
+  adoOrgUrl: string;
+  adoProject: string;
+  adoRepoName: string;
+  adoPat: string;
+  adoPipelineId: string;
+  adoPipelineName: string;
+  templateProfile: string;
+  buildCommand: string;
+  testCommand: string;
+}
+
+export type WorkspaceProfileInput = Omit<WorkspaceProfile, "id" | "createdAt" | "updatedAt">;
+
+export async function listProfiles(): Promise<WorkspaceProfile[]> {
+  const r = await fetch(`${RUNTIME_URL}/profiles`);
+  if (!r.ok) throw new Error(`/profiles HTTP ${r.status}`);
+  return (await r.json()) as WorkspaceProfile[];
+}
+
+export async function getProfile(id: string): Promise<WorkspaceProfile> {
+  const r = await fetch(`${RUNTIME_URL}/profiles/${id}`);
+  if (!r.ok) throw new Error(`/profiles/${id} HTTP ${r.status}`);
+  return (await r.json()) as WorkspaceProfile;
+}
+
+export async function createProfile(data: WorkspaceProfileInput): Promise<WorkspaceProfile> {
+  const r = await fetch(`${RUNTIME_URL}/profiles`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error(`createProfile HTTP ${r.status}: ${await r.text()}`);
+  return (await r.json()) as WorkspaceProfile;
+}
+
+export async function updateProfile(id: string, data: Partial<WorkspaceProfileInput>): Promise<WorkspaceProfile> {
+  const r = await fetch(`${RUNTIME_URL}/profiles/${id}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error(`updateProfile HTTP ${r.status}: ${await r.text()}`);
+  return (await r.json()) as WorkspaceProfile;
+}
+
+export async function deleteProfile(id: string): Promise<void> {
+  const r = await fetch(`${RUNTIME_URL}/profiles/${id}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`deleteProfile HTTP ${r.status}`);
 }

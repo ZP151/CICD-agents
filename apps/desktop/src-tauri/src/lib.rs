@@ -92,8 +92,11 @@ pub fn run() {
                 .build(app)?;
 
             // ── Start the daemon sidecar ──────────────────────────────────────
+            // Use a different port in release builds to avoid colliding with a
+            // developer's local daemon process on the default 8787 port.
+            let daemon_port = if cfg!(debug_assertions) { "8787" } else { "18787" };
             match app.shell().sidecar("cicd-daemon") {
-                Ok(cmd) => match cmd.spawn() {
+                Ok(cmd) => match cmd.env("RUNTIME_PORT", daemon_port).spawn() {
                     Ok((_rx, child)) => {
                         *app.state::<DaemonProcess>().0.lock().unwrap() = Some(child);
                         log::info!("cicd-daemon started");

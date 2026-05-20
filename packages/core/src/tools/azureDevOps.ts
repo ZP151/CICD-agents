@@ -61,6 +61,13 @@ function resolveOrgProject(ctx: ToolContext, payload: Record<string, unknown>): 
   return { org, project };
 }
 
+/** Resolve PAT: per-context override first, then module-level provider (keyring). */
+async function resolvePat(ctx: ToolContext): Promise<string> {
+  const ctxPat = String(ctx.extra?.["ado_pat"] ?? "").trim();
+  if (ctxPat) return ctxPat;
+  return patProvider();
+}
+
 async function postJson(url: string, body: unknown, pat: string): Promise<Response> {
   return fetch(url, {
     method: "POST",
@@ -117,7 +124,7 @@ export function azureDevOpsTools(): Tool[] {
         if (!source || !title) {
           throw new ToolError("create_pull_request requires 'source_branch' and 'title'.");
         }
-        const pat = await patProvider();
+        const pat = await resolvePat(ctx);
         const url =
           `${adoBase(org)}/${project}/_apis/git/repositories/${repository}/pullrequests` +
           `?api-version=${API_VERSION_GIT}`;
@@ -178,7 +185,7 @@ export function azureDevOpsTools(): Tool[] {
             "link_work_item requires 'repository', 'pull_request_id', 'work_item_id'.",
           );
         }
-        const pat = await patProvider();
+        const pat = await resolvePat(ctx);
         const artifactId = `vstfs:///Git/PullRequestId/${project}%2F${repository}%2F${prId}`;
         const url = `${adoBase(org)}/${project}/_apis/wit/workitems/${workItemId}?api-version=${API_VERSION_WI}`;
         const body = [
@@ -213,7 +220,7 @@ export function azureDevOpsTools(): Tool[] {
         const pipelineId = Number(payload["pipeline_id"] ?? 0);
         const branch = String(payload["branch"] ?? "");
         if (!pipelineId) throw new ToolError("trigger_pipeline_run requires 'pipeline_id'.");
-        const pat = await patProvider();
+        const pat = await resolvePat(ctx);
         const url = `${adoBase(org)}/${project}/_apis/pipelines/${pipelineId}/runs?api-version=${API_VERSION_PIPELINES}`;
         const body: Record<string, unknown> = {};
         if (branch) {

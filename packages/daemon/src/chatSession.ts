@@ -9,11 +9,14 @@ import {
   ToolExecutor,
   isConfirmationMessage,
   isDenialMessage,
+  getWorkspaceProfile,
+  profileToToolExtra,
   type ChatEvent,
   type ChatMessage,
   type ChatPlannerResult,
   type PendingToolAction,
   type ToolContext,
+  type Settings,
   azureDevOpsTools,
   dotnetTools,
   gitTools,
@@ -21,6 +24,34 @@ import {
   npmTools,
   pytestTools,
 } from "@cicd-agent/core";
+// Inline config types (mirrored from server.ts ChatStartSchema — kept here to
+// avoid a circular import since server.ts imports ChatSessionManager).
+export interface InlineLlmConfig {
+  llmProvider?:     "azure" | "openai";
+  azureEndpoint?:   string;
+  azureApiKey?:     string;
+  azureDeployment?: string;
+  azureApiVersion?: string;
+  openaiApiKey?:    string;
+  openaiModel?:     string;
+}
+
+export interface InlineProfile {
+  id?:             string;
+  name?:           string;
+  repoPath:        string;
+  defaultBranch:   string;
+  targetBranch:    string;
+  adoOrgUrl:       string;
+  adoProject:      string;
+  adoRepoName:     string;
+  adoPat:          string;
+  adoPipelineId:   string;
+  adoPipelineName: string;
+  templateProfile: string;
+  buildCommand:    string;
+  testCommand:     string;
+}
 
 // ─── Persistent history store (JSON file, capped at 200 messages per session) ─
 
@@ -45,6 +76,7 @@ interface StoredSession {
   id: string;
   createdAt: number;
   repoPath: string;
+  profileId?: string;             // optional workspace profile binding
   messages: ChatMessage[];        // for LLM context
   bubbles: StoredBubble[];        // for UI restoration
   pendingAction?: PendingToolAction; // last write-action the agent proposed, awaiting "yes"
@@ -80,15 +112,40 @@ interface ActiveSession {
   abortController: AbortController;
 }
 
+// ─── Inline config helpers ────────────────────────────────────────────────────
+
+/**
+ * Merge inline LLM config from the frontend (localStorage Settings) on top of
+ * the env-based defaults. This lets the installed app work without a .env file.
+ */
+function buildEffectiveSettings(override?: InlineLlmConfig): Settings {
+  const base = getSettings();
+  if (!override) return base;
+  const isAzure = (override.llmProvider ?? "azure") === "azure";
+  return {
+    ...base,
+    azureOpenAiEndpoint:        isAzure ? (override.azureEndpoint   ?? base.azureOpenAiEndpoint)        : base.azureOpenAiEndpoint,
+    azureOpenAiApiKey:          isAzure ? (override.azureApiKey     ?? base.azureOpenAiApiKey)          : base.azureOpenAiApiKey,
+    azureOpenAiChatDeployment:  isAzure ? (override.azureDeployment ?? base.azureOpenAiChatDeployment)  : base.azureOpenAiChatDeployment,
+    azureOpenAiApiVersion:      isAzure ? (override.azureApiVersion ?? base.azureOpenAiApiVersion)      : base.azureOpenAiApiVersion,
+    llmConfigured: isAzure
+      ? Boolean(
+          (override.azureEndpoint ?? base.azureOpenAiEndpoint) &&
+          (override.azureApiKey   ?? base.azureOpenAiApiKey),
+        )
+      : Boolean(override.openaiApiKey ?? base.azureOpenAiApiKey),
+  };
+}
+
 // ─── ChatSessionManager ───────────────────────────────────────────────────────
 
 export class ChatSessionManager {
   private readonly active = new Map<string, ActiveSession>();
 
-  createSession(repoPath: string): string {
+  createSession(repoPath: string, profileId?: string): string {
     const id = `chat_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
     const store = loadStore();
-    store[id] = { id, createdAt: now(), repoPath, messages: [], bubbles: [] };
+    store[id] = { id, createdAt: now(), repoPath, profileId, messages: [], bubbles: [] };
     saveStore(store);
     this.active.set(id, {
       repoPath,
@@ -161,7 +218,14 @@ export class ChatSessionManager {
       });
   }
 
-  async *run(sessionId: string, message: string, repoPath: string): AsyncGenerator<ChatEvent> {
+  async *run(
+    sessionId: string,
+    message: string,
+    repoPath: string,
+    profileId?: string,
+    llmConfig?: InlineLlmConfig,
+    inlineProfile?: InlineProfile,
+  ): AsyncGenerator<ChatEvent> {
     // ── Ensure session is active ─────────────────────────────────────────────
     if (!this.active.has(sessionId)) {
       const store = loadStore();
@@ -179,12 +243,26 @@ export class ChatSessionManager {
     const session = this.active.get(sessionId)!;
     session.repoPath = repoPath;
 
-    // Update repoPath in store
+    // Update repoPath (and optionally profileId) in store
     {
       const store = loadStore();
       if (store[sessionId]) {
         store[sessionId].repoPath = repoPath;
+        if (profileId) store[sessionId].profileId = profileId;
         saveStore(store);
+      }
+    }
+
+    // ── Resolve workspace profile extras (ADO PAT, org, project, etc.) ──────
+    // Prefer inline profile sent from the frontend over a stored profile lookup.
+    let profileExtra: Record<string, unknown> = {};
+    if (inlineProfile) {
+      profileExtra = profileToToolExtra(inlineProfile as Parameters<typeof profileToToolExtra>[0]);
+    } else {
+      const resolvedProfileId = profileId ?? loadStore()[sessionId]?.profileId;
+      if (resolvedProfileId) {
+        const p = getWorkspaceProfile(getSettings().dataDir, resolvedProfileId);
+        if (p) profileExtra = profileToToolExtra(p);
       }
     }
 
@@ -193,7 +271,7 @@ export class ChatSessionManager {
       repoPath: session.repoPath,
       env: {},
       timeoutSec: 60,
-      extra: {},
+      extra: profileExtra,
     };
     const executor = new ToolExecutor(toolCtx);
     executor.registerMany([
@@ -204,7 +282,8 @@ export class ChatSessionManager {
       ...azureDevOpsTools(),
       gitIntentTool(),
     ]);
-    const llm = new LLMClient();
+    const effectiveSettings = buildEffectiveSettings(llmConfig);
+    const llm = new LLMClient(effectiveSettings);
     const planner = new ChatPlanner(llm, executor);
     const waitForConfirm = (): Promise<boolean> =>
       new Promise<boolean>((resolve) => {
@@ -342,12 +421,18 @@ export class ChatSessionManager {
 
       const session = this.active.get(sessionId)!;
 
-      // Build executor
+      // Build executor — inject workspace profile if one is bound to this session
+      const profileExtra: Record<string, unknown> = storedSession.profileId
+        ? (() => {
+            const p = getWorkspaceProfile(getSettings().dataDir, storedSession.profileId!);
+            return p ? profileToToolExtra(p) : {};
+          })()
+        : {};
       const toolCtx: ToolContext = {
         repoPath: session.repoPath,
         env: {},
         timeoutSec: 60,
-        extra: {},
+        extra: profileExtra,
       };
       const executor = new ToolExecutor(toolCtx);
       executor.registerMany([

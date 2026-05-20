@@ -30,7 +30,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        node: [20]
+        node: [24]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -66,7 +66,7 @@ jobs:
           version: 9.0.0
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
       - name: Install macOS deps
@@ -79,8 +79,6 @@ jobs:
         run: pnpm -r --filter "./packages/*" run build
       - name: Build desktop installer
         env:
-          # Signing secrets must be set in repository secrets by the owner.
-          # The build will still produce unsigned binaries if these are absent.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: pnpm --filter @cicd-agent/desktop tauri:build || true

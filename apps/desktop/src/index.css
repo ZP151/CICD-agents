@@ -7,6 +7,7 @@ body,
 #root {
   height: 100%;
   margin: 0;
+  overflow: hidden;
 }
 
 body {
@@ -14,21 +15,111 @@ body {
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-/* Slim dark scrollbar for chat message list */
-.chat-scroll {
+/* ── Global dark scrollbar ───────────────────────────────────────────────── */
+* {
   scrollbar-width: thin;
-  scrollbar-color: rgba(82, 82, 91, 0.5) transparent;
+  scrollbar-color: rgba(63, 63, 70, 0.8) transparent;
 }
-.chat-scroll::-webkit-scrollbar {
+*::-webkit-scrollbar        { width: 5px; height: 5px; }
+*::-webkit-scrollbar-track  { background: transparent; }
+*::-webkit-scrollbar-thumb  { background-color: rgba(63, 63, 70, 0.8); border-radius: 9999px; }
+*::-webkit-scrollbar-thumb:hover { background-color: rgba(82, 82, 91, 0.9); }
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* ── Chat workspace flex shell ───────────────────────────────────────────── */
+/*
+  Layout order: [history?] [drag?] [balance-spacer?] [middle] [balance-spacer?] [drag?] [right?]
+  Balance spacers are injected via JSX to keep the conversation centred when only
+  one side panel is open.
+*/
+.chat-workspace {
+  display: flex;
+  flex: 1 1 0;     /* fills remaining height after the top bar */
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── History panel ───────────────────────────────────────────────────────── */
+.history-panel {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-right: 1px solid rgb(39 39 42);
+  transition: width 180ms ease, opacity 150ms ease;
+  min-width: 0;
+}
+
+/* ── Middle panel wrapper — fills remaining space, centres inner ─────────── */
+.middle-panel {
+  flex: 1 1 520px;    /* flex-basis = min; flex-grow fills the rest */
+  min-width: 520px;   /* hard floor — side panels cannot push below this */
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* ── Inner conversation column — width-capped, always centred ────────────── */
+/*
+  max-width is intentionally narrow so justify-content:center has room to apply:
+    both collapsed  → middle ~910px  → inner=660, ±125px margin   ✓
+    one panel open  → middle ~670px  → inner=660, ±5px margin     ✓
+    both open       → middle ~450px  → inner fills 450px          ✓
+*/
+.middle-panel-inner {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 660px;
+  min-width: 0;
+  height: 100%;
+}
+
+/* ── Scrollable message area ─────────────────────────────────────────────── */
+.message-panel {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ── Input bar — owned by middle column, never scrolls ──────────────────── */
+.input-panel {
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+/* ── Right context panel ─────────────────────────────────────────────────── */
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-left: 1px solid rgba(39, 39, 42, 0.6);
+  transition: width 180ms ease, opacity 150ms ease;
+  min-width: 0;
+}
+
+/* ── Resize drag handle ──────────────────────────────────────────────────── */
+.panel-resize-handle {
   width: 4px;
-}
-.chat-scroll::-webkit-scrollbar-track {
+  flex-shrink: 0;
+  cursor: col-resize;
   background: transparent;
+  transition: background 120ms ease;
+  position: relative;
+  z-index: 20;
+  /* widen the interactive hit-area without affecting visual width */
+  margin: 0 -3px;
+  padding: 0 3px;
 }
-.chat-scroll::-webkit-scrollbar-thumb {
-  background-color: rgba(82, 82, 91, 0.5);
-  border-radius: 9999px;
-}
-.chat-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(113, 113, 122, 0.7);
+.panel-resize-handle:hover,
+.panel-resize-handle:active {
+  background: rgba(99, 102, 241, 0.45);
 }

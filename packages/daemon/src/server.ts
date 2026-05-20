@@ -38,9 +38,15 @@ import {
   TaskQueue,
   type TaskRunner,
   type TaskView,
+  listWorkspaceProfiles,
+  getWorkspaceProfile,
+  createWorkspaceProfile,
+  updateWorkspaceProfile,
+  deleteWorkspaceProfile,
+  type WorkspaceProfileInput,
 } from "@cicd-agent/core";
 import { SubmitPipelineSchema, TaskIdParam } from "./schemas.js";
-import { ChatSessionManager } from "./chatSession.js";
+import { ChatSessionManager, type InlineLlmConfig, type InlineProfile } from "./chatSession.js";
 import { z } from "zod";
 
 export interface BuildAppOptions {
@@ -48,12 +54,63 @@ export interface BuildAppOptions {
   runner?: TaskRunner;
 }
 
+// Inline LLM config sent from the frontend Settings page (localStorage).
+// All fields are optional — missing ones fall back to env / .env defaults.
+const LlmConfigSchema = z.object({
+  llmProvider:     z.enum(["azure", "openai"]).optional(),
+  azureEndpoint:   z.string().optional(),
+  azureApiKey:     z.string().optional(),
+  azureDeployment: z.string().optional(),
+  azureApiVersion: z.string().optional(),
+  openaiApiKey:    z.string().optional(),
+  openaiModel:     z.string().optional(),
+}).optional();
+
+// Inline profile data sent from the frontend Profiles page (localStorage).
+// Skips the daemon-side DB lookup entirely.
+const InlineProfileSchema = z.object({
+  id:              z.string().optional(),
+  name:            z.string().optional(),
+  repoPath:        z.string().default(""),
+  defaultBranch:   z.string().default("main"),
+  targetBranch:    z.string().default("main"),
+  adoOrgUrl:       z.string().default(""),
+  adoProject:      z.string().default(""),
+  adoRepoName:     z.string().default(""),
+  adoPat:          z.string().default(""),
+  adoPipelineId:   z.string().default(""),
+  adoPipelineName: z.string().default(""),
+  templateProfile: z.string().default(""),
+  buildCommand:    z.string().default(""),
+  testCommand:     z.string().default(""),
+}).optional();
+
+
 const ChatStartSchema = z.object({
-  message: z.string().min(1),
-  repoPath: z.string().default(process.cwd()),
+  message:   z.string().min(1),
+  repoPath:  z.string().default(process.cwd()),
   sessionId: z.string().optional(),
+  profileId: z.string().optional(),  // kept for backwards compat; ignored when profile is provided
+  llmConfig: LlmConfigSchema,        // inline LLM config from localStorage Settings
+  profile:   InlineProfileSchema,    // inline profile data from localStorage Profiles
 });
 const SessionIdParam = z.object({ sessionId: z.string().min(1) });
+const ProfileIdParam = z.object({ id: z.string().min(1) });
+const ProfileBodySchema = z.object({
+  name: z.string().min(1),
+  repoPath: z.string().default(""),
+  defaultBranch: z.string().default("main"),
+  targetBranch: z.string().default("main"),
+  adoOrgUrl: z.string().default(""),
+  adoProject: z.string().default(""),
+  adoRepoName: z.string().default(""),
+  adoPat: z.string().default(""),
+  adoPipelineId: z.string().default(""),
+  adoPipelineName: z.string().default(""),
+  templateProfile: z.string().default(""),
+  buildCommand: z.string().default(""),
+  testCommand: z.string().default(""),
+});
 
 export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInstance> {
   const settings = getSettings();
@@ -159,14 +216,51 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     });
   });
 
+  // ── Workspace profile endpoints ──────────────────────────────────────────────
+
+  app.get("/profiles", async () => listWorkspaceProfiles(settings.dataDir));
+
+  app.get("/profiles/:id", async (req, reply) => {
+    const parsed = ProfileIdParam.safeParse(req.params);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid id" });
+    const profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
+    if (!profile) return reply.code(404).send({ error: "profile not found" });
+    return profile;
+  });
+
+  app.post("/profiles", async (req, reply) => {
+    const parsed = ProfileBodySchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const profile = createWorkspaceProfile(settings.dataDir, parsed.data as WorkspaceProfileInput);
+    return reply.code(201).send(profile);
+  });
+
+  app.put("/profiles/:id", async (req, reply) => {
+    const paramParsed = ProfileIdParam.safeParse(req.params);
+    if (!paramParsed.success) return reply.code(400).send({ error: "invalid id" });
+    const bodyParsed = ProfileBodySchema.partial().safeParse(req.body);
+    if (!bodyParsed.success) return reply.code(400).send({ error: bodyParsed.error.flatten() });
+    const updated = updateWorkspaceProfile(settings.dataDir, paramParsed.data.id, bodyParsed.data);
+    if (!updated) return reply.code(404).send({ error: "profile not found" });
+    return updated;
+  });
+
+  app.delete("/profiles/:id", async (req, reply) => {
+    const parsed = ProfileIdParam.safeParse(req.params);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid id" });
+    const ok = deleteWorkspaceProfile(settings.dataDir, parsed.data.id);
+    if (!ok) return reply.code(404).send({ error: "profile not found" });
+    return { ok: true };
+  });
+
   // ── Chat endpoints ───────────────────────────────────────────────────────────
 
   app.post("/chat", async (req, reply) => {
     const parsed = ChatStartSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
 
-    const { message, repoPath, sessionId: existingId } = parsed.data;
-    const sessionId = existingId ?? chatSessions.createSession(repoPath);
+    const { message, repoPath, sessionId: existingId, profileId, llmConfig, profile } = parsed.data;
+    const sessionId = existingId ?? chatSessions.createSession(repoPath, profileId);
 
     reply.raw.setHeader("Content-Type", "text/event-stream");
     reply.raw.setHeader("Cache-Control", "no-cache, no-transform");
@@ -185,7 +279,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     return new Promise<void>((resolve) => {
       (async () => {
         try {
-          for await (const event of chatSessions.run(sessionId, message, repoPath)) {
+          for await (const event of chatSessions.run(sessionId, message, repoPath, profileId, llmConfig, profile)) {
             send(event.type, event);
             if (
               event.type === "done" ||
