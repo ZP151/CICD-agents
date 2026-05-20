@@ -49,11 +49,14 @@ function deleteProfileLocal(id: string): void {
 // ─── Git branch loader (Tauri command) ───────────────────────────────────────
 
 async function fetchGitBranches(repoPath: string): Promise<string[]> {
-  if (!repoPath.trim() || !("__TAURI__" in window)) return [];
+  if (!repoPath.trim()) return [];
   try {
+    // Tauri v2 exposes __TAURI_INTERNALS__; fall back gracefully in browser dev
     const { invoke } = await import("@tauri-apps/api/core");
-    return await invoke<string[]>("list_git_branches", { repoPath });
-  } catch {
+    const result = await invoke<string[]>("list_git_branches", { repoPath });
+    return Array.isArray(result) ? result : [];
+  } catch (e) {
+    console.warn("[Profiles] list_git_branches failed:", e);
     return [];
   }
 }
@@ -183,9 +186,13 @@ function ProfileForm({ initial, onSave, onCancel, saving }: ProfileFormProps) {
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!form.repoPath.trim()) { setBranches([]); return; }
+    if (!form.repoPath.trim()) {
+      setBranches([]);
+      setBranchLoading(false);
+      return;
+    }
+    setBranchLoading(true); // show spinner immediately on keystroke
     debounceRef.current = setTimeout(async () => {
-      setBranchLoading(true);
       const b = await fetchGitBranches(form.repoPath.trim());
       setBranches(b);
       setBranchLoading(false);
