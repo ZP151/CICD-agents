@@ -45,13 +45,5 @@
     ],
     "externalBin": ["binaries/cicd-daemon"]
   },
-  "plugins": {
-    "shell": {
-      "all": false,
-      "sidecar": true,
-      "scope": [
-        { "name": "binaries/cicd-daemon", "sidecar": true }
-      ]
-    }
-  }
+  "plugins": {}
 }

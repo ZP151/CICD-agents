@@ -5,7 +5,10 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "shell:allow-spawn",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [{ "name": "binaries/cicd-daemon", "sidecar": true }]
+    },
     "shell:allow-kill",
     "shell:allow-stdin-write"
   ]
