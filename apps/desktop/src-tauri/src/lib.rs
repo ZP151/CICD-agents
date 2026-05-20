@@ -62,12 +62,12 @@ pub fn run() {
                     }
                     Err(e) => {
                         log::error!("Failed to spawn cicd-daemon: {e}");
-                        show_daemon_error(app, &e.to_string());
+                        show_daemon_error(&app.handle(), &e.to_string());
                     }
                 },
                 Err(e) => {
                     log::error!("Failed to create sidecar command: {e}");
-                    show_daemon_error(app, &e.to_string());
+                    show_daemon_error(&app.handle(), &e.to_string());
                 }
             }
 
