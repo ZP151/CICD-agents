@@ -272,7 +272,7 @@ function ProfileForm({ initial, onSave, onCancel, saving }: ProfileFormProps) {
   return (
     <form
       onSubmit={(e) => { e.preventDefault(); void onSave(form); }}
-      className="mx-auto max-w-xl space-y-6 py-2"
+      className="space-y-6 py-2"
     >
       {/* ── Identity ── */}
       <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
@@ -300,8 +300,8 @@ function ProfileForm({ initial, onSave, onCancel, saving }: ProfileFormProps) {
             className={`w-full rounded-md border px-3 py-1.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition ${
               !branchLoading && branches.length > 0
                 ? "border-emerald-600 bg-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-600"
-                : branchLoading
-                ? "border-zinc-600 bg-zinc-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 animate-pulse"
+              : branchLoading
+              ? "border-zinc-600 bg-zinc-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 : "border-zinc-700 bg-zinc-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             }`}
           />
@@ -612,63 +612,65 @@ export default function Profiles(): JSX.Element {
         )}
       </div>
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto px-6 py-5">
-        {error && (
-          <div className="mb-4 rounded-md bg-red-900/30 border border-red-800 px-4 py-2 text-sm text-red-400">
-            {error}
-          </div>
-        )}
+      {/* Body — scrolls; content is max-w-xl centered like Settings */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-xl px-6 py-5">
+          {error && (
+            <div className="mb-4 rounded-md bg-red-900/30 border border-red-800 px-4 py-2 text-sm text-red-400">
+              {error}
+            </div>
+          )}
 
-        {mode === "new" && (
-          <ProfileForm
-            initial={BLANK}
-            onSave={handleSave}
-            onCancel={() => setMode("list")}
-            saving={saving}
-          />
-        )}
+          {mode === "new" && (
+            <ProfileForm
+              initial={BLANK}
+              onSave={handleSave}
+              onCancel={() => setMode("list")}
+              saving={saving}
+            />
+          )}
 
-        {typeof mode === "object" && "editing" in mode && (
-          <ProfileForm
-            initial={mode.editing}
-            onSave={handleSave}
-            onCancel={() => setMode("list")}
-            saving={saving}
-          />
-        )}
+          {typeof mode === "object" && "editing" in mode && (
+            <ProfileForm
+              initial={mode.editing}
+              onSave={handleSave}
+              onCancel={() => setMode("list")}
+              saving={saving}
+            />
+          )}
 
-        {mode === "list" && (
-          <>
-            {profiles.length === 0 && (
-              <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-                <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="text-zinc-700">
-                  <rect x="6" y="8" width="28" height="24" rx="3" stroke="currentColor" strokeWidth="1.5" />
-                  <path d="M13 16h14M13 21h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-                <p className="text-sm text-zinc-500">No profiles yet.</p>
-                <button
-                  onClick={() => setMode("new")}
-                  className="text-sm text-blue-400 hover:text-blue-300 transition"
-                >
-                  Create your first profile
-                </button>
-              </div>
-            )}
-            {profiles.length > 0 && (
-              <div className="flex flex-col gap-2">
-                {profiles.map((p) => (
-                  <ProfileCard
-                    key={p.id}
-                    profile={p}
-                    onEdit={() => setMode({ editing: p })}
-                    onDelete={() => handleDelete(p.id)}
-                  />
-                ))}
-              </div>
-            )}
-          </>
-        )}
+          {mode === "list" && (
+            <>
+              {profiles.length === 0 && (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+                  <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="text-zinc-700">
+                    <rect x="6" y="8" width="28" height="24" rx="3" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M13 16h14M13 21h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                  <p className="text-sm text-zinc-500">No profiles yet.</p>
+                  <button
+                    onClick={() => setMode("new")}
+                    className="text-sm text-blue-400 hover:text-blue-300 transition"
+                  >
+                    Create your first profile
+                  </button>
+                </div>
+              )}
+              {profiles.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {profiles.map((p) => (
+                    <ProfileCard
+                      key={p.id}
+                      profile={p}
+                      onEdit={() => setMode({ editing: p })}
+                      onDelete={() => handleDelete(p.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
