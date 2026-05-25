@@ -81,6 +81,7 @@ interface StoredSession {
   bubbles: StoredBubble[];        // for UI restoration
   pendingAction?: PendingToolAction; // last write-action the agent proposed, awaiting "yes"
   llmConfig?: InlineLlmConfig;    // persisted so confirm-action can reuse the same creds
+  inlineProfile?: InlineProfile;  // persisted so confirm-action has ADO/profile context
 }
 
 type HistoryStore = Record<string, StoredSession>;
@@ -244,15 +245,16 @@ export class ChatSessionManager {
     const session = this.active.get(sessionId)!;
     session.repoPath = repoPath;
 
-    // Update repoPath, profileId, and llmConfig in store.
-    // Persisting llmConfig lets confirm-action reuse the same credentials
-    // without the frontend needing to re-send them.
+    // Update repoPath, profileId, llmConfig, and inlineProfile in store.
+    // Persisting these lets confirm-action reuse the same credentials and
+    // ADO context without the frontend needing to re-send them.
     {
       const store = loadStore();
       if (store[sessionId]) {
         store[sessionId].repoPath = repoPath;
         if (profileId) store[sessionId].profileId = profileId;
         if (llmConfig) store[sessionId].llmConfig = llmConfig;
+        if (inlineProfile) store[sessionId].inlineProfile = inlineProfile;
         saveStore(store);
       }
     }
@@ -425,13 +427,17 @@ export class ChatSessionManager {
 
       const session = this.active.get(sessionId)!;
 
-      // Build executor — inject workspace profile if one is bound to this session
-      const profileExtra: Record<string, unknown> = storedSession.profileId
-        ? (() => {
-            const p = getWorkspaceProfile(getSettings().dataDir, storedSession.profileId!);
-            return p ? profileToToolExtra(p) : {};
-          })()
-        : {};
+      // Build executor — prefer the persisted inline profile (sent from the
+      // frontend localStorage on the original /chat request) so that ADO org,
+      // project, repo, and PAT are available without a daemon-side DB lookup.
+      const profileExtra: Record<string, unknown> = storedSession.inlineProfile
+        ? profileToToolExtra(storedSession.inlineProfile as Parameters<typeof profileToToolExtra>[0])
+        : storedSession.profileId
+          ? (() => {
+              const p = getWorkspaceProfile(getSettings().dataDir, storedSession.profileId!);
+              return p ? profileToToolExtra(p) : {};
+            })()
+          : {};
       const toolCtx: ToolContext = {
         repoPath: session.repoPath,
         env: {},
