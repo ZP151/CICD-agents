@@ -141,6 +141,74 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     llmConfigured: settings.llmConfigured,
   }));
 
+  // ── /daemon/configure — persist LLM credentials and hot-reload settings ───
+  // The frontend Settings page calls this so credentials survive daemon restarts
+  // without users ever touching a .env file.
+  const DaemonConfigureSchema = z.object({
+    llmProvider:     z.enum(["azure", "openai"]).optional(),
+    azureEndpoint:   z.string().optional(),
+    azureApiKey:     z.string().optional(),
+    azureDeployment: z.string().optional(),
+    azureApiVersion: z.string().optional(),
+    openaiApiKey:    z.string().optional(),
+    openaiModel:     z.string().optional(),
+  });
+
+  app.post("/daemon/configure", async (req, reply) => {
+    const parsed = DaemonConfigureSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+
+    const cfg = parsed.data;
+    const envDir = nodePath.join(nodeOs.homedir(), ".cicd-agent");
+    const envFile = nodePath.join(envDir, ".env");
+
+    // Build env lines from provided (non-empty) values
+    const lines: string[] = [];
+    if (cfg.llmProvider === "azure" || (!cfg.llmProvider && cfg.azureEndpoint)) {
+      if (cfg.azureEndpoint)   lines.push(`AZURE_OPENAI_ENDPOINT=${cfg.azureEndpoint}`);
+      if (cfg.azureApiKey)     lines.push(`AZURE_OPENAI_API_KEY=${cfg.azureApiKey}`);
+      if (cfg.azureDeployment) lines.push(`AZURE_OPENAI_DEPLOYMENT=${cfg.azureDeployment}`);
+      if (cfg.azureApiVersion) lines.push(`AZURE_OPENAI_API_VERSION=${cfg.azureApiVersion}`);
+    } else if (cfg.llmProvider === "openai" || cfg.openaiApiKey) {
+      if (cfg.openaiApiKey) lines.push(`OPENAI_API_KEY=${cfg.openaiApiKey}`);
+      if (cfg.openaiModel)  lines.push(`OPENAI_MODEL=${cfg.openaiModel}`);
+    }
+
+    if (lines.length > 0) {
+      // Merge with existing file: keep lines whose key we are NOT overwriting
+      const newKeys = new Set(lines.map((l) => l.split("=")[0] ?? ""));
+      let existing: string[] = [];
+      if (nodeFs.existsSync(envFile)) {
+        existing = nodeFs.readFileSync(envFile, "utf8")
+          .split("\n")
+          .filter((l) => {
+            const key = (l.split("=")[0] ?? "").trim();
+            return key && !newKeys.has(key);
+          });
+      }
+      nodeFs.mkdirSync(envDir, { recursive: true });
+      nodeFs.writeFileSync(envFile, [...existing, ...lines].join("\n") + "\n", "utf8");
+
+      // Hot-reload: update process.env so new sessions pick up the new creds
+      for (const line of lines) {
+        const eqIdx = line.indexOf("=");
+        if (eqIdx > 0) {
+          process.env[line.slice(0, eqIdx)] = line.slice(eqIdx + 1);
+        }
+      }
+    }
+
+    // Re-evaluate llmConfigured from the freshly set env vars
+    const isAzure = !!(process.env["AZURE_OPENAI_ENDPOINT"] && process.env["AZURE_OPENAI_API_KEY"]);
+    const isOpenAI = !!process.env["OPENAI_API_KEY"];
+    const nowConfigured = isAzure || isOpenAI;
+
+    // Patch the live settings object so /healthz reflects the new state immediately
+    (settings as Record<string, unknown>)["llmConfigured"] = nowConfigured;
+
+    return { ok: true, llmConfigured: nowConfigured };
+  });
+
   app.post("/tasks/submit-pipeline", async (req, reply) => {
     const parsed = SubmitPipelineSchema.safeParse(req.body);
     if (!parsed.success) {

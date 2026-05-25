@@ -80,6 +80,7 @@ interface StoredSession {
   messages: ChatMessage[];        // for LLM context
   bubbles: StoredBubble[];        // for UI restoration
   pendingAction?: PendingToolAction; // last write-action the agent proposed, awaiting "yes"
+  llmConfig?: InlineLlmConfig;    // persisted so confirm-action can reuse the same creds
 }
 
 type HistoryStore = Record<string, StoredSession>;
@@ -243,12 +244,15 @@ export class ChatSessionManager {
     const session = this.active.get(sessionId)!;
     session.repoPath = repoPath;
 
-    // Update repoPath (and optionally profileId) in store
+    // Update repoPath, profileId, and llmConfig in store.
+    // Persisting llmConfig lets confirm-action reuse the same credentials
+    // without the frontend needing to re-send them.
     {
       const store = loadStore();
       if (store[sessionId]) {
         store[sessionId].repoPath = repoPath;
         if (profileId) store[sessionId].profileId = profileId;
+        if (llmConfig) store[sessionId].llmConfig = llmConfig;
         saveStore(store);
       }
     }
@@ -443,7 +447,11 @@ export class ChatSessionManager {
         ...azureDevOpsTools(),
         gitIntentTool(),
       ]);
-      const llm = new LLMClient();
+      // Reuse the LLM config that was persisted when the session's last /chat
+      // request ran — this ensures confirm-action works without the frontend
+      // having to re-send credentials.
+      const effectiveSettings = buildEffectiveSettings(storedSession.llmConfig);
+      const llm = new LLMClient(effectiveSettings);
       const planner = new ChatPlanner(llm, executor);
 
       // ── Execute the confirmed tool ─────────────────────────────────────────

@@ -13,15 +13,20 @@ import Profiles from "./pages/Profiles.js";
 
 type DaemonState = "starting" | "ready" | "failed";
 
-function useDaemonReady(): DaemonState {
-  const [state, setState] = useState<DaemonState>("starting");
+interface DaemonInfo {
+  state: DaemonState;
+  llmConfigured: boolean;
+}
+
+function useDaemonReady(): DaemonInfo {
+  const [info, setInfo] = useState<DaemonInfo>({ state: "starting", llmConfigured: false });
   const attempts = useRef(0);
 
   useEffect(() => {
     // Only poll in Tauri (installed app). In the browser / tauri dev the daemon
     // is already running before the frontend loads.
     if (!("__TAURI__" in window)) {
-      setState("ready");
+      setInfo({ state: "ready", llmConfigured: true });
       return;
     }
 
@@ -31,28 +36,31 @@ function useDaemonReady(): DaemonState {
     async function poll() {
       while (attempts.current < MAX && !cancelled) {
         try {
-          await fetchHealth();
-          if (!cancelled) setState("ready");
+          const h = await fetchHealth();
+          if (!cancelled) setInfo({ state: "ready", llmConfigured: h.llmConfigured ?? false });
           return;
         } catch {
           attempts.current += 1;
           await new Promise((r) => setTimeout(r, 1000));
         }
       }
-      if (!cancelled) setState("failed");
+      if (!cancelled) setInfo({ state: "failed", llmConfigured: false });
     }
 
     void poll();
     return () => { cancelled = true; };
   }, []);
 
-  return state;
+  return info;
 }
 
 function DaemonGate({ children }: { children: React.ReactNode }) {
-  const state = useDaemonReady();
+  const info = useDaemonReady();
+  const [setupDismissed, setSetupDismissed] = useState(
+    () => localStorage.getItem("setup_banner_dismissed") === "1"
+  );
 
-  if (state === "starting") {
+  if (info.state === "starting") {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center gap-3 bg-zinc-950 text-zinc-400">
         <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -64,7 +72,7 @@ function DaemonGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (state === "failed") {
+  if (info.state === "failed") {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center gap-3 bg-zinc-950 text-zinc-400">
         <svg className="h-6 w-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,7 +86,42 @@ function DaemonGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  // Show first-run setup banner when the daemon is reachable but LLM is not configured
+  const showSetup = info.state === "ready" && !info.llmConfigured && !setupDismissed;
+
+  return (
+    <>
+      {showSetup && (
+        <SetupBanner onDismiss={() => {
+          setSetupDismissed(true);
+          localStorage.setItem("setup_banner_dismissed", "1");
+        }} />
+      )}
+      {children}
+    </>
+  );
+}
+
+function SetupBanner({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div className="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-3 bg-amber-900/90 px-4 py-2.5 text-sm text-amber-100 backdrop-blur-sm border-b border-amber-700/60">
+      <div className="flex items-center gap-2">
+        <svg className="h-4 w-4 shrink-0 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+        <span>
+          <strong>LLM not configured.</strong>{" "}
+          Open <strong>Settings</strong>, enter your Azure OpenAI or OpenAI credentials, then click <strong>Apply to Daemon</strong>.
+        </span>
+      </div>
+      <button
+        onClick={onDismiss}
+        className="shrink-0 rounded px-2 py-0.5 text-xs text-amber-300 hover:bg-amber-800/50 transition"
+      >
+        Dismiss
+      </button>
+    </div>
+  );
 }
 
 function useWindowState() {

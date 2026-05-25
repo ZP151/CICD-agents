@@ -365,3 +365,31 @@ export async function deleteProfile(id: string): Promise<void> {
   const r = await fetch(`${RUNTIME_URL}/profiles/${id}`, { method: "DELETE" });
   if (!r.ok) throw new Error(`deleteProfile HTTP ${r.status}`);
 }
+
+// ─── Daemon configuration ─────────────────────────────────────────────────────
+
+export interface DaemonConfigPayload {
+  llmProvider?: "azure" | "openai";
+  azureEndpoint?: string;
+  azureApiKey?: string;
+  azureDeployment?: string;
+  azureApiVersion?: string;
+  openaiApiKey?: string;
+  openaiModel?: string;
+}
+
+/**
+ * Persist LLM credentials to ~/.cicd-agent/.env on the daemon host and
+ * hot-reload them so they take effect immediately without a daemon restart.
+ */
+export async function configureDaemon(
+  cfg: DaemonConfigPayload,
+): Promise<{ ok: boolean; llmConfigured: boolean }> {
+  const r = await fetch(`${RUNTIME_URL}/daemon/configure`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(cfg),
+  });
+  if (!r.ok) throw new Error(`/daemon/configure HTTP ${r.status}: ${await r.text()}`);
+  return (await r.json()) as { ok: boolean; llmConfigured: boolean };
+}

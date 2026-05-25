@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchHealth, configureDaemon, type DaemonConfigPayload } from "../api";
 
 // ─── Persistence ───────────────────────────────────────────────────────────────
 
@@ -103,12 +104,50 @@ function Divider() {
 
 // ─── Main Settings page ────────────────────────────────────────────────────────
 
+type DaemonStatus = "unknown" | "checking" | "configured" | "unconfigured" | "unreachable" | "applying" | "applied" | "error";
+
 export default function Settings(): JSX.Element {
   const [s, setS] = useState<AppSettings>(loadSettings);
   // "saved" flash indicator
   const [saved, setSaved] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Daemon status
+  const [daemonStatus, setDaemonStatus] = useState<DaemonStatus>("unknown");
+  const [applyError, setApplyError] = useState<string | null>(null);
+
+  // Check daemon health on mount
+  useEffect(() => {
+    setDaemonStatus("checking");
+    fetchHealth()
+      .then((h) => setDaemonStatus(h.llmConfigured ? "configured" : "unconfigured"))
+      .catch(() => setDaemonStatus("unreachable"));
+  }, []);
+
+  const applyToDaemon = useCallback(async (settings: AppSettings) => {
+    setDaemonStatus("applying");
+    setApplyError(null);
+    try {
+      const cfg: DaemonConfigPayload = { llmProvider: settings.llmProvider };
+      if (settings.llmProvider === "azure") {
+        cfg.azureEndpoint   = settings.azureEndpoint;
+        cfg.azureApiKey     = settings.azureApiKey;
+        cfg.azureDeployment = settings.azureDeployment;
+        cfg.azureApiVersion = settings.azureApiVersion;
+      } else {
+        cfg.openaiApiKey = settings.openaiApiKey;
+        cfg.openaiModel  = settings.openaiModel;
+      }
+      const res = await configureDaemon(cfg);
+      setDaemonStatus(res.llmConfigured ? "applied" : "unconfigured");
+      // Reset to stable "configured" after a moment
+      setTimeout(() => setDaemonStatus(res.llmConfigured ? "configured" : "unconfigured"), 2500);
+    } catch (e) {
+      setApplyError(e instanceof Error ? e.message : String(e));
+      setDaemonStatus("error");
+    }
+  }, []);
 
   // Auto-save with 800 ms debounce after any change
   useEffect(() => {
@@ -130,6 +169,19 @@ export default function Settings(): JSX.Element {
     setS((prev) => ({ ...prev, [key]: value }));
   }
 
+  // Daemon status badge helpers
+  const statusBadge: Record<DaemonStatus, { label: string; cls: string }> = {
+    unknown:      { label: "Unknown",       cls: "text-zinc-500" },
+    checking:     { label: "Checking...",   cls: "text-zinc-400" },
+    configured:   { label: "LLM Ready",     cls: "text-emerald-500" },
+    unconfigured: { label: "Not Configured", cls: "text-amber-400" },
+    unreachable:  { label: "Daemon Offline", cls: "text-red-400" },
+    applying:     { label: "Applying...",   cls: "text-blue-400" },
+    applied:      { label: "Applied",       cls: "text-emerald-400" },
+    error:        { label: "Apply Failed",  cls: "text-red-400" },
+  };
+  const badge = statusBadge[daemonStatus];
+
   return (
     <div className="mx-auto max-w-xl space-y-8 py-2">
       <div className="flex items-start justify-between">
@@ -139,9 +191,10 @@ export default function Settings(): JSX.Element {
             Configure your LLM provider.
           </p>
         </div>
-        {saved && (
-          <span className="mt-1 text-xs text-emerald-500 shrink-0">Saved</span>
-        )}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          {saved && <span className="text-xs text-emerald-500">Saved</span>}
+          <span className={`text-xs font-medium ${badge.cls}`}>{badge.label}</span>
+        </div>
       </div>
 
       {/* ── LLM section ── */}
@@ -222,9 +275,31 @@ export default function Settings(): JSX.Element {
           </div>
         )}
 
-        <p className="rounded-lg bg-amber-950/30 px-3 py-2 text-[11px] text-amber-400/80 border border-amber-900/40">
-          Restart the daemon after changing LLM settings for them to take effect.
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] text-zinc-500">
+            Click <strong className="text-zinc-300">Apply to Daemon</strong> to activate credentials immediately.
+            They are also written to <code className="text-zinc-400">~/.cicd-agent/.env</code> so they persist across restarts.
+          </p>
+          <button
+            type="button"
+            onClick={() => void applyToDaemon(s)}
+            disabled={daemonStatus === "applying" || daemonStatus === "unreachable"}
+            className="shrink-0 rounded-lg border border-blue-700/60 bg-blue-600/20 px-4 py-1.5 text-sm font-medium text-blue-300 transition hover:bg-blue-600/30 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {daemonStatus === "applying" ? "Applying…" : "Apply to Daemon"}
+          </button>
+        </div>
+        {applyError && (
+          <p className="rounded-lg bg-red-950/30 px-3 py-2 text-[11px] text-red-400 border border-red-900/40">
+            {applyError}
+          </p>
+        )}
+        {daemonStatus === "unreachable" && (
+          <p className="rounded-lg bg-amber-950/30 px-3 py-2 text-[11px] text-amber-400/80 border border-amber-900/40">
+            Daemon is not reachable. Start the app and the daemon will launch automatically.
+            Credentials will be applied on next start.
+          </p>
+        )}
       </section>
 
       <p className="text-xs text-zinc-600">
