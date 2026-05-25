@@ -37,6 +37,11 @@ function authHeader(pat: string): Record<string, string> {
 }
 
 function adoBase(org: string): string {
+  // Accept either a full URL (https://tebssg.visualstudio.com or
+  // https://dev.azure.com/myorg) or a bare org slug.
+  if (org.startsWith("http://") || org.startsWith("https://")) {
+    return org.replace(/\/$/, "");
+  }
   return `https://dev.azure.com/${org}`;
 }
 

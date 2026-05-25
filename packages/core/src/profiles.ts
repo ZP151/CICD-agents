@@ -207,9 +207,11 @@ export function deleteWorkspaceProfile(dataDir: string, id: string): boolean {
  * tools receive the correct org / project / repo / PAT automatically.
  */
 export function profileToToolExtra(profile: WorkspaceProfile): Record<string, unknown> {
-  const orgSlug = profile.adoOrgUrl.replace(/\/$/, "").split("/").pop() ?? profile.adoOrgUrl;
+  // Pass the full org URL so adoBase() can build the correct base for both
+  // https://dev.azure.com/myorg  and  https://myorg.visualstudio.com  formats.
+  const orgBase = profile.adoOrgUrl.replace(/\/$/, "");
   return {
-    ado_org: orgSlug,
+    ado_org: orgBase,
     ado_project: profile.adoProject,
     ado_repository: profile.adoRepoName,
     ado_target_branch: profile.targetBranch,
