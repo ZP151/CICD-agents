@@ -1,6 +1,6 @@
 {
   "name": "@cicd-agent/daemon",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -29,9 +29,11 @@
     "@cicd-agent/core": "workspace:*",
     "@fastify/cors": "^10.1.0",
     "@fastify/sensible": "^5.6.0",
+    "better-sqlite3": "^11.0.0",
     "dotenv": "^16.4.0",
     "fastify": "^4.28.0",
     "fastify-sse-v2": "^4.1.0",
+    "sqlite-vec": "^0.1.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
