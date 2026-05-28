@@ -42,6 +42,10 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile=false
+      # core must be built first so downstream packages (cli, daemon, review-agent)
+      # can resolve @cicd-agent/core types during typecheck.
+      - name: Build core
+        run: pnpm --filter @cicd-agent/core run build
       - name: Typecheck
         run: pnpm -r --filter "./packages/*" run typecheck
       - name: Lint
