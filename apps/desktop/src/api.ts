@@ -1,3 +1,8 @@
+// Daemon base URL.  In dev (Vite / tauri dev) this is always port 8787.
+// In a packaged release it is also 8787 – using a single consistent port
+// avoids the async bootstrapping problem that caused the frontend to connect
+// to the wrong port before the Rust backend had a chance to report it.
+// Override with VITE_RUNTIME_URL if you need a non-default address.
 const RUNTIME_URL = import.meta.env.VITE_RUNTIME_URL ?? "http://127.0.0.1:8787";
 
 export interface HealthStatus {

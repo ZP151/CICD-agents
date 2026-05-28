@@ -1,10 +1,19 @@
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
 use tauri_plugin_shell::{process::{CommandChild, CommandEvent}, ShellExt};
+
+/// The port on which the daemon is listening.  Set once during setup() and
+/// read by the frontend via the `get_daemon_port` command.
+static DAEMON_PORT: OnceLock<u16> = OnceLock::new();
+
+#[tauri::command]
+fn get_daemon_port() -> u16 {
+    *DAEMON_PORT.get().unwrap_or(&8787)
+}
 
 /// Resolve the git executable path.  On Windows the Tauri process may inherit
 /// a minimal PATH, so we probe a few well-known locations before falling back
@@ -91,7 +100,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(DaemonProcess(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![list_git_branches])
+        .invoke_handler(tauri::generate_handler![list_git_branches, get_daemon_port])
         // Hide windows instead of quitting when the user closes them
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -133,9 +142,12 @@ pub fn run() {
                 .build(app)?;
 
             // ── Start the daemon sidecar ──────────────────────────────────────
-            // Use a different port in release builds to avoid colliding with a
-            // developer's local daemon process on the default 8787 port.
-            let daemon_port = if cfg!(debug_assertions) { "8787" } else { "18787" };
+            // Use port 8787 for both dev and release so the frontend URL
+            // constant never needs to change between builds.
+            let daemon_port_num: u16 = 8787;
+            let _ = DAEMON_PORT.set(daemon_port_num);
+            let daemon_port_str = daemon_port_num.to_string();
+            let daemon_port = daemon_port_str.as_str();
             match app.shell().sidecar("cicd-daemon") {
                 Ok(cmd) => match cmd
                     // Pass port both ways: CLI arg is the most reliable mechanism for
