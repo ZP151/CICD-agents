@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchHealth, configureDaemon, type DaemonConfigPayload } from "../api";
+import {
+  fetchHealth,
+  fetchAuthStatus,
+  fetchDaemonConfig,
+  configureDaemon,
+  migrateProfilesToCloud,
+  type DaemonConfigPayload,
+  type HealthStatus,
+  type AuthUser,
+} from "../api";
 
 // ─── Persistence ───────────────────────────────────────────────────────────────
 
@@ -13,6 +22,10 @@ interface AppSettings {
   azureApiVersion: string;
   openaiApiKey: string;
   openaiModel: string;
+  // Azure cloud persistence
+  azureStorageAccount: string;
+  azureKeyVaultUrl: string;
+  azureCosmosEndpoint: string;
 }
 
 const DEFAULTS: AppSettings = {
@@ -23,6 +36,9 @@ const DEFAULTS: AppSettings = {
   azureApiVersion: "2024-02-01",
   openaiApiKey: "",
   openaiModel: "gpt-4o",
+  azureStorageAccount: "",
+  azureKeyVaultUrl: "",
+  azureCosmosEndpoint: "",
 };
 
 function loadSettings(): AppSettings {
@@ -102,9 +118,23 @@ function Divider() {
   return <hr className="border-zinc-800/60" />;
 }
 
+// ─── Cloud status pill ────────────────────────────────────────────────────────
+
+function CloudPill({ active, label }: { active: boolean; label: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+      active ? "bg-emerald-900/40 text-emerald-400" : "bg-zinc-800/60 text-zinc-600"
+    }`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-zinc-700"}`} />
+      {label}
+    </span>
+  );
+}
+
 // ─── Main Settings page ────────────────────────────────────────────────────────
 
 type DaemonStatus = "unknown" | "checking" | "configured" | "unconfigured" | "unreachable" | "applying" | "applied" | "error";
+type CloudApplyStatus = "idle" | "applying" | "applied" | "error";
 
 export default function Settings(): JSX.Element {
   const [s, setS] = useState<AppSettings>(loadSettings);
@@ -113,16 +143,49 @@ export default function Settings(): JSX.Element {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Daemon status
+  // Daemon / LLM status
   const [daemonStatus, setDaemonStatus] = useState<DaemonStatus>("unknown");
   const [applyError, setApplyError] = useState<string | null>(null);
 
-  // Check daemon health on mount
+  // Azure cloud status
+  const [health, setHealth] = useState<HealthStatus>({ ok: false });
+  const [authUser, setAuthUser] = useState<AuthUser>({ authenticated: false });
+  const [aoaiKeyInVault, setAoaiKeyInVault] = useState(false);
+  const [cloudStatus, setCloudStatus] = useState<CloudApplyStatus>("idle");
+  const [cloudError, setCloudError] = useState<string | null>(null);
+  const [migrateStatus, setMigrateStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [migrateResult, setMigrateResult] = useState<{ migrated: number; skipped: number; total: number } | null>(null);
+
+  // Check daemon health + pre-fill config on mount
   useEffect(() => {
     setDaemonStatus("checking");
+
+    // Load non-secret config from daemon and merge into local settings
+    // Daemon values win only for fields the user hasn't filled in locally
+    fetchDaemonConfig().then((cfg) => {
+      if (!cfg) return;
+      setAoaiKeyInVault(cfg.aoaiKeyInVault ?? false);
+      setS((prev) => ({
+        ...prev,
+        llmProvider:         (prev.llmProvider || cfg.llmProvider as "azure" | "openai") ?? prev.llmProvider,
+        azureEndpoint:       prev.azureEndpoint    || cfg.azureEndpoint,
+        azureDeployment:     prev.azureDeployment  || cfg.azureDeployment,
+        azureApiVersion:     prev.azureApiVersion  || cfg.azureApiVersion,
+        openaiModel:         prev.openaiModel      || cfg.openaiModel,
+        azureStorageAccount: prev.azureStorageAccount || cfg.azureStorageAccount,
+        azureKeyVaultUrl:    prev.azureKeyVaultUrl    || cfg.azureKeyVaultUrl,
+        azureCosmosEndpoint: prev.azureCosmosEndpoint || cfg.azureCosmosEndpoint,
+      }));
+    }).catch(() => {/* non-fatal */});
+
     fetchHealth()
-      .then((h) => setDaemonStatus(h.llmConfigured ? "configured" : "unconfigured"))
+      .then((h) => {
+        setHealth(h);
+        setDaemonStatus(h.llmConfigured ? "configured" : "unconfigured");
+      })
       .catch(() => setDaemonStatus("unreachable"));
+
+    fetchAuthStatus().then(setAuthUser).catch(() => {/* non-fatal */});
   }, []);
 
   const applyToDaemon = useCallback(async (settings: AppSettings) => {
@@ -141,11 +204,32 @@ export default function Settings(): JSX.Element {
       }
       const res = await configureDaemon(cfg);
       setDaemonStatus(res.llmConfigured ? "applied" : "unconfigured");
-      // Reset to stable "configured" after a moment
       setTimeout(() => setDaemonStatus(res.llmConfigured ? "configured" : "unconfigured"), 2500);
     } catch (e) {
       setApplyError(e instanceof Error ? e.message : String(e));
       setDaemonStatus("error");
+    }
+  }, []);
+
+  const applyCloudToDaemon = useCallback(async (settings: AppSettings) => {
+    setCloudStatus("applying");
+    setCloudError(null);
+    try {
+      const res = await configureDaemon({
+        azureStorageAccount: settings.azureStorageAccount,
+        azureKeyVaultUrl:    settings.azureKeyVaultUrl,
+        azureCosmosEndpoint: settings.azureCosmosEndpoint,
+      });
+      setHealth((h) => ({ ...h,
+        cloudProfileStore: res.cloudProfileStore,
+        cloudSecrets: res.cloudSecrets,
+        cloudSessions: res.cloudSessions,
+      }));
+      setCloudStatus("applied");
+      setTimeout(() => setCloudStatus("idle"), 2500);
+    } catch (e) {
+      setCloudError(e instanceof Error ? e.message : String(e));
+      setCloudStatus("error");
     }
   }, []);
 
@@ -235,13 +319,34 @@ export default function Settings(): JSX.Element {
               onChange={(v) => set("azureEndpoint", v)}
               hint="Found in Azure Portal → Azure OpenAI resource → Keys and Endpoint"
             />
-            <Field
-              label="API Key"
-              type="password"
-              placeholder="••••••••••••••••"
-              value={s.azureApiKey}
-              onChange={(v) => set("azureApiKey", v)}
-            />
+            {aoaiKeyInVault ? (
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-zinc-400">API Key</span>
+                <div className="flex items-center gap-2 rounded-lg border border-emerald-800/50 bg-emerald-950/20 px-3 py-2">
+                  <svg className="h-3.5 w-3.5 shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  <span className="text-xs text-emerald-400">Stored in Azure Key Vault</span>
+                  <button
+                    type="button"
+                    onClick={() => { setAoaiKeyInVault(false); set("azureApiKey", ""); }}
+                    className="ml-auto text-[10px] text-zinc-600 hover:text-zinc-400 transition"
+                  >
+                    Replace
+                  </button>
+                </div>
+                <p className="text-[10px] text-zinc-600">Your API key is securely stored in Key Vault. Click Replace to update it.</p>
+              </div>
+            ) : (
+              <Field
+                label="API Key"
+                type="password"
+                placeholder="••••••••••••••••"
+                value={s.azureApiKey}
+                onChange={(v) => set("azureApiKey", v)}
+                hint={s.azureKeyVaultUrl ? "Will be stored in Key Vault on Apply." : undefined}
+              />
+            )}
             <Field
               label="Deployment Name"
               placeholder="gpt-4o"
@@ -299,6 +404,132 @@ export default function Settings(): JSX.Element {
             Daemon is not reachable. Start the app and the daemon will launch automatically.
             Credentials will be applied on next start.
           </p>
+        )}
+      </section>
+
+      {/* ── Azure Cloud section ── */}
+      <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-5">
+        <div className="flex items-start justify-between">
+          <SectionHeader
+            title="Azure Cloud Persistence"
+            subtitle="Store profiles, secrets, and chat history in your Azure subscription. Requires az login."
+          />
+          <div className="flex items-center gap-1.5 shrink-0 pt-0.5 flex-wrap justify-end max-w-[160px]">
+            <CloudPill active={!!health.cloudProfileStore} label="Profiles" />
+            <CloudPill active={!!health.cloudSecrets} label="Secrets" />
+            <CloudPill active={!!health.cloudSessions} label="Sessions" />
+          </div>
+        </div>
+
+        {/* Auth status banner */}
+        <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${
+          authUser.authenticated
+            ? "border-emerald-800/60 bg-emerald-950/20"
+            : "border-zinc-800 bg-zinc-900/60"
+        }`}>
+          {authUser.authenticated ? (
+            <>
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600/70 text-xs font-semibold text-white">
+                {(authUser.name ?? authUser.upn ?? "?").slice(0, 1).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-zinc-200 truncate">{authUser.name ?? authUser.upn}</p>
+                <p className="text-[10px] text-zinc-500 truncate">{authUser.upn ?? authUser.oid}</p>
+              </div>
+              <span className="ml-auto text-[10px] text-emerald-500 shrink-0">Signed in</span>
+            </>
+          ) : (
+            <>
+              <svg className="h-4 w-4 shrink-0 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              <span className="text-xs text-zinc-500">Not signed in — use the sidebar button to sign in with Microsoft.</span>
+            </>
+          )}
+        </div>
+
+        <Divider />
+
+        <div className="space-y-4">
+          <Field
+            label="Storage Account Name"
+            placeholder="mystorageaccount"
+            value={s.azureStorageAccount}
+            onChange={(v) => set("azureStorageAccount", v)}
+            hint="Azure Storage account for Profile persistence (Table Storage). Leave blank to use local files."
+          />
+          <Field
+            label="Key Vault URL"
+            placeholder="https://my-vault.vault.azure.net/"
+            value={s.azureKeyVaultUrl}
+            onChange={(v) => set("azureKeyVaultUrl", v)}
+            hint="Azure Key Vault for PAT and API key storage."
+          />
+          <Field
+            label="Cosmos DB Endpoint"
+            placeholder="https://my-cosmos.documents.azure.com:443/"
+            value={s.azureCosmosEndpoint}
+            onChange={(v) => set("azureCosmosEndpoint", v)}
+            hint="Azure Cosmos DB endpoint for chat session persistence."
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] text-zinc-500">
+            Written to <code className="text-zinc-400">~/.cicd-agent/.env</code> and applied immediately.
+            Requires <strong className="text-zinc-300">az login</strong> and RBAC roles on each resource.
+          </p>
+          <button
+            type="button"
+            onClick={() => void applyCloudToDaemon(s)}
+            disabled={cloudStatus === "applying" || daemonStatus === "unreachable"}
+            className="shrink-0 rounded-lg border border-zinc-700/60 bg-zinc-800/40 px-4 py-1.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-700/50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {cloudStatus === "applying" ? "Applying…" : cloudStatus === "applied" ? "Applied" : "Apply"}
+          </button>
+        </div>
+
+        {cloudError && (
+          <p className="rounded-lg bg-red-950/30 px-3 py-2 text-[11px] text-red-400 border border-red-900/40">
+            {/auth_required|credential|401|403/i.test(cloudError)
+              ? "Azure credential expired. Use the sidebar Sign-in button to re-authenticate."
+              : cloudError}
+          </p>
+        )}
+
+        {/* Migration — only show when cloud store is active */}
+        {health.cloudProfileStore && (
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-medium text-zinc-300">Migrate local profiles to cloud</p>
+              <p className="text-[10px] text-zinc-600 mt-0.5">
+                Copy profiles from the local JSON store to Azure Table Storage. Existing cloud profiles are not overwritten.
+              </p>
+              {migrateResult && (
+                <p className="text-[10px] text-emerald-400 mt-1">
+                  Done — {migrateResult.migrated} migrated, {migrateResult.skipped} already in cloud (total {migrateResult.total})
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                setMigrateStatus("running");
+                try {
+                  const r = await migrateProfilesToCloud();
+                  setMigrateResult(r);
+                  setMigrateStatus("done");
+                } catch (e) {
+                  setCloudError(e instanceof Error ? e.message : String(e));
+                  setMigrateStatus("error");
+                }
+              }}
+              disabled={migrateStatus === "running"}
+              className="shrink-0 rounded-md border border-zinc-700 px-3 py-1 text-[11px] text-zinc-400 hover:bg-zinc-800/40 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              {migrateStatus === "running" ? "Migrating…" : migrateStatus === "done" ? "Done" : "Migrate"}
+            </button>
+          </div>
         )}
       </section>
 

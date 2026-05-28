@@ -1,9 +1,18 @@
 const RUNTIME_URL = import.meta.env.VITE_RUNTIME_URL ?? "http://127.0.0.1:8787";
 
-export async function fetchHealth(): Promise<{ ok: boolean; uptimeSec?: number; llmConfigured?: boolean }> {
+export interface HealthStatus {
+  ok: boolean;
+  uptimeSec?: number;
+  llmConfigured?: boolean;
+  cloudProfileStore?: boolean;
+  cloudSecrets?: boolean;
+  cloudSessions?: boolean;
+}
+
+export async function fetchHealth(): Promise<HealthStatus> {
   const r = await fetch(`${RUNTIME_URL}/healthz`);
   if (!r.ok) throw new Error(`/healthz HTTP ${r.status}`);
-  return r.json();
+  return r.json() as Promise<HealthStatus>;
 }
 
 export interface TaskView {
@@ -366,6 +375,113 @@ export async function deleteProfile(id: string): Promise<void> {
   if (!r.ok) throw new Error(`deleteProfile HTTP ${r.status}`);
 }
 
+// ─── Azure Auth ───────────────────────────────────────────────────────────────
+
+export interface AuthUser {
+  authenticated: boolean;
+  oid?: string;
+  upn?: string;
+  name?: string;
+  fromCache?: boolean;
+  message?: string;
+}
+
+/** Instant cached user — no Azure round-trip, safe to call on every render cycle. */
+export async function fetchAuthStatus(): Promise<AuthUser> {
+  try {
+    const r = await fetch(`${RUNTIME_URL}/auth/status`);
+    if (!r.ok) return { authenticated: false };
+    return (await r.json()) as AuthUser;
+  } catch {
+    return { authenticated: false };
+  }
+}
+
+/** Live user identity — verifies the credential is still valid and persists result. */
+export async function fetchAuthMe(): Promise<AuthUser> {
+  try {
+    const r = await fetch(`${RUNTIME_URL}/auth/me`);
+    if (!r.ok) return { authenticated: false };
+    return (await r.json()) as AuthUser;
+  } catch {
+    return { authenticated: false };
+  }
+}
+
+export type AuthLoginEvent =
+  | { type: "status"; message: string }
+  | { type: "output"; line: string }
+  | { type: "done"; authenticated: boolean; oid?: string; upn?: string; name?: string }
+  | { type: "error"; message: string };
+
+/**
+ * Stream `az login` via the daemon.
+ * Returns a cancel function. Calls `onEvent` for each SSE event.
+ */
+export function authLoginStream(onEvent: (e: AuthLoginEvent) => void): () => void {
+  const controller = new AbortController();
+
+  fetch(`${RUNTIME_URL}/auth/login`, {
+    method: "POST",
+    signal: controller.signal,
+  })
+    .then(async (r) => {
+      if (!r.ok || !r.body) { onEvent({ type: "error", message: `HTTP ${r.status}` }); return; }
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      let currentEvent = "output";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) { currentEvent = line.slice(7).trim(); }
+          else if (line.startsWith("data: ")) {
+            try {
+              const d = JSON.parse(line.slice(6)) as Record<string, unknown>;
+              onEvent({ type: currentEvent, ...d } as AuthLoginEvent);
+            } catch { /* ignore */ }
+          }
+        }
+      }
+    })
+    .catch((err: unknown) => {
+      if ((err as { name?: string }).name !== "AbortError") {
+        onEvent({ type: "error", message: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+  return () => controller.abort();
+}
+
+/** Sign out — calls az logout on the daemon host and clears the cache. */
+export async function authLogout(): Promise<void> {
+  await fetch(`${RUNTIME_URL}/auth/logout`, { method: "POST" });
+}
+
+/** Migrate local profiles → Azure Table Storage. Returns counts. */
+export async function migrateProfilesToCloud(): Promise<{ migrated: number; skipped: number; total: number }> {
+  const r = await fetch(`${RUNTIME_URL}/profiles/migrate`, { method: "POST" });
+  if (!r.ok) {
+    const body = await r.json() as { message?: string };
+    throw new Error(body.message ?? `HTTP ${r.status}`);
+  }
+  return r.json() as Promise<{ migrated: number; skipped: number; total: number }>;
+}
+
+/**
+ * Returns true when the error from a daemon call indicates an expired Azure credential.
+ * Used to show a "Sign in again" banner rather than a generic error.
+ */
+export function isAzureAuthError(err: unknown): boolean {
+  if (err instanceof Response) return err.status === 401;
+  if (err instanceof Error) return /azure_auth_required|credential|401|403/i.test(err.message);
+  return false;
+}
+
 // ─── Daemon configuration ─────────────────────────────────────────────────────
 
 export interface DaemonConfigPayload {
@@ -376,6 +492,33 @@ export interface DaemonConfigPayload {
   azureApiVersion?: string;
   openaiApiKey?: string;
   openaiModel?: string;
+  // Azure cloud persistence
+  azureStorageAccount?: string;
+  azureKeyVaultUrl?: string;
+  azureCosmosEndpoint?: string;
+}
+
+export interface DaemonConfig {
+  llmProvider: string;
+  azureDeployment: string;
+  azureApiVersion: string;
+  azureEndpoint: string;
+  openaiModel: string;
+  aoaiKeyInVault: boolean;
+  azureStorageAccount: string;
+  azureKeyVaultUrl: string;
+  azureCosmosEndpoint: string;
+}
+
+/** Read the daemon's current non-secret configuration for pre-filling the Settings UI. */
+export async function fetchDaemonConfig(): Promise<DaemonConfig | null> {
+  try {
+    const r = await fetch(`${RUNTIME_URL}/daemon/config`);
+    if (!r.ok) return null;
+    return (await r.json()) as DaemonConfig;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -384,12 +527,12 @@ export interface DaemonConfigPayload {
  */
 export async function configureDaemon(
   cfg: DaemonConfigPayload,
-): Promise<{ ok: boolean; llmConfigured: boolean }> {
+): Promise<{ ok: boolean; llmConfigured: boolean; cloudProfileStore?: boolean; cloudSecrets?: boolean; cloudSessions?: boolean }> {
   const r = await fetch(`${RUNTIME_URL}/daemon/configure`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(cfg),
   });
   if (!r.ok) throw new Error(`/daemon/configure HTTP ${r.status}: ${await r.text()}`);
-  return (await r.json()) as { ok: boolean; llmConfigured: boolean };
+  return (await r.json()) as { ok: boolean; llmConfigured: boolean; cloudProfileStore?: boolean; cloudSecrets?: boolean; cloudSessions?: boolean };
 }

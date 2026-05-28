@@ -7,20 +7,32 @@ import {
   cancelPlan,
   fetchChatHistory,
   fetchChatMessages,
+  listProfiles,
   type ChatEventPayload,
   type ChatHistoryEntry,
   type WorkspaceProfile,
 } from "../api.js";
 
-// ─── Profile source of truth: localStorage (same as Profiles page) ────────────
-// Profiles are stored locally; no daemon call needed to read them.
+// ─── Profile loader: daemon-first, localStorage fallback ─────────────────────
 const PROFILES_KEY = "cicd_agent_profiles_v1";
+
 function loadProfilesLocal(): WorkspaceProfile[] {
   try {
     const raw = localStorage.getItem(PROFILES_KEY);
     if (raw) return JSON.parse(raw) as WorkspaceProfile[];
   } catch { /* ignore */ }
   return [];
+}
+
+async function loadProfilesFromDaemon(): Promise<WorkspaceProfile[]> {
+  try {
+    const remote = await listProfiles();
+    // Keep localStorage in sync so the Chat page always has fresh data
+    localStorage.setItem(PROFILES_KEY, JSON.stringify(remote));
+    return remote;
+  } catch {
+    return loadProfilesLocal();
+  }
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1090,16 +1102,22 @@ export default function Chat({ mini = false }: ChatProps) {
     }
   }, [mini]);
 
-  // Load profiles from localStorage (same source as Profiles page).
-  // Re-sync whenever the window regains focus (user may have added a profile
-  // on the Profiles page and navigated back here).
+  // Load profiles: daemon API first, localStorage fallback.
+  // Re-sync on window focus so profiles created on the Profiles page
+  // appear here without a full page reload.
   useEffect(() => {
     if (mini) return;
-    const sync = () => setAvailableProfiles(loadProfilesLocal());
+    let cancelled = false;
+    const sync = () => {
+      void loadProfilesFromDaemon().then((ps) => {
+        if (!cancelled) setAvailableProfiles(ps);
+      });
+    };
     sync(); // initial load
     window.addEventListener("focus", sync);
     document.addEventListener("visibilitychange", sync);
     return () => {
+      cancelled = true;
       window.removeEventListener("focus", sync);
       document.removeEventListener("visibilitychange", sync);
     };

@@ -1,6 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Route, Routes, Navigate, useLocation } from "react-router-dom";
-import { fetchHealth } from "./api.js";
+import {
+  fetchHealth,
+  fetchAuthStatus,
+  fetchAuthMe,
+  authLoginStream,
+  authLogout,
+  type AuthUser,
+  type AuthLoginEvent,
+} from "./api.js";
 import Dashboard from "./pages/Dashboard.js";
 import Repos from "./pages/Repos.js";
 import TaskViewer from "./pages/TaskViewer.js";
@@ -16,17 +24,26 @@ type DaemonState = "starting" | "ready" | "failed";
 interface DaemonInfo {
   state: DaemonState;
   llmConfigured: boolean;
+  cloudProfileStore: boolean;
+  cloudSecrets: boolean;
+  cloudSessions: boolean;
 }
 
 function useDaemonReady(): DaemonInfo {
-  const [info, setInfo] = useState<DaemonInfo>({ state: "starting", llmConfigured: false });
+  const [info, setInfo] = useState<DaemonInfo>({
+    state: "starting",
+    llmConfigured: false,
+    cloudProfileStore: false,
+    cloudSecrets: false,
+    cloudSessions: false,
+  });
   const attempts = useRef(0);
 
   useEffect(() => {
     // Only poll in Tauri (installed app). In the browser / tauri dev the daemon
     // is already running before the frontend loads.
     if (!("__TAURI__" in window)) {
-      setInfo({ state: "ready", llmConfigured: true });
+      setInfo({ state: "ready", llmConfigured: true, cloudProfileStore: false, cloudSecrets: false, cloudSessions: false });
       return;
     }
 
@@ -37,14 +54,20 @@ function useDaemonReady(): DaemonInfo {
       while (attempts.current < MAX && !cancelled) {
         try {
           const h = await fetchHealth();
-          if (!cancelled) setInfo({ state: "ready", llmConfigured: h.llmConfigured ?? false });
+          if (!cancelled) setInfo({
+            state: "ready",
+            llmConfigured: h.llmConfigured ?? false,
+            cloudProfileStore: h.cloudProfileStore ?? false,
+            cloudSecrets: h.cloudSecrets ?? false,
+            cloudSessions: h.cloudSessions ?? false,
+          });
           return;
         } catch {
           attempts.current += 1;
           await new Promise((r) => setTimeout(r, 1000));
         }
       }
-      if (!cancelled) setInfo({ state: "failed", llmConfigured: false });
+      if (!cancelled) setInfo({ state: "failed", llmConfigured: false, cloudProfileStore: false, cloudSecrets: false, cloudSessions: false });
     }
 
     void poll();
@@ -54,7 +77,7 @@ function useDaemonReady(): DaemonInfo {
   return info;
 }
 
-function DaemonGate({ children }: { children: React.ReactNode }) {
+function DaemonGate({ children }: { children: (info: DaemonInfo) => React.ReactNode }) {
   const info = useDaemonReady();
   const [setupDismissed, setSetupDismissed] = useState(
     () => localStorage.getItem("setup_banner_dismissed") === "1"
@@ -97,7 +120,7 @@ function DaemonGate({ children }: { children: React.ReactNode }) {
           localStorage.setItem("setup_banner_dismissed", "1");
         }} />
       )}
-      {children}
+      {children(info)}
     </>
   );
 }
@@ -223,73 +246,177 @@ function IconSettings() {
   );
 }
 
+// ─── useAuth hook ─────────────────────────────────────────────────────────────
+
+const AUTH_CACHE_KEY = "cicd_agent_auth_user";
+
+function useAuth() {
+  const [user, setUser] = useState<AuthUser>(() => {
+    try {
+      const raw = localStorage.getItem(AUTH_CACHE_KEY);
+      if (raw) return JSON.parse(raw) as AuthUser;
+    } catch { /* ignore */ }
+    return { authenticated: false };
+  });
+
+  const save = useCallback((u: AuthUser) => {
+    setUser(u);
+    if (u.authenticated) {
+      localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(u));
+    } else {
+      localStorage.removeItem(AUTH_CACHE_KEY);
+    }
+  }, []);
+
+  // On mount: check daemon's instant cache, then do a live check in background
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      // Fast path: daemon file cache (no Azure round-trip)
+      const cached = await fetchAuthStatus();
+      if (!cancelled && cached.authenticated) save(cached);
+
+      // Slow path: live credential check (updates token validity)
+      const live = await fetchAuthMe();
+      if (!cancelled) save(live);
+    })();
+    return () => { cancelled = true; };
+  }, [save]);
+
+  return { user, save };
+}
+
+// ─── Login modal ──────────────────────────────────────────────────────────────
+
+function LoginModal({ onDone, onCancel }: { onDone: (u: AuthUser) => void; onCancel: () => void }) {
+  const [lines, setLines] = useState<string[]>(["Waiting for az login…"]);
+  const [done, setDone] = useState(false);
+  const cancelRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    cancelRef.current = authLoginStream((e: AuthLoginEvent) => {
+      if (e.type === "output") setLines((l) => [...l.slice(-40), e.line]);
+      else if (e.type === "status") setLines((l) => [...l, e.message]);
+      else if (e.type === "done") {
+        setDone(true);
+        if (e.authenticated) onDone({ authenticated: true, oid: e.oid, upn: e.upn, name: e.name });
+        else onCancel();
+      } else if (e.type === "error") {
+        setLines((l) => [...l, `Error: ${e.message}`]);
+        setDone(true);
+      }
+    });
+    return () => { cancelRef.current?.(); };
+  }, [onDone, onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 backdrop-blur-sm">
+      <div className="w-[480px] rounded-xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-zinc-200">Sign in with Microsoft</h2>
+          {done && (
+            <button onClick={onCancel} className="text-xs text-zinc-500 hover:text-zinc-300">Close</button>
+          )}
+        </div>
+        <p className="mb-3 text-xs text-zinc-500">
+          A browser window will open. Sign in with your company Microsoft account.
+        </p>
+        <div className="h-40 overflow-y-auto rounded-md bg-zinc-950 p-2 font-mono text-[11px] text-zinc-400 leading-relaxed">
+          {lines.map((l, i) => <div key={i}>{l}</div>)}
+        </div>
+        {!done && (
+          <div className="mt-3 flex justify-end">
+            <button
+              onClick={() => { cancelRef.current?.(); onCancel(); }}
+              className="text-xs text-zinc-500 hover:text-zinc-300"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── User footer ─────────────────────────────────────────────────────────────
 
 function UserFooter() {
+  const { user, save } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [loggingIn, setLoggingIn] = useState(false);
 
-  // For now this is a placeholder — wire to real auth in the future
-  const isSignedIn = false;
+  const handleLogin = () => { setMenuOpen(false); setLoggingIn(true); };
+  const handleLoginDone = (u: AuthUser) => { save(u); setLoggingIn(false); };
+  const handleLoginCancel = () => setLoggingIn(false);
 
-  if (!isSignedIn) {
-    return (
-      <div className="border-t border-zinc-800/60 p-2.5">
-        <button
-          className="flex w-full items-center gap-2 rounded-md border border-zinc-800 px-2 py-1.5 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-800/40"
-          onClick={() => {
-            // Microsoft login — placeholder
-            alert("Microsoft login coming soon");
-          }}
-        >
-          <svg className="h-4 w-4 shrink-0 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-          </svg>
-          <span className="text-[12px] text-zinc-500">Sign in with Microsoft</span>
-        </button>
-      </div>
-    );
-  }
+  const handleLogout = async () => {
+    setMenuOpen(false);
+    await authLogout();
+    save({ authenticated: false });
+  };
+
+  const initials = user.name
+    ? user.name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase()
+    : user.upn?.[0]?.toUpperCase() ?? "?";
 
   return (
-    <div className="relative border-t border-zinc-800/60 p-2.5">
-      <button
-        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-zinc-800/60"
-        onClick={() => setMenuOpen((v) => !v)}
-      >
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600/80 text-xs font-semibold text-white">
-          P
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[12px] font-medium text-zinc-300">Ping Zhou</p>
-          <p className="truncate text-[10px] text-zinc-600">Azure DevOps connected</p>
-        </div>
-        <svg className="h-3 w-3 shrink-0 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+    <>
+      {loggingIn && <LoginModal onDone={handleLoginDone} onCancel={handleLoginCancel} />}
 
-      {menuOpen && (
-        <div className="absolute bottom-full left-2.5 right-2.5 mb-1 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl">
-          {[
-            { label: "Account", href: "#" },
-            { label: "Connected providers", href: "#" },
-            { label: "Usage", href: "#" },
-          ].map((item) => (
-            <button
-              key={item.label}
-              className="flex w-full items-center px-3 py-1.5 text-left text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
-              onClick={() => setMenuOpen(false)}
-            >
-              {item.label}
-            </button>
-          ))}
-          <hr className="my-1 border-zinc-800" />
-          <button className="flex w-full items-center px-3 py-1.5 text-left text-xs text-red-400 hover:bg-zinc-800 transition-colors">
-            Sign out
+      {!user.authenticated ? (
+        <div className="border-t border-zinc-800/60 p-2.5">
+          <button
+            className="flex w-full items-center gap-2 rounded-md border border-zinc-800 px-2 py-1.5 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-800/40"
+            onClick={handleLogin}
+          >
+            <svg className="h-4 w-4 shrink-0 text-zinc-600" fill="currentColor" viewBox="0 0 21 21">
+              <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+              <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+              <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+              <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+            </svg>
+            <span className="text-[12px] text-zinc-500">Sign in with Microsoft</span>
           </button>
         </div>
+      ) : (
+        <div className="relative border-t border-zinc-800/60 p-2.5">
+          <button
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-zinc-800/60"
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600/80 text-xs font-semibold text-white">
+              {initials}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[12px] font-medium text-zinc-300">
+                {user.name ?? user.upn ?? "Azure User"}
+              </p>
+              <p className="truncate text-[10px] text-zinc-600">{user.upn ?? user.oid}</p>
+            </div>
+            <svg className="h-3 w-3 shrink-0 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {menuOpen && (
+            <div className="absolute bottom-full left-2.5 right-2.5 mb-1 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl">
+              <div className="px-3 py-2 border-b border-zinc-800">
+                <p className="text-[11px] font-medium text-zinc-300 truncate">{user.name ?? user.upn}</p>
+                <p className="text-[10px] text-zinc-600 truncate">{user.upn}</p>
+              </div>
+              <hr className="my-1 border-zinc-800" />
+              <button
+                className="flex w-full items-center px-3 py-1.5 text-left text-xs text-red-400 hover:bg-zinc-800 transition-colors"
+                onClick={() => void handleLogout()}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -341,7 +468,8 @@ function MiniLayout() {
   );
 }
 
-function FullLayout() {
+function FullLayout({ info }: { info: DaemonInfo }) {
+  const anyCloud = info.cloudProfileStore || info.cloudSecrets || info.cloudSessions;
   return (
     <div className="flex h-screen w-screen bg-zinc-950 text-zinc-100">
       {/* Sidebar */}
@@ -352,6 +480,13 @@ function FullLayout() {
             D
           </div>
           <span className="text-sm font-semibold tracking-tight text-zinc-200">Dev Agent</span>
+          {anyCloud && (
+            <div title="Azure cloud persistence active" className="ml-auto flex items-center gap-0.5 shrink-0">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 opacity-60" />
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 opacity-30" />
+            </div>
+          )}
         </div>
 
         {/* Navigation groups */}
@@ -410,7 +545,7 @@ export default function App(): JSX.Element {
   if (location.pathname === "/chat-mini") return <MiniLayout />;
   return (
     <DaemonGate>
-      <FullLayout />
+      {(info) => <FullLayout info={info} />}
     </DaemonGate>
   );
 }

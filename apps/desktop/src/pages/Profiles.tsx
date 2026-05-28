@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { WorkspaceProfile, WorkspaceProfileInput } from "../api";
+import {
+  listProfiles,
+  createProfile,
+  updateProfile,
+  deleteProfile,
+  fetchHealth,
+  type WorkspaceProfile,
+  type WorkspaceProfileInput,
+} from "../api";
 
-// ─── Local-storage persistence ────────────────────────────────────────────────
+// ─── Local-storage fallback ───────────────────────────────────────────────────
+// Used only when the daemon is unreachable.
 
 const PROFILES_KEY = "cicd_agent_profiles_v1";
 
@@ -11,7 +20,7 @@ function genId(): string {
     : Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-function loadProfiles(): WorkspaceProfile[] {
+function loadProfilesLocal(): WorkspaceProfile[] {
   try {
     const raw = localStorage.getItem(PROFILES_KEY);
     if (raw) return JSON.parse(raw) as WorkspaceProfile[];
@@ -19,30 +28,30 @@ function loadProfiles(): WorkspaceProfile[] {
   return [];
 }
 
-function persistProfiles(profiles: WorkspaceProfile[]): void {
+function persistProfilesLocal(profiles: WorkspaceProfile[]): void {
   localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
 }
 
 function createProfileLocal(data: WorkspaceProfileInput): WorkspaceProfile {
   const now = Date.now() / 1000;
   const profile: WorkspaceProfile = { ...data, id: genId(), createdAt: now, updatedAt: now };
-  persistProfiles([...loadProfiles(), profile]);
+  persistProfilesLocal([...loadProfilesLocal(), profile]);
   return profile;
 }
 
 function updateProfileLocal(id: string, data: Partial<WorkspaceProfileInput>): WorkspaceProfile {
-  const all = loadProfiles();
+  const all = loadProfilesLocal();
   const idx = all.findIndex((p) => p.id === id);
   if (idx < 0) throw new Error("Profile not found");
   const updated: WorkspaceProfile = { ...all[idx]!, ...data, id, updatedAt: Date.now() / 1000 };
   const next = [...all];
   next[idx] = updated;
-  persistProfiles(next);
+  persistProfilesLocal(next);
   return updated;
 }
 
 function deleteProfileLocal(id: string): void {
-  persistProfiles(loadProfiles().filter((p) => p.id !== id));
+  persistProfilesLocal(loadProfilesLocal().filter((p) => p.id !== id));
 }
 
 // ─── Git branch loader ────────────────────────────────────────────────────────
@@ -381,28 +390,62 @@ export default function Profiles(): JSX.Element {
   const [mode, setMode] = useState<Mode>("list");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // true = daemon API is active (cloud or local), false = localStorage fallback
+  const [usingDaemon, setUsingDaemon] = useState(false);
+  const [cloudSync, setCloudSync] = useState(false);
 
-  const reload = useCallback(() => { setProfiles(loadProfiles()); setError(null); }, []);
-  useEffect(() => { reload(); }, [reload]);
+  const reload = useCallback(async () => {
+    setError(null);
+    try {
+      const remote = await listProfiles();
+      setProfiles(remote);
+      setUsingDaemon(true);
+      // Sync to localStorage so the Chat page's profile lookup still works
+      localStorage.setItem(PROFILES_KEY, JSON.stringify(remote));
+    } catch {
+      setProfiles(loadProfilesLocal());
+      setUsingDaemon(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+    // Check if cloud profile store is active
+    fetchHealth()
+      .then((h) => setCloudSync(!!h.cloudProfileStore))
+      .catch(() => {/* non-fatal */});
+  }, [reload]);
 
   const handleSave = useCallback(async (data: WorkspaceProfileInput) => {
     setSaving(true); setError(null);
     try {
-      if (typeof mode === "object" && "editing" in mode) updateProfileLocal(mode.editing.id, data);
-      else createProfileLocal(data);
-      setMode("list"); reload();
+      if (usingDaemon) {
+        if (typeof mode === "object" && "editing" in mode) {
+          await updateProfile(mode.editing.id, data);
+        } else {
+          await createProfile(data);
+        }
+      } else {
+        if (typeof mode === "object" && "editing" in mode) updateProfileLocal(mode.editing.id, data);
+        else createProfileLocal(data);
+      }
+      setMode("list");
+      await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
-  }, [mode, reload]);
+  }, [mode, reload, usingDaemon]);
 
-  const handleDelete = useCallback((id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     if (!confirm("Delete this profile?")) return;
-    try { deleteProfileLocal(id); reload(); }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-  }, [reload]);
+    try {
+      if (usingDaemon) await deleteProfile(id);
+      else deleteProfileLocal(id);
+      await reload();
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }, [reload, usingDaemon]);
 
   // ── Form modes ──────────────────────────────────────────────────────────────
   if (mode === "new" || (typeof mode === "object" && "editing" in mode)) {
@@ -428,7 +471,27 @@ export default function Profiles(): JSX.Element {
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-xl font-semibold text-zinc-100">Profiles</h2>
-          <p className="mt-1 text-sm text-zinc-500">Each profile holds repo path, ADO connection, and branch defaults for one workspace.</p>
+          <div className="mt-1 flex items-center gap-2 flex-wrap">
+            <p className="text-sm text-zinc-500">Each profile holds repo path, ADO connection, and branch defaults for one workspace.</p>
+          </div>
+          <div className="mt-1.5 flex items-center gap-2">
+            {cloudSync ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-900/30 border border-emerald-800/40 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                Cloud synced · Azure Table Storage
+              </span>
+            ) : usingDaemon ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-zinc-800/60 px-2 py-0.5 text-[10px] font-medium text-zinc-500">
+                <span className="h-1.5 w-1.5 rounded-full bg-zinc-600" />
+                Local · daemon store
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-zinc-800/60 px-2 py-0.5 text-[10px] font-medium text-zinc-600">
+                <span className="h-1.5 w-1.5 rounded-full bg-zinc-700" />
+                Local · browser storage
+              </span>
+            )}
+          </div>
         </div>
         {profiles.length > 0 && (
           <button
@@ -461,7 +524,12 @@ export default function Profiles(): JSX.Element {
       ) : (
         <div className="space-y-2">
           {profiles.map((p) => (
-            <ProfileCard key={p.id} profile={p} onEdit={() => setMode({ editing: p })} onDelete={() => handleDelete(p.id)} />
+            <ProfileCard
+              key={p.id}
+              profile={p}
+              onEdit={() => setMode({ editing: p })}
+              onDelete={() => void handleDelete(p.id)}
+            />
           ))}
         </div>
       )}
