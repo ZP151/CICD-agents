@@ -19,6 +19,12 @@ export * from "./tools/gitIntent.js";
 export * from "./telemetry.js";
 export * from "./chatPlanner.js";
 
+// Azure cloud persistence (opt-in — requires env vars)
+export * from "./store/azureAuth.js";
+export * from "./store/tableProfileStore.js";
+export * from "./store/keyVaultSecrets.js";
+export * from "./store/cosmosSessionStore.js";
+
 // SQLite-heavy modules — import directly when needed, not via barrel:
 // import { openRepoDb } from "@cicd-agent/core/db/database"
 // import { VectorIndex } from "@cicd-agent/core/vectorIndex"

@@ -44,7 +44,16 @@ import {
   updateWorkspaceProfile,
   deleteWorkspaceProfile,
   type WorkspaceProfileInput,
+  AzureTableProfileStore,
+  KeyVaultSecrets,
+  getCurrentUser,
+  isAzureAuthAvailable,
+  persistUserCache,
+  loadPersistedUser,
+  clearPersistedUser,
+  resetUserCache,
 } from "@cicd-agent/core";
+import { spawn } from "node:child_process";
 import { SubmitPipelineSchema, TaskIdParam } from "./schemas.js";
 import { ChatSessionManager, type InlineLlmConfig, type InlineProfile } from "./chatSession.js";
 import { z } from "zod";
@@ -117,6 +126,40 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   const app = Fastify({
     logger: { level: settings.runtimeLogLevel.toLowerCase() },
   });
+
+  // Lazy store getters — re-evaluated on every request so hot-reloaded settings
+  // (after /daemon/configure) are always reflected without a daemon restart.
+  let _tableCache: { url: string; store: AzureTableProfileStore } | null = null;
+  const getTableStore = (): AzureTableProfileStore | null => {
+    const url = settings.azureStorageAccount;
+    if (!url) return null;
+    if (_tableCache?.url !== url) _tableCache = { url, store: new AzureTableProfileStore(url) };
+    return _tableCache.store;
+  };
+
+  let _kvCache: { url: string; kv: KeyVaultSecrets } | null = null;
+  const getKvSecrets = (): KeyVaultSecrets | null => {
+    const url = settings.azureKeyVaultUrl;
+    if (!url) return null;
+    if (_kvCache?.url !== url) _kvCache = { url, kv: new KeyVaultSecrets(url) };
+    return _kvCache.kv;
+  };
+
+  // If AOAI key was stored as a KV sentinel on a previous Apply, resolve it now
+  // so LLM calls work without a restart.
+  if (
+    settings.azureKeyVaultUrl &&
+    (process.env["AZURE_OPENAI_API_KEY"] ?? "").startsWith("kv://")
+  ) {
+    try {
+      const kv = new KeyVaultSecrets(settings.azureKeyVaultUrl);
+      const key = await kv.getAoaiKey();
+      if (key) process.env["AZURE_OPENAI_API_KEY"] = key;
+    } catch {
+      // Non-fatal: if KV is unreachable at startup, leave the sentinel and retry next request
+    }
+  }
+
   // Allow cross-origin requests from the Tauri/Vite frontend
   app.addHook("onSend", async (req, reply) => {
     reply.header("Access-Control-Allow-Origin", "*");
@@ -124,6 +167,21 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     reply.header("Access-Control-Allow-Headers", "content-type");
   });
   app.options("*", async (_req, reply) => reply.code(204).send());
+
+  // Global Azure auth error handler: map 401/403 from Azure SDK into a structured
+  // response the frontend can distinguish from generic server errors.
+  app.setErrorHandler(async (error, _req, reply) => {
+    const status = (error as { statusCode?: number }).statusCode
+      ?? (error as { status?: number }).status;
+    if (status === 401 || status === 403) {
+      return reply.code(401).send({
+        error: "azure_auth_required",
+        message: "Azure credential expired or missing. Please sign in again.",
+      });
+    }
+    // Re-throw non-auth errors for Fastify's default handler
+    reply.code(500).send({ error: error.message ?? "internal error" });
+  });
 
   const queue = new TaskQueue(opts.runner ?? runPipelineTask);
   queue.start();
@@ -139,12 +197,138 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     version: process.env.npm_package_version ?? "0.1.0",
     uptimeSec: (Date.now() - startedAt) / 1000,
     llmConfigured: settings.llmConfigured,
+    // Read live settings values so Apply in the UI is reflected immediately
+    cloudProfileStore: !!(settings.azureStorageAccount),
+    cloudSecrets:      !!(settings.azureKeyVaultUrl),
+    cloudSessions:     !!(settings.azureCosmosEndpoint),
+  }));
+
+  // ── /auth/status — instant cached user (no Azure round-trip) ────────────────
+  app.get("/auth/status", async () => {
+    const cached = loadPersistedUser(settings.dataDir);
+    if (cached && cached.oid !== "anonymous") {
+      return { authenticated: true, oid: cached.oid, upn: cached.upn, name: cached.name, fromCache: true };
+    }
+    return { authenticated: false, fromCache: true };
+  });
+
+  // ── /auth/me — resolve live Azure user identity and persist result ───────────
+  app.get("/auth/me", async (_req, reply) => {
+    const available = await isAzureAuthAvailable();
+    if (!available) {
+      return reply.code(200).send({
+        authenticated: false,
+        message: "No Azure credential found. Run `az login` (or use the Sign-in button) to enable cloud persistence.",
+      });
+    }
+    const user = await getCurrentUser();
+    // Persist so /auth/status is instant next time
+    persistUserCache(user, settings.dataDir);
+    return {
+      authenticated: true,
+      oid:  user.oid,
+      upn:  user.upn,
+      name: user.name,
+    };
+  });
+
+  // ── /auth/login — spawn `az login` and stream output via SSE ────────────────
+  // Streams lines from the az subprocess until it exits, then resolves user.
+  app.post("/auth/login", async (req, reply) => {
+    reply.raw.setHeader("Content-Type", "text/event-stream");
+    reply.raw.setHeader("Cache-Control", "no-cache, no-transform");
+    reply.raw.setHeader("Connection", "keep-alive");
+    reply.raw.setHeader("Access-Control-Allow-Origin", "*");
+    reply.raw.flushHeaders();
+
+    const send = (event: string, data: unknown): void => {
+      reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    return new Promise<void>((resolve) => {
+      send("status", { message: "Starting az login…" });
+
+      const proc = spawn("az", ["login"], {
+        shell: true,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      const emit = (line: string): void => {
+        if (line.trim()) send("output", { line: line.trim() });
+      };
+
+      proc.stdout?.on("data", (chunk: Buffer) => {
+        chunk.toString().split("\n").forEach(emit);
+      });
+      proc.stderr?.on("data", (chunk: Buffer) => {
+        chunk.toString().split("\n").forEach(emit);
+      });
+
+      proc.on("close", async (code) => {
+        if (code !== 0) {
+          send("error", { message: `az login exited with code ${code}` });
+          reply.raw.end();
+          resolve();
+          return;
+        }
+        // Refresh cached credential after successful login
+        resetUserCache();
+        const user = await getCurrentUser();
+        persistUserCache(user, settings.dataDir);
+        send("done", {
+          authenticated: user.oid !== "anonymous",
+          oid:  user.oid,
+          upn:  user.upn,
+          name: user.name,
+        });
+        reply.raw.end();
+        resolve();
+      });
+
+      req.raw.on("close", () => {
+        proc.kill();
+        resolve();
+      });
+    });
+  });
+
+  // ── /auth/logout — run `az logout` and clear cache ───────────────────────────
+  app.post("/auth/logout", async (_req, reply) => {
+    return new Promise<void>((resolve) => {
+      const proc = spawn("az", ["logout"], { shell: true, stdio: "ignore" });
+      proc.on("close", () => {
+        clearPersistedUser(settings.dataDir);
+        resetUserCache();
+        reply.send({ ok: true });
+        resolve();
+      });
+    });
+  });
+
+  // ── /daemon/config — read current non-secret configuration ──────────────────
+  // Returns everything the Settings UI needs to pre-fill its fields, but never
+  // returns API keys, PATs, or other credentials.
+  app.get("/daemon/config", async () => ({
+    llmProvider:     process.env["AZURE_OPENAI_ENDPOINT"] ? "azure"
+                   : process.env["OPENAI_API_KEY"]        ? "openai"
+                   : "",
+    azureDeployment:  process.env["AZURE_OPENAI_DEPLOYMENT"] ?? "",
+    azureApiVersion:  process.env["AZURE_OPENAI_API_VERSION"] ?? "",
+    azureEndpoint:    process.env["AZURE_OPENAI_ENDPOINT"] ?? "",
+    openaiModel:      process.env["OPENAI_MODEL"] ?? "",
+    // true when AOAI key is stored in Key Vault (value is a sentinel)
+    aoaiKeyInVault:   (process.env["AZURE_OPENAI_API_KEY"] ?? "").startsWith("kv://"),
+    // Azure cloud persistence — URLs are not secrets
+    azureStorageAccount: settings.azureStorageAccount ?? "",
+    azureKeyVaultUrl:    settings.azureKeyVaultUrl ?? "",
+    azureCosmosEndpoint: settings.azureCosmosEndpoint ?? "",
   }));
 
   // ── /daemon/configure — persist LLM credentials and hot-reload settings ───
   // The frontend Settings page calls this so credentials survive daemon restarts
   // without users ever touching a .env file.
   const DaemonConfigureSchema = z.object({
+    // LLM config
     llmProvider:     z.enum(["azure", "openai"]).optional(),
     azureEndpoint:   z.string().optional(),
     azureApiKey:     z.string().optional(),
@@ -152,6 +336,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     azureApiVersion: z.string().optional(),
     openaiApiKey:    z.string().optional(),
     openaiModel:     z.string().optional(),
+    // Azure cloud persistence config
+    azureStorageAccount: z.string().optional(),
+    azureKeyVaultUrl:    z.string().optional(),
+    azureCosmosEndpoint: z.string().optional(),
   });
 
   app.post("/daemon/configure", async (req, reply) => {
@@ -164,15 +352,36 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
     // Build env lines from provided (non-empty) values
     const lines: string[] = [];
+    // Determine effective KV URL: either from the payload (new value) or existing settings
+    const effectiveKvUrl = cfg.azureKeyVaultUrl ?? settings.azureKeyVaultUrl;
+
     if (cfg.llmProvider === "azure" || (!cfg.llmProvider && cfg.azureEndpoint)) {
       if (cfg.azureEndpoint)   lines.push(`AZURE_OPENAI_ENDPOINT=${cfg.azureEndpoint}`);
-      if (cfg.azureApiKey)     lines.push(`AZURE_OPENAI_API_KEY=${cfg.azureApiKey}`);
       if (cfg.azureDeployment) lines.push(`AZURE_OPENAI_DEPLOYMENT=${cfg.azureDeployment}`);
       if (cfg.azureApiVersion) lines.push(`AZURE_OPENAI_API_VERSION=${cfg.azureApiVersion}`);
+      if (cfg.azureApiKey) {
+        if (effectiveKvUrl) {
+          // Store AOAI key in Key Vault instead of .env for better security
+          try {
+            const tempKv = new KeyVaultSecrets(effectiveKvUrl);
+            await tempKv.setAoaiKey(cfg.azureApiKey);
+            lines.push(`AZURE_OPENAI_API_KEY=kv://aoai-key`); // sentinel — key lives in KV
+          } catch {
+            // KV not ready yet (e.g. first Apply before az login) — fall back to .env
+            lines.push(`AZURE_OPENAI_API_KEY=${cfg.azureApiKey}`);
+          }
+        } else {
+          lines.push(`AZURE_OPENAI_API_KEY=${cfg.azureApiKey}`);
+        }
+      }
     } else if (cfg.llmProvider === "openai" || cfg.openaiApiKey) {
       if (cfg.openaiApiKey) lines.push(`OPENAI_API_KEY=${cfg.openaiApiKey}`);
       if (cfg.openaiModel)  lines.push(`OPENAI_MODEL=${cfg.openaiModel}`);
     }
+    // Azure cloud persistence — write even if empty so the user can clear them
+    if (cfg.azureStorageAccount !== undefined) lines.push(`AZURE_STORAGE_ACCOUNT=${cfg.azureStorageAccount}`);
+    if (cfg.azureKeyVaultUrl    !== undefined) lines.push(`AZURE_KEYVAULT_URL=${cfg.azureKeyVaultUrl}`);
+    if (cfg.azureCosmosEndpoint !== undefined) lines.push(`AZURE_COSMOS_ENDPOINT=${cfg.azureCosmosEndpoint}`);
 
     if (lines.length > 0) {
       // Merge with existing file: keep lines whose key we are NOT overwriting
@@ -205,8 +414,20 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
     // Patch the live settings object so /healthz reflects the new state immediately
     (settings as Record<string, unknown>)["llmConfigured"] = nowConfigured;
+    if (cfg.azureStorageAccount !== undefined)
+      (settings as Record<string, unknown>)["azureStorageAccount"] = cfg.azureStorageAccount;
+    if (cfg.azureKeyVaultUrl !== undefined)
+      (settings as Record<string, unknown>)["azureKeyVaultUrl"] = cfg.azureKeyVaultUrl;
+    if (cfg.azureCosmosEndpoint !== undefined)
+      (settings as Record<string, unknown>)["azureCosmosEndpoint"] = cfg.azureCosmosEndpoint;
 
-    return { ok: true, llmConfigured: nowConfigured };
+    const cloudStores = {
+      cloudProfileStore: !!(settings.azureStorageAccount),
+      cloudSecrets:      !!(settings.azureKeyVaultUrl),
+      cloudSessions:     !!(settings.azureCosmosEndpoint),
+    };
+
+    return { ok: true, llmConfigured: nowConfigured, ...cloudStores };
   });
 
   app.post("/tasks/submit-pipeline", async (req, reply) => {
@@ -285,12 +506,46 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   });
 
   // ── Workspace profile endpoints ──────────────────────────────────────────────
+  // Cloud-first: use AzureTableProfileStore when configured, else local JSON.
+  // Key Vault integration: when kvSecrets is available, adoPat is transparently
+  // stored in Key Vault and stripped/injected on read.
 
-  app.get("/profiles", async () => listWorkspaceProfiles(settings.dataDir));
+  async function resolveAdoPat(profileId: string, bodyPat: string): Promise<string> {
+    const kv = getKvSecrets();
+    if (kv && bodyPat) {
+      await kv.setAdoPat(profileId, bodyPat);
+      return "";
+    }
+    return bodyPat;
+  }
+
+  async function injectAdoPat<T extends { id: string; adoPat: string }>(profile: T): Promise<T> {
+    const kv = getKvSecrets();
+    if (kv) {
+      const pat = await kv.getAdoPat(profile.id);
+      return { ...profile, adoPat: pat ?? "" };
+    }
+    return profile;
+  }
+
+  app.get("/profiles", async () => {
+    const ts = getTableStore();
+    if (ts) {
+      const profiles = await ts.list();
+      return Promise.all(profiles.map(injectAdoPat));
+    }
+    return listWorkspaceProfiles(settings.dataDir);
+  });
 
   app.get("/profiles/:id", async (req, reply) => {
     const parsed = ProfileIdParam.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send({ error: "invalid id" });
+    const ts = getTableStore();
+    if (ts) {
+      const profile = await ts.get(parsed.data.id);
+      if (!profile) return reply.code(404).send({ error: "profile not found" });
+      return injectAdoPat(profile);
+    }
     const profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
     if (!profile) return reply.code(404).send({ error: "profile not found" });
     return profile;
@@ -299,7 +554,16 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.post("/profiles", async (req, reply) => {
     const parsed = ProfileBodySchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const profile = createWorkspaceProfile(settings.dataDir, parsed.data as WorkspaceProfileInput);
+    const data = parsed.data as WorkspaceProfileInput;
+    const ts = getTableStore();
+    if (ts) {
+      const safePat = await resolveAdoPat("__new__", data.adoPat);
+      const profile = await ts.create({ ...data, adoPat: safePat });
+      const kv = getKvSecrets();
+      if (kv && parsed.data.adoPat) await kv.setAdoPat(profile.id, parsed.data.adoPat);
+      return reply.code(201).send(await injectAdoPat(profile));
+    }
+    const profile = createWorkspaceProfile(settings.dataDir, data);
     return reply.code(201).send(profile);
   });
 
@@ -308,7 +572,20 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     if (!paramParsed.success) return reply.code(400).send({ error: "invalid id" });
     const bodyParsed = ProfileBodySchema.partial().safeParse(req.body);
     if (!bodyParsed.success) return reply.code(400).send({ error: bodyParsed.error.flatten() });
-    const updated = updateWorkspaceProfile(settings.dataDir, paramParsed.data.id, bodyParsed.data);
+    const id = paramParsed.data.id;
+    const data = bodyParsed.data;
+    const ts = getTableStore();
+    if (ts) {
+      const kv = getKvSecrets();
+      if (data.adoPat !== undefined && kv) {
+        if (data.adoPat) await kv.setAdoPat(id, data.adoPat);
+        data.adoPat = "";
+      }
+      const updated = await ts.update(id, data);
+      if (!updated) return reply.code(404).send({ error: "profile not found" });
+      return injectAdoPat(updated);
+    }
+    const updated = updateWorkspaceProfile(settings.dataDir, id, data);
     if (!updated) return reply.code(404).send({ error: "profile not found" });
     return updated;
   });
@@ -316,9 +593,52 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.delete("/profiles/:id", async (req, reply) => {
     const parsed = ProfileIdParam.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send({ error: "invalid id" });
-    const ok = deleteWorkspaceProfile(settings.dataDir, parsed.data.id);
+    const id = parsed.data.id;
+    const ts = getTableStore();
+    if (ts) {
+      const kv = getKvSecrets();
+      if (kv) await kv.deleteAdoPat(id);
+      const ok = await ts.delete(id);
+      if (!ok) return reply.code(404).send({ error: "profile not found" });
+      return { ok: true };
+    }
+    const ok = deleteWorkspaceProfile(settings.dataDir, id);
     if (!ok) return reply.code(404).send({ error: "profile not found" });
     return { ok: true };
+  });
+
+  // ── Profile migration: local JSON → Azure Table Storage ─────────────────────
+  // One-shot; idempotent (upsert).  Returns counts of migrated vs skipped profiles.
+  app.post("/profiles/migrate", async (_req, reply) => {
+    const ts = getTableStore();
+    if (!ts) {
+      return reply.code(400).send({
+        error: "cloud_not_configured",
+        message: "AZURE_STORAGE_ACCOUNT is not set. Configure it in Settings first.",
+      });
+    }
+    const local = listWorkspaceProfiles(settings.dataDir);
+    if (local.length === 0) return { migrated: 0, skipped: 0, total: 0 };
+
+    const kv = getKvSecrets();
+    let migrated = 0;
+    let skipped = 0;
+    for (const p of local) {
+      try {
+        const existing = await ts.get(p.id);
+        if (existing) { skipped++; continue; }
+        if (kv && p.adoPat) {
+          await kv.setAdoPat(p.id, p.adoPat);
+          await ts.create({ ...p, adoPat: "" });
+        } else {
+          await ts.create(p);
+        }
+        migrated++;
+      } catch {
+        skipped++;
+      }
+    }
+    return { migrated, skipped, total: local.length };
   });
 
   // ── Chat endpoints ───────────────────────────────────────────────────────────
@@ -430,7 +750,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     return { ok: true };
   });
 
-  app.get("/chat/history", async (_req, reply) => {
+  app.get("/chat/history", async () => {
     return chatSessions.listRecent(30);
   });
 

@@ -22,6 +22,15 @@ const SettingsSchema = z.object({
   indexEmbedBatch: z.coerce.number().default(64),
   telemetryEnabled: z.coerce.boolean().default(false),
   appInsightsConnectionString: z.string().default(""),
+  // ── Azure cloud persistence (optional — falls back to local JSON when unset) ──
+  /** Azure Storage account name for profile persistence (Table Storage) */
+  azureStorageAccount: z.string().default(""),
+  /** Azure Key Vault URL for secret storage, e.g. https://my-vault.vault.azure.net/ */
+  azureKeyVaultUrl: z.string().default(""),
+  /** Azure Cosmos DB endpoint for chat session persistence */
+  azureCosmosEndpoint: z.string().default(""),
+  /** Cosmos DB session TTL in seconds (default 90 days) */
+  azureCosmosSessionTtlSec: z.coerce.number().default(7_776_000),
 });
 
 export type Settings = z.infer<typeof SettingsSchema> & {
@@ -52,6 +61,10 @@ function readEnv(): Record<string, string | undefined> {
     indexEmbedBatch: process.env.INDEX_EMBED_BATCH,
     telemetryEnabled: process.env.TELEMETRY_ENABLED,
     appInsightsConnectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING,
+    azureStorageAccount:      process.env.AZURE_STORAGE_ACCOUNT,
+    azureKeyVaultUrl:         process.env.AZURE_KEYVAULT_URL,
+    azureCosmosEndpoint:      process.env.AZURE_COSMOS_ENDPOINT,
+    azureCosmosSessionTtlSec: process.env.AZURE_COSMOS_SESSION_TTL_SEC,
   };
 }
 

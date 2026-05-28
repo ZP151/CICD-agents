@@ -23,6 +23,9 @@ import {
   gitIntentTool,
   npmTools,
   pytestTools,
+  CosmosSessionStore,
+  resetCosmosClient,
+  type CosmosStoredSession,
 } from "@cicd-agent/core";
 // Inline config types (mirrored from server.ts ChatStartSchema — kept here to
 // avoid a circular import since server.ts imports ChatSessionManager).
@@ -51,6 +54,26 @@ export interface InlineProfile {
   templateProfile: string;
   buildCommand:    string;
   testCommand:     string;
+}
+
+// ─── Cosmos DB session store (opt-in) ────────────────────────────────────────
+// Re-evaluated whenever the endpoint changes so /daemon/configure hot-reload
+// is reflected without a daemon restart.
+
+let _cosmosStore: CosmosSessionStore | null = null;
+let _cosmosEndpoint: string | null = null;
+
+function getCosmosStore(): CosmosSessionStore | null {
+  const settings = getSettings();
+  const endpoint = settings.azureCosmosEndpoint;
+  if (!endpoint) return null;
+  if (_cosmosEndpoint !== endpoint) {
+    // Endpoint changed — reset the SDK-level singleton so a fresh client is used
+    resetCosmosClient();
+    _cosmosEndpoint = endpoint;
+    _cosmosStore = new CosmosSessionStore(endpoint, settings.azureCosmosSessionTtlSec);
+  }
+  return _cosmosStore;
 }
 
 // ─── Persistent history store (JSON file, capped at 200 messages per session) ─
@@ -90,7 +113,7 @@ function historyPath(): string {
   return path.join(getSettings().dataDir, "chat-history.json");
 }
 
-function loadStore(): HistoryStore {
+function loadStoreSync(): HistoryStore {
   const p = historyPath();
   if (!fs.existsSync(p)) return {};
   try {
@@ -100,10 +123,79 @@ function loadStore(): HistoryStore {
   }
 }
 
-function saveStore(store: HistoryStore): void {
+function saveStoreSync(store: HistoryStore): void {
   const p = historyPath();
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, JSON.stringify(store, null, 2), "utf8");
+}
+
+// ── Cosmos-aware async helpers ────────────────────────────────────────────────
+
+async function loadSession(sessionId: string): Promise<StoredSession | null> {
+  const cosmos = getCosmosStore();
+  if (cosmos) {
+    try {
+      const doc = await cosmos.load(sessionId);
+      if (doc) return cosmosToStored(doc);
+    } catch {
+      // fall through to local
+    }
+  }
+  return loadStoreSync()[sessionId] ?? null;
+}
+
+async function saveSession(session: StoredSession): Promise<void> {
+  const cosmos = getCosmosStore();
+  if (cosmos) {
+    try {
+      await cosmos.save(storedToCosmos(session));
+      return;
+    } catch {
+      // fall through to local
+    }
+  }
+  const store = loadStoreSync();
+  store[session.id] = session;
+  saveStoreSync(store);
+}
+
+/** Map Cosmos document back to local StoredSession shape. */
+function cosmosToStored(doc: CosmosStoredSession): StoredSession {
+  return {
+    id:            doc.id,
+    createdAt:     doc.createdAt,
+    repoPath:      doc.repoPath,
+    profileId:     doc.profileId,
+    messages:      doc.messages as ChatMessage[],
+    bubbles:       doc.bubbles as StoredBubble[],
+    pendingAction: doc.pendingAction as PendingToolAction | undefined,
+    llmConfig:     doc.llmConfig as InlineLlmConfig | undefined,
+    inlineProfile: doc.inlineProfile as InlineProfile | undefined,
+  };
+}
+
+/** Map local StoredSession to Cosmos document shape. */
+function storedToCosmos(s: StoredSession): Omit<CosmosStoredSession, "userId" | "updatedAt"> {
+  return {
+    id:            s.id,
+    createdAt:     s.createdAt,
+    repoPath:      s.repoPath,
+    profileId:     s.profileId,
+    messages:      s.messages,
+    bubbles:       s.bubbles,
+    pendingAction: s.pendingAction,
+    llmConfig:     s.llmConfig,
+    inlineProfile: s.inlineProfile,
+  };
+}
+
+/** Synchronous fallback for code paths that must stay sync (legacy helpers). */
+function loadStore(): HistoryStore {
+  return loadStoreSync();
+}
+
+function saveStore(store: HistoryStore): void {
+  saveStoreSync(store);
 }
 
 // ─── Active-session in-memory state ──────────────────────────────────────────
@@ -146,9 +238,13 @@ export class ChatSessionManager {
 
   createSession(repoPath: string, profileId?: string): string {
     const id = `chat_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
-    const store = loadStore();
-    store[id] = { id, createdAt: now(), repoPath, profileId, messages: [], bubbles: [] };
-    saveStore(store);
+    const session: StoredSession = { id, createdAt: now(), repoPath, profileId, messages: [], bubbles: [] };
+    // Fire-and-forget async save; local sync fallback happens inside saveSession
+    saveSession(session).catch(() => {
+      const store = loadStoreSync();
+      store[id] = session;
+      saveStoreSync(store);
+    });
     this.active.set(id, {
       repoPath,
       confirmResolver: null,
@@ -157,32 +253,30 @@ export class ChatSessionManager {
     return id;
   }
 
-  getHistory(sessionId: string, limit = 40): ChatMessage[] {
-    const store = loadStore();
-    return (store[sessionId]?.messages ?? []).slice(-limit);
+  async getHistory(sessionId: string, limit = 40): Promise<ChatMessage[]> {
+    const session = await loadSession(sessionId);
+    return (session?.messages ?? []).slice(-limit);
   }
 
-  getBubbles(sessionId: string): StoredBubble[] {
-    const store = loadStore();
-    return store[sessionId]?.bubbles ?? [];
+  async getBubbles(sessionId: string): Promise<StoredBubble[]> {
+    const session = await loadSession(sessionId);
+    return session?.bubbles ?? [];
   }
 
-  private appendMessage(sessionId: string, role: "user" | "assistant", content: string): void {
-    const store = loadStore();
-    const session = store[sessionId];
+  private async appendMessage(sessionId: string, role: "user" | "assistant", content: string): Promise<void> {
+    const session = await loadSession(sessionId);
     if (!session) return;
     session.messages.push({ role, content, timestamp: now() });
     if (session.messages.length > 200) session.messages = session.messages.slice(-200);
-    saveStore(store);
+    await saveSession(session);
   }
 
-  appendBubble(sessionId: string, bubble: StoredBubble): void {
-    const store = loadStore();
-    const session = store[sessionId];
+  async appendBubble(sessionId: string, bubble: StoredBubble): Promise<void> {
+    const session = await loadSession(sessionId);
     if (!session) return;
     session.bubbles.push(bubble);
     if (session.bubbles.length > 400) session.bubbles = session.bubbles.slice(-400);
-    saveStore(store);
+    await saveSession(session);
   }
 
   confirm(sessionId: string, confirmed: boolean): boolean {
@@ -205,8 +299,16 @@ export class ChatSessionManager {
     }
   }
 
-  listRecent(limit = 30): Array<{ sessionId: string; preview: string; createdAt: number }> {
-    const store = loadStore();
+  async listRecent(limit = 30): Promise<Array<{ sessionId: string; preview: string; createdAt: number }>> {
+    const cosmos = getCosmosStore();
+    if (cosmos) {
+      try {
+        return await cosmos.listRecent(limit);
+      } catch {
+        // fall through to local
+      }
+    }
+    const store = loadStoreSync();
     return Object.values(store)
       .sort((a, b) => b.createdAt - a.createdAt)
       .slice(0, limit)
@@ -230,8 +332,8 @@ export class ChatSessionManager {
   ): AsyncGenerator<ChatEvent> {
     // ── Ensure session is active ─────────────────────────────────────────────
     if (!this.active.has(sessionId)) {
-      const store = loadStore();
-      if (!store[sessionId]) {
+      const storedCheck = await loadSession(sessionId);
+      if (!storedCheck) {
         yield { type: "error", message: "session not found" };
         return;
       }
@@ -249,13 +351,13 @@ export class ChatSessionManager {
     // Persisting these lets confirm-action reuse the same credentials and
     // ADO context without the frontend needing to re-send them.
     {
-      const store = loadStore();
-      if (store[sessionId]) {
-        store[sessionId].repoPath = repoPath;
-        if (profileId) store[sessionId].profileId = profileId;
-        if (llmConfig) store[sessionId].llmConfig = llmConfig;
-        if (inlineProfile) store[sessionId].inlineProfile = inlineProfile;
-        saveStore(store);
+      const storedSession = await loadSession(sessionId);
+      if (storedSession) {
+        storedSession.repoPath = repoPath;
+        if (profileId) storedSession.profileId = profileId;
+        if (llmConfig) storedSession.llmConfig = llmConfig;
+        if (inlineProfile) storedSession.inlineProfile = inlineProfile;
+        await saveSession(storedSession);
       }
     }
 
@@ -265,7 +367,8 @@ export class ChatSessionManager {
     if (inlineProfile) {
       profileExtra = profileToToolExtra(inlineProfile as Parameters<typeof profileToToolExtra>[0]);
     } else {
-      const resolvedProfileId = profileId ?? loadStore()[sessionId]?.profileId;
+      const storedForProfile = await loadSession(sessionId);
+      const resolvedProfileId = profileId ?? storedForProfile?.profileId;
       if (resolvedProfileId) {
         const p = getWorkspaceProfile(getSettings().dataDir, resolvedProfileId);
         if (p) profileExtra = profileToToolExtra(p);
@@ -298,13 +401,12 @@ export class ChatSessionManager {
 
     try {
       // ── Persist user message ───────────────────────────────────────────────
-      this.appendBubble(sessionId, { role: "user", content: message, timestamp: now(), repoPath });
-      this.appendMessage(sessionId, "user", message);
+      await this.appendBubble(sessionId, { role: "user", content: message, timestamp: now(), repoPath });
+      await this.appendMessage(sessionId, "user", message);
 
       // ── Confirmation / Denial resolver ─────────────────────────────────────
       {
-        const store = loadStore();
-        const storedSession = store[sessionId];
+        const storedSession = await loadSession(sessionId);
         // If no stored pending action, attempt to infer one from the last assistant message
         const pending = storedSession?.pendingAction
           ?? (isConfirmationMessage(message) ? inferPendingAction(storedSession?.messages ?? []) : undefined);
@@ -312,8 +414,10 @@ export class ChatSessionManager {
         if (pending) {
           if (isDenialMessage(message)) {
             // User cancelled — clear pending action and acknowledge
-            if (storedSession) storedSession.pendingAction = undefined;
-            saveStore(store);
+            if (storedSession) {
+              storedSession.pendingAction = undefined;
+              await saveSession(storedSession);
+            }
             const doneEvent: ChatEvent = {
               type: "done",
               result: {
@@ -325,16 +429,18 @@ export class ChatSessionManager {
                 usedLlm: false,
               },
             };
-            this.appendMessage(sessionId, "assistant", doneEvent.result.response);
-            this.appendBubble(sessionId, { role: "assistant", content: doneEvent.result.response, timestamp: now() });
+            await this.appendMessage(sessionId, "assistant", doneEvent.result.response);
+            await this.appendBubble(sessionId, { role: "assistant", content: doneEvent.result.response, timestamp: now() });
             yield doneEvent;
             return;
           }
 
           if (isConfirmationMessage(message)) {
             // Clear pending from store immediately so it won't fire again
-            if (storedSession) storedSession.pendingAction = undefined;
-            saveStore(store);
+            if (storedSession) {
+              storedSession.pendingAction = undefined;
+              await saveSession(storedSession);
+            }
 
             // ── Execute the tool directly — no LLM round trip ───────────────
             yield { type: "tool_start", name: pending.tool, args: pending.args };
@@ -350,7 +456,7 @@ export class ChatSessionManager {
             yield { type: "tool_end", name: pending.tool, ok, summary, result: toolResult };
 
             // Persist tool bubble
-            this.appendBubble(sessionId, {
+            await this.appendBubble(sessionId, {
               role: "tool",
               content: summary,
               timestamp: now(),
@@ -362,7 +468,7 @@ export class ChatSessionManager {
             });
 
             // Add context to LLM history so it knows what was done
-            this.appendMessage(
+            await this.appendMessage(
               sessionId,
               "assistant",
               `[executed] ${pending.tool}(${JSON.stringify(pending.args)}): ${summary}`,
@@ -373,11 +479,11 @@ export class ChatSessionManager {
               ? `${pending.tool} completed${pending.nextHint ? ` — next: ${pending.nextHint}` : ""}. Report result and continue the workflow.`
               : `${pending.tool} failed: ${summary}. What should we do?`;
 
-            this.appendMessage(sessionId, "user", continuationMsg);
-            const history = this.getHistory(sessionId, 22);
+            await this.appendMessage(sessionId, "user", continuationMsg);
+            const history22 = await this.getHistory(sessionId, 22);
 
             yield* this._runPlannerAndPersist(
-              sessionId, continuationMsg, history, session.repoPath, planner, waitForConfirm,
+              sessionId, continuationMsg, history22, session.repoPath, planner, waitForConfirm,
             );
             return;
           }
@@ -385,7 +491,7 @@ export class ChatSessionManager {
       }
 
       // ── Normal LLM flow ────────────────────────────────────────────────────
-      const history = this.getHistory(sessionId, 20);
+      const history = await this.getHistory(sessionId, 20);
       yield* this._runPlannerAndPersist(
         sessionId, message, history, session.repoPath, planner, waitForConfirm,
       );
@@ -403,8 +509,7 @@ export class ChatSessionManager {
    */
   async *confirmAction(sessionId: string): AsyncGenerator<ChatEvent> {
     // Load pending action — use heuristic fallback if LLM omitted the JSON field
-    const store = loadStore();
-    const storedSession = store[sessionId];
+    const storedSession = await loadSession(sessionId);
     const pending = storedSession?.pendingAction
       ?? inferPendingAction(storedSession?.messages ?? []);
 
@@ -423,7 +528,7 @@ export class ChatSessionManager {
     try {
       // Clear pending action immediately so a double-click can't re-trigger
       storedSession.pendingAction = undefined;
-      saveStore(store);
+      await saveSession(storedSession);
 
       const session = this.active.get(sessionId)!;
 
@@ -474,7 +579,7 @@ export class ChatSessionManager {
       yield { type: "tool_end", name: pending.tool, ok, summary, result: toolResult };
 
       // Persist tool bubble
-      this.appendBubble(sessionId, {
+      await this.appendBubble(sessionId, {
         role: "tool",
         content: summary,
         timestamp: now(),
@@ -486,7 +591,7 @@ export class ChatSessionManager {
       });
 
       // Record in LLM history
-      this.appendMessage(
+      await this.appendMessage(
         sessionId,
         "assistant",
         `[confirmed & executed] ${pending.tool}(${JSON.stringify(pending.args)}): ${summary}`,
@@ -503,8 +608,8 @@ export class ChatSessionManager {
           `If the next step requires user confirmation (commit/push/PR), propose it with pending_action in your JSON.`
         : `WORKFLOW STEP FAILED: ${pending.tool} failed with error: ${summary}. Explain what went wrong and propose a recovery action.`;
 
-      this.appendMessage(sessionId, "user", continuationMsg);
-      const history = this.getHistory(sessionId, 22);
+      await this.appendMessage(sessionId, "user", continuationMsg);
+      const history = await this.getHistory(sessionId, 22);
 
       yield* this._runPlannerAndPersist(
         sessionId, continuationMsg, history, session.repoPath, planner, () => Promise.resolve(true),
@@ -533,7 +638,7 @@ export class ChatSessionManager {
       } else if (event.type === "tool_end") {
         const args = pendingToolArgs.get(event.name);
         pendingToolArgs.delete(event.name);
-        this.appendBubble(sessionId, {
+        await this.appendBubble(sessionId, {
           role: "tool",
           content: event.summary,
           timestamp: now(),
@@ -546,13 +651,12 @@ export class ChatSessionManager {
         yield event;
       } else if (event.type === "done") {
         // ── Workflow-state enrichment ──────────────────────────────────────
-        // Derive the correct pending_action from ACTUAL execution history.
-        // This owns workflow control instead of relying on the LLM to emit it.
-        const enrichedResult = deriveWorkflowPendingAction(sessionId, event.result);
+        const bubbles = await this.getBubbles(sessionId);
+        const enrichedResult = deriveWorkflowPendingAction(sessionId, event.result, bubbles);
         const enrichedEvent: ChatEvent = { type: "done", result: enrichedResult };
 
         assistantReply = enrichedResult.response;
-        this.appendBubble(sessionId, {
+        await this.appendBubble(sessionId, {
           role: "assistant",
           content: enrichedResult.response,
           timestamp: now(),
@@ -560,21 +664,20 @@ export class ChatSessionManager {
           actionsTaken: enrichedResult.actionsTaken,
           suggestions: enrichedResult.suggestions,
         });
-        // Store the enriched pendingAction — this is the single source of truth
-        const store = loadStore();
-        const s = store[sessionId];
-        if (s) {
-          s.pendingAction = enrichedResult.pendingAction ?? undefined;
-          saveStore(store);
+        // Store the enriched pendingAction
+        const storedForPending = await loadSession(sessionId);
+        if (storedForPending) {
+          storedForPending.pendingAction = enrichedResult.pendingAction ?? undefined;
+          await saveSession(storedForPending);
         }
         yield enrichedEvent;
       } else if (event.type === "error") {
         assistantReply = event.message;
-        this.appendBubble(sessionId, { role: "error", content: event.message, timestamp: now() });
+        await this.appendBubble(sessionId, { role: "error", content: event.message, timestamp: now() });
         yield event;
       } else if (event.type === "cancelled") {
         assistantReply = "(cancelled)";
-        this.appendBubble(sessionId, { role: "system", content: "Action cancelled.", timestamp: now() });
+        await this.appendBubble(sessionId, { role: "system", content: "Action cancelled.", timestamp: now() });
         yield event;
       } else {
         yield event;
@@ -582,7 +685,7 @@ export class ChatSessionManager {
     }
 
     if (assistantReply) {
-      this.appendMessage(sessionId, "assistant", assistantReply);
+      await this.appendMessage(sessionId, "assistant", assistantReply);
     }
   }
 }
@@ -672,7 +775,11 @@ const WORKFLOW_STEPS: Array<{
  *   2. If the response is asking for confirmation → derive from workflow stage
  *   3. Otherwise → no pending action
  */
-function deriveWorkflowPendingAction(sessionId: string, result: ChatPlannerResult): ChatPlannerResult {
+function deriveWorkflowPendingAction(
+  _sessionId: string,
+  result: ChatPlannerResult,
+  bubbles: StoredBubble[],
+): ChatPlannerResult {
   // If LLM correctly provided pending_action, trust it
   if (result.pendingAction?.tool) return result;
 
@@ -685,9 +792,6 @@ function deriveWorkflowPendingAction(sessionId: string, result: ChatPlannerResul
     response.includes("ready to") || response.includes("want me to");
   if (!isAskingConfirmation) return result;
 
-  // Load executed tools from this session's persisted bubbles
-  const store = loadStore();
-  const bubbles: StoredBubble[] = store[sessionId]?.bubbles ?? [];
   const executedTools = new Set(
     bubbles.filter((b) => b.role === "tool" && b.toolOk === true).map((b) => b.toolName ?? ""),
   );

@@ -312,6 +312,114 @@ export function createProgram(): Command {
       console.log(chalk.dim("\nThen open a new terminal and run: dev-agent healthz"));
     });
 
+  // ── auth subcommand ───────────────────────────────────────────────────────────
+  const auth = program.command("auth").description("Azure account management.");
+
+  auth
+    .command("login")
+    .description("Sign in with Microsoft (opens browser via az login).")
+    .action(async () => {
+      const c = await client();
+      const baseUrl = c.baseUrl;
+      const { default: EventSource } = await import("eventsource");
+      const url = `${baseUrl}/auth/login`;
+
+      console.log(chalk.dim("Opening browser for Microsoft sign-in…\n"));
+
+      await new Promise<void>((resolve) => {
+        // POST via fetch-then-EventSource pattern: daemon streams SSE from az login
+        const controller = new AbortController();
+
+        fetch(url, { method: "POST", signal: controller.signal })
+          .then(async (r) => {
+            if (!r.ok || !r.body) {
+              console.error(chalk.red(`Login request failed: HTTP ${r.status}`));
+              resolve();
+              return;
+            }
+            const reader = r.body.getReader();
+            const dec = new TextDecoder();
+            let buf = "";
+            let currentEvent = "output";
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buf += dec.decode(value, { stream: true });
+              const lines = buf.split("\n");
+              buf = lines.pop() ?? "";
+              for (const line of lines) {
+                if (line.startsWith("event: ")) { currentEvent = line.slice(7).trim(); }
+                else if (line.startsWith("data: ")) {
+                  try {
+                    const d = JSON.parse(line.slice(6)) as Record<string, unknown>;
+                    if (currentEvent === "output" && d["line"]) {
+                      console.log(chalk.dim(String(d["line"])));
+                    } else if (currentEvent === "status") {
+                      console.log(chalk.cyan(String(d["message"] ?? "")));
+                    } else if (currentEvent === "done") {
+                      if (d["authenticated"]) {
+                        console.log();
+                        console.log(chalk.green("Signed in successfully."));
+                        console.log(`  ${chalk.bold("Name:")} ${d["name"] ?? "-"}`);
+                        console.log(`  ${chalk.bold("Email:")} ${d["upn"] ?? "-"}`);
+                        console.log(`  ${chalk.bold("OID:")} ${d["oid"] ?? "-"}`);
+                      } else {
+                        console.log(chalk.red("Sign-in did not complete."));
+                      }
+                    } else if (currentEvent === "error") {
+                      console.error(chalk.red(String(d["message"] ?? "Login error")));
+                    }
+                  } catch { /* ignore */ }
+                }
+              }
+            }
+            resolve();
+          })
+          .catch((err: unknown) => {
+            console.error(chalk.red(err instanceof Error ? err.message : String(err)));
+            resolve();
+          });
+      });
+    });
+
+  auth
+    .command("logout")
+    .description("Sign out of Microsoft account (az logout).")
+    .action(async () => {
+      const c = await client();
+      const baseUrl = c.baseUrl;
+      const r = await fetch(`${baseUrl}/auth/logout`, { method: "POST" });
+      if (r.ok) {
+        console.log(chalk.green("Signed out successfully."));
+      } else {
+        console.error(chalk.red(`Logout failed: HTTP ${r.status}`));
+      }
+    });
+
+  auth
+    .command("status")
+    .description("Show current Azure account (cached, instant).")
+    .action(async () => {
+      const c = await client();
+      const baseUrl = c.baseUrl;
+
+      // Try live check first, fall back to cache
+      const r = await fetch(`${baseUrl}/auth/me`);
+      const user = await r.json() as Record<string, unknown>;
+
+      if (user["authenticated"]) {
+        console.log(chalk.green("Signed in"));
+        console.log(`  ${chalk.bold("Name:")}  ${user["name"] ?? "-"}`);
+        console.log(`  ${chalk.bold("Email:")} ${user["upn"] ?? "-"}`);
+        console.log(`  ${chalk.bold("OID:")}   ${user["oid"] ?? "-"}`);
+      } else {
+        console.log(chalk.yellow("Not signed in."));
+        console.log(chalk.dim("Run: dev-agent auth login"));
+        if (user["message"]) console.log(chalk.dim(String(user["message"])));
+      }
+    });
+
   program
     .command("configure-pat")
     .description("Store the Azure DevOps PAT in the OS keyring.")
