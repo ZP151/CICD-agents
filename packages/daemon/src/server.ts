@@ -44,6 +44,9 @@ import {
   updateWorkspaceProfile,
   deleteWorkspaceProfile,
   type WorkspaceProfileInput,
+  listAzurePullRequests,
+  listAzurePipelineRuns,
+  listReviewQueueItems,
   AzureTableProfileStore,
   KeyVaultSecrets,
   getCurrentUser,
@@ -52,8 +55,9 @@ import {
   loadPersistedUser,
   clearPersistedUser,
   resetUserCache,
+  runCommand,
 } from "@cicd-agent/core";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { SubmitPipelineSchema, TaskIdParam } from "./schemas.js";
 import { ChatSessionManager, type InlineLlmConfig, type InlineProfile } from "./chatSession.js";
 import { z } from "zod";
@@ -248,7 +252,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     return new Promise<void>((resolve) => {
       send("status", { message: "Starting az login…" });
 
-      const proc = spawn("az", ["login"], {
+      // Sidecar processes have no GUI access, so browser-based login cannot open
+      // a window. --use-device-code shows a URL + code the user pastes manually.
+      const proc = spawn("az", ["login", "--use-device-code"], {
         shell: true,
         stdio: ["ignore", "pipe", "pipe"],
       });
@@ -306,6 +312,43 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   });
 
   // ── /daemon/config — read current non-secret configuration ──────────────────
+  // ── /git/branches — list local+remote branches for a given repo path ────────
+  app.get("/git/branches", async (req, reply) => {
+    const repoPath = (req.query as Record<string, string>)["repoPath"] ?? "";
+    if (!repoPath) return reply.code(400).send({ error: "repoPath required" });
+    try {
+      // runCommand uses the PATH already enriched by injectGitPath() at startup,
+      // and never spawns via shell so % characters are never misinterpreted.
+      const result = await runCommand(["git", "branch", "-a"], {
+        cwd: repoPath,
+        allowed: ["git"],
+        timeoutSec: 8,
+      });
+      if (result.returncode !== 0) {
+        return reply.send({ branches: [], error: result.stderr?.trim() || `git exited ${result.returncode}` });
+      }
+      const stdout = result.stdout ?? "";
+      const branches = stdout
+        .split(/\r?\n/)
+        .map((l) => {
+          // Strip leading "* " (current branch marker) or spaces
+          const trimmed = l.replace(/^\*?\s+/, "").trim();
+          // Normalise remote tracking refs: "remotes/origin/main" → "main"
+          if (trimmed.startsWith("remotes/")) {
+            const afterRemotes = trimmed.slice("remotes/".length);
+            const slashIdx = afterRemotes.indexOf("/");
+            return slashIdx >= 0 ? afterRemotes.slice(slashIdx + 1) : afterRemotes;
+          }
+          return trimmed;
+        })
+        .filter((l) => l && !l.includes(" -> "))
+        .filter((l, i, arr) => arr.indexOf(l) === i);
+      return reply.send({ branches });
+    } catch (err) {
+      return reply.send({ branches: [], error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
   // Returns everything the Settings UI needs to pre-fill its fields, but never
   // returns API keys, PATs, or other credentials.
   app.get("/daemon/config", async () => ({
@@ -607,6 +650,96 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     return { ok: true };
   });
 
+  app.get("/profiles/:id/pull-requests", async (req, reply) => {
+    const parsed = ProfileIdParam.safeParse(req.params);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid id" });
+    const statusParam = typeof (req.query as Record<string, unknown>)["status"] === "string"
+      ? String((req.query as Record<string, unknown>)["status"])
+      : "active";
+    const status = ["active", "completed", "abandoned", "all"].includes(statusParam)
+      ? statusParam as "active" | "completed" | "abandoned" | "all"
+      : "active";
+
+    const ts = getTableStore();
+    let profile: Awaited<ReturnType<typeof getWorkspaceProfile>> | null = null;
+    if (ts) {
+      try {
+        const cloudProfile = await ts.get(parsed.data.id);
+        profile = cloudProfile ? await injectAdoPat(cloudProfile) : null;
+      } catch {
+        // Azure auth unavailable (e.g. not logged in) — fall back to local storage
+        profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
+      }
+    } else {
+      profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
+    }
+    if (!profile) return reply.code(404).send({ error: "profile not found" });
+    if (!profile.adoOrgUrl || !profile.adoProject || !profile.adoRepoName) {
+      return reply.code(400).send({ error: "ado_profile_incomplete" });
+    }
+    if (!profile.adoPat) {
+      return reply.code(400).send({ error: "ado_pat_missing" });
+    }
+
+    const prs = await listAzurePullRequests({
+      organization: profile.adoOrgUrl,
+      project: profile.adoProject,
+      repository: profile.adoRepoName,
+      pat: profile.adoPat,
+      status,
+      top: 50,
+    });
+    const runs = profile.adoPipelineId
+      ? await listAzurePipelineRuns({
+        organization: profile.adoOrgUrl,
+        project: profile.adoProject,
+        pipelineId: profile.adoPipelineId,
+        pat: profile.adoPat,
+        top: 100,
+      })
+      : [];
+    return {
+      pullRequests: prs.map((pr) => ({
+        ...pr,
+        pipelineRun: runs.find((run) => run.sourceBranch === pr.sourceBranch),
+      })),
+    };
+  });
+
+  app.get("/profiles/:id/review-queue", async (req, reply) => {
+    const parsed = ProfileIdParam.safeParse(req.params);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid id" });
+
+    const ts = getTableStore();
+    let profile: Awaited<ReturnType<typeof getWorkspaceProfile>> | null = null;
+    if (ts) {
+      try {
+        profile = await ts.get(parsed.data.id);
+      } catch {
+        // Azure auth unavailable — fall back to local storage
+        profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
+      }
+    } else {
+      profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
+    }
+    if (!profile) return reply.code(404).send({ error: "profile not found" });
+    if (!settings.azureStorageAccount) {
+      return { items: [], configured: false };
+    }
+    // If Azure auth is unavailable, return empty queue instead of crashing
+    let items: Awaited<ReturnType<typeof listReviewQueueItems>>;
+    try {
+      items = await listReviewQueueItems({
+        storageAccount: settings.azureStorageAccount,
+        repository: profile.adoRepoName,
+        limit: 100,
+      });
+    } catch {
+      return { items: [], configured: true, error: "Azure authentication unavailable. Sign in to load queue." };
+    }
+    return { items, configured: true };
+  });
+
   // ── Profile migration: local JSON → Azure Table Storage ─────────────────────
   // One-shot; idempotent (upsert).  Returns counts of migrated vs skipped profiles.
   app.post("/profiles/migrate", async (_req, reply) => {
@@ -701,7 +834,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     return { ok: true };
   });
 
-  // Dedicated confirm-action endpoint: directly executes the stored pendingAction
+  // Dedicated confirm-action endpoint: directly executes the stored approval proposal
   // and streams tool + LLM continuation events back (same SSE format as /chat).
   app.post("/chat/:sessionId/confirm-action", async (req, reply) => {
     const parsed = SessionIdParam.safeParse(req.params);
@@ -760,6 +893,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     return chatSessions.getBubbles(parsed.data.sessionId);
   });
 
+  app.get("/chat/:sessionId/state", async (req, reply) => {
+    const parsed = SessionIdParam.safeParse(req.params);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid sessionId" });
+    return { workflowState: await chatSessions.getWorkflowState(parsed.data.sessionId) };
+  });
+
   app.post("/shutdown", async () => {
     setTimeout(() => {
       process.exit(0);
@@ -770,7 +909,37 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   return app;
 }
 
+/** On Windows, inject git into process PATH so git tools work when the
+ *  daemon runs as a Tauri sidecar (which inherits a minimal PATH). */
+function injectGitPath(): void {
+  if (process.platform !== "win32") return;
+  // Already reachable — nothing to do.
+  const probe = spawnSync("git", ["--version"], { shell: false, encoding: "utf8", timeout: 3000 });
+  if (probe.status === 0) return;
+
+  const sep = ";";
+  const currentPath = process.env["PATH"] ?? "";
+
+  // Try well-known Windows installation locations (checked synchronously — fast)
+  const home = nodeOs.homedir();
+  const userProfile = process.env["USERPROFILE"] ?? "";
+  const candidates = [
+    "C:\\Program Files\\Git\\cmd",
+    "C:\\Program Files\\Git\\bin",
+    "C:\\Program Files (x86)\\Git\\cmd",
+    nodePath.join(home, "AppData", "Local", "Programs", "Git", "cmd"),
+    ...(userProfile ? [nodePath.join(userProfile, "AppData", "Local", "Programs", "Git", "cmd")] : []),
+    "C:\\ProgramData\\scoop\\apps\\git\\current\\cmd",
+    nodePath.join(home, "scoop", "apps", "git", "current", "cmd"),
+  ];
+  const found = candidates.find((p) => { try { return nodeFs.existsSync(p); } catch { return false; } });
+  if (found) {
+    process.env["PATH"] = `${found}${sep}${currentPath}`;
+  }
+}
+
 export async function startServer(): Promise<FastifyInstance> {
+  injectGitPath();
   const settings = getSettings();
   const app = await buildApp();
   await app.listen({ host: settings.runtimeHost, port: settings.runtimePort });

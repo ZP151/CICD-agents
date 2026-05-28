@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { open as openUrl } from "@tauri-apps/plugin-shell";
 import { NavLink, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import {
   fetchHealth,
@@ -6,16 +7,145 @@ import {
   fetchAuthMe,
   authLoginStream,
   authLogout,
+  listProfiles,
+  createProfile as apiCreateProfile,
+  updateProfile as apiUpdateProfile,
+  deleteProfile as apiDeleteProfile,
   type AuthUser,
   type AuthLoginEvent,
+  type WorkspaceProfile,
+  type WorkspaceProfileInput,
 } from "./api.js";
 import Dashboard from "./pages/Dashboard.js";
 import Repos from "./pages/Repos.js";
 import TaskViewer from "./pages/TaskViewer.js";
 import ReviewFindings from "./pages/ReviewFindings.js";
+import PullRequests from "./pages/PullRequests.js";
 import Settings from "./pages/Settings.js";
 import Chat from "./pages/Chat.js";
 import Profiles from "./pages/Profiles.js";
+
+// ─── Global app data (profiles, etc.) ────────────────────────────────────────
+// Loaded once after daemon is ready. All pages read from here — no per-page fetching.
+
+const PROFILES_LS_KEY = "cicd_agent_profiles_v1";
+
+function lsProfiles(): WorkspaceProfile[] {
+  try { return JSON.parse(localStorage.getItem(PROFILES_LS_KEY) ?? "[]") as WorkspaceProfile[]; }
+  catch { return []; }
+}
+
+interface AppData {
+  profiles: WorkspaceProfile[];
+  profilesLoading: boolean;
+  cloudProfileStore: boolean;
+  usingDaemon: boolean;
+  refreshProfiles: () => Promise<void>;
+  createProfile: (d: WorkspaceProfileInput) => Promise<WorkspaceProfile>;
+  updateProfile: (id: string, d: Partial<WorkspaceProfileInput>) => Promise<WorkspaceProfile>;
+  deleteProfile: (id: string) => Promise<void>;
+}
+
+const AppDataContext = createContext<AppData>({
+  profiles: [],
+  profilesLoading: false,
+  cloudProfileStore: false,
+  usingDaemon: false,
+  refreshProfiles: async () => {},
+  createProfile: async () => { throw new Error("not ready"); },
+  updateProfile: async () => { throw new Error("not ready"); },
+  deleteProfile: async () => {},
+});
+
+export function useAppData(): AppData {
+  return useContext(AppDataContext);
+}
+
+function AppDataProvider({ children, daemonReady }: { children: React.ReactNode; daemonReady: boolean }) {
+  const [profiles, setProfiles] = useState<WorkspaceProfile[]>(() => lsProfiles());
+  const [profilesLoading, setProfilesLoading] = useState(false);
+  const [cloudProfileStore, setCloudProfileStore] = useState(false);
+  const [usingDaemon, setUsingDaemon] = useState(false);
+  const loadedRef = useRef(false);
+
+  const syncToLs = (ps: WorkspaceProfile[]) => {
+    localStorage.setItem(PROFILES_LS_KEY, JSON.stringify(ps));
+  };
+
+  const refreshProfiles = useCallback(async () => {
+    setProfilesLoading(true);
+    try {
+      const remote = await listProfiles();
+      setProfiles(remote);
+      setUsingDaemon(true);
+      syncToLs(remote);
+      // Check cloud status once
+      fetchHealth().then(h => setCloudProfileStore(!!h.cloudProfileStore)).catch(() => {});
+    } catch {
+      const local = lsProfiles();
+      setProfiles(local);
+      setUsingDaemon(false);
+    } finally {
+      setProfilesLoading(false);
+    }
+  }, []);
+
+  // Load once when daemon becomes ready
+  useEffect(() => {
+    if (!daemonReady || loadedRef.current) return;
+    loadedRef.current = true;
+    void refreshProfiles();
+  }, [daemonReady, refreshProfiles]);
+
+  // ── Local-only fallbacks (used when daemon is unreachable) ──────────────────
+  function genId() { return crypto.randomUUID(); }
+  function lsCreate(data: WorkspaceProfileInput): WorkspaceProfile {
+    const now = Date.now() / 1000;
+    return { ...data, id: genId(), createdAt: now, updatedAt: now };
+  }
+  function lsUpdate(id: string, data: Partial<WorkspaceProfileInput>, prev: WorkspaceProfile[]): WorkspaceProfile {
+    const existing = prev.find(p => p.id === id);
+    if (!existing) throw new Error("Profile not found");
+    return { ...existing, ...data, id, updatedAt: Date.now() / 1000 };
+  }
+
+  const createProfile = useCallback(async (data: WorkspaceProfileInput): Promise<WorkspaceProfile> => {
+    let p: WorkspaceProfile;
+    try {
+      p = await apiCreateProfile(data);
+      setUsingDaemon(true);
+    } catch {
+      p = lsCreate(data);
+    }
+    setProfiles(prev => { const next = [...prev, p]; syncToLs(next); return next; });
+    return p;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const updateProfile = useCallback(async (id: string, data: Partial<WorkspaceProfileInput>): Promise<WorkspaceProfile> => {
+    let updated: WorkspaceProfile;
+    try {
+      updated = await apiUpdateProfile(id, data);
+      setUsingDaemon(true);
+    } catch {
+      updated = lsUpdate(id, data, profiles);
+    }
+    setProfiles(prev => { const next = prev.map(p => p.id === id ? updated : p); syncToLs(next); return next; });
+    return updated!;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profiles]);
+
+  const deleteProfile = useCallback(async (id: string): Promise<void> => {
+    try { await apiDeleteProfile(id); } catch { /* local-only delete still removes from state */ }
+    setProfiles(prev => { const next = prev.filter(p => p.id !== id); syncToLs(next); return next; });
+  }, []);
+
+  return (
+    <AppDataContext.Provider value={{ profiles, profilesLoading, cloudProfileStore, usingDaemon, refreshProfiles, createProfile, updateProfile, deleteProfile }}>
+      {children}
+    </AppDataContext.Provider>
+  );
+}
 
 // ─── Daemon readiness ─────────────────────────────────────────────────────────
 
@@ -189,14 +319,6 @@ function IconChat() {
   );
 }
 
-function IconTasks() {
-  return (
-    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-    </svg>
-  );
-}
-
 function IconRepos() {
   return (
     <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -221,10 +343,10 @@ function IconReview() {
   );
 }
 
-function IconPipelines() {
+function IconActivity() {
   return (
     <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 19V5m0 14h16M8 16v-5m4 5V8m4 8v-3" />
     </svg>
   );
 }
@@ -293,11 +415,26 @@ function LoginModal({ onDone, onCancel }: { onDone: (u: AuthUser) => void; onCan
   const [done, setDone] = useState(false);
   const cancelRef = useRef<(() => void) | null>(null);
 
+  // Parse device code URL and code from az login output
+  const [deviceUrl, setDeviceUrl] = useState<string | null>(null);
+  const [deviceCode, setDeviceCode] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [browserOpened, setBrowserOpened] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     cancelRef.current = authLoginStream((e: AuthLoginEvent) => {
-      if (e.type === "output") setLines((l) => [...l.slice(-40), e.line]);
-      else if (e.type === "status") setLines((l) => [...l, e.message]);
-      else if (e.type === "done") {
+      if (e.type === "output") {
+        setLines((l) => [...l.slice(-40), e.line]);
+        // Parse "https://microsoft.com/devicelogin" URL
+        const urlMatch = e.line.match(/https:\/\/\S+/);
+        if (urlMatch) setDeviceUrl(urlMatch[0]);
+        // Parse 8-char device code like "ABCD1234"
+        const codeMatch = e.line.match(/\b([A-Z0-9]{8,9})\b/);
+        if (codeMatch && !e.line.toLowerCase().includes("http")) setDeviceCode(codeMatch[1] ?? null);
+      } else if (e.type === "status") {
+        setLines((l) => [...l, e.message]);
+      } else if (e.type === "done") {
         setDone(true);
         if (e.authenticated) onDone({ authenticated: true, oid: e.oid, upn: e.upn, name: e.name });
         else onCancel();
@@ -309,23 +446,91 @@ function LoginModal({ onDone, onCancel }: { onDone: (u: AuthUser) => void; onCan
     return () => { cancelRef.current?.(); };
   }, [onDone, onCancel]);
 
+  // Auto-open browser and auto-copy code as soon as both are available
+  useEffect(() => {
+    if (deviceUrl && !browserOpened) {
+      void openUrl(deviceUrl);
+      setBrowserOpened(true);
+    }
+  }, [deviceUrl, browserOpened]);
+
+  useEffect(() => {
+    if (deviceCode) {
+      void navigator.clipboard.writeText(deviceCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }, [deviceCode]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [lines]);
+
+  const copyCode = () => {
+    if (!deviceCode) return;
+    void navigator.clipboard.writeText(deviceCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 backdrop-blur-sm">
-      <div className="w-[480px] rounded-xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl">
-        <div className="mb-3 flex items-center justify-between">
+      <div className="w-[520px] rounded-xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl space-y-4">
+        <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-zinc-200">Sign in with Microsoft</h2>
           {done && (
             <button onClick={onCancel} className="text-xs text-zinc-500 hover:text-zinc-300">Close</button>
           )}
         </div>
-        <p className="mb-3 text-xs text-zinc-500">
-          A browser window will open. Sign in with your company Microsoft account.
-        </p>
-        <div className="h-40 overflow-y-auto rounded-md bg-zinc-950 p-2 font-mono text-[11px] text-zinc-400 leading-relaxed">
+
+        {/* Device code card — shown once az outputs the URL/code */}
+        {deviceUrl && (
+          <div className="rounded-lg border border-blue-800/50 bg-blue-950/20 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-green-400 font-medium">
+                {browserOpened ? "Browser opened automatically" : "Opening browser…"}
+              </span>
+              <button
+                onClick={() => void openUrl(deviceUrl)}
+                className="ml-auto rounded border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-800 transition"
+              >
+                Reopen
+              </button>
+            </div>
+            {deviceCode && (
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-zinc-400">Enter this code in the browser:</span>
+                <span className="rounded bg-zinc-800 px-3 py-1 font-mono text-base font-bold text-zinc-100 tracking-widest">
+                  {deviceCode}
+                </span>
+                <button
+                  onClick={copyCode}
+                  className="rounded border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-800 transition"
+                >
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+            )}
+            <p className="text-[10px] text-zinc-500">
+              Sign in with your company Microsoft account at{" "}
+              <button
+                onClick={() => void openUrl(deviceUrl)}
+                className="text-blue-500 underline hover:text-blue-400"
+              >
+                {deviceUrl}
+              </button>
+            </p>
+          </div>
+        )}
+
+        {/* Raw output log */}
+        <div className="h-28 overflow-y-auto rounded-md bg-zinc-950 p-2 font-mono text-[11px] text-zinc-500 leading-relaxed">
           {lines.map((l, i) => <div key={i}>{l}</div>)}
+          <div ref={bottomRef} />
         </div>
+
         {!done && (
-          <div className="mt-3 flex justify-end">
+          <div className="flex justify-end">
             <button
               onClick={() => { cancelRef.current?.(); onCancel(); }}
               className="text-xs text-zinc-500 hover:text-zinc-300"
@@ -427,36 +632,26 @@ const NAV_GROUPS = [
     label: "Workspace",
     items: [
       { to: "/chat", label: "New chat", Icon: IconChat },
-      { to: "/tasks", label: "Tasks", Icon: IconTasks },
-      { to: "/profiles", label: "Profiles", Icon: IconProfiles },
       { to: "/pulls", label: "Pull Requests", Icon: IconPR },
+      { to: "/profiles", label: "Profiles", Icon: IconProfiles },
     ],
   },
   {
     label: "Quality",
     items: [
-      { to: "/findings", label: "Review Findings", Icon: IconReview },
-      { to: "/pipelines", label: "Pipelines", Icon: IconPipelines },
+      { to: "/findings", label: "Review Queue", Icon: IconReview },
     ],
   },
   {
     label: "System",
     items: [
+      { to: "/activity", label: "Activity", Icon: IconActivity },
       { to: "/settings", label: "Settings", Icon: IconSettings },
     ],
   },
 ];
 
-// ─── Placeholder page ─────────────────────────────────────────────────────────
-
-function Placeholder({ title }: { title: string }) {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 text-zinc-700">
-      <p className="text-lg font-semibold">{title}</p>
-      <p className="text-sm">Coming soon</p>
-    </div>
-  );
-}
+// ─── Product placeholder pages ────────────────────────────────────────────────
 
 // ─── Layouts ──────────────────────────────────────────────────────────────────
 
@@ -527,10 +722,11 @@ function FullLayout({ info }: { info: DaemonInfo }) {
           <Route path="/chat" element={<Chat />} />
           <Route path="/dashboard" element={<div className="flex flex-1 overflow-auto p-6"><Dashboard /></div>} />
           <Route path="/repos" element={<div className="flex flex-1 overflow-auto p-6"><Repos /></div>} />
-          <Route path="/tasks" element={<div className="flex flex-1 overflow-auto p-6"><TaskViewer /></div>} />
-          <Route path="/pulls" element={<Placeholder title="Pull Requests" />} />
+          <Route path="/tasks" element={<Navigate to="/activity" replace />} />
+          <Route path="/activity" element={<div className="flex flex-1 overflow-hidden p-6"><TaskViewer /></div>} />
+          <Route path="/pulls" element={<div className="flex flex-1 overflow-auto p-6"><PullRequests /></div>} />
           <Route path="/findings" element={<div className="flex flex-1 overflow-auto p-6"><ReviewFindings /></div>} />
-          <Route path="/pipelines" element={<Placeholder title="Pipelines" />} />
+          <Route path="/pipelines" element={<Navigate to="/pulls" replace />} />
           <Route path="/profiles" element={<div className="flex flex-1 overflow-auto p-6"><Profiles /></div>} />
           <Route path="/settings" element={<div className="flex flex-1 overflow-auto p-6"><Settings /></div>} />
         </Routes>
@@ -545,7 +741,11 @@ export default function App(): JSX.Element {
   if (location.pathname === "/chat-mini") return <MiniLayout />;
   return (
     <DaemonGate>
-      {(info) => <FullLayout info={info} />}
+      {(info) => (
+        <AppDataProvider daemonReady={info.state === "ready"}>
+          <FullLayout info={info} />
+        </AppDataProvider>
+      )}
     </DaemonGate>
   );
 }

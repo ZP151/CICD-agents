@@ -11,6 +11,7 @@
     },
     "shell:allow-kill",
     "shell:allow-stdin-write",
+    "shell:allow-open",
     "dialog:allow-open",
     "core:window:allow-set-size"
   ]

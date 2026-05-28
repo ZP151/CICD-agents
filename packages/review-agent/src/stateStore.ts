@@ -8,6 +8,12 @@ export interface ReviewHistoryRow {
   lastRunAt: string;
   lastTokensIn: number;
   lastTokensOut: number;
+  sourceCommit?: string;
+  decisionQueue?: string;
+  decisionRiskLevel?: string;
+  decisionReason?: string;
+  autoApprovedAt?: string;
+  autoApprovalActor?: string;
 }
 
 export interface ConventionRow {
@@ -53,6 +59,12 @@ export class TableStateStore implements StateStore {
         lastRunAt: entity.lastRunAt ?? "",
         lastTokensIn: entity.lastTokensIn ?? 0,
         lastTokensOut: entity.lastTokensOut ?? 0,
+        sourceCommit: entity.sourceCommit ? String(entity.sourceCommit) : "",
+        decisionQueue: entity.decisionQueue ? String(entity.decisionQueue) : "",
+        decisionRiskLevel: entity.decisionRiskLevel ? String(entity.decisionRiskLevel) : "",
+        decisionReason: entity.decisionReason ? String(entity.decisionReason) : "",
+        autoApprovedAt: entity.autoApprovedAt ? String(entity.autoApprovedAt) : "",
+        autoApprovalActor: entity.autoApprovalActor ? String(entity.autoApprovalActor) : "",
       };
     } catch (err: unknown) {
       const e = err as { statusCode?: number };

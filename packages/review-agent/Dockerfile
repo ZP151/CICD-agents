@@ -1,4 +1,4 @@
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 COPY pnpm-workspace.yaml package.json .npmrc tsconfig.base.json ./
@@ -12,7 +12,7 @@ COPY packages/review-agent packages/review-agent
 RUN pnpm --filter @cicd-agent/core build
 RUN pnpm --filter @cicd-agent/review-agent build
 
-FROM node:20-alpine AS runtime
+FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=8080
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate

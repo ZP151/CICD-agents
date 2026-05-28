@@ -45,6 +45,36 @@ function adoBase(org: string): string {
   return `https://dev.azure.com/${org}`;
 }
 
+export interface AzurePullRequestSummary {
+  id: number;
+  title: string;
+  status: string;
+  isDraft: boolean;
+  sourceBranch: string;
+  targetBranch: string;
+  createdBy: string;
+  creationDate: string;
+  repository: string;
+  url: string;
+  reviewerCount: number;
+  voteSummary: {
+    approved: number;
+    waiting: number;
+    rejected: number;
+  };
+}
+
+export interface AzurePipelineRunSummary {
+  id: number;
+  name: string;
+  state: string;
+  result: string;
+  createdDate: string;
+  finishedDate: string;
+  sourceBranch: string;
+  url: string;
+}
+
 function resolveOrgProject(ctx: ToolContext, payload: Record<string, unknown>): {
   org: string;
   project: string;
@@ -95,6 +125,148 @@ async function patchJson(url: string, body: unknown, pat: string, contentType: s
     },
     body: JSON.stringify(body),
   });
+}
+
+export async function listAzurePullRequests(args: {
+  organization: string;
+  project: string;
+  repository: string;
+  pat: string;
+  status?: "active" | "completed" | "abandoned" | "all";
+  top?: number;
+  creatorId?: string;
+  reviewerId?: string;
+}): Promise<AzurePullRequestSummary[]> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const repository = args.repository.trim();
+  const pat = args.pat.trim();
+  if (!org || !project || !repository) {
+    throw new ToolError("ADO organization, project, and repository are required to list pull requests.");
+  }
+  if (!pat) {
+    throw new ToolError("ADO PAT is required to list pull requests.");
+  }
+
+  const params = new URLSearchParams({
+    "searchCriteria.status": args.status ?? "active",
+    "$top": String(args.top ?? 50),
+    "api-version": API_VERSION_GIT,
+  });
+  if (args.creatorId) params.set("searchCriteria.creatorId", args.creatorId);
+  if (args.reviewerId) params.set("searchCriteria.reviewerId", args.reviewerId);
+
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories/` +
+    `${encodeURIComponent(repository)}/pullrequests?${params.toString()}`;
+  const resp = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      ...authHeader(pat),
+    },
+  });
+  if (!resp.ok) {
+    throw new ToolError(`ADO list pull requests failed: HTTP ${resp.status}: ${(await resp.text()).slice(0, 400)}`);
+  }
+  const data = (await resp.json()) as {
+    value?: Array<{
+      pullRequestId?: number;
+      title?: string;
+      status?: string;
+      isDraft?: boolean;
+      sourceRefName?: string;
+      targetRefName?: string;
+      creationDate?: string;
+      createdBy?: { displayName?: string };
+      repository?: { name?: string };
+      reviewers?: Array<{ vote?: number }>;
+    }>;
+  };
+  return (data.value ?? []).map((pr) => {
+    const id = Number(pr.pullRequestId ?? 0);
+    const reviewers = pr.reviewers ?? [];
+    return {
+      id,
+      title: pr.title ?? "",
+      status: pr.status ?? "",
+      isDraft: Boolean(pr.isDraft ?? false),
+      sourceBranch: stripRef(pr.sourceRefName ?? ""),
+      targetBranch: stripRef(pr.targetRefName ?? ""),
+      createdBy: pr.createdBy?.displayName ?? "",
+      creationDate: pr.creationDate ?? "",
+      repository: pr.repository?.name ?? repository,
+      url: id ? `${adoBase(org)}/${project}/_git/${repository}/pullrequest/${id}` : "",
+      reviewerCount: reviewers.length,
+      voteSummary: {
+        approved: reviewers.filter((r) => Number(r.vote ?? 0) > 0).length,
+        waiting: reviewers.filter((r) => Number(r.vote ?? 0) === 0).length,
+        rejected: reviewers.filter((r) => Number(r.vote ?? 0) < 0).length,
+      },
+    };
+  });
+}
+
+export async function listAzurePipelineRuns(args: {
+  organization: string;
+  project: string;
+  pipelineId: string | number;
+  pat: string;
+  top?: number;
+}): Promise<AzurePipelineRunSummary[]> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const pipelineId = String(args.pipelineId ?? "").trim();
+  const pat = args.pat.trim();
+  if (!org || !project || !pipelineId) {
+    throw new ToolError("ADO organization, project, and pipeline ID are required to list pipeline runs.");
+  }
+  if (!pat) {
+    throw new ToolError("ADO PAT is required to list pipeline runs.");
+  }
+
+  const params = new URLSearchParams({
+    "api-version": "7.1",
+  });
+  if (args.top) params.set("$top", String(args.top));
+
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/pipelines/` +
+    `${encodeURIComponent(pipelineId)}/runs?${params.toString()}`;
+  const resp = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      ...authHeader(pat),
+    },
+  });
+  if (!resp.ok) {
+    throw new ToolError(`ADO list pipeline runs failed: HTTP ${resp.status}: ${(await resp.text()).slice(0, 400)}`);
+  }
+  const data = (await resp.json()) as {
+    value?: Array<{
+      id?: number;
+      name?: string;
+      state?: string;
+      result?: string;
+      createdDate?: string;
+      finishedDate?: string;
+      _links?: { web?: { href?: string } };
+      resources?: { repositories?: { self?: { refName?: string } } };
+    }>;
+  };
+  return (data.value ?? []).map((run) => ({
+    id: Number(run.id ?? 0),
+    name: run.name ?? "",
+    state: run.state ?? "",
+    result: run.result ?? "",
+    createdDate: run.createdDate ?? "",
+    finishedDate: run.finishedDate ?? "",
+    sourceBranch: stripRef(run.resources?.repositories?.self?.refName ?? ""),
+    url: run._links?.web?.href ?? "",
+  }));
+}
+
+function stripRef(ref: string): string {
+  return ref.replace(/^refs\/heads\//, "");
 }
 
 export function azureDevOpsTools(): Tool[] {

@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  listProfiles,
-  createProfile,
-  updateProfile,
-  deleteProfile,
-  fetchHealth,
+  fetchGitBranchesFromDaemon,
   type WorkspaceProfile,
   type WorkspaceProfileInput,
 } from "../api";
+import { useAppData } from "../App";
 
 // ─── Local-storage fallback ───────────────────────────────────────────────────
 // Used only when the daemon is unreachable.
@@ -32,40 +29,24 @@ function persistProfilesLocal(profiles: WorkspaceProfile[]): void {
   localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
 }
 
-function createProfileLocal(data: WorkspaceProfileInput): WorkspaceProfile {
-  const now = Date.now() / 1000;
-  const profile: WorkspaceProfile = { ...data, id: genId(), createdAt: now, updatedAt: now };
-  persistProfilesLocal([...loadProfilesLocal(), profile]);
-  return profile;
-}
-
-function updateProfileLocal(id: string, data: Partial<WorkspaceProfileInput>): WorkspaceProfile {
-  const all = loadProfilesLocal();
-  const idx = all.findIndex((p) => p.id === id);
-  if (idx < 0) throw new Error("Profile not found");
-  const updated: WorkspaceProfile = { ...all[idx]!, ...data, id, updatedAt: Date.now() / 1000 };
-  const next = [...all];
-  next[idx] = updated;
-  persistProfilesLocal(next);
-  return updated;
-}
-
-function deleteProfileLocal(id: string): void {
-  persistProfilesLocal(loadProfilesLocal().filter((p) => p.id !== id));
-}
 
 // ─── Git branch loader ────────────────────────────────────────────────────────
+// In a Tauri context we invoke the native Rust command first (it uses cmd /c on
+// Windows so it sees the user's full PATH).  We fall back to the daemon HTTP
+// API for browser-based dev mode or if the Tauri command returns nothing.
 
 async function fetchGitBranches(repoPath: string): Promise<string[]> {
   if (!repoPath.trim()) return [];
-  try {
-    const { invoke } = await import("@tauri-apps/api/core");
-    const result = await invoke<string[]>("list_git_branches", { repoPath });
-    return Array.isArray(result) ? result : [];
-  } catch (e) {
-    console.warn("[Profiles] list_git_branches failed:", e);
-    return [];
+
+  if (typeof window !== "undefined" && "__TAURI__" in window) {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const branches = await invoke<string[]>("list_git_branches", { repoPath: repoPath.trim() });
+      if (branches.length > 0) return branches;
+    } catch { /* fall through */ }
   }
+
+  return fetchGitBranchesFromDaemon(repoPath);
 }
 
 // ─── PAT helpers ─────────────────────────────────────────────────────────────
@@ -187,19 +168,27 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
   // ── Git branch loading ──────────────────────────────────────────────────────
   const [branches, setBranches] = useState<string[]>([]);
   const [branchLoading, setBranchLoading] = useState(false);
+  const [branchError, setBranchError] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadBranches = useCallback(async (repoPath: string) => {
+    if (!repoPath.trim()) { setBranches([]); setBranchLoading(false); setBranchError(false); return; }
+    setBranchLoading(true);
+    setBranchError(false);
+    const b = await fetchGitBranches(repoPath.trim());
+    setBranches(b);
+    setBranchLoading(false);
+    setBranchError(b.length === 0);
+  }, []);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!form.repoPath.trim()) { setBranches([]); setBranchLoading(false); return; }
+    if (!form.repoPath.trim()) { setBranches([]); setBranchLoading(false); setBranchError(false); return; }
     setBranchLoading(true);
-    debounceRef.current = setTimeout(async () => {
-      const b = await fetchGitBranches(form.repoPath.trim());
-      setBranches(b);
-      setBranchLoading(false);
-    }, 600);
+    setBranchError(false);
+    debounceRef.current = setTimeout(() => { void loadBranches(form.repoPath); }, 700);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [form.repoPath]);
+  }, [form.repoPath, loadBranches]);
 
   // ── PAT state ───────────────────────────────────────────────────────────────
   const [patStatus, setPatStatus] = useState<PatStatus>(initial.adoPat ? "verified" : "none");
@@ -224,6 +213,19 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
 
   // ── Branch select helper ────────────────────────────────────────────────────
   function BranchSelect({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+    if (branchLoading) {
+      return (
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-zinc-400">{label}</span>
+          <div className="flex items-center gap-2 rounded-lg border border-zinc-700/60 bg-zinc-900 px-3 py-2 text-sm text-zinc-500">
+            <svg className="animate-spin w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="30 70" />
+            </svg>
+            Detecting branches…
+          </div>
+        </div>
+      );
+    }
     if (branches.length > 0) {
       return (
         <label className="flex flex-col gap-1">
@@ -231,10 +233,10 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
           <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="w-full rounded-lg border border-zinc-700/60 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-zinc-600 transition"
+            className="w-full rounded-lg border border-emerald-700/60 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-emerald-500 transition"
           >
             {branches.map((b) => <option key={b} value={b}>{b}</option>)}
-            {!branches.includes(value) && value && <option value={value}>{value} (custom)</option>}
+            {!branches.includes(value) && value && <option value={value}>{value} (saved)</option>}
           </select>
         </label>
       );
@@ -245,7 +247,9 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
   const repoInputClass = `w-full rounded-lg border px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 outline-none transition ${
     !branchLoading && branches.length > 0
       ? "border-emerald-600 bg-zinc-900 focus:border-emerald-500"
-      : "border-zinc-700/60 bg-zinc-900 focus:border-zinc-600"
+      : branchError && form.repoPath
+        ? "border-amber-700/60 bg-zinc-900 focus:border-amber-600"
+        : "border-zinc-700/60 bg-zinc-900 focus:border-zinc-600"
   }`;
 
   return (
@@ -273,13 +277,35 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
           </div>
           <Field label="Profile name *" value={form.name} onChange={set("name")} placeholder="my-project" />
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-zinc-400">Repo path</span>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-zinc-400">Repo path</span>
+              {form.repoPath && (
+                <button
+                  type="button"
+                  onClick={() => void loadBranches(form.repoPath)}
+                  disabled={branchLoading}
+                  title="Reload branches from this path"
+                  className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition disabled:opacity-40"
+                >
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" className={branchLoading ? "animate-spin" : ""}>
+                    <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                    <path d="M8 1v4l2.5-2L8 1z" fill="currentColor"/>
+                  </svg>
+                  {branchLoading ? "Loading…" : branchError ? "No branches found — retry" : branches.length > 0 ? `${branches.length} branches` : "Detect branches"}
+                </button>
+              )}
+            </div>
             <input
               value={form.repoPath}
               onChange={(e) => set("repoPath")(e.target.value)}
               placeholder="C:\projects\my-app"
               className={repoInputClass}
             />
+            {branchError && form.repoPath && (
+              <p className="text-[10px] text-amber-500/80">
+                Could not read branches. Check the path is a valid git repository.
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <BranchSelect label="Default branch" value={form.defaultBranch} onChange={set("defaultBranch")} />
@@ -386,66 +412,42 @@ function ProfileCard({ profile, onEdit, onDelete }: { profile: WorkspaceProfile;
 type Mode = "list" | "new" | { editing: WorkspaceProfile };
 
 export default function Profiles(): JSX.Element {
-  const [profiles, setProfiles] = useState<WorkspaceProfile[]>([]);
+  const {
+    profiles,
+    profilesLoading,
+    cloudProfileStore: cloudSync,
+    usingDaemon,
+    refreshProfiles,
+    createProfile,
+    updateProfile,
+    deleteProfile,
+  } = useAppData();
+
   const [mode, setMode] = useState<Mode>("list");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // true = daemon API is active (cloud or local), false = localStorage fallback
-  const [usingDaemon, setUsingDaemon] = useState(false);
-  const [cloudSync, setCloudSync] = useState(false);
-
-  const reload = useCallback(async () => {
-    setError(null);
-    try {
-      const remote = await listProfiles();
-      setProfiles(remote);
-      setUsingDaemon(true);
-      // Sync to localStorage so the Chat page's profile lookup still works
-      localStorage.setItem(PROFILES_KEY, JSON.stringify(remote));
-    } catch {
-      setProfiles(loadProfilesLocal());
-      setUsingDaemon(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-    // Check if cloud profile store is active
-    fetchHealth()
-      .then((h) => setCloudSync(!!h.cloudProfileStore))
-      .catch(() => {/* non-fatal */});
-  }, [reload]);
 
   const handleSave = useCallback(async (data: WorkspaceProfileInput) => {
     setSaving(true); setError(null);
     try {
-      if (usingDaemon) {
-        if (typeof mode === "object" && "editing" in mode) {
-          await updateProfile(mode.editing.id, data);
-        } else {
-          await createProfile(data);
-        }
+      if (typeof mode === "object" && "editing" in mode) {
+        await updateProfile(mode.editing.id, data);
       } else {
-        if (typeof mode === "object" && "editing" in mode) updateProfileLocal(mode.editing.id, data);
-        else createProfileLocal(data);
+        await createProfile(data);
       }
       setMode("list");
-      await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
-  }, [mode, reload, usingDaemon]);
+  }, [mode, createProfile, updateProfile]);
 
   const handleDelete = useCallback(async (id: string) => {
     if (!confirm("Delete this profile?")) return;
-    try {
-      if (usingDaemon) await deleteProfile(id);
-      else deleteProfileLocal(id);
-      await reload();
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-  }, [reload, usingDaemon]);
+    try { await deleteProfile(id); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }, [deleteProfile]);
 
   // ── Form modes ──────────────────────────────────────────────────────────────
   if (mode === "new" || (typeof mode === "object" && "editing" in mode)) {
@@ -510,7 +512,12 @@ export default function Profiles(): JSX.Element {
         <div className="rounded-lg bg-red-900/30 border border-red-800 px-4 py-2 text-sm text-red-400">{error}</div>
       )}
 
-      {profiles.length === 0 ? (
+      {profilesLoading && profiles.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-400" />
+          <p className="text-xs text-zinc-600">Loading profiles…</p>
+        </div>
+      ) : profiles.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
           <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="text-zinc-700">
             <rect x="6" y="8" width="28" height="24" rx="3" stroke="currentColor" strokeWidth="1.5" />

@@ -1,7 +1,9 @@
 export { buildApp, startServer } from "./server.js";
 export { ReviewService } from "./reviewService.js";
 export { runReviewPlanner, bundleToReviewPrompt, REVIEW_SYSTEM_PROMPT } from "./reviewPlanner.js";
+export { decideReviewOutcome, DEFAULT_AUTO_APPROVAL_POLICY } from "./reviewDecision.js";
 export type { ReviewFinding, ReviewResult } from "./reviewPlanner.js";
+export type { AutoApprovalPolicy, ReviewDecision } from "./reviewDecision.js";
 export { buildCloudContext } from "./cloudContext.js";
 export type { CloudContextBundle, CloudChangedFile } from "./cloudContext.js";
 export { AdoClient, COMMENT_TYPE_TEXT, THREAD_STATUS_ACTIVE } from "./adoClient.js";

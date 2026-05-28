@@ -22,6 +22,7 @@ htmlcov/
 node_modules/
 .pnpm-store/
 .pnpm-debug.log
+.tools/
 .turbo/
 packages/*/dist/
 apps/*/dist/

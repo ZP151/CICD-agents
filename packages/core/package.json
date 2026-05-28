@@ -10,6 +10,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./chatContext": {
+      "types": "./dist/chatContext.d.ts",
+      "import": "./dist/chatContext.js"
+    },
     "./db/schema.sql": "./src/db/schema.sql"
   },
   "files": ["dist", "src/db/schema.sql"],

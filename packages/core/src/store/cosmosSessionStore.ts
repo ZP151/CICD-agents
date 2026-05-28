@@ -26,7 +26,10 @@ export interface CosmosStoredSession {
   profileId?: string;
   messages: unknown[];
   bubbles: unknown[];
+  approvalProposal?: unknown;
+  /** @deprecated Use approvalProposal. */
   pendingAction?: unknown;
+  workflowState?: unknown;
   llmConfig?: unknown;
   inlineProfile?: unknown;
   ttl?: number;         // auto-expire via Cosmos TTL

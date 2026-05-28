@@ -1,6 +1,12 @@
 import { emitReviewMetrics, LLMClient } from "@cicd-agent/core";
 import { AdoClient, COMMENT_TYPE_TEXT, THREAD_STATUS_ACTIVE } from "./adoClient.js";
 import { buildCloudContext } from "./cloudContext.js";
+import {
+  decideReviewOutcome,
+  DEFAULT_AUTO_APPROVAL_POLICY,
+  type AutoApprovalPolicy,
+  type ReviewDecision,
+} from "./reviewDecision.js";
 import { runReviewPlanner } from "./reviewPlanner.js";
 import type { StateStore } from "./stateStore.js";
 import type { AdoPrEvent } from "./webhook.js";
@@ -10,13 +16,18 @@ export interface ReviewServiceOptions {
   state: StateStore;
   llm?: LLMClient;
   maxFilesPerPr?: number;
+  autoApprovalPolicy?: Partial<AutoApprovalPolicy>;
   log?: { info: (o: object, m?: string) => void; warn: (o: object, m?: string) => void; error: (o: object, m?: string) => void };
 }
 
 export class ReviewService {
   constructor(private readonly opts: ReviewServiceOptions) {}
 
-  async handle(ev: AdoPrEvent): Promise<{ status: "reviewed" | "duplicate" | "skipped"; findings?: number }> {
+  async handle(ev: AdoPrEvent): Promise<{
+    status: "reviewed" | "duplicate" | "skipped";
+    findings?: number;
+    decision?: ReviewDecision["queue"];
+  }> {
     const project = ev.resource.repository.project?.name ?? "";
     const repoId = ev.resource.repository.id;
     const repoName = ev.resource.repository.name;
@@ -52,6 +63,13 @@ export class ReviewService {
 
     const llm = this.opts.llm ?? new LLMClient();
     const review = await runReviewPlanner({ llm, bundle, conventions });
+    let decision = decideReviewOutcome({
+      policy: { ...DEFAULT_AUTO_APPROVAL_POLICY, ...this.opts.autoApprovalPolicy },
+      targetBranch: ev.resource.targetRefName ?? "",
+      changedFiles: bundle.files,
+      findings: review.findings,
+      reviewUsedLlm: review.tokensIn > 0 || review.tokensOut > 0,
+    });
 
     if (review.summary || review.findings.length > 0) {
       await ado.createThread({
@@ -91,6 +109,25 @@ export class ReviewService {
       }
     }
 
+    if (decision.autoApprove) {
+      try {
+        await ado.approvePullRequest({
+          project,
+          repositoryId: repoId,
+          pullRequestId: prId,
+          reviewerId: this.autoApprovalPolicy().reviewerId,
+        });
+      } catch (err) {
+        decision = {
+          queue: "needs_human_review",
+          riskLevel: decision.riskLevel,
+          autoApprove: false,
+          reason: `Auto-approval failed: ${err instanceof Error ? err.message : String(err)}`,
+        };
+        log?.warn({ prId, err }, "auto-approval failed");
+      }
+    }
+
     await this.opts.state.upsertHistory({
       partitionKey: repoName,
       rowKey: String(prId),
@@ -99,9 +136,15 @@ export class ReviewService {
       lastRunAt: new Date().toISOString(),
       lastTokensIn: review.tokensIn,
       lastTokensOut: review.tokensOut,
+      sourceCommit,
+      decisionQueue: decision.queue,
+      decisionRiskLevel: decision.riskLevel,
+      decisionReason: decision.reason,
+      autoApprovedAt: decision.autoApprove ? new Date().toISOString() : "",
+      autoApprovalActor: decision.autoApprove ? this.autoApprovalPolicy().reviewerId : "",
     });
 
-    log?.info({ prId, findings: review.findings.length }, "review posted");
+    log?.info({ prId, findings: review.findings.length, decision: decision.queue }, "review posted");
     void emitReviewMetrics({
       prId,
       repository: repoName,
@@ -111,6 +154,10 @@ export class ReviewService {
       tokensOut: review.tokensOut,
       status: "reviewed",
     });
-    return { status: "reviewed", findings: review.findings.length };
+    return { status: "reviewed", findings: review.findings.length, decision: decision.queue };
+  }
+
+  private autoApprovalPolicy(): AutoApprovalPolicy {
+    return { ...DEFAULT_AUTO_APPROVAL_POLICY, ...this.opts.autoApprovalPolicy };
   }
 }

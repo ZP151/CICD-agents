@@ -19,10 +19,19 @@ export interface TaskView {
   id: string;
   kind: string;
   status: string;
+  payload?: Record<string, unknown>;
   steps: Array<{ seq: number; name: string; detail: string; status: string; createdAt: number }>;
   result: unknown;
   error: string;
   createdAt: number;
+  startedAt?: number | null;
+  finishedAt?: number | null;
+}
+
+export async function fetchTasks(): Promise<TaskView[]> {
+  const r = await fetch(`${RUNTIME_URL}/tasks`);
+  if (!r.ok) throw new Error(`/tasks HTTP ${r.status}`);
+  return (await r.json()) as TaskView[];
 }
 
 export async function fetchTask(taskId: string): Promise<TaskView> {
@@ -64,10 +73,14 @@ export const runtimeUrl = RUNTIME_URL;
 
 export type ChatEventType =
   | "session"
-  | "thinking"
+  | "assistant_delta"
+  | "progress"
   | "tool_start"
   | "tool_end"
   | "confirm_required"
+  | "workflow_state"
+  | "approval_required"
+  | "approval_resolved"
   | "executing"
   | "message"
   | "done"
@@ -78,7 +91,7 @@ export interface ChatEventPayload {
   type: ChatEventType;
   // session
   sessionId?: string;
-  // thinking
+  // assistant_delta
   delta?: string;
   // tool_start / tool_end
   name?: string;
@@ -89,6 +102,25 @@ export interface ChatEventPayload {
   // confirm_required
   riskLevel?: string;
   plan?: string;
+  approval?: {
+    id: string;
+    action: {
+      tool: string;
+      args: Record<string, unknown>;
+      description: string;
+      nextHint?: string;
+    };
+    riskLevel: string;
+    explanation: string;
+  };
+  approvalId?: string;
+  approved?: boolean;
+  state?: {
+    status: "planning" | "running" | "waiting_for_approval" | "blocked" | "done" | "failed";
+    currentStep: string;
+    completedTools: string[];
+    pendingApproval?: ChatEventPayload["approval"];
+  };
   // message / error
   text?: string;
   message?: string;
@@ -98,12 +130,6 @@ export interface ChatEventPayload {
     riskLevel: string;
     actionsTaken: string[];
     suggestions: string[];
-    pendingAction?: {
-      tool: string;
-      args: Record<string, unknown>;
-      description: string;
-      nextHint?: string;
-    };
   };
 }
 
@@ -118,6 +144,8 @@ export interface ChatMessageEntry {
   content: string;
   timestamp: number;
 }
+
+export type ChatWorkflowState = NonNullable<ChatEventPayload["state"]>;
 
 // ─── localStorage config readers ─────────────────────────────────────────────
 // Read at call time so any changes the user makes in Settings / Profiles are
@@ -238,7 +266,7 @@ export async function confirmPlan(sessionId: string): Promise<void> {
   if (!r.ok) throw new Error(`confirm failed: HTTP ${r.status}`);
 }
 
-/** Dispatch a structured confirm-action (bypasses chat input — directly executes pendingAction). */
+/** Dispatch a structured confirm-action (bypasses chat input and executes the stored approval proposal). */
 export function confirmAction(
   sessionId: string,
   onEvent: (payload: ChatEventPayload) => void,
@@ -315,6 +343,12 @@ export async function fetchChatMessages(sessionId: string): Promise<ChatMessageE
   return (await r.json()) as ChatMessageEntry[];
 }
 
+export async function fetchChatState(sessionId: string): Promise<{ workflowState?: ChatWorkflowState }> {
+  const r = await fetch(`${RUNTIME_URL}/chat/${sessionId}/state`);
+  if (!r.ok) throw new Error(`/chat/state HTTP ${r.status}`);
+  return (await r.json()) as { workflowState?: ChatWorkflowState };
+}
+
 // ─── Workspace profile API ────────────────────────────────────────────────────
 
 export interface WorkspaceProfile {
@@ -337,6 +371,51 @@ export interface WorkspaceProfile {
 }
 
 export type WorkspaceProfileInput = Omit<WorkspaceProfile, "id" | "createdAt" | "updatedAt">;
+
+export interface PipelineRunSummary {
+  id: number;
+  name: string;
+  state: string;
+  result: string;
+  createdDate: string;
+  finishedDate: string;
+  sourceBranch: string;
+  url: string;
+}
+
+export interface PullRequestSummary {
+  id: number;
+  title: string;
+  status: string;
+  isDraft: boolean;
+  sourceBranch: string;
+  targetBranch: string;
+  createdBy: string;
+  creationDate: string;
+  repository: string;
+  url: string;
+  reviewerCount: number;
+  voteSummary: {
+    approved: number;
+    waiting: number;
+    rejected: number;
+  };
+  pipelineRun?: PipelineRunSummary;
+}
+
+export interface ReviewQueueItem {
+  repository: string;
+  pullRequestId: number;
+  lastIterationId: number;
+  findingCount: number;
+  lastRunAt: string;
+  sourceCommit: string;
+  decisionQueue: "auto_approved" | "needs_human_review" | "blocked" | "watching";
+  decisionRiskLevel: "low" | "medium" | "high";
+  decisionReason: string;
+  autoApprovedAt: string;
+  autoApprovalActor: string;
+}
 
 export async function listProfiles(): Promise<WorkspaceProfile[]> {
   const r = await fetch(`${RUNTIME_URL}/profiles`);
@@ -373,6 +452,25 @@ export async function updateProfile(id: string, data: Partial<WorkspaceProfileIn
 export async function deleteProfile(id: string): Promise<void> {
   const r = await fetch(`${RUNTIME_URL}/profiles/${id}`, { method: "DELETE" });
   if (!r.ok) throw new Error(`deleteProfile HTTP ${r.status}`);
+}
+
+export async function fetchProfilePullRequests(
+  profileId: string,
+  status = "active",
+): Promise<PullRequestSummary[]> {
+  const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/pull-requests?status=${encodeURIComponent(status)}`);
+  if (!r.ok) throw new Error(`/profiles/${profileId}/pull-requests HTTP ${r.status}: ${await r.text()}`);
+  const body = (await r.json()) as { pullRequests: PullRequestSummary[] };
+  return body.pullRequests;
+}
+
+export async function fetchProfileReviewQueue(profileId: string): Promise<{
+  configured: boolean;
+  items: ReviewQueueItem[];
+}> {
+  const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/review-queue`);
+  if (!r.ok) throw new Error(`/profiles/${profileId}/review-queue HTTP ${r.status}: ${await r.text()}`);
+  return (await r.json()) as { configured: boolean; items: ReviewQueueItem[] };
 }
 
 // ─── Azure Auth ───────────────────────────────────────────────────────────────
@@ -508,6 +606,18 @@ export interface DaemonConfig {
   azureStorageAccount: string;
   azureKeyVaultUrl: string;
   azureCosmosEndpoint: string;
+}
+
+/** List git branches for a repo path by asking the daemon (which uses shell:true to find git). */
+export async function fetchGitBranchesFromDaemon(repoPath: string): Promise<string[]> {
+  try {
+    const r = await fetch(`${RUNTIME_URL}/git/branches?repoPath=${encodeURIComponent(repoPath)}`);
+    if (!r.ok) return [];
+    const data = await r.json() as { branches: string[] };
+    return data.branches ?? [];
+  } catch {
+    return [];
+  }
 }
 
 /** Read the daemon's current non-secret configuration for pre-filling the Settings UI. */

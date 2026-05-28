@@ -76,4 +76,12 @@ describe("daemon HTTP", () => {
     const r = await app.inject({ method: "GET", url: "/tasks/no-such-task" });
     expect(r.statusCode).toBe(404);
   });
+
+  it("returns empty chat workflow state for an unknown session", async () => {
+    app = await buildApp();
+    const state = await app.inject({ method: "GET", url: "/chat/no-such-session/state" });
+    expect(state.statusCode).toBe(200);
+    const body = state.json() as { workflowState?: unknown };
+    expect(body.workflowState).toBeUndefined();
+  });
 });

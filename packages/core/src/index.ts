@@ -10,6 +10,7 @@ export * from "./indexer/types.js";
 export * from "./indexer/parsers.js";
 export * from "./indexer/chunks.js";
 export * from "./tools/executor.js";
+export * from "./tools/capabilities.js";
 export * from "./tools/git.js";
 export * from "./tools/dotnet.js";
 export * from "./tools/npm.js";
@@ -18,6 +19,7 @@ export * from "./tools/azureDevOps.js";
 export * from "./tools/gitIntent.js";
 export * from "./telemetry.js";
 export * from "./chatPlanner.js";
+export * from "./reviewQueue.js";
 
 // Azure cloud persistence (opt-in — requires env vars)
 export * from "./store/azureAuth.js";

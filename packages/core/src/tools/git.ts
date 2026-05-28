@@ -75,6 +75,61 @@ export function gitTools(): Tool[] {
         ]),
     },
     {
+      name: "git_show",
+      description: "Show a commit, tag, or file at a revision. Use path to inspect a single file at that revision.",
+      parameters: {
+        type: "object",
+        properties: {
+          revision: { type: "string", default: "HEAD" },
+          path: { type: "string", description: "Optional file path to show at the revision." },
+          stat: { type: "boolean", description: "Show summary statistics instead of the full patch/content." },
+        },
+      },
+      allowedCommands: ALLOWED,
+      handler: (ctx, payload) => {
+        const revision = String(payload["revision"] ?? "HEAD").trim() || "HEAD";
+        const path = String(payload["path"] ?? "").trim();
+        if (path) return git(ctx, ["show", `${revision}:${path}`]);
+        return git(ctx, payload["stat"] ? ["show", "--stat", revision] : ["show", revision]);
+      },
+    },
+    {
+      name: "git_fetch",
+      description: "Fetch remote-tracking refs from a remote without changing the working tree.",
+      parameters: {
+        type: "object",
+        properties: {
+          remote: { type: "string", default: "origin" },
+          prune: { type: "boolean", default: false },
+        },
+      },
+      allowedCommands: ALLOWED,
+      handler: (ctx, payload) => {
+        const remote = String(payload["remote"] ?? "origin").trim() || "origin";
+        const args = payload["prune"] ? ["fetch", "--prune", remote] : ["fetch", remote];
+        return git(ctx, args);
+      },
+    },
+    {
+      name: "git_merge_base",
+      description: "Find the best common ancestor between two refs.",
+      parameters: {
+        type: "object",
+        required: ["left", "right"],
+        properties: {
+          left: { type: "string", description: "First branch, tag, or revision." },
+          right: { type: "string", description: "Second branch, tag, or revision." },
+        },
+      },
+      allowedCommands: ALLOWED,
+      handler: (ctx, payload) => {
+        const left = String(payload["left"] ?? "").trim();
+        const right = String(payload["right"] ?? "").trim();
+        if (!left || !right) throw new ToolError("git_merge_base requires 'left' and 'right'");
+        return git(ctx, ["merge-base", left, right]);
+      },
+    },
+    {
       name: "git_push",
       description: "Push a branch to a remote (defaults to origin).",
       parameters: {
@@ -109,6 +164,91 @@ export function gitTools(): Tool[] {
       },
     },
     {
+      name: "git_checkout",
+      description: "Switch to an existing branch or revision.",
+      parameters: {
+        type: "object",
+        required: ["ref"],
+        properties: {
+          ref: { type: "string", description: "Existing branch, tag, or revision to check out." },
+        },
+      },
+      allowedCommands: ALLOWED,
+      handler: (ctx, payload) => {
+        const ref = String(payload["ref"] ?? "").trim();
+        if (!ref) throw new ToolError("git_checkout requires 'ref'");
+        return git(ctx, ["checkout", ref]);
+      },
+    },
+    {
+      name: "git_pull",
+      description: "Pull changes from a remote branch into the current branch.",
+      parameters: {
+        type: "object",
+        properties: {
+          remote: { type: "string", default: "origin" },
+          branch: { type: "string", description: "Optional remote branch to pull." },
+          rebase: { type: "boolean", default: false },
+          ffOnly: { type: "boolean", default: false },
+        },
+      },
+      allowedCommands: ALLOWED,
+      handler: (ctx, payload) => {
+        const remote = String(payload["remote"] ?? "origin").trim() || "origin";
+        const branch = String(payload["branch"] ?? "").trim();
+        const args = ["pull"];
+        if (payload["rebase"]) args.push("--rebase");
+        if (payload["ffOnly"]) args.push("--ff-only");
+        args.push(remote);
+        if (branch) args.push(branch);
+        return git(ctx, args);
+      },
+    },
+    {
+      name: "git_merge",
+      description: "Merge another ref into the current branch.",
+      parameters: {
+        type: "object",
+        required: ["ref"],
+        properties: {
+          ref: { type: "string", description: "Branch, tag, or revision to merge." },
+          noCommit: { type: "boolean", default: false },
+          ffOnly: { type: "boolean", default: false },
+        },
+      },
+      allowedCommands: ALLOWED,
+      handler: (ctx, payload) => {
+        const ref = String(payload["ref"] ?? "").trim();
+        if (!ref) throw new ToolError("git_merge requires 'ref'");
+        const args = ["merge"];
+        if (payload["noCommit"]) args.push("--no-commit");
+        if (payload["ffOnly"]) args.push("--ff-only");
+        args.push(ref);
+        return git(ctx, args);
+      },
+    },
+    {
+      name: "git_rebase",
+      description: "Rebase the current branch onto another ref.",
+      parameters: {
+        type: "object",
+        required: ["onto"],
+        properties: {
+          onto: { type: "string", description: "Branch, tag, or revision to rebase onto." },
+          autostash: { type: "boolean", default: false },
+        },
+      },
+      allowedCommands: ALLOWED,
+      handler: (ctx, payload) => {
+        const onto = String(payload["onto"] ?? "").trim();
+        if (!onto) throw new ToolError("git_rebase requires 'onto'");
+        const args = ["rebase"];
+        if (payload["autostash"]) args.push("--autostash");
+        args.push(onto);
+        return git(ctx, args);
+      },
+    },
+    {
       name: "git_add",
       description: "Stage files for commit. Pass paths as an array, or leave empty to stage all changes (git add .).",
       parameters: {
@@ -125,6 +265,34 @@ export function gitTools(): Tool[] {
       handler: (ctx, payload) => {
         const paths = payload["paths"] as string[] | undefined;
         const args = paths && paths.length > 0 ? ["add", "--", ...paths] : ["add", "."];
+        return git(ctx, args);
+      },
+    },
+    {
+      name: "git_restore",
+      description: "Restore files in the working tree or staged area.",
+      parameters: {
+        type: "object",
+        required: ["paths"],
+        properties: {
+          paths: {
+            type: "array",
+            items: { type: "string" },
+            description: "Specific files or directories to restore.",
+          },
+          source: { type: "string", description: "Optional source revision, such as HEAD." },
+          staged: { type: "boolean", description: "Restore the staged area instead of the working tree." },
+        },
+      },
+      allowedCommands: ALLOWED,
+      handler: (ctx, payload) => {
+        const paths = payload["paths"] as string[] | undefined;
+        if (!paths || paths.length === 0) throw new ToolError("git_restore requires at least one path");
+        const source = String(payload["source"] ?? "").trim();
+        const args = ["restore"];
+        if (payload["staged"]) args.push("--staged");
+        if (source) args.push("--source", source);
+        args.push("--", ...paths);
         return git(ctx, args);
       },
     },

@@ -57,6 +57,10 @@ export function runCommand(cmd: string[], options: RunOptions): Promise<CommandR
     const child = spawn(head, cmd.slice(1), {
       cwd: options.cwd,
       env: { ...process.env, ...(options.env ?? {}) },
+      // Do NOT use shell:true on Windows — cmd.exe splits space-containing
+      // arguments (e.g. git commit messages) into separate tokens, turning
+      // "commit -m My message" into pathspec errors. The daemon's injectGitPath()
+      // already injects git into process.env.PATH, so shell:false finds git fine.
       shell: false,
       windowsHide: true,
     });

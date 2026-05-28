@@ -17,6 +17,18 @@ const ConfigSchema = z.object({
   tablesConnectionString: z.string().default(""),
   appInsightsConnectionString: z.string().default(""),
   reviewMaxFilesPerPr: z.coerce.number().default(40),
+  reviewAutoApproveEnabled: z.coerce.boolean().default(false),
+  reviewAutoApproveReviewerId: z.string().default(""),
+  reviewAutoApproveMaxChangedFiles: z.coerce.number().default(8),
+  reviewAutoApproveTargetBranches: z.array(z.string()).default(["main"]),
+  reviewAutoApproveSensitivePaths: z.array(z.string()).default([
+    ".github/",
+    "infra/",
+    "deploy/",
+    "security/",
+    "auth/",
+    "migrations/",
+  ]),
 });
 
 export type ReviewAgentConfig = z.infer<typeof ConfigSchema>;
@@ -39,5 +51,22 @@ export function loadConfig(): ReviewAgentConfig {
     tablesConnectionString: process.env.AZURE_TABLES_CONNECTION_STRING,
     appInsightsConnectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING,
     reviewMaxFilesPerPr: process.env.REVIEW_MAX_FILES_PER_PR,
+    reviewAutoApproveEnabled: process.env.REVIEW_AUTO_APPROVE_ENABLED,
+    reviewAutoApproveReviewerId: process.env.REVIEW_AUTO_APPROVE_REVIEWER_ID,
+    reviewAutoApproveMaxChangedFiles: process.env.REVIEW_AUTO_APPROVE_MAX_CHANGED_FILES,
+    reviewAutoApproveTargetBranches: csv(process.env.REVIEW_AUTO_APPROVE_TARGET_BRANCHES, ["main"]),
+    reviewAutoApproveSensitivePaths: csv(process.env.REVIEW_AUTO_APPROVE_SENSITIVE_PATHS, [
+      ".github/",
+      "infra/",
+      "deploy/",
+      "security/",
+      "auth/",
+      "migrations/",
+    ]),
   });
+}
+
+function csv(value: string | undefined, fallback: string[]): string[] {
+  if (!value) return fallback;
+  return value.split(",").map((part) => part.trim()).filter(Boolean);
 }

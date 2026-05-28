@@ -6,37 +6,78 @@ use tauri::{
 };
 use tauri_plugin_shell::{process::{CommandChild, CommandEvent}, ShellExt};
 
+/// Resolve the git executable path.  On Windows the Tauri process may inherit
+/// a minimal PATH, so we probe a few well-known locations before falling back
+/// to the bare "git" name (which works when Git for Windows is in PATH).
+fn git_executable() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        let candidates = [
+            r"C:\Program Files\Git\cmd\git.exe",
+            r"C:\Program Files\Git\bin\git.exe",
+            r"C:\Program Files (x86)\Git\cmd\git.exe",
+        ];
+        for c in &candidates {
+            if std::path::Path::new(c).exists() {
+                return c.to_string();
+            }
+        }
+        // Also try LOCALAPPDATA\Programs\Git
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            let p = format!(r"{}\Programs\Git\cmd\git.exe", local);
+            if std::path::Path::new(&p).exists() {
+                return p;
+            }
+        }
+    }
+    "git".to_string()
+}
+
+/// Parse `git branch -a` output into a deduplicated list of short branch names.
+/// The plain `git branch -a` format (no --format flag) avoids the cmd.exe `%`
+/// variable-expansion problem that corrupts `--format=%(refname:short)` on Windows.
+fn parse_git_branch_output(stdout: &str) -> Vec<String> {
+    let mut seen = Vec::<String>::new();
+    for line in stdout.lines() {
+        // Strip leading "* " (current branch marker) or "  "
+        let trimmed = line.trim_start_matches('*').trim();
+        if trimmed.is_empty() || trimmed.contains(" -> ") {
+            continue;
+        }
+        // Normalise remote tracking refs: "remotes/origin/main" → "main"
+        let name = if let Some(after_remotes) = trimmed.strip_prefix("remotes/") {
+            // e.g. "origin/main" → strip remote name prefix
+            if let Some((_remote, branch)) = after_remotes.split_once('/') {
+                branch.to_string()
+            } else {
+                after_remotes.to_string()
+            }
+        } else {
+            trimmed.to_string()
+        };
+        if !name.is_empty() && !seen.contains(&name) {
+            seen.push(name);
+        }
+    }
+    seen
+}
+
 /// Returns the list of local + remote branch names for the given repo path.
 /// Returns an empty vec if the path is not a git repository or git is unavailable.
 #[allow(dead_code)]
 #[tauri::command]
 fn list_git_branches(repo_path: String) -> Vec<String> {
-    let result = std::process::Command::new("git")
-        .args(["branch", "-a", "--format=%(refname:short)"])
+    let git = git_executable();
+    // Use `git branch -a` without `--format` to avoid cmd.exe `%` expansion
+    // corrupting the format string on Windows.
+    let result = std::process::Command::new(&git)
+        .args(["branch", "-a"])
         .current_dir(&repo_path)
         .output();
 
     match result {
         Ok(output) if output.status.success() => {
-            String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .map(|l| l.trim().to_string())
-                // normalise remote refs: "origin/main" → "main"; skip "origin/HEAD -> …"
-                .map(|l| {
-                    if let Some(stripped) = l.strip_prefix("origin/") {
-                        if stripped.contains(" -> ") {
-                            return String::new();
-                        }
-                        return stripped.to_string();
-                    }
-                    l
-                })
-                .filter(|l| !l.is_empty())
-                // deduplicate while preserving order
-                .fold(Vec::<String>::new(), |mut acc, b| {
-                    if !acc.contains(&b) { acc.push(b); }
-                    acc
-                })
+            parse_git_branch_output(&String::from_utf8_lossy(&output.stdout))
         }
         _ => vec![],
     }

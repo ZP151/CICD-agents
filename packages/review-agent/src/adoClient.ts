@@ -138,6 +138,29 @@ export class AdoClient {
     return r.json();
   }
 
+  async approvePullRequest(args: {
+    project: string;
+    repositoryId: string;
+    pullRequestId: number;
+    reviewerId: string;
+  }): Promise<unknown> {
+    const url =
+      `${this.baseUrl}/${args.project}/_apis/git/repositories/${args.repositoryId}` +
+      `/pullRequests/${args.pullRequestId}/reviewers/${args.reviewerId}?api-version=7.1-preview.1`;
+    const r = await fetch(url, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: await this.authHeader(),
+      },
+      body: JSON.stringify({ vote: 10, isReapprove: true }),
+    });
+    if (!r.ok) {
+      throw new Error(`approvePullRequest failed: HTTP ${r.status}: ${(await r.text()).slice(0, 400)}`);
+    }
+    return r.json();
+  }
+
   private async json<T = unknown>(url: string): Promise<T> {
     const r = await fetch(url, { headers: { Authorization: await this.authHeader() } });
     if (!r.ok) throw new Error(`GET ${url} failed: HTTP ${r.status}`);

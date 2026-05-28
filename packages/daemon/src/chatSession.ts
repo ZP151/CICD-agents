@@ -7,6 +7,7 @@ import {
   LLMClient,
   getSettings,
   ToolExecutor,
+  runCommand,
   isConfirmationMessage,
   isDenialMessage,
   getWorkspaceProfile,
@@ -14,6 +15,7 @@ import {
   type ChatEvent,
   type ChatMessage,
   type ChatPlannerResult,
+  type ChatWorkflowState,
   type PendingToolAction,
   type ToolContext,
   type Settings,
@@ -27,6 +29,12 @@ import {
   resetCosmosClient,
   type CosmosStoredSession,
 } from "@cicd-agent/core";
+import {
+  buildChatContext,
+  chatContextToPrompt,
+  refreshChatIndex,
+  type ChatContextProfile,
+} from "@cicd-agent/core/chatContext";
 // Inline config types (mirrored from server.ts ChatStartSchema — kept here to
 // avoid a circular import since server.ts imports ChatSessionManager).
 export interface InlineLlmConfig {
@@ -102,7 +110,10 @@ interface StoredSession {
   profileId?: string;             // optional workspace profile binding
   messages: ChatMessage[];        // for LLM context
   bubbles: StoredBubble[];        // for UI restoration
-  pendingAction?: PendingToolAction; // last write-action the agent proposed, awaiting "yes"
+  approvalProposal?: PendingToolAction; // last write action awaiting user approval
+  /** @deprecated Use approvalProposal. Kept so old local/Cosmos sessions can be resumed. */
+  pendingAction?: PendingToolAction;
+  workflowState?: ChatWorkflowState;
   llmConfig?: InlineLlmConfig;    // persisted so confirm-action can reuse the same creds
   inlineProfile?: InlineProfile;  // persisted so confirm-action has ADO/profile context
 }
@@ -168,7 +179,9 @@ function cosmosToStored(doc: CosmosStoredSession): StoredSession {
     profileId:     doc.profileId,
     messages:      doc.messages as ChatMessage[],
     bubbles:       doc.bubbles as StoredBubble[],
+    approvalProposal: doc.approvalProposal as PendingToolAction | undefined,
     pendingAction: doc.pendingAction as PendingToolAction | undefined,
+    workflowState: doc.workflowState as ChatWorkflowState | undefined,
     llmConfig:     doc.llmConfig as InlineLlmConfig | undefined,
     inlineProfile: doc.inlineProfile as InlineProfile | undefined,
   };
@@ -183,7 +196,9 @@ function storedToCosmos(s: StoredSession): Omit<CosmosStoredSession, "userId" | 
     profileId:     s.profileId,
     messages:      s.messages,
     bubbles:       s.bubbles,
+    approvalProposal: s.approvalProposal,
     pendingAction: s.pendingAction,
+    workflowState: s.workflowState,
     llmConfig:     s.llmConfig,
     inlineProfile: s.inlineProfile,
   };
@@ -235,6 +250,7 @@ function buildEffectiveSettings(override?: InlineLlmConfig): Settings {
 
 export class ChatSessionManager {
   private readonly active = new Map<string, ActiveSession>();
+  private readonly contextIndexRefreshAt = new Map<string, number>();
 
   createSession(repoPath: string, profileId?: string): string {
     const id = `chat_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
@@ -261,6 +277,11 @@ export class ChatSessionManager {
   async getBubbles(sessionId: string): Promise<StoredBubble[]> {
     const session = await loadSession(sessionId);
     return session?.bubbles ?? [];
+  }
+
+  async getWorkflowState(sessionId: string): Promise<ChatWorkflowState | undefined> {
+    const session = await loadSession(sessionId);
+    return session?.workflowState;
   }
 
   private async appendMessage(sessionId: string, role: "user" | "assistant", content: string): Promise<void> {
@@ -345,7 +366,13 @@ export class ChatSessionManager {
     }
 
     const session = this.active.get(sessionId)!;
-    session.repoPath = repoPath;
+
+    // Prefer the inline profile's repoPath (sent from the frontend) over the
+    // top-level repoPath parameter.  Chat.tsx may send "." as the fallback when
+    // its local state hasn't been populated yet, while the inline profile always
+    // carries the user-configured workspace path.
+    const effectiveRepoPath = (inlineProfile?.repoPath?.trim() || repoPath.trim()) || ".";
+    session.repoPath = effectiveRepoPath;
 
     // Update repoPath, profileId, llmConfig, and inlineProfile in store.
     // Persisting these lets confirm-action reuse the same credentials and
@@ -353,7 +380,7 @@ export class ChatSessionManager {
     {
       const storedSession = await loadSession(sessionId);
       if (storedSession) {
-        storedSession.repoPath = repoPath;
+        storedSession.repoPath = effectiveRepoPath;
         if (profileId) storedSession.profileId = profileId;
         if (llmConfig) storedSession.llmConfig = llmConfig;
         if (inlineProfile) storedSession.inlineProfile = inlineProfile;
@@ -407,17 +434,23 @@ export class ChatSessionManager {
       // ── Confirmation / Denial resolver ─────────────────────────────────────
       {
         const storedSession = await loadSession(sessionId);
-        // If no stored pending action, attempt to infer one from the last assistant message
-        const pending = storedSession?.pendingAction
-          ?? (isConfirmationMessage(message) ? inferPendingAction(storedSession?.messages ?? []) : undefined);
+        // If no stored approval proposal, attempt to infer one from the last assistant message.
+        const storedProposal = storedSession ? storedApprovalProposal(storedSession) : undefined;
+        const inferredProposal = isConfirmationMessage(message)
+          ? inferPendingAction(storedSession?.messages ?? [])
+          : undefined;
+        const pending = storedProposal ?? inferredProposal;
 
         if (pending) {
           if (isDenialMessage(message)) {
-            // User cancelled — clear pending action and acknowledge
+            // User cancelled — clear the proposal and acknowledge.
             if (storedSession) {
-              storedSession.pendingAction = undefined;
+              clearStoredApprovalProposal(storedSession);
+              storedSession.workflowState = buildWorkflowState([], undefined, "done", "cancelled");
               await saveSession(storedSession);
             }
+            yield { type: "approval_resolved", approvalId: approvalIdFor(pending), approved: false };
+            yield { type: "workflow_state", state: buildWorkflowState([], undefined, "done", "cancelled") };
             const doneEvent: ChatEvent = {
               type: "done",
               result: {
@@ -438,10 +471,13 @@ export class ChatSessionManager {
           if (isConfirmationMessage(message)) {
             // Clear pending from store immediately so it won't fire again
             if (storedSession) {
-              storedSession.pendingAction = undefined;
+              clearStoredApprovalProposal(storedSession);
+              storedSession.workflowState = buildWorkflowState([], undefined, "running", pending.tool);
               await saveSession(storedSession);
             }
 
+            yield { type: "approval_resolved", approvalId: approvalIdFor(pending), approved: true };
+            yield { type: "workflow_state", state: buildWorkflowState([], undefined, "running", pending.tool) };
             // ── Execute the tool directly — no LLM round trip ───────────────
             yield { type: "tool_start", name: pending.tool, args: pending.args };
             let toolResult: unknown;
@@ -481,9 +517,12 @@ export class ChatSessionManager {
 
             await this.appendMessage(sessionId, "user", continuationMsg);
             const history22 = await this.getHistory(sessionId, 22);
+            yield { type: "progress", message: "Refreshing project context" };
+            const contextPrompt = await this.buildContextPrompt(session.repoPath, continuationMsg, llm, inlineProfile);
+            yield { type: "progress", message: "Planning next step" };
 
             yield* this._runPlannerAndPersist(
-              sessionId, continuationMsg, history22, session.repoPath, planner, waitForConfirm,
+              sessionId, continuationMsg, history22, session.repoPath, planner, waitForConfirm, contextPrompt,
             );
             return;
           }
@@ -492,8 +531,11 @@ export class ChatSessionManager {
 
       // ── Normal LLM flow ────────────────────────────────────────────────────
       const history = await this.getHistory(sessionId, 20);
+      yield { type: "progress", message: "Reading project context" };
+      const contextPrompt = await this.buildContextPrompt(session.repoPath, message, llm, inlineProfile);
+      yield { type: "progress", message: "Planning response" };
       yield* this._runPlannerAndPersist(
-        sessionId, message, history, session.repoPath, planner, waitForConfirm,
+        sessionId, message, history, session.repoPath, planner, waitForConfirm, contextPrompt,
       );
     } finally {
       // Always clean up the active entry — even if the server force-closes the generator
@@ -502,19 +544,20 @@ export class ChatSessionManager {
   }
 
   /**
-   * Directly execute the session's stored pendingAction (invoked by the
+   * Directly execute the session's stored approval proposal (invoked by the
    * dedicated /confirm-action endpoint — not via a chat message).
    * After execution, asks the LLM for the NEXT single workflow step only
    * (no re-running of read tools).
    */
   async *confirmAction(sessionId: string): AsyncGenerator<ChatEvent> {
-    // Load pending action — use heuristic fallback if LLM omitted the JSON field
+    // Load approval proposal, using heuristic fallback if the LLM omitted the JSON field.
     const storedSession = await loadSession(sessionId);
-    const pending = storedSession?.pendingAction
-      ?? inferPendingAction(storedSession?.messages ?? []);
+    const pending = storedSession
+      ? storedApprovalProposal(storedSession) ?? inferPendingAction(storedSession.messages)
+      : undefined;
 
     if (!pending || !storedSession) {
-      yield { type: "error", message: "No pending action for this session" };
+      yield { type: "error", message: "No approval proposal for this session" };
       return;
     }
 
@@ -526,11 +569,14 @@ export class ChatSessionManager {
     });
 
     try {
-      // Clear pending action immediately so a double-click can't re-trigger
-      storedSession.pendingAction = undefined;
+      // Clear immediately so a double-click cannot re-trigger the same action.
+      clearStoredApprovalProposal(storedSession);
+      storedSession.workflowState = buildWorkflowState(storedSession.bubbles, undefined, "running", pending.tool);
       await saveSession(storedSession);
 
       const session = this.active.get(sessionId)!;
+      yield { type: "approval_resolved", approvalId: approvalIdFor(pending), approved: true };
+      yield { type: "workflow_state", state: buildWorkflowState(storedSession.bubbles, undefined, "running", pending.tool) };
 
       // Build executor — prefer the persisted inline profile (sent from the
       // frontend localStorage on the original /chat request) so that ADO org,
@@ -605,21 +651,24 @@ export class ChatSessionManager {
           `CRITICAL: Do NOT call git_status, git_diff, git_log, git_branch_list, git_current_branch, or git_remote again. ` +
           `The working tree state is already known. ` +
           `Proceed DIRECTLY to: ${nextHint}. ` +
-          `If the next step requires user confirmation (commit/push/PR), propose it with pending_action in your JSON.`
+          `If the next step requires user confirmation, propose it with approval_proposal in your JSON.`
         : `WORKFLOW STEP FAILED: ${pending.tool} failed with error: ${summary}. Explain what went wrong and propose a recovery action.`;
 
       await this.appendMessage(sessionId, "user", continuationMsg);
       const history = await this.getHistory(sessionId, 22);
+      yield { type: "progress", message: "Refreshing project context" };
+      const contextPrompt = await this.buildContextPrompt(session.repoPath, continuationMsg, llm, storedSession.inlineProfile);
+      yield { type: "progress", message: "Planning next step" };
 
       yield* this._runPlannerAndPersist(
-        sessionId, continuationMsg, history, session.repoPath, planner, () => Promise.resolve(true),
+        sessionId, continuationMsg, history, session.repoPath, planner, () => Promise.resolve(true), contextPrompt,
       );
     } finally {
       this.active.delete(sessionId);
     }
   }
 
-  /** Run the ChatPlanner, persist events, and save pendingAction from result. */
+  /** Run the ChatPlanner, persist events, and save approval proposal state. */
   private async *_runPlannerAndPersist(
     sessionId: string,
     message: string,
@@ -627,11 +676,12 @@ export class ChatSessionManager {
     repoPath: string,
     planner: ChatPlanner,
     waitForConfirm: () => Promise<boolean>,
+    contextPrompt?: string,
   ): AsyncGenerator<ChatEvent> {
     let assistantReply = "";
     const pendingToolArgs = new Map<string, Record<string, unknown>>();
 
-    for await (const event of planner.run(message, history, repoPath, waitForConfirm)) {
+    for await (const event of planner.run(message, history, repoPath, waitForConfirm, contextPrompt)) {
       if (event.type === "tool_start") {
         pendingToolArgs.set(event.name, event.args);
         yield event;
@@ -653,7 +703,11 @@ export class ChatSessionManager {
         // ── Workflow-state enrichment ──────────────────────────────────────
         const bubbles = await this.getBubbles(sessionId);
         const enrichedResult = deriveWorkflowPendingAction(sessionId, event.result, bubbles);
-        const enrichedEvent: ChatEvent = { type: "done", result: enrichedResult };
+        const userFacingResult: ChatPlannerResult = {
+          ...enrichedResult,
+          approvalProposal: undefined,
+        };
+        const enrichedEvent: ChatEvent = { type: "done", result: userFacingResult };
 
         assistantReply = enrichedResult.response;
         await this.appendBubble(sessionId, {
@@ -664,11 +718,24 @@ export class ChatSessionManager {
           actionsTaken: enrichedResult.actionsTaken,
           suggestions: enrichedResult.suggestions,
         });
-        // Store the enriched pendingAction
+        // Store the enriched approval proposal
         const storedForPending = await loadSession(sessionId);
+        const workflowState = buildWorkflowState(
+          bubbles,
+          approvalProposalFromResult(enrichedResult),
+          approvalProposalFromResult(enrichedResult) ? "waiting_for_approval" : "done",
+          approvalProposalFromResult(enrichedResult)?.tool ?? "done",
+          enrichedResult.riskLevel,
+          enrichedResult.response,
+        );
         if (storedForPending) {
-          storedForPending.pendingAction = enrichedResult.pendingAction ?? undefined;
+          setStoredApprovalProposal(storedForPending, approvalProposalFromResult(enrichedResult));
+          storedForPending.workflowState = workflowState;
           await saveSession(storedForPending);
+        }
+        yield { type: "workflow_state", state: workflowState };
+        if (workflowState.pendingApproval) {
+          yield { type: "approval_required", approval: workflowState.pendingApproval };
         }
         yield enrichedEvent;
       } else if (event.type === "error") {
@@ -679,6 +746,8 @@ export class ChatSessionManager {
         assistantReply = "(cancelled)";
         await this.appendBubble(sessionId, { role: "system", content: "Action cancelled.", timestamp: now() });
         yield event;
+      } else if (event.type === "progress") {
+        yield event;
       } else {
         yield event;
       }
@@ -687,6 +756,62 @@ export class ChatSessionManager {
     if (assistantReply) {
       await this.appendMessage(sessionId, "assistant", assistantReply);
     }
+  }
+
+  private async buildContextPrompt(
+    repoPath: string,
+    message: string,
+    llm: LLMClient,
+    inlineProfile?: InlineProfile,
+  ): Promise<string | undefined> {
+    try {
+      const profile = inlineProfileToChatContextProfile(inlineProfile);
+      const bundle = await buildChatContext({ repoPath, message, llm, profile });
+      this.refreshContextIndexInBackground(repoPath, llm, profile);
+      let prompt = chatContextToPrompt(bundle) ?? "";
+
+      // Always inject the current git branch so the agent knows the source
+      // branch without having to call git_current_branch explicitly.
+      try {
+        const branchResult = await runCommand(["git", "rev-parse", "--abbrev-ref", "HEAD"], {
+          cwd: repoPath,
+          allowed: ["git"],
+          timeoutSec: 5,
+        });
+        const currentBranch = branchResult.stdout.trim();
+        if (currentBranch && currentBranch !== "HEAD") {
+          const targetBranch = inlineProfile?.targetBranch || inlineProfile?.defaultBranch || "main";
+          const branchInfo = [
+            "\n## Current Git State",
+            `- Current branch: ${currentBranch}`,
+            `- PR target branch: ${targetBranch}`,
+            currentBranch === targetBranch
+              ? `- WARNING: You are on the PR target branch. Create a feature branch before committing and pushing.`
+              : "",
+          ].filter(Boolean).join("\n");
+          prompt = prompt ? `${prompt}\n${branchInfo}` : branchInfo;
+        }
+      } catch {
+        // branch info is best-effort; ignore errors
+      }
+
+      return prompt || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private refreshContextIndexInBackground(
+    repoPath: string,
+    llm: LLMClient,
+    profile?: ChatContextProfile,
+  ): void {
+    const nowMs = Date.now();
+    const key = repoPath;
+    const last = this.contextIndexRefreshAt.get(key) ?? 0;
+    if (nowMs - last < 5 * 60 * 1000) return;
+    this.contextIndexRefreshAt.set(key, nowMs);
+    void refreshChatIndex({ repoPath, llm, profile }).catch(() => undefined);
   }
 }
 
@@ -698,32 +823,90 @@ function truncateStr(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max - 3)}...`;
 }
 
-// ── Git-to-PR workflow steps (ordered) ───────────────────────────────────────
-const WORKFLOW_STEPS: Array<{
+function inlineProfileToChatContextProfile(profile?: InlineProfile): ChatContextProfile | undefined {
+  if (!profile) return undefined;
+  return {
+    buildCommand: profile.buildCommand,
+    testCommand: profile.testCommand,
+    targetBranch: profile.targetBranch || profile.defaultBranch || "main",
+    pipelineName: profile.adoPipelineName,
+  };
+}
+
+function approvalIdFor(action: PendingToolAction): string {
+  return `approval_${action.tool}_${hashShort(JSON.stringify(action.args ?? {}))}`;
+}
+
+function approvalProposalFromResult(result: ChatPlannerResult): PendingToolAction | undefined {
+  return result.approvalProposal;
+}
+
+function storedApprovalProposal(session: StoredSession): PendingToolAction | undefined {
+  return session.approvalProposal ?? session.pendingAction;
+}
+
+function setStoredApprovalProposal(session: StoredSession, proposal: PendingToolAction | undefined): void {
+  session.approvalProposal = proposal;
+  session.pendingAction = undefined;
+}
+
+function clearStoredApprovalProposal(session: StoredSession): void {
+  setStoredApprovalProposal(session, undefined);
+}
+
+function buildWorkflowState(
+  bubbles: StoredBubble[],
+  approvalProposal: PendingToolAction | undefined,
+  status: ChatWorkflowState["status"],
+  currentStep: string,
+  riskLevel = "medium",
+  explanation = "",
+): ChatWorkflowState {
+  const completedTools = bubbles
+    .filter((b) => b.role === "tool" && b.toolName && b.toolOk !== false)
+    .map((b) => b.toolName as string);
+  return {
+    status,
+    currentStep,
+    completedTools,
+    pendingApproval: approvalProposal
+      ? {
+          id: approvalIdFor(approvalProposal),
+          action: approvalProposal,
+          riskLevel,
+          explanation,
+        }
+      : undefined,
+  };
+}
+
+function hashShort(value: string): string {
+  return crypto.createHash("sha1").update(value).digest("hex").slice(0, 10);
+}
+
+// ── Write-action derivation ──────────────────────────────────────────────────
+const ACTION_DERIVERS: Array<{
   tool: string;
   description: string;
   nextHint: string;
-  /** Build args from session bubble history */
-  buildArgs: (bubbles: StoredBubble[]) => Record<string, unknown>;
+  buildArgs: (response: string, bubbles: StoredBubble[]) => Record<string, unknown>;
 }> = [
   {
     tool: "git_add",
     description: "Stage all changes",
     nextHint: "commit staged changes",
-    buildArgs: () => ({}),  // stage everything
+    buildArgs: (response) => {
+      const paths = extractMentionedPaths(response);
+      return paths.length > 0 ? { paths } : {};
+    },
   },
   {
     tool: "git_commit",
     description: "Commit staged changes",
     nextHint: "push branch",
-    buildArgs: (bubbles) => {
-      // Extract commit message proposed by the LLM from the last assistant bubble
-      const last = [...bubbles].reverse().find((b) => b.role === "assistant");
-      const text = last?.content ?? "";
-      // Look for quoted message in the assistant response
-      const quoted = text.match(/["'`]([^"'`\n]{10,120})["'`]/)?.[1];
-      // Or a line starting with "feat/fix/chore/docs/refactor:"
-      const conventional = text.match(/\b(feat|fix|chore|docs|refactor|style|test|ci|build|perf)(\([^)]+\))?:\s*(.+)/i)?.[0];
+    buildArgs: (response) => {
+      const quoted = response.match(/["'`]([^"'`\n]{10,120})["'`]/)?.[1];
+      const conventional = response.match(/\b(feat|fix|chore|docs|refactor|style|test|ci|build|perf)(\([^)]+\))?:\s*(.+)/i)?.[0];
       const message = quoted ?? conventional ?? "feat: update changes";
       return { message: message.trim() };
     },
@@ -732,56 +915,113 @@ const WORKFLOW_STEPS: Array<{
     tool: "git_push",
     description: "Push branch to remote",
     nextHint: "create PR",
-    buildArgs: (bubbles) => {
-      // Use the branch name from git_current_branch result
-      const branchBubble = [...bubbles].reverse().find((b) => b.toolName === "git_current_branch");
-      const raw = branchBubble?.toolResult;
-      const branch = typeof raw === "object" && raw !== null && "stdout" in raw
-        ? String((raw as Record<string, unknown>).stdout).trim()
-        : "HEAD";
-      return { branch };
+    buildArgs: (_response, bubbles) => {
+      return { branch: currentBranchFromBubbles(bubbles) };
+    },
+  },
+  {
+    tool: "git_create_branch",
+    description: "Create branch",
+    nextHint: "continue workflow",
+    buildArgs: (response) => {
+      return { name: extractBranchName(response) ?? "feature/ai-change" };
+    },
+  },
+  {
+    tool: "git_checkout",
+    description: "Switch branch or revision",
+    nextHint: "continue workflow",
+    buildArgs: (response) => {
+      return { ref: extractGitRef(response) ?? "HEAD" };
+    },
+  },
+  {
+    tool: "git_pull",
+    description: "Pull changes from remote",
+    nextHint: "continue workflow",
+    buildArgs: (response) => {
+      const ref = extractGitRef(response);
+      const lower = response.toLowerCase();
+      return {
+        remote: "origin",
+        ...(ref ? { branch: ref.replace(/^origin\//, "") } : {}),
+        rebase: lower.includes("rebase"),
+        ffOnly: lower.includes("ff-only") || lower.includes("fast-forward only"),
+      };
+    },
+  },
+  {
+    tool: "git_merge",
+    description: "Merge branch or revision",
+    nextHint: "continue workflow",
+    buildArgs: (response) => {
+      return { ref: extractGitRef(response) ?? "main" };
+    },
+  },
+  {
+    tool: "git_rebase",
+    description: "Rebase current branch",
+    nextHint: "continue workflow",
+    buildArgs: (response) => {
+      return { onto: extractGitRef(response) ?? "main", autostash: response.toLowerCase().includes("autostash") };
+    },
+  },
+  {
+    tool: "git_restore",
+    description: "Restore files",
+    nextHint: "continue workflow",
+    buildArgs: (response) => {
+      const paths = extractMentionedPaths(response);
+      return {
+        paths,
+        staged: response.toLowerCase().includes("unstage") || response.toLowerCase().includes("staged"),
+      };
+    },
+  },
+  {
+    tool: "git_stash",
+    description: "Stash working-tree changes",
+    nextHint: "continue workflow",
+    buildArgs: (response) => {
+      const lower = response.toLowerCase();
+      if (lower.includes("pop") || lower.includes("restore")) return { action: "pop" };
+      const msg = response.match(/stash(?: message)?:\s*["'`]?([^"'`\n]{4,80})["'`]?/i)?.[1];
+      return msg ? { action: "push", message: msg.trim() } : { action: "push" };
     },
   },
   {
     tool: "ado_create_pr",
     description: "Create pull request",
     nextHint: "done",
-    buildArgs: (bubbles) => {
-      // Extract source branch
-      const branchBubble = [...bubbles].reverse().find((b) => b.toolName === "git_current_branch");
-      const raw = branchBubble?.toolResult;
-      const source_branch = typeof raw === "object" && raw !== null && "stdout" in raw
-        ? String((raw as Record<string, unknown>).stdout).trim()
-        : "HEAD";
-      // Extract PR title/description from last assistant bubble
-      const last = [...bubbles].reverse().find((b) => b.role === "assistant");
-      const text = last?.content ?? "";
-      const titleMatch = text.match(/(?:title|PR title|pull request title)[:\s]+["']?([^\n"']{5,100})["']?/i);
+    buildArgs: (response, bubbles) => {
+      const source_branch = currentBranchFromBubbles(bubbles);
+      const titleMatch = response.match(/(?:title|PR title|pull request title)[:\s]+["']?([^\n"']{5,100})["']?/i);
       const title = titleMatch?.[1] ?? `Update from ${source_branch}`;
-      return { source_branch, title, description: text.slice(0, 300) };
+      return { source_branch, title, description: response.slice(0, 300) };
     },
   },
 ];
 
 /**
- * Workflow-state-driven pending action enrichment.
+ * Workflow-state-driven approval proposal enrichment.
  *
- * Instead of relying on the LLM to emit pending_action in its JSON (unreliable),
+ * Instead of relying on the LLM to emit an approval proposal in its JSON (unreliable),
  * this function looks at the ACTUAL tool execution history to determine where we are
  * in the git-to-PR workflow and what the next confirmation step should be.
  *
  * Priority:
- *   1. If the LLM correctly emitted pending_action → use it as-is (respect LLM intent)
- *   2. If the response is asking for confirmation → derive from workflow stage
- *   3. Otherwise → no pending action
+ *   1. If the LLM correctly emitted an approval proposal → use it as-is (respect LLM intent)
+ *   2. If the response is asking for confirmation → derive from explicit action intent
+ *   3. If this is clearly a PR workflow → infer the next PR workflow action
+ *   3. Otherwise → no approval proposal
  */
-function deriveWorkflowPendingAction(
+export function deriveWorkflowPendingAction(
   _sessionId: string,
   result: ChatPlannerResult,
   bubbles: StoredBubble[],
 ): ChatPlannerResult {
-  // If LLM correctly provided pending_action, trust it
-  if (result.pendingAction?.tool) return result;
+  // If LLM correctly provided an approval proposal, trust it
+  if (approvalProposalFromResult(result)?.tool) return result;
 
   // Only infer when the response clearly asks the user to confirm an action
   const response = result.response.toLowerCase();
@@ -792,35 +1032,21 @@ function deriveWorkflowPendingAction(
     response.includes("ready to") || response.includes("want me to");
   if (!isAskingConfirmation) return result;
 
-  const executedTools = new Set(
-    bubbles.filter((b) => b.role === "tool" && b.toolOk === true).map((b) => b.toolName ?? ""),
-  );
+  const explicitTool = inferWriteToolFromResponse(response);
+  if (explicitTool) return withDerivedAction(result, explicitTool, bubbles);
 
-  // Walk the workflow steps and find the first one not yet completed
-  for (const step of WORKFLOW_STEPS) {
-    if (!executedTools.has(step.tool)) {
-      const args = step.buildArgs(bubbles);
-      return {
-        ...result,
-        pendingAction: {
-          tool: step.tool,
-          args,
-          description: step.description,
-          nextHint: step.nextHint,
-        },
-      };
-    }
-  }
+  const nextPrTool = inferNextPrWorkflowTool(response, bubbles);
+  if (nextPrTool) return withDerivedAction(result, nextPrTool, bubbles);
 
-  return result;  // all steps done, no pending action needed
+  return result;  // all steps done, no approval proposal needed
 }
 
 /**
- * Fallback used by confirmAction when no pendingAction is stored.
+ * Fallback used by confirmAction when no approval proposal is stored.
  * This can happen if the session was reloaded or store was not updated.
  * Uses workflow-state detection from execution history.
  */
-function inferPendingAction(messages: ChatMessage[]): PendingToolAction | undefined {
+export function inferPendingAction(messages: ChatMessage[]): PendingToolAction | undefined {
   // Only used as last-resort in confirmAction — the primary path is deriveWorkflowPendingAction
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
   if (!lastAssistant) return undefined;
@@ -832,18 +1058,119 @@ function inferPendingAction(messages: ChatMessage[]): PendingToolAction | undefi
     t.includes("ready to") || t.includes("want me to");
   if (!isAskingConfirmation) return undefined;
 
-  if (t.includes("stage") || t.includes("git add") || t.includes("add all")) {
-    return { tool: "git_add", args: {}, description: "Stage all changes", nextHint: "commit staged changes" };
+  const tool = inferWriteToolFromResponse(t) ?? inferNextPrWorkflowTool(t, []);
+  return tool ? buildPendingAction(tool, lastAssistant.content, []) : undefined;
+}
+
+function withDerivedAction(
+  result: ChatPlannerResult,
+  tool: string,
+  bubbles: StoredBubble[],
+): ChatPlannerResult {
+  return {
+    ...result,
+    approvalProposal: buildPendingAction(tool, result.response, bubbles),
+  };
+}
+
+function buildPendingAction(
+  tool: string,
+  response: string,
+  bubbles: StoredBubble[],
+): PendingToolAction {
+  const deriver = ACTION_DERIVERS.find((entry) => entry.tool === tool);
+  if (!deriver) {
+    return { tool, args: {}, description: tool, nextHint: "continue workflow" };
   }
-  if (t.includes("commit")) {
-    const msgMatch = t.match(/["']([^"']{5,80})["']/);
-    return { tool: "git_commit", args: { message: msgMatch?.[1] ?? "feat: update" }, description: "Commit staged changes", nextHint: "push branch" };
+  return {
+    tool: deriver.tool,
+    args: deriver.buildArgs(response, bubbles),
+    description: deriver.description,
+    nextHint: deriver.nextHint,
+  };
+}
+
+function inferWriteToolFromResponse(response: string): string | undefined {
+  if (/\b(create|open|raise).{0,20}\b(pull request|pr)\b/.test(response)) return "ado_create_pr";
+  if (/\b(rebase)\b/.test(response)) return "git_rebase";
+  if (/\bmerge\b/.test(response)) return "git_merge";
+  if (/\bpull\b/.test(response) && !/\bpull request\b/.test(response)) return "git_pull";
+  if (/\b(restore|discard|revert file|unstage)\b/.test(response) && extractMentionedPaths(response).length > 0) return "git_restore";
+  if (/\b(stash|shelve)\b/.test(response)) return "git_stash";
+  if (/\b(create).{0,20}\bbranch\b|\bnew branch\b/.test(response)) return "git_create_branch";
+  if (/\b(checkout|switch).{0,20}\b(branch|to)\b/.test(response)) return "git_checkout";
+  if (/\b(stage|git add|add all)\b/.test(response)) return "git_add";
+  if (/\bcommit\b/.test(response)) return "git_commit";
+  if (/\bpush\b/.test(response)) return "git_push";
+  return undefined;
+}
+
+function inferNextPrWorkflowTool(response: string, bubbles: StoredBubble[]): string | undefined {
+  const prWorkflow = /\b(pr|pull request|commit|push|stage|staged|branch)\b/.test(response) ||
+    bubbles.some((b) => ["git_add", "git_commit", "git_push", "ado_create_pr"].includes(b.toolName ?? ""));
+  if (!prWorkflow) return undefined;
+
+  const executedTools = new Set(
+    bubbles.filter((b) => b.role === "tool" && b.toolOk === true).map((b) => b.toolName ?? ""),
+  );
+  if (!executedTools.has("git_add")) return "git_add";
+  if (!executedTools.has("git_commit")) return "git_commit";
+  if (!executedTools.has("git_push")) return "git_push";
+  if (!executedTools.has("ado_create_pr")) return "ado_create_pr";
+  return undefined;
+}
+
+function currentBranchFromBubbles(bubbles: StoredBubble[]): string {
+  // Primary: look for an explicit git_current_branch tool result
+  const branchBubble = [...bubbles].reverse().find((b) => b.toolName === "git_current_branch");
+  const raw = branchBubble?.toolResult;
+  if (typeof raw === "object" && raw !== null && "stdout" in raw) {
+    const branch = String((raw as Record<string, unknown>).stdout).trim();
+    if (branch && branch !== "HEAD") return branch;
   }
-  if (t.includes("push")) {
-    return { tool: "git_push", args: { branch: "HEAD" }, description: "Push branch to remote", nextHint: "create PR" };
+
+  // Fallback 1: extract from the most recent successful git_push args
+  const pushBubble = [...bubbles].reverse().find(
+    (b) => b.toolName === "git_push" && b.toolOk !== false && b.toolArgs,
+  );
+  if (pushBubble?.toolArgs && "branch" in pushBubble.toolArgs) {
+    const branch = String(pushBubble.toolArgs.branch ?? "").trim();
+    if (branch && branch !== "HEAD") return branch;
   }
-  if (t.includes("pull request") || t.includes(" pr ") || t.includes("create pr")) {
-    return { tool: "ado_create_pr", args: {}, description: "Create pull request", nextHint: "done" };
+
+  // Fallback 2: extract from the most recent git_create_branch or git_checkout args
+  const switchBubble = [...bubbles].reverse().find(
+    (b) => (b.toolName === "git_create_branch" || b.toolName === "git_checkout") && b.toolArgs,
+  );
+  if (switchBubble?.toolArgs) {
+    const ref = String(switchBubble.toolArgs["name"] ?? switchBubble.toolArgs["ref"] ?? "").trim();
+    if (ref && ref !== "HEAD") return ref;
+  }
+
+  return "HEAD";
+}
+
+function extractBranchName(response: string): string | undefined {
+  return response.match(/\b(?:branch\s+(?:named|called)?|named|called)\s+["'`]?([A-Za-z0-9._/-]{3,80})["'`]?/i)?.[1];
+}
+
+function extractGitRef(response: string): string | undefined {
+  const patterns = [
+    /\b(?:checkout|switch)\s+(?:to\s+)?(?:branch\s+)?["'`]?([A-Za-z0-9._/-]{2,100})["'`]?/i,
+    /\brebase\s+(?:onto\s+)?["'`]?([A-Za-z0-9._/-]{2,100})["'`]?/i,
+    /\bmerge\s+(?:into\s+)?["'`]?([A-Za-z0-9._/-]{2,100})["'`]?/i,
+    /\bpull\s+["'`]?([A-Za-z0-9._/-]{2,100})["'`]?/i,
+    /\b(?:onto|into|from|to|branch|ref)\s+["'`]?([A-Za-z0-9._/-]{2,100})["'`]?/i,
+    /\b(origin\/[A-Za-z0-9._/-]{2,100})\b/i,
+  ];
+  for (const pattern of patterns) {
+    const match = response.match(pattern)?.[1];
+    if (match) return match.replace(/[.,;:)]+$/, "");
   }
   return undefined;
+}
+
+function extractMentionedPaths(response: string): string[] {
+  const matches = response.match(/(?:[\w.-]+\/)+[\w.-]+|[\w.-]+\.(?:tsx|ts|jsx|json|js|yaml|yml|scss|css|html|lock|md|py|cs|go|rs|java|kt|sql)/g) ?? [];
+  return [...new Set(matches)].slice(0, 20);
 }

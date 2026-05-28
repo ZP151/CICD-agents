@@ -7,45 +7,22 @@ import {
   cancelPlan,
   fetchChatHistory,
   fetchChatMessages,
-  listProfiles,
+  fetchChatState,
   type ChatEventPayload,
   type ChatHistoryEntry,
   type WorkspaceProfile,
 } from "../api.js";
-
-// ─── Profile loader: daemon-first, localStorage fallback ─────────────────────
-const PROFILES_KEY = "cicd_agent_profiles_v1";
-
-function loadProfilesLocal(): WorkspaceProfile[] {
-  try {
-    const raw = localStorage.getItem(PROFILES_KEY);
-    if (raw) return JSON.parse(raw) as WorkspaceProfile[];
-  } catch { /* ignore */ }
-  return [];
-}
-
-async function loadProfilesFromDaemon(): Promise<WorkspaceProfile[]> {
-  try {
-    const remote = await listProfiles();
-    // Keep localStorage in sync so the Chat page always has fresh data
-    localStorage.setItem(PROFILES_KEY, JSON.stringify(remote));
-    return remote;
-  } catch {
-    return loadProfilesLocal();
-  }
-}
+import { useAppData } from "../App.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type BubbleKind = "user" | "assistant" | "thinking" | "tool" | "confirm" | "pending_confirm" | "error" | "system";
+type BubbleKind = "user" | "assistant" | "tool" | "confirm" | "pending_confirm" | "error" | "system";
 
 interface Bubble {
   id: string;
   kind: BubbleKind;
   text?: string;
   streaming?: boolean;
-  // thinking bubble (collapsible execution trace)
-  thinkingOpen?: boolean;
   // tool
   toolName?: string;
   toolArgs?: Record<string, unknown>;
@@ -388,38 +365,6 @@ function ThinkingDots() {
   );
 }
 
-function ThinkingTrace({ bubble, onToggle }: { bubble: Bubble; onToggle: () => void }) {
-  const summary = bubble.text?.split("\n").find((l) => l.trim())?.trim().slice(0, 80) ?? "Thinking…";
-  return (
-    <div className="mb-1 flex justify-start">
-      <div className="max-w-[85%]">
-        <button
-          onClick={onToggle}
-          className="flex items-center gap-1.5 rounded-lg border border-zinc-800/60 bg-zinc-900/40 px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-800/60 hover:text-zinc-400 transition-colors"
-        >
-          <span className="text-zinc-700">{bubble.thinkingOpen ? "▼" : "▶"}</span>
-          <span className="font-mono text-zinc-500">Reasoning</span>
-          {bubble.streaming ? (
-            <ThinkingDots />
-          ) : (
-            <span className="ml-1 rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide bg-zinc-800 text-zinc-600">done</span>
-          )}
-          {!bubble.thinkingOpen && !bubble.streaming && (
-            <span className="ml-1 truncate max-w-[200px] text-zinc-700 italic">{summary}</span>
-          )}
-        </button>
-        {bubble.thinkingOpen && (
-          <div className="mt-1 max-h-52 overflow-y-auto rounded-lg border border-zinc-800/60 bg-zinc-900/40 px-3 py-2">
-            <pre className="whitespace-pre-wrap break-words text-[11px] text-zinc-600 font-mono">
-              {bubble.text}
-            </pre>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /** Groups consecutive tool bubbles into a compact execution log. */
 function ExecutionLog({ tools, onToggleTool }: { tools: Bubble[]; onToggleTool: (id: string) => void }) {
   const running = tools.some((t) => t.toolOk === undefined);
@@ -615,47 +560,14 @@ function PendingActionCard({
 }
 
 function MetaPanel({ meta }: { meta: NonNullable<Bubble["meta"]> }) {
-  const [open, setOpen] = useState(false);
-  const hasContent =
-    (meta.riskLevel && meta.riskLevel !== "low") ||
-    (meta.actionsTaken?.length ?? 0) > 0 ||
-    (meta.suggestions?.length ?? 0) > 0;
-  if (!hasContent) return null;
+  const suggestions = meta.suggestions?.filter(Boolean) ?? [];
+  if (suggestions.length === 0) return null;
   return (
-    <div className="mt-1">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-400"
-      >
-        <span>{open ? "▼" : "▶"}</span>
-        <span>Details</span>
-        {meta.riskLevel && meta.riskLevel !== "low" && (
-          <span className={`ml-1 rounded px-1 text-[10px] font-medium ${riskColor(meta.riskLevel)}`}>
-            {meta.riskLevel}
-          </span>
-        )}
-      </button>
-      {open && (
-        <div className="mt-1 rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-500">
-          {meta.actionsTaken && meta.actionsTaken.length > 0 && (
-            <div className="mb-1.5">
-              <span className="font-semibold text-zinc-400">Actions taken</span>
-              <ul className="mt-0.5 ml-2 space-y-0.5">
-                {meta.actionsTaken.map((a, i) => <li key={i} className="text-zinc-500">- {a}</li>)}
-              </ul>
-            </div>
-          )}
-          {meta.suggestions && meta.suggestions.length > 0 && (
-            <div>
-              <span className="font-semibold text-zinc-400">Suggestions</span>
-              <ul className="mt-0.5 ml-2 space-y-0.5">
-                {meta.suggestions.map((s, i) => <li key={i} className="text-zinc-500">- {s}</li>)}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+    <ul className="mt-1.5 ml-1 space-y-0.5 text-xs text-zinc-500">
+      {suggestions.map((s, i) => (
+        <li key={i} className="flex gap-1"><span className="text-zinc-600">›</span>{s}</li>
+      ))}
+    </ul>
   );
 }
 
@@ -663,7 +575,6 @@ function MetaPanel({ meta }: { meta: NonNullable<Bubble["meta"]> }) {
 
 interface WorkflowStep {
   label: string;
-  tool: string | null;
   done: boolean;
   active: boolean;
 }
@@ -673,6 +584,27 @@ interface TaskState {
   steps: WorkflowStep[];
   currentStepLabel: string;
   risk?: string;
+}
+
+type WorkflowStatus = "planning" | "running" | "waiting_for_approval" | "blocked" | "done" | "failed";
+
+interface ApprovalRequest {
+  id: string;
+  action: {
+    tool: string;
+    args: Record<string, unknown>;
+    description: string;
+    nextHint?: string;
+  };
+  riskLevel: string;
+  explanation: string;
+}
+
+interface WorkflowEventState {
+  status: WorkflowStatus;
+  currentStep: string;
+  completedTools: string[];
+  pendingApproval?: ApprovalRequest;
 }
 
 interface WorkspacePanelProps {
@@ -819,6 +751,67 @@ function WorkspacePanel({ repoPath, setRepoPath, currentBranch, branchList, task
 
     </div>
   );
+}
+
+function toolLabel(name: string): string {
+  const labels: Record<string, string> = {
+    git_status: "Check Git status",
+    git_diff: "Inspect changes",
+    git_current_branch: "Read current branch",
+    git_log: "Read commit history",
+    git_branch_list: "List branches",
+    git_remote: "Inspect remotes",
+    git_show: "Inspect revision",
+    git_fetch: "Fetch remotes",
+    git_merge_base: "Find merge base",
+    git_checkout: "Switch branch",
+    git_pull: "Pull branch",
+    git_merge: "Merge branch",
+    git_rebase: "Rebase branch",
+    git_restore: "Restore files",
+    git_add: "Stage files",
+    git_commit: "Create commit",
+    git_push: "Push branch",
+    git_stash: "Stash changes",
+    git_create_branch: "Create branch",
+    ado_create_pr: "Create pull request",
+    ado_trigger_pipeline: "Run pipeline",
+  };
+  return labels[name] ?? name.replace(/_/g, " ");
+}
+
+function taskStateFromWorkflow(
+  workflowState: WorkflowEventState | null,
+  fallbackGoal: string | null,
+): TaskState | null {
+  if (!workflowState) return null;
+  const completed = workflowState.completedTools ?? [];
+  const steps: WorkflowStep[] = completed.map((tool) => ({
+    label: toolLabel(tool),
+    done: true,
+    active: false,
+  }));
+
+  const pendingTool = workflowState.pendingApproval?.action.tool;
+  const currentLabel =
+    workflowState.pendingApproval?.action.description
+      ?? workflowState.currentStep
+      ?? workflowState.status;
+
+  if (pendingTool) {
+    steps.push({ label: currentLabel || toolLabel(pendingTool), done: false, active: true });
+  } else if (workflowState.status === "running" || workflowState.status === "planning") {
+    steps.push({ label: currentLabel, done: false, active: true });
+  } else if (steps.length === 0 && currentLabel) {
+    steps.push({ label: currentLabel, done: workflowState.status === "done", active: false });
+  }
+
+  return {
+    goal: fallbackGoal ?? "Current workflow",
+    steps,
+    currentStepLabel: currentLabel,
+    risk: workflowState.pendingApproval?.riskLevel,
+  };
 }
 
 // ─── Panel toggle icons ───────────────────────────────────────────────────────
@@ -1003,13 +996,15 @@ export default function Chat({ mini = false }: ChatProps) {
     document.addEventListener("mouseup", onUp);
   }, [rightWidth, historyOpen, historyWidth]);
   const [statusText, setStatusText] = useState<string | null>(null);
+  const [workflowState, setWorkflowState] = useState<WorkflowEventState | null>(null);
   const [titleEditing, setTitleEditing] = useState(false);
   const [customTitle, setCustomTitle] = useState<string | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(
     typeof window !== "undefined" ? (localStorage.getItem("chat_profile_id") ?? null) : null,
   );
-  const [availableProfiles, setAvailableProfiles] = useState<WorkspaceProfile[]>([]);
+  // Profiles come from global AppDataContext — loaded once on app start, no per-mount fetch
+  const { profiles: availableProfiles } = useAppData();
   const cancelRef = useRef<(() => void) | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -1102,26 +1097,7 @@ export default function Chat({ mini = false }: ChatProps) {
     }
   }, [mini]);
 
-  // Load profiles: daemon API first, localStorage fallback.
-  // Re-sync on window focus so profiles created on the Profiles page
-  // appear here without a full page reload.
-  useEffect(() => {
-    if (mini) return;
-    let cancelled = false;
-    const sync = () => {
-      void loadProfilesFromDaemon().then((ps) => {
-        if (!cancelled) setAvailableProfiles(ps);
-      });
-    };
-    sync(); // initial load
-    window.addEventListener("focus", sync);
-    document.addEventListener("visibilitychange", sync);
-    return () => {
-      cancelled = true;
-      window.removeEventListener("focus", sync);
-      document.removeEventListener("visibilitychange", sync);
-    };
-  }, [mini]);
+  // Profiles are managed globally by AppDataContext — no per-mount fetch needed here.
 
   useEffect(() => {
     if (activeProfileId) {
@@ -1130,6 +1106,18 @@ export default function Chat({ mini = false }: ChatProps) {
       localStorage.removeItem("chat_profile_id");
     }
   }, [activeProfileId]);
+
+  // On mount: if there is an active profile but no saved repo path, restore
+  // the repo path from that profile so git tools have a valid cwd from the start.
+  useEffect(() => {
+    if (repoPath) return;
+    if (!activeProfileId || availableProfiles.length === 0) return;
+    const p = availableProfiles.find((pr) => pr.id === activeProfileId);
+    if (p?.repoPath) setRepoPath(p.repoPath);
+  // Run once when profiles first become available; intentionally exclude repoPath
+  // from deps to avoid a loop when the effect itself sets repoPath.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProfileId, availableProfiles]);
 
   useEffect(() => {
     localStorage.setItem("chat_repo", repoPath);
@@ -1178,15 +1166,6 @@ export default function Chat({ mini = false }: ChatProps) {
     return items;
   }, [bubbles]);
 
-  // Derived: the most recent pending_confirm bubble that is still waiting
-  const activePendingBubble = useMemo(() => {
-    for (let i = bubbles.length - 1; i >= 0; i--) {
-      const b = bubbles[i]!;
-      if (b.kind === "pending_confirm" && b.pendingStatus === "waiting") return b;
-    }
-    return null;
-  }, [bubbles]);
-
   // Derived: conversation title from first user message
   const conversationTitle = useMemo(() => {
     const first = bubbles.find((b) => b.kind === "user");
@@ -1207,139 +1186,70 @@ export default function Chat({ mini = false }: ChatProps) {
     return [] as string[];
   }, [bubbles]);
 
-  // Derived workflow task state for the right-side panel
-  const taskState = useMemo((): TaskState | null => {
-    if (bubbles.length === 0) return null;
-    // Only show panel when there are tool executions (i.e. an active workflow)
-    const hasTools = bubbles.some((b) => b.kind === "tool");
-    if (!hasTools) return null;
-
-    const firstUserMsg = bubbles.find((b) => b.kind === "user")?.text ?? "";
-
-    // Extract branch from git_current_branch result
-    const branchBubble = [...bubbles].reverse().find(
-      (b) => b.kind === "tool" && b.toolName === "git_current_branch",
-    );
-    const rawBranch = branchBubble?.toolResult;
-    const branch = typeof rawBranch === "object" && rawBranch !== null && "stdout" in rawBranch
-      ? String((rawBranch as Record<string, unknown>).stdout).trim()
-      : typeof rawBranch === "string" ? rawBranch.trim() : undefined;
-
-    // Extract risk from last assistant bubble meta
-    const risk = [...bubbles].reverse().find((b) => b.meta?.riskLevel)?.meta?.riskLevel;
-
-    // Active pending card
-    const pending = activePendingBubble;
-
-    // Derive step completion from executed tools
-    const toolDone = (name: string) => bubbles.some((b) => b.kind === "tool" && b.toolName === name && b.toolOk === true);
-
-    const STEPS: WorkflowStep[] = [
-      { label: "Review changes",    tool: null,           done: hasTools, active: false },
-      { label: "Stage files",       tool: "git_add",      done: toolDone("git_add"),      active: pending?.pendingTool === "git_add" },
-      { label: "Commit",            tool: "git_commit",   done: toolDone("git_commit"),   active: pending?.pendingTool === "git_commit" },
-      { label: "Push branch",       tool: "git_push",     done: toolDone("git_push"),     active: pending?.pendingTool === "git_push" },
-      { label: "Create PR",         tool: "ado_create_pr",done: toolDone("ado_create_pr"),active: pending?.pendingTool === "ado_create_pr" },
-    ];
-
-    const activeStep = STEPS.find((s) => s.active);
-    const currentStepLabel = activeStep ? `Waiting: ${activeStep.label}` : busy ? "Executing…" : "Thinking…";
-
-    return { goal: firstUserMsg.slice(0, 80), steps: STEPS, currentStepLabel, risk };
-  }, [bubbles, activePendingBubble, busy, repoPath]);
+  // Dynamic workflow task state for the right-side panel. The daemon owns this
+  // state; the UI no longer infers a fixed Git-to-PR checklist from bubbles.
+  const taskState = useMemo(
+    () => taskStateFromWorkflow(workflowState, conversationTitle),
+    [workflowState, conversationTitle],
+  );
 
   const addBubble = useCallback((bubble: Bubble) => {
     shouldScrollRef.current = true;
     setBubbles((prev) => [...prev, bubble]);
   }, []);
 
-  const updateStreamingBubble = useCallback((delta: string) => {
-    shouldScrollRef.current = true;
-    setBubbles((prev) => {
-      const last = prev[prev.length - 1];
-      // Stream into an existing thinking/assistant streaming bubble
-      if ((last?.kind === "thinking" || last?.kind === "assistant") && last.streaming) {
-        return [...prev.slice(0, -1), { ...last, kind: "thinking", text: (last.text ?? "") + delta }];
-      }
-      // Create a new thinking bubble (collapsed header by default, shows live content when open)
-      return [...prev, { id: uid(), kind: "thinking", text: delta, streaming: true, thinkingOpen: false }];
-    });
-  }, []);
-
-  /** Strip the structured JSON agent response from thinking text so it doesn't appear in the Reasoning card. */
-  const stripAgentJson = (text: string): string => {
-    // Remove any line (or trailing block) that looks like the agent's final JSON output
-    return text
-      .split("\n")
-      .filter((line) => {
-        const t = line.trim();
-        if (!t.startsWith("{")) return true;
-        try {
-          const parsed = JSON.parse(t) as Record<string, unknown>;
-          return !(("response" in parsed) && ("risk_level" in parsed || "actions_taken" in parsed));
-        } catch {
-          return true;
-        }
-      })
-      .join("\n")
-      .trimEnd();
-  };
-
-  /**
-   * Finalise the streaming thinking bubble, add the clean assistant response,
-   * and optionally append a PendingActionCard.
-   */
+  /** Add the clean assistant response; approvals are rendered from structured events. */
   const finaliseWithResponse = useCallback((
     cleanText: string,
     meta?: Bubble["meta"],
-    pendingAction?: { tool: string; args: Record<string, unknown>; description: string; nextHint?: string },
   ) => {
     shouldScrollRef.current = true;
     setBubbles((prev) => {
-      const lastIdx = prev.length - 1;
-      const last = prev[lastIdx];
-      const result: Bubble[] = [];
-
-      // Finalise or discard the streaming thinking bubble (strip embedded JSON)
-      if ((last?.kind === "thinking" || last?.kind === "assistant") && last.streaming) {
-        const stripped = stripAgentJson(last.text ?? "").trim();
-        if (stripped) {
-          result.push(...prev.slice(0, lastIdx), { ...last, kind: "thinking", text: stripped, streaming: false, thinkingOpen: false });
-        } else {
-          result.push(...prev.slice(0, lastIdx)); // discard if nothing left after strip
-        }
-      } else {
-        result.push(...prev); // keep everything as-is
-      }
-
-      // Clean assistant response
-      if (cleanText) {
+      const result: Bubble[] = [...prev];
+      // When an approval card is the last bubble, the card already shows the
+      // assistant's explanation — adding a separate text bubble would duplicate it.
+      const lastBubble = result[result.length - 1];
+      const hasWaitingCard =
+        lastBubble?.kind === "pending_confirm" &&
+        lastBubble.pendingStatus === "waiting";
+      if (cleanText && !hasWaitingCard) {
         result.push({ id: uid(), kind: "assistant", text: cleanText, streaming: false, meta });
       }
+      return result;
+    });
+  }, []);
 
-      // Pending action card
-      if (pendingAction?.tool) {
-        result.push({
+  const showApprovalRequest = useCallback((approval: ApprovalRequest) => {
+    shouldScrollRef.current = true;
+    setBubbles((prev) => {
+      const alreadyWaiting = prev.some(
+        (b) =>
+          b.kind === "pending_confirm" &&
+          b.pendingStatus === "waiting" &&
+          b.pendingTool === approval.action.tool,
+      );
+      if (alreadyWaiting) return prev;
+      return [
+        ...prev,
+        {
           id: uid(),
           kind: "pending_confirm",
-          pendingTool: pendingAction.tool,
-          pendingArgs: pendingAction.args,
-          pendingDescription: pendingAction.description,
-          pendingNextHint: pendingAction.nextHint,
+          pendingTool: approval.action.tool,
+          pendingArgs: approval.action.args,
+          pendingDescription: approval.explanation || approval.action.description,
+          pendingNextHint: approval.action.nextHint,
           pendingStatus: "waiting",
-        });
-      }
-
-      return result;
+        },
+      ];
     });
   }, []);
 
   const stopStreaming = useCallback(() => {
     setBubbles((prev) => {
       const last = prev[prev.length - 1];
-      if ((last?.kind === "thinking" || last?.kind === "assistant") && last.streaming) {
+      if (last?.kind === "assistant" && last.streaming) {
         if (last.text?.trim()) {
-          return [...prev.slice(0, -1), { ...last, kind: "thinking", streaming: false, thinkingOpen: false }];
+          return [...prev.slice(0, -1), { ...last, streaming: false }];
         }
         return prev.slice(0, -1); // discard empty
       }
@@ -1347,15 +1257,21 @@ export default function Chat({ mini = false }: ChatProps) {
     });
   }, []);
 
+  const appendAssistantDelta = useCallback((delta: string) => {
+    if (!delta) return;
+    shouldScrollRef.current = true;
+    setBubbles((prev) => {
+      const last = prev[prev.length - 1];
+      if (last?.kind === "assistant" && last.streaming) {
+        return [...prev.slice(0, -1), { ...last, text: `${last.text ?? ""}${delta}` }];
+      }
+      return [...prev, { id: uid(), kind: "assistant", text: delta, streaming: true }];
+    });
+  }, []);
+
   const toggleTool = useCallback((id: string) => {
     setBubbles((prev) =>
       prev.map((b) => (b.id === id ? { ...b, toolOpen: !b.toolOpen } : b)),
-    );
-  }, []);
-
-  const toggleThinking = useCallback((id: string) => {
-    setBubbles((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, thinkingOpen: !b.thinkingOpen } : b)),
     );
   }, []);
 
@@ -1379,7 +1295,7 @@ export default function Chat({ mini = false }: ChatProps) {
   const sendMessage = useCallback((msg: string) => {
     if (!msg || busy) return;
     setBusy(true);
-    setStatusText("Thinking");
+    setStatusText("Planning");
     addBubble({ id: uid(), kind: "user", text: msg });
 
     const repo = repoPath || ".";
@@ -1394,9 +1310,14 @@ export default function Chat({ mini = false }: ChatProps) {
           }
           break;
 
-        case "thinking":
-          if (ev.delta) updateStreamingBubble(ev.delta);
-          setStatusText("Thinking");
+        case "assistant_delta":
+          setStatusText(null);
+          appendAssistantDelta(ev.delta ?? "");
+          break;
+
+        case "progress":
+          stopStreaming();
+          setStatusText(ev.message ?? "Working");
           break;
 
         case "tool_start":
@@ -1432,6 +1353,41 @@ export default function Chat({ mini = false }: ChatProps) {
           break;
         }
 
+        case "workflow_state":
+          setWorkflowState(ev.state ?? null);
+          if (ev.state?.pendingApproval) showApprovalRequest(ev.state.pendingApproval);
+          if (ev.state?.status === "waiting_for_approval") setStatusText("Waiting for approval");
+          else if (ev.state?.status === "running") setStatusText("Executing");
+          else if (ev.state?.status === "planning") setStatusText("Planning");
+          break;
+
+        case "approval_required":
+          if (ev.approval) {
+            setWorkflowState((prev) => ({
+              status: "waiting_for_approval",
+              currentStep: ev.approval?.action.description ?? "Waiting for approval",
+              completedTools: prev?.completedTools ?? [],
+              pendingApproval: ev.approval,
+            }));
+            showApprovalRequest(ev.approval);
+          }
+          setStatusText("Waiting for approval");
+          break;
+
+        case "approval_resolved":
+          setWorkflowState((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  status: ev.approved ? "running" : "done",
+                  currentStep: ev.approved ? "Executing approved action" : "Approval cancelled",
+                  pendingApproval: undefined,
+                }
+              : prev,
+          );
+          setStatusText(ev.approved ? "Approval accepted" : "Approval cancelled");
+          break;
+
         case "executing":
           addBubble({ id: uid(), kind: "system", text: "Executing actions..." });
           setStatusText("Executing");
@@ -1453,8 +1409,7 @@ export default function Chat({ mini = false }: ChatProps) {
           const meta: Bubble["meta"] = ev.result
             ? { riskLevel: ev.result.riskLevel, actionsTaken: ev.result.actionsTaken, suggestions: ev.result.suggestions }
             : undefined;
-          const pa = ev.result?.pendingAction;
-          finaliseWithResponse(ev.result?.response?.trim() ?? "", meta, pa);
+          finaliseWithResponse(ev.result?.response?.trim() ?? "", meta);
           setBusy(false);
           setStatusText(null);
           cancelRef.current = null;
@@ -1476,7 +1431,7 @@ export default function Chat({ mini = false }: ChatProps) {
       }
     }, activeProfileId ?? undefined);
     cancelRef.current = cancel;
-  }, [busy, sessionId, repoPath, activeProfileId, addBubble, updateStreamingBubble, stopStreaming, finaliseWithResponse, mini]);
+  }, [busy, sessionId, repoPath, activeProfileId, addBubble, stopStreaming, appendAssistantDelta, finaliseWithResponse, showApprovalRequest, mini]);
 
   const send = useCallback(() => {
     const msg = input.trim();
@@ -1500,9 +1455,14 @@ export default function Chat({ mini = false }: ChatProps) {
     // Dispatch structured confirm — does NOT send a chat message
     const { cancel } = apiConfirmAction(sessionId, (ev: ChatEventPayload) => {
       switch (ev.type) {
-        case "thinking":
-          if (ev.delta) updateStreamingBubble(ev.delta);
-          setStatusText("Thinking");
+        case "assistant_delta":
+          setStatusText(null);
+          appendAssistantDelta(ev.delta ?? "");
+          break;
+
+        case "progress":
+          stopStreaming();
+          setStatusText(ev.message ?? "Working");
           break;
 
         case "tool_start":
@@ -1531,6 +1491,41 @@ export default function Chat({ mini = false }: ChatProps) {
           setStatusText("Processing");
           break;
 
+        case "workflow_state":
+          setWorkflowState(ev.state ?? null);
+          if (ev.state?.pendingApproval) showApprovalRequest(ev.state.pendingApproval);
+          if (ev.state?.status === "running") setStatusText("Executing");
+          else if (ev.state?.status === "waiting_for_approval") setStatusText("Waiting for approval");
+          else if (ev.state?.status === "planning") setStatusText("Planning");
+          break;
+
+        case "approval_required":
+          if (ev.approval) {
+            setWorkflowState((prev) => ({
+              status: "waiting_for_approval",
+              currentStep: ev.approval?.action.description ?? "Waiting for approval",
+              completedTools: prev?.completedTools ?? [],
+              pendingApproval: ev.approval,
+            }));
+            showApprovalRequest(ev.approval);
+          }
+          setStatusText("Waiting for approval");
+          break;
+
+        case "approval_resolved":
+          setWorkflowState((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  status: ev.approved ? "running" : "done",
+                  currentStep: ev.approved ? "Executing approved action" : "Approval cancelled",
+                  pendingApproval: undefined,
+                }
+              : prev,
+          );
+          setStatusText(ev.approved ? "Approval accepted" : "Approval cancelled");
+          break;
+
         case "done": {
           // Mark any still-executing pending_confirm as done
           setBubbles((prev) =>
@@ -1543,8 +1538,7 @@ export default function Chat({ mini = false }: ChatProps) {
           const meta: Bubble["meta"] = ev.result
             ? { riskLevel: ev.result.riskLevel, actionsTaken: ev.result.actionsTaken, suggestions: ev.result.suggestions }
             : undefined;
-          const pa = ev.result?.pendingAction;
-          finaliseWithResponse(ev.result?.response?.trim() ?? "", meta, pa);
+          finaliseWithResponse(ev.result?.response?.trim() ?? "", meta);
           setBusy(false);
           setStatusText(null);
           cancelRef.current = null;
@@ -1575,18 +1569,19 @@ export default function Chat({ mini = false }: ChatProps) {
       }
     });
     cancelRef.current = cancel;
-  }, [sessionId, busy, addBubble, updateStreamingBubble, stopStreaming, finaliseWithResponse, mini]);
+  }, [sessionId, busy, addBubble, stopStreaming, appendAssistantDelta, finaliseWithResponse, showApprovalRequest, mini]);
 
   const cancelPendingAction = useCallback((bubbleId: string) => {
     setBubbles((prev) => prev.map((b) => b.id === bubbleId ? { ...b, pendingStatus: "cancelled" } : b));
-    // Send explicit cancel message so backend clears the pending action state
+    // Send explicit cancel message so backend clears the approval proposal state.
     sendMessage("no");
   }, [sendMessage]);
 
 
   const loadSession = useCallback(async (sid: string) => {
     try {
-      const stored = await fetchChatMessages(sid) as Array<{
+      const [stored, state] = await Promise.all([
+        fetchChatMessages(sid) as Promise<Array<{
         role: string;
         content: string;
         timestamp: number;
@@ -1598,7 +1593,9 @@ export default function Chat({ mini = false }: ChatProps) {
         riskLevel?: string;
         actionsTaken?: string[];
         suggestions?: string[];
-      }>;
+        }>>,
+        fetchChatState(sid).catch(() => ({ workflowState: undefined })),
+      ]);
       setSessionId(sid);
       atBottomRef.current = true;
       shouldScrollRef.current = true;
@@ -1633,11 +1630,16 @@ export default function Chat({ mini = false }: ChatProps) {
           return { ...base, kind: "assistant" as const, text: m.content, meta };
         }),
       );
+      setWorkflowState(state.workflowState ?? null);
+      // Restore approval card bubble if the session was waiting for user approval
+      if (state.workflowState?.pendingApproval) {
+        showApprovalRequest(state.workflowState.pendingApproval);
+      }
       setHistoryOpen(false);
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [showApprovalRequest]);
 
   const newChat = useCallback(() => {
     setSessionId(null);
@@ -1645,6 +1647,7 @@ export default function Chat({ mini = false }: ChatProps) {
     cancelRef.current?.();
     setBusy(false);
     setStatusText(null);
+    setWorkflowState(null);
     setCustomTitle(null);
     setTitleEditing(false);
   }, []);
@@ -1857,14 +1860,6 @@ export default function Chat({ mini = false }: ChatProps) {
                   <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-indigo-600/80 px-4 py-2.5 text-sm text-white/95 shadow-md ring-1 ring-indigo-500/30">
                     {b.text}
                   </div>
-                </div>
-              );
-            }
-
-            if (b.kind === "thinking") {
-              return (
-                <div key={b.id} className="mb-1">
-                  <ThinkingTrace bubble={b} onToggle={() => toggleThinking(b.id)} />
                 </div>
               );
             }

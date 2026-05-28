@@ -40,7 +40,19 @@ export async function buildApp(opts: BuildOptions = {}): Promise<FastifyInstance
           }
         : undefined,
     });
-    service = new ReviewService({ ado, state, maxFilesPerPr: config.reviewMaxFilesPerPr, log: app.log });
+    service = new ReviewService({
+      ado,
+      state,
+      maxFilesPerPr: config.reviewMaxFilesPerPr,
+      autoApprovalPolicy: {
+        enabled: config.reviewAutoApproveEnabled,
+        reviewerId: config.reviewAutoApproveReviewerId,
+        maxChangedFiles: config.reviewAutoApproveMaxChangedFiles,
+        allowedTargetBranches: config.reviewAutoApproveTargetBranches,
+        sensitivePathPatterns: config.reviewAutoApproveSensitivePaths,
+      },
+      log: app.log,
+    });
   }
 
   const queue = new IdempotentQueue<{ key: string; raw: unknown }>(async (job) => {
@@ -51,7 +63,7 @@ export async function buildApp(opts: BuildOptions = {}): Promise<FastifyInstance
     }
     try {
       const result = await service!.handle(parsed.data);
-      app.log.info({ key: job.key, status: result.status, findings: result.findings }, "review handled");
+      app.log.info({ key: job.key, status: result.status, findings: result.findings, decision: result.decision }, "review handled");
     } catch (err) {
       app.log.error({ err, key: job.key }, "review handler failed");
     }

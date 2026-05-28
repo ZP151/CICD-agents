@@ -1,6 +1,6 @@
 {
   "name": "@cicd-agent/desktop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,6 +19,7 @@
     "@tanstack/react-query": "^5.51.0",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-shell": "^2.0.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "react": "^18.3.1",
