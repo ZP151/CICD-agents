@@ -1,11 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig(({ mode }) => {
-  // In production Tauri builds (pnpm build), the sidecar daemon listens on 18787
-  // to avoid colliding with a developer's local daemon on 8787.
+export default defineConfig(() => {
+  // Dev and packaged builds both use 8787 (matches the Tauri sidecar in lib.rs).
   // Allow an explicit VITE_RUNTIME_URL env var to override for custom deployments.
-  const defaultPort = mode === "production" ? "18787" : "8787";
+  const defaultPort = "8787";
   const runtimeUrl =
     process.env["VITE_RUNTIME_URL"] ?? `http://127.0.0.1:${defaultPort}`;
 

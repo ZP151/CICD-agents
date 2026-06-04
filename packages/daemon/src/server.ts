@@ -47,6 +47,9 @@ import {
   listAzurePullRequests,
   listAzurePipelineRuns,
   listReviewQueueItems,
+  listLocalReviewHistory,
+  upsertLocalReviewHistory,
+  type ReviewHistoryRecord,
   AzureTableProfileStore,
   KeyVaultSecrets,
   getCurrentUser,
@@ -56,10 +59,19 @@ import {
   clearPersistedUser,
   resetUserCache,
   runCommand,
+  LLMClient,
 } from "@cicd-agent/core";
 import { spawn, spawnSync } from "node:child_process";
 import { SubmitPipelineSchema, TaskIdParam } from "./schemas.js";
 import { ChatSessionManager, type InlineLlmConfig, type InlineProfile } from "./chatSession.js";
+import {
+  AdoClient,
+  buildCloudContext,
+  runReviewPlanner,
+  decideReviewOutcome,
+  DEFAULT_AUTO_APPROVAL_POLICY,
+  FileStateStore,
+} from "@cicd-agent/review-agent";
 import { z } from "zod";
 
 export interface BuildAppOptions {
@@ -109,6 +121,21 @@ const ChatStartSchema = z.object({
 });
 const SessionIdParam = z.object({ sessionId: z.string().min(1) });
 const ProfileIdParam = z.object({ id: z.string().min(1) });
+
+const ReviewHistoryUpsertSchema = z.object({
+  pullRequestId: z.coerce.number().int().positive(),
+  lastIterationId: z.coerce.number().int().nonnegative().default(0),
+  findingCount: z.coerce.number().int().nonnegative().default(0),
+  lastRunAt: z.string().default(() => new Date().toISOString()),
+  sourceCommit: z.string().default(""),
+  decisionQueue: z.enum(["auto_approved", "needs_human_review", "blocked", "watching"]).default("needs_human_review"),
+  decisionRiskLevel: z.enum(["low", "medium", "high"]).default("medium"),
+  decisionReason: z.string().default(""),
+  autoApprovedAt: z.string().default(""),
+  autoApprovalActor: z.string().default(""),
+  lastTokensIn: z.coerce.number().int().nonnegative().optional(),
+  lastTokensOut: z.coerce.number().int().nonnegative().optional(),
+});
 const ProfileBodySchema = z.object({
   name: z.string().min(1),
   repoPath: z.string().default(""),
@@ -167,7 +194,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   // Allow cross-origin requests from the Tauri/Vite frontend
   app.addHook("onSend", async (req, reply) => {
     reply.header("Access-Control-Allow-Origin", "*");
-    reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    reply.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
     reply.header("Access-Control-Allow-Headers", "content-type");
   });
   app.options("*", async (_req, reply) => reply.code(204).send());
@@ -724,7 +751,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     }
     if (!profile) return reply.code(404).send({ error: "profile not found" });
     if (!settings.azureStorageAccount) {
-      return { items: [], configured: false };
+      const items = listLocalReviewHistory({
+        dataDir: settings.dataDir,
+        repository: profile.adoRepoName,
+        limit: 100,
+      });
+      return { items, configured: false, storage: "local" as const };
     }
     // If Azure auth is unavailable, return empty queue instead of crashing
     let items: Awaited<ReturnType<typeof listReviewQueueItems>>;
@@ -738,6 +770,229 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       return { items: [], configured: true, error: "Azure authentication unavailable. Sign in to load queue." };
     }
     return { items, configured: true };
+  });
+
+  app.post("/profiles/:id/review-history", async (req, reply) => {
+    const parsedId = ProfileIdParam.safeParse(req.params);
+    if (!parsedId.success) return reply.code(400).send({ error: "invalid id" });
+    const parsedBody = ReviewHistoryUpsertSchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) return reply.code(400).send({ error: parsedBody.error.flatten() });
+
+    const profile = getWorkspaceProfile(settings.dataDir, parsedId.data.id);
+    if (!profile) return reply.code(404).send({ error: "profile not found" });
+    const repository = profile.adoRepoName.trim();
+    if (!repository) return reply.code(400).send({ error: "profile has no adoRepoName" });
+
+    const record: ReviewHistoryRecord = {
+      repository,
+      pullRequestId: parsedBody.data.pullRequestId,
+      lastIterationId: parsedBody.data.lastIterationId,
+      findingCount: parsedBody.data.findingCount,
+      lastRunAt: parsedBody.data.lastRunAt,
+      sourceCommit: parsedBody.data.sourceCommit,
+      decisionQueue: parsedBody.data.decisionQueue,
+      decisionRiskLevel: parsedBody.data.decisionRiskLevel,
+      decisionReason: parsedBody.data.decisionReason,
+      autoApprovedAt: parsedBody.data.autoApprovedAt,
+      autoApprovalActor: parsedBody.data.autoApprovalActor,
+      lastTokensIn: parsedBody.data.lastTokensIn,
+      lastTokensOut: parsedBody.data.lastTokensOut,
+    };
+
+    if (settings.azureStorageAccount) {
+      return reply.code(400).send({
+        error: "cloud_configured",
+        message: "Use the cloud Review Agent to persist history when Azure Table Storage is configured.",
+      });
+    }
+
+    const saved = upsertLocalReviewHistory(settings.dataDir, record);
+    return { ok: true, record: saved, storage: "local" as const };
+  });
+
+  // ── POST /profiles/:id/review-run — run Review Agent immediately on a PR ────
+  // Accepts: { pullRequestId, targetBranch?, llmConfig?, profile? }
+  // Builds cloud context, runs the LLM review planner, saves result to history,
+  // and returns the decision (queue, riskLevel, reason, findings count).
+  const ReviewRunSchema = z.object({
+    pullRequestId: z.coerce.number().int().positive(),
+    targetBranch:  z.string().default(""),
+    llmConfig:     LlmConfigSchema,
+    profile:       InlineProfileSchema,
+  });
+
+  function extractAdoOrg(adoOrgUrl: string): string {
+    try {
+      const url = new URL(adoOrgUrl);
+      if (url.hostname === "dev.azure.com") {
+        // https://dev.azure.com/{org} → extract bare org slug
+        const parts = url.pathname.split("/").filter(Boolean);
+        return parts[0] ?? adoOrgUrl;
+      }
+      // https://tebssg.visualstudio.com/ or any other full-URL format —
+      // pass the origin directly so AdoClient doesn't prepend dev.azure.com again
+      return url.origin;
+    } catch {
+      return adoOrgUrl;
+    }
+  }
+
+  function buildReviewLlmSettings(override?: InlineLlmConfig) {
+    const base = getSettings();
+    if (!override) return base;
+    const isAzure = (override.llmProvider ?? "azure") === "azure";
+    return {
+      ...base,
+      azureOpenAiEndpoint:       isAzure ? (override.azureEndpoint   ?? base.azureOpenAiEndpoint)       : base.azureOpenAiEndpoint,
+      azureOpenAiApiKey:         isAzure ? (override.azureApiKey     ?? base.azureOpenAiApiKey)         : base.azureOpenAiApiKey,
+      azureOpenAiChatDeployment: isAzure ? (override.azureDeployment ?? base.azureOpenAiChatDeployment) : base.azureOpenAiChatDeployment,
+      azureOpenAiApiVersion:     isAzure ? (override.azureApiVersion ?? base.azureOpenAiApiVersion)     : base.azureOpenAiApiVersion,
+      llmConfigured: isAzure
+        ? Boolean(
+            (override.azureEndpoint ?? base.azureOpenAiEndpoint) &&
+            (override.azureApiKey   ?? base.azureOpenAiApiKey),
+          )
+        : Boolean(override.openaiApiKey ?? base.azureOpenAiApiKey),
+    };
+  }
+
+  app.post("/profiles/:id/review-run", async (req, reply) => {
+    const parsedId = ProfileIdParam.safeParse(req.params);
+    if (!parsedId.success) return reply.code(400).send({ error: "invalid id" });
+    const parsedBody = ReviewRunSchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) return reply.code(400).send({ error: parsedBody.error.flatten() });
+
+    const { pullRequestId, targetBranch: bodyTargetBranch, llmConfig, profile: inlineProfile } = parsedBody.data;
+
+    // Resolve profile — prefer inline data (already has PAT from localStorage), fall back to store
+    type MinProfile = { adoOrgUrl: string; adoProject: string; adoRepoName: string; adoPat: string; targetBranch: string };
+    let profileData: MinProfile;
+    if (
+      inlineProfile?.adoOrgUrl &&
+      inlineProfile.adoProject &&
+      inlineProfile.adoRepoName &&
+      inlineProfile.adoPat
+    ) {
+      profileData = {
+        adoOrgUrl:   inlineProfile.adoOrgUrl,
+        adoProject:  inlineProfile.adoProject,
+        adoRepoName: inlineProfile.adoRepoName,
+        adoPat:      inlineProfile.adoPat,
+        targetBranch: inlineProfile.targetBranch,
+      };
+    } else {
+      const ts = getTableStore();
+      let stored: Awaited<ReturnType<typeof getWorkspaceProfile>> | null = null;
+      if (ts) {
+        try {
+          const cloudP = await ts.get(parsedId.data.id);
+          stored = cloudP ? await injectAdoPat(cloudP) : null;
+        } catch {
+          stored = getWorkspaceProfile(settings.dataDir, parsedId.data.id);
+        }
+      } else {
+        stored = getWorkspaceProfile(settings.dataDir, parsedId.data.id);
+      }
+      if (!stored) return reply.code(404).send({ error: "profile not found" });
+      profileData = {
+        adoOrgUrl:   stored.adoOrgUrl,
+        adoProject:  stored.adoProject,
+        adoRepoName: stored.adoRepoName,
+        adoPat:      stored.adoPat,
+        targetBranch: stored.targetBranch,
+      };
+    }
+
+    if (!profileData.adoOrgUrl || !profileData.adoProject || !profileData.adoRepoName) {
+      return reply.code(400).send({ error: "ado_profile_incomplete" });
+    }
+    if (!profileData.adoPat) {
+      return reply.code(400).send({ error: "ado_pat_missing" });
+    }
+
+    const org = extractAdoOrg(profileData.adoOrgUrl);
+    const ado = new AdoClient({ organization: org, pat: profileData.adoPat });
+    const stateStore = new FileStateStore(settings.dataDir);
+
+    const effectiveSettings = buildReviewLlmSettings(llmConfig);
+    const llm = new LLMClient(effectiveSettings);
+
+    // Fetch PR iterations to determine the latest revision
+    let iter: { value: Array<{ id: number; sourceRefCommit: { commitId: string } }> };
+    try {
+      iter = await ado.getPullRequestIterations(profileData.adoProject, profileData.adoRepoName, pullRequestId);
+    } catch (err) {
+      return reply.code(400).send({ error: `ADO error: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    const latest = iter.value[iter.value.length - 1];
+    if (!latest) {
+      return reply.code(400).send({ error: "no iterations found for this PR" });
+    }
+
+    const sourceCommit = (latest.sourceRefCommit as { commitId?: string })?.commitId ?? "";
+    const repository   = profileData.adoRepoName.trim();
+    const conventions  = await stateStore.listConventions(repository);
+
+    // Build diff context from ADO, then run the LLM review planner
+    let bundle: Awaited<ReturnType<typeof buildCloudContext>>;
+    try {
+      bundle = await buildCloudContext({
+        ado,
+        project:      profileData.adoProject,
+        repositoryId: repository,
+        prId:         pullRequestId,
+        iterationId:  latest.id,
+        sourceCommit,
+        maxFiles: 40,
+      });
+    } catch (err) {
+      return reply.code(400).send({ error: `context error: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    const review = await runReviewPlanner({ llm, bundle, conventions });
+
+    const effectiveTargetBranch = bodyTargetBranch || profileData.targetBranch || "main";
+    const decision = decideReviewOutcome({
+      policy:       { ...DEFAULT_AUTO_APPROVAL_POLICY },
+      targetBranch: effectiveTargetBranch,
+      changedFiles: bundle.files,
+      findings:     review.findings,
+      reviewUsedLlm: review.tokensIn > 0 || review.tokensOut > 0,
+    });
+
+    const now = new Date().toISOString();
+    await stateStore.upsertHistory({
+      partitionKey:       repository,
+      rowKey:             String(pullRequestId),
+      lastIterationId:    latest.id,
+      findingCount:       review.findings.length,
+      lastRunAt:          now,
+      sourceCommit,
+      decisionQueue:      decision.queue,
+      decisionRiskLevel:  decision.riskLevel,
+      decisionReason:     decision.reason,
+      autoApprovedAt:     decision.autoApprove ? now : "",
+      autoApprovalActor:  decision.autoApprove ? "cicd-agent" : "",
+      lastTokensIn:       review.tokensIn,
+      lastTokensOut:      review.tokensOut,
+    });
+
+    return {
+      ok:               true,
+      pullRequestId,
+      repository,
+      iterationId:      latest.id,
+      findingCount:     review.findings.length,
+      decisionQueue:    decision.queue,
+      decisionRiskLevel: decision.riskLevel,
+      decisionReason:   decision.reason,
+      lastRunAt:        now,
+      tokensIn:         review.tokensIn,
+      tokensOut:        review.tokensOut,
+      summary:          review.summary,
+      findings:         review.findings,
+    };
   });
 
   // ── Profile migration: local JSON → Azure Table Storage ─────────────────────

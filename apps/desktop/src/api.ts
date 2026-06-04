@@ -1,3 +1,11 @@
+import {
+  listReviewHistoryLocal,
+  mergeReviewQueueItems,
+  syncReviewHistoryLocal,
+  upsertReviewHistoryLocal,
+  type ReviewHistoryRecord,
+} from "./reviewHistoryLocal.js";
+
 // Daemon base URL.  In dev (Vite / tauri dev) this is always port 8787.
 // In a packaged release it is also 8787 – using a single consistent port
 // avoids the async bootstrapping problem that caused the frontend to connect
@@ -408,6 +416,9 @@ export interface PullRequestSummary {
   pipelineRun?: PipelineRunSummary;
 }
 
+export type { ReviewHistoryRecord } from "./reviewHistoryLocal.js";
+export { REVIEW_HISTORY_LS_KEY } from "./reviewHistoryLocal.js";
+
 export interface ReviewQueueItem {
   repository: string;
   pullRequestId: number;
@@ -472,10 +483,78 @@ export async function fetchProfilePullRequests(
 export async function fetchProfileReviewQueue(profileId: string): Promise<{
   configured: boolean;
   items: ReviewQueueItem[];
+  storage?: "azure" | "local" | "browser";
 }> {
-  const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/review-queue`);
-  if (!r.ok) throw new Error(`/profiles/${profileId}/review-queue HTTP ${r.status}: ${await r.text()}`);
-  return (await r.json()) as { configured: boolean; items: ReviewQueueItem[] };
+  const profile = readProfileData(profileId);
+  const repoName = typeof profile?.["adoRepoName"] === "string" ? profile["adoRepoName"] : "";
+
+  try {
+    const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/review-queue`);
+    if (!r.ok) throw new Error(`/profiles/${profileId}/review-queue HTTP ${r.status}: ${await r.text()}`);
+    const body = (await r.json()) as {
+      configured: boolean;
+      items: ReviewQueueItem[];
+      storage?: "azure" | "local";
+    };
+
+    if (body.configured) {
+      return { configured: true, items: body.items, storage: body.storage ?? "azure" };
+    }
+
+    if (body.items.length > 0) syncReviewHistoryLocal(body.items);
+    const browserItems = listReviewHistoryLocal(repoName);
+    return {
+      configured: false,
+      items: mergeReviewQueueItems(body.items, browserItems),
+      storage: body.items.length > 0 ? "local" : browserItems.length > 0 ? "browser" : "local",
+    };
+  } catch {
+    return {
+      configured: false,
+      items: listReviewHistoryLocal(repoName),
+      storage: "browser",
+    };
+  }
+}
+
+export async function recordProfileReviewHistory(
+  profileId: string,
+  record: Omit<ReviewHistoryRecord, "repository"> & {
+    repository?: string;
+  },
+): Promise<void> {
+  const profile = readProfileData(profileId);
+  const repository =
+    record.repository ??
+    (typeof profile?.["adoRepoName"] === "string" ? profile["adoRepoName"] : "");
+  if (!repository.trim()) throw new Error("profile has no adoRepoName");
+
+  const full = { ...record, repository: repository.trim() };
+  upsertReviewHistoryLocal(full);
+
+  try {
+    const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/review-history`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        pullRequestId: full.pullRequestId,
+        lastIterationId: full.lastIterationId,
+        findingCount: full.findingCount,
+        lastRunAt: full.lastRunAt,
+        sourceCommit: full.sourceCommit,
+        decisionQueue: full.decisionQueue,
+        decisionRiskLevel: full.decisionRiskLevel,
+        decisionReason: full.decisionReason,
+        autoApprovedAt: full.autoApprovedAt,
+        autoApprovalActor: full.autoApprovalActor,
+      }),
+    });
+    if (!r.ok && r.status !== 400) {
+      throw new Error(`/profiles/${profileId}/review-history HTTP ${r.status}: ${await r.text()}`);
+    }
+  } catch {
+    // Daemon unreachable — browser copy is enough for this session.
+  }
 }
 
 // ─── Azure Auth ───────────────────────────────────────────────────────────────
@@ -563,6 +642,69 @@ export function authLoginStream(onEvent: (e: AuthLoginEvent) => void): () => voi
 /** Sign out — calls az logout on the daemon host and clears the cache. */
 export async function authLogout(): Promise<void> {
   await fetch(`${RUNTIME_URL}/auth/logout`, { method: "POST" });
+}
+
+export interface ReviewFinding {
+  file: string;
+  line: number;
+  severity: "info" | "warning" | "blocking";
+  category: "bug" | "missing-test" | "security" | "style" | "design";
+  message: string;
+}
+
+export interface ReviewRunResult {
+  ok: boolean;
+  pullRequestId: number;
+  repository: string;
+  iterationId: number;
+  findingCount: number;
+  decisionQueue: "auto_approved" | "needs_human_review" | "blocked" | "watching";
+  decisionRiskLevel: "low" | "medium" | "high";
+  decisionReason: string;
+  lastRunAt: string;
+  tokensIn: number;
+  tokensOut: number;
+  summary: string;
+  findings?: ReviewFinding[];
+}
+
+/**
+ * POST /profiles/:id/review-run
+ * Invokes the Review Agent immediately on the given PR.
+ * The daemon uses the profile's ADO PAT + the daemon's LLM config to build
+ * context, run the LLM planner, decide the queue lane, and persist the result.
+ * Returns the decision so the frontend can update the history record in-place.
+ */
+export async function runProfileReviewRun(
+  profileId: string,
+  pullRequestId: number,
+  targetBranch: string,
+): Promise<ReviewRunResult> {
+  const profile = readProfileData(profileId);
+  const llmConfig = readLlmConfig();
+
+  const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/review-run`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      pullRequestId,
+      targetBranch,
+      ...(llmConfig ? { llmConfig } : {}),
+      ...(profile ? { profile } : {}),
+    }),
+  });
+
+  if (!r.ok) {
+    const body = await r.text();
+    let msg = `review-run HTTP ${r.status}`;
+    try {
+      const json = JSON.parse(body) as { error?: string; message?: string };
+      msg = json.error ?? json.message ?? msg;
+    } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+
+  return (await r.json()) as ReviewRunResult;
 }
 
 /** Migrate local profiles → Azure Table Storage. Returns counts. */

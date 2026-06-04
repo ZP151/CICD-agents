@@ -227,6 +227,9 @@ importers:
       '@cicd-agent/core':
         specifier: workspace:*
         version: link:../core
+      '@cicd-agent/review-agent':
+        specifier: workspace:*
+        version: link:../review-agent
       '@fastify/cors':
         specifier: ^10.1.0
         version: 10.1.0

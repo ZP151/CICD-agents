@@ -20,6 +20,7 @@ export * from "./tools/gitIntent.js";
 export * from "./telemetry.js";
 export * from "./chatPlanner.js";
 export * from "./reviewQueue.js";
+export * from "./reviewHistoryLocal.js";
 
 // Azure cloud persistence (opt-in — requires env vars)
 export * from "./store/azureAuth.js";

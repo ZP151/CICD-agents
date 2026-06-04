@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAppData } from "../App.js";
-import { fetchProfilePullRequests, type PullRequestSummary } from "../api.js";
+import {
+  fetchProfilePullRequests,
+  recordProfileReviewHistory,
+  runProfileReviewRun,
+  type PullRequestSummary,
+  type ReviewRunResult,
+} from "../api.js";
+import { saveFindingsLocal } from "../reviewHistoryLocal.js";
 
 function formatDate(value: string): string {
   if (!value) return "";
@@ -30,6 +37,65 @@ export default function PullRequests(): JSX.Element {
   const [prs, setPrs] = useState<PullRequestSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  type QueueState =
+    | { phase: "idle" }
+    | { phase: "watching" }
+    | { phase: "reviewing" }
+    | { phase: "done"; result: ReviewRunResult }
+    | { phase: "error"; message: string };
+
+  const [queueing, setQueueing] = useState<Record<number, QueueState>>({});
+
+  const handleQueueForReview = useCallback(async (pr: PullRequestSummary) => {
+    if (!profileId) return;
+
+    // Step 1 — write a "watching" placeholder so the PR appears in the Review Queue immediately
+    setQueueing((prev) => ({ ...prev, [pr.id]: { phase: "watching" } }));
+    try {
+      await recordProfileReviewHistory(profileId, {
+        pullRequestId: pr.id,
+        lastIterationId: 0,
+        findingCount: 0,
+        lastRunAt: new Date().toISOString(),
+        sourceCommit: "",
+        decisionQueue: "watching",
+        decisionRiskLevel: "medium",
+        decisionReason: `Queued for review — awaiting Review Agent run on ${pr.sourceBranch}`,
+        autoApprovedAt: "",
+        autoApprovalActor: "",
+      });
+    } catch {
+      // Non-fatal — proceed to the actual review even if the placeholder write failed
+    }
+
+    // Step 2 — run the Review Agent immediately
+    setQueueing((prev) => ({ ...prev, [pr.id]: { phase: "reviewing" } }));
+    try {
+      const result = await runProfileReviewRun(profileId, pr.id, pr.targetBranch);
+      // Persist the real result into browser localStorage so Review Queue reflects it immediately
+      await recordProfileReviewHistory(profileId, {
+        pullRequestId:     result.pullRequestId,
+        lastIterationId:   result.iterationId,
+        findingCount:      result.findingCount,
+        lastRunAt:         result.lastRunAt,
+        sourceCommit:      "",
+        decisionQueue:     result.decisionQueue,
+        decisionRiskLevel: result.decisionRiskLevel,
+        decisionReason:    result.decisionReason,
+        autoApprovedAt:    result.decisionQueue === "auto_approved" ? result.lastRunAt : "",
+        autoApprovalActor: result.decisionQueue === "auto_approved" ? "cicd-agent" : "",
+      });
+      if (result.findings && result.findings.length > 0) {
+        saveFindingsLocal(result.repository, result.pullRequestId, result.findings);
+      }
+      setQueueing((prev) => ({ ...prev, [pr.id]: { phase: "done", result } }));
+    } catch (err) {
+      setQueueing((prev) => ({
+        ...prev,
+        [pr.id]: { phase: "error", message: err instanceof Error ? err.message : String(err) },
+      }));
+    }
+  }, [profileId]);
 
   useEffect(() => {
     if (!profileId && profiles[0]) setProfileId(profiles[0].id);
@@ -130,6 +196,34 @@ export default function PullRequests(): JSX.Element {
           {prs.map((pr) => {
             const state = readiness(pr);
             const pipeline = pipelineReadiness(pr);
+            const qState = queueing[pr.id] ?? { phase: "idle" };
+
+            // Derive button label, style, and disabled state from qState
+            const isRunning = qState.phase === "watching" || qState.phase === "reviewing";
+            const isDone    = qState.phase === "done";
+            const isError   = qState.phase === "error";
+
+            const decisionLabel = isDone
+              ? qState.result.decisionQueue === "auto_approved"   ? "Auto-approved"
+              : qState.result.decisionQueue === "needs_human_review" ? "Needs review"
+              : qState.result.decisionQueue === "blocked"         ? "Blocked"
+              : "Reviewed"
+              : "";
+
+            const decisionTone = isDone
+              ? qState.result.decisionQueue === "auto_approved"      ? "border-emerald-800/60 bg-emerald-950/20 text-emerald-400"
+              : qState.result.decisionQueue === "needs_human_review" ? "border-yellow-800/60 bg-yellow-950/20 text-yellow-400"
+              : qState.result.decisionQueue === "blocked"            ? "border-red-800/60 bg-red-950/20 text-red-400"
+              : "border-blue-800/60 bg-blue-950/20 text-blue-400"
+              : "";
+
+            const buttonClass = `rounded-md border px-3 py-1.5 text-xs transition disabled:opacity-60 ${
+              isDone   ? `${decisionTone} cursor-default`
+              : isError ? "border-red-800/60 text-red-400 hover:border-red-700 hover:text-red-300"
+              : isRunning ? "border-zinc-700 text-zinc-500 cursor-wait"
+              : "border-zinc-700 text-zinc-400 hover:border-blue-700 hover:text-blue-300"
+            }`;
+
             return (
               <article key={pr.id} className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -146,16 +240,42 @@ export default function PullRequests(): JSX.Element {
                       {pr.sourceBranch} {"->"} {pr.targetBranch}
                     </p>
                   </div>
-                  {pr.url && (
-                    <a
-                      href={pr.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-md border border-zinc-800 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-200"
-                    >
-                      Open in ADO
-                    </a>
-                  )}
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => void handleQueueForReview(pr)}
+                        disabled={isRunning || isDone}
+                        className={buttonClass}
+                      >
+                        {qState.phase === "watching"  ? "Queuing…"
+                        : qState.phase === "reviewing" ? "Reviewing…"
+                        : isDone                       ? decisionLabel
+                        : isError                      ? "Retry"
+                        : "Queue for Review"}
+                      </button>
+                      {pr.url && (
+                        <a
+                          href={pr.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-md border border-zinc-800 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-200"
+                        >
+                          Open in ADO
+                        </a>
+                      )}
+                    </div>
+                    {/* Inline review outcome / error */}
+                    {isDone && (
+                      <p className="max-w-xs text-right text-[10px] leading-relaxed text-zinc-500 truncate" title={qState.result.decisionReason}>
+                        {qState.result.findingCount} finding{qState.result.findingCount === 1 ? "" : "s"} · {qState.result.decisionReason}
+                      </p>
+                    )}
+                    {isError && (
+                      <p className="max-w-xs text-right text-[10px] text-red-500 truncate" title={qState.message}>
+                        {qState.message}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-4 grid gap-2 text-xs text-zinc-500 sm:grid-cols-4">

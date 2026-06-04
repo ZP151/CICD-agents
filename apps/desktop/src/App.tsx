@@ -110,30 +110,34 @@ function AppDataProvider({ children, daemonReady }: { children: React.ReactNode;
   }
 
   const createProfile = useCallback(async (data: WorkspaceProfileInput): Promise<WorkspaceProfile> => {
-    let p: WorkspaceProfile;
     try {
-      p = await apiCreateProfile(data);
+      const p = await apiCreateProfile(data);
       setUsingDaemon(true);
-    } catch {
-      p = lsCreate(data);
+      setProfiles(prev => { const next = [...prev, p]; syncToLs(next); return next; });
+      return p;
+    } catch (err) {
+      if (usingDaemon) throw err;
+      const p = lsCreate(data);
+      setProfiles(prev => { const next = [...prev, p]; syncToLs(next); return next; });
+      return p;
     }
-    setProfiles(prev => { const next = [...prev, p]; syncToLs(next); return next; });
-    return p;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [usingDaemon]);
 
   const updateProfile = useCallback(async (id: string, data: Partial<WorkspaceProfileInput>): Promise<WorkspaceProfile> => {
-    let updated: WorkspaceProfile;
     try {
-      updated = await apiUpdateProfile(id, data);
+      const updated = await apiUpdateProfile(id, data);
       setUsingDaemon(true);
-    } catch {
-      updated = lsUpdate(id, data, profiles);
+      setProfiles(prev => { const next = prev.map(p => p.id === id ? updated : p); syncToLs(next); return next; });
+      return updated;
+    } catch (err) {
+      if (usingDaemon) throw err;
+      const updated = lsUpdate(id, data, profiles);
+      setProfiles(prev => { const next = prev.map(p => p.id === id ? updated : p); syncToLs(next); return next; });
+      return updated;
     }
-    setProfiles(prev => { const next = prev.map(p => p.id === id ? updated : p); syncToLs(next); return next; });
-    return updated!;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profiles]);
+  }, [profiles, usingDaemon]);
 
   const deleteProfile = useCallback(async (id: string): Promise<void> => {
     try { await apiDeleteProfile(id); } catch { /* local-only delete still removes from state */ }

@@ -15,6 +15,7 @@ export { IdempotentQueue } from "./queue.js";
 export type { QueuedJob } from "./queue.js";
 export {
   TableStateStore,
+  FileStateStore,
   InMemoryStateStore,
 } from "./stateStore.js";
 export type { StateStore, ReviewHistoryRow, ConventionRow } from "./stateStore.js";

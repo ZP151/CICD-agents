@@ -36,6 +36,27 @@ function authHeader(pat: string): Record<string, string> {
   return { Authorization: `Basic ${Buffer.from(`:${pat}`).toString("base64")}` };
 }
 
+const ADO_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+/** ADO returns 302 to a sign-in page when PAT auth fails; do not follow that redirect. */
+async function adoFetch(url: string, pat: string, init: RequestInit = {}): Promise<Response> {
+  const resp = await fetch(url, {
+    ...init,
+    redirect: "manual",
+    headers: {
+      Accept: "application/json",
+      ...authHeader(pat),
+      ...(init.headers ?? {}),
+    },
+  });
+  if (ADO_REDIRECT_STATUSES.has(resp.status)) {
+    throw new ToolError(
+      "ADO authentication failed (redirect to sign-in). Check org URL, PAT value, and Code (Read) scope.",
+    );
+  }
+  return resp;
+}
+
 function adoBase(org: string): string {
   // Accept either a full URL (https://tebssg.visualstudio.com or
   // https://dev.azure.com/myorg) or a bare org slug.
@@ -104,25 +125,17 @@ async function resolvePat(ctx: ToolContext): Promise<string> {
 }
 
 async function postJson(url: string, body: unknown, pat: string): Promise<Response> {
-  return fetch(url, {
+  return adoFetch(url, pat, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...authHeader(pat),
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
 
 async function patchJson(url: string, body: unknown, pat: string, contentType: string): Promise<Response> {
-  return fetch(url, {
+  return adoFetch(url, pat, {
     method: "PATCH",
-    headers: {
-      "Content-Type": contentType,
-      Accept: "application/json",
-      ...authHeader(pat),
-    },
+    headers: { "Content-Type": contentType },
     body: JSON.stringify(body),
   });
 }
@@ -159,16 +172,8 @@ export async function listAzurePullRequests(args: {
   const url =
     `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories/` +
     `${encodeURIComponent(repository)}/pullrequests?${params.toString()}`;
-  const resp = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-      ...authHeader(pat),
-    },
-  });
-  if (!resp.ok) {
-    throw new ToolError(`ADO list pull requests failed: HTTP ${resp.status}: ${(await resp.text()).slice(0, 400)}`);
-  }
-  const data = (await resp.json()) as {
+  const resp = await adoFetch(url, pat);
+  const data = (await parseAdoJson(resp, "list pull requests")) as {
     value?: Array<{
       pullRequestId?: number;
       title?: string;
@@ -232,16 +237,8 @@ export async function listAzurePipelineRuns(args: {
   const url =
     `${adoBase(org)}/${encodeURIComponent(project)}/_apis/pipelines/` +
     `${encodeURIComponent(pipelineId)}/runs?${params.toString()}`;
-  const resp = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-      ...authHeader(pat),
-    },
-  });
-  if (!resp.ok) {
-    throw new ToolError(`ADO list pipeline runs failed: HTTP ${resp.status}: ${(await resp.text()).slice(0, 400)}`);
-  }
-  const data = (await resp.json()) as {
+  const resp = await adoFetch(url, pat);
+  const data = (await parseAdoJson(resp, "list pipeline runs")) as {
     value?: Array<{
       id?: number;
       name?: string;
@@ -267,6 +264,28 @@ export async function listAzurePipelineRuns(args: {
 
 function stripRef(ref: string): string {
   return ref.replace(/^refs\/heads\//, "");
+}
+
+/** Parse an ADO REST response; surface HTML auth pages as a clear ToolError. */
+async function parseAdoJson(resp: Response, action: string): Promise<unknown> {
+  const text = await resp.text();
+  if (!resp.ok) {
+    throw new ToolError(`ADO ${action} failed: HTTP ${resp.status}: ${text.slice(0, 400)}`);
+  }
+  const trimmed = text.trimStart();
+  if (trimmed.startsWith("<!") || trimmed.startsWith("<html")) {
+    throw new ToolError(
+      `ADO ${action} returned HTML instead of JSON (often a sign-in or error page). ` +
+        "Check adoOrgUrl, project, repository, and PAT scopes (Code: Read).",
+    );
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new ToolError(
+      `ADO ${action} returned invalid JSON. Body starts with: ${text.slice(0, 200)}`,
+    );
+  }
 }
 
 export function azureDevOpsTools(): Tool[] {

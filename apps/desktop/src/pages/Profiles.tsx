@@ -58,8 +58,12 @@ async function verifyPat(orgUrl: string, pat: string): Promise<boolean> {
   try {
     const base = orgUrl.replace(/\/$/, "");
     const r = await fetch(`${base}/_apis/projects?api-version=7.1&$top=1`, {
+      redirect: "manual",
       headers: { Authorization: `Basic ${btoa(`:${pat}`)}` },
     });
+    if (r.status === 301 || r.status === 302 || r.status === 303 || r.status === 307 || r.status === 308) {
+      return false;
+    }
     return r.ok;
   } catch {
     return false;

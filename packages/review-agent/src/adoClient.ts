@@ -59,6 +59,9 @@ export class AdoClient {
   }
 
   private get baseUrl(): string {
+    if (this.org.startsWith("http://") || this.org.startsWith("https://")) {
+      return this.org.replace(/\/$/, "");
+    }
     return `https://dev.azure.com/${this.org}`;
   }
 
