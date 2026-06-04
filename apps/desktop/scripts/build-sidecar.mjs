@@ -38,7 +38,10 @@ function getRustTargetTriple() {
 // Uses the running Node major version so the pkg binary matches the runtime.
 // --------------------------------------------------------------------------
 function pkgTargetFor(triple) {
-  const nodeMajor = process.versions.node.split(".")[0]; // e.g. "20"
+  const runtimeMajor = Number(process.versions.node.split(".")[0] ?? "22");
+  // @yao-pkg/pkg can lag behind newly released Node majors. The repo supports
+  // Node >=22, so package the sidecar with the newest known pkg runtime here.
+  const nodeMajor = String(Math.min(runtimeMajor, 22));
   const nodeTag = `node${nodeMajor}`;
   if (triple.includes("windows")) return `${nodeTag}-win-x64`;
   if (triple.includes("aarch64") && triple.includes("apple")) return `${nodeTag}-macos-arm64`;

@@ -40,6 +40,38 @@ describe("review decision", () => {
     expect(decision.riskLevel).toBe("medium");
   });
 
+  it("watches low-risk PRs when auto-approval is disabled", () => {
+    const decision = decideReviewOutcome({
+      policy: { ...policy, enabled: false },
+      targetBranch: "main",
+      changedFiles: [{ path: "README.md", changeType: "edit", content: "Updated setup notes." }],
+      findings: [{
+        file: "README.md",
+        line: 1,
+        severity: "info",
+        category: "style",
+        message: "Consider clarifying this setup note.",
+      }],
+      reviewUsedLlm: true,
+    });
+    expect(decision.queue).toBe("watching");
+    expect(decision.autoApprove).toBe(false);
+    expect(decision.riskLevel).toBe("low");
+  });
+
+  it("watches low-risk PRs until an approval reviewer is configured", () => {
+    const decision = decideReviewOutcome({
+      policy: { ...policy, reviewerId: "" },
+      targetBranch: "main",
+      changedFiles: [{ path: "README.md", changeType: "edit", content: "Updated setup notes." }],
+      findings: [],
+      reviewUsedLlm: true,
+    });
+    expect(decision.queue).toBe("watching");
+    expect(decision.autoApprove).toBe(false);
+    expect(decision.riskLevel).toBe("low");
+  });
+
   it("blocks security findings", () => {
     const decision = decideReviewOutcome({
       policy,

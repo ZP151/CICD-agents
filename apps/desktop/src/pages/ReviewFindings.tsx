@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAppData } from "../App.js";
-import { fetchProfileReviewQueue, type ReviewFinding, type ReviewQueueItem } from "../api.js";
+import {
+  configureDaemon,
+  fetchDaemonConfig,
+  fetchProfileReviewQueue,
+  type ReviewFinding,
+  type ReviewQueueItem,
+} from "../api.js";
 import { loadFindingsLocal } from "../reviewHistoryLocal.js";
 
 const lanes: Array<{
@@ -18,19 +24,19 @@ const lanes: Array<{
   {
     key: "needs_human_review",
     title: "Needs human review",
-    description: "Medium-risk PRs, uncertain findings, or policy exceptions.",
+    description: "Warnings, sensitive paths, or approval guardrails that need judgment.",
     tone: "text-yellow-400 border-yellow-900/50 bg-yellow-950/10",
   },
   {
     key: "blocked",
     title: "Blocked",
-    description: "High-risk findings, failed policy, failed pipeline, or conflicts.",
+    description: "High-risk findings, failed pipeline checks, or merge conflicts.",
     tone: "text-red-400 border-red-900/50 bg-red-950/10",
   },
   {
     key: "watching",
     title: "Watching",
-    description: "PRs waiting for new commits, pipeline completion, or policy updates.",
+    description: "PRs waiting for commits, pipeline results, or approval configuration.",
     tone: "text-blue-400 border-blue-900/50 bg-blue-950/10",
   },
 ];
@@ -147,10 +153,27 @@ export default function ReviewFindings(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<ReviewQueueItem | null>(null);
   const [panelFindings, setPanelFindings] = useState<ReviewFinding[]>([]);
+  const [autoApproveEnabled, setAutoApproveEnabled] = useState(true);
+  const [autoApproveSaving, setAutoApproveSaving] = useState(false);
+  const [autoApproveError, setAutoApproveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profileId && profiles[0]) setProfileId(profiles[0].id);
   }, [profileId, profiles]);
+
+  useEffect(() => {
+    fetchDaemonConfig()
+      .then((cfg) => {
+        if (cfg && typeof cfg.reviewAutoApproveEnabled === "boolean") {
+          setAutoApproveEnabled(cfg.reviewAutoApproveEnabled);
+        } else {
+          setAutoApproveEnabled(true);
+        }
+      })
+      .catch(() => {
+        setAutoApproveEnabled(true);
+      });
+  }, []);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === profileId) ?? null,
@@ -199,6 +222,19 @@ export default function ReviewFindings(): JSX.Element {
     setPanelFindings([]);
   }
 
+  async function setGlobalAutoApprove(enabled: boolean): Promise<void> {
+    setAutoApproveSaving(true);
+    setAutoApproveError(null);
+    try {
+      await configureDaemon({ reviewAutoApproveEnabled: enabled });
+      setAutoApproveEnabled(enabled);
+    } catch (err) {
+      setAutoApproveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAutoApproveSaving(false);
+    }
+  }
+
   return (
     <div className="w-full space-y-6">
       {selectedItem && (
@@ -218,6 +254,32 @@ export default function ReviewFindings(): JSX.Element {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex rounded-md border border-zinc-800 bg-zinc-900 p-0.5">
+            <button
+              type="button"
+              disabled={autoApproveSaving}
+              onClick={() => void setGlobalAutoApprove(true)}
+              className={`rounded px-2.5 py-1 text-xs transition disabled:opacity-50 ${
+                autoApproveEnabled
+                  ? "bg-emerald-900/50 text-emerald-300"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              Auto-approve on
+            </button>
+            <button
+              type="button"
+              disabled={autoApproveSaving}
+              onClick={() => void setGlobalAutoApprove(false)}
+              className={`rounded px-2.5 py-1 text-xs transition disabled:opacity-50 ${
+                !autoApproveEnabled
+                  ? "bg-zinc-800 text-zinc-200"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              Off
+            </button>
+          </div>
           <select
             className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 outline-none"
             value={profileId}
@@ -256,6 +318,12 @@ export default function ReviewFindings(): JSX.Element {
       {error && (
         <div className="rounded-lg border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">
           {error}
+        </div>
+      )}
+
+      {autoApproveError && (
+        <div className="rounded-lg border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">
+          {autoApproveError}
         </div>
       )}
 

@@ -662,6 +662,7 @@ export interface ReviewRunResult {
   decisionRiskLevel: "low" | "medium" | "high";
   decisionReason: string;
   lastRunAt: string;
+  autoApprovalActor: string;
   tokensIn: number;
   tokensOut: number;
   summary: string;
@@ -741,6 +742,7 @@ export interface DaemonConfigPayload {
   azureStorageAccount?: string;
   azureKeyVaultUrl?: string;
   azureCosmosEndpoint?: string;
+  reviewAutoApproveEnabled?: boolean;
 }
 
 export interface DaemonConfig {
@@ -753,6 +755,7 @@ export interface DaemonConfig {
   azureStorageAccount: string;
   azureKeyVaultUrl: string;
   azureCosmosEndpoint: string;
+  reviewAutoApproveEnabled: boolean;
 }
 
 /** List git branches for a repo path by asking the daemon (which uses shell:true to find git). */

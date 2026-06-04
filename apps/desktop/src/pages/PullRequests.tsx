@@ -83,7 +83,7 @@ export default function PullRequests(): JSX.Element {
         decisionRiskLevel: result.decisionRiskLevel,
         decisionReason:    result.decisionReason,
         autoApprovedAt:    result.decisionQueue === "auto_approved" ? result.lastRunAt : "",
-        autoApprovalActor: result.decisionQueue === "auto_approved" ? "cicd-agent" : "",
+        autoApprovalActor: result.decisionQueue === "auto_approved" ? result.autoApprovalActor : "",
       });
       if (result.findings && result.findings.length > 0) {
         saveFindingsLocal(result.repository, result.pullRequestId, result.findings);

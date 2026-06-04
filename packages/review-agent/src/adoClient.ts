@@ -19,6 +19,12 @@ export interface AdoClientOptions {
   };
 }
 
+export interface AdoAuthenticatedUser {
+  id: string;
+  displayName: string;
+  uniqueName: string;
+}
+
 export class AdoClient {
   private readonly org: string;
   private readonly pat?: string;
@@ -69,6 +75,23 @@ export class AdoClient {
     return this.json(
       `${this.baseUrl}/${project}/_apis/git/repositories/${repositoryId}/pullrequests/${prId}?api-version=7.1-preview.1`,
     );
+  }
+
+  async getAuthenticatedUser(): Promise<AdoAuthenticatedUser> {
+    const data = await this.json<{
+      authenticatedUser?: {
+        id?: string;
+        displayName?: string;
+        uniqueName?: string;
+      };
+    }>(`${this.baseUrl}/_apis/connectionData?api-version=7.1-preview.1`);
+    const user = data.authenticatedUser;
+    if (!user?.id) throw new Error("Could not resolve authenticated ADO user.");
+    return {
+      id: user.id,
+      displayName: user.displayName ?? "",
+      uniqueName: user.uniqueName ?? "",
+    };
   }
 
   async getPullRequestIterations(

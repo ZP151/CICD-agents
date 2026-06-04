@@ -392,6 +392,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     azureStorageAccount: settings.azureStorageAccount ?? "",
     azureKeyVaultUrl:    settings.azureKeyVaultUrl ?? "",
     azureCosmosEndpoint: settings.azureCosmosEndpoint ?? "",
+    reviewAutoApproveEnabled: settings.reviewAutoApproveEnabled,
   }));
 
   // ── /daemon/configure — persist LLM credentials and hot-reload settings ───
@@ -410,6 +411,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     azureStorageAccount: z.string().optional(),
     azureKeyVaultUrl:    z.string().optional(),
     azureCosmosEndpoint: z.string().optional(),
+    reviewAutoApproveEnabled: z.boolean().optional(),
   });
 
   app.post("/daemon/configure", async (req, reply) => {
@@ -452,6 +454,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     if (cfg.azureStorageAccount !== undefined) lines.push(`AZURE_STORAGE_ACCOUNT=${cfg.azureStorageAccount}`);
     if (cfg.azureKeyVaultUrl    !== undefined) lines.push(`AZURE_KEYVAULT_URL=${cfg.azureKeyVaultUrl}`);
     if (cfg.azureCosmosEndpoint !== undefined) lines.push(`AZURE_COSMOS_ENDPOINT=${cfg.azureCosmosEndpoint}`);
+    if (cfg.reviewAutoApproveEnabled !== undefined) lines.push(`REVIEW_AUTO_APPROVE_ENABLED=${cfg.reviewAutoApproveEnabled ? "true" : "false"}`);
 
     if (lines.length > 0) {
       // Merge with existing file: keep lines whose key we are NOT overwriting
@@ -490,6 +493,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       (settings as Record<string, unknown>)["azureKeyVaultUrl"] = cfg.azureKeyVaultUrl;
     if (cfg.azureCosmosEndpoint !== undefined)
       (settings as Record<string, unknown>)["azureCosmosEndpoint"] = cfg.azureCosmosEndpoint;
+    if (cfg.reviewAutoApproveEnabled !== undefined)
+      (settings as Record<string, unknown>)["reviewAutoApproveEnabled"] = cfg.reviewAutoApproveEnabled;
 
     const cloudStores = {
       cloudProfileStore: !!(settings.azureStorageAccount),
@@ -952,9 +957,22 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
     const review = await runReviewPlanner({ llm, bundle, conventions });
 
-    const effectiveTargetBranch = bodyTargetBranch || profileData.targetBranch || "main";
-    const decision = decideReviewOutcome({
-      policy:       { ...DEFAULT_AUTO_APPROVAL_POLICY },
+    const policyTargetBranch = profileData.targetBranch || "main";
+    const effectiveTargetBranch = bodyTargetBranch || policyTargetBranch;
+    let reviewer: Awaited<ReturnType<typeof ado.getAuthenticatedUser>> | null = null;
+    try {
+      reviewer = await ado.getAuthenticatedUser();
+    } catch (err) {
+      app.log.warn({ err }, "could not resolve ADO reviewer identity for auto-approval");
+    }
+
+    let decision = decideReviewOutcome({
+      policy: {
+        ...DEFAULT_AUTO_APPROVAL_POLICY,
+        enabled: settings.reviewAutoApproveEnabled,
+        reviewerId: reviewer?.id ?? "",
+        allowedTargetBranches: [policyTargetBranch],
+      },
       targetBranch: effectiveTargetBranch,
       changedFiles: bundle.files,
       findings:     review.findings,
@@ -962,6 +980,25 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     });
 
     const now = new Date().toISOString();
+    const autoApprovalActor = reviewer?.uniqueName || reviewer?.displayName || reviewer?.id || "";
+    if (decision.autoApprove && reviewer) {
+      try {
+        await ado.approvePullRequest({
+          project: profileData.adoProject,
+          repositoryId: repository,
+          pullRequestId,
+          reviewerId: reviewer.id,
+        });
+      } catch (err) {
+        decision = {
+          queue: "needs_human_review",
+          riskLevel: decision.riskLevel,
+          autoApprove: false,
+          reason: `Auto-approval failed: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+    }
+
     await stateStore.upsertHistory({
       partitionKey:       repository,
       rowKey:             String(pullRequestId),
@@ -973,7 +1010,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       decisionRiskLevel:  decision.riskLevel,
       decisionReason:     decision.reason,
       autoApprovedAt:     decision.autoApprove ? now : "",
-      autoApprovalActor:  decision.autoApprove ? "cicd-agent" : "",
+      autoApprovalActor:  decision.autoApprove ? autoApprovalActor : "",
       lastTokensIn:       review.tokensIn,
       lastTokensOut:      review.tokensOut,
     });
@@ -988,6 +1025,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       decisionRiskLevel: decision.riskLevel,
       decisionReason:   decision.reason,
       lastRunAt:        now,
+      autoApprovalActor: decision.autoApprove ? autoApprovalActor : "",
       tokensIn:         review.tokensIn,
       tokensOut:        review.tokensOut,
       summary:          review.summary,

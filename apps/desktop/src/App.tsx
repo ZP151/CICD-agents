@@ -667,6 +667,27 @@ function MiniLayout() {
   );
 }
 
+function PageShell({
+  children,
+  scroll = true,
+}: {
+  children: React.ReactNode;
+  scroll?: boolean;
+}) {
+  return (
+    <div className="relative flex min-w-0 flex-1 overflow-hidden">
+      <div
+        className={`min-w-0 flex-1 px-6 pt-6 pb-16 ${
+          scroll ? "overflow-auto" : "overflow-hidden"
+        }`}
+      >
+        {children}
+      </div>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 border-t border-zinc-900/70 bg-gradient-to-t from-zinc-950 via-zinc-950/90 to-transparent" />
+    </div>
+  );
+}
+
 function FullLayout({ info }: { info: DaemonInfo }) {
   const anyCloud = info.cloudProfileStore || info.cloudSecrets || info.cloudSessions;
   return (
@@ -724,15 +745,15 @@ function FullLayout({ info }: { info: DaemonInfo }) {
         <Routes>
           <Route path="/" element={<Navigate to="/chat" replace />} />
           <Route path="/chat" element={<Chat />} />
-          <Route path="/dashboard" element={<div className="flex flex-1 overflow-auto p-6"><Dashboard /></div>} />
-          <Route path="/repos" element={<div className="flex flex-1 overflow-auto p-6"><Repos /></div>} />
+          <Route path="/dashboard" element={<PageShell><Dashboard /></PageShell>} />
+          <Route path="/repos" element={<PageShell><Repos /></PageShell>} />
           <Route path="/tasks" element={<Navigate to="/activity" replace />} />
-          <Route path="/activity" element={<div className="flex flex-1 overflow-hidden p-6"><TaskViewer /></div>} />
-          <Route path="/pulls" element={<div className="flex flex-1 overflow-auto p-6"><PullRequests /></div>} />
-          <Route path="/findings" element={<div className="flex flex-1 overflow-auto p-6"><ReviewFindings /></div>} />
+          <Route path="/activity" element={<PageShell scroll={false}><TaskViewer /></PageShell>} />
+          <Route path="/pulls" element={<PageShell><PullRequests /></PageShell>} />
+          <Route path="/findings" element={<PageShell><ReviewFindings /></PageShell>} />
           <Route path="/pipelines" element={<Navigate to="/pulls" replace />} />
-          <Route path="/profiles" element={<div className="flex flex-1 overflow-auto p-6"><Profiles /></div>} />
-          <Route path="/settings" element={<div className="flex flex-1 overflow-auto p-6"><Settings /></div>} />
+          <Route path="/profiles" element={<PageShell><Profiles /></PageShell>} />
+          <Route path="/settings" element={<PageShell><Settings /></PageShell>} />
         </Routes>
       </main>
     </div>

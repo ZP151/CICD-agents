@@ -18,7 +18,7 @@ const ConfigSchema = z.object({
   dataDir: z.string().default(""),
   appInsightsConnectionString: z.string().default(""),
   reviewMaxFilesPerPr: z.coerce.number().default(40),
-  reviewAutoApproveEnabled: z.coerce.boolean().default(false),
+  reviewAutoApproveEnabled: z.coerce.boolean().default(true),
   reviewAutoApproveReviewerId: z.string().default(""),
   reviewAutoApproveMaxChangedFiles: z.coerce.number().default(8),
   reviewAutoApproveTargetBranches: z.array(z.string()).default(["main"]),

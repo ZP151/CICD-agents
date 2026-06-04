@@ -17,7 +17,7 @@ export interface ReviewDecision {
 }
 
 export const DEFAULT_AUTO_APPROVAL_POLICY: AutoApprovalPolicy = {
-  enabled: false,
+  enabled: true,
   reviewerId: "",
   maxChangedFiles: 8,
   allowedTargetBranches: ["main"],
@@ -46,10 +46,10 @@ export function decideReviewOutcome(args: {
     return { queue: "needs_human_review", riskLevel, autoApprove: false, reason: "Warnings or policy-sensitive files need human review." };
   }
   if (!args.policy.enabled) {
-    return { queue: "needs_human_review", riskLevel, autoApprove: false, reason: "Auto-approval is disabled by policy." };
+    return { queue: "watching", riskLevel, autoApprove: false, reason: "Auto-approval is not enabled in global review policy." };
   }
   if (!args.policy.reviewerId) {
-    return { queue: "needs_human_review", riskLevel, autoApprove: false, reason: "Auto-approval reviewer identity is not configured." };
+    return { queue: "watching", riskLevel, autoApprove: false, reason: "Auto-approval reviewer identity is not configured." };
   }
   if (!args.reviewUsedLlm) {
     return { queue: "needs_human_review", riskLevel, autoApprove: false, reason: "The review model did not run, so approval needs a human." };
