@@ -25,7 +25,7 @@ const lanes: Array<{
     key: "needs_human_review",
     title: "Needs human review",
     description: "Warnings, sensitive paths, or approval guardrails that need judgment.",
-    tone: "text-yellow-400 border-yellow-900/50 bg-yellow-950/10",
+    tone: "review-lane-human text-yellow-400 border-yellow-900/50 bg-yellow-950/10",
   },
   {
     key: "blocked",
@@ -254,32 +254,6 @@ export default function ReviewFindings(): JSX.Element {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-md border border-zinc-800 bg-zinc-900 p-0.5">
-            <button
-              type="button"
-              disabled={autoApproveSaving}
-              onClick={() => void setGlobalAutoApprove(true)}
-              className={`rounded px-2.5 py-1 text-xs transition disabled:opacity-50 ${
-                autoApproveEnabled
-                  ? "bg-emerald-900/50 text-emerald-300"
-                  : "text-zinc-500 hover:text-zinc-300"
-              }`}
-            >
-              Auto-approve on
-            </button>
-            <button
-              type="button"
-              disabled={autoApproveSaving}
-              onClick={() => void setGlobalAutoApprove(false)}
-              className={`rounded px-2.5 py-1 text-xs transition disabled:opacity-50 ${
-                !autoApproveEnabled
-                  ? "bg-zinc-800 text-zinc-200"
-                  : "text-zinc-500 hover:text-zinc-300"
-              }`}
-            >
-              Off
-            </button>
-          </div>
           <select
             className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 outline-none"
             value={profileId}
@@ -327,12 +301,46 @@ export default function ReviewFindings(): JSX.Element {
         </div>
       )}
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 lg:grid-cols-4">
         {lanes.map((lane) => (
           <div key={lane.key} className={`rounded-lg border p-4 ${lane.tone}`}>
-            <p className="text-sm font-semibold">{lane.title}</p>
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm font-semibold">{lane.title}</p>
+              {lane.key === "auto_approved" && (
+                <button
+                  type="button"
+                  disabled={autoApproveSaving}
+                  onClick={() => void setGlobalAutoApprove(!autoApproveEnabled)}
+                  className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${
+                    autoApproveEnabled
+                      ? "border-emerald-800/60 bg-emerald-900/40 text-emerald-300"
+                      : "border-zinc-700 bg-zinc-800/40 text-zinc-500 hover:text-zinc-300"
+                  }`}
+                  title={autoApproveEnabled ? "Disable auto-approve" : "Enable auto-approve"}
+                  aria-label={autoApproveEnabled ? "Disable auto-approve" : "Enable auto-approve"}
+                  aria-pressed={autoApproveEnabled}
+                >
+                  {autoApproveEnabled ? (
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  )}
+                </button>
+              )}
+            </div>
             <p className="mt-2 text-xs leading-relaxed text-zinc-500">{lane.description}</p>
-            <p className="mt-4 text-2xl font-semibold text-zinc-200">{counts[lane.key]}</p>
+            <div className="mt-4 flex items-end justify-between gap-2">
+              <p className="text-2xl font-semibold text-zinc-200">{counts[lane.key]}</p>
+              {lane.key === "auto_approved" && (
+                <p className="text-[10px] font-medium text-zinc-600">
+                  {autoApproveEnabled ? "Enabled" : "Disabled"}
+                </p>
+              )}
+            </div>
           </div>
         ))}
       </section>
