@@ -7,7 +7,8 @@ describe("tool capability registry", () => {
     const caps = toolCapabilities(gitTools());
     expect(caps.find((cap) => cap.name === "git_status")?.riskLevel).toBe("low");
     expect(caps.find((cap) => cap.name === "git_status")?.readOnly).toBe(true);
-    expect(caps.find((cap) => cap.name === "git_fetch")?.riskLevel).toBe("low");
+    expect(caps.find((cap) => cap.name === "git_fetch")?.riskLevel).toBe("medium");
+    expect(caps.find((cap) => cap.name === "git_fetch")?.requiresApproval).toBe(true);
     expect(caps.find((cap) => cap.name === "git_merge_base")?.readOnly).toBe(true);
     expect(caps.find((cap) => cap.name === "git_show")?.readOnly).toBe(true);
     expect(caps.find((cap) => cap.name === "git_restore")?.riskLevel).toBe("medium");

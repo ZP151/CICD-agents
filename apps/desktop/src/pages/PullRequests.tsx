@@ -131,7 +131,7 @@ export default function PullRequests(): JSX.Element {
           <h2 className="text-2xl font-semibold text-zinc-100">Pull Requests</h2>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500">
             Developer workspace for active PRs. This view starts with Azure DevOps PR state;
-            pipeline readiness is matched from the selected profile when a pipeline is configured.
+            pipeline readiness is matched from the selected Project Link when a pipeline is configured.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -141,7 +141,7 @@ export default function PullRequests(): JSX.Element {
             disabled={profilesLoading || profiles.length === 0}
             onChange={(e) => setProfileId(e.target.value)}
           >
-            {profiles.length === 0 && <option value="">No profiles</option>}
+            {profiles.length === 0 && <option value="">No Project Links</option>}
             {profiles.map((profile) => (
               <option key={profile.id} value={profile.id}>{profile.name}</option>
             ))}
@@ -186,7 +186,7 @@ export default function PullRequests(): JSX.Element {
         <div className="flex flex-1 items-center justify-center rounded-lg border border-zinc-800/70 bg-zinc-900/20 p-8 text-center">
           <div>
             <p className="text-sm font-medium text-zinc-400">No pull requests found</p>
-            <p className="mt-1 text-sm text-zinc-600">Try another profile or status filter.</p>
+            <p className="mt-1 text-sm text-zinc-600">Try another Project Link or status filter.</p>
           </div>
         </div>
       )}

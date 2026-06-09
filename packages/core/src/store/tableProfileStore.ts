@@ -52,6 +52,10 @@ type ProfileEntity = {
   adoPat: string;
   adoPipelineId: string;
   adoPipelineName: string;
+  adoMcpEnabled?: boolean;
+  adoMcpCommand?: string;
+  adoMcpAuthentication?: string;
+  adoMcpDomains?: string;
   templateProfile: string;
   buildCommand: string;
   testCommand: string;
@@ -72,6 +76,10 @@ function entityToProfile(e: ProfileEntity): WorkspaceProfile {
     adoPat:          e.adoPat,
     adoPipelineId:   e.adoPipelineId,
     adoPipelineName: e.adoPipelineName,
+    adoMcpEnabled:   e.adoMcpEnabled ?? false,
+    adoMcpCommand:   e.adoMcpCommand ?? "",
+    adoMcpAuthentication: e.adoMcpAuthentication ?? "",
+    adoMcpDomains:   e.adoMcpDomains ?? "repositories,pipelines,work-items",
     templateProfile: e.templateProfile,
     buildCommand:    e.buildCommand,
     testCommand:     e.testCommand,
@@ -94,6 +102,10 @@ function profileToEntity(userId: string, p: WorkspaceProfile): ProfileEntity {
     adoPat:          p.adoPat,
     adoPipelineId:   p.adoPipelineId,
     adoPipelineName: p.adoPipelineName,
+    adoMcpEnabled:   p.adoMcpEnabled,
+    adoMcpCommand:   p.adoMcpCommand,
+    adoMcpAuthentication: p.adoMcpAuthentication,
+    adoMcpDomains:   p.adoMcpDomains,
     templateProfile: p.templateProfile,
     buildCommand:    p.buildCommand,
     testCommand:     p.testCommand,

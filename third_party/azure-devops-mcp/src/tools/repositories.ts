@@ -1,0 +1,2179 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { WebApi } from "azure-devops-node-api";
+import {
+  GitRef,
+  GitForkRef,
+  PullRequestStatus,
+  GitQueryCommitsCriteria,
+  GitVersionType,
+  GitVersionDescriptor,
+  GitPullRequestQuery,
+  GitPullRequestQueryInput,
+  GitPullRequestQueryType,
+  CommentThreadContext,
+  CommentThreadStatus,
+  GitPullRequestCompletionOptions,
+  GitPullRequestMergeStrategy,
+  GitPullRequest,
+  GitPullRequestCommentThread,
+  Comment,
+  VersionControlChangeType,
+  VersionControlRecursionType,
+} from "azure-devops-node-api/interfaces/GitInterfaces.js";
+import { z } from "zod";
+import { getCurrentUserDetails, getUserIdFromEmail } from "./auth.js";
+import { GitRepository } from "azure-devops-node-api/interfaces/TfvcInterfaces.js";
+import { WebApiTagDefinition } from "azure-devops-node-api/interfaces/CoreInterfaces.js";
+import { extractAdoStreamError, getEnumKeys, streamToString } from "../utils.js";
+
+const REPO_TOOLS = {
+  list_repos_by_project: "repo_list_repos_by_project",
+  list_pull_requests_by_repo_or_project: "repo_list_pull_requests_by_repo_or_project",
+  list_branches_by_repo: "repo_list_branches_by_repo",
+  list_my_branches_by_repo: "repo_list_my_branches_by_repo",
+  list_pull_request_threads: "repo_list_pull_request_threads",
+  list_pull_request_thread_comments: "repo_list_pull_request_thread_comments",
+  get_repo_by_name_or_id: "repo_get_repo_by_name_or_id",
+  get_branch_by_name: "repo_get_branch_by_name",
+  get_pull_request_by_id: "repo_get_pull_request_by_id",
+  get_pull_request_changes: "repo_get_pull_request_changes",
+  create_pull_request: "repo_create_pull_request",
+  create_branch: "repo_create_branch",
+  update_pull_request: "repo_update_pull_request",
+  update_pull_request_reviewers: "repo_update_pull_request_reviewers",
+  reply_to_comment: "repo_reply_to_comment",
+  create_pull_request_thread: "repo_create_pull_request_thread",
+  update_pull_request_thread: "repo_update_pull_request_thread",
+  search_commits: "repo_search_commits",
+  list_pull_requests_by_commits: "repo_list_pull_requests_by_commits",
+  vote_pull_request: "repo_vote_pull_request",
+  list_directory: "repo_list_directory",
+  get_file_content: "repo_get_file_content",
+};
+
+function branchesFilterOutIrrelevantProperties(branches: GitRef[], top: number) {
+  return branches
+    ?.flatMap((branch) => (branch.name ? [branch.name] : []))
+    ?.filter((branch) => branch.startsWith("refs/heads/"))
+    .map((branch) => branch.replace("refs/heads/", ""))
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, top);
+}
+
+function trimPullRequestThread(thread: GitPullRequestCommentThread) {
+  return {
+    id: thread.id,
+    publishedDate: thread.publishedDate,
+    lastUpdatedDate: thread.lastUpdatedDate,
+    status: thread.status,
+    comments: trimComments(thread.comments),
+    threadContext: thread.threadContext,
+  };
+}
+
+/**
+ * Trims comment data to essential properties, filtering out deleted comments
+ * @param comments Array of comments to trim (can be undefined/null)
+ * @returns Array of trimmed comment objects with essential properties only
+ */
+function trimComments(comments: Comment[] | undefined | null) {
+  return comments
+    ?.filter((comment) => !comment.isDeleted) // Exclude deleted comments
+    ?.map((comment) => ({
+      id: comment.id,
+      author: {
+        displayName: comment.author?.displayName,
+        uniqueName: comment.author?.uniqueName,
+      },
+      content: comment.content,
+      publishedDate: comment.publishedDate,
+      lastUpdatedDate: comment.lastUpdatedDate,
+      lastContentUpdatedDate: comment.lastContentUpdatedDate,
+    }));
+}
+
+function pullRequestStatusStringToInt(status: string): number {
+  switch (status) {
+    case "Abandoned":
+      return PullRequestStatus.Abandoned.valueOf();
+    case "Active":
+      return PullRequestStatus.Active.valueOf();
+    case "All":
+      return PullRequestStatus.All.valueOf();
+    case "Completed":
+      return PullRequestStatus.Completed.valueOf();
+    case "NotSet":
+      return PullRequestStatus.NotSet.valueOf();
+    default:
+      throw new Error(`Unknown pull request status: ${status}`);
+  }
+}
+
+function filterReposByName(repositories: GitRepository[], repoNameFilter: string): GitRepository[] {
+  const lowerCaseFilter = repoNameFilter.toLowerCase();
+  const filteredByName = repositories?.filter((repo) => repo.name?.toLowerCase().includes(lowerCaseFilter));
+
+  return filteredByName;
+}
+
+function trimPullRequest(pr: GitPullRequest | null | undefined, includeDescription = false) {
+  if (!pr) {
+    return null;
+  }
+
+  const statusName = typeof pr.status === "number" ? (PullRequestStatus[pr.status] ?? "Unknown") : "Unknown";
+
+  return {
+    pullRequestId: pr.pullRequestId,
+    codeReviewId: pr.codeReviewId,
+    repository: pr.repository?.name,
+    status: pr.status,
+    statusName,
+    createdBy: {
+      displayName: pr.createdBy?.displayName,
+      uniqueName: pr.createdBy?.uniqueName,
+    },
+    creationDate: pr.creationDate,
+    closedDate: pr.closedDate,
+    title: pr.title,
+    ...(includeDescription ? { description: pr.description ?? "" } : {}),
+    isDraft: pr.isDraft,
+    sourceRefName: pr.sourceRefName,
+    targetRefName: pr.targetRefName,
+    project: pr.repository?.project?.name,
+  };
+}
+
+// Helper function to build a version descriptor from branch or commit
+function buildVersionDescriptor(version?: string, versionType?: string): GitVersionDescriptor | undefined {
+  if (!version) {
+    return undefined;
+  }
+
+  const versionTypeMap: Record<string, GitVersionType> = {
+    Branch: GitVersionType.Branch,
+    Commit: GitVersionType.Commit,
+    Tag: GitVersionType.Tag,
+  };
+
+  return {
+    version: version,
+    versionType: versionTypeMap[versionType || "Branch"] ?? GitVersionType.Branch,
+  };
+}
+
+function configureRepoTools(server: McpServer, tokenProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string) {
+  server.tool(
+    REPO_TOOLS.create_pull_request,
+    "Create a new pull request.",
+    {
+      repositoryId: z
+        .string()
+        .describe("The ID or name of the repository where the pull request will be created. When using a repository name instead of a GUID, the project parameter must also be provided."),
+      sourceRefName: z.string().describe("The source branch name for the pull request, e.g., 'refs/heads/feature-branch'."),
+      targetRefName: z.string().describe("The target branch name for the pull request, e.g., 'refs/heads/main'."),
+      title: z.string().describe("The title of the pull request."),
+      description: z.string().max(4000).optional().describe("The description of the pull request. Must not be longer than 4000 characters. Optional."),
+      isDraft: z.boolean().optional().default(false).describe("Indicates whether the pull request is a draft. Defaults to false."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a repository name instead of a GUID."),
+      workItems: z.string().optional().describe("Work item IDs to associate with the pull request, space-separated."),
+      forkSourceRepositoryId: z.string().optional().describe("The ID of the fork repository that the pull request originates from. Optional, used when creating a pull request from a fork."),
+      labels: z.array(z.string()).optional().describe("Array of label names to add to the pull request after creation."),
+    },
+    async ({ repositoryId, sourceRefName, targetRefName, title, description, isDraft, project, workItems, forkSourceRepositoryId, labels }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+        const workItemRefs = workItems ? workItems.split(" ").map((id) => ({ id: id.trim() })) : [];
+        const noDataErrorMessage =
+          `Pull request creation returned no data and no matching PR was found. This often means repositoryId=\"${repositoryId}\" was not resolvable. ` +
+          "Try the repository GUID from repo_list_repos_by_project instead of the Project/RepoName slash format.";
+
+        const forkSource: GitForkRef | undefined = forkSourceRepositoryId
+          ? {
+              repository: {
+                id: forkSourceRepositoryId,
+              },
+            }
+          : undefined;
+
+        const labelDefinitions: WebApiTagDefinition[] | undefined = labels ? labels.map((label) => ({ name: label })) : undefined;
+
+        let pullRequest = await gitApi.createPullRequest(
+          {
+            sourceRefName,
+            targetRefName,
+            title,
+            description,
+            isDraft,
+            workItemRefs: workItemRefs,
+            forkSource,
+            labels: labelDefinitions,
+            supportsIterations: true,
+          },
+          repositoryId,
+          project
+        );
+
+        if (!pullRequest) {
+          const prs = await gitApi.getPullRequests(repositoryId, { sourceRefName, targetRefName, status: PullRequestStatus.Active }, project, undefined, 0, 1);
+          if (prs && prs.length > 0) {
+            pullRequest = prs[0];
+          } else {
+            return {
+              content: [{ type: "text", text: noDataErrorMessage }],
+              isError: true,
+            };
+          }
+        }
+
+        const trimmedPullRequest = trimPullRequest(pullRequest, true);
+
+        if (!trimmedPullRequest) {
+          return {
+            content: [{ type: "text", text: noDataErrorMessage }],
+            isError: true,
+          };
+        }
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(trimmedPullRequest, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error creating pull request: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.create_branch,
+    "Create a new branch in the repository.",
+    {
+      repositoryId: z
+        .string()
+        .describe("The ID or name of the repository where the branch will be created. When using a repository name instead of a GUID, the project parameter must also be provided."),
+      branchName: z.string().describe("The name of the new branch to create, e.g., 'feature-branch'."),
+      sourceBranchName: z.string().optional().default("main").describe("The name of the source branch to create the new branch from. Defaults to 'main'."),
+      sourceCommitId: z.string().optional().describe("The commit ID to create the branch from. If not provided, uses the latest commit of the source branch."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a repository name instead of a GUID."),
+    },
+    async ({ repositoryId, branchName, sourceBranchName, sourceCommitId, project }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+
+        let commitId = sourceCommitId;
+
+        // If no commit ID is provided, get the latest commit from the source branch
+        if (!commitId) {
+          const sourceRefName = `refs/heads/${sourceBranchName}`;
+          try {
+            const sourceBranch = await gitApi.getRefs(repositoryId, project, "heads/", false, false, undefined, false, undefined, sourceBranchName);
+            const branch = sourceBranch.find((b) => b.name === sourceRefName);
+            if (!branch || !branch.objectId) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Error: Source branch '${sourceBranchName}' not found in repository ${repositoryId}`,
+                  },
+                ],
+                isError: true,
+              };
+            }
+            commitId = branch.objectId;
+          } catch (error) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Error retrieving source branch '${sourceBranchName}': ${error instanceof Error ? error.message : String(error)}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+        }
+
+        // Create the new branch using updateRefs
+        const newRefName = `refs/heads/${branchName}`;
+        const refUpdate = {
+          name: newRefName,
+          newObjectId: commitId,
+          oldObjectId: "0000000000000000000000000000000000000000", // All zeros indicates creating a new ref
+        };
+
+        try {
+          const result = await gitApi.updateRefs([refUpdate], repositoryId, project);
+
+          // Check if the branch creation was successful
+          if (result && result.length > 0 && result[0].success) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Branch '${branchName}' created successfully from '${sourceBranchName}' (${commitId})`,
+                },
+              ],
+            };
+          } else {
+            const errorMessage = result && result.length > 0 && result[0].customMessage ? result[0].customMessage : "Unknown error occurred during branch creation";
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Error creating branch '${branchName}': ${errorMessage}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error creating branch '${branchName}': ${error instanceof Error ? error.message : String(error)}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error creating branch: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.update_pull_request,
+    "Update a Pull Request by ID with specified fields, including setting autocomplete with various completion options.",
+    {
+      repositoryId: z.string().describe("The ID or name of the repository where the pull request exists. When using a repository name instead of a GUID, the project parameter must also be provided."),
+      pullRequestId: z.coerce.number().min(1).describe("The ID of the pull request to update."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a repository name instead of a GUID."),
+      title: z.string().optional().describe("The new title for the pull request."),
+      description: z.string().max(4000).optional().describe("The new description for the pull request. Must not be longer than 4000 characters."),
+      isDraft: z.boolean().optional().describe("Whether the pull request should be a draft."),
+      targetRefName: z.string().optional().describe("The new target branch name (e.g., 'refs/heads/main')."),
+      status: z.enum(["Active", "Abandoned"]).optional().describe("The new status of the pull request. Can be 'Active' or 'Abandoned'."),
+      autoComplete: z.boolean().optional().describe("Set the pull request to autocomplete when all requirements are met."),
+      mergeStrategy: z
+        .enum(getEnumKeys(GitPullRequestMergeStrategy) as [string, ...string[]])
+        .optional()
+        .describe("The merge strategy to use when the pull request autocompletes. Defaults to 'NoFastForward'."),
+      mergeCommitMessage: z.string().optional().describe("Commit message to use when the pull request is completed."),
+      deleteSourceBranch: z.boolean().optional().default(false).describe("Whether to delete the source branch when the pull request autocompletes. Defaults to false."),
+      transitionWorkItems: z.boolean().optional().default(true).describe("Whether to transition associated work items to the next state when the pull request autocompletes. Defaults to true."),
+      bypassReason: z.string().optional().describe("Reason for bypassing branch policies. When provided, branch policies will be automatically bypassed during autocompletion."),
+      labels: z.array(z.string()).optional().describe("Array of label names to replace existing labels on the pull request. This will remove all current labels and add the specified ones."),
+    },
+    async ({
+      repositoryId,
+      pullRequestId,
+      project,
+      title,
+      description,
+      isDraft,
+      targetRefName,
+      status,
+      autoComplete,
+      mergeStrategy,
+      mergeCommitMessage,
+      deleteSourceBranch,
+      transitionWorkItems,
+      bypassReason,
+      labels,
+    }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+
+        // Build update object with only provided fields
+        const updateRequest: Record<string, unknown> = {};
+
+        if (title !== undefined) updateRequest.title = title;
+        if (description !== undefined) updateRequest.description = description;
+        if (isDraft !== undefined) updateRequest.isDraft = isDraft;
+        if (targetRefName !== undefined) updateRequest.targetRefName = targetRefName;
+        if (status !== undefined) {
+          updateRequest.status = status === "Active" ? PullRequestStatus.Active.valueOf() : PullRequestStatus.Abandoned.valueOf();
+        }
+
+        if (autoComplete !== undefined) {
+          if (autoComplete) {
+            const data = await getCurrentUserDetails(tokenProvider, connectionProvider, userAgentProvider);
+            const autoCompleteUserId = data.authenticatedUser.id;
+            updateRequest.autoCompleteSetBy = { id: autoCompleteUserId };
+
+            const completionOptions: GitPullRequestCompletionOptions = {
+              deleteSourceBranch: deleteSourceBranch || false,
+              transitionWorkItems: transitionWorkItems !== false, // Default to true unless explicitly set to false
+              bypassPolicy: !!bypassReason, // Automatically set to true if bypassReason is provided
+            };
+
+            if (mergeStrategy) {
+              completionOptions.mergeStrategy = GitPullRequestMergeStrategy[mergeStrategy as keyof typeof GitPullRequestMergeStrategy];
+            }
+
+            if (mergeCommitMessage) {
+              completionOptions.mergeCommitMessage = mergeCommitMessage;
+            }
+
+            if (bypassReason) {
+              completionOptions.bypassReason = bypassReason;
+            }
+
+            updateRequest.completionOptions = completionOptions;
+          } else {
+            updateRequest.autoCompleteSetBy = null;
+            updateRequest.completionOptions = null;
+          }
+        }
+
+        // Validate that at least one field is provided for update
+        if (Object.keys(updateRequest).length === 0 && !labels) {
+          return {
+            content: [{ type: "text", text: "Error: At least one field (title, description, isDraft, targetRefName, status, autoComplete options, or labels) must be provided for update." }],
+            isError: true,
+          };
+        }
+
+        // Update labels if provided
+        if (labels) {
+          const currentLabels = await gitApi.getPullRequestLabels(repositoryId, pullRequestId, project);
+          for (const currentLabel of currentLabels) {
+            if (currentLabel.id) {
+              await gitApi.deletePullRequestLabels(repositoryId, pullRequestId, currentLabel.id, project);
+            }
+          }
+          for (const label of labels) {
+            await gitApi.createPullRequestLabel({ name: label }, repositoryId, pullRequestId, project);
+          }
+        }
+
+        let updatedPullRequest;
+        if (Object.keys(updateRequest).length > 0) {
+          updatedPullRequest = await gitApi.updatePullRequest(updateRequest, repositoryId, pullRequestId, project);
+        } else {
+          // If only labels were updated, get the current pull request
+          updatedPullRequest = await gitApi.getPullRequest(repositoryId, pullRequestId, project);
+        }
+
+        const trimmedUpdatedPullRequest = trimPullRequest(updatedPullRequest, true);
+
+        if (!trimmedUpdatedPullRequest) {
+          return {
+            content: [{ type: "text", text: "Pull request updated but API returned no data." }],
+          };
+        }
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(trimmedUpdatedPullRequest, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error updating pull request: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.update_pull_request_reviewers,
+    "Add or remove reviewers for an existing pull request.",
+    {
+      repositoryId: z.string().describe("The ID or name of the repository where the pull request exists. When using a repository name instead of a GUID, the project parameter must also be provided."),
+      pullRequestId: z.coerce.number().min(1).describe("The ID of the pull request to update."),
+      reviewerIds: z.array(z.string()).describe("List of reviewer ids to add or remove from the pull request."),
+      action: z.enum(["add", "remove"]).describe("Action to perform on the reviewers. Can be 'add' or 'remove'."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a repository name instead of a GUID."),
+    },
+    async ({ repositoryId, pullRequestId, reviewerIds, action, project }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+
+        let updatedPullRequest;
+        if (action === "add") {
+          updatedPullRequest = await gitApi.createPullRequestReviewers(
+            reviewerIds.map((id) => ({ id: id })),
+            repositoryId,
+            pullRequestId,
+            project
+          );
+
+          const trimmedResponse = updatedPullRequest.map((item) => ({
+            displayName: item.displayName,
+            id: item.id,
+            uniqueName: item.uniqueName,
+            vote: item.vote,
+            hasDeclined: item.hasDeclined,
+            isFlagged: item.isFlagged,
+          }));
+
+          return {
+            content: [{ type: "text", text: JSON.stringify(trimmedResponse, null, 2) }],
+          };
+        } else {
+          for (const reviewerId of reviewerIds) {
+            await gitApi.deletePullRequestReviewer(repositoryId, pullRequestId, reviewerId, project);
+          }
+
+          return {
+            content: [{ type: "text", text: `Reviewers with IDs ${reviewerIds.join(", ")} removed from pull request ${pullRequestId}.` }],
+          };
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error updating pull request reviewers: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.list_repos_by_project,
+    "Retrieve a list of repositories for a given project",
+    {
+      project: z.string().describe("The name or ID of the Azure DevOps project."),
+      top: z.coerce.number().default(100).describe("The maximum number of repositories to return."),
+      skip: z.coerce.number().default(0).describe("The number of repositories to skip. Defaults to 0."),
+      repoNameFilter: z.string().optional().describe("Optional filter to search for repositories by name. If provided, only repositories with names containing this string will be returned."),
+    },
+    async ({ project, top, skip, repoNameFilter }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+        const repositories = await gitApi.getRepositories(project, false, false, false);
+
+        const filteredRepositories = repoNameFilter ? filterReposByName(repositories, repoNameFilter) : repositories;
+
+        const paginatedRepositories = filteredRepositories?.sort((a, b) => a.name?.localeCompare(b.name ?? "") ?? 0).slice(skip, skip + top);
+
+        // Filter out the irrelevant properties
+        const trimmedRepositories = paginatedRepositories?.map((repo) => ({
+          id: repo.id,
+          name: repo.name,
+          isDisabled: repo.isDisabled,
+          isFork: repo.isFork,
+          isInMaintenance: repo.isInMaintenance,
+          webUrl: repo.webUrl,
+          size: repo.size,
+        }));
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(trimmedRepositories, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error listing repositories: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.list_pull_requests_by_repo_or_project,
+    "Retrieve a list of pull requests for a given repository. Either repositoryId or project must be provided.",
+    {
+      repositoryId: z
+        .string()
+        .optional()
+        .describe("The ID or name of the repository where the pull requests are located. When using a repository name instead of a GUID, the project parameter must also be provided."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a repository name instead of a GUID, or to scope the search to a specific project."),
+      top: z.coerce.number().default(100).describe("The maximum number of pull requests to return."),
+      skip: z.coerce.number().default(0).describe("The number of pull requests to skip."),
+      created_by_me: z.boolean().default(false).describe("Filter pull requests created by the current user."),
+      created_by_user: z.string().optional().describe("Filter pull requests created by a specific user (provide email or unique name). Takes precedence over created_by_me if both are provided."),
+      i_am_reviewer: z.boolean().default(false).describe("Filter pull requests where the current user is a reviewer."),
+      user_is_reviewer: z
+        .string()
+        .optional()
+        .describe("Filter pull requests where a specific user is a reviewer (provide email or unique name). Takes precedence over i_am_reviewer if both are provided."),
+      status: z
+        .enum(getEnumKeys(PullRequestStatus) as [string, ...string[]])
+        .default("Active")
+        .describe("Filter pull requests by status. Defaults to 'Active'."),
+      sourceRefName: z.string().optional().describe("Filter pull requests from this source branch (e.g., 'refs/heads/feature-branch')."),
+      targetRefName: z.string().optional().describe("Filter pull requests into this target branch (e.g., 'refs/heads/main')."),
+    },
+    async ({ repositoryId, project, top, skip, created_by_me, created_by_user, i_am_reviewer, user_is_reviewer, status, sourceRefName, targetRefName }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+
+        // Build the search criteria
+        const searchCriteria: {
+          status: number;
+          repositoryId?: string;
+          creatorId?: string;
+          reviewerId?: string;
+          sourceRefName?: string;
+          targetRefName?: string;
+        } = {
+          status: pullRequestStatusStringToInt(status),
+        };
+
+        if (!repositoryId && !project) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Either repositoryId or project must be provided.",
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        if (repositoryId) {
+          searchCriteria.repositoryId = repositoryId;
+        }
+
+        if (sourceRefName) {
+          searchCriteria.sourceRefName = sourceRefName;
+        }
+
+        if (targetRefName) {
+          searchCriteria.targetRefName = targetRefName;
+        }
+
+        if (created_by_user) {
+          try {
+            const userId = await getUserIdFromEmail(created_by_user, tokenProvider, connectionProvider, userAgentProvider);
+            searchCriteria.creatorId = userId;
+          } catch (error) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Error finding user with email ${created_by_user}: ${error instanceof Error ? error.message : String(error)}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+        } else if (created_by_me) {
+          const data = await getCurrentUserDetails(tokenProvider, connectionProvider, userAgentProvider);
+          const userId = data.authenticatedUser.id;
+          searchCriteria.creatorId = userId;
+        }
+
+        if (user_is_reviewer) {
+          try {
+            const reviewerUserId = await getUserIdFromEmail(user_is_reviewer, tokenProvider, connectionProvider, userAgentProvider);
+            searchCriteria.reviewerId = reviewerUserId;
+          } catch (error) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Error finding reviewer with email ${user_is_reviewer}: ${error instanceof Error ? error.message : String(error)}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+        } else if (i_am_reviewer) {
+          const data = await getCurrentUserDetails(tokenProvider, connectionProvider, userAgentProvider);
+          const userId = data.authenticatedUser.id;
+          searchCriteria.reviewerId = userId;
+        }
+
+        let pullRequests;
+        if (repositoryId) {
+          pullRequests = await gitApi.getPullRequests(
+            repositoryId,
+            searchCriteria,
+            project, // project
+            undefined, // maxCommentLength
+            skip,
+            top
+          );
+        } else if (project) {
+          // If only project is provided, use getPullRequestsByProject
+          pullRequests = await gitApi.getPullRequestsByProject(
+            project,
+            searchCriteria,
+            undefined, // maxCommentLength
+            skip,
+            top
+          );
+        } else {
+          // This case should not occur due to earlier validation, but added for completeness
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Either repositoryId or project must be provided.",
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const filteredPullRequests = pullRequests?.map((pr) => trimPullRequest(pr));
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(filteredPullRequests, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error listing pull requests: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.list_pull_request_threads,
+    "Retrieve a list of comment threads for a pull request.",
+    {
+      repositoryId: z
+        .string()
+        .describe("The ID or name of the repository where the pull request is located. When using a repository name instead of a GUID, the project parameter must also be provided."),
+      pullRequestId: z.coerce.number().min(1).describe("The ID of the pull request for which to retrieve threads."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a repository name instead of a GUID."),
+      iteration: z.coerce.number().min(1).optional().describe("The iteration ID for which to retrieve threads. Optional, defaults to the latest iteration."),
+      baseIteration: z.coerce.number().min(1).optional().describe("The base iteration ID for which to retrieve threads. Optional, defaults to the latest base iteration."),
+      top: z.coerce.number().default(100).describe("The maximum number of threads to return after filtering."),
+      skip: z.coerce.number().default(0).describe("The number of threads to skip after filtering."),
+      fullResponse: z.boolean().optional().default(false).describe("Return full thread JSON response instead of trimmed data."),
+      status: z
+        .enum(getEnumKeys(CommentThreadStatus) as [string, ...string[]])
+        .optional()
+        .describe("Filter threads by status. If not specified, returns threads of all statuses."),
+      authorEmail: z.string().optional().describe("Filter threads by the email of the thread author (first comment author)."),
+      authorDisplayName: z.string().optional().describe("Filter threads by the display name of the thread author (first comment author). Case-insensitive partial matching."),
+    },
+    async ({ repositoryId, pullRequestId, project, iteration, baseIteration, top, skip, fullResponse, status, authorEmail, authorDisplayName }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+
+        const threads = (await gitApi.getThreads(repositoryId, pullRequestId, project, iteration, baseIteration)) ?? [];
+
+        let filteredThreads = threads;
+
+        if (status !== undefined) {
+          const statusValue = CommentThreadStatus[status as keyof typeof CommentThreadStatus];
+          filteredThreads = filteredThreads.filter((thread) => thread.status === statusValue);
+        }
+
+        if (authorEmail !== undefined) {
+          filteredThreads = filteredThreads.filter((thread) => {
+            const firstComment = thread.comments?.[0];
+            return firstComment?.author?.uniqueName?.toLowerCase() === authorEmail.toLowerCase();
+          });
+        }
+
+        if (authorDisplayName !== undefined) {
+          const lowerAuthorName = authorDisplayName.toLowerCase();
+          filteredThreads = filteredThreads.filter((thread) => {
+            const firstComment = thread.comments?.[0];
+            return firstComment?.author?.displayName?.toLowerCase().includes(lowerAuthorName);
+          });
+        }
+
+        const paginatedThreads = filteredThreads.sort((a, b) => (a.id ?? 0) - (b.id ?? 0)).slice(skip, skip + top);
+
+        if (fullResponse) {
+          return {
+            content: [{ type: "text", text: JSON.stringify(paginatedThreads, null, 2) }],
+          };
+        }
+
+        // Return trimmed thread data focusing on essential information
+        const trimmedThreads = paginatedThreads.map((thread) => trimPullRequestThread(thread));
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(trimmedThreads, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error listing pull request threads: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.list_pull_request_thread_comments,
+    "Retrieve a list of comments in a pull request thread.",
+    {
+      repositoryId: z
+        .string()
+        .describe("The ID or name of the repository where the pull request is located. When using a repository name instead of a GUID, the project parameter must also be provided."),
+      pullRequestId: z.coerce.number().min(1).describe("The ID of the pull request for which to retrieve thread comments."),
+      threadId: z.coerce.number().min(1).describe("The ID of the thread for which to retrieve comments."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a repository name instead of a GUID."),
+      top: z.coerce.number().default(100).describe("The maximum number of comments to return."),
+      skip: z.coerce.number().default(0).describe("The number of comments to skip."),
+      fullResponse: z.boolean().optional().default(false).describe("Return full comment JSON response instead of trimmed data."),
+    },
+    async ({ repositoryId, pullRequestId, threadId, project, top, skip, fullResponse }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+
+        // Get thread comments - GitApi uses getComments for retrieving comments from a specific thread
+        const comments = await gitApi.getComments(repositoryId, pullRequestId, threadId, project);
+
+        const paginatedComments = comments?.sort((a, b) => (a.id ?? 0) - (b.id ?? 0)).slice(skip, skip + top);
+
+        if (fullResponse) {
+          return {
+            content: [{ type: "text", text: JSON.stringify(paginatedComments, null, 2) }],
+          };
+        }
+
+        // Return trimmed comment data focusing on essential information
+        const trimmedComments = trimComments(paginatedComments);
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(trimmedComments, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error listing pull request thread comments: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.list_branches_by_repo,
+    "Retrieve a list of branch names for a given repository. Returns an array of branch name strings, not full branch objects. Use repo_get_branch_by_name to get full details for a specific branch.",
+    {
+      repositoryId: z
+        .string()
+        .describe("The ID or name of the repository where the branches are located. When using a repository name instead of a GUID, the project parameter must also be provided."),
+      top: z.coerce.number().default(100).describe("The maximum number of branches to return. Defaults to 100."),
+      filterContains: z.string().optional().describe("Filter to find branches that contain this string in their name."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a repository name instead of a GUID."),
+    },
+    async ({ repositoryId, top, filterContains, project }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+        const branches = await gitApi.getRefs(repositoryId, project, "heads/", undefined, undefined, undefined, undefined, undefined, filterContains);
+
+        const filteredBranches = branchesFilterOutIrrelevantProperties(branches, top);
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(filteredBranches, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error listing branches: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.list_my_branches_by_repo,
+    "Retrieve a list of my branch names for a given repository Id. Returns an array of branch name strings, not full branch objects. Use repo_get_branch_by_name to get full details for a specific branch.",
+    {
+      repositoryId: z
+        .string()
+        .describe("The ID or name of the repository where the branches are located. When using a repository name instead of a GUID, the project parameter must also be provided."),
+      top: z.coerce.number().default(100).describe("The maximum number of branches to return."),
+      filterContains: z.string().optional().describe("Filter to find branches that contain this string in their name."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a repository name instead of a GUID."),
+    },
+    async ({ repositoryId, top, filterContains, project }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+        const branches = await gitApi.getRefs(repositoryId, project, "heads/", undefined, undefined, true, undefined, undefined, filterContains);
+
+        const filteredBranches = branchesFilterOutIrrelevantProperties(branches, top);
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(filteredBranches, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error listing my branches: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.get_repo_by_name_or_id,
+    "Get the repository by project and repository name or ID.",
+    {
+      project: z.string().describe("Project name or ID where the repository is located."),
+      repositoryNameOrId: z.string().describe("Repository name or ID."),
+    },
+    async ({ project, repositoryNameOrId }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+        const repositories = await gitApi.getRepositories(project);
+
+        const repository = repositories?.find((repo) => repo.name === repositoryNameOrId || repo.id === repositoryNameOrId);
+
+        if (!repository) {
+          return {
+            content: [{ type: "text", text: `Repository ${repositoryNameOrId} not found in project ${project}` }],
+            isError: true,
+          };
+        }
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(repository, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error getting repository: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.get_branch_by_name,
+    "Get a branch by its name. Returns isError: true if the branch is not found.",
+    {
+      repositoryId: z.string().describe("The ID or name of the repository where the branch is located. When using a repository name instead of a GUID, the project parameter must also be provided."),
+      branchName: z.string().describe("The name of the branch to retrieve, e.g., 'main' or 'feature-branch'."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a repository name instead of a GUID."),
+    },
+    async ({ repositoryId, branchName, project }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+        const branches = await gitApi.getRefs(repositoryId, project, "heads/", false, false, undefined, false, undefined, branchName);
+        const branch = branches.find((branch) => branch.name === `refs/heads/${branchName}` || branch.name === branchName);
+        if (!branch) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Branch ${branchName} not found in repository ${repositoryId}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        return {
+          content: [{ type: "text", text: JSON.stringify(branch, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error getting branch: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.get_pull_request_by_id,
+    "Get a pull request by its ID.",
+    {
+      repositoryId: z
+        .string()
+        .describe("The ID or name of the repository where the pull request is located. When using a repository name instead of a GUID, the project parameter must also be provided."),
+      pullRequestId: z.coerce.number().min(1).describe("The ID of the pull request to retrieve."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a repository name instead of a GUID."),
+      includeWorkItemRefs: z.boolean().optional().default(false).describe("Whether to reference work items associated with the pull request."),
+      includeLabels: z.boolean().optional().default(false).describe("Whether to include a summary of labels in the response."),
+      includeChangedFiles: z.boolean().optional().default(false).describe("Whether to include the list of files changed in the pull request."),
+    },
+    async ({ repositoryId, pullRequestId, project, includeWorkItemRefs, includeLabels, includeChangedFiles }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+        const pullRequest = await gitApi.getPullRequest(repositoryId, pullRequestId, project, undefined, undefined, undefined, undefined, includeWorkItemRefs);
+
+        let enhancedResponse: Record<string, unknown> = { ...pullRequest };
+
+        if (includeLabels) {
+          try {
+            const projectId = pullRequest.repository?.project?.id;
+            const projectName = pullRequest.repository?.project?.name;
+            const labels = await gitApi.getPullRequestLabels(repositoryId, pullRequestId, projectName, projectId);
+
+            const labelNames = labels.map((label) => label.name).filter((name) => name !== undefined);
+
+            enhancedResponse = {
+              ...enhancedResponse,
+              labelSummary: {
+                labels: labelNames,
+                labelCount: labelNames.length,
+              },
+            };
+          } catch (error) {
+            console.warn(`Error fetching PR labels: ${error instanceof Error ? error.message : "Unknown error"}`);
+            enhancedResponse = {
+              ...enhancedResponse,
+              labelSummary: {},
+            };
+          }
+        }
+
+        if (includeChangedFiles) {
+          try {
+            const iterations = await gitApi.getPullRequestIterations(repositoryId, pullRequestId, project);
+
+            if (iterations?.length) {
+              const latestIteration = iterations[iterations.length - 1];
+
+              if (latestIteration.id != null) {
+                const changes = await gitApi.getPullRequestIterationChanges(repositoryId, pullRequestId, latestIteration.id, project);
+
+                enhancedResponse = {
+                  ...enhancedResponse,
+                  changedFilesSummary: {
+                    changeEntries: changes?.changeEntries ?? [],
+                    fileCount: changes?.changeEntries?.length ?? 0,
+                    nextSkip: changes?.nextSkip,
+                    nextTop: changes?.nextTop,
+                  },
+                };
+              } else {
+                enhancedResponse = {
+                  ...enhancedResponse,
+                  changedFilesSummary: { changeEntries: [], fileCount: 0 },
+                };
+              }
+            } else {
+              enhancedResponse = {
+                ...enhancedResponse,
+                changedFilesSummary: { changeEntries: [], fileCount: 0 },
+              };
+            }
+          } catch (error) {
+            console.warn(`Error fetching PR changed files: ${error instanceof Error ? error.message : "Unknown error"}`);
+            enhancedResponse = {
+              ...enhancedResponse,
+              changedFilesSummary: {},
+            };
+          }
+        }
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(enhancedResponse, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error getting pull request: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.get_pull_request_changes,
+    "Get the file changes (diff) for a pull request iteration with actual code diff content. Returns the code changes including line-by-line diffs made in the pull request.",
+    {
+      repositoryId: z.string().describe("The ID of the repository where the pull request is located."),
+      pullRequestId: z.number().describe("The ID of the pull request to retrieve changes for."),
+      iterationId: z.number().optional().describe("The iteration ID to get changes for. If not specified, gets changes for the latest iteration."),
+      project: z.string().optional().describe("Project ID or project name (optional)"),
+      top: z.number().optional().describe("Maximum number of files to include diffs for. Default is 100."),
+      skip: z.number().optional().describe("Number of changes to skip for pagination."),
+      compareTo: z.number().optional().describe("Iteration ID to compare against. If specified, returns changes between two iterations."),
+      includeDiffs: z.boolean().optional().describe("Whether to include actual line-by-line diff content. Default is true. Set to false to get only file metadata."),
+      includeLineContent: z
+        .boolean()
+        .optional()
+        .describe(
+          "Whether to include the actual line content from the changed files. Default is true. When true, fetches file content and includes the actual code lines that were added/removed/modified."
+        ),
+    },
+    async ({ repositoryId, pullRequestId, iterationId, project, top, skip, compareTo, includeDiffs = true, includeLineContent = true }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+
+        // If repositoryId is a name (not a GUID), we need a project to resolve it.
+        // GUID pattern: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+        const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(repositoryId);
+        if (!isGuid && !project) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Error: When using a repository name instead of a GUID for repositoryId, the 'project' parameter is required. Please either provide the project name/ID, or use repo_get_repo_by_name_or_id to resolve the repository GUID first.",
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // If no iteration ID provided, get the latest iteration
+        let targetIterationId = iterationId;
+        let targetIteration;
+        if (targetIterationId == null) {
+          const iterations = await gitApi.getPullRequestIterations(repositoryId, pullRequestId, project);
+          if (!iterations || iterations.length === 0) {
+            return {
+              content: [{ type: "text", text: "No iterations found for this pull request." }],
+              isError: true,
+            };
+          }
+          // Get the latest iteration
+          targetIteration = iterations[iterations.length - 1];
+          targetIterationId = targetIteration.id;
+        } else {
+          // Get the specific iteration
+          targetIteration = await gitApi.getPullRequestIteration(repositoryId, pullRequestId, targetIterationId, project);
+        }
+
+        // Get the file change metadata
+        const changes = await gitApi.getPullRequestIterationChanges(repositoryId, pullRequestId, targetIterationId ?? 1, project, top, skip, compareTo);
+
+        // If includeDiffs is false, just return the metadata
+        if (!includeDiffs) {
+          return {
+            content: [{ type: "text", text: JSON.stringify(changes, null, 2) }],
+          };
+        }
+
+        // Get actual diff content using getFileDiffs
+        if (changes.changeEntries && changes.changeEntries.length > 0 && targetIteration) {
+          // Determine base and target commits
+          const baseCommitId = compareTo
+            ? (await gitApi.getPullRequestIteration(repositoryId, pullRequestId, compareTo, project)).sourceRefCommit?.commitId
+            : targetIteration.commonRefCommit?.commitId;
+          const targetCommitId = targetIteration.sourceRefCommit?.commitId;
+
+          if (baseCommitId && targetCommitId) {
+            // Build FileDiffsCriteria with paths from changeEntries
+            // Exclude added and deleted files as they don't have both versions to diff
+            // changeType is a flags enum so use bitwise AND to check
+            const fileDiffParams = changes.changeEntries
+              .filter((entry) => {
+                const ct = entry.changeType ?? 0;
+                return entry.item?.path && !(ct & VersionControlChangeType.Add) && !(ct & VersionControlChangeType.Delete);
+              })
+              .map((entry) => {
+                // Remove leading slash if present - Azure DevOps API expects relative paths
+                const itemPath = entry.item?.path ?? "";
+                const path = itemPath.startsWith("/") ? itemPath.substring(1) : itemPath;
+                // For renamed/moved files, use the original path from the change entry
+                const origPath = entry.originalPath ? (entry.originalPath.startsWith("/") ? entry.originalPath.substring(1) : entry.originalPath) : path;
+                return {
+                  path: path,
+                  originalPath: origPath,
+                };
+              });
+
+            try {
+              // Fetch diffs for modified files. Add/Delete files are excluded from getFileDiffs
+              // because they don't have two versions to compare; their content is fetched
+              // separately below via getItemText when includeLineContent is true.
+              let fileDiffs: any[] = [];
+              if (fileDiffParams.length > 0) {
+                // Azure DevOps getFileDiffs API accepts max 10 files per request
+                const FILE_DIFF_BATCH_SIZE = 10;
+                for (let i = 0; i < fileDiffParams.length; i += FILE_DIFF_BATCH_SIZE) {
+                  const batch = fileDiffParams.slice(i, i + FILE_DIFF_BATCH_SIZE);
+                  const batchDiffs = await gitApi.getFileDiffs(
+                    {
+                      baseVersionCommit: baseCommitId,
+                      targetVersionCommit: targetCommitId,
+                      fileDiffParams: batch,
+                    },
+                    project || "",
+                    repositoryId
+                  );
+                  fileDiffs = fileDiffs.concat(batchDiffs);
+                }
+              }
+
+              // Merge diff content with change metadata.
+              // Added/deleted entries get diff: null here and are enriched below.
+              const enrichedChanges = {
+                ...changes,
+                changeEntries: changes.changeEntries.map((entry) => {
+                  // Normalize path for comparison (remove leading slash)
+                  const entryPath = entry.item?.path?.startsWith("/") ? entry.item.path.substring(1) : entry.item?.path;
+                  const matchingDiff = fileDiffs.find((diff) => diff.path === entryPath);
+                  return {
+                    ...entry,
+                    diff: matchingDiff || null,
+                  };
+                }),
+              };
+
+              // If includeLineContent is true, fetch actual file content with concurrency limit
+              if (includeLineContent && enrichedChanges.changeEntries) {
+                const CONCURRENCY_LIMIT = 10;
+                const entriesWithContent = [...enrichedChanges.changeEntries];
+                for (let i = 0; i < entriesWithContent.length; i += CONCURRENCY_LIMIT) {
+                  const batch = entriesWithContent.slice(i, i + CONCURRENCY_LIMIT);
+                  const batchResults = await Promise.all(
+                    batch.map(async (entry) => {
+                      const ct = entry.changeType ?? 0;
+                      const isAdd = !!(ct & VersionControlChangeType.Add);
+                      const isDelete = !!(ct & VersionControlChangeType.Delete);
+
+                      const entryPath = entry.item?.path ? (entry.item.path.startsWith("/") ? entry.item.path.substring(1) : entry.item.path) : undefined;
+                      // For deleted files ADO sets item.path to null and puts the path in originalPath only.
+                      // Normalise originalPath once and use it as the fallback throughout.
+                      const normalizedOriginalPath = entry.originalPath ? (entry.originalPath.startsWith("/") ? entry.originalPath.substring(1) : entry.originalPath) : undefined;
+                      // effectivePath is what we use as the "current" path for API calls / early-exit guard.
+                      // For additions/modifications it's item.path; for deletions it's originalPath.
+                      const effectivePath = entryPath ?? normalizedOriginalPath;
+
+                      if (!effectivePath) {
+                        return entry;
+                      }
+
+                      // Handle added files: fetch full content at target commit and create synthetic diff
+                      if (isAdd && !entry.diff) {
+                        try {
+                          const targetStream = await gitApi
+                            .getItemText(repositoryId, effectivePath, project, undefined, undefined, undefined, undefined, undefined, { version: targetCommitId, versionType: GitVersionType.Commit })
+                            .catch(() => null);
+                          if (targetStream) {
+                            const targetText = await streamToString(targetStream);
+                            const targetLines = targetText.split(/\r?\n/);
+                            return {
+                              ...entry,
+                              diff: {
+                                path: effectivePath,
+                                originalPath: null,
+                                lineDiffBlocks: [
+                                  {
+                                    changeType: 1, // Add
+                                    originalLineNumberStart: 0,
+                                    originalLinesCount: 0,
+                                    modifiedLineNumberStart: 1,
+                                    modifiedLinesCount: targetLines.length,
+                                    modifiedLines: targetLines,
+                                  },
+                                ],
+                              },
+                            };
+                          }
+                        } catch (addError) {
+                          return {
+                            ...entry,
+                            _contentFetchError: `Failed to fetch added file content: ${addError instanceof Error ? addError.message : "Unknown error"}`,
+                          };
+                        }
+                        return entry;
+                      }
+
+                      // Handle deleted files: fetch full content at base commit and create synthetic diff.
+                      // basePath prefers originalPath (the pre-deletion path); falls back to effectivePath.
+                      if (isDelete && !entry.diff) {
+                        try {
+                          const basePath = normalizedOriginalPath ?? effectivePath;
+                          const baseStream = await gitApi
+                            .getItemText(repositoryId, basePath, project, undefined, undefined, undefined, undefined, undefined, { version: baseCommitId, versionType: GitVersionType.Commit })
+                            .catch(() => null);
+                          if (baseStream) {
+                            const baseText = await streamToString(baseStream);
+                            const baseLines = baseText.split(/\r?\n/);
+                            return {
+                              ...entry,
+                              diff: {
+                                path: null,
+                                originalPath: basePath,
+                                lineDiffBlocks: [
+                                  {
+                                    changeType: 2, // Delete
+                                    originalLineNumberStart: 1,
+                                    originalLinesCount: baseLines.length,
+                                    modifiedLineNumberStart: 0,
+                                    modifiedLinesCount: 0,
+                                    originalLines: baseLines,
+                                  },
+                                ],
+                              },
+                            };
+                          }
+                        } catch (delError) {
+                          return {
+                            ...entry,
+                            _contentFetchError: `Failed to fetch deleted file content: ${delError instanceof Error ? delError.message : "Unknown error"}`,
+                          };
+                        }
+                        return entry;
+                      }
+
+                      // For modified/renamed files, skip if no diff blocks
+                      if (!entry.diff?.lineDiffBlocks || entry.diff.lineDiffBlocks.length === 0) {
+                        return entry;
+                      }
+
+                      // For renamed/moved files, the base version is at the original path
+                      const basePath = normalizedOriginalPath ?? effectivePath;
+
+                      try {
+                        // Fetch file content at both commits
+                        const [baseContent, targetContent] = await Promise.all([
+                          // Base version (original) - use basePath for renamed files
+                          gitApi
+                            .getItemText(repositoryId, basePath, project, undefined, undefined, undefined, undefined, undefined, { version: baseCommitId, versionType: GitVersionType.Commit })
+                            .catch(() => null),
+                          // Target version (modified)
+                          gitApi
+                            .getItemText(repositoryId, effectivePath, project, undefined, undefined, undefined, undefined, undefined, { version: targetCommitId, versionType: GitVersionType.Commit })
+                            .catch(() => null),
+                        ]);
+
+                        // Convert streams to text
+                        const baseText = baseContent ? await streamToString(baseContent) : "";
+                        const targetText = targetContent ? await streamToString(targetContent) : "";
+
+                        // Check if response is an Azure DevOps error (returned as JSON in the stream)
+                        const checkForApiError = (text: string, label: string) => {
+                          if (text.startsWith("{")) {
+                            try {
+                              const parsed = JSON.parse(text);
+                              if (parsed.$id && parsed.innerException !== undefined) {
+                                throw new Error(`Failed to fetch ${label} file content: ${parsed.message || text}`);
+                              }
+                            } catch (e) {
+                              if (e instanceof Error && e.message.startsWith("Failed to fetch")) throw e;
+                              // Not valid JSON or not an error response — treat as legitimate content
+                            }
+                          }
+                        };
+                        checkForApiError(baseText, "base");
+                        checkForApiError(targetText, "target");
+
+                        // Split into lines
+                        const baseLines = baseText.split(/\r?\n/);
+                        const targetLines = targetText.split(/\r?\n/);
+
+                        // Enrich each lineDiffBlock with actual line content
+                        const enrichedDiff = {
+                          ...entry.diff,
+                          lineDiffBlocks: entry.diff.lineDiffBlocks?.map((block: any) => {
+                            const enrichedBlock: any = { ...block };
+
+                            // Add original (base) lines if they exist
+                            if (block.originalLineNumberStart && block.originalLinesCount) {
+                              const startIdx = block.originalLineNumberStart - 1;
+                              const endIdx = startIdx + block.originalLinesCount;
+                              enrichedBlock.originalLines = baseLines.slice(startIdx, endIdx);
+                            }
+
+                            // Add modified (target) lines if they exist
+                            if (block.modifiedLineNumberStart && block.modifiedLinesCount) {
+                              const startIdx = block.modifiedLineNumberStart - 1;
+                              const endIdx = startIdx + block.modifiedLinesCount;
+                              enrichedBlock.modifiedLines = targetLines.slice(startIdx, endIdx);
+                            }
+
+                            return enrichedBlock;
+                          }),
+                        };
+
+                        return {
+                          ...entry,
+                          diff: enrichedDiff,
+                        };
+                      } catch (contentError) {
+                        // If content fetch fails, return entry with error
+                        return {
+                          ...entry,
+                          _contentFetchError: `Failed to fetch line content: ${contentError instanceof Error ? contentError.message : "Unknown error"}`,
+                        };
+                      }
+                    })
+                  );
+                  // Write batch results back into the array
+                  for (let j = 0; j < batchResults.length; j++) {
+                    entriesWithContent[i + j] = batchResults[j];
+                  }
+                }
+
+                enrichedChanges.changeEntries = entriesWithContent;
+              }
+
+              return {
+                content: [{ type: "text", text: JSON.stringify(enrichedChanges, null, 2) }],
+              };
+            } catch (diffError) {
+              // If diff fetching fails, return metadata with error info
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: JSON.stringify(
+                      {
+                        ...changes,
+                        _diffError: `Failed to fetch diff content: ${diffError instanceof Error ? diffError.message : "Unknown error"}`,
+                        _note: "Returned metadata only",
+                      },
+                      null,
+                      2
+                    ),
+                  },
+                ],
+              };
+            }
+          }
+        }
+
+        // Fallback: return metadata if we couldn't get diffs
+        return {
+          content: [{ type: "text", text: JSON.stringify(changes, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error getting pull request changes: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.reply_to_comment,
+    "Replies to a specific comment on a pull request.",
+    {
+      repositoryId: z
+        .string()
+        .describe("The ID or name of the repository where the pull request is located. When using a repository name instead of a GUID, the project parameter must also be provided."),
+      pullRequestId: z.coerce.number().min(1).describe("The ID of the pull request where the comment thread exists."),
+      threadId: z.coerce.number().min(1).describe("The ID of the thread to which the comment will be added."),
+      content: z.string().describe("The content of the comment to be added."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a repository name instead of a GUID."),
+      fullResponse: z.boolean().optional().default(false).describe("Return full comment JSON response instead of a simple confirmation message."),
+    },
+    async ({ repositoryId, pullRequestId, threadId, content, project, fullResponse }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+        const comment = await gitApi.createComment({ content }, repositoryId, pullRequestId, threadId, project);
+
+        // Check if the comment was successfully created
+        if (!comment) {
+          return {
+            content: [{ type: "text", text: `Error: Failed to add comment to thread ${threadId}. The comment was not created successfully.` }],
+            isError: true,
+          };
+        }
+
+        if (fullResponse) {
+          return {
+            content: [{ type: "text", text: JSON.stringify(comment, null, 2) }],
+          };
+        }
+
+        return {
+          content: [{ type: "text", text: `Comment successfully added to thread ${threadId}.` }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error replying to comment: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.create_pull_request_thread,
+    "Creates a new comment thread on a pull request.",
+    {
+      repositoryId: z
+        .string()
+        .describe("The ID or name of the repository where the pull request is located. When using a repository name instead of a GUID, the project parameter must also be provided."),
+      pullRequestId: z.coerce.number().min(1).describe("The ID of the pull request where the comment thread exists."),
+      content: z.string().describe("The content of the comment to be added."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a repository name instead of a GUID."),
+      filePath: z.string().optional().describe("The path of the file where the comment thread will be created. (optional)"),
+      status: z
+        .enum(getEnumKeys(CommentThreadStatus) as [string, ...string[]])
+        .optional()
+        .default(CommentThreadStatus[CommentThreadStatus.Active])
+        .describe("The status of the comment thread. Defaults to 'Active'."),
+      rightFileStartLine: z.coerce
+        .number()
+        .min(1)
+        .optional()
+        .describe("Position of first character of the thread's span in right file. The line number of a thread's position. Starts at 1. (optional)"),
+      rightFileStartOffset: z
+        .number()
+        .optional()
+        .describe(
+          "Start character offset of the thread's span within the line in the right file. The character offset of a thread's position inside of a line. Starts at 1. Must be set if rightFileStartLine is also specified. (optional)"
+        ),
+      rightFileEndLine: z
+        .number()
+        .optional()
+        .describe(
+          "Position of last character of the thread's span in right file. The line number of a thread's position. Starts at 1. Must be set if rightFileStartLine is also specified. (optional)"
+        ),
+      rightFileEndOffset: z
+        .number()
+        .optional()
+        .describe(
+          "Exclusive end character offset of the thread's span within the line in the right file. This value is exclusive: to cover the entire line, set it to (length of the original line text) + 1. When posting a suggestion, always calculate this from the existing file content being replaced, not from the suggestion or replacement text. Must be set if rightFileEndLine is also specified. (optional)"
+        ),
+    },
+    async ({ repositoryId, pullRequestId, content, project, filePath, status, rightFileStartLine, rightFileStartOffset, rightFileEndLine, rightFileEndOffset }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+
+        const normalizedFilePath = filePath && !filePath.startsWith("/") ? `/${filePath}` : filePath;
+        const threadContext: CommentThreadContext = { filePath: normalizedFilePath };
+
+        if (rightFileStartLine !== undefined) {
+          if (rightFileStartLine < 1) {
+            return {
+              content: [{ type: "text", text: "rightFileStartLine must be greater than or equal to 1." }],
+              isError: true,
+            };
+          }
+
+          threadContext.rightFileStart = { line: rightFileStartLine };
+
+          if (rightFileStartOffset !== undefined) {
+            if (rightFileStartOffset < 1) {
+              return {
+                content: [{ type: "text", text: "rightFileStartOffset must be greater than or equal to 1." }],
+                isError: true,
+              };
+            }
+
+            threadContext.rightFileStart.offset = rightFileStartOffset;
+          }
+        }
+
+        if (rightFileEndLine !== undefined) {
+          if (rightFileStartLine === undefined) {
+            return {
+              content: [{ type: "text", text: "rightFileEndLine must only be specified if rightFileStartLine is also specified." }],
+              isError: true,
+            };
+          }
+
+          if (rightFileEndLine < 1) {
+            return {
+              content: [{ type: "text", text: "rightFileEndLine must be greater than or equal to 1." }],
+              isError: true,
+            };
+          }
+
+          if (rightFileEndOffset === undefined) {
+            return {
+              content: [{ type: "text", text: "rightFileEndOffset must be specified if rightFileEndLine is specified." }],
+              isError: true,
+            };
+          }
+
+          threadContext.rightFileEnd = { line: rightFileEndLine };
+
+          if (rightFileEndOffset !== undefined) {
+            if (rightFileEndOffset < 1) {
+              return {
+                content: [{ type: "text", text: "rightFileEndOffset must be greater than or equal to 1." }],
+                isError: true,
+              };
+            }
+
+            threadContext.rightFileEnd.offset = rightFileEndOffset;
+          }
+        }
+
+        if (rightFileEndOffset !== undefined && rightFileEndLine === undefined) {
+          return {
+            content: [{ type: "text", text: "rightFileEndLine must be specified if rightFileEndOffset is specified." }],
+            isError: true,
+          };
+        }
+
+        if (rightFileStartLine !== undefined && rightFileStartOffset !== undefined) {
+          if (rightFileEndLine === undefined || rightFileEndOffset === undefined) {
+            return {
+              content: [{ type: "text", text: "rightFileEndLine and rightFileEndOffset must both be specified when rightFileStartLine and rightFileStartOffset are both specified." }],
+              isError: true,
+            };
+          }
+        }
+
+        if (rightFileStartLine !== undefined && rightFileEndLine !== undefined && rightFileStartLine === rightFileEndLine) {
+          if (rightFileEndOffset !== undefined && rightFileStartOffset !== undefined && rightFileEndOffset < rightFileStartOffset) {
+            return {
+              content: [{ type: "text", text: "rightFileEndOffset must be greater than or equal to rightFileStartOffset when both are on the same line." }],
+              isError: true,
+            };
+          }
+        }
+
+        const thread = await gitApi.createThread(
+          { comments: [{ content: content }], threadContext: threadContext, status: CommentThreadStatus[status as keyof typeof CommentThreadStatus] },
+          repositoryId,
+          pullRequestId,
+          project
+        );
+
+        const trimmedThread = trimPullRequestThread(thread);
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(trimmedThread, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error creating pull request thread: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.update_pull_request_thread,
+    "Updates an existing comment thread on a pull request.",
+    {
+      repositoryId: z
+        .string()
+        .describe("The ID or name of the repository where the pull request is located. When using a repository name instead of a GUID, the project parameter must also be provided."),
+      pullRequestId: z.coerce.number().min(1).describe("The ID of the pull request where the comment thread exists."),
+      threadId: z.coerce.number().min(1).describe("The ID of the thread to update."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a repository name instead of a GUID."),
+      status: z
+        .enum(getEnumKeys(CommentThreadStatus) as [string, ...string[]])
+        .optional()
+        .describe("The new status for the comment thread."),
+    },
+    async ({ repositoryId, pullRequestId, threadId, project, status }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+        const updateRequest: Record<string, unknown> = {};
+
+        if (status !== undefined) {
+          updateRequest.status = CommentThreadStatus[status as keyof typeof CommentThreadStatus];
+        }
+
+        if (Object.keys(updateRequest).length === 0) {
+          return {
+            content: [{ type: "text", text: "Error: At least one field (status) must be provided for update." }],
+            isError: true,
+          };
+        }
+
+        const thread = await gitApi.updateThread(updateRequest, repositoryId, pullRequestId, threadId, project);
+
+        if (!thread) {
+          return {
+            content: [{ type: "text", text: `Error: Failed to update thread ${threadId}. The thread was not updated successfully.` }],
+            isError: true,
+          };
+        }
+
+        const trimmedThread = trimPullRequestThread(thread);
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(trimmedThread, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error updating pull request thread: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  const gitVersionTypeStrings = Object.values(GitVersionType).filter((value): value is string => typeof value === "string");
+
+  server.tool(
+    REPO_TOOLS.search_commits,
+    "Search for commits in a repository with comprehensive filtering capabilities. Supports searching by description/comment text, time range, author, committer, specific commit IDs, and more. This is the unified tool for all commit search operations.",
+    {
+      project: z.string().describe("Project name or ID"),
+      repository: z.string().describe("Repository name or ID"),
+      // Existing parameters
+      fromCommit: z.string().optional().describe("Starting commit ID"),
+      toCommit: z.string().optional().describe("Ending commit ID"),
+      version: z.string().optional().describe("The name of the branch, tag or commit to filter commits by"),
+      versionType: z
+        .enum(gitVersionTypeStrings as [string, ...string[]])
+        .optional()
+        .default(GitVersionType[GitVersionType.Branch])
+        .describe("The meaning of the version parameter, e.g., branch, tag or commit"),
+      skip: z.coerce.number().optional().default(0).describe("Number of commits to skip"),
+      top: z.coerce.number().optional().default(10).describe("Maximum number of commits to return"),
+      includeLinks: z.boolean().optional().default(false).describe("Include commit links"),
+      includeWorkItems: z.boolean().optional().default(false).describe("Include associated work items"),
+      // Enhanced search parameters
+      searchText: z.string().optional().describe("Search text to filter commits by description/comment. Supports partial matching."),
+      author: z.string().optional().describe("Filter commits by author email or display name"),
+      authorEmail: z.string().optional().describe("Filter commits by exact author email address"),
+      committer: z.string().optional().describe("Filter commits by committer email or display name"),
+      committerEmail: z.string().optional().describe("Filter commits by exact committer email address"),
+      fromDate: z.string().optional().describe("Filter commits from this date (ISO 8601 format, e.g., '2024-01-01T00:00:00Z')"),
+      toDate: z.string().optional().describe("Filter commits to this date (ISO 8601 format, e.g., '2024-12-31T23:59:59Z')"),
+      commitIds: z.array(z.string()).optional().describe("Array of specific commit IDs to retrieve. When provided, other filters are ignored except top/skip."),
+      historySimplificationMode: z.enum(["FirstParent", "SimplifyMerges", "FullHistory", "FullHistorySimplifyMerges"]).optional().describe("How to simplify the commit history"),
+    },
+    async ({
+      project,
+      repository,
+      fromCommit,
+      toCommit,
+      version,
+      versionType,
+      skip,
+      top,
+      includeLinks,
+      includeWorkItems,
+      searchText,
+      author,
+      authorEmail,
+      committer,
+      committerEmail,
+      fromDate,
+      toDate,
+      commitIds,
+      historySimplificationMode,
+    }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+
+        // If specific commit IDs are provided, use getCommits with commit ID filtering
+        if (commitIds && commitIds.length > 0) {
+          const commits = [];
+          const batchSize = Math.min(top || 10, commitIds.length);
+          const startIndex = skip || 0;
+          const endIndex = Math.min(startIndex + batchSize, commitIds.length);
+
+          // Process commits in the requested range
+          const requestedCommitIds = commitIds.slice(startIndex, endIndex);
+
+          // Use getCommits for each commit ID to maintain consistency
+          for (const commitId of requestedCommitIds) {
+            try {
+              const searchCriteria: GitQueryCommitsCriteria = {
+                includeLinks: includeLinks,
+                includeWorkItems: includeWorkItems,
+                fromCommitId: commitId,
+                toCommitId: commitId,
+              };
+
+              const commitResults = await gitApi.getCommits(repository, searchCriteria, project, 0, 1);
+
+              if (commitResults && commitResults.length > 0) {
+                commits.push(commitResults[0]);
+              }
+            } catch (error) {
+              // Log error but continue with other commits
+              console.warn(`Failed to retrieve commit ${commitId}: ${error instanceof Error ? error.message : String(error)}`);
+              // Add error information to result instead of failing completely
+              commits.push({
+                commitId: commitId,
+                error: `Failed to retrieve: ${error instanceof Error ? error.message : String(error)}`,
+              });
+            }
+          }
+
+          return {
+            content: [{ type: "text", text: JSON.stringify(commits, null, 2) }],
+          };
+        }
+
+        const searchCriteria: GitQueryCommitsCriteria = {
+          fromCommitId: fromCommit,
+          toCommitId: toCommit,
+          includeLinks: includeLinks,
+          includeWorkItems: includeWorkItems,
+        };
+
+        // Add author filter
+        if (author) {
+          searchCriteria.author = author;
+        }
+
+        // Add date range filters (ADO API expects ISO string format)
+        if (fromDate) {
+          searchCriteria.fromDate = fromDate;
+        }
+        if (toDate) {
+          searchCriteria.toDate = toDate;
+        }
+
+        // Add history simplification if specified
+        if (historySimplificationMode) {
+          // Note: This parameter might not be directly supported by all ADO API versions
+          // but we'll include it in the criteria for forward compatibility
+          const extendedCriteria = searchCriteria as GitQueryCommitsCriteria & { historySimplificationMode?: string };
+          extendedCriteria.historySimplificationMode = historySimplificationMode;
+        }
+
+        if (version) {
+          const itemVersion: GitVersionDescriptor = {
+            version: version,
+            versionType: GitVersionType[versionType as keyof typeof GitVersionType],
+          };
+          searchCriteria.itemVersion = itemVersion;
+        }
+
+        const commits = await gitApi.getCommits(repository, searchCriteria, project, skip, top);
+
+        // Additional client-side filtering for enhanced search capabilities
+        let filteredCommits = commits;
+
+        // Filter by search text in commit message if not handled by API
+        if (searchText && filteredCommits) {
+          filteredCommits = filteredCommits.filter((commit) => commit.comment?.toLowerCase().includes(searchText.toLowerCase()));
+        }
+
+        // Filter by author email if specified
+        if (authorEmail && filteredCommits) {
+          filteredCommits = filteredCommits.filter((commit) => commit.author?.email?.toLowerCase() === authorEmail.toLowerCase());
+        }
+
+        // Filter by committer if specified
+        if (committer && filteredCommits) {
+          filteredCommits = filteredCommits.filter(
+            (commit) => commit.committer?.name?.toLowerCase().includes(committer.toLowerCase()) || commit.committer?.email?.toLowerCase().includes(committer.toLowerCase())
+          );
+        }
+
+        // Filter by committer email if specified
+        if (committerEmail && filteredCommits) {
+          filteredCommits = filteredCommits.filter((commit) => commit.committer?.email?.toLowerCase() === committerEmail.toLowerCase());
+        }
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(filteredCommits, null, 2) }],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error searching commits: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  const pullRequestQueryTypesStrings = Object.values(GitPullRequestQueryType).filter((value): value is string => typeof value === "string");
+
+  server.tool(
+    REPO_TOOLS.list_pull_requests_by_commits,
+    "Lists pull requests by commit IDs to find which pull requests contain specific commits",
+    {
+      project: z.string().describe("Project name or ID"),
+      repository: z.string().describe("Repository name or ID"),
+      commits: z.array(z.string()).describe("Array of commit IDs to query for"),
+      queryType: z
+        .enum(pullRequestQueryTypesStrings as [string, ...string[]])
+        .optional()
+        .default(GitPullRequestQueryType[GitPullRequestQueryType.LastMergeCommit])
+        .describe("Type of query to perform"),
+    },
+    async ({ project, repository, commits, queryType }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+
+        const query: GitPullRequestQuery = {
+          queries: [
+            {
+              items: commits,
+              type: GitPullRequestQueryType[queryType as keyof typeof GitPullRequestQueryType],
+            } as GitPullRequestQueryInput,
+          ],
+        };
+
+        const queryResult = await gitApi.getPullRequestQuery(query, repository, project);
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(queryResult, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error querying pull requests by commits: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.vote_pull_request,
+    "Cast a vote on a pull request. Automatically adds the current user as a reviewer if they are not already one.",
+    {
+      repositoryId: z.string().describe("The ID or name of the repository. When using a repository name instead of a GUID, the project parameter must also be provided."),
+      pullRequestId: z.coerce.number().min(1).describe("The ID of the pull request."),
+      vote: z.enum(["Approved", "ApprovedWithSuggestions", "NoVote", "WaitingForAuthor", "Rejected"]).describe("The vote to cast: Approved(10), Suggestions(5), None(0), Waiting(-5), Rejected(-10)."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a repository name instead of a GUID."),
+    },
+    async ({ repositoryId, pullRequestId, vote, project }) => {
+      const connection = await connectionProvider();
+      const gitApi = await connection.getGitApi();
+
+      const userDetails = await getCurrentUserDetails(tokenProvider, connectionProvider, userAgentProvider);
+      const userId = userDetails.authenticatedUser.id;
+
+      if (!userId) {
+        throw new Error("Could not determine authenticated user ID.");
+      }
+
+      const voteMap: Record<string, number> = {
+        Approved: 10,
+        ApprovedWithSuggestions: 5,
+        NoVote: 0,
+        WaitingForAuthor: -5,
+        Rejected: -10,
+      };
+
+      const existingReviewer = await gitApi.getPullRequestReviewer(repositoryId, pullRequestId, userId, project).catch((error) => {
+        if (!(error instanceof Error) || !/not found|reviewer does not exist/i.test(error.message)) {
+          throw error;
+        }
+
+        return undefined;
+      });
+
+      const reviewerPayload = {
+        vote: voteMap[vote],
+        id: userId,
+        ...(existingReviewer?.isRequired !== undefined ? { isRequired: existingReviewer.isRequired } : {}),
+      };
+
+      await gitApi.createPullRequestReviewer(reviewerPayload as any, repositoryId, pullRequestId, userId, project);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Successfully cast vote '${vote}' on PR #${pullRequestId}.`,
+          },
+        ],
+      };
+    }
+  );
+
+  server.tool(
+    REPO_TOOLS.list_directory,
+    "List files and folders in a directory within a repository. Useful for exploring the structure of a codebase or finding related files. Returns isError: true if the path is not found.",
+    {
+      repositoryId: z.string().describe("The ID or name of the repository."),
+      path: z.string().optional().default("/").describe("The directory path to list (e.g., '/src' or '/src/components'). Defaults to repository root."),
+      project: z.string().optional().describe("Project ID or name. Required if repositoryId is a name rather than a GUID."),
+      version: z.string().optional().describe("The version identifier - branch name (e.g., 'main'), tag name, or commit SHA. Defaults to the repository's default branch."),
+      versionType: z.enum(["Branch", "Commit", "Tag"]).optional().default("Branch").describe("The type of version identifier: 'Branch', 'Commit', or 'Tag'. Defaults to 'Branch'."),
+      recursive: z.boolean().optional().default(false).describe("Whether to list items recursively. Defaults to false."),
+      recursionDepth: z.coerce.number().min(1).optional().default(1).describe("Maximum depth for recursive listing (1-10). Only applies when recursive is true. Defaults to 1."),
+    },
+    async ({ repositoryId, path, project, version, versionType, recursive, recursionDepth }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+
+        const versionDescriptor = buildVersionDescriptor(version, versionType);
+        const clampedDepth = Math.min(Math.max(recursionDepth || 1, 1), 10);
+
+        let recursionType = VersionControlRecursionType.OneLevel;
+
+        if (recursive) {
+          recursionType = VersionControlRecursionType.Full;
+        }
+
+        const items = await gitApi.getItems(repositoryId, project, path, recursionType, true, false, false, false, versionDescriptor);
+
+        if (!items || items.length === 0) {
+          return {
+            content: [{ type: "text", text: `No items found at path: ${path}. The path may not exist in the repository.` }],
+            isError: true,
+          };
+        }
+
+        let filteredItems = items;
+
+        if (recursive && clampedDepth < 10) {
+          const basePath = path === "/" ? "" : path;
+          const baseDepth = basePath.split("/").filter((p) => p).length;
+
+          filteredItems = items.filter((item) => {
+            if (!item.path) return false;
+            const itemDepth = item.path.split("/").filter((p) => p).length;
+            return itemDepth <= baseDepth + clampedDepth;
+          });
+        }
+
+        const formattedItems = filteredItems.map((item) => ({
+          path: item.path,
+          isFolder: item.isFolder,
+          gitObjectType: item.gitObjectType,
+          commitId: item.commitId,
+          contentMetadata: item.contentMetadata
+            ? {
+                contentType: item.contentMetadata.contentType,
+                fileName: item.contentMetadata.fileName,
+              }
+            : undefined,
+        }));
+
+        const response = {
+          count: formattedItems.length,
+          path: path,
+          recursive: recursive,
+          recursionDepth: recursive ? clampedDepth : undefined,
+          items: formattedItems,
+        };
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(response, null, 2) }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [{ type: "text", text: `Error listing directory: ${errorMessage}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ── Get file content at a specific version (branch, tag, or commit) ──
+  const fileVersionTypeStrings = getEnumKeys(GitVersionType);
+
+  server.tool(
+    REPO_TOOLS.get_file_content,
+    "Get the content of a file from a Git repository at a specific version (branch, tag, or commit SHA). " +
+      "Useful for reading source files from PR branches, specific commits, or tags without having them checked out locally. " +
+      "Returns isError: true if the file is not found.",
+    {
+      repositoryId: z.string().describe("The ID (GUID) or name of the repository."),
+      path: z.string().describe("The full path to the file in the repository, e.g., '/src/main.ts' or 'src/main.ts'."),
+      project: z.string().optional().describe("Project ID or project name. Required when repositoryId is a name."),
+      version: z
+        .string()
+        .optional()
+        .describe("Version string: branch name (e.g. 'main'), tag name, or commit SHA. " + "Defaults to the repository's default branch if not specified."),
+      versionType: z
+        .enum(fileVersionTypeStrings as [string, ...string[]])
+        .optional()
+        .default("Commit")
+        .describe("How to interpret the 'version' parameter. Defaults to 'Commit'."),
+    },
+    async ({ repositoryId, path, project, version, versionType }) => {
+      try {
+        const connection = await connectionProvider();
+        const gitApi = await connection.getGitApi();
+
+        // Build the version descriptor if a version was specified
+        const versionDescriptor: GitVersionDescriptor | undefined = version
+          ? {
+              version: version,
+              versionType: GitVersionType[versionType as keyof typeof GitVersionType],
+            }
+          : undefined;
+
+        // getItemText returns a ReadableStream of the file content as text
+        const stream = await gitApi.getItemText(
+          repositoryId,
+          path,
+          project,
+          undefined, // scopePath
+          undefined, // recursionLevel
+          undefined, // includeContentMetadata
+          undefined, // latestProcessedChange
+          false, // download
+          versionDescriptor,
+          true // includeContent
+        );
+
+        const content = await streamToString(stream);
+
+        const streamError = extractAdoStreamError(content);
+        if (streamError) {
+          return {
+            content: [{ type: "text", text: `Error getting file content for '${path}': ${streamError}` }],
+            isError: true,
+          };
+        }
+
+        return {
+          content: [{ type: "text", text: content }],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error getting file content for '${path}': ${errorMessage}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+}
+
+export { REPO_TOOLS, configureRepoTools };

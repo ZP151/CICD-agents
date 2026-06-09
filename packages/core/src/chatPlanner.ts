@@ -4,7 +4,7 @@ import { translateIntent } from "./tools/gitIntent.js";
 import { logger } from "./logger.js";
 import { getSettings } from "./settings.js";
 import type { ToolExecutor } from "./tools/executor.js";
-import { toolCapabilityPrompt } from "./tools/capabilities.js";
+import { toolCapabilities, toolCapabilityPrompt } from "./tools/capabilities.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -111,8 +111,8 @@ The user message may include a "Repository context" section assembled from a qui
 | Operation | Autonomy |
 |-----------|----------|
 | Registered read-only tools | Run immediately when useful |
-| Registered write tools | Run only when the user clearly requested that exact action, or after approval |
-| Medium/high risk write tools | Prefer proposing an approval_proposal with exact args before execution |
+| Registered write tools | Propose an approval_proposal with exact args before execution |
+| Medium/high risk write tools | Runtime requires approval before execution |
 | Destructive or remote-changing tools | Always require explicit approval |
 
 ## Tool selection guide
@@ -210,7 +210,18 @@ export class ChatPlanner {
       },
     ];
 
-    const tools = this.executor.schemas();
+    const registeredTools = this.executor.list();
+    const tools = registeredTools.map((tool) => ({
+      type: "function" as const,
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters,
+      },
+    }));
+    const capabilitiesByName = new Map(
+      toolCapabilities(registeredTools).map((cap) => [cap.name, cap]),
+    );
     const toolCallsMade: ChatPlannerResult["toolCallsMade"] = [];
     let lastText = "";
     let confirmedOnce = false;
@@ -256,6 +267,31 @@ export class ChatPlanner {
             args = JSON.parse(tc.arguments || "{}") as Record<string, unknown>;
           } catch {
             args = {};
+          }
+
+          const capability = capabilitiesByName.get(tc.name);
+          if (capability?.requiresApproval) {
+            const description = approvalDescription(capability.description, tc.name);
+            yield {
+              type: "done",
+              result: {
+                response:
+                  `The \`${tc.name}\` tool requires approval before I can run it. ` +
+                  `Shall I proceed with ${description}?`,
+                riskLevel: capability.riskLevel,
+                actionsTaken: toolCallsMade.map((t) => t.name),
+                suggestions: [],
+                toolCallsMade,
+                usedLlm: true,
+                approvalProposal: {
+                  tool: tc.name,
+                  args,
+                  description,
+                  nextHint: "continue workflow",
+                },
+              },
+            };
+            return;
           }
 
           yield { type: "tool_start", name: tc.name, args };
@@ -450,4 +486,10 @@ function parseFinalJson(text: string): Record<string, unknown> | null {
 
 function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 3)}...`;
+}
+
+function approvalDescription(description: string, fallbackName: string): string {
+  const trimmed = description.trim();
+  if (!trimmed) return fallbackName.replace(/_/g, " ");
+  return trimmed.endsWith(".") ? trimmed.slice(0, -1) : trimmed;
 }

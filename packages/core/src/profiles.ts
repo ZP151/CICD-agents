@@ -121,6 +121,13 @@ export interface WorkspaceProfile {
   adoPipelineId: string;
   adoPipelineName: string;
 
+  // Optional Azure DevOps MCP bridge. Disabled by default; when enabled, the
+  // daemon can reuse the upstream microsoft/azure-devops-mcp tool surface.
+  adoMcpEnabled: boolean;
+  adoMcpCommand: string;
+  adoMcpAuthentication: string;
+  adoMcpDomains: string;
+
   // Optional reference to a YAML build/test template
   templateProfile: string;   // name of a Profile from profiles.yaml, or ""
 
@@ -217,5 +224,9 @@ export function profileToToolExtra(profile: WorkspaceProfile): Record<string, un
     ado_target_branch: profile.targetBranch,
     ado_pat: profile.adoPat,
     ...(profile.adoPipelineId ? { ado_pipeline_id: profile.adoPipelineId } : {}),
+    ado_mcp_enabled: profile.adoMcpEnabled,
+    ado_mcp_command: profile.adoMcpCommand,
+    ado_mcp_authentication: profile.adoMcpAuthentication,
+    ado_mcp_domains: profile.adoMcpDomains,
   };
 }

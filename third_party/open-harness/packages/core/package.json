@@ -1,0 +1,64 @@
+{
+  "name": "@openharness/core",
+  "version": "0.6.2",
+  "type": "module",
+  "description": "Building blocks for capable, general-purpose agents",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./providers": {
+      "types": "./dist/providers/index.d.ts",
+      "import": "./dist/providers/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "format": "oxfmt --write src",
+    "format:check": "oxfmt --check src"
+  },
+  "keywords": [
+    "agent",
+    "ai",
+    "llm",
+    "tools",
+    "mcp",
+    "middleware",
+    "runner"
+  ],
+  "homepage": "https://github.com/MaxGfeller/open-harness/tree/main/packages/core#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MaxGfeller/open-harness.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/MaxGfeller/open-harness/issues"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@ai-sdk/mcp": "^1.0.21",
+    "ai": "^6.0.97",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@ai-sdk/anthropic": "^3.0.46",
+    "@ai-sdk/openai": "^3.0.30",
+    "@types/node": "^25.3.0",
+    "oxfmt": "^0.35.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0"
+  }
+}

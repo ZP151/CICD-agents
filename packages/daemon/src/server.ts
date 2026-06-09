@@ -70,6 +70,7 @@ import {
 import { spawnSync } from "node:child_process";
 import { SubmitPipelineSchema, TaskIdParam } from "./schemas.js";
 import { ChatSessionManager, type InlineLlmConfig, type InlineProfile } from "./chatSession.js";
+import { chatEventToSseEvents, sessionStartedEvent } from "./chatEvents.js";
 import {
   AdoClient,
   buildCloudContext,
@@ -111,6 +112,10 @@ const InlineProfileSchema = z.object({
   adoPat:          z.string().default(""),
   adoPipelineId:   z.string().default(""),
   adoPipelineName: z.string().default(""),
+  adoMcpEnabled:   z.coerce.boolean().default(false),
+  adoMcpCommand:   z.string().default(""),
+  adoMcpAuthentication: z.string().default(""),
+  adoMcpDomains:   z.string().default("repositories,pipelines,work-items"),
   templateProfile: z.string().default(""),
   buildCommand:    z.string().default(""),
   testCommand:     z.string().default(""),
@@ -153,6 +158,10 @@ const ProfileBodySchema = z.object({
   adoPat: z.string().default(""),
   adoPipelineId: z.string().default(""),
   adoPipelineName: z.string().default(""),
+  adoMcpEnabled: z.coerce.boolean().default(false),
+  adoMcpCommand: z.string().default(""),
+  adoMcpAuthentication: z.string().default(""),
+  adoMcpDomains: z.string().default("repositories,pipelines,work-items"),
   templateProfile: z.string().default(""),
   buildCommand: z.string().default(""),
   testCommand: z.string().default(""),
@@ -922,6 +931,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     if (!profileData.adoOrgUrl || !profileData.adoProject || !profileData.adoRepoName) {
       return reply.code(400).send({ error: "ado_profile_incomplete" });
     }
+
     const org = extractAdoOrg(profileData.adoOrgUrl);
     const ado = new AdoClient({
       organization: org,
@@ -1098,13 +1108,13 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     };
 
     // Always send the sessionId first so the client can store it
-    send("session", { sessionId });
+    for (const sse of sessionStartedEvent(sessionId)) send(sse.event, sse.payload);
 
     return new Promise<void>((resolve) => {
       (async () => {
         try {
           for await (const event of chatSessions.run(sessionId, message, repoPath, profileId, llmConfig, profile)) {
-            send(event.type, event);
+            for (const sse of chatEventToSseEvents(event)) send(sse.event, sse.payload);
             if (
               event.type === "done" ||
               event.type === "error" ||
@@ -1158,7 +1168,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       (async () => {
         try {
           for await (const event of chatSessions.confirmAction(sessionId)) {
-            send(event.type, event);
+            for (const sse of chatEventToSseEvents(event)) send(sse.event, sse.payload);
             if (event.type === "done" || event.type === "error" || event.type === "cancelled") {
               reply.raw.end();
               resolve();

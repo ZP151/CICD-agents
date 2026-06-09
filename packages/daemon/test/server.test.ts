@@ -14,6 +14,9 @@ beforeAll(() => {
   process.env.RUNTIME_PORT = "0";
   process.env.AZURE_OPENAI_ENDPOINT = "";
   process.env.AZURE_OPENAI_API_KEY = "";
+  process.env.AZURE_COSMOS_ENDPOINT = "";
+  process.env.AZURE_STORAGE_ACCOUNT = "";
+  process.env.AZURE_KEYVAULT_URL = "";
   resetSettingsForTests();
 });
 

@@ -17,6 +17,7 @@ export * from "./tools/npm.js";
 export * from "./tools/pytest.js";
 export * from "./tools/azureDevOps.js";
 export * from "./tools/gitIntent.js";
+export * from "./tools/mcp.js";
 export * from "./telemetry.js";
 export * from "./chatPlanner.js";
 export * from "./reviewQueue.js";

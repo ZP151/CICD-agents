@@ -86,17 +86,25 @@ export const runtimeUrl = RUNTIME_URL;
 
 export type ChatEventType =
   | "session"
+  | "session.started"
   | "assistant_delta"
+  | "text.delta"
   | "progress"
   | "tool_start"
+  | "tool.started"
   | "tool_end"
+  | "tool.completed"
   | "confirm_required"
   | "workflow_state"
+  | "workflow.updated"
   | "approval_required"
+  | "approval.required"
   | "approval_resolved"
+  | "approval.resolved"
   | "executing"
   | "message"
   | "done"
+  | "final"
   | "error"
   | "cancelled";
 
@@ -104,6 +112,7 @@ export interface ChatEventPayload {
   type: ChatEventType;
   // session
   sessionId?: string;
+  legacyType?: string;
   // assistant_delta
   delta?: string;
   // tool_start / tool_end
@@ -378,12 +387,18 @@ export interface WorkspaceProfile {
   adoPat: string;
   adoPipelineId: string;
   adoPipelineName: string;
+  adoMcpEnabled: boolean;
+  adoMcpCommand: string;
+  adoMcpAuthentication: string;
+  adoMcpDomains: string;
   templateProfile: string;
   buildCommand: string;
   testCommand: string;
 }
 
 export type WorkspaceProfileInput = Omit<WorkspaceProfile, "id" | "createdAt" | "updatedAt">;
+export type ProjectLink = WorkspaceProfile;
+export type ProjectLinkInput = WorkspaceProfileInput;
 
 export interface PipelineRunSummary {
   id: number;

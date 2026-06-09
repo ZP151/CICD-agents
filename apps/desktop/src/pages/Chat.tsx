@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   chatStream,
   confirmAction as apiConfirmAction,
@@ -11,8 +10,15 @@ import {
   type ChatEventPayload,
   type ChatHistoryEntry,
   type WorkspaceProfile,
+  type WorkspaceProfileInput,
 } from "../api.js";
 import { useAppData } from "../App.js";
+import {
+  fetchGitBranches,
+  type PatStatus,
+  projectLinkNameFromRepo,
+  verifyPat,
+} from "../projectLinks.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -619,6 +625,364 @@ interface WorkspacePanelProps {
   setActiveProfileId: (id: string | null) => void;
 }
 
+const EMPTY_PROJECT_LINK: WorkspaceProfileInput = {
+  name: "",
+  repoPath: "",
+  defaultBranch: "main",
+  targetBranch: "main",
+  adoOrgUrl: "",
+  adoProject: "",
+  adoRepoName: "",
+  adoPat: "",
+  adoPipelineId: "",
+  adoPipelineName: "",
+  adoMcpEnabled: false,
+  adoMcpCommand: "",
+  adoMcpAuthentication: "",
+  adoMcpDomains: "repositories,pipelines,work-items",
+  templateProfile: "",
+  buildCommand: "",
+  testCommand: "",
+};
+
+function ProjectLinkSetupCard({
+  repoPath,
+  onCreated,
+  createProjectLink,
+}: {
+  repoPath: string;
+  onCreated: (profile: WorkspaceProfile) => void;
+  createProjectLink: (data: WorkspaceProfileInput) => Promise<WorkspaceProfile>;
+}) {
+  const [form, setForm] = useState<WorkspaceProfileInput>(() => ({
+    ...EMPTY_PROJECT_LINK,
+    name: projectLinkNameFromRepo(repoPath),
+    repoPath,
+  }));
+  const [advanced, setAdvanced] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [branches, setBranches] = useState<string[]>([]);
+  const [branchLoading, setBranchLoading] = useState(false);
+  const [branchError, setBranchError] = useState(false);
+  const branchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [patStatus, setPatStatus] = useState<PatStatus>("none");
+  const [verifyingPat, setVerifyingPat] = useState(false);
+
+  useEffect(() => {
+    setForm((current) => ({
+      ...current,
+      repoPath: current.repoPath || repoPath,
+      name: current.name === "Project link" && repoPath ? projectLinkNameFromRepo(repoPath) : current.name,
+    }));
+  }, [repoPath]);
+
+  const set = <K extends keyof WorkspaceProfileInput>(key: K) => (value: WorkspaceProfileInput[K]) => {
+    setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const loadBranches = useCallback(async (path: string) => {
+    if (!path.trim()) {
+      setBranches([]);
+      setBranchLoading(false);
+      setBranchError(false);
+      return;
+    }
+    setBranchLoading(true);
+    setBranchError(false);
+    const detected = await fetchGitBranches(path.trim());
+    setBranches(detected);
+    setBranchLoading(false);
+    setBranchError(detected.length === 0);
+    if (detected.length > 0) {
+      setForm((current) => {
+        const preferred =
+          detected.includes(current.defaultBranch)
+            ? current.defaultBranch
+            : detected.includes("main")
+              ? "main"
+              : detected.includes("master")
+                ? "master"
+                : detected[0] ?? current.defaultBranch;
+        const target =
+          detected.includes(current.targetBranch)
+            ? current.targetBranch
+            : preferred;
+        return { ...current, defaultBranch: preferred, targetBranch: target };
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (branchDebounceRef.current) clearTimeout(branchDebounceRef.current);
+    if (!form.repoPath.trim()) {
+      setBranches([]);
+      setBranchLoading(false);
+      setBranchError(false);
+      return;
+    }
+    setBranchLoading(true);
+    setBranchError(false);
+    branchDebounceRef.current = setTimeout(() => {
+      void loadBranches(form.repoPath);
+    }, 700);
+    return () => {
+      if (branchDebounceRef.current) clearTimeout(branchDebounceRef.current);
+    };
+  }, [form.repoPath, loadBranches]);
+
+  useEffect(() => {
+    if (patStatus === "verified" || patStatus === "invalid") setPatStatus("none");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.adoPat]);
+
+  const canSave = form.name.trim().length > 0 && form.repoPath.trim().length > 0;
+
+  async function handleVerifyPat() {
+    setVerifyingPat(true);
+    setPatStatus(await verifyPat(form.adoOrgUrl, form.adoPat) ? "verified" : "invalid");
+    setVerifyingPat(false);
+  }
+
+  function handleRequestPat() {
+    const org = form.adoOrgUrl.replace(/\/$/, "");
+    window.open(org ? `${org}/_usersSettings/tokens` : "https://dev.azure.com", "_blank");
+    if (patStatus === "none") setPatStatus("pending");
+  }
+
+  function BranchSelect({
+    label,
+    value,
+    onChange,
+  }: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+  }) {
+    if (branchLoading) {
+      return (
+        <div className="grid gap-1">
+          <span className="text-[11px] font-medium text-zinc-500">{label}</span>
+          <div className="flex items-center gap-2 rounded-lg border border-zinc-700/60 bg-zinc-950 px-3 py-2 text-sm text-zinc-500">
+            <svg className="h-3 w-3 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="30 70" />
+            </svg>
+            Detecting branches...
+          </div>
+        </div>
+      );
+    }
+    if (branches.length > 0) {
+      return (
+        <label className="grid gap-1">
+          <span className="text-[11px] font-medium text-zinc-500">{label}</span>
+          <select
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            className="rounded-lg border border-emerald-700/60 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none transition focus:border-emerald-500"
+          >
+            {branches.map((branch) => (
+              <option key={branch} value={branch}>{branch}</option>
+            ))}
+            {!branches.includes(value) && value && <option value={value}>{value} (custom)</option>}
+          </select>
+        </label>
+      );
+    }
+    return (
+      <label className="grid gap-1">
+        <span className="text-[11px] font-medium text-zinc-500">{label}</span>
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="rounded-lg border border-zinc-700/60 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-zinc-500"
+          placeholder="main"
+        />
+      </label>
+    );
+  }
+
+  const repoInputClass = `rounded-lg border px-3 py-2 font-mono text-sm text-zinc-200 outline-none transition ${
+    !branchLoading && branches.length > 0
+      ? "border-emerald-700/60 bg-zinc-950 focus:border-emerald-500"
+      : branchError && form.repoPath
+        ? "border-amber-700/60 bg-zinc-950 focus:border-amber-600"
+        : "border-zinc-700/60 bg-zinc-950 focus:border-zinc-500"
+  }`;
+
+  async function save() {
+    if (!canSave || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const created = await createProjectLink({
+        ...form,
+        name: form.name.trim(),
+        repoPath: form.repoPath.trim(),
+        defaultBranch: form.defaultBranch.trim() || "main",
+        targetBranch: form.targetBranch.trim() || form.defaultBranch.trim() || "main",
+      });
+      onCreated(created);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="w-full max-w-xl rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 text-left shadow-lg">
+      <div className="mb-4 flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-800">
+          <svg className="h-5 w-5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 7h7a5 5 0 010 10H6m10-5h5M3 12h8" />
+          </svg>
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-zinc-200">Create a Project Link</p>
+          <p className="mt-1 text-xs leading-relaxed text-zinc-600">
+            Connect this local repository to its Azure DevOps project, repo, branches, and pipeline defaults. You can finish it here and continue the chat.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-3">
+        <label className="grid gap-1">
+          <span className="text-[11px] font-medium text-zinc-500">Link name</span>
+          <input
+            value={form.name}
+            onChange={(e) => set("name")(e.target.value)}
+            className="rounded-lg border border-zinc-700/60 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-zinc-500"
+            placeholder="web-app production"
+          />
+        </label>
+        <label className="grid gap-1">
+          <span className="flex items-center justify-between gap-2 text-[11px] font-medium text-zinc-500">
+            <span>Local repository path</span>
+            {form.repoPath && (
+              <button
+                type="button"
+                onClick={() => void loadBranches(form.repoPath)}
+                disabled={branchLoading}
+                className="text-[10px] text-zinc-600 transition hover:text-zinc-400 disabled:opacity-40"
+              >
+                {branchLoading ? "Loading..." : branchError ? "Retry branch detection" : branches.length > 0 ? `${branches.length} branches found` : "Detect branches"}
+              </button>
+            )}
+          </span>
+          <input
+            value={form.repoPath}
+            onChange={(e) => set("repoPath")(e.target.value)}
+            className={repoInputClass}
+            placeholder="C:\projects\my-app"
+          />
+          {branchError && form.repoPath && (
+            <span className="text-[10px] text-amber-500/80">Could not read branches. Check this is a valid git repository.</span>
+          )}
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <BranchSelect label="Default branch" value={form.defaultBranch} onChange={set("defaultBranch")} />
+          <BranchSelect label="PR target branch" value={form.targetBranch} onChange={set("targetBranch")} />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setAdvanced((value) => !value)}
+          className="mt-1 text-left text-xs text-zinc-600 hover:text-zinc-400"
+        >
+          {advanced ? "Hide" : "Add"} Azure DevOps details
+        </button>
+
+        {advanced && (
+          <div className="grid gap-3 rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
+            <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoOrgUrl} onChange={(e) => set("adoOrgUrl")(e.target.value)} placeholder="https://dev.azure.com/org" />
+            <div className="grid grid-cols-2 gap-2">
+              <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoProject} onChange={(e) => set("adoProject")(e.target.value)} placeholder="ADO project" />
+              <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoRepoName} onChange={(e) => set("adoRepoName")(e.target.value)} placeholder="ADO repo" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoPipelineId} onChange={(e) => set("adoPipelineId")(e.target.value)} placeholder="Pipeline ID" />
+              <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoPipelineName} onChange={(e) => set("adoPipelineName")(e.target.value)} placeholder="Pipeline name" />
+            </div>
+            <div className="grid gap-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-medium text-zinc-500">Personal Access Token</span>
+                <div className="flex items-center gap-2">
+                  {patStatus === "pending" && <span className="rounded-full border border-amber-800/40 bg-amber-900/30 px-2 py-0.5 text-[10px] font-medium text-amber-400">Pending</span>}
+                  {patStatus === "verified" && <span className="rounded-full border border-emerald-800/40 bg-emerald-900/30 px-2 py-0.5 text-[10px] font-medium text-emerald-400">Verified</span>}
+                  {patStatus === "invalid" && <span className="rounded-full border border-red-800/40 bg-red-900/30 px-2 py-0.5 text-[10px] font-medium text-red-400">Invalid</span>}
+                  <button type="button" onClick={handleRequestPat} className="text-[10px] text-zinc-600 underline underline-offset-2 transition hover:text-zinc-400">
+                    Request PAT
+                  </button>
+                  {form.adoPat && form.adoOrgUrl && (
+                    <button
+                      type="button"
+                      onClick={() => void handleVerifyPat()}
+                      disabled={verifyingPat}
+                      className="text-[10px] text-zinc-600 underline underline-offset-2 transition hover:text-zinc-400 disabled:opacity-50"
+                    >
+                      {verifyingPat ? "Verifying..." : "Verify"}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <input
+                className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600"
+                type="password"
+                value={form.adoPat}
+                onChange={(e) => set("adoPat")(e.target.value)}
+                placeholder="Personal Access Token"
+              />
+              {patStatus === "pending" && (
+                <p className="rounded-lg border border-amber-900/30 bg-amber-950/20 px-3 py-2 text-[11px] leading-relaxed text-amber-400/80">
+                  Create a PAT with Code, Build, and Pull Request thread permissions, paste it here, then click Verify.
+                </p>
+              )}
+            </div>
+            <div className="grid gap-2 rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5">
+              <label className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.adoMcpEnabled}
+                  onChange={(event) => set("adoMcpEnabled")(event.target.checked)}
+                  className="mt-0.5 h-3.5 w-3.5 rounded border-zinc-700 bg-zinc-900"
+                />
+                <span className="min-w-0">
+                  <span className="block text-[11px] font-medium text-zinc-400">Enable Azure DevOps MCP bridge</span>
+                  <span className="block text-[10px] leading-relaxed text-zinc-700">Registers reusable upstream ADO MCP tools for this Project Link.</span>
+                </span>
+              </label>
+              {form.adoMcpEnabled && (
+                <div className="grid gap-2">
+                  <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoMcpCommand} onChange={(e) => set("adoMcpCommand")(e.target.value)} placeholder="mcp-server-azuredevops" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoMcpAuthentication} onChange={(e) => set("adoMcpAuthentication")(e.target.value)} placeholder="pat or azcli" />
+                    <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoMcpDomains} onChange={(e) => set("adoMcpDomains")(e.target.value)} placeholder="repositories,pipelines,work-items" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {error && <p className="rounded-lg border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">{error}</p>}
+
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={!canSave || saving}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {saving ? "Creating..." : "Create and use"}
+          </button>
+          <span className="text-[11px] text-zinc-700">Only name and local path are required to start.</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function WorkspacePanel({ repoPath, setRepoPath, currentBranch, branchList, taskState, busy, profiles, activeProfileId, setActiveProfileId }: WorkspacePanelProps) {
   const repoName = repoPath ? repoPath.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? "" : "";
 
@@ -682,10 +1046,10 @@ function WorkspacePanel({ repoPath, setRepoPath, currentBranch, branchList, task
       <div className="p-3 space-y-3.5">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600">Context</p>
 
-        {/* Profile selector */}
+        {/* Project Link selector */}
         {profiles.length > 0 && (
           <div className="space-y-1.5">
-            <p className="text-[10px] text-zinc-600">Profile</p>
+            <p className="text-[10px] text-zinc-600">Project Link</p>
             <select
               className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[11px] text-zinc-300 focus:border-zinc-700 focus:outline-none"
               value={activeProfileId ?? ""}
@@ -935,7 +1299,6 @@ interface ChatProps {
 }
 
 export default function Chat({ mini = false }: ChatProps) {
-  const navigate = useNavigate();
   const [repoPath, setRepoPath] = useState(
     typeof window !== "undefined" ? (localStorage.getItem("chat_repo") ?? "") : "",
   );
@@ -1003,12 +1366,19 @@ export default function Chat({ mini = false }: ChatProps) {
   const [activeProfileId, setActiveProfileId] = useState<string | null>(
     typeof window !== "undefined" ? (localStorage.getItem("chat_profile_id") ?? null) : null,
   );
-  // Profiles come from global AppDataContext — loaded once on app start, no per-mount fetch
-  const { profiles: availableProfiles } = useAppData();
+  // Project Links come from global AppDataContext — loaded once on app start, no per-mount fetch.
+  // The underlying storage type is still WorkspaceProfile until the model is migrated.
+  const { profiles: availableProfiles, createProfile: createProjectLink } = useAppData();
   const cancelRef = useRef<(() => void) | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const useProjectLink = useCallback((profile: WorkspaceProfile) => {
+    setActiveProfileId(profile.id);
+    if (profile.repoPath) setRepoPath(profile.repoPath);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }, []);
 
   // ── Auto-expand the Tauri window when opening panels would clip content ───
   useEffect(() => {
@@ -1097,7 +1467,7 @@ export default function Chat({ mini = false }: ChatProps) {
     }
   }, [mini]);
 
-  // Profiles are managed globally by AppDataContext — no per-mount fetch needed here.
+  // Project Links are managed globally by AppDataContext — no per-mount fetch needed here.
 
   useEffect(() => {
     if (activeProfileId) {
@@ -1107,14 +1477,14 @@ export default function Chat({ mini = false }: ChatProps) {
     }
   }, [activeProfileId]);
 
-  // On mount: if there is an active profile but no saved repo path, restore
-  // the repo path from that profile so git tools have a valid cwd from the start.
+  // On mount: if there is an active Project Link but no saved repo path, restore
+  // the repo path from that link so git tools have a valid cwd from the start.
   useEffect(() => {
     if (repoPath) return;
     if (!activeProfileId || availableProfiles.length === 0) return;
     const p = availableProfiles.find((pr) => pr.id === activeProfileId);
     if (p?.repoPath) setRepoPath(p.repoPath);
-  // Run once when profiles first become available; intentionally exclude repoPath
+  // Run once when Project Links first become available; intentionally exclude repoPath
   // from deps to avoid a loop when the effect itself sets repoPath.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProfileId, availableProfiles]);
@@ -1741,48 +2111,28 @@ export default function Chat({ mini = false }: ChatProps) {
           {bubbles.length === 0 && (
             <div className="flex flex-1 flex-col items-center justify-center gap-6 w-full px-8">
 
-              {/* ── Profile gate ─────────────────────────────────────────── */}
+              {/* ── Project Link gate ─────────────────────────────────────── */}
               {availableProfiles.length === 0 ? (
-                /* No profiles at all — guide user to create one first */
-                <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 flex flex-col items-center gap-3 text-center">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-800">
-                    <svg className="h-5 w-5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-zinc-300">Set up a profile first</p>
-                    <p className="mt-1 text-xs text-zinc-600 leading-relaxed">
-                      A profile stores your repo path, Azure DevOps connection, and pipeline settings.
-                      It will be reused for all chats in the same project.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => navigate("/profiles")}
-                    className="mt-1 rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-500 transition active:scale-95"
-                  >
-                    Create a profile
-                  </button>
-                </div>
+                <ProjectLinkSetupCard
+                  repoPath={repoPath}
+                  createProjectLink={createProjectLink}
+                  onCreated={useProjectLink}
+                />
               ) : (
-                /* Profiles exist — show selector if none active */
+                /* Project Links exist — show selector if none active */
                 !activeProfileId ? (
                   <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 flex flex-col gap-3">
                     <div className="flex items-center gap-2">
                       <svg className="h-4 w-4 shrink-0 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                       </svg>
-                      <p className="text-xs font-semibold text-zinc-400">Choose a profile for this chat</p>
+                      <p className="text-xs font-semibold text-zinc-400">Choose a Project Link for this chat</p>
                     </div>
                     <div className="flex flex-col gap-1.5">
                       {availableProfiles.map((p) => (
                         <button
                           key={p.id}
-                          onClick={() => {
-                            setActiveProfileId(p.id);
-                            if (p.repoPath) setRepoPath(p.repoPath);
-                            setTimeout(() => textareaRef.current?.focus(), 0);
-                          }}
+                          onClick={() => useProjectLink(p)}
                           className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-left hover:border-zinc-700 hover:bg-zinc-800/60 transition group"
                         >
                           <div className="min-w-0">
@@ -1797,15 +2147,21 @@ export default function Chat({ mini = false }: ChatProps) {
                         </button>
                       ))}
                     </div>
-                    <button
-                      onClick={() => navigate("/profiles")}
-                      className="text-xs text-zinc-600 hover:text-zinc-400 transition text-left pt-0.5"
-                    >
-                      + New profile
-                    </button>
+                    <details className="pt-0.5">
+                      <summary className="cursor-pointer text-xs text-zinc-600 transition hover:text-zinc-400">
+                        + New Project Link
+                      </summary>
+                      <div className="mt-3">
+                        <ProjectLinkSetupCard
+                          repoPath={repoPath}
+                          createProjectLink={createProjectLink}
+                          onCreated={useProjectLink}
+                        />
+                      </div>
+                    </details>
                   </div>
                 ) : (
-                  /* Profile selected — show the normal welcome + suggestions */
+                  /* Project Link selected — show the normal welcome + suggestions */
                   <>
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-800/60">
                       <svg className="h-6 w-6 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1941,7 +2297,7 @@ export default function Chat({ mini = false }: ChatProps) {
 
             {/* Input bar — scoped to middle column only */}
             <div className="input-panel border-t border-zinc-800/80 px-3 py-2">
-              {/* Profile context chip */}
+              {/* Project Link context chip */}
               {!mini && (
                 <div className="flex items-center gap-1.5 px-1 pb-1.5">
                   {availableProfiles.length > 0 ? (
@@ -1959,19 +2315,14 @@ export default function Chat({ mini = false }: ChatProps) {
                           if (p?.repoPath) setRepoPath(p.repoPath);
                         }}
                       >
-                        <option value="">No profile selected</option>
+                        <option value="">No Project Link selected</option>
                         {availableProfiles.map((p) => (
                           <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
                       </select>
                     </>
                   ) : (
-                    <button
-                      onClick={() => navigate("/profiles")}
-                      className="text-[11px] text-zinc-700 hover:text-zinc-500 transition"
-                    >
-                      No profiles — create one
-                    </button>
+                    <span className="text-[11px] text-zinc-700">No Project Link yet — create one above</span>
                   )}
                 </div>
               )}

@@ -1,195 +1,186 @@
-# cicd-agent
+# CI/CD Dev Agent Architecture
 
-> Status: v2 in active development. The new Node.js / TypeScript stack lives under
-> [`packages/`](packages/) and [`apps/desktop/`](apps/desktop/). The v1 Python POC
-> under [`runtime/`](runtime/), [`cli/`](cli/), and [`tests/`](tests/) is **frozen**;
-> see [runtime/NOTICE.md](runtime/NOTICE.md).
+> Status: `v0.5.3` in active development.
 
-A local-first AI agent for CI/CD work. A lightweight runtime lives on
-your machine, indexes your repos with Tree-sitter and a vector store, and
-runs a single **Pipeline Agent** workflow that turns a `git diff` into:
+CI/CD Dev Agent is a local-first developer agent for repository, pull request,
+and Azure DevOps workflows. The current product is built around a desktop chat
+client, a local daemon, shared agent/tooling packages, and source-first reuse of
+mature upstream agent infrastructure.
 
-- a structured PR summary + risk assessment via Azure OpenAI,
-- an Azure DevOps pull request (with optional work-item link),
-- an optional Azure Pipelines run.
+The older Python proof of concept under `runtime/`, `cli/`, and `tests/` is
+frozen. Current development lives in `packages/`, `apps/desktop/`, `docs/`, and
+`third_party/`.
 
-The CLI (`dev-agent`) is a thin entrance that auto-starts the runtime on
-demand.
+## System View
 
-## v2 quick start (Node.js stack)
-
-```bash
-# from the repo root
-pnpm install
-pnpm -r --filter "./packages/*" run build
-pnpm --filter @cicd-agent/cli dev healthz     # auto-starts the daemon
-pnpm --filter @cicd-agent/cli dev tui          # multi-panel terminal UI
+```text
++------------------------+
+| Tauri Desktop App      |
+| apps/desktop           |
+|                        |
+| - Chat workspace       |
+| - Project Links        |
+| - PR / Review views    |
++-----------+------------+
+            |
+            | HTTP + SSE
+            v
++------------------------+
+| Local Daemon           |
+| packages/daemon        |
+|                        |
+| - Chat sessions        |
+| - Approval state       |
+| - Profile persistence  |
+| - Workflow events      |
++-----------+------------+
+            |
+            | ToolContext
+            v
++------------------------+        +-------------------------+
+| Core Agent Runtime     |        | Review Agent            |
+| packages/core          |        | packages/review-agent   |
+|                        |        |                         |
+| - Chat planner         |        | - PR review planning    |
+| - Tool executor        |        | - Review findings       |
+| - Risk policy          |        | - ADO review context    |
+| - Git/build/test tools |        +-------------------------+
+| - ADO + MCP bridge     |
++-----------+------------+
+            |
+            +--------------------+
+            |                    |
+            v                    v
++------------------------+   +-----------------------------+
+| Local Repository       |   | Azure DevOps / MCP Servers  |
+|                        |   |                             |
+| - Git state            |   | - ADO REST tools            |
+| - Branches             |   | - Azure DevOps MCP bridge   |
+| - Build/test commands  |   | - PRs / pipelines / work    |
++------------------------+   +-----------------------------+
 ```
 
-Phase docs:
+## Main Components
 
-- Production architecture: [docs/architecture.md](docs/architecture.md)
-- ADRs (0001..0007): [docs/adr/](docs/adr/)
-- POC validation: [docs/poc-validation.md](docs/poc-validation.md)
-- Observability: [docs/observability.md](docs/observability.md)
-- Review Agent deployment: [packages/review-agent/deploy/README.md](packages/review-agent/deploy/README.md)
-- Desktop GUI: [apps/desktop/README.md](apps/desktop/README.md)
+| Component | Path | Responsibility |
+| --- | --- | --- |
+| Desktop app | `apps/desktop/` | Tauri shell, chat UI, Project Link setup, PR workspace, review queue, settings. |
+| Daemon | `packages/daemon/` | Local HTTP/SSE API, chat session lifecycle, approval cards, event compatibility, profile and cloud store routing. |
+| Core | `packages/core/` | Planner, tool executor, tool risk policy, Git/build/test tools, Azure DevOps tools, MCP stdio bridge, Project Link model. |
+| Review Agent | `packages/review-agent/` | PR review context, finding generation, decision routing for review queue and auto-approval. |
+| CLI | `packages/cli/` | Thin command-line entry points for daemon and developer workflows. |
+| Upstream source | `third_party/` | Vendored OpenHarness and Azure DevOps MCP sources used for source-first reuse. |
+| Docs | `docs/` | Roadmap, progress tracker, architecture notes, ADRs, and source reuse registry. |
 
-```
-Developer CLI
+## Project Link Model
+
+`Project Link` is the user-facing name for the workspace mapping object. It
+connects a local repository to its DevOps context:
+
+- local repository path
+- default branch
+- PR target branch
+- Azure DevOps organization, project, and repository
+- optional pipeline ID/name
+- optional PAT
+- optional Azure DevOps MCP bridge settings
+
+The internal TypeScript/API name `WorkspaceProfile` is still kept for
+compatibility with existing routes and storage.
+
+## Safety And Approval Flow
+
+```text
+User request
     |
-    v   HTTP localhost:8787
-+--------------------------+
-| Local Agent Runtime      |
-|  - repo indexer          |
-|  - vector index          |
-|  - context builder       |
-|  - planner (ReAct-lite)  |
-|  - tool executor         |
-|  - memory store          |
-+--------------------------+
-    |             |
-    v             v
- Azure OpenAI   Azure DevOps REST
+    v
+Chat planner proposes tool calls
+    |
+    v
+Tool capability policy classifies risk
+    |
+    +--> low risk: execute directly
+    |
+    +--> medium/high risk: emit approval proposal
+                              |
+                              v
+                         User confirms
+                              |
+                              v
+                    Confirmed-action executor runs
 ```
 
-## Requirements
+Important boundaries:
 
-- Python 3.10+
-- Git in PATH
-- (Optional) Azure OpenAI deployment for chat + embeddings
-- (Optional) Azure DevOps PAT for PR / pipeline calls
+- Risk is classified centrally in `packages/core/src/tools/capabilities.ts`.
+- Enforcement happens in `ToolExecutor`, not only in prompts.
+- Planner execution and confirmed-action execution use separate executor
+  instances.
+- Azure DevOps MCP tools are mapped into the same local policy layer.
 
-## Install
+## Event Protocol
 
-```bash
-python -m venv .venv
-.\.venv\Scripts\activate    # PowerShell: .\.venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
+The daemon emits legacy chat events and canonical aliases for newer clients.
+The compatibility layer lives in `packages/daemon/src/chatEvents.ts`.
+
+Examples:
+
+| Legacy | Canonical |
+| --- | --- |
+| `assistant_delta` | `text.delta` |
+| `tool_start` | `tool.started` |
+| `tool_end` | `tool.completed` |
+| `workflow_state` | `workflow.updated` |
+| `approval_required` | `approval.required` |
+| `approval_resolved` | `approval.resolved` |
+| `done` | `final` |
+
+## Source Reuse Architecture
+
+The project currently reuses mature upstream projects by vendoring source and
+bridging behavior behind local contracts:
+
+| Upstream | Local Boundary | Current Use |
+| --- | --- | --- |
+| `MaxGfeller/open-harness` | `packages/core/src/tools/executor.ts` and daemon executors | Approval-before-execute pattern adapted to local tools. |
+| `microsoft/azure-devops-mcp` | `packages/core/src/tools/mcp.ts` and Project Link MCP settings | Optional Azure DevOps MCP server bridge for repositories, pipelines, and work items. |
+
+Reuse tracking is maintained in `docs/third-party-source-reuse.md`.
+
+## Persistence Boundaries
+
+```text
+Desktop localStorage
+    |
+    | inline settings/profile data for current chat
+    v
+Daemon profile store
+    |
+    +--> local JSON store under daemon data dir
+    |
+    +--> optional Azure Table Storage
+             |
+             +--> optional Key Vault PAT storage
+
+Chat session store
+    |
+    +--> local JSON history
+    |
+    +--> optional Cosmos DB session store
 ```
 
-This exposes a `dev-agent` console script. During development you can also
-run `python -m cli.main ...`.
+## Release Boundary
 
-## Configure
+GitHub Actions workflows live in `.github/workflows/`.
 
-1. Copy `.env.example` to `.env` at the project root and fill in:
-  - `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`,
-   `AZURE_OPENAI_CHAT_DEPLOYMENT`, `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`.
-  - `AZURE_DEVOPS_ORG`, `AZURE_DEVOPS_PROJECT`.
-   Without Azure OpenAI the runtime still works in **offline mode**:
-   embeddings and the LLM planner are skipped and a deterministic PR summary
-   is produced from the diff.
-2. Store your Azure DevOps PAT in the OS keyring (never in `.env`):
-  ```bash
-   dev-agent configure-pat
-  ```
-   The PAT is stored under service `cicd-agent`, user `azure-devops-pat`.
-3. Edit `runtime/config/profiles.yaml` (or point `CICD_AGENT_PROFILES_PATH`
-  at a per-machine override). Each profile sets the build/test commands and
-   the Azure DevOps org/project/repo for one type of repository.
+- `ci.yml` validates Node packages and desktop installer builds.
+- `release.yml` is triggered by semantic version tags such as `v0.5.3` and
+  creates GitHub Releases with installer assets.
 
-## Run the Pipeline Agent
+## Further Architecture Documents
 
-From inside any repo:
-
-```bash
-python -m cli.main submit-pipeline `
-  --repo "C:\path\to\your\repo" `
-  --profile dotnet-api `
-  --target-branch develop `
-  --no-pr `
-  --wait `
-  --repo .                            `
-  --profile dotnet-api                `
-  --target-branch develop             `
-  --work-item 12345                   `
-  --trigger-pipeline                  `
-  --wait
-```
-
-The first call auto-starts the runtime in the background (logs go to
-`%USERPROFILE%\.cicd-agent\logs\runtime.log`). Subsequent calls reuse the
-already-running instance.
-
-Other CLI commands:
-
-```bash
-dev-agent healthz                # check runtime + LLM configuration
-dev-agent status <task-id>       # JSON view of a task
-dev-agent logs <task-id>         # printed step log
-dev-agent logs <task-id> --tail  # follow until task ends
-dev-agent stop                   # ask the runtime to exit
-```
-
-## How it works
-
-1. **Index** - `RepoIndexer` walks the repo respecting `.gitignore` and
-  ignored globs from the profile, then uses Tree-sitter to extract
-   classes/functions/methods/interfaces and imports into SQLite. Updates are
-   incremental: files are re-parsed only when their SHA-1 content hash
-   changes.
-2. **Embed** - new chunks are embedded with the configured Azure OpenAI
-  embedding deployment and stored either in `sqlite-vec` (when the
-   extension is available) or in a parallel BLOB table with brute-force
-   cosine search.
-3. **Context Builder** - takes `git diff` and produces a token-budgeted
-  bundle of the diff plus affected symbols, related tests and configs, and
-   vector-similar chunks.
-4. **Planner** - a small ReAct-style loop calls Azure OpenAI with the tool
-  registry; the model can invoke `git_`*, `dotnet_*`, `npm_*`, `pytest_*`
-   and `ado_*` tools to inspect/build/test/create PRs before emitting a
-   JSON answer with title, summary, risk level and reasoning.
-5. **Pipeline Agent** - wires everything together, then runs the profile's
-  build/test commands and (optionally) creates an Azure DevOps PR and
-   queues a pipeline run.
-
-## Safety guarantees
-
-- All subprocesses run with `cwd` pinned to the repo path.
-- Each per-language tool advertises an allowlist of acceptable executables.
-- Captured stdout/stderr is run through a redaction filter before being
-persisted in task step logs.
-- The Azure DevOps PAT is read at call time from the OS keyring; it is
-never written to SQLite, task results, or log files.
-
-## Project layout
-
-```
-cli/                      # Typer entrance + auto-start client
-runtime/
-  api/                    # FastAPI routes + schemas
-  core/                   # indexer, builder, planner, executor, queue, llm
-  tools/                  # git, dotnet, npm, pytest, azure_devops
-  index/                  # SQLite schema + connection helpers
-  config/                 # settings + profiles.yaml loader
-tests/
-  unit/                   # fast, no-network unit tests
-  integration/            # offline pipeline-agent run on a fixture repo
-```
-
-## Troubleshooting
-
-- **"Runtime unavailable" on first call** - check
-`%USERPROFILE%\.cicd-agent\logs\runtime.log` for the failed startup; the
-most common cause is a port conflict on 8787 (set `RUNTIME_PORT` in
-`.env`).
-- `**tree_sitter_languages` import failure** - the indexer falls back to a
-files-only mode; affected symbols and vector search degrade but the
-pipeline still runs.
-- **Azure OpenAI auth errors** - re-check `AZURE_OPENAI_ENDPOINT` (must end
-with `/`), the API key, and that your `*_DEPLOYMENT` names match what is
-deployed in your Azure resource (not the underlying model name).
-- **"PAT not configured"** - run `dev-agent configure-pat` again; the PAT
-is per-user, per-OS keyring.
-- **PR creation refuses to run** - the source branch cannot equal the
-target branch and the profile must have a non-empty
-`azure_devops.repository`.
-
-## Roadmap (deferred for v1)
-
-- Review Agent (PR comment posting).
-- Windows Service / tray-app packaging (currently on-demand only).
-- LSP-based symbol fallback for C# generics/partials.
-- Multi-repo orchestration.
-
+- `docs/architecture.md`
+- `docs/dev-agent-product-roadmap-and-reuse-plan.md`
+- `docs/dev-agent-progress-tracker.md`
+- `docs/third-party-source-reuse.md`
+- `docs/adr/`

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ChatPlanner } from "../src/chatPlanner.js";
 import type { ChatStreamEvent, LLMClient } from "../src/llm.js";
-import { ToolExecutor } from "../src/tools/executor.js";
+import { ToolExecutor, type Tool } from "../src/tools/executor.js";
 
 function fakeLlm(json: string): LLMClient {
   return {
@@ -9,6 +9,19 @@ function fakeLlm(json: string): LLMClient {
     async *chatStream(): AsyncGenerator<ChatStreamEvent> {
       yield { type: "delta", delta: json };
       yield { type: "done", finishReason: "stop" };
+    },
+  } as unknown as LLMClient;
+}
+
+function fakeToolCallLlm(name: string, args: Record<string, unknown>): LLMClient {
+  return {
+    configured: true,
+    async *chatStream(): AsyncGenerator<ChatStreamEvent> {
+      yield {
+        type: "tool_call",
+        toolCalls: [{ id: "call_1", name, arguments: JSON.stringify(args) }],
+      };
+      yield { type: "done", finishReason: "tool_calls" };
     },
   } as unknown as LLMClient;
 }
@@ -23,6 +36,26 @@ async function runPlanner(json: string) {
   const done = events.find((event) => event.type === "done");
   if (!done || done.type !== "done") throw new Error("missing done event");
   return done.result;
+}
+
+async function runPlannerWithToolCall(tool: Tool, args: Record<string, unknown>) {
+  let called = false;
+  const executor = new ToolExecutor({ repoPath: ".", env: {}, timeoutSec: 1, extra: {} });
+  executor.register({
+    ...tool,
+    handler: async (ctx, payload) => {
+      called = true;
+      return tool.handler(ctx, payload);
+    },
+  });
+  const planner = new ChatPlanner(fakeToolCallLlm(tool.name, args), executor, { maxSteps: 1 });
+  const events = [];
+  for await (const event of planner.run("run tool", [], ".", async () => true)) {
+    events.push(event);
+  }
+  const done = events.find((event) => event.type === "done");
+  if (!done || done.type !== "done") throw new Error("missing done event");
+  return { called, result: done.result, events };
 }
 
 describe("ChatPlanner approval proposal parsing", () => {
@@ -63,5 +96,34 @@ describe("ChatPlanner approval proposal parsing", () => {
 
     expect(result.approvalProposal?.tool).toBe("git_push");
     expect(result.approvalProposal?.args).toEqual({ branch: "feature/x" });
+  });
+
+  it.each([
+    ["git_fetch", { remote: "origin", prune: true }, "medium"],
+    ["git_commit", { message: "feat: test approval" }, "medium"],
+    ["git_push", { branch: "feature/x" }, "high"],
+    ["git_rebase", { onto: "origin/main", autostash: true }, "high"],
+    ["ado_create_pr", { source_branch: "feature/x", title: "Test PR" }, "high"],
+    ["ado_trigger_pipeline", { branch: "feature/x" }, "high"],
+  ])("blocks direct approval-required tool calls for %s", async (name, args, riskLevel) => {
+    const tool: Tool = {
+      name,
+      description: `Execute ${name}`,
+      parameters: { type: "object", properties: {} },
+      handler: async () => ({ ok: true }),
+    };
+
+    const { called, result, events } = await runPlannerWithToolCall(tool, args);
+
+    expect(called).toBe(false);
+    expect(events.some((event) => event.type === "tool_start")).toBe(false);
+    expect(result.riskLevel).toBe(riskLevel);
+    expect(result.approvalProposal).toEqual({
+      tool: name,
+      args,
+      description: `Execute ${name}`,
+      nextHint: "continue workflow",
+    });
+    expect(result.response).toContain("requires approval");
   });
 });

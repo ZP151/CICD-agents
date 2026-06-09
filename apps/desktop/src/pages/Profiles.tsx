@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  fetchGitBranchesFromDaemon,
   type WorkspaceProfile,
   type WorkspaceProfileInput,
 } from "../api";
 import { useAppData } from "../App";
+import { fetchGitBranches, type PatStatus, verifyPat } from "../projectLinks";
 
 // ─── Local-storage fallback ───────────────────────────────────────────────────
 // Used only when the daemon is unreachable.
@@ -29,46 +29,6 @@ function persistProfilesLocal(profiles: WorkspaceProfile[]): void {
   localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
 }
 
-
-// ─── Git branch loader ────────────────────────────────────────────────────────
-// In a Tauri context we invoke the native Rust command first (it uses cmd /c on
-// Windows so it sees the user's full PATH).  We fall back to the daemon HTTP
-// API for browser-based dev mode or if the Tauri command returns nothing.
-
-async function fetchGitBranches(repoPath: string): Promise<string[]> {
-  if (!repoPath.trim()) return [];
-
-  if (typeof window !== "undefined" && "__TAURI__" in window) {
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      const branches = await invoke<string[]>("list_git_branches", { repoPath: repoPath.trim() });
-      if (branches.length > 0) return branches;
-    } catch { /* fall through */ }
-  }
-
-  return fetchGitBranchesFromDaemon(repoPath);
-}
-
-// ─── PAT helpers ─────────────────────────────────────────────────────────────
-
-type PatStatus = "none" | "pending" | "verified" | "invalid";
-
-async function verifyPat(orgUrl: string, pat: string): Promise<boolean> {
-  if (!orgUrl || !pat) return false;
-  try {
-    const base = orgUrl.replace(/\/$/, "");
-    const r = await fetch(`${base}/_apis/projects?api-version=7.1&$top=1`, {
-      redirect: "manual",
-      headers: { Authorization: `Basic ${btoa(`:${pat}`)}` },
-    });
-    if (r.status === 301 || r.status === 302 || r.status === 303 || r.status === 307 || r.status === 308) {
-      return false;
-    }
-    return r.ok;
-  } catch {
-    return false;
-  }
-}
 
 // ─── Shared field components ──────────────────────────────────────────────────
 
@@ -136,7 +96,7 @@ function Field({
   );
 }
 
-// ─── Blank profile ────────────────────────────────────────────────────────────
+// ─── Blank Project Link ───────────────────────────────────────────────────────
 
 const BLANK: WorkspaceProfileInput = {
   name: "",
@@ -149,12 +109,16 @@ const BLANK: WorkspaceProfileInput = {
   adoPat: "",
   adoPipelineId: "",
   adoPipelineName: "",
+  adoMcpEnabled: false,
+  adoMcpCommand: "",
+  adoMcpAuthentication: "",
+  adoMcpDomains: "repositories,pipelines,work-items",
   templateProfile: "",
   buildCommand: "",
   testCommand: "",
 };
 
-// ─── Profile form ─────────────────────────────────────────────────────────────
+// ─── Project Link form ────────────────────────────────────────────────────────
 
 interface ProfileFormProps {
   initial: WorkspaceProfileInput;
@@ -166,7 +130,7 @@ interface ProfileFormProps {
 
 function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProps) {
   const [form, setForm] = useState<WorkspaceProfileInput>(initial);
-  const set = (key: keyof WorkspaceProfileInput) => (v: string) =>
+  const set = <K extends keyof WorkspaceProfileInput>(key: K) => (v: WorkspaceProfileInput[K]) =>
     setForm((f) => ({ ...f, [key]: v }));
 
   // ── Git branch loading ──────────────────────────────────────────────────────
@@ -269,7 +233,7 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
             <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        <h2 className="text-xl font-semibold text-zinc-100">{isNew ? "New profile" : "Edit profile"}</h2>
+        <h2 className="text-xl font-semibold text-zinc-100">{isNew ? "New Project Link" : "Edit Project Link"}</h2>
       </div>
 
       <form onSubmit={(e) => { e.preventDefault(); void onSave(form); }} className="space-y-5">
@@ -277,9 +241,9 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
           <div>
             <h3 className="text-sm font-semibold text-zinc-200">Workspace</h3>
-            <p className="mt-0.5 text-xs text-zinc-500">Name this profile and point it to a local repo.</p>
+            <p className="mt-0.5 text-xs text-zinc-500">Name this project-to-DevOps mapping and point it to a local repo.</p>
           </div>
-          <Field label="Profile name *" value={form.name} onChange={set("name")} placeholder="my-project" />
+          <Field label="Project Link name *" value={form.name} onChange={set("name")} placeholder="my-project" />
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-zinc-400">Repo path</span>
@@ -321,7 +285,7 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
           <div>
             <h3 className="text-sm font-semibold text-zinc-200">Azure DevOps</h3>
-            <p className="mt-0.5 text-xs text-zinc-500">Connection used by ADO tools when this profile is active.</p>
+            <p className="mt-0.5 text-xs text-zinc-500">Connection used by ADO tools when this Project Link is active.</p>
           </div>
           <Field label="Organisation URL" value={form.adoOrgUrl} onChange={set("adoOrgUrl")} placeholder="https://dev.azure.com/myorg" />
           <div className="grid grid-cols-2 gap-4">
@@ -362,6 +326,45 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
               </p>
             )}
           </div>
+
+          <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={form.adoMcpEnabled}
+                onChange={(event) => set("adoMcpEnabled")(event.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-zinc-700 bg-zinc-900"
+              />
+              <span className="min-w-0">
+                <span className="block text-xs font-medium text-zinc-300">Enable Azure DevOps MCP bridge</span>
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-zinc-600">
+                  Reuse the upstream Azure DevOps MCP server for repositories, pipelines, and work item tools when this Project Link is active.
+                </span>
+              </span>
+            </label>
+            {form.adoMcpEnabled && (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field
+                  label="MCP command"
+                  value={form.adoMcpCommand}
+                  onChange={set("adoMcpCommand")}
+                  placeholder="mcp-server-azuredevops"
+                />
+                <Field
+                  label="Authentication"
+                  value={form.adoMcpAuthentication}
+                  onChange={set("adoMcpAuthentication")}
+                  placeholder="pat or azcli"
+                />
+                <Field
+                  label="Domains"
+                  value={form.adoMcpDomains}
+                  onChange={set("adoMcpDomains")}
+                  placeholder="repositories,pipelines,work-items"
+                />
+              </div>
+            )}
+          </div>
         </section>
 
         {/* ── Actions ── */}
@@ -371,7 +374,7 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
             disabled={saving || !form.name.trim()}
             className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-40 transition"
           >
-            {saving ? "Saving…" : "Save profile"}
+            {saving ? "Saving…" : "Save Project Link"}
           </button>
           <button type="button" onClick={onBack}
             className="rounded-lg border border-zinc-700 px-5 py-2 text-sm text-zinc-400 hover:border-zinc-600 hover:text-zinc-200 transition">
@@ -383,7 +386,7 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
   );
 }
 
-// ─── Profile card ─────────────────────────────────────────────────────────────
+// ─── Project Link card ────────────────────────────────────────────────────────
 
 function ProfileCard({ profile, onEdit, onDelete }: { profile: WorkspaceProfile; onEdit: () => void; onDelete: () => void }) {
   return (
@@ -448,7 +451,7 @@ export default function Profiles(): JSX.Element {
   }, [mode, createProfile, updateProfile]);
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!confirm("Delete this profile?")) return;
+    if (!confirm("Delete this Project Link?")) return;
     try { await deleteProfile(id); }
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }, [deleteProfile]);
@@ -476,9 +479,9 @@ export default function Profiles(): JSX.Element {
     <div className="mx-auto max-w-xl w-full space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-zinc-100">Profiles</h2>
+          <h2 className="text-xl font-semibold text-zinc-100">Project Links</h2>
           <div className="mt-1 flex items-center gap-2 flex-wrap">
-            <p className="text-sm text-zinc-500">Each profile holds repo path, ADO connection, and branch defaults for one workspace.</p>
+            <p className="text-sm text-zinc-500">Each Project Link maps one local repo to Azure DevOps, branch defaults, and validation commands.</p>
           </div>
           <div className="mt-1.5 flex items-center gap-2">
             {cloudSync ? (
@@ -507,7 +510,7 @@ export default function Profiles(): JSX.Element {
             <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
               <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
             </svg>
-            New profile
+            New Project Link
           </button>
         )}
       </div>
@@ -519,7 +522,7 @@ export default function Profiles(): JSX.Element {
       {profilesLoading && profiles.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-400" />
-          <p className="text-xs text-zinc-600">Loading profiles…</p>
+          <p className="text-xs text-zinc-600">Loading Project Links…</p>
         </div>
       ) : profiles.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
@@ -527,9 +530,9 @@ export default function Profiles(): JSX.Element {
             <rect x="6" y="8" width="28" height="24" rx="3" stroke="currentColor" strokeWidth="1.5" />
             <path d="M13 16h14M13 21h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
-          <p className="text-sm text-zinc-500">No profiles yet.</p>
+          <p className="text-sm text-zinc-500">No Project Links yet.</p>
           <button onClick={() => setMode("new")} className="text-sm text-blue-400 hover:text-blue-300 transition">
-            Create your first profile
+            Create your first Project Link
           </button>
         </div>
       ) : (

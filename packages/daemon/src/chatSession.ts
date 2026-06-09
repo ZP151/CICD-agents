@@ -7,6 +7,9 @@ import {
   LLMClient,
   getSettings,
   ToolExecutor,
+  toolRequiresApproval,
+  StdioMcpClient,
+  createMcpToolsFromClient,
   runCommand,
   isConfirmationMessage,
   isDenialMessage,
@@ -17,6 +20,7 @@ import {
   type ChatPlannerResult,
   type ChatWorkflowState,
   type PendingToolAction,
+  type Tool,
   type ToolContext,
   type Settings,
   azureDevOpsTools,
@@ -60,6 +64,10 @@ export interface InlineProfile {
   adoPat:          string;
   adoPipelineId:   string;
   adoPipelineName: string;
+  adoMcpEnabled:   boolean;
+  adoMcpCommand:   string;
+  adoMcpAuthentication: string;
+  adoMcpDomains:   string;
   templateProfile: string;
   buildCommand:    string;
   testCommand:     string;
@@ -120,6 +128,134 @@ interface StoredSession {
 }
 
 type HistoryStore = Record<string, StoredSession>;
+
+type ChatExecutorMode = "planner" | "confirmed-action";
+
+function chatTools(): Tool[] {
+  return [
+    ...gitTools(),
+    ...dotnetTools(),
+    ...npmTools(),
+    ...pytestTools(),
+    ...azureDevOpsTools(),
+    gitIntentTool(),
+  ];
+}
+
+interface ChatToolExecutors {
+  plannerExecutor: ToolExecutor;
+  actionExecutor: ToolExecutor;
+  close: () => Promise<void>;
+}
+
+async function createChatToolExecutors(ctx: ToolContext): Promise<ChatToolExecutors> {
+  const clients: StdioMcpClient[] = [];
+  const tools = [...chatTools(), ...await optionalAzureDevOpsMcpTools(ctx, clients)];
+  const plannerExecutor = createChatToolExecutor(ctx, "planner", tools);
+  const actionExecutor = createChatToolExecutor(ctx, "confirmed-action", tools);
+  return {
+    plannerExecutor,
+    actionExecutor,
+    close: async () => {
+      await Promise.allSettled(clients.map((client) => client.close()));
+    },
+  };
+}
+
+function createChatToolExecutor(ctx: ToolContext, mode: ChatExecutorMode, tools: Tool[]): ToolExecutor {
+  const executor = new ToolExecutor(
+    ctx,
+    mode === "planner"
+      ? ({ tool }) => !toolRequiresApproval(tool)
+      : undefined,
+  );
+  executor.registerMany(tools);
+  return executor;
+}
+
+async function optionalAzureDevOpsMcpTools(ctx: ToolContext, clients: StdioMcpClient[]): Promise<Tool[]> {
+  const profileEnabled = asBoolean(ctx.extra["ado_mcp_enabled"]);
+  if (!profileEnabled && !isEnabled(process.env.CICD_AGENT_ADO_MCP_ENABLED)) return [];
+  const org = azureDevOpsOrgSlug(String(ctx.extra["ado_org"] ?? getSettings().azureDevOpsOrg ?? ""));
+  if (!org) return [];
+  const pat = String(ctx.extra["ado_pat"] ?? "").trim();
+  const env: Record<string, string> = {};
+  if (pat) env.PERSONAL_ACCESS_TOKEN = Buffer.from(`:${pat}`).toString("base64");
+  const command = nonEmptyString(ctx.extra["ado_mcp_command"]) || process.env.CICD_AGENT_ADO_MCP_COMMAND || "mcp-server-azuredevops";
+  const authentication =
+    nonEmptyString(ctx.extra["ado_mcp_authentication"]) ||
+    (pat ? "pat" : (process.env.CICD_AGENT_ADO_MCP_AUTHENTICATION || "azcli"));
+  const domains =
+    nonEmptyString(ctx.extra["ado_mcp_domains"]) ||
+    process.env.CICD_AGENT_ADO_MCP_DOMAINS ||
+    "repositories,pipelines,work-items";
+  const client = new StdioMcpClient({
+    name: "ado",
+    command,
+    args: [
+      org,
+      "--authentication",
+      authentication,
+      "--domains",
+      domains,
+    ],
+    env,
+    timeoutMs: Number(process.env.CICD_AGENT_ADO_MCP_TIMEOUT_MS ?? 15_000),
+  });
+  try {
+    const tools = await createMcpToolsFromClient("ado", client);
+    clients.push(client);
+    return tools;
+  } catch {
+    await client.close();
+    return [];
+  }
+}
+
+function isEnabled(value: string | undefined): boolean {
+  return value === "1" || value?.toLowerCase() === "true" || value?.toLowerCase() === "yes";
+}
+
+function asBoolean(value: unknown): boolean {
+  return value === true || value === "1" || String(value).toLowerCase() === "true" || String(value).toLowerCase() === "yes";
+}
+
+function nonEmptyString(value: unknown): string {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function inlineProfileToToolExtra(profile: InlineProfile): Record<string, unknown> {
+  const orgBase = profile.adoOrgUrl.replace(/\/$/, "");
+  return {
+    ado_org: orgBase,
+    ado_project: profile.adoProject,
+    ado_repository: profile.adoRepoName,
+    ado_target_branch: profile.targetBranch,
+    ado_pat: profile.adoPat,
+    ...(profile.adoPipelineId ? { ado_pipeline_id: profile.adoPipelineId } : {}),
+    ado_mcp_enabled: profile.adoMcpEnabled,
+    ado_mcp_command: profile.adoMcpCommand,
+    ado_mcp_authentication: profile.adoMcpAuthentication,
+    ado_mcp_domains: profile.adoMcpDomains,
+  };
+}
+
+function azureDevOpsOrgSlug(value: string): string {
+  const raw = value.trim().replace(/\/$/, "");
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    if (url.hostname === "dev.azure.com") {
+      return url.pathname.split("/").filter(Boolean)[0] ?? "";
+    }
+    if (url.hostname.endsWith(".visualstudio.com")) {
+      return url.hostname.split(".")[0] ?? "";
+    }
+    return raw;
+  } catch {
+    return raw;
+  }
+}
 
 function historyPath(): string {
   return path.join(getSettings().dataDir, "chat-history.json");
@@ -395,7 +531,7 @@ export class ChatSessionManager {
     // Prefer inline profile sent from the frontend over a stored profile lookup.
     let profileExtra: Record<string, unknown> = {};
     if (inlineProfile) {
-      profileExtra = profileToToolExtra(inlineProfile as Parameters<typeof profileToToolExtra>[0]);
+      profileExtra = inlineProfileToToolExtra(inlineProfile);
     } else {
       const storedForProfile = await loadSession(sessionId);
       const resolvedProfileId = profileId ?? storedForProfile?.profileId;
@@ -405,25 +541,20 @@ export class ChatSessionManager {
       }
     }
 
-    // ── Build shared tools/executor (needed for both paths) ─────────────────
+    // ── Build shared tool context plus separate executors for planner vs.
+    // confirmed actions. The planner executor uses an approval callback ported
+    // from OpenHarness' approve-before-execute pattern as a runtime backstop.
     const toolCtx: ToolContext = {
       repoPath: session.repoPath,
       env: {},
       timeoutSec: 60,
       extra: profileExtra,
     };
-    const executor = new ToolExecutor(toolCtx);
-    executor.registerMany([
-      ...gitTools(),
-      ...dotnetTools(),
-      ...npmTools(),
-      ...pytestTools(),
-      ...azureDevOpsTools(),
-      gitIntentTool(),
-    ]);
+    const toolRuntime = await createChatToolExecutors(toolCtx);
+    const { plannerExecutor, actionExecutor } = toolRuntime;
     const effectiveSettings = buildEffectiveSettings(llmConfig);
     const llm = new LLMClient(effectiveSettings);
-    const planner = new ChatPlanner(llm, executor);
+    const planner = new ChatPlanner(llm, plannerExecutor);
     const waitForConfirm = (): Promise<boolean> =>
       new Promise<boolean>((resolve) => {
         session.confirmResolver = resolve;
@@ -486,7 +617,7 @@ export class ChatSessionManager {
             let toolResult: unknown;
             let ok = true;
             try {
-              toolResult = await executor.call(pending.tool, pending.args);
+              toolResult = await actionExecutor.call(pending.tool, pending.args);
             } catch (err) {
               ok = false;
               toolResult = { error: err instanceof Error ? err.message : String(err) };
@@ -541,6 +672,7 @@ export class ChatSessionManager {
         sessionId, message, history, session.repoPath, planner, waitForConfirm, contextPrompt,
       );
     } finally {
+      await toolRuntime.close();
       // Always clean up the active entry — even if the server force-closes the generator
       this.active.delete(sessionId);
     }
@@ -571,6 +703,7 @@ export class ChatSessionManager {
       abortController: new AbortController(),
     });
 
+    let toolRuntime: ChatToolExecutors | null = null;
     try {
       // Clear immediately so a double-click cannot re-trigger the same action.
       clearStoredApprovalProposal(storedSession);
@@ -585,7 +718,7 @@ export class ChatSessionManager {
       // frontend localStorage on the original /chat request) so that ADO org,
       // project, repo, and PAT are available without a daemon-side DB lookup.
       const profileExtra: Record<string, unknown> = storedSession.inlineProfile
-        ? profileToToolExtra(storedSession.inlineProfile as Parameters<typeof profileToToolExtra>[0])
+        ? inlineProfileToToolExtra(storedSession.inlineProfile)
         : storedSession.profileId
           ? (() => {
               const p = getWorkspaceProfile(getSettings().dataDir, storedSession.profileId!);
@@ -598,28 +731,21 @@ export class ChatSessionManager {
         timeoutSec: 60,
         extra: profileExtra,
       };
-      const executor = new ToolExecutor(toolCtx);
-      executor.registerMany([
-        ...gitTools(),
-        ...dotnetTools(),
-        ...npmTools(),
-        ...pytestTools(),
-        ...azureDevOpsTools(),
-        gitIntentTool(),
-      ]);
+      toolRuntime = await createChatToolExecutors(toolCtx);
+      const { actionExecutor, plannerExecutor } = toolRuntime;
       // Reuse the LLM config that was persisted when the session's last /chat
       // request ran — this ensures confirm-action works without the frontend
       // having to re-send credentials.
       const effectiveSettings = buildEffectiveSettings(storedSession.llmConfig);
       const llm = new LLMClient(effectiveSettings);
-      const planner = new ChatPlanner(llm, executor);
+      const planner = new ChatPlanner(llm, plannerExecutor);
 
       // ── Execute the confirmed tool ─────────────────────────────────────────
       yield { type: "tool_start", name: pending.tool, args: pending.args };
       let toolResult: unknown;
       let ok = true;
       try {
-        toolResult = await executor.call(pending.tool, pending.args);
+        toolResult = await actionExecutor.call(pending.tool, pending.args);
       } catch (err) {
         ok = false;
         toolResult = { error: err instanceof Error ? err.message : String(err) };
@@ -667,6 +793,7 @@ export class ChatSessionManager {
         sessionId, continuationMsg, history, session.repoPath, planner, () => Promise.resolve(true), contextPrompt,
       );
     } finally {
+      await toolRuntime?.close();
       this.active.delete(sessionId);
     }
   }

@@ -441,8 +441,8 @@ export default function Settings(): JSX.Element {
       </SettingsSection>
 
       <SettingsSection title="Review defaults">
-        <SettingsRow title="Queue scope" description="Uses the selected workspace profile">
-          <StatusPill>Profile</StatusPill>
+        <SettingsRow title="Queue scope" description="Uses the selected Project Link">
+          <StatusPill>Project Link</StatusPill>
         </SettingsRow>
         <SettingsRow title="Audit records" description="Keeps timestamps and actors when available">
           <StatusPill>Retained</StatusPill>

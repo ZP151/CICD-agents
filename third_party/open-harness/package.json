@@ -1,0 +1,23 @@
+{
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r build",
+    "changeset": "changeset",
+    "release:github": "node scripts/release/push-and-release.mjs",
+    "release:publish": "node scripts/release/publish-and-release.mjs",
+    "release:status": "changeset status",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "typecheck": "pnpm -r typecheck",
+    "format": "pnpm -r format",
+    "format:check": "pnpm -r format:check",
+    "dev:docs": "pnpm --filter docs dev",
+    "dev:web": "pnpm --filter @openharness/web dev",
+    "version-packages": "changeset version && pnpm install --lockfile-only"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.30.0",
+    "jsdom": "^26.1.0",
+    "vitest": "^3.2.1"
+  }
+}

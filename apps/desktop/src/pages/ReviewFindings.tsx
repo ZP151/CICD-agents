@@ -249,7 +249,7 @@ export default function ReviewFindings(): JSX.Element {
         <div>
           <h2 className="text-2xl font-semibold text-zinc-100">Review Queue</h2>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500">
-            Approval and quality queue for the selected profile. Decisions come from
+            Approval and quality queue for the selected Project Link. Decisions come from
             Review Agent history, including auto-approval audit records.
           </p>
         </div>
@@ -260,7 +260,7 @@ export default function ReviewFindings(): JSX.Element {
             disabled={profilesLoading || profiles.length === 0}
             onChange={(e) => setProfileId(e.target.value)}
           >
-            {profiles.length === 0 && <option value="">No profiles</option>}
+            {profiles.length === 0 && <option value="">No Project Links</option>}
             {profiles.map((profile) => (
               <option key={profile.id} value={profile.id}>{profile.name}</option>
             ))}

@@ -2,7 +2,7 @@ import type { Tool } from "./executor.js";
 
 export interface ToolCapability {
   name: string;
-  category: "git" | "ado" | "test" | "build" | "other";
+  category: "git" | "ado" | "mcp" | "test" | "build" | "other";
   description: string;
   riskLevel: "low" | "medium" | "high";
   readOnly: boolean;
@@ -18,7 +18,6 @@ const READ_ONLY_TOOLS = new Set([
   "git_remote",
   "git_current_branch",
   "git_show",
-  "git_fetch",
   "git_merge_base",
   "git_intent_translator",
 ]);
@@ -44,6 +43,22 @@ export function toolCapabilities(tools: Iterable<Tool>): ToolCapability[] {
   }));
 }
 
+export function toolCapability(tool: Tool): ToolCapability {
+  return {
+    name: tool.name,
+    category: classifyToolCategory(tool.name),
+    description: tool.description,
+    riskLevel: classifyToolRisk(tool.name),
+    readOnly: READ_ONLY_TOOLS.has(tool.name),
+    requiresApproval: classifyToolRisk(tool.name) !== "low",
+    required: requiredParams(tool),
+  };
+}
+
+export function toolRequiresApproval(tool: Tool): boolean {
+  return toolCapability(tool).requiresApproval;
+}
+
 export function toolCapabilityPrompt(tools: Iterable<Tool>): string {
   const capabilities = toolCapabilities(tools);
   if (capabilities.length === 0) return "";
@@ -64,6 +79,8 @@ export function toolCapabilityPrompt(tools: Iterable<Tool>): string {
 function classifyToolCategory(name: string): ToolCapability["category"] {
   if (name.startsWith("git_")) return "git";
   if (name.startsWith("ado_")) return "ado";
+  if (name.startsWith("mcp_ado_") || name.startsWith("mcp_azure_devops_")) return "ado";
+  if (name.startsWith("mcp_")) return "mcp";
   if (name.includes("test") || name === "pytest") return "test";
   if (name.includes("build") || name.startsWith("npm_") || name.startsWith("dotnet_")) return "build";
   return "other";
@@ -72,6 +89,22 @@ function classifyToolCategory(name: string): ToolCapability["category"] {
 function classifyToolRisk(name: string): ToolCapability["riskLevel"] {
   if (HIGH_RISK_TOOLS.has(name)) return "high";
   if (READ_ONLY_TOOLS.has(name)) return "low";
+  if (name.startsWith("mcp_")) return classifyMcpToolRisk(name);
+  return "medium";
+}
+
+function classifyMcpToolRisk(name: string): ToolCapability["riskLevel"] {
+  const action = name.toLowerCase();
+  if (
+    /\b(create|update|delete|remove|trigger|run|queue|approve|abandon|complete|merge|link|add|vote|reply)\b/.test(action) ||
+    /_(create|update|delete|remove|trigger|run|queue|approve|abandon|complete|merge|link|add|vote|reply)_?/.test(action)
+  ) {
+    return action.includes("pull_request") || action.includes("pipeline") || action.includes("repo_")
+      ? "high"
+      : "medium";
+  }
+  if (/\b(list|get|search|show|read|find|query|download)\b/.test(action)) return "low";
+  if (/_(list|get|search|show|read|find|query|download)_?/.test(action)) return "low";
   return "medium";
 }
 

@@ -646,7 +646,7 @@ function ProductionAuthGate({ children, info }: { children: React.ReactNode; inf
             <div>
               <h1 className="text-sm font-semibold text-zinc-100">Corporate Microsoft sign-in required</h1>
               <p className="mt-1 text-xs leading-5 text-zinc-500">
-                Your Azure identity is used to load your profiles and chat data from the company cloud store.
+                Your Azure identity is used to load your Project Links and chat data from the company cloud store.
               </p>
             </div>
           </div>
@@ -762,7 +762,7 @@ const NAV_GROUPS = [
     items: [
       { to: "/chat", label: "New chat", Icon: IconChat },
       { to: "/pulls", label: "Pull Requests", Icon: IconPR },
-      { to: "/profiles", label: "Profiles", Icon: IconProfiles },
+      { to: "/profiles", label: "Project Links", Icon: IconProfiles },
     ],
   },
   {

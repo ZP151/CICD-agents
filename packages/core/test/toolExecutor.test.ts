@@ -4,6 +4,7 @@ import {
   redact,
   runCommand,
   splitCommand,
+  ToolDeniedError,
   ToolError,
   ToolExecutor,
 } from "../src/tools/executor.js";
@@ -57,5 +58,49 @@ describe("ToolExecutor", () => {
   it("throws ToolError for unknown tool", async () => {
     const exec = new ToolExecutor({ repoPath: os.tmpdir(), env: {}, timeoutSec: 5, extra: {} });
     await expect(exec.call("nope", {})).rejects.toBeInstanceOf(ToolError);
+  });
+
+  it("runs the approval callback before executing a tool", async () => {
+    let called = false;
+    const exec = new ToolExecutor(
+      { repoPath: os.tmpdir(), env: {}, timeoutSec: 5, extra: {} },
+      async ({ toolName, payload }) => {
+        expect(toolName).toBe("echo");
+        expect(payload).toEqual({ foo: 1 });
+        return true;
+      },
+    );
+    exec.register({
+      name: "echo",
+      description: "echo",
+      parameters: { type: "object", properties: {} },
+      handler: async () => {
+        called = true;
+        return { ok: true };
+      },
+    });
+
+    await expect(exec.call("echo", { foo: 1 })).resolves.toEqual({ ok: true });
+    expect(called).toBe(true);
+  });
+
+  it("throws ToolDeniedError and skips handler when approval denies execution", async () => {
+    let called = false;
+    const exec = new ToolExecutor(
+      { repoPath: os.tmpdir(), env: {}, timeoutSec: 5, extra: {} },
+      () => false,
+    );
+    exec.register({
+      name: "danger",
+      description: "danger",
+      parameters: { type: "object", properties: {} },
+      handler: async () => {
+        called = true;
+        return { ok: true };
+      },
+    });
+
+    await expect(exec.call("danger", {})).rejects.toBeInstanceOf(ToolDeniedError);
+    expect(called).toBe(false);
   });
 });

@@ -22,6 +22,25 @@ export function redact(text: string): string {
 
 export class ToolError extends Error {}
 
+export interface ToolCallInfo {
+  toolName: string;
+  payload: Record<string, unknown>;
+  tool: Tool;
+}
+
+/**
+ * Ported from OpenHarness' approve-before-execute pattern.
+ * Return true to allow tool execution, false to deny it.
+ */
+export type ToolApproveFn = (toolCall: ToolCallInfo) => boolean | Promise<boolean>;
+
+export class ToolDeniedError extends Error {
+  constructor(toolName: string) {
+    super(`Tool call to "${toolName}" was denied.`);
+    this.name = "ToolDeniedError";
+  }
+}
+
 export interface CommandResult {
   cmd: string[];
   returncode: number;
@@ -132,7 +151,10 @@ export function toolSchema(tool: Tool): {
 export class ToolExecutor {
   private readonly tools = new Map<string, Tool>();
 
-  constructor(public readonly context: ToolContext) {}
+  constructor(
+    public readonly context: ToolContext,
+    private readonly approve?: ToolApproveFn,
+  ) {}
 
   register(tool: Tool): void {
     this.tools.set(tool.name, tool);
@@ -153,6 +175,10 @@ export class ToolExecutor {
   async call(name: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
     const tool = this.tools.get(name);
     if (!tool) throw new ToolError(`unknown tool: ${name}`);
+    if (this.approve) {
+      const allowed = await this.approve({ toolName: name, payload, tool });
+      if (!allowed) throw new ToolDeniedError(name);
+    }
     const result = await tool.handler(this.context, payload);
     if (result === null || typeof result !== "object" || Array.isArray(result)) {
       throw new ToolError(`tool '${name}' did not return an object`);

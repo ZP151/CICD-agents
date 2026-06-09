@@ -1,6 +1,6 @@
 name: Release
 
-# Triggered when you push a version tag such as v0.2.0
+# Triggered when you push a version tag such as v0.5.3
 on:
   push:
     tags:

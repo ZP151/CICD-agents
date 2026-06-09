@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "baseUrl": "src",
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@modules/*": ["modules/*"],
+      "@tools/*": ["tools/*"],
+      "@config/*": ["config/*"],
+      "@utils": ["utils.js"]
+    }
+  },
+  "include": ["./src/**/*", "./docs/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
