@@ -46,6 +46,7 @@ import {
   type WorkspaceProfileInput,
   listAzurePullRequests,
   listAzurePipelineRuns,
+  getAzureDevOpsAuth,
   listReviewQueueItems,
   listLocalReviewHistory,
   upsertLocalReviewHistory,
@@ -720,15 +721,14 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     if (!profile.adoOrgUrl || !profile.adoProject || !profile.adoRepoName) {
       return reply.code(400).send({ error: "ado_profile_incomplete" });
     }
-    if (!profile.adoPat) {
-      return reply.code(400).send({ error: "ado_pat_missing" });
-    }
+
+    const adoAuth = await getAzureDevOpsAuth(profile.adoPat);
 
     const prs = await listAzurePullRequests({
       organization: profile.adoOrgUrl,
       project: profile.adoProject,
       repository: profile.adoRepoName,
-      pat: profile.adoPat,
+      auth: adoAuth,
       status,
       top: 50,
     });
@@ -737,7 +737,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         organization: profile.adoOrgUrl,
         project: profile.adoProject,
         pipelineId: profile.adoPipelineId,
-        pat: profile.adoPat,
+        auth: adoAuth,
         top: 100,
       })
       : [];
@@ -881,14 +881,13 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
     const { pullRequestId, targetBranch: bodyTargetBranch, llmConfig, profile: inlineProfile } = parsedBody.data;
 
-    // Resolve profile — prefer inline data (already has PAT from localStorage), fall back to store
+    // Resolve profile — prefer inline data from the frontend, fall back to store.
     type MinProfile = { adoOrgUrl: string; adoProject: string; adoRepoName: string; adoPat: string; targetBranch: string };
     let profileData: MinProfile;
     if (
       inlineProfile?.adoOrgUrl &&
       inlineProfile.adoProject &&
-      inlineProfile.adoRepoName &&
-      inlineProfile.adoPat
+      inlineProfile.adoRepoName
     ) {
       profileData = {
         adoOrgUrl:   inlineProfile.adoOrgUrl,
@@ -923,12 +922,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     if (!profileData.adoOrgUrl || !profileData.adoProject || !profileData.adoRepoName) {
       return reply.code(400).send({ error: "ado_profile_incomplete" });
     }
-    if (!profileData.adoPat) {
-      return reply.code(400).send({ error: "ado_pat_missing" });
-    }
-
     const org = extractAdoOrg(profileData.adoOrgUrl);
-    const ado = new AdoClient({ organization: org, pat: profileData.adoPat });
+    const ado = new AdoClient({
+      organization: org,
+      authHeaderProvider: async () => (await getAzureDevOpsAuth(profileData.adoPat)).header,
+    });
     const stateStore = new FileStateStore(settings.dataDir);
 
     const effectiveSettings = buildReviewLlmSettings(llmConfig);

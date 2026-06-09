@@ -11,6 +11,8 @@ export interface AdoClientOptions {
   pat?: string;
   /** Override the credential entirely (tests). */
   credential?: TokenCredential;
+  /** Override HTTP Authorization header resolution entirely. */
+  authHeaderProvider?: () => Promise<string>;
   /** Service principal config (for cloud). */
   spn?: {
     tenantId: string;
@@ -28,12 +30,14 @@ export interface AdoAuthenticatedUser {
 export class AdoClient {
   private readonly org: string;
   private readonly pat?: string;
+  private readonly authHeaderProvider?: () => Promise<string>;
   private readonly credential: TokenCredential | null;
   private cachedToken: { token: string; expiresAt: number } | null = null;
 
   constructor(opts: AdoClientOptions) {
     this.org = opts.organization;
     this.pat = opts.pat;
+    this.authHeaderProvider = opts.authHeaderProvider;
     if (opts.credential) {
       this.credential = opts.credential;
     } else if (opts.spn?.tenantId && opts.spn.clientId && opts.spn.clientSecret) {
@@ -52,6 +56,7 @@ export class AdoClient {
   }
 
   private async authHeader(): Promise<string> {
+    if (this.authHeaderProvider) return this.authHeaderProvider();
     if (this.pat) return `Basic ${Buffer.from(`:${this.pat}`).toString("base64")}`;
     if (!this.credential) throw new Error("No ADO credential available (no PAT, no SPN, no MI).");
     const now = Date.now();

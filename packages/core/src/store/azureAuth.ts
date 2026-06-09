@@ -62,6 +62,7 @@ let cached: AzureUser | null = null;
 let pluginRegistered = false;
 
 const IDENTITY_SCOPE = "https://graph.microsoft.com/User.Read";
+export const AZURE_DEVOPS_SCOPE = "499b84ac-1321-427f-aa17-267ca6975798/.default";
 const TOKEN_CACHE_NAME = "cicd-agent";
 const REDIRECT_URI = "http://localhost";
 const MSAL_CACHE_SERVICE = "Microsoft.Developer.IdentityService";
@@ -231,6 +232,57 @@ export async function loginWithCachedAccount(homeAccountId: string): Promise<Azu
   return cached;
 }
 
+export async function getAzureDevOpsToken(opts: {
+  interactive?: boolean;
+  browser?: BrowserLoginChoice;
+  loginHint?: string;
+  homeAccountId?: string;
+} = {}): Promise<string> {
+  const clientId = desktopClientId();
+  if (clientId) {
+    const client = await createMsalClient();
+    const accounts = await client.getTokenCache().getAllAccounts();
+    const account = opts.homeAccountId
+      ? accounts.find((candidate) => candidate.homeAccountId === opts.homeAccountId)
+      : accounts[0];
+
+    if (account) {
+      try {
+        const result = await client.acquireTokenSilent({
+          scopes: [AZURE_DEVOPS_SCOPE],
+          account,
+        });
+        if (result?.accessToken) return result.accessToken;
+      } catch {
+        // Consent may not have been granted yet; fall through to interactive or identity cache.
+      }
+    }
+
+    if (opts.interactive) {
+      const result = await client.acquireTokenInteractive({
+        scopes: [AZURE_DEVOPS_SCOPE],
+        account: account ?? undefined,
+        loginHint: opts.loginHint ?? account?.username,
+        openBrowser: (url) => openBrowser(url, opts.browser ?? "default"),
+        successTemplate: "Azure DevOps access is enabled. You can close this browser tab and return to CICD Agent.",
+        errorTemplate: "Azure DevOps sign-in did not complete. Return to CICD Agent and try again.",
+      });
+      if (result?.accessToken) return result.accessToken;
+    }
+  }
+
+  try {
+    const token = await getAzureCredential({ interactive: false }).getToken(AZURE_DEVOPS_SCOPE);
+    if (token?.token) return token.token;
+  } catch {
+    // Normalize below.
+  }
+
+  throw new AzureAuthenticationRequiredError(
+    "Azure DevOps OAuth token is unavailable. Sign in again or configure an ADO PAT fallback.",
+  );
+}
+
 export async function loginWithBrowser(
   browser: BrowserLoginChoice = "default",
   opts: { loginHint?: string } = {},
@@ -264,6 +316,16 @@ export async function loginWithBrowser(
     ...decodeUserFromJwt(result.idToken ?? result.accessToken),
     avatarDataUrl: await fetchGraphAvatar(result.accessToken),
   };
+  try {
+    await getAzureDevOpsToken({
+      interactive: true,
+      browser,
+      loginHint: opts.loginHint ?? result.account?.username,
+      homeAccountId: result.account?.homeAccountId,
+    });
+  } catch {
+    // ADO OAuth is optional at sign-in time; ADO calls can still use PAT fallback.
+  }
   return cached;
 }
 

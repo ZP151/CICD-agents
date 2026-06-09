@@ -1,4 +1,5 @@
 import { getSettings } from "../settings.js";
+import { getAzureDevOpsToken, isAzureAuthenticationRequiredError } from "../store/azureAuth.js";
 import { ToolError, type Tool, type ToolContext } from "./executor.js";
 
 export const PAT_KEYRING_SERVICE = "cicd-agent";
@@ -9,6 +10,12 @@ const API_VERSION_WI = "7.1-preview.3";
 const API_VERSION_PIPELINES = "7.1-preview.1";
 
 export type PatProvider = () => Promise<string>;
+export type AdoAuthMode = "oauth" | "pat";
+
+export interface AdoAuth {
+  mode: AdoAuthMode;
+  header: string;
+}
 
 let patProvider: PatProvider = async () => {
   // Default: read from keyring via dynamic import; injectable in tests.
@@ -32,26 +39,36 @@ export function setPatProvider(provider: PatProvider): void {
   patProvider = provider;
 }
 
-function authHeader(pat: string): Record<string, string> {
-  return { Authorization: `Basic ${Buffer.from(`:${pat}`).toString("base64")}` };
+function patAuth(pat: string): AdoAuth {
+  return { mode: "pat", header: `Basic ${Buffer.from(`:${pat}`).toString("base64")}` };
+}
+
+function bearerAuth(token: string): AdoAuth {
+  return { mode: "oauth", header: `Bearer ${token}` };
+}
+
+function authHeader(auth: AdoAuth): Record<string, string> {
+  return { Authorization: auth.header };
 }
 
 const ADO_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 /** ADO returns 302 to a sign-in page when PAT auth fails; do not follow that redirect. */
-async function adoFetch(url: string, pat: string, init: RequestInit = {}): Promise<Response> {
+async function adoFetch(url: string, auth: AdoAuth, init: RequestInit = {}): Promise<Response> {
   const resp = await fetch(url, {
     ...init,
     redirect: "manual",
     headers: {
       Accept: "application/json",
-      ...authHeader(pat),
+      ...authHeader(auth),
       ...(init.headers ?? {}),
     },
   });
   if (ADO_REDIRECT_STATUSES.has(resp.status)) {
     throw new ToolError(
-      "ADO authentication failed (redirect to sign-in). Check org URL, PAT value, and Code (Read) scope.",
+      auth.mode === "oauth"
+        ? "ADO OAuth authentication failed (redirect to sign-in). Sign in again and make sure your account can access this Azure DevOps organization."
+        : "ADO authentication failed (redirect to sign-in). Check org URL, PAT value, and Code (Read) scope.",
     );
   }
   return resp;
@@ -117,23 +134,44 @@ function resolveOrgProject(ctx: ToolContext, payload: Record<string, unknown>): 
   return { org, project };
 }
 
-/** Resolve PAT: per-context override first, then module-level provider (keyring). */
-async function resolvePat(ctx: ToolContext): Promise<string> {
+async function resolveAdoAuth(ctx: ToolContext): Promise<AdoAuth> {
   const ctxPat = String(ctx.extra?.["ado_pat"] ?? "").trim();
-  if (ctxPat) return ctxPat;
-  return patProvider();
+  if (ctxPat) return patAuth(ctxPat);
+
+  try {
+    return bearerAuth(await getAzureDevOpsToken({ interactive: false }));
+  } catch (err) {
+    if (!isAzureAuthenticationRequiredError(err)) throw err;
+  }
+
+  try {
+    return patAuth(await patProvider());
+  } catch (err) {
+    if (err instanceof ToolError) {
+      throw new ToolError(
+        "Azure DevOps OAuth token is unavailable and no PAT fallback is configured. Sign in again or configure an ADO PAT.",
+      );
+    }
+    throw err;
+  }
 }
 
-async function postJson(url: string, body: unknown, pat: string): Promise<Response> {
-  return adoFetch(url, pat, {
+export async function getAzureDevOpsAuth(preferredPat?: string): Promise<AdoAuth> {
+  const pat = preferredPat?.trim();
+  if (pat) return patAuth(pat);
+  return bearerAuth(await getAzureDevOpsToken({ interactive: false }));
+}
+
+async function postJson(url: string, body: unknown, auth: AdoAuth): Promise<Response> {
+  return adoFetch(url, auth, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
 
-async function patchJson(url: string, body: unknown, pat: string, contentType: string): Promise<Response> {
-  return adoFetch(url, pat, {
+async function patchJson(url: string, body: unknown, auth: AdoAuth, contentType: string): Promise<Response> {
+  return adoFetch(url, auth, {
     method: "PATCH",
     headers: { "Content-Type": contentType },
     body: JSON.stringify(body),
@@ -144,7 +182,8 @@ export async function listAzurePullRequests(args: {
   organization: string;
   project: string;
   repository: string;
-  pat: string;
+  pat?: string;
+  auth?: AdoAuth;
   status?: "active" | "completed" | "abandoned" | "all";
   top?: number;
   creatorId?: string;
@@ -153,13 +192,10 @@ export async function listAzurePullRequests(args: {
   const org = args.organization.trim();
   const project = args.project.trim();
   const repository = args.repository.trim();
-  const pat = args.pat.trim();
   if (!org || !project || !repository) {
     throw new ToolError("ADO organization, project, and repository are required to list pull requests.");
   }
-  if (!pat) {
-    throw new ToolError("ADO PAT is required to list pull requests.");
-  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
 
   const params = new URLSearchParams({
     "searchCriteria.status": args.status ?? "active",
@@ -172,7 +208,7 @@ export async function listAzurePullRequests(args: {
   const url =
     `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories/` +
     `${encodeURIComponent(repository)}/pullrequests?${params.toString()}`;
-  const resp = await adoFetch(url, pat);
+  const resp = await adoFetch(url, auth);
   const data = (await parseAdoJson(resp, "list pull requests")) as {
     value?: Array<{
       pullRequestId?: number;
@@ -215,19 +251,17 @@ export async function listAzurePipelineRuns(args: {
   organization: string;
   project: string;
   pipelineId: string | number;
-  pat: string;
+  pat?: string;
+  auth?: AdoAuth;
   top?: number;
 }): Promise<AzurePipelineRunSummary[]> {
   const org = args.organization.trim();
   const project = args.project.trim();
   const pipelineId = String(args.pipelineId ?? "").trim();
-  const pat = args.pat.trim();
   if (!org || !project || !pipelineId) {
     throw new ToolError("ADO organization, project, and pipeline ID are required to list pipeline runs.");
   }
-  if (!pat) {
-    throw new ToolError("ADO PAT is required to list pipeline runs.");
-  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
 
   const params = new URLSearchParams({
     "api-version": "7.1",
@@ -237,7 +271,7 @@ export async function listAzurePipelineRuns(args: {
   const url =
     `${adoBase(org)}/${encodeURIComponent(project)}/_apis/pipelines/` +
     `${encodeURIComponent(pipelineId)}/runs?${params.toString()}`;
-  const resp = await adoFetch(url, pat);
+  const resp = await adoFetch(url, auth);
   const data = (await parseAdoJson(resp, "list pipeline runs")) as {
     value?: Array<{
       id?: number;
@@ -320,7 +354,7 @@ export function azureDevOpsTools(): Tool[] {
         if (!source || !title) {
           throw new ToolError("create_pull_request requires 'source_branch' and 'title'.");
         }
-        const pat = await resolvePat(ctx);
+        const auth = await resolveAdoAuth(ctx);
         const url =
           `${adoBase(org)}/${project}/_apis/git/repositories/${repository}/pullrequests` +
           `?api-version=${API_VERSION_GIT}`;
@@ -333,7 +367,7 @@ export function azureDevOpsTools(): Tool[] {
             description,
             isDraft: draft,
           },
-          pat,
+          auth,
         );
         if (!resp.ok) {
           throw new ToolError(
@@ -381,7 +415,7 @@ export function azureDevOpsTools(): Tool[] {
             "link_work_item requires 'repository', 'pull_request_id', 'work_item_id'.",
           );
         }
-        const pat = await resolvePat(ctx);
+        const auth = await resolveAdoAuth(ctx);
         const artifactId = `vstfs:///Git/PullRequestId/${project}%2F${repository}%2F${prId}`;
         const url = `${adoBase(org)}/${project}/_apis/wit/workitems/${workItemId}?api-version=${API_VERSION_WI}`;
         const body = [
@@ -391,7 +425,7 @@ export function azureDevOpsTools(): Tool[] {
             value: { rel: "ArtifactLink", url: artifactId, attributes: { name: "Pull Request" } },
           },
         ];
-        const resp = await patchJson(url, body, pat, "application/json-patch+json");
+        const resp = await patchJson(url, body, auth, "application/json-patch+json");
         if (!resp.ok) {
           return { ok: false, status_code: resp.status, error: (await resp.text()).slice(0, 400) };
         }
@@ -416,13 +450,13 @@ export function azureDevOpsTools(): Tool[] {
         const pipelineId = Number(payload["pipeline_id"] ?? 0);
         const branch = String(payload["branch"] ?? "");
         if (!pipelineId) throw new ToolError("trigger_pipeline_run requires 'pipeline_id'.");
-        const pat = await resolvePat(ctx);
+        const auth = await resolveAdoAuth(ctx);
         const url = `${adoBase(org)}/${project}/_apis/pipelines/${pipelineId}/runs?api-version=${API_VERSION_PIPELINES}`;
         const body: Record<string, unknown> = {};
         if (branch) {
           body["resources"] = { repositories: { self: { refName: `refs/heads/${branch}` } } };
         }
-        const resp = await postJson(url, body, pat);
+        const resp = await postJson(url, body, auth);
         if (!resp.ok) {
           throw new ToolError(
             `ADO trigger_pipeline_run failed: HTTP ${resp.status}: ${(await resp.text()).slice(0, 400)}`,
