@@ -84,4 +84,16 @@ describe("daemon HTTP", () => {
     const body = state.json() as { workflowState?: unknown };
     expect(body.workflowState).toBeUndefined();
   });
+
+  it("reports cached auth status and clears local auth cache without Azure CLI", async () => {
+    app = await buildApp();
+
+    const status = await app.inject({ method: "GET", url: "/auth/status" });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toMatchObject({ authenticated: false, fromCache: true });
+
+    const logout = await app.inject({ method: "POST", url: "/auth/logout" });
+    expect(logout.statusCode).toBe(200);
+    expect(logout.json()).toEqual({ ok: true });
+  });
 });

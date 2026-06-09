@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { open as openUrl } from "@tauri-apps/plugin-shell";
 import { NavLink, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import {
   fetchHealth,
+  fetchAuthAccounts,
   fetchAuthStatus,
   fetchAuthMe,
   authLoginStream,
@@ -13,6 +13,8 @@ import {
   deleteProfile as apiDeleteProfile,
   type AuthUser,
   type AuthLoginEvent,
+  type AuthCachedAccount,
+  type AuthBrowserChoice,
   type WorkspaceProfile,
   type WorkspaceProfileInput,
 } from "./api.js";
@@ -376,7 +378,25 @@ function IconSettings() {
 
 const AUTH_CACHE_KEY = "cicd_agent_auth_user";
 
-function useAuth() {
+interface AuthState {
+  user: AuthUser;
+  checking: boolean;
+  save: (u: AuthUser) => void;
+  refresh: () => Promise<AuthUser>;
+}
+
+const AuthContext = createContext<AuthState>({
+  user: { authenticated: false },
+  checking: true,
+  save: () => {},
+  refresh: async () => ({ authenticated: false }),
+});
+
+function useAuth(): AuthState {
+  return useContext(AuthContext);
+}
+
+function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser>(() => {
     try {
       const raw = localStorage.getItem(AUTH_CACHE_KEY);
@@ -384,6 +404,7 @@ function useAuth() {
     } catch { /* ignore */ }
     return { authenticated: false };
   });
+  const [checking, setChecking] = useState(true);
 
   const save = useCallback((u: AuthUser) => {
     setUser(u);
@@ -394,153 +415,162 @@ function useAuth() {
     }
   }, []);
 
+  const refresh = useCallback(async (): Promise<AuthUser> => {
+    setChecking(true);
+    try {
+      const cached = await fetchAuthStatus();
+      if (cached.authenticated) save(cached);
+      const live = await fetchAuthMe();
+      save(live);
+      return live;
+    } finally {
+      setChecking(false);
+    }
+  }, [save]);
+
   // On mount: check daemon's instant cache, then do a live check in background
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      // Fast path: daemon file cache (no Azure round-trip)
-      const cached = await fetchAuthStatus();
-      if (!cancelled && cached.authenticated) save(cached);
-
-      // Slow path: live credential check (updates token validity)
-      const live = await fetchAuthMe();
-      if (!cancelled) save(live);
+      setChecking(true);
+      try {
+        const cached = await fetchAuthStatus();
+        if (!cancelled && cached.authenticated) save(cached);
+        const live = await fetchAuthMe();
+        if (!cancelled) save(live);
+      } finally {
+        if (!cancelled) setChecking(false);
+      }
     })();
     return () => { cancelled = true; };
   }, [save]);
 
-  return { user, save };
+  return (
+    <AuthContext.Provider value={{ user, checking, save, refresh }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 // ─── Login modal ──────────────────────────────────────────────────────────────
 
 function LoginModal({ onDone, onCancel }: { onDone: (u: AuthUser) => void; onCancel: () => void }) {
-  const [lines, setLines] = useState<string[]>(["Waiting for az login…"]);
+  const [accounts, setAccounts] = useState<AuthCachedAccount[]>([]);
+  const [browser, setBrowser] = useState<AuthBrowserChoice>("default");
+  const [message, setMessage] = useState("");
   const [done, setDone] = useState(false);
+  const [started, setStarted] = useState(false);
   const cancelRef = useRef<(() => void) | null>(null);
 
-  // Parse device code URL and code from az login output
-  const [deviceUrl, setDeviceUrl] = useState<string | null>(null);
-  const [deviceCode, setDeviceCode] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [browserOpened, setBrowserOpened] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    cancelRef.current = authLoginStream((e: AuthLoginEvent) => {
-      if (e.type === "output") {
-        setLines((l) => [...l.slice(-40), e.line]);
-        // Parse "https://microsoft.com/devicelogin" URL
-        const urlMatch = e.line.match(/https:\/\/\S+/);
-        if (urlMatch) setDeviceUrl(urlMatch[0]);
-        // Parse 8-char device code like "ABCD1234"
-        const codeMatch = e.line.match(/\b([A-Z0-9]{8,9})\b/);
-        if (codeMatch && !e.line.toLowerCase().includes("http")) setDeviceCode(codeMatch[1] ?? null);
+    let cancelled = false;
+    void (async () => {
+      const cached = await fetchAuthAccounts();
+      if (cancelled) return;
+      setAccounts(cached);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const startLogin = (account?: AuthCachedAccount) => {
+    cancelRef.current?.();
+    setStarted(true);
+    setDone(false);
+    setMessage(account ? `Signing in as ${account.username ?? account.name ?? "selected account"}...` : `Opening ${browserLabel(browser)}...`);
+
+    cancelRef.current = authLoginStream(browser, (e: AuthLoginEvent) => {
+      if (e.type === "browser") {
+        setMessage(e.message);
+      } else if (e.type === "output") {
+        setMessage(e.line);
       } else if (e.type === "status") {
-        setLines((l) => [...l, e.message]);
+        setMessage(e.message);
       } else if (e.type === "done") {
         setDone(true);
-        if (e.authenticated) onDone({ authenticated: true, oid: e.oid, upn: e.upn, name: e.name });
+        setMessage(e.authenticated ? "Sign-in complete." : "Sign-in did not return a verified user.");
+        if (e.authenticated) onDone({ authenticated: true, oid: e.oid, upn: e.upn, name: e.name, avatarDataUrl: e.avatarDataUrl });
         else onCancel();
       } else if (e.type === "error") {
-        setLines((l) => [...l, `Error: ${e.message}`]);
+        setMessage(e.message);
         setDone(true);
+        setStarted(false);
       }
-    });
-    return () => { cancelRef.current?.(); };
-  }, [onDone, onCancel]);
-
-  // Auto-open browser and auto-copy code as soon as both are available
-  useEffect(() => {
-    if (deviceUrl && !browserOpened) {
-      void openUrl(deviceUrl);
-      setBrowserOpened(true);
-    }
-  }, [deviceUrl, browserOpened]);
-
-  useEffect(() => {
-    if (deviceCode) {
-      void navigator.clipboard.writeText(deviceCode);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [deviceCode]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [lines]);
-
-  const copyCode = () => {
-    if (!deviceCode) return;
-    void navigator.clipboard.writeText(deviceCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    }, { loginHint: account?.username, accountHomeId: account?.homeAccountId });
   };
 
+  useEffect(() => () => { cancelRef.current?.(); }, []);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 backdrop-blur-sm">
-      <div className="w-[520px] rounded-xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-sm">
+      <div className="w-[460px] rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-5 shadow-2xl space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-zinc-200">Sign in with Microsoft</h2>
-          {done && (
-            <button onClick={onCancel} className="text-xs text-zinc-500 hover:text-zinc-300">Close</button>
+          <h2 className="text-sm font-semibold text-[rgb(var(--app-text))]">Sign in with Microsoft</h2>
+          {(done || !started) && (
+            <button onClick={onCancel} className="text-xs text-[rgb(var(--app-text-muted))] hover:text-[rgb(var(--app-text))]">Close</button>
           )}
         </div>
 
-        {/* Device code card — shown once az outputs the URL/code */}
-        {deviceUrl && (
-          <div className="rounded-lg border border-blue-800/50 bg-blue-950/20 p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-green-400 font-medium">
-                {browserOpened ? "Browser opened automatically" : "Opening browser…"}
-              </span>
-              <button
-                onClick={() => void openUrl(deviceUrl)}
-                className="ml-auto rounded border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-800 transition"
-              >
-                Reopen
-              </button>
-            </div>
-            {deviceCode && (
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-zinc-400">Enter this code in the browser:</span>
-                <span className="rounded bg-zinc-800 px-3 py-1 font-mono text-base font-bold text-zinc-100 tracking-widest">
-                  {deviceCode}
-                </span>
-                <button
-                  onClick={copyCode}
-                  className="rounded border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-800 transition"
-                >
-                  {copied ? "Copied!" : "Copy"}
-                </button>
+        {!started && (
+          <div className="space-y-3">
+            {accounts.length > 0 && (
+              <div className="space-y-2">
+                {accounts.slice(0, 4).map((account) => (
+                  <button
+                    key={account.homeAccountId}
+                    type="button"
+                    onClick={() => startLogin(account)}
+                    className="flex w-full items-center gap-3 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2 text-left transition hover:border-[rgb(var(--app-accent))] hover:bg-[rgb(var(--app-accent-soft))]"
+                  >
+                    <AccountAvatar account={account} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-[rgb(var(--app-text))]">
+                        {account.name ?? account.username ?? "Microsoft account"}
+                      </span>
+                      {account.username && (
+                        <span className="block truncate text-xs text-[rgb(var(--app-text-muted))]">{account.username}</span>
+                      )}
+                    </span>
+                  </button>
+                ))}
               </div>
             )}
-            <p className="text-[10px] text-zinc-500">
-              Sign in with your company Microsoft account at{" "}
+
+            <div className="flex rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]">
               <button
-                onClick={() => void openUrl(deviceUrl)}
-                className="text-blue-500 underline hover:text-blue-400"
+                type="button"
+                onClick={() => startLogin()}
+                className="min-w-0 flex-1 rounded-l-md px-3 py-2 text-sm font-semibold text-[rgb(var(--app-text))] transition hover:bg-[rgb(var(--app-bg-muted))]"
               >
-                {deviceUrl}
+                Use another account
               </button>
-            </p>
+              <div className="relative border-l border-[rgb(var(--app-border))]">
+                <select
+                  aria-label="Browser"
+                  value={browser}
+                  onChange={(e) => setBrowser(e.target.value as AuthBrowserChoice)}
+                  className="h-full appearance-none rounded-r-md bg-[rgb(var(--app-bg-muted))] py-2 pl-3 pr-7 text-xs font-medium text-[rgb(var(--app-text))] outline-none transition hover:bg-[rgb(var(--app-accent-soft))]"
+                >
+                  <option value="default">Default</option>
+                  <option value="edge">Edge</option>
+                  <option value="chrome">Chrome</option>
+                </select>
+                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[rgb(var(--app-text-muted))]">v</span>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Raw output log */}
-        <div className="h-28 overflow-y-auto rounded-md bg-zinc-950 p-2 font-mono text-[11px] text-zinc-500 leading-relaxed">
-          {lines.map((l, i) => <div key={i}>{l}</div>)}
-          <div ref={bottomRef} />
-        </div>
-
-        {!done && (
-          <div className="flex justify-end">
-            <button
-              onClick={() => { cancelRef.current?.(); onCancel(); }}
-              className="text-xs text-zinc-500 hover:text-zinc-300"
-            >
-              Cancel
-            </button>
+        {(started || message) && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-[rgb(var(--app-text-muted))]">{message}</span>
+            {started && !done && (
+              <button
+                onClick={() => { cancelRef.current?.(); onCancel(); }}
+                className="text-xs text-[rgb(var(--app-text-muted))] hover:text-[rgb(var(--app-text))]"
+              >
+                Cancel
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -548,15 +578,106 @@ function LoginModal({ onDone, onCancel }: { onDone: (u: AuthUser) => void; onCan
   );
 }
 
+function browserLabel(browser: AuthBrowserChoice): string {
+  if (browser === "edge") return "Microsoft Edge";
+  if (browser === "chrome") return "Google Chrome";
+  return "your default browser";
+}
+
+function accountInitials(account: AuthCachedAccount): string {
+  const source = account.name ?? account.username ?? "?";
+  const parts = source.split(/[.\s@_-]+/).filter(Boolean);
+  return parts.map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "?";
+}
+
+function AccountAvatar({ account }: { account: AuthCachedAccount }) {
+  if (account.avatarDataUrl) {
+    return <img src={account.avatarDataUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />;
+  }
+  return (
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--app-accent))] text-xs font-semibold text-white">
+      {accountInitials(account)}
+    </span>
+  );
+}
+
+function ProductionAuthGate({ children, info }: { children: React.ReactNode; info: DaemonInfo }) {
+  const requiresAuth = info.cloudProfileStore || info.cloudSecrets || info.cloudSessions;
+  const { user, checking, save, refresh } = useAuth();
+  const [loggingIn, setLoggingIn] = useState(false);
+
+  const handleLoginDone = (u: AuthUser) => {
+    save(u);
+    setLoggingIn(false);
+    void refresh();
+  };
+
+  if (!requiresAuth) return <>{children}</>;
+
+  if (checking) {
+    return (
+      <div className="flex h-screen w-screen flex-col items-center justify-center gap-3 bg-zinc-950 text-zinc-400">
+        <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+        </svg>
+        <span className="text-sm">Checking Microsoft sign-in...</span>
+      </div>
+    );
+  }
+
+  if (!user.authenticated) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-zinc-950 px-6 text-zinc-200">
+        {loggingIn && (
+          <LoginModal
+            onDone={handleLoginDone}
+            onCancel={() => setLoggingIn(false)}
+          />
+        )}
+        <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl">
+          <div className="mb-5 flex items-center gap-3">
+            <svg className="h-5 w-5 shrink-0" fill="currentColor" viewBox="0 0 21 21">
+              <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+              <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+              <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+              <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+            </svg>
+            <div>
+              <h1 className="text-sm font-semibold text-zinc-100">Corporate Microsoft sign-in required</h1>
+              <p className="mt-1 text-xs leading-5 text-zinc-500">
+                Your Azure identity is used to load your profiles and chat data from the company cloud store.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLoggingIn(true)}
+            className="flex w-full items-center justify-center rounded-md border border-blue-700/60 bg-blue-600/20 px-3 py-2 text-sm font-medium text-blue-200 transition hover:bg-blue-600/30"
+          >
+            Sign in with Microsoft
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 // ─── User footer ─────────────────────────────────────────────────────────────
 
 function UserFooter() {
-  const { user, save } = useAuth();
+  const { user, save, refresh } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
 
   const handleLogin = () => { setMenuOpen(false); setLoggingIn(true); };
-  const handleLoginDone = (u: AuthUser) => { save(u); setLoggingIn(false); };
+  const handleLoginDone = (u: AuthUser) => {
+    save(u);
+    setLoggingIn(false);
+    void refresh();
+  };
   const handleLoginCancel = () => setLoggingIn(false);
 
   const handleLogout = async () => {
@@ -594,9 +715,13 @@ function UserFooter() {
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-zinc-800/60"
             onClick={() => setMenuOpen((v) => !v)}
           >
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600/80 text-xs font-semibold text-white">
-              {initials}
-            </div>
+            {user.avatarDataUrl ? (
+              <img src={user.avatarDataUrl} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+            ) : (
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600/80 text-xs font-semibold text-white">
+                {initials}
+              </div>
+            )}
             <div className="min-w-0 flex-1">
               <p className="truncate text-[12px] font-medium text-zinc-300">
                 {user.name ?? user.upn ?? "Azure User"}
@@ -767,9 +892,13 @@ export default function App(): JSX.Element {
   return (
     <DaemonGate>
       {(info) => (
-        <AppDataProvider daemonReady={info.state === "ready"}>
-          <FullLayout info={info} />
-        </AppDataProvider>
+        <AuthProvider>
+          <ProductionAuthGate info={info}>
+            <AppDataProvider daemonReady={info.state === "ready"}>
+              <FullLayout info={info} />
+            </AppDataProvider>
+          </ProductionAuthGate>
+        </AuthProvider>
       )}
     </DaemonGate>
   );

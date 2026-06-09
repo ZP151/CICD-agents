@@ -57,11 +57,16 @@ import {
   persistUserCache,
   loadPersistedUser,
   clearPersistedUser,
+  getCachedAzureAccounts,
+  loginWithBrowser,
+  loginWithCachedAccount,
+  isAzureAuthenticationRequiredError,
   resetUserCache,
   runCommand,
   LLMClient,
+  type BrowserLoginChoice,
 } from "@cicd-agent/core";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { SubmitPipelineSchema, TaskIdParam } from "./schemas.js";
 import { ChatSessionManager, type InlineLlmConfig, type InlineProfile } from "./chatSession.js";
 import {
@@ -204,7 +209,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.setErrorHandler(async (error, _req, reply) => {
     const status = (error as { statusCode?: number }).statusCode
       ?? (error as { status?: number }).status;
-    if (status === 401 || status === 403) {
+    if (isAzureAuthenticationRequiredError(error) || status === 401 || status === 403) {
       return reply.code(401).send({
         error: "azure_auth_required",
         message: "Azure credential expired or missing. Please sign in again.",
@@ -238,7 +243,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.get("/auth/status", async () => {
     const cached = loadPersistedUser(settings.dataDir);
     if (cached && cached.oid !== "anonymous") {
-      return { authenticated: true, oid: cached.oid, upn: cached.upn, name: cached.name, fromCache: true };
+      return { authenticated: true, oid: cached.oid, upn: cached.upn, name: cached.name, avatarDataUrl: cached.avatarDataUrl, fromCache: true };
     }
     return { authenticated: false, fromCache: true };
   });
@@ -249,7 +254,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     if (!available) {
       return reply.code(200).send({
         authenticated: false,
-        message: "No Azure credential found. Run `az login` (or use the Sign-in button) to enable cloud persistence.",
+        message: "No Azure credential found. Use the Sign-in button to enable cloud persistence.",
       });
     }
     const user = await getCurrentUser();
@@ -260,11 +265,16 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       oid:  user.oid,
       upn:  user.upn,
       name: user.name,
+      avatarDataUrl: user.avatarDataUrl,
     };
   });
 
-  // ── /auth/login — spawn `az login` and stream output via SSE ────────────────
-  // Streams lines from the az subprocess until it exits, then resolves user.
+  // ── /auth/accounts — recent Microsoft accounts from local MSAL cache ───────
+  app.get("/auth/accounts", async () => ({
+    accounts: await getCachedAzureAccounts(),
+  }));
+
+  // ── /auth/login — native browser flow streamed via SSE ─────────────────────
   app.post("/auth/login", async (req, reply) => {
     reply.raw.setHeader("Content-Type", "text/event-stream");
     reply.raw.setHeader("Cache-Control", "no-cache, no-transform");
@@ -276,66 +286,67 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
-    return new Promise<void>((resolve) => {
-      send("status", { message: "Starting az login…" });
+    const requestedBrowser = (req.body as { browser?: string } | undefined)?.browser;
+    const loginHint = (req.body as { loginHint?: string } | undefined)?.loginHint;
+    const accountHomeId = (req.body as { accountHomeId?: string } | undefined)?.accountHomeId;
+    const browser: BrowserLoginChoice =
+      requestedBrowser === "edge" || requestedBrowser === "chrome" || requestedBrowser === "default"
+        ? requestedBrowser
+        : "default";
 
-      // Sidecar processes have no GUI access, so browser-based login cannot open
-      // a window. --use-device-code shows a URL + code the user pastes manually.
-      const proc = spawn("az", ["login", "--use-device-code"], {
-        shell: true,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+    let cancelled = false;
+    reply.raw.on("close", () => {
+      cancelled = true;
+    });
 
-      const emit = (line: string): void => {
-        if (line.trim()) send("output", { line: line.trim() });
-      };
-
-      proc.stdout?.on("data", (chunk: Buffer) => {
-        chunk.toString().split("\n").forEach(emit);
-      });
-      proc.stderr?.on("data", (chunk: Buffer) => {
-        chunk.toString().split("\n").forEach(emit);
-      });
-
-      proc.on("close", async (code) => {
-        if (code !== 0) {
-          send("error", { message: `az login exited with code ${code}` });
-          reply.raw.end();
-          resolve();
+    try {
+      if (accountHomeId) {
+        send("status", { message: "Signing in..." });
+        const cachedUser = await loginWithCachedAccount(accountHomeId);
+        if (cachedUser && !cancelled) {
+          persistUserCache(cachedUser, settings.dataDir);
+          send("done", {
+            authenticated: true,
+            oid:  cachedUser.oid,
+            upn:  cachedUser.upn,
+            name: cachedUser.name,
+            avatarDataUrl: cachedUser.avatarDataUrl,
+          });
           return;
         }
-        // Refresh cached credential after successful login
-        resetUserCache();
-        const user = await getCurrentUser();
-        persistUserCache(user, settings.dataDir);
-        send("done", {
-          authenticated: user.oid !== "anonymous",
-          oid:  user.oid,
-          upn:  user.upn,
-          name: user.name,
-        });
-        reply.raw.end();
-        resolve();
-      });
+      }
 
-      req.raw.on("close", () => {
-        proc.kill();
-        resolve();
+      send("status", { message: "Preparing Microsoft Entra sign-in..." });
+      send("browser", {
+        browser,
+        message: browser === "default"
+          ? "Opening your default browser..."
+          : `Opening ${browser === "edge" ? "Microsoft Edge" : "Google Chrome"}...`,
       });
-    });
+      resetUserCache();
+      const user = await loginWithBrowser(browser, { loginHint });
+
+      if (cancelled) return;
+      persistUserCache(user, settings.dataDir);
+      send("done", {
+        authenticated: user.oid !== "anonymous",
+        oid:  user.oid,
+        upn:  user.upn,
+        name: user.name,
+        avatarDataUrl: user.avatarDataUrl,
+      });
+    } catch (err) {
+      if (!cancelled) send("error", { message: err instanceof Error ? err.message : String(err) });
+    } finally {
+      if (!reply.raw.destroyed) reply.raw.end();
+    }
   });
 
-  // ── /auth/logout — run `az logout` and clear cache ───────────────────────────
+  // ── /auth/logout — clear local app identity cache ──────────────────────────
   app.post("/auth/logout", async (_req, reply) => {
-    return new Promise<void>((resolve) => {
-      const proc = spawn("az", ["logout"], { shell: true, stdio: "ignore" });
-      proc.on("close", () => {
-        clearPersistedUser(settings.dataDir);
-        resetUserCache();
-        reply.send({ ok: true });
-        resolve();
-      });
-    });
+    clearPersistedUser(settings.dataDir);
+    resetUserCache();
+    reply.send({ ok: true });
   });
 
   // ── /daemon/config — read current non-secret configuration ──────────────────
@@ -439,7 +450,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
             await tempKv.setAoaiKey(cfg.azureApiKey);
             lines.push(`AZURE_OPENAI_API_KEY=kv://aoai-key`); // sentinel — key lives in KV
           } catch {
-            // KV not ready yet (e.g. first Apply before az login) — fall back to .env
+            // KV not ready yet (e.g. first Apply before sign-in) — fall back to .env
             lines.push(`AZURE_OPENAI_API_KEY=${cfg.azureApiKey}`);
           }
         } else {
@@ -698,8 +709,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       try {
         const cloudProfile = await ts.get(parsed.data.id);
         profile = cloudProfile ? await injectAdoPat(cloudProfile) : null;
-      } catch {
-        // Azure auth unavailable (e.g. not logged in) — fall back to local storage
+      } catch (err) {
+        if (isAzureAuthenticationRequiredError(err)) throw err;
         profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
       }
     } else {
@@ -747,8 +758,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     if (ts) {
       try {
         profile = await ts.get(parsed.data.id);
-      } catch {
-        // Azure auth unavailable — fall back to local storage
+      } catch (err) {
+        if (isAzureAuthenticationRequiredError(err)) throw err;
         profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
       }
     } else {
@@ -771,8 +782,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         repository: profile.adoRepoName,
         limit: 100,
       });
-    } catch {
-      return { items: [], configured: true, error: "Azure authentication unavailable. Sign in to load queue." };
+    } catch (err) {
+      if (isAzureAuthenticationRequiredError(err)) throw err;
+      return { items: [], configured: true, error: "Azure storage unavailable. Try again later." };
     }
     return { items, configured: true };
   });

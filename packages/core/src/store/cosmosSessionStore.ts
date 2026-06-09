@@ -10,8 +10,7 @@
  * Fallback: if Cosmos is unavailable, callers should catch and use the local JSON store.
  */
 import { CosmosClient, type ContainerRequest } from "@azure/cosmos";
-import { DefaultAzureCredential } from "@azure/identity";
-import { getCurrentUser } from "./azureAuth.js";
+import { getAzureCredential, requireCurrentUser } from "./azureAuth.js";
 
 const DB_NAME = "cicd-agent";
 const CONTAINER_NAME = "chat-sessions";
@@ -40,7 +39,7 @@ let _ready = false;
 
 function makeClient(endpoint: string): CosmosClient {
   if (!_client) {
-    _client = new CosmosClient({ endpoint, aadCredentials: new DefaultAzureCredential() });
+    _client = new CosmosClient({ endpoint, aadCredentials: getAzureCredential({ interactive: false }) });
   }
   return _client;
 }
@@ -90,8 +89,8 @@ export class CosmosSessionStore {
   }
 
   async load(sessionId: string): Promise<CosmosStoredSession | null> {
+    const user = await requireCurrentUser();
     await this.init();
-    const user = await getCurrentUser();
     try {
       const { resource } = await this.container()
         .item(sessionId, user.oid)
@@ -104,8 +103,8 @@ export class CosmosSessionStore {
   }
 
   async save(session: Omit<CosmosStoredSession, "userId" | "updatedAt">): Promise<void> {
+    const user = await requireCurrentUser();
     await this.init();
-    const user = await getCurrentUser();
     const doc: CosmosStoredSession = {
       ...session,
       userId:    user.oid,
@@ -116,8 +115,8 @@ export class CosmosSessionStore {
   }
 
   async delete(sessionId: string): Promise<void> {
+    const user = await requireCurrentUser();
     await this.init();
-    const user = await getCurrentUser();
     try {
       await this.container().item(sessionId, user.oid).delete();
     } catch (err: unknown) {
@@ -126,8 +125,8 @@ export class CosmosSessionStore {
   }
 
   async listRecent(limit = 30): Promise<Array<{ sessionId: string; preview: string; createdAt: number }>> {
+    const user = await requireCurrentUser();
     await this.init();
-    const user = await getCurrentUser();
     const query = {
       query: `SELECT c.id, c.createdAt, ARRAY_SLICE(c.messages, -1) AS lastMsg
               FROM c

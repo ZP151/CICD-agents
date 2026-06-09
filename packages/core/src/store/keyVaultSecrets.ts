@@ -11,14 +11,13 @@
  *   const pat = await kv.getAdoPat(profileId);
  */
 import { SecretClient } from "@azure/keyvault-secrets";
-import { DefaultAzureCredential } from "@azure/identity";
-import { getCurrentUser } from "./azureAuth.js";
+import { getAzureCredential, requireCurrentUser } from "./azureAuth.js";
 
 export class KeyVaultSecrets {
   private readonly client: SecretClient;
 
   constructor(vaultUrl: string) {
-    this.client = new SecretClient(vaultUrl, new DefaultAzureCredential());
+    this.client = new SecretClient(vaultUrl, getAzureCredential({ interactive: false }));
   }
 
   // ── ADO PAT (per profile) ───────────────────────────────────────────────────
@@ -52,7 +51,7 @@ export class KeyVaultSecrets {
   // ── Azure OpenAI API key (per user) ─────────────────────────────────────────
 
   async getAoaiKey(): Promise<string | null> {
-    const user = await getCurrentUser();
+    const user = await requireCurrentUser();
     const shortId = user.oid.replace(/-/g, "").slice(0, 12);
     try {
       const secret = await this.client.getSecret(`aoai-key-${shortId}`);
@@ -64,7 +63,7 @@ export class KeyVaultSecrets {
   }
 
   async setAoaiKey(apiKey: string): Promise<void> {
-    const user = await getCurrentUser();
+    const user = await requireCurrentUser();
     const shortId = user.oid.replace(/-/g, "").slice(0, 12);
     await this.client.setSecret(`aoai-key-${shortId}`, apiKey, {
       tags: { type: "aoai-key", userId: user.oid },

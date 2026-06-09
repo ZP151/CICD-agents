@@ -7,7 +7,7 @@
  * Or from the desktop app dir: node scripts/build-sidecar.mjs
  */
 import { execSync, spawnSync } from "child_process";
-import { copyFileSync, mkdirSync, existsSync, readdirSync, statSync, rmSync } from "fs";
+import { copyFileSync, mkdirSync, existsSync, readdirSync, readFileSync, statSync, rmSync } from "fs";
 import { resolve, dirname, join } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { createRequire } from "module";
@@ -81,33 +81,86 @@ function copyDirRecursive(src, dest) {
 
 function stageNativeModules() {
   const searchRoots = [daemonRoot, repoRoot, join(repoRoot, "packages/core")];
-  const packages = ["better-sqlite3", "sqlite-vec"];
+  const packages = [
+    "better-sqlite3",
+    "sqlite-vec",
+    "keytar",
+    "@azure/msal-node-extensions",
+    "@azure/msal-node-runtime",
+  ];
   const req = createRequire(pathToFileURL(join(repoRoot, "package.json")));
   const staged = [];
 
   for (const pkgName of packages) {
     let pkgMain;
+    let pkgRoot;
     for (const root of searchRoots) {
-      try { pkgMain = req.resolve(pkgName, { paths: [root] }); break; }
-      catch { /* try next */ }
+      try { pkgMain = req.resolve(`${pkgName}/package.json`, { paths: [root] }); break; }
+      catch {
+        try { pkgMain = req.resolve(pkgName, { paths: [root] }); break; }
+        catch { /* try next */ }
+      }
     }
     if (!pkgMain) {
-      console.warn(`  WARNING: could not resolve ${pkgName}, skipping`);
-      continue;
+      pkgRoot = findPnpmPackageRoot(pkgName);
+      if (!pkgRoot) {
+        console.warn(`  WARNING: could not resolve ${pkgName}, skipping`);
+        continue;
+      }
     }
 
-    // Walk up from main entry to find the package root (directory with package.json)
-    let pkgRoot = dirname(pkgMain);
-    while (pkgRoot !== dirname(pkgRoot)) {
-      if (existsSync(join(pkgRoot, "package.json"))) break;
-      pkgRoot = dirname(pkgRoot);
+    // Walk up from main entry to find the package root (directory with package.json).
+    // Guard: stop when we reach the filesystem root to avoid an infinite/huge traversal.
+    if (!pkgRoot) {
+      let candidate = dirname(pkgMain);
+      let foundRoot = false;
+      while (candidate !== dirname(candidate)) {
+        const manifest = join(candidate, "package.json");
+        if (existsSync(manifest)) {
+          try {
+            const manifestText = readFileSync(manifest, "utf8");
+            if (manifestText.includes(`"name": "${pkgName}"`)) {
+              pkgRoot = candidate;
+              foundRoot = true;
+              break;
+            }
+          } catch { /* keep walking */ }
+        }
+        candidate = dirname(candidate);
+      }
+      if (!foundRoot) {
+        // Walk-up reached the filesystem root without finding a matching package.json.
+        // Fall back to the pnpm virtual store search.
+        pkgRoot = findPnpmPackageRoot(pkgName);
+        if (!pkgRoot) {
+          console.warn(`  WARNING: could not find package root for ${pkgName}, skipping`);
+          continue;
+        }
+      }
     }
 
     const destPkg = resolve(daemonRoot, "node_modules", pkgName);
     if (existsSync(destPkg)) {
-      console.log(`  already present: ${pkgName}`);
-      staged.push(destPkg);
-      continue;
+      // Validate the staged directory actually contains the correct package.
+      // A stale/corrupt staging (e.g. wrong files from a previous failed run)
+      // must be cleared before re-staging.
+      const stagedManifest = join(destPkg, "package.json");
+      let validStage = false;
+      try {
+        if (existsSync(stagedManifest)) {
+          const content = readFileSync(stagedManifest, "utf8");
+          validStage = content.includes(`"name": "${pkgName}"`);
+        }
+      } catch { /* treat as invalid */ }
+
+      if (validStage) {
+        console.log(`  already present: ${pkgName}`);
+        staged.push(destPkg);
+        continue;
+      }
+
+      console.log(`  re-staging ${pkgName} (clearing invalid existing directory):`);
+      try { rmSync(destPkg, { recursive: true, force: true }); } catch { /* best-effort */ }
     }
 
     console.log(`  staging ${pkgName} (full package):`);
@@ -117,6 +170,18 @@ function stageNativeModules() {
     staged.push(destPkg);
   }
   return staged;
+}
+
+function findPnpmPackageRoot(pkgName) {
+  const pnpmDir = join(repoRoot, "node_modules", ".pnpm");
+  if (!existsSync(pnpmDir)) return null;
+  const prefix = `${pkgName.replace("/", "+")}@`;
+  for (const entry of readdirSync(pnpmDir)) {
+    if (!entry.startsWith(prefix)) continue;
+    const candidate = join(pnpmDir, entry, "node_modules", ...pkgName.split("/"));
+    if (existsSync(join(candidate, "package.json"))) return candidate;
+  }
+  return null;
 }
 
 function cleanupStagedDirs(dirs) {

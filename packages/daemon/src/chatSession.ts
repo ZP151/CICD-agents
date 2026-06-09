@@ -27,6 +27,7 @@ import {
   pytestTools,
   CosmosSessionStore,
   resetCosmosClient,
+  isAzureAuthenticationRequiredError,
   type CosmosStoredSession,
 } from "@cicd-agent/core";
 import {
@@ -148,7 +149,8 @@ async function loadSession(sessionId: string): Promise<StoredSession | null> {
     try {
       const doc = await cosmos.load(sessionId);
       if (doc) return cosmosToStored(doc);
-    } catch {
+    } catch (err) {
+      if (isAzureAuthenticationRequiredError(err)) throw err;
       // fall through to local
     }
   }
@@ -161,7 +163,8 @@ async function saveSession(session: StoredSession): Promise<void> {
     try {
       await cosmos.save(storedToCosmos(session));
       return;
-    } catch {
+    } catch (err) {
+      if (isAzureAuthenticationRequiredError(err)) throw err;
       // fall through to local
     }
   }

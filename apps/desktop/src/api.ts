@@ -564,8 +564,18 @@ export interface AuthUser {
   oid?: string;
   upn?: string;
   name?: string;
+  avatarDataUrl?: string;
   fromCache?: boolean;
   message?: string;
+}
+
+export interface AuthCachedAccount {
+  homeAccountId: string;
+  localAccountId?: string;
+  tenantId?: string;
+  username?: string;
+  name?: string;
+  avatarDataUrl?: string;
 }
 
 /** Instant cached user — no Azure round-trip, safe to call on every render cycle. */
@@ -590,21 +600,41 @@ export async function fetchAuthMe(): Promise<AuthUser> {
   }
 }
 
+export async function fetchAuthAccounts(): Promise<AuthCachedAccount[]> {
+  try {
+    const r = await fetch(`${RUNTIME_URL}/auth/accounts`);
+    if (!r.ok) return [];
+    const data = await r.json() as { accounts?: AuthCachedAccount[] };
+    return data.accounts ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export type AuthLoginEvent =
   | { type: "status"; message: string }
+  | { type: "browser"; browser: AuthBrowserChoice; message: string }
   | { type: "output"; line: string }
-  | { type: "done"; authenticated: boolean; oid?: string; upn?: string; name?: string }
+  | { type: "done"; authenticated: boolean; oid?: string; upn?: string; name?: string; avatarDataUrl?: string }
   | { type: "error"; message: string };
 
+export type AuthBrowserChoice = "default" | "edge" | "chrome";
+
 /**
- * Stream `az login` via the daemon.
+ * Stream Microsoft browser login via the daemon.
  * Returns a cancel function. Calls `onEvent` for each SSE event.
  */
-export function authLoginStream(onEvent: (e: AuthLoginEvent) => void): () => void {
+export function authLoginStream(
+  browser: AuthBrowserChoice,
+  onEvent: (e: AuthLoginEvent) => void,
+  opts: { loginHint?: string; accountHomeId?: string } = {},
+): () => void {
   const controller = new AbortController();
 
   fetch(`${RUNTIME_URL}/auth/login`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ browser, loginHint: opts.loginHint, accountHomeId: opts.accountHomeId }),
     signal: controller.signal,
   })
     .then(async (r) => {
@@ -639,7 +669,7 @@ export function authLoginStream(onEvent: (e: AuthLoginEvent) => void): () => voi
   return () => controller.abort();
 }
 
-/** Sign out — calls az logout on the daemon host and clears the cache. */
+/** Sign out — clears the daemon's local app identity cache. */
 export async function authLogout(): Promise<void> {
   await fetch(`${RUNTIME_URL}/auth/logout`, { method: "POST" });
 }

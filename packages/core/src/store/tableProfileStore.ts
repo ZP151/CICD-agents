@@ -11,9 +11,8 @@
  * Table Storage is secured via AAD RBAC).
  */
 import { TableClient, TableServiceClient, odata } from "@azure/data-tables";
-import { DefaultAzureCredential } from "@azure/identity";
 import type { WorkspaceProfile, WorkspaceProfileInput } from "../profiles.js";
-import { getCurrentUser } from "./azureAuth.js";
+import { getAzureCredential, requireCurrentUser } from "./azureAuth.js";
 import crypto from "node:crypto";
 
 const TABLE_NAME = "CicdAgentProfiles";
@@ -23,12 +22,12 @@ function tableUrl(accountName: string): string {
 }
 
 async function getClient(accountName: string): Promise<TableClient> {
-  const cred = new DefaultAzureCredential();
+  const cred = getAzureCredential({ interactive: false });
   return new TableClient(tableUrl(accountName), TABLE_NAME, cred);
 }
 
 async function ensureTable(accountName: string): Promise<void> {
-  const cred = new DefaultAzureCredential();
+  const cred = getAzureCredential({ interactive: false });
   const svc = new TableServiceClient(tableUrl(accountName), cred);
   try {
     await svc.createTable(TABLE_NAME);
@@ -120,8 +119,8 @@ export class AzureTableProfileStore {
   }
 
   async list(): Promise<WorkspaceProfile[]> {
+    const user = await requireCurrentUser();
     await this.init();
-    const user = await getCurrentUser();
     const client = await getClient(this.accountName);
     const results: WorkspaceProfile[] = [];
 
@@ -135,8 +134,8 @@ export class AzureTableProfileStore {
   }
 
   async get(id: string): Promise<WorkspaceProfile | null> {
+    const user = await requireCurrentUser();
     await this.init();
-    const user = await getCurrentUser();
     const client = await getClient(this.accountName);
     try {
       const entity = await client.getEntity<ProfileEntity>(user.oid, id);
@@ -148,8 +147,8 @@ export class AzureTableProfileStore {
   }
 
   async create(data: WorkspaceProfileInput): Promise<WorkspaceProfile> {
+    const user = await requireCurrentUser();
     await this.init();
-    const user = await getCurrentUser();
     const client = await getClient(this.accountName);
     const ts = nowSec();
     const profile: WorkspaceProfile = {
@@ -163,11 +162,10 @@ export class AzureTableProfileStore {
   }
 
   async update(id: string, data: Partial<WorkspaceProfileInput>): Promise<WorkspaceProfile | null> {
-    await this.init();
     const existing = await this.get(id);
     if (!existing) return null;
 
-    const user = await getCurrentUser();
+    const user = await requireCurrentUser();
     const client = await getClient(this.accountName);
     const updated: WorkspaceProfile = { ...existing, ...data, id, updatedAt: nowSec() };
     await client.upsertEntity(profileToEntity(user.oid, updated), "Replace");
@@ -175,8 +173,8 @@ export class AzureTableProfileStore {
   }
 
   async delete(id: string): Promise<boolean> {
+    const user = await requireCurrentUser();
     await this.init();
-    const user = await getCurrentUser();
     const client = await getClient(this.accountName);
     try {
       await client.deleteEntity(user.oid, id);

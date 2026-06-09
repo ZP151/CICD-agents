@@ -1,5 +1,5 @@
 import { TableClient, odata, type TableEntity } from "@azure/data-tables";
-import { DefaultAzureCredential } from "@azure/identity";
+import { getAzureCredential } from "./store/azureAuth.js";
 
 const REVIEW_HISTORY_TABLE = "ReviewHistory";
 
@@ -44,7 +44,7 @@ export async function listReviewQueueItems(args: {
   const repository = args.repository.trim();
   if (!storageAccount || !repository) return [];
 
-  const client = new TableClient(tableUrl(storageAccount), REVIEW_HISTORY_TABLE, new DefaultAzureCredential());
+  const client = new TableClient(tableUrl(storageAccount), REVIEW_HISTORY_TABLE, getAzureCredential({ interactive: false }));
   const items: ReviewQueueItem[] = [];
   try {
     const iter = client.listEntities<TableEntity<ReviewHistoryEntity>>({

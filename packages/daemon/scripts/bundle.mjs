@@ -29,8 +29,16 @@ await build({
   define: {
     "import.meta.url": "__importMetaUrl",
   },
-  // Native addons must stay external; pkg will embed the .node binaries as assets
-  external: ["better-sqlite3", "sqlite-vec", "web-tree-sitter"],
+  // Native addons/packages must stay external; pkg embeds their binaries as assets
+  // and several of them resolve files relative to their package directory.
+  external: [
+    "better-sqlite3",
+    "sqlite-vec",
+    "web-tree-sitter",
+    "keytar",
+    "@azure/msal-node-extensions",
+    "@azure/msal-node-runtime",
+  ],
   banner: {
     js: [
       "// Bundled by esbuild for Tauri sidecar distribution",

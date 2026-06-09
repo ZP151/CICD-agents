@@ -22,7 +22,13 @@
       "node_modules/better-sqlite3/build/Release/*.node",
       "node_modules/sqlite-vec/prebuilds/**/*.node",
       "node_modules/sqlite-vec/build/Release/*.node",
-      "node_modules/web-tree-sitter/**/*.wasm"
+      "node_modules/web-tree-sitter/**/*.wasm",
+      "node_modules/keytar/build/Release/*.node",
+      "node_modules/@azure/msal-node-extensions/bin/**/*.node",
+      "node_modules/@azure/msal-node-runtime/dist/**/*.node",
+      "node_modules/@azure/msal-node-runtime/dist/**/*.dll",
+      "node_modules/@azure/msal-node-runtime/dist/**/*.so",
+      "node_modules/@azure/msal-node-runtime/dist/**/*.dylib"
     ]
   },
   "dependencies": {
