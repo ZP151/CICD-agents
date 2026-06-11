@@ -385,7 +385,7 @@ export function gitTools(): Tool[] {
     },
     {
       name: "git_diff",
-      description: "Show diff against an optional target branch or the index. Supports --staged/--cached, --name-only, --stat, context, and path filters.",
+      description: "Show Git diffs. Omit target_branch to inspect uncommitted working-tree changes. Use staged/cached for the index. target_branch compares committed branch history and does not include unstaged working-tree edits.",
       parameters: {
         type: "object",
         properties: {
