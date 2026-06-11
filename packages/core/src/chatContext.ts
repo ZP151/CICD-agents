@@ -29,6 +29,8 @@ export interface ChatContextBundle {
   projectStructure: Array<{ path: string; kind: string; reason: string }>;
   relevantChunks: ChatContextChunk[];
   changedFiles: ChangedFile[];
+  changeSummary?: string;
+  changeDiffExcerpt?: string;
   memories: Array<{ key: string; value: string }>;
   profile?: ChatContextProfile;
   indexStats: VectorIndexStats;
@@ -100,16 +102,21 @@ export async function buildChatContext(args: {
     try {
       indexStats = vectors.stats();
       if (args.llm.configured && indexStats.chunksEmbedded > 0) {
-        const hits = await vectors.searchText(args.llm, args.message, maxChunks);
-        relevantChunks = hits.map((hit) => ({
-          path: hit.filePath,
-          startLine: hit.startLine,
-          endLine: hit.endLine,
-          text: hit.text,
-          score: hit.score,
-          reason: "semantic-search",
-        }));
-        semanticUsed = relevantChunks.length > 0;
+        try {
+          const hits = await vectors.searchText(args.llm, args.message, maxChunks);
+          relevantChunks = hits.map((hit) => ({
+            path: hit.filePath,
+            startLine: hit.startLine,
+            endLine: hit.endLine,
+            text: hit.text,
+            score: hit.score,
+            reason: "semantic-search",
+          }));
+          semanticUsed = relevantChunks.length > 0;
+        } catch {
+          semanticUsed = false;
+          relevantChunks = [];
+        }
       }
     } finally {
       vectors.close();
@@ -121,15 +128,21 @@ export async function buildChatContext(args: {
     relevantChunks = heuristicChunks(repoPath, repoFiles, args.message, maxChunks);
   }
 
-  const changedFiles = shouldInspectGit(args.message)
+  const inspectGit = shouldInspectGit(args.message);
+  const changedFiles = inspectGit
     ? await getChangedFiles(repoPath, args.profile?.targetBranch)
     : [];
+  const changeDiffExcerpt = inspectGit && changedFiles.length > 0
+    ? await getChangeDiffExcerpt(repoPath, args.profile?.targetBranch)
+    : "";
 
   return {
     repoSummary: summarizeRepo(repoFiles, 0, repoFiles.length),
     projectStructure,
     relevantChunks: dedupeChunks([...importantChunks, ...relevantChunks]).slice(0, maxChunks + importantChunks.length),
     changedFiles,
+    changeSummary: changedFiles.length > 0 ? inferChangeSummary(changedFiles, changeDiffExcerpt) : undefined,
+    changeDiffExcerpt,
     memories: [],
     profile: args.profile,
     indexStats,
@@ -143,14 +156,23 @@ export async function refreshChatIndex(args: {
   repoPath: string;
   llm: LLMClient;
   profile?: ChatContextProfile;
-}): Promise<{ filesSeen: number; filesIndexed: number; embedded: number }> {
+}): Promise<{ filesSeen: number; filesIndexed: number; embedded: number; embeddingError?: string }> {
   const repoPath = path.resolve(args.repoPath);
   const indexer = new RepoIndexer(repoPath, profileToIndexerProfile(args.profile));
   const vectors = new VectorIndex(repoPath);
   try {
     const stats = await indexer.update();
-    const embedded = args.llm.configured ? await vectors.embedPending(args.llm) : 0;
-    return { filesSeen: stats.filesSeen, filesIndexed: stats.filesIndexed, embedded };
+    try {
+      const embedded = args.llm.configured ? await vectors.embedPending(args.llm) : 0;
+      return { filesSeen: stats.filesSeen, filesIndexed: stats.filesIndexed, embedded };
+    } catch (err) {
+      return {
+        filesSeen: stats.filesSeen,
+        filesIndexed: stats.filesIndexed,
+        embedded: 0,
+        embeddingError: err instanceof Error ? err.message : String(err),
+      };
+    }
   } finally {
     indexer.close();
     vectors.close();
@@ -215,6 +237,16 @@ export function chatContextToPrompt(bundle: ChatContextBundle, charBudget = 1200
     parts.push("\n## Changed files");
     for (const cf of bundle.changedFiles.slice(0, 40)) {
       parts.push(`- ${cf.status}: ${cf.path} (+${cf.additions}/-${cf.deletions})`);
+    }
+    if (bundle.changeSummary) {
+      parts.push("\n## Change interpretation");
+      parts.push(bundle.changeSummary);
+    }
+    if (bundle.changeDiffExcerpt) {
+      parts.push("\n## Diff excerpt for understanding the change");
+      parts.push("```diff");
+      parts.push(bundle.changeDiffExcerpt.trim());
+      parts.push("```");
     }
   }
 
@@ -398,6 +430,56 @@ async function getChangedFiles(repoPath: string, targetBranch = "main"): Promise
   } catch {
     return [];
   }
+}
+
+async function getChangeDiffExcerpt(repoPath: string, targetBranch = "main", maxChars = 9000): Promise<string> {
+  const attempts = [
+    ["diff", "--unified=40", `${targetBranch}...HEAD`],
+    ["diff", "--unified=40", "HEAD"],
+  ];
+  for (const args of attempts) {
+    try {
+      const diff = await runCommand(["git", ...args], {
+        cwd: repoPath,
+        allowed: ["git"],
+        timeoutSec: 30,
+      });
+      const text = diff.stdout.trim();
+      if (diff.returncode === 0 && text) {
+        return text.length > maxChars ? `${text.slice(0, maxChars)}\n...diff truncated...` : text;
+      }
+    } catch {
+      // try the next diff shape
+    }
+  }
+  return "";
+}
+
+function inferChangeSummary(files: ChangedFile[], diffExcerpt = ""): string {
+  const paths = files.map((file) => file.path.toLowerCase());
+  const totalAdditions = files.reduce((sum, file) => sum + file.additions, 0);
+  const totalDeletions = files.reduce((sum, file) => sum + file.deletions, 0);
+  const areas: string[] = [];
+  if (paths.some((file) => /test|spec/.test(file))) areas.push("tests");
+  if (paths.some((file) => /controller|route|api|endpoint/.test(file))) areas.push("API/controller behavior");
+  if (paths.some((file) => /service|manager|client|provider/.test(file))) areas.push("service/client logic");
+  if (paths.some((file) => /config|settings|appsettings|\.env|pipeline|workflow|dockerfile/.test(file))) areas.push("configuration or CI/CD");
+  if (paths.some((file) => /model|schema|migration|entity|dto/.test(file))) areas.push("data model/schema");
+  if (paths.some((file) => /\.(tsx|jsx|css|scss)$/.test(file))) areas.push("frontend/UI");
+  if (paths.some((file) => /\.(cs)$/.test(file))) areas.push(".NET code");
+  if (paths.some((file) => /\.(ts|js|mts|mjs)$/.test(file))) areas.push("TypeScript/JavaScript code");
+
+  const signals: string[] = [];
+  const lowerDiff = diffExcerpt.toLowerCase();
+  if (/\b(auth|token|permission|credential|oauth|pat)\b/.test(lowerDiff)) signals.push("authentication/permission handling");
+  if (/\b(error|exception|catch|retry|fallback|diagnostic)\b/.test(lowerDiff)) signals.push("error handling or diagnostics");
+  if (/\b(validate|validation|required|schema)\b/.test(lowerDiff)) signals.push("validation");
+  if (/\b(stream|delta|event|sse)\b/.test(lowerDiff)) signals.push("streaming/event flow");
+  if (/\b(add|stage|commit|push|branch|diff|status)\b/.test(lowerDiff)) signals.push("Git workflow behavior");
+
+  const areaText = areas.length > 0 ? areas.slice(0, 4).join(", ") : "general code";
+  const signalText = signals.length > 0 ? ` Signals in the diff suggest ${signals.slice(0, 4).join(", ")}.` : "";
+  return `Likely change focus: ${areaText}. Scope: ${files.length} file(s), +${totalAdditions}/-${totalDeletions}.${signalText}`;
 }
 
 function dedupeChunks(chunks: ChatContextChunk[]): ChatContextChunk[] {

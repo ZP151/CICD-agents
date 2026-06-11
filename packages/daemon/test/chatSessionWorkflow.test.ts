@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { deriveWorkflowPendingAction, inferPendingAction } from "../src/chatSession.js";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { LLMClient, resetSettingsForTests } from "@cicd-agent/core";
+import { createChatToolExecutors, deriveWorkflowPendingAction, inferPendingAction } from "../src/chatSession.js";
 import type { ChatPlannerResult } from "@cicd-agent/core";
 
 function result(response: string): ChatPlannerResult {
@@ -92,5 +96,98 @@ describe("chat session workflow action derivation", () => {
       { role: "assistant", content: "Would you like me to push the branch?", timestamp: 1 },
     ]);
     expect(pending?.tool).toBe("git_push");
+  });
+
+  it("stops after push when the user only asked for stage commit and push", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      result("The changes have been pushed successfully. Shall I proceed to create a pull request targeting the main branch?"),
+      [
+        { role: "user", content: "stage changes, commit and push to remote side", timestamp: 0 },
+        { role: "tool", content: "ok", timestamp: 1, toolName: "git_add", toolOk: true },
+        { role: "tool", content: "ok", timestamp: 2, toolName: "git_commit", toolOk: true },
+        { role: "tool", content: "ok", timestamp: 3, toolName: "git_push", toolOk: true },
+      ],
+    );
+    expect(derived.approvalProposal).toBeUndefined();
+  });
+
+  it("allows pull request creation only when the user asked for it", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      result("The changes have been pushed successfully. Shall I proceed to create a pull request targeting the main branch?"),
+      [
+        { role: "user", content: "stage changes, commit, push, and create a PR", timestamp: 0 },
+        { role: "tool", content: "ok", timestamp: 1, toolName: "git_add", toolOk: true },
+        { role: "tool", content: "ok", timestamp: 2, toolName: "git_commit", toolOk: true },
+        { role: "tool", content: "ok", timestamp: 3, toolName: "git_push", toolOk: true },
+      ],
+    );
+    expect(derived.approvalProposal?.tool).toBe("ado_create_pr");
+  });
+
+  it("strips out-of-scope Azure DevOps approval proposals", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      {
+        ...result("The branch is pushed. Shall I create a PR?"),
+        approvalProposal: {
+          tool: "ado_create_pr",
+          args: { source_branch: "feature/x", title: "Update" },
+          description: "Create pull request",
+          nextHint: "done",
+        },
+      },
+      [
+        { role: "user", content: "stage changes, commit and push to remote side", timestamp: 0 },
+        { role: "tool", content: "ok", timestamp: 1, toolName: "git_push", toolOk: true },
+      ],
+    );
+    expect(derived.approvalProposal).toBeUndefined();
+  });
+
+  it("does not infer out-of-scope PR actions after session reload", () => {
+    const pending = inferPendingAction([
+      { role: "user", content: "stage changes, commit and push", timestamp: 0 },
+      { role: "assistant", content: "The branch is pushed. Shall I create a PR?", timestamp: 1 },
+    ]);
+    expect(pending).toBeUndefined();
+  });
+
+  it("returns follow-up repository context after refreshing the index", async () => {
+    process.env.AZURE_OPENAI_ENDPOINT = "";
+    process.env.AZURE_OPENAI_API_KEY = "";
+    process.env.RUNTIME_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-index-tool-"));
+    resetSettingsForTests();
+
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-index-repo-"));
+    fs.mkdirSync(path.join(repo, "src"), { recursive: true });
+    fs.writeFileSync(path.join(repo, "README.md"), "# Demo Architecture\n\nThe daemon streams chat events.\n", "utf8");
+    fs.writeFileSync(path.join(repo, "src", "server.ts"), "export function startServer() { return 'daemon api'; }\n", "utf8");
+
+    const executors = await createChatToolExecutors(
+      {
+        repoPath: repo,
+        env: {},
+        timeoutSec: 10,
+        extra: { chat_message: "Explain this project architecture" },
+      },
+      new LLMClient(),
+    );
+    try {
+      const result = await executors.plannerExecutor.call("repo_refresh_index", {});
+      expect(result.ok).toBe(true);
+      expect(Number(result.filesSeen)).toBeGreaterThanOrEqual(1);
+      expect(Number(result.totalFilesIndexed)).toBeGreaterThanOrEqual(1);
+      expect(String(result.summary)).toContain("Current index");
+      expect(String(result.summary)).toContain("Follow-up repository context");
+      expect(String(result.contextSummary)).toContain("index is available");
+      expect(String(result.repositoryContextPrompt)).toContain("Demo Architecture");
+      expect(String(result.repositoryContextPrompt)).toContain("src/server.ts");
+      expect(String(result.instruction)).toContain("answer the user's original request");
+      expect(String(result.instruction)).toContain("incremental update count");
+    } finally {
+      await executors.close();
+    }
   });
 });

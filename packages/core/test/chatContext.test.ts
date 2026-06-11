@@ -2,12 +2,18 @@ import { beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { LLMClient, resetSettingsForTests } from "../src/index.js";
-import { buildChatContext, chatContextToPrompt, describeChatContext, refreshChatIndex, shouldInspectGit } from "../src/chatContext.js";
+import { buildChatContext, chatContextToPrompt, describeChatContext, getChatIndexStatus, refreshChatIndex, shouldInspectGit } from "../src/chatContext.js";
 
 function write(file: string, text: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text, "utf8");
+}
+
+function git(repo: string, args: string[]): void {
+  const result = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+  expect(result.status, result.stderr).toBe(0);
 }
 
 describe("chat context", () => {
@@ -21,6 +27,36 @@ describe("chat context", () => {
   it("does not treat general project understanding as a Git-state request", () => {
     expect(shouldInspectGit("Explain how this project is structured")).toBe(false);
     expect(shouldInspectGit("What changed on this branch?")).toBe(true);
+  });
+
+  it("adds interpretation and diff context for Git-state questions", async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-context-git-repo-"));
+    git(repo, ["init"]);
+    git(repo, ["config", "user.email", "test@example.com"]);
+    git(repo, ["config", "user.name", "Test User"]);
+    write(path.join(repo, "src", "ClaimsController.cs"), "public class ClaimsController { string Status() => \"old\"; }\n");
+    git(repo, ["add", "."]);
+    git(repo, ["commit", "-m", "initial"]);
+    write(
+      path.join(repo, "src", "ClaimsController.cs"),
+      "public class ClaimsController { string Status() => \"new\"; string Retry() => \"fallback\"; }\n",
+    );
+
+    const llm = new LLMClient();
+    const bundle = await buildChatContext({
+      repoPath: repo,
+      message: "What are the current workspace changes about?",
+      llm,
+      profile: { targetBranch: "main" },
+    });
+
+    expect(bundle.changedFiles).toHaveLength(1);
+    expect(bundle.changeSummary).toContain("API/controller behavior");
+    expect(bundle.changeDiffExcerpt).toContain("Retry");
+
+    const prompt = chatContextToPrompt(bundle);
+    expect(prompt).toContain("Change interpretation");
+    expect(prompt).toContain("Diff excerpt for understanding the change");
   });
 
   it("builds repository context without embeddings", async () => {
@@ -62,7 +98,17 @@ describe("chat context", () => {
     write(path.join(repo, "src", "chatSession.ts"), "export function runChat() { return 'indexed chat'; }\n");
 
     const llm = new LLMClient();
+    const before = getChatIndexStatus(repo);
+    expect(before.indexed).toBe(false);
+    expect(before.semanticReady).toBe(false);
+    expect(before.retrievalMode).toBe("quick-scan");
+
     await refreshChatIndex({ repoPath: repo, llm });
+    const after = getChatIndexStatus(repo);
+    expect(after.indexed).toBe(true);
+    expect(after.semanticReady).toBe(false);
+    expect(after.stats.filesIndexed).toBe(1);
+    expect(after.summary).toContain("Index exists");
 
     const bundle = await buildChatContext({
       repoPath: repo,
@@ -78,5 +124,26 @@ describe("chat context", () => {
 
     const prompt = chatContextToPrompt(bundle);
     expect(prompt).toContain("indexed (1 files");
+  });
+
+  it("keeps the file index usable when embedding generation fails", async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-context-embedding-fallback-"));
+    write(path.join(repo, "src", "server.ts"), "export function startServer() { return 'api'; }\n");
+
+    const llm = {
+      configured: true,
+      embed: async () => {
+        throw new Error("embedding deployment missing");
+      },
+    } as unknown as LLMClient;
+
+    const stats = await refreshChatIndex({ repoPath: repo, llm });
+    expect(stats.filesIndexed).toBe(1);
+    expect(stats.embedded).toBe(0);
+    expect(stats.embeddingError).toContain("embedding deployment missing");
+
+    const status = getChatIndexStatus(repo);
+    expect(status.indexed).toBe(true);
+    expect(status.semanticReady).toBe(false);
   });
 });

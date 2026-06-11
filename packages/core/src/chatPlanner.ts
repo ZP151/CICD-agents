@@ -101,12 +101,13 @@ When the user asks you to help with a goal like "until PR", "from review to merg
 1. Quickly understand the user's goal and the lightweight repository context provided in the user message when it is relevant.
 2. Use project docs, file-structure signals, and profile settings when they help answer the request.
 3. Run Git read operations automatically only when they are useful for the user's goal (status, log, diff, branch list).
-4. When the user asks about current workspace changes, understand what the changes are about, not only which files changed. Prefer git_status with short=true plus git_diff with name_only/stat/staged/path filters as needed, then summarize likely intent, affected areas, risks, and recommended scope.
+4. When the user asks about current workspace changes, understand what the changes are about, not only which files changed. Prefer git_status with short=true, git_diff with context/path filters for unstaged working-tree changes, and git_diff with staged=true for staged changes. Do not use target_branch when reviewing uncommitted working-tree changes unless you also inspect the working-tree diff.
 5. Summarize what you found: relevant code/docs, modified files, untracked files, risks, recommended scope.
-6. Propose the next write action clearly (e.g. "I'll stage all 4 modified files and generate a commit message. Shall I proceed?").
+6. Before proposing git_add, git_commit, or git_push, explain the concrete basis for the proposal: files inspected, important diff summary, exact paths/branch/message args, and why the scope is correct.
 7. On user confirmation, execute the write action WITHOUT re-asking.
 8. After each write action, use known context first, then run only the read checks needed for the next decision.
-9. Continue until the goal is complete (PR created or requested endpoint reached) or the user stops you.
+9. Continue only until the user's requested endpoint is complete. If the user asked for stage/commit/push, stop after push. Do not create PRs, link work items, or trigger pipelines unless the user explicitly asked for those steps.
+10. If you call repo_refresh_index, treat it as a context-gathering step, not the final answer. Use the returned repositoryContextPrompt/contextSummary to answer the user's original request in the same turn. Do not ask the user to provide a high-level overview when repository context is available.
 
 ## Repository Context
 The user message may include a "Repository context" section assembled from a quick project scan, project docs, file-structure signals, profile settings, and sometimes existing semantic index data. Treat this context as helpful local knowledge, not as a mandatory first step.
@@ -114,6 +115,7 @@ The user message may include a "Repository context" section assembled from a qui
 - Do not call Git tools or force repository-index assumptions just because tools/context are available.
 - Call Git tools when the user asks about current changes, branch state, commit/PR workflow, or when repository context says changed files are relevant.
 - If repository context is insufficient, use safe read-only tools to gather missing facts.
+- If repo_refresh_index returns repositoryContextPrompt, rely on it as fresh repository context for the current turn.
 
 ## Autonomy table
 | Operation | Autonomy |
@@ -129,6 +131,7 @@ The user message may include a "Repository context" section assembled from a qui
 - Do not assume every workflow must stage, commit, push, and create a PR.
 - For a proposed next action, choose the registered write tool that directly matches the user's goal.
 - Fill required arguments exactly as the tool schema requires.
+- For git_add, pass paths whenever the changed file list is known. Use an empty args object only after explaining why every changed path should be staged.
 - Use structured Git tool arguments for common flags instead of asking the user to run raw commands. Examples: git_status {"short":true}, git_diff {"staged":true}, git_diff {"name_only":true}, git_add {"paths":["src/file.ts"]}, git_commit {"message":"...","noVerify":true}, git_switch {"branch":"feature/x","create":true}.
 
 ## Risk Classification
@@ -315,6 +318,38 @@ export class ChatPlanner {
         for (const tc of executableToolCalls) {
           const args = parseToolArguments(tc.arguments);
           const capability = capabilitiesByName.get(tc.name);
+          const outOfScope = outOfScopeWriteMessage(tc.name, message, history);
+          if (outOfScope) {
+            const result: ChatPlannerResult = {
+              response: outOfScope,
+              finalizationMode: "none",
+              riskLevel: "low",
+              actionsTaken: toolCallsMade.map((t) => t.name),
+              suggestions: [],
+              toolCallsMade,
+              usedLlm: true,
+            };
+            yield { type: "done", result };
+            return;
+          }
+
+          const inspectionGuidance = requiredChangeInspectionGuidance(
+            tc.name,
+            args,
+            message,
+            history,
+            toolCallsMade,
+          );
+          if (inspectionGuidance) {
+            yield { type: "progress", message: inspectionGuidance };
+            messages.push({
+              role: "tool",
+              tool_call_id: tc.id,
+              content: JSON.stringify({ ok: false, guidance: inspectionGuidance }),
+            });
+            continue;
+          }
+
           if (capability?.requiresApproval) {
             const description = approvalDescription(capability.description, tc.name);
             yield {
@@ -561,6 +596,74 @@ function parseToolArguments(raw: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function requiredChangeInspectionGuidance(
+  toolName: string,
+  args: Record<string, unknown>,
+  message: string,
+  history: ChatMessage[],
+  toolCallsMade: ChatPlannerResult["toolCallsMade"],
+): string {
+  if (!["git_add", "git_commit", "git_push"].includes(toolName)) return "";
+  const lower = userScopeText(message, history).toLowerCase();
+  if (!/\b(change|changes|stage|commit|push|review|diff|working tree|workspace)\b/.test(lower)) return "";
+
+  const executed = new Set(toolCallsMade.filter((call) => call.ok).map((call) => call.name));
+  const hasStatus = executed.has("git_status");
+  const hasDiff = executed.has("git_diff") || executed.has("git_show");
+
+  if (toolName === "git_add" && (!hasStatus || !hasDiff)) {
+    const hasPaths = Array.isArray(args["paths"]) && args["paths"].length > 0;
+    return hasPaths
+      ? "Inspect current changes with git_status and git_diff before requesting approval to stage selected paths."
+      : "Inspect current changes with git_status and git_diff, then propose git_add with exact paths or explain why all changed paths should be staged.";
+  }
+
+  if (toolName === "git_commit" && !executed.has("git_add") && !historyMentionsExecuted(history, "git_add")) {
+    return "Verify staged content with git_status and git_diff staged=true before requesting approval to commit.";
+  }
+
+  if (toolName === "git_push" && !executed.has("git_commit") && !historyMentionsExecuted(history, "git_commit")) {
+    return "Do not push until the requested commit has been created; inspect current branch/status and propose the commit step first.";
+  }
+
+  return "";
+}
+
+function outOfScopeWriteMessage(
+  toolName: string,
+  message: string,
+  history: ChatMessage[],
+): string {
+  const scope = userScopeText(message, history).toLowerCase();
+  if (toolName === "ado_create_pr" && !/\b(pr|pull request)\b/.test(scope)) {
+    return "The requested workflow scope does not include creating a pull request. I will stop at the requested Git workflow boundary unless you explicitly ask me to create a PR.";
+  }
+  if (/work_item|workitem/.test(toolName) && !/\b(work item|workitem|user story|task|bug|link)\b/.test(scope)) {
+    return "The requested workflow scope does not include linking work items, and no work item was explicitly selected. I will not link a work item unless you ask for it and provide or select the work item.";
+  }
+  if (toolName === "ado_trigger_pipeline" && !/\b(pipeline|build|run ci|trigger)\b/.test(scope)) {
+    return "The requested workflow scope does not include triggering a pipeline. I will not run the pipeline unless you explicitly ask for it.";
+  }
+  return "";
+}
+
+function userScopeText(message: string, history: ChatMessage[]): string {
+  const userHistory = history
+    .filter((entry) => entry.role === "user")
+    .map((entry) => entry.content)
+    .join("\n");
+  return `${userHistory}\n${message}`;
+}
+
+function historyMentionsExecuted(history: ChatMessage[], toolName: string): boolean {
+  const marker = `[executed] ${toolName}`;
+  const confirmedMarker = `[confirmed & executed] ${toolName}`;
+  return history.some((entry) =>
+    entry.role === "assistant" &&
+    (entry.content.includes(marker) || entry.content.includes(confirmedMarker))
+  );
 }
 
 function plannerResultFromControl(

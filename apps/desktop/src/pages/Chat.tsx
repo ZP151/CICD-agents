@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   checkAdoProjectLinkTools,
   chatStream,
@@ -33,9 +33,12 @@ import {
   fetchAzureDevOpsRemoteSuggestion,
   fetchGitBranches,
   DEFAULT_ADO_ORG_URL,
+  loadStoredActiveProjectLinkId,
   pickRecommendedPipeline,
   type PatStatus,
   projectLinkNameFromRepo,
+  resolveActiveProjectLinkId,
+  saveStoredActiveProjectLinkId,
   verifyPat,
 } from "../projectLinks.js";
 import { finaliseAssistantResponseBubbles, type AssistantBubbleMeta } from "../chatBubbles.js";
@@ -811,7 +814,6 @@ function ProjectLinkSetupCard({
   const [branches, setBranches] = useState<string[]>([]);
   const [branchLoading, setBranchLoading] = useState(false);
   const [branchError, setBranchError] = useState(false);
-  const [remoteHint, setRemoteHint] = useState<string | null>(null);
   const branchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [patStatus, setPatStatus] = useState<PatStatus>("none");
   const [verifyingPat, setVerifyingPat] = useState(false);
@@ -844,7 +846,6 @@ function ProjectLinkSetupCard({
       setBranches([]);
       setBranchLoading(false);
       setBranchError(false);
-      setRemoteHint(null);
       return;
     }
     setBranchLoading(true);
@@ -875,15 +876,12 @@ function ProjectLinkSetupCard({
       });
     }
     if (remote) {
-      setRemoteHint(`${remote.adoProject} / ${remote.adoRepoName} from ${remote.remoteName}`);
       setForm((current) => ({
         ...current,
         adoOrgUrl: current.adoOrgUrl || remote.adoOrgUrl,
         adoProject: current.adoProject || remote.adoProject,
         adoRepoName: current.adoRepoName || remote.adoRepoName,
       }));
-    } else {
-      setRemoteHint(null);
     }
   }, []);
 
@@ -1004,15 +1002,6 @@ function ProjectLinkSetupCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [advanced, form.adoOrgUrl, form.adoProject, form.adoPat]);
 
-  useEffect(() => {
-    if (!advanced || !form.adoOrgUrl.trim() || !form.adoProject.trim() || !form.adoRepoName.trim()) return;
-    const timer = setTimeout(() => {
-      void runDiscovery("pipelines", "auto");
-    }, 650);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [advanced, form.adoOrgUrl, form.adoProject, form.adoRepoName, form.adoPat]);
-
   async function handleCheckMcp() {
     setMcpChecking(true);
     setMcpStatus(null);
@@ -1090,12 +1079,7 @@ function ProjectLinkSetupCard({
         ? "border-amber-700/60 bg-[rgb(var(--app-surface-raised))] focus:border-amber-600"
         : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] focus:border-zinc-500"
   }`;
-  const hasAdoMapping = Boolean(form.adoOrgUrl.trim() && form.adoProject.trim() && form.adoRepoName.trim());
-  const advancedLabel = advanced
-    ? "Hide Azure DevOps details"
-    : hasAdoMapping
-      ? "Review inferred Azure DevOps details"
-      : "Add Azure DevOps details";
+  const hasOptionalFallbacks = Boolean(form.adoPipelineName || form.adoPipelineId || form.adoPat || form.adoMcpEnabled);
 
   async function save() {
     if (!canSave || saving) return;
@@ -1127,9 +1111,6 @@ function ProjectLinkSetupCard({
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-[rgb(var(--app-text))]">Create a Project Link</p>
-          <p className="mt-1 text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
-            Choose a local repository. Azure DevOps mapping can be inferred or added later.
-          </p>
         </div>
       </div>
 
@@ -1166,9 +1147,6 @@ function ProjectLinkSetupCard({
           {branchError && form.repoPath && (
             <span className="text-[10px] text-amber-500/80">Could not read branches. Check this is a valid git repository.</span>
           )}
-          {remoteHint && (
-            <span className="text-[10px] text-emerald-500/80">Azure DevOps fields inferred from git remote: {remoteHint}</span>
-          )}
         </label>
         <div className="grid min-w-0 grid-cols-1 gap-3">
           <BranchSelect label="Default branch" value={form.defaultBranch} onChange={set("defaultBranch")} />
@@ -1178,9 +1156,17 @@ function ProjectLinkSetupCard({
         <button
           type="button"
           onClick={() => setAdvanced((value) => !value)}
-          className="mt-1 text-left text-xs text-[rgb(var(--app-text-muted))] hover:text-[rgb(var(--app-text))]"
+          className="mt-1 flex items-center justify-between gap-2 rounded-lg border border-[rgb(var(--app-border))] px-3 py-2 text-left text-xs text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))]"
         >
-          {advancedLabel}
+          <span className="flex items-center gap-2">
+            <svg className={`h-3.5 w-3.5 transition ${advanced ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            <span className="font-medium">Azure DevOps</span>
+          </span>
+          {form.adoProject && form.adoRepoName && (
+            <span className="shrink-0 rounded-full border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-subtle))]">configured</span>
+          )}
         </button>
 
         {advanced && (
@@ -1255,127 +1241,140 @@ function ProjectLinkSetupCard({
                 />
               )}
             </div>
-            <div className="grid gap-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2.5">
-              <div className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => void handleDiscover("pipelines")}
-                  disabled={!form.adoOrgUrl || !form.adoProject || !form.adoRepoName || discovering !== null}
-                  className="rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] text-[rgb(var(--app-text-muted))] transition hover:border-zinc-500 hover:text-[rgb(var(--app-text))] disabled:opacity-40"
-                >
-                  {discovering === "pipelines" ? "Discovering..." : "Refresh pipelines"}
-                </button>
-              </div>
-              {(["pipelines"] as AdoDiscoveryKind[]).map((kind) => (
-                discovered[kind].length > 0 && (
-                  <label key={kind} className="grid gap-1">
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-[rgb(var(--app-text-subtle))]">{kind}</span>
-                    <select
-                      className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
-                      defaultValue=""
-                      onChange={(event) => {
-                        const selected = discovered[kind].find((option) => option.id === event.target.value);
-                        if (selected) applyDiscovery(kind, selected);
-                      }}
-                    >
-                      <option value="">Select {kind.slice(0, -1)}</option>
-                      {discovered[kind].map((option) => (
-                        <option key={`${kind}-${option.id}`} value={option.id}>
-                          {option.name}{option.description ? ` - ${option.description}` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )
-              ))}
-              {discoveryError && (
-                <p className="rounded-md border border-red-900/40 bg-red-950/20 px-2.5 py-1.5 text-[11px] text-red-300">
-                  {discoveryError}
-                </p>
-              )}
-              {pipelineHint && (
-                <p className="rounded-md border border-emerald-900/40 bg-emerald-950/20 px-2.5 py-1.5 text-[11px] text-emerald-300">
-                  {pipelineHint}
-                </p>
-              )}
-            </div>
-            <div className="grid min-w-0 grid-cols-1 gap-2">
-              <input className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoPipelineId} onChange={(e) => set("adoPipelineId")(e.target.value)} placeholder="Pipeline ID" />
-              <input className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoPipelineName} onChange={(e) => set("adoPipelineName")(e.target.value)} placeholder="Pipeline name" />
-            </div>
-            <div className="grid gap-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-medium text-[rgb(var(--app-text-muted))]">PAT fallback (optional)</span>
-                <div className="flex items-center gap-2">
-                  {patStatus === "pending" && <span className="rounded-full border border-amber-800/40 bg-amber-900/30 px-2 py-0.5 text-[10px] font-medium text-amber-400">Pending</span>}
-                  {patStatus === "verified" && <span className="rounded-full border border-emerald-800/40 bg-emerald-900/30 px-2 py-0.5 text-[10px] font-medium text-emerald-400">Verified</span>}
-                  {patStatus === "invalid" && <span className="rounded-full border border-red-800/40 bg-red-900/30 px-2 py-0.5 text-[10px] font-medium text-red-400">Invalid</span>}
-                  <button type="button" onClick={handleRequestPat} className="text-[10px] text-[rgb(var(--app-text-muted))] underline underline-offset-2 transition hover:text-[rgb(var(--app-text))]">
-                    Request PAT
-                  </button>
-                  {form.adoPat && form.adoOrgUrl && (
+            {discoveryError && (
+              <p className="rounded-md border border-red-900/40 bg-red-950/20 px-2.5 py-1.5 text-[11px] text-red-300">
+                {discoveryError}
+              </p>
+            )}
+
+            <details className="group rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))]">
+                <span className="flex items-center gap-2">
+                  <svg className="h-3.5 w-3.5 transition group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  <span className="font-medium">Optional fallbacks</span>
+                </span>
+                {hasOptionalFallbacks && (
+                  <span className="shrink-0 rounded-full border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-subtle))]">configured</span>
+                )}
+              </summary>
+              <div className="grid gap-3 border-t border-[rgb(var(--app-border))] p-3">
+                <div className="grid gap-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <span className="text-[11px] font-medium text-[rgb(var(--app-text-muted))]">Pipeline matching</span>
                     <button
                       type="button"
-                      onClick={() => void handleVerifyPat()}
-                      disabled={verifyingPat}
-                      className="text-[10px] text-[rgb(var(--app-text-muted))] underline underline-offset-2 transition hover:text-[rgb(var(--app-text))] disabled:opacity-50"
+                      onClick={() => void handleDiscover("pipelines")}
+                      disabled={!form.adoOrgUrl || !form.adoProject || !form.adoRepoName || discovering !== null}
+                      className="rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] text-[rgb(var(--app-text-muted))] transition hover:border-zinc-500 hover:text-[rgb(var(--app-text))] disabled:opacity-40"
                     >
-                      {verifyingPat ? "Verifying..." : "Verify"}
+                      {discovering === "pipelines" ? "Discovering..." : "Refresh pipelines"}
                     </button>
+                  </div>
+                  {(["pipelines"] as AdoDiscoveryKind[]).map((kind) => (
+                    discovered[kind].length > 0 && (
+                      <label key={kind} className="grid gap-1">
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-[rgb(var(--app-text-subtle))]">{kind}</span>
+                        <select
+                          className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
+                          defaultValue=""
+                          onChange={(event) => {
+                            const selected = discovered[kind].find((option) => option.id === event.target.value);
+                            if (selected) applyDiscovery(kind, selected);
+                          }}
+                        >
+                          <option value="">Select {kind.slice(0, -1)}</option>
+                          {discovered[kind].map((option) => (
+                            <option key={`${kind}-${option.id}`} value={option.id}>
+                              {option.name}{option.description ? ` - ${option.description}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )
+                  ))}
+                  {pipelineHint && (
+                    <p className="rounded-md border border-emerald-900/40 bg-emerald-950/20 px-2.5 py-1.5 text-[11px] text-emerald-300">
+                      {pipelineHint}
+                    </p>
+                  )}
+                  <div className="grid min-w-0 grid-cols-1 gap-2">
+                    <input className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoPipelineId} onChange={(e) => set("adoPipelineId")(e.target.value)} placeholder="Pipeline ID" />
+                    <input className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoPipelineName} onChange={(e) => set("adoPipelineName")(e.target.value)} placeholder="Pipeline name" />
+                  </div>
+                </div>
+
+                <div className="grid gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-medium text-[rgb(var(--app-text-muted))]">PAT fallback</span>
+                    <div className="flex items-center gap-2">
+                      {patStatus === "pending" && <span className="rounded-full border border-amber-800/40 bg-amber-900/30 px-2 py-0.5 text-[10px] font-medium text-amber-400">Pending</span>}
+                      {patStatus === "verified" && <span className="rounded-full border border-emerald-800/40 bg-emerald-900/30 px-2 py-0.5 text-[10px] font-medium text-emerald-400">Verified</span>}
+                      {patStatus === "invalid" && <span className="rounded-full border border-red-800/40 bg-red-900/30 px-2 py-0.5 text-[10px] font-medium text-red-400">Invalid</span>}
+                      <button type="button" onClick={handleRequestPat} className="text-[10px] text-[rgb(var(--app-text-muted))] underline underline-offset-2 transition hover:text-[rgb(var(--app-text))]">
+                        Request PAT
+                      </button>
+                      {form.adoPat && form.adoOrgUrl && (
+                        <button
+                          type="button"
+                          onClick={() => void handleVerifyPat()}
+                          disabled={verifyingPat}
+                          className="text-[10px] text-[rgb(var(--app-text-muted))] underline underline-offset-2 transition hover:text-[rgb(var(--app-text))] disabled:opacity-50"
+                        >
+                          {verifyingPat ? "Verifying..." : "Verify"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
+                    type="password"
+                    value={form.adoPat}
+                    onChange={(e) => set("adoPat")(e.target.value)}
+                    placeholder="PAT"
+                  />
+                </div>
+
+                <div className="grid gap-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-2.5">
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.adoMcpEnabled}
+                      onChange={(event) => set("adoMcpEnabled")(event.target.checked)}
+                      className="mt-0.5 h-3.5 w-3.5 rounded border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-[11px] font-medium text-[rgb(var(--app-text))]">Enable external Azure DevOps MCP bridge fallback</span>
+                    </span>
+                  </label>
+                  {form.adoMcpEnabled && (
+                    <div className="grid gap-2">
+                      <input className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoMcpCommand} onChange={(e) => set("adoMcpCommand")(e.target.value)} placeholder="mcp-server-azuredevops" />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoMcpAuthentication} onChange={(e) => set("adoMcpAuthentication")(e.target.value)} placeholder="pat or azcli" />
+                        <input className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoMcpDomains} onChange={(e) => set("adoMcpDomains")(e.target.value)} placeholder="repositories,pipelines,work-items" />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleCheckMcp()}
+                          disabled={!form.adoOrgUrl || mcpChecking}
+                          className="rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] text-[rgb(var(--app-text-muted))] transition hover:border-zinc-500 hover:text-[rgb(var(--app-text))] disabled:opacity-40"
+                        >
+                          {mcpChecking ? "Checking..." : "Check ADO auth/tools"}
+                        </button>
+                        {mcpStatus && (
+                          <span className={`text-[10px] ${mcpStatus.startsWith("ADO tools ready") ? "text-emerald-400" : "text-amber-400"}`}>
+                            {mcpStatus}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
-              <input
-                className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
-                type="password"
-                value={form.adoPat}
-                onChange={(e) => set("adoPat")(e.target.value)}
-                placeholder="Optional PAT fallback"
-              />
-              {patStatus === "pending" && (
-                <p className="rounded-lg border border-amber-900/30 bg-amber-950/20 px-3 py-2 text-[11px] leading-relaxed text-amber-400/80">
-                  Microsoft sign-in is tried first. Use PAT only if OAuth cannot reach this organization, with Code, Build, and Pull Request thread permissions.
-                </p>
-              )}
-            </div>
-            <div className="grid gap-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2.5">
-              <label className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  checked={form.adoMcpEnabled}
-                  onChange={(event) => set("adoMcpEnabled")(event.target.checked)}
-                  className="mt-0.5 h-3.5 w-3.5 rounded border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]"
-                />
-                <span className="min-w-0">
-                  <span className="block text-[11px] font-medium text-[rgb(var(--app-text))]">Enable external Azure DevOps MCP bridge fallback</span>
-                  <span className="block text-[10px] leading-relaxed text-[rgb(var(--app-text-subtle))]">Optional fallback while ADO capabilities are internalized into this app.</span>
-                </span>
-              </label>
-              {form.adoMcpEnabled && (
-                <div className="grid gap-2">
-                  <input className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoMcpCommand} onChange={(e) => set("adoMcpCommand")(e.target.value)} placeholder="mcp-server-azuredevops" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoMcpAuthentication} onChange={(e) => set("adoMcpAuthentication")(e.target.value)} placeholder="pat or azcli" />
-                    <input className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoMcpDomains} onChange={(e) => set("adoMcpDomains")(e.target.value)} placeholder="repositories,pipelines,work-items" />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void handleCheckMcp()}
-                      disabled={!form.adoOrgUrl || mcpChecking}
-                      className="rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] text-[rgb(var(--app-text-muted))] transition hover:border-zinc-500 hover:text-[rgb(var(--app-text))] disabled:opacity-40"
-                    >
-                      {mcpChecking ? "Checking..." : "Check ADO auth/tools"}
-                    </button>
-                    {mcpStatus && (
-                      <span className={`text-[10px] ${mcpStatus.startsWith("ADO tools ready") ? "text-emerald-400" : "text-amber-400"}`}>
-                        {mcpStatus}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            </details>
           </div>
         )}
 
@@ -1390,7 +1389,6 @@ function ProjectLinkSetupCard({
           >
             {saving ? "Creating..." : "Create and use"}
           </button>
-          <span className="text-[11px] text-zinc-700">Only name and local path are required to start.</span>
         </div>
       </div>
     </div>
@@ -1945,14 +1943,52 @@ interface ChatProps {
   mini?: boolean;
 }
 
+const CHAT_DRAFT_STORAGE_KEY = "dev_agent_chat_draft_v1";
+
+interface ChatDraftState {
+  repoPath: string;
+  input: string;
+  bubbles: Bubble[];
+  sessionId: string | null;
+  statusText: string | null;
+  workflowState: WorkflowEventState | null;
+  customTitle: string | null;
+  activeProfileId: string | null;
+}
+
+function loadChatDraft(): ChatDraftState | null {
+  try {
+    const raw = sessionStorage.getItem(CHAT_DRAFT_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as ChatDraftState;
+  } catch {
+    return null;
+  }
+}
+
+function saveChatDraft(draft: ChatDraftState): void {
+  try {
+    sessionStorage.setItem(CHAT_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  } catch {
+    /* ignore storage quota / privacy mode */
+  }
+}
+
 export default function Chat({ mini = false }: ChatProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const initialDraftRef = useRef<ChatDraftState | null>(null);
+  if (initialDraftRef.current === null) {
+    const explicitNewChat = new URLSearchParams(location.search).get("new") === "1";
+    initialDraftRef.current = !explicitNewChat && typeof window !== "undefined" ? loadChatDraft() : null;
+  }
+  const initialDraft = initialDraftRef.current;
   const [repoPath, setRepoPath] = useState(
-    typeof window !== "undefined" ? (localStorage.getItem("chat_repo") ?? "") : "",
+    initialDraft?.repoPath ?? (typeof window !== "undefined" ? (localStorage.getItem("chat_repo") ?? "") : ""),
   );
-  const [input, setInput] = useState("");
-  const [bubbles, setBubbles] = useState<Bubble[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [input, setInput] = useState(initialDraft?.input ?? "");
+  const [bubbles, setBubbles] = useState<Bubble[]>(initialDraft?.bubbles ?? []);
+  const [sessionId, setSessionId] = useState<string | null>(initialDraft?.sessionId ?? null);
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<ChatHistoryEntry[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -2006,13 +2042,13 @@ export default function Chat({ mini = false }: ChatProps) {
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
   }, [rightWidth, historyOpen, historyWidth]);
-  const [statusText, setStatusText] = useState<string | null>(null);
-  const [workflowState, setWorkflowState] = useState<WorkflowEventState | null>(null);
+  const [statusText, setStatusText] = useState<string | null>(initialDraft?.statusText ?? null);
+  const [workflowState, setWorkflowState] = useState<WorkflowEventState | null>(initialDraft?.workflowState ?? null);
   const [titleEditing, setTitleEditing] = useState(false);
-  const [customTitle, setCustomTitle] = useState<string | null>(null);
+  const [customTitle, setCustomTitle] = useState<string | null>(initialDraft?.customTitle ?? null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(
-    typeof window !== "undefined" ? (localStorage.getItem("chat_profile_id") ?? null) : null,
+    () => initialDraft?.activeProfileId ?? (loadStoredActiveProjectLinkId() || null),
   );
   const [customModel, setCustomModel] = useState<CustomConversationModel>(readCustomConversationModel);
   const [activeModel, setActiveModel] = useState<ConversationModelChoice>(readInitialConversationModelChoice);
@@ -2049,6 +2085,11 @@ export default function Chat({ mini = false }: ChatProps) {
     () => availableProfiles.find((profile) => profile.id === activeProfileId) ?? null,
     [availableProfiles, activeProfileId],
   );
+
+  useEffect(() => {
+    if (availableProfiles.length === 0) return;
+    setActiveProfileId((current) => resolveActiveProjectLinkId(availableProfiles, current) || null);
+  }, [availableProfiles]);
 
   const refreshModelChoices = useCallback(() => {
     const next = readCustomConversationModel();
@@ -2211,11 +2252,7 @@ export default function Chat({ mini = false }: ChatProps) {
   // Project Links are managed globally by AppDataContext — no per-mount fetch needed here.
 
   useEffect(() => {
-    if (activeProfileId) {
-      localStorage.setItem("chat_profile_id", activeProfileId);
-    } else {
-      localStorage.removeItem("chat_profile_id");
-    }
+    saveStoredActiveProjectLinkId(activeProfileId);
   }, [activeProfileId]);
 
   // On mount: if there is an active Project Link but no saved repo path, restore
@@ -2328,7 +2365,7 @@ export default function Chat({ mini = false }: ChatProps) {
   const welcomeSuggestions = useMemo(() => {
     const hasAdoMapping = Boolean(activeProfile?.adoOrgUrl && activeProfile.adoProject && activeProfile.adoRepoName);
     const hasPipeline = Boolean(activeProfile?.adoPipelineId || activeProfile?.adoPipelineName);
-    const needsProjectUnderstanding = !indexStatus?.indexed || !indexStatus.semanticReady;
+    const needsProjectUnderstanding = indexStatus ? (!indexStatus.indexed || !indexStatus.semanticReady) : false;
     const suggestions = [
       needsProjectUnderstanding ? "Understand this project" : "Explain this project architecture",
       "Review my changes",
@@ -3035,6 +3072,11 @@ export default function Chat({ mini = false }: ChatProps) {
   }, [showApprovalRequest]);
 
   const newChat = useCallback(() => {
+    try {
+      sessionStorage.removeItem(CHAT_DRAFT_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
     setSessionId(null);
     setBubbles([]);
     cancelRef.current?.();
@@ -3044,6 +3086,28 @@ export default function Chat({ mini = false }: ChatProps) {
     setCustomTitle(null);
     setTitleEditing(false);
   }, []);
+
+  useEffect(() => {
+    if (mini) return;
+    saveChatDraft({
+      repoPath,
+      input,
+      bubbles,
+      sessionId,
+      statusText,
+      workflowState,
+      customTitle,
+      activeProfileId,
+    });
+  }, [activeProfileId, bubbles, customTitle, input, mini, repoPath, sessionId, statusText, workflowState]);
+
+  useEffect(() => {
+    if (mini) return;
+    const params = new URLSearchParams(location.search);
+    if (params.get("new") !== "1") return;
+    newChat();
+    navigate("/chat", { replace: true });
+  }, [location.search, mini, navigate, newChat]);
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 

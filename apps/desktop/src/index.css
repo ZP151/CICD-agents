@@ -69,7 +69,8 @@ body {
 [data-theme="light"] .bg-zinc-950,
 [data-theme="light"] .bg-zinc-950\/95,
 [data-theme="light"] .bg-zinc-950\/80,
-[data-theme="light"] .bg-zinc-950\/40 {
+[data-theme="light"] .bg-zinc-950\/40,
+[data-theme="light"] .bg-zinc-950\/30 {
   background-color: rgb(var(--app-bg)) !important;
 }
 
@@ -618,8 +619,8 @@ body {
 
 /* Middle panel wrapper: fills remaining space, centers inner */
 .middle-panel {
-  flex: 1 1 520px;    /* flex-basis = min; flex-grow fills the rest */
-  min-width: 520px;   /* hard floor: side panels cannot push below this */
+  flex: 1 1 420px;    /* flex-basis = min; flex-grow fills the rest */
+  min-width: 420px;   /* hard floor: side panels cannot push below this */
   display: flex;
   justify-content: center;
   overflow: hidden;

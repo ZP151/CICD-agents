@@ -10,6 +10,12 @@ import { logger } from "../logger.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCHEMA_PATH = path.join(__dirname, "schema.sql");
 
+function resolveSchemaPath(): string {
+  const alt = path.join(__dirname, "..", "..", "src", "db", "schema.sql");
+  if (fs.existsSync(alt)) return alt;
+  return SCHEMA_PATH;
+}
+
 function repoId(repoPath: string): string {
   const norm = path.resolve(repoPath).toLowerCase();
   return crypto.createHash("sha1").update(norm).digest("hex").slice(0, 16);
@@ -32,7 +38,8 @@ export interface RepoDatabase {
 let schemaCache: string | null = null;
 function getSchema(): string {
   if (schemaCache) return schemaCache;
-  schemaCache = fs.readFileSync(SCHEMA_PATH, "utf8");
+  const schemaPath = resolveSchemaPath();
+  schemaCache = fs.readFileSync(schemaPath, "utf8");
   return schemaCache;
 }
 

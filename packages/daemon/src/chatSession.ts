@@ -182,13 +182,50 @@ function chatContextTools(llm: LLMClient): Tool[] {
       },
       handler: async (ctx) => {
         const stats = await refreshChatIndex({ repoPath: ctx.repoPath, llm });
+        const embeddingError = "embeddingError" in stats
+          ? nonEmptyString((stats as { embeddingError?: unknown }).embeddingError)
+          : "";
+        const originalMessage = nonEmptyString(ctx.extra["chat_message"]);
+        const inlineProfile = isInlineProfileLike(ctx.extra["chat_profile"])
+          ? ctx.extra["chat_profile"]
+          : undefined;
+        const profile = inlineProfileToChatContextProfile(inlineProfile);
+        const followUpContext = originalMessage
+          ? await buildChatContext({
+              repoPath: ctx.repoPath,
+              message: originalMessage,
+              llm,
+              profile,
+              useSemanticIndex: true,
+            })
+          : null;
+        const repositoryContextPrompt = followUpContext
+          ? chatContextToPrompt(followUpContext, 10_000)
+          : "";
         return {
           ok: true,
           repoPath: ctx.repoPath,
           filesSeen: stats.filesSeen,
           filesIndexed: stats.filesIndexed,
+          filesIndexedThisRun: stats.filesIndexed,
           embedded: stats.embedded,
-          summary: `Refreshed repository index: ${stats.filesSeen} files seen, ${stats.filesIndexed} updated, ${stats.embedded} embedded.`,
+          embeddingWarning: embeddingError
+            ? `Embedding failed; repository file/chunk index is still usable. ${embeddingError}`
+            : "",
+          totalFilesIndexed: followUpContext?.indexStats.filesIndexed ?? 0,
+          totalChunksIndexed: followUpContext?.indexStats.chunksIndexed ?? 0,
+          totalChunksEmbedded: followUpContext?.indexStats.chunksEmbedded ?? 0,
+          contextSummary: followUpContext ? describeChatContext(followUpContext) : "",
+          repositoryContextPrompt,
+          instruction:
+            "Use repositoryContextPrompt to answer the user's original request now. filesIndexedThisRun is only the incremental update count, not the total indexed repository size. Do not stop after refreshing the index, and do not ask the user to provide a high-level overview when repository context is available.",
+          summary:
+            `Repository index refresh complete. Current index: ${followUpContext?.indexStats.filesIndexed ?? 0} files, ` +
+            `${followUpContext?.indexStats.chunksIndexed ?? 0} chunks, ` +
+            `${followUpContext?.indexStats.chunksEmbedded ?? 0} embedded chunks. ` +
+            `This incremental run updated ${stats.filesIndexed} file(s) and embedded ${stats.embedded} chunk(s). ` +
+            (embeddingError ? "Embedding failed, so semantic search may fall back to quick scan. " : "") +
+            "Follow-up repository context is included in this tool result.",
         };
       },
     },
@@ -331,6 +368,10 @@ function asBoolean(value: unknown): boolean {
 
 function nonEmptyString(value: unknown): string {
   return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function isInlineProfileLike(value: unknown): value is InlineProfile {
+  return typeof value === "object" && value !== null && typeof (value as { repoPath?: unknown }).repoPath === "string";
 }
 
 function inlineProfileToToolExtra(profile: InlineProfile): Record<string, unknown> {
@@ -706,7 +747,11 @@ export class ChatSessionManager {
       repoPath: session.repoPath,
       env: {},
       timeoutSec: 60,
-      extra: profileExtra,
+      extra: {
+        ...profileExtra,
+        chat_message: message,
+        ...(inlineProfile ? { chat_profile: inlineProfile } : {}),
+      },
     };
     const effectiveSettings = buildEffectiveSettings(llmConfig);
     const llm = new LLMClient(effectiveSettings);
@@ -1364,7 +1409,7 @@ const ACTION_DERIVERS: Array<{
   {
     tool: "git_push",
     description: "Push branch to remote",
-    nextHint: "create PR",
+    nextHint: "done",
     buildArgs: (_response, bubbles) => {
       return { branch: currentBranchFromBubbles(bubbles) };
     },
@@ -1471,7 +1516,13 @@ export function deriveWorkflowPendingAction(
   bubbles: StoredBubble[],
 ): ChatPlannerResult {
   // If LLM correctly provided an approval proposal, trust it
-  if (approvalProposalFromResult(result)?.tool) return result;
+  const providedProposal = approvalProposalFromResult(result);
+  if (providedProposal?.tool) {
+    return isProposalWithinUserScope(providedProposal.tool, bubbles) ? result : {
+      ...result,
+      approvalProposal: undefined,
+    };
+  }
 
   // Only infer when the response clearly asks the user to confirm an action
   const response = result.response.toLowerCase();
@@ -1483,7 +1534,9 @@ export function deriveWorkflowPendingAction(
   if (!isAskingConfirmation) return result;
 
   const explicitTool = inferWriteToolFromResponse(response);
-  if (explicitTool) return withDerivedAction(result, explicitTool, bubbles);
+  if (explicitTool && isProposalWithinUserScope(explicitTool, bubbles)) {
+    return withDerivedAction(result, explicitTool, bubbles);
+  }
 
   const nextPrTool = inferNextPrWorkflowTool(response, bubbles);
   if (nextPrTool) return withDerivedAction(result, nextPrTool, bubbles);
@@ -1509,6 +1562,7 @@ export function inferPendingAction(messages: ChatMessage[]): PendingToolAction |
   if (!isAskingConfirmation) return undefined;
 
   const tool = inferWriteToolFromResponse(t) ?? inferNextPrWorkflowTool(t, []);
+  if (tool && !isToolWithinChatMessageScope(tool, messages)) return undefined;
   return tool ? buildPendingAction(tool, lastAssistant.content, []) : undefined;
 }
 
@@ -1566,8 +1620,41 @@ function inferNextPrWorkflowTool(response: string, bubbles: StoredBubble[]): str
   if (!executedTools.has("git_add")) return "git_add";
   if (!executedTools.has("git_commit")) return "git_commit";
   if (!executedTools.has("git_push")) return "git_push";
-  if (!executedTools.has("ado_create_pr")) return "ado_create_pr";
+  if (userScopeAllowsAdoStep(bubbles, "pr") && !executedTools.has("ado_create_pr")) return "ado_create_pr";
   return undefined;
+}
+
+function isProposalWithinUserScope(tool: string, bubbles: StoredBubble[]): boolean {
+  if (tool === "ado_create_pr") return userScopeAllowsAdoStep(bubbles, "pr");
+  if (/work_item|workitem/.test(tool)) return userScopeAllowsAdoStep(bubbles, "work_item");
+  if (tool === "ado_trigger_pipeline") return userScopeAllowsAdoStep(bubbles, "pipeline");
+  return true;
+}
+
+function isToolWithinChatMessageScope(tool: string, messages: ChatMessage[]): boolean {
+  if (!["ado_create_pr", "ado_trigger_pipeline"].includes(tool) && !/work_item|workitem/.test(tool)) return true;
+  const userText = messages
+    .filter((message) => message.role === "user")
+    .map((message) => message.content)
+    .join("\n")
+    .toLowerCase();
+  if (tool === "ado_create_pr") return /\b(pr|pull request)\b/.test(userText);
+  if (/work_item|workitem/.test(tool)) return /\b(work item|workitem|user story|task|bug|link)\b/.test(userText);
+  return /\b(pipeline|build|run ci|trigger)\b/.test(userText);
+}
+
+function userScopeAllowsAdoStep(
+  bubbles: StoredBubble[],
+  step: "pr" | "work_item" | "pipeline",
+): boolean {
+  const userText = bubbles
+    .filter((bubble) => bubble.role === "user")
+    .map((bubble) => bubble.content)
+    .join("\n")
+    .toLowerCase();
+  if (step === "pr") return /\b(pr|pull request)\b/.test(userText);
+  if (step === "work_item") return /\b(work item|workitem|user story|task|bug|link)\b/.test(userText);
+  return /\b(pipeline|build|run ci|trigger)\b/.test(userText);
 }
 
 function currentBranchFromBubbles(bubbles: StoredBubble[]): string {

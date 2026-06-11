@@ -730,7 +730,7 @@ const NAV_GROUPS = [
   {
     label: "Workspace",
     items: [
-      { to: "/chat", label: "New chat", Icon: IconChat },
+      { to: "/chat?new=1", match: "/chat", label: "New chat", Icon: IconChat },
       { to: "/pulls", label: "Pull Requests", Icon: IconPR },
       { to: "/profiles", label: "Project Links", Icon: IconProfiles },
     ],
@@ -784,6 +784,7 @@ function PageShell({
 }
 
 function FullLayout({ info }: { info: DaemonInfo }) {
+  const location = useLocation();
   const anyCloud = info.cloudProfileStore || info.cloudSecrets || info.cloudSessions;
   return (
     <div className="flex h-screen w-screen bg-zinc-950 text-zinc-100">
@@ -817,7 +818,7 @@ function FullLayout({ info }: { info: DaemonInfo }) {
                   to={item.to}
                   className={({ isActive }) =>
                     `flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors ${
-                      isActive
+                      (item.match ? location.pathname === item.match : isActive)
                         ? "bg-zinc-800 text-zinc-100"
                         : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300"
                     }`
