@@ -76,6 +76,7 @@ export interface InlineProfile {
   templateProfile: string;
   buildCommand:    string;
   testCommand:     string;
+  ignoredGlobs?:   string[];
 }
 
 // ─── Cosmos DB session store (opt-in) ────────────────────────────────────────
@@ -114,6 +115,7 @@ interface StoredBubble {
   checkpointPath?: string;
   // assistant result metadata (hidden from main bubble, shown in Details)
   riskLevel?: string;
+  finalizationMode?: ChatPlannerResult["finalizationMode"];
   actionsTaken?: string[];
   suggestions?: string[];
   repoPath?: string;
@@ -773,7 +775,18 @@ export class ChatSessionManager {
             let toolResult: unknown;
             let ok = true;
             try {
-              toolResult = await actionExecutor.call(pending.tool, pending.args);
+              for await (const streamEvent of actionExecutor.callStream(pending.tool, pending.args)) {
+                if (streamEvent.type === "output") {
+                  yield {
+                    type: "tool_output_delta",
+                    name: pending.tool,
+                    stream: streamEvent.stream,
+                    delta: streamEvent.text,
+                  };
+                } else {
+                  toolResult = streamEvent.result;
+                }
+              }
             } catch (err) {
               ok = false;
               toolResult = { error: err instanceof Error ? err.message : String(err) };
@@ -903,7 +916,18 @@ export class ChatSessionManager {
       let toolResult: unknown;
       let ok = true;
       try {
-        toolResult = await actionExecutor.call(pending.tool, pending.args);
+        for await (const streamEvent of actionExecutor.callStream(pending.tool, pending.args)) {
+          if (streamEvent.type === "output") {
+            yield {
+              type: "tool_output_delta",
+              name: pending.tool,
+              stream: streamEvent.stream,
+              delta: streamEvent.text,
+            };
+          } else {
+            toolResult = streamEvent.result;
+          }
+        }
       } catch (err) {
         ok = false;
         toolResult = { error: err instanceof Error ? err.message : String(err) };
@@ -1018,6 +1042,7 @@ export class ChatSessionManager {
           content: enrichedWithContext.response,
           timestamp: now(),
           riskLevel: enrichedWithContext.riskLevel,
+          finalizationMode: enrichedWithContext.finalizationMode,
           actionsTaken: enrichedWithContext.actionsTaken,
           suggestions: enrichedWithContext.suggestions,
         });

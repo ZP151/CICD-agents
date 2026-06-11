@@ -170,4 +170,27 @@ describe("ToolExecutor", () => {
       },
     });
   });
+
+  it("streams tool runtime events before the final result", async () => {
+    const exec = new ToolExecutor({ repoPath: os.tmpdir(), env: {}, timeoutSec: 5, extra: {} });
+    exec.register({
+      name: "streaming",
+      description: "streaming",
+      parameters: { type: "object", properties: {} },
+      handler: async (ctx) => {
+        ctx.emitToolEvent?.({ type: "output", stream: "stdout", text: "line 1\n" });
+        ctx.emitToolEvent?.({ type: "output", stream: "stderr", text: "warn\n" });
+        return { ok: true };
+      },
+    });
+
+    const events = [];
+    for await (const event of exec.callStream("streaming", {})) events.push(event);
+
+    expect(events).toEqual([
+      { type: "output", stream: "stdout", text: "line 1\n" },
+      { type: "output", stream: "stderr", text: "warn\n" },
+      { type: "result", result: { ok: true } },
+    ]);
+  });
 });

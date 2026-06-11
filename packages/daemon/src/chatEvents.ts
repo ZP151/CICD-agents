@@ -5,7 +5,9 @@ export type CanonicalChatEventType =
   | "text.delta"
   | "progress"
   | "tool.started"
+  | "tool.output.delta"
   | "tool.completed"
+  | "assistant.control"
   | "approval.required"
   | "approval.resolved"
   | "workflow.updated"
@@ -22,7 +24,9 @@ const CANONICAL_EVENT_BY_LEGACY: Partial<Record<ChatEvent["type"], CanonicalChat
   assistant_delta: "text.delta",
   progress: "progress",
   tool_start: "tool.started",
+  tool_output_delta: "tool.output.delta",
   tool_end: "tool.completed",
+  assistant_control: "assistant.control",
   approval_required: "approval.required",
   approval_resolved: "approval.resolved",
   workflow_state: "workflow.updated",

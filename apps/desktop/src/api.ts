@@ -106,8 +106,12 @@ export type ChatEventType =
   | "progress"
   | "tool_start"
   | "tool.started"
+  | "tool_output_delta"
+  | "tool.output.delta"
   | "tool_end"
   | "tool.completed"
+  | "assistant_control"
+  | "assistant.control"
   | "confirm_required"
   | "workflow_state"
   | "workflow.updated"
@@ -119,11 +123,31 @@ export type ChatEventType =
   | "message"
   | "done"
   | "final"
+  | "ui.chunk"
   | "error"
   | "cancelled";
 
+export type ChatUiChunk =
+  | { type: "start" }
+  | { type: "text-start"; id: string }
+  | { type: "text-delta"; id: string; delta: string }
+  | { type: "text-end"; id: string }
+  | { type: "progress"; message: string }
+  | { type: "tool-input-start"; toolCallId: string; toolName: string }
+  | { type: "tool-input-available"; toolCallId: string; toolName: string; input: Record<string, unknown> }
+  | { type: "tool-output-delta"; toolCallId: string; toolName: string; stream: "stdout" | "stderr"; delta: string }
+  | { type: "tool-output-available"; toolCallId: string; toolName: string; output: unknown; summary: string }
+  | { type: "tool-output-error"; toolCallId: string; toolName: string; errorText: string; summary: string }
+  | { type: "approval-required"; approval: unknown }
+  | { type: "approval-resolved"; approvalId: string; approved: boolean }
+  | { type: "metadata-available"; metadata: unknown }
+  | { type: "workflow-updated"; state: unknown }
+  | { type: "finish"; finishReason: "stop" | "cancelled" | "error" }
+  | { type: "error"; errorText: string };
+
 export interface ChatEventPayload {
   type: ChatEventType;
+  uiChunk?: ChatUiChunk;
   // session
   sessionId?: string;
   legacyType?: string;
@@ -132,6 +156,7 @@ export interface ChatEventPayload {
   // tool_start / tool_end
   name?: string;
   args?: Record<string, unknown>;
+  stream?: "stdout" | "stderr";
   ok?: boolean;
   summary?: string;
   toolResult?: unknown;  // structured tool output for renderers
@@ -164,6 +189,7 @@ export interface ChatEventPayload {
   result?: {
     response: string;
     streamedResponse?: string;
+    finalizationMode?: "agent_final" | "control_marker" | "plain_json" | "none";
     riskLevel: string;
     actionsTaken: string[];
     suggestions: string[];
@@ -234,12 +260,41 @@ export interface ChatCheckpointRollbackPlan {
 }
 
 export interface ChatMessageEntry {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "tool" | "system" | "error";
   content: string;
   timestamp: number;
+  toolName?: string;
+  toolArgs?: Record<string, unknown>;
+  toolOk?: boolean;
+  toolSummary?: string;
+  toolResult?: unknown;
+  riskLevel?: string;
+  finalizationMode?: "agent_final" | "control_marker" | "plain_json" | "none";
+  actionsTaken?: string[];
+  suggestions?: string[];
 }
 
 export type ChatWorkflowState = NonNullable<ChatEventPayload["state"]>;
+
+export type ChatWorkflowAction = "inspect_environment" | "inspect_changes" | "refresh_branch";
+
+export interface ChatWorkflowToolResult {
+  name: string;
+  command: string;
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+  returncode: number;
+}
+
+export interface ChatWorkflowActionResult {
+  ok: boolean;
+  action: ChatWorkflowAction;
+  repoPath: string;
+  summary: string;
+  workflowState: ChatWorkflowState;
+  tools: ChatWorkflowToolResult[];
+}
 
 export interface ChatIndexStatus {
   repoPath: string;
@@ -266,13 +321,13 @@ export interface ChatIndexRefreshResult {
 }
 
 // ─── localStorage config readers ─────────────────────────────────────────────
+type ConversationModelChoice = "built_in" | "custom";
+
 // Read at call time so any changes the user makes in Settings / Profiles are
 // picked up immediately without a page reload.
-
-function readLlmConfig(): Record<string, unknown> | undefined {
+function readLlmConfig(conversationModelChoice: ConversationModelChoice = "built_in"): Record<string, unknown> | undefined {
   try {
-    const activeModel = localStorage.getItem("dev_agent_active_model");
-    if (activeModel !== "custom") return undefined;
+    if (conversationModelChoice !== "custom") return undefined;
 
     const raw = localStorage.getItem("dev_agent_settings");
     if (!raw) return undefined;
@@ -348,6 +403,7 @@ export function chatStream(
   sessionId: string | null,
   onEvent: (payload: ChatEventPayload) => void,
   profileId?: string,
+  conversationModelChoice: ConversationModelChoice = "built_in",
 ): { cancel: () => void } {
   const controller = new AbortController();
 
@@ -356,8 +412,8 @@ export function chatStream(
   if (profileId) body["profileId"] = profileId;
 
   // Attach LLM config and full profile data so the daemon uses the user's
-  // UI-configured settings rather than requiring a .env file.
-  const llmConfig = readLlmConfig();
+  // selected conversation model only when they choose an additional provider.
+  const llmConfig = readLlmConfig(conversationModelChoice);
   if (llmConfig) body["llmConfig"] = llmConfig;
   const profile = readProfileData(profileId);
   if (profile) body["profile"] = profile;
@@ -390,7 +446,7 @@ export function chatStream(
           } else if (line.startsWith("data: ")) {
             const raw = line.slice(6);
             try {
-              const parsed = JSON.parse(raw) as ChatEventPayload & { result?: unknown };
+              const parsed = JSON.parse(raw) as ChatEventPayload & { result?: unknown; chunk?: ChatUiChunk };
               // For tool_end, the backend sends { type, name, ok, summary, result }
               // Map `result` → `toolResult` to avoid collision with the done `result`
               const toolResult = currentEventType === "tool_end" ? parsed.result : undefined;
@@ -400,6 +456,7 @@ export function chatStream(
               onEvent({
                 ...parsed,
                 type: (currentEventType as ChatEventType) || parsed.type,
+                uiChunk: currentEventType === "ui.chunk" ? parsed.chunk : undefined,
                 toolResult,
                 result: doneResult,
               });
@@ -458,7 +515,7 @@ export function confirmAction(
           } else if (line.startsWith("data: ")) {
             const raw = line.slice(6);
             try {
-              const parsed = JSON.parse(raw) as ChatEventPayload & { result?: unknown };
+              const parsed = JSON.parse(raw) as ChatEventPayload & { result?: unknown; chunk?: ChatUiChunk };
               const toolResult = currentEventType === "tool_end" ? parsed.result : undefined;
               const doneResult = currentEventType === "done"
                 ? (parsed.result as ChatEventPayload["result"])
@@ -466,6 +523,7 @@ export function confirmAction(
               onEvent({
                 ...parsed,
                 type: (currentEventType as ChatEventType) || parsed.type,
+                uiChunk: currentEventType === "ui.chunk" ? parsed.chunk : undefined,
                 toolResult,
                 result: doneResult,
               });
@@ -531,6 +589,21 @@ export async function fetchChatState(sessionId: string): Promise<{ workflowState
   return (await r.json()) as { workflowState?: ChatWorkflowState };
 }
 
+export async function runChatWorkflowAction(
+  action: ChatWorkflowAction,
+  repoPath: string,
+  profileId?: string | null,
+): Promise<ChatWorkflowActionResult> {
+  const profile = readProfileData(profileId ?? undefined);
+  const r = await fetch(`${RUNTIME_URL}/chat/workflow-action`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action, repoPath, ...(profile ? { profile } : {}) }),
+  });
+  if (!r.ok) throw new Error(`/chat/workflow-action HTTP ${r.status}: ${await r.text()}`);
+  return (await r.json()) as ChatWorkflowActionResult;
+}
+
 // ─── Workspace profile API ────────────────────────────────────────────────────
 
 export interface WorkspaceProfile {
@@ -573,6 +646,10 @@ export interface AdoDiscoveryResult {
   source: "internal" | "mcp";
   kind: AdoDiscoveryKind;
   items: AdoDiscoveryOption[];
+  authMode?: "oauth" | "pat";
+  authStatus?: "ok" | "oauth_unavailable" | "oauth_no_org_access" | "pat_invalid_or_missing_scope" | "unknown_error";
+  authMessage?: string;
+  retryable?: boolean;
 }
 
 export interface AdoMcpCheckResult {
@@ -839,7 +916,10 @@ export async function discoverAdoProjectLinkOptions(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ kind, profile }),
   });
-  if (!r.ok) throw new Error(`discover ${kind} HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(messageFromErrorBody(`discover ${kind} HTTP ${r.status}`, text));
+  }
   return (await r.json()) as AdoDiscoveryResult;
 }
 
@@ -1182,11 +1262,21 @@ export async function recordProfileReviewOperation(
 export interface AuthUser {
   authenticated: boolean;
   oid?: string;
+  homeAccountId?: string;
+  tenantId?: string;
+  username?: string;
   upn?: string;
   name?: string;
   avatarDataUrl?: string;
   fromCache?: boolean;
   message?: string;
+  azureAuthConfig?: {
+    tenantId?: string;
+    clientId?: string;
+    usesDefaultTenant: boolean;
+    usesDefaultClient: boolean;
+    azureDevOpsScopes: string[];
+  };
 }
 
 export interface AuthCachedAccount {
@@ -1287,6 +1377,33 @@ export function authLoginStream(
     });
 
   return () => controller.abort();
+}
+
+export async function enableAzureDevOpsOAuth(
+  browser: AuthBrowserChoice = "default",
+  opts: { loginHint?: string; accountHomeId?: string } = {},
+): Promise<{ ok: boolean; authMode: "oauth"; tokenAvailable: boolean; message: string; user?: AuthUser }> {
+  const r = await fetch(`${RUNTIME_URL}/auth/azure-devops/enable`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ browser, loginHint: opts.loginHint, accountHomeId: opts.accountHomeId }),
+  });
+  const body = await r.json().catch(() => ({})) as {
+    ok?: boolean;
+    authMode?: "oauth";
+    tokenAvailable?: boolean;
+    message?: string;
+    authMessage?: string;
+    user?: AuthUser;
+  };
+  if (!r.ok || !body.ok) throw new Error(body.authMessage ?? body.message ?? `ADO OAuth HTTP ${r.status}`);
+  return {
+    ok: true,
+    authMode: "oauth",
+    tokenAvailable: Boolean(body.tokenAvailable),
+    message: body.message ?? "Azure DevOps OAuth is enabled.",
+    user: body.user,
+  };
 }
 
 /** Sign out — clears the daemon's local app identity cache. */
@@ -1421,6 +1538,8 @@ export interface DaemonConfigPayload {
   azureStorageAccount?: string;
   azureKeyVaultUrl?: string;
   azureCosmosEndpoint?: string;
+  azureTenantId?: string;
+  azureClientId?: string;
   reviewAutoApproveEnabled?: boolean;
   reviewStaleAgeHours?: number;
 }
@@ -1435,6 +1554,10 @@ export interface DaemonConfig {
   azureStorageAccount: string;
   azureKeyVaultUrl: string;
   azureCosmosEndpoint: string;
+  azureTenantId: string;
+  azureClientId: string;
+  azureAuthUsesDefaultTenant: boolean;
+  azureAuthUsesDefaultClient: boolean;
   reviewAutoApproveEnabled: boolean;
   reviewStaleAgeHours: number;
 }

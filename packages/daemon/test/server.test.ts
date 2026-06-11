@@ -90,6 +90,36 @@ describe("daemon HTTP", () => {
     expect(body.workflowState).toBeUndefined();
   });
 
+  it("streams OpenHarness-style UI chunks alongside legacy chat SSE events", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-ui-stream-"));
+    fs.writeFileSync(path.join(repo, "README.md"), "# demo\n", "utf8");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat",
+      payload: {
+        message: "summarize current workspace",
+        repoPath: repo,
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const events = parseSse(response.body);
+    const uiChunks = events
+      .filter((entry) => entry.event === "ui.chunk")
+      .map((entry) => entry.data as { chunk?: { type?: string; delta?: string } })
+      .map((entry) => entry.chunk);
+
+    expect(events.some((entry) => entry.event === "session")).toBe(true);
+    expect(events.some((entry) => entry.event === "final")).toBe(true);
+    expect(uiChunks.map((chunk) => chunk?.type)).toEqual(
+      expect.arrayContaining(["start", "progress", "text-start", "text-delta", "text-end", "finish"]),
+    );
+    expect(uiChunks.some((chunk) => chunk?.type === "text-delta" && typeof chunk.delta === "string" && chunk.delta.length > 0))
+      .toBe(true);
+  });
+
   it("previews stored Git checkpoints without requiring a repo mutation", async () => {
     app = await buildApp();
     const checkpointId = "git-2026-06-11T00-00-00-000Z";
@@ -122,6 +152,76 @@ describe("daemon HTTP", () => {
       files: ["README.md"],
       diffTruncated: true,
     });
+  });
+
+  it("returns chat index status and triggers index refresh", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-index-repo-"));
+    fs.mkdirSync(path.join(repo, "src"), { recursive: true });
+    fs.writeFileSync(path.join(repo, "src", "chatSession.ts"), "export const ready = true;\n", "utf8");
+
+    const status = await app.inject({
+      method: "POST",
+      url: "/chat/index-status",
+      payload: { repoPath: repo },
+    });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toMatchObject({
+      repoPath: repo,
+      indexed: false,
+      semanticReady: false,
+      retrievalMode: "quick-scan",
+    });
+
+    const refresh = await app.inject({
+      method: "POST",
+      url: "/chat/index-refresh",
+      payload: { repoPath: repo },
+    });
+    expect(refresh.statusCode, refresh.body).toBe(200);
+
+    const refreshBody = refresh.json() as {
+      ok: boolean;
+      refresh: { filesSeen: number; filesIndexed: number; embedded: number };
+      status: { indexed: boolean; semanticReady: boolean; stats: { filesIndexed: number; chunksIndexed: number } };
+    };
+
+    expect(refreshBody.ok).toBe(true);
+    expect(refreshBody.refresh.filesSeen).toBeGreaterThan(0);
+    expect(refreshBody.refresh.filesIndexed).toBeGreaterThan(0);
+    expect(refreshBody.refresh.embedded).toBe(0);
+    expect(refreshBody.status.indexed).toBe(true);
+    expect(refreshBody.status.stats.filesIndexed).toBe(refreshBody.refresh.filesIndexed);
+
+    const after = await app.inject({
+      method: "POST",
+      url: "/chat/index-status",
+      payload: { repoPath: repo },
+    });
+    expect(after.statusCode).toBe(200);
+    expect(after.json()).toMatchObject({
+      repoPath: repo,
+      indexed: true,
+      retrievalMode: "quick-scan",
+    });
+  });
+
+  it("returns 400 for malformed chat index request payload", async () => {
+    app = await buildApp();
+
+    const status = await app.inject({
+      method: "POST",
+      url: "/chat/index-status",
+      payload: { repoPath: 123 },
+    });
+    expect(status.statusCode).toBe(400);
+
+    const refresh = await app.inject({
+      method: "POST",
+      url: "/chat/index-refresh",
+      payload: { profile: "bad" },
+    });
+    expect(refresh.statusCode).toBe(400);
   });
 
   it("plans checkpoint rollback without executing it", async () => {
@@ -1213,3 +1313,14 @@ describe("daemon HTTP", () => {
   });
 
 });
+
+function parseSse(body: string): Array<{ event: string; data: unknown }> {
+  return body
+    .trim()
+    .split(/\n\n+/)
+    .map((block) => {
+      const event = block.match(/^event: (.+)$/m)?.[1] ?? "";
+      const dataText = block.match(/^data: (.+)$/m)?.[1] ?? "null";
+      return { event, data: JSON.parse(dataText) as unknown };
+    });
+}

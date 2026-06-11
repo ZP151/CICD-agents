@@ -32,8 +32,8 @@ Status values:
 | Product roadmap | Complete | 100% | Roadmap and source-first reuse plan documented in `docs/dev-agent-product-roadmap-and-reuse-plan.md`. |
 | Current-state audit | Complete | 100% | Main shortfalls identified: prompt-driven approval, shallow workflow state, incomplete semantic retrieval, weak rollback, custom ADO tooling. |
 | Source-first reuse strategy | Complete | 100% | Reuse modes, license gate, priority table, risk register, and third-party source registry documented. OpenHarness and Azure DevOps MCP source have been vendored for direct reuse. |
-| Implementation phases | In progress | 94% | Phase 1 has execution-layer approval enforcement, explicit risky-tool tests, a backward-compatible canonical event alias layer, and first source-first upstream reuse from OpenHarness wired into the daemon runtime. Phase 2 now has index-aware chat context, repository context metadata, an internal `repo_refresh_index` tool, light-theme conversation polish, raw JSON removal from normal Chat, and an intermediate visible/control streaming protocol using `__CONTROL_JSON__`. Phase 4 now has Azure DevOps MCP source intake, an MCP stdio bridge as temporary compatibility infrastructure, Project Link-level MCP fallback configuration, internally ported Azure DevOps MCP-style capabilities for discovery/health/PR/build context, local git remote inference for ADO Project Link fields, structured ADO auth diagnostics, enriched pipeline discovery metadata, and pipeline recommendation during setup. Phase 5 now has PR-Agent source intake, PR context, non-mutating insight preview, readiness/risk categorization, PR-Agent-style review metadata, hunk-aware priority compression for larger PRs, compression boundary reporting, hunk coverage reporting, route-level review-run contract coverage, ADO PR signal enrichment for full review runs, ADO filediffs/hunk context, finding post-processing, full AI review output from the reused Review Agent path, Activity-tracked AI insight preview/full review-run events for PR analysis traceability, a PR insight artifact store that lets users reopen saved preview/full review summaries without rerunning analysis, daemon-backed local persistence/sync for those saved AI conclusions, Chat-side retrieval of saved PR AI insights as reusable context when users ask about already analyzed PRs, visible Chat metadata showing exactly which saved PR insight artifact ids/timestamps were reused, a Pull Requests-to-Chat handoff that opens saved PR insights in Chat with the right Project Link/repo context, global Activity visibility/details for saved PR insight artifacts with Chat handoff, preview-vs-full-review artifact comparison in Activity, same-kind refresh-to-refresh comparison in Activity, saved PR insight analysis-baseline persistence for full-review iteration/source commit, Pull Requests freshness/staleness labeling for saved insights once current PR context is loaded, one-click refresh for stale saved insights using the existing preview/full-review flows, versioned saved insight artifacts so refreshes preserve previous AI conclusions while latest views still show the newest run, and a Pull Requests card-level saved-run history list with Chat handoff for older runs. Phase 6 now persists low-confidence review signals, policy results, manual disposition summary fields, append-only manual disposition audit events, ADO write-back status/thread links, and append-only ADO write-back attempt events into Review History; uses them for Review Queue attention ordering/filtering/reason-code explanations; feeds context confidence into auto-approval decisions; has daemon endpoints for review dispositions and review-operation activity; can optionally write blocking/request-change decisions back to ADO PR threads; exposes guarded retry for failed or pending ADO write-back; shows a richer Review Queue audit panel; supports single-PR rerun, visible-list batch rerun, stale-review rerun, configurable stale-review age, per-item freshness badges, compact card-level audit summaries, a recent review-operation activity feed backed by daemon local persistence with browser fallback, global Activity page visibility for review operations, and Activity-page filtering by Project Link plus review event type. Phase 7 has a non-destructive Git checkpoint snapshot tool, automatically creates checkpoints before confirmed medium/high-risk Git write tools run, returns checkpoint metadata with tool results, persists checkpoint ids into chat/session tool bubbles, exposes checkpoint activity through the daemon, displays checkpoint activity/detail records in the global Activity page, provides a low-risk `git_checkpoint_show` tool for reading stored checkpoint snapshots, exposes safe checkpoint previews in Activity with status, changed files, and truncated diff content, provides rollback planning with explicit confirmed-action proposals, includes a medium-risk `git_checkpoint_apply` write tool that restores tracked files to a stored checkpoint patch after approval, lets Activity hand rollback proposals to Chat for the existing approval workflow through a tested shared draft builder, and distinguishes checkpoint-apply target snapshots from pre-apply safety snapshots in Activity metadata and UI. Product UX uses Project Link wording, supports richer in-chat Project Link creation, treats the built-in model as the default Conversation model, and exposes user-added APIs as additional selectable model choices. |
-| Verification | Partial | 99% | `.tools` runner works when `.tools/node-v22.11.0-win-x64` and `.tools` are prepended to `PATH`. Core full tests, daemon full tests, core/daemon/desktop/review-agent typechecks, and desktop/review-agent production builds pass. Daemon tests now cover internal ADO discovery, repository-filtered pipeline discovery, internal ADO tool health with auth diagnostics, PR context routing, PR insight preview readiness categories, `review-run` metadata/compression/coverage/context-confidence response fields, review disposition persistence, ADO write-back endpoint contract without network write-back, mocked successful ADO PR-thread write-back payloads, mocked failed ADO PR-thread write-back payloads, persisted write-back status/thread-link fields, append-only write-back attempt events for both success and failure, review-operation POST/GET route persistence, automatic Git checkpoint creation before confirmed Git write actions, checkpoint metadata returned with confirmed Git write results, checkpoint metadata extraction, checkpoint activity listing from persisted tool bubbles, checkpoint-apply target/safety metadata in activity records, checkpoint preview routing with truncation, read-only checkpoint rollback planning that does not mutate the repo, and automatic safety checkpoint creation before confirmed checkpoint apply; review-agent tests cover PR-Agent-style metadata parsing, ADO PR readiness signals in review prompts, ADO hunk context extraction, hunk coverage summaries, changed-hunk prompt rendering, hunk-aware compression priority, finding post-processing, large PR prompt compression, security-sensitive file prioritization, context-quality auto-approval gating, review policy persistence through state stores, manual disposition compatibility, and append-only disposition/write-back event serialization; core local review-history tests cover confidence metadata persistence, attention-priority ordering, priority reason codes, manual disposition persistence, disposition event round-tripping, and write-back status/thread-link/attempt-event persistence; core review-operation tests cover daemon-local activity persistence, repository filtering, limits, and corrupt-store fallback; core PR insight artifact tests cover daemon-local versioned refresh history plus explicit-id replacement compatibility; core Git checkpoint tests cover non-destructive status/diff snapshot creation, low-risk capability classification, ToolExecutor before-execute hook ordering, before-execute metadata propagation, checkpoint readback, checkpoint preview summaries, checkpoint rollback planning, checkpoint patch apply, clean-checkpoint restore behavior, HEAD mismatch rejection, and medium-risk checkpoint apply classification; core settings tests cover the configurable review stale age default and environment override; desktop tests cover Project Link pipeline recommendation, browser review-history persistence, daemon-to-browser sync, merge behavior, corrupt-cache handling for write-back attempt events, review operation activity persistence/capping/corrupt-cache fallback, PR insight artifact freshness and versioned refresh history, pure Review Queue audit presentation data for labels, summary, ordering, fallbacks, empty state, and compact card summaries, Review Queue stable item keys, stale review selection rules, and Review Queue rerun result mapping that preserves manual disposition plus ADO write-back audit history; desktop typecheck covers the Activity page checkpoint activity integration and checkpoint apply metadata rendering; desktop build covers the PR context panel, Project Link autofill integration, preview readiness display, full insight metadata/compression/coverage/context-confidence display, discarded finding count display, Review Queue confidence signal display, attention sorting/filtering controls, configurable stale age control, compact card-level audit summaries, recent review-operation activity feed, global Activity page review-operation list/detail rendering, Activity-page checkpoint preview and rollback-plan rendering, Activity-page Project Link and review event-type filters, disposition event display, ADO write-back status/thread-link display, guarded retry write-back controls, richer audit panel rendering, write-back attempt history rendering, single-item Review Queue rerun controls, visible-list batch rerun controls, stale-review batch rerun controls, and AI insight output. Low-level MCP bridge registration remains covered as compatibility infrastructure. |
+| Implementation phases | In progress | 64% | Progress is now tracked against product readiness rather than accumulated implementation activity. PR insight, Review Queue, Activity, checkpointing, and internal ADO read/write tools are usable foundations. The largest remaining gaps are durable workflow execution, richer repository understanding, complete ADO OAuth consent recovery, automatic Project Link field reduction, and production hardening. Recent work moved Conversation Environment actions from prompt shortcuts toward structured workflow actions, added internal PR work-item and PR policy-evaluation capabilities, and kept external ADO MCP strictly as fallback infrastructure. |
+| Verification | Partial | 86% | Focused typechecks/builds and a broad historical test suite have passed during recent sessions, but the new product-readiness score is lower because structured workflow actions, ADO OAuth recovery, and PR policy/work-item enrichment still need fresh focused tests and at least one live ADO validation pass. |
 
 ## Phase Progress Summary
 
@@ -41,13 +41,13 @@ Status values:
 | --- | --- | --- | ---: | --- | --- |
 | 0 | Planning, Audit, And Reuse Strategy | Complete | 100% | Understand current gaps and choose source-first reuse path. | All candidate repos |
 | 1 | Safety And Event Protocol | In progress | 60% | Hard approval gate and clean event protocol. | OpenHarness, Goose |
-| 2 | Repository Understanding | In progress | 11% | Make semantic repo context first-class. | Aider, Continue, OpenHands |
-| 3 | Durable Workflow Engine | Not started | 0% | Replace shallow workflow state with real workflow model. | OpenHarness, mcp-agent, Harness Agents |
-| 4 | MCP And Azure DevOps Tool Reuse | In progress | 70% | Internalize ADO MCP capabilities and map them into local policies. | microsoft/azure-devops-mcp |
-| 5 | Pull Requests Workspace | In progress | 85% | PR readiness workspace with ADO and local repo context. | Azure DevOps MCP, PR-Agent |
+| 2 | Repository Understanding | In progress | 22% | Make semantic repo context first-class. | Aider, Continue, OpenHands |
+| 3 | Durable Workflow Engine | In progress | 12% | Replace shallow workflow state with real workflow model. | OpenHarness, mcp-agent, Harness Agents |
+| 4 | MCP And Azure DevOps Tool Reuse | In progress | 74% | Internalize ADO MCP capabilities and map them into local policies. | microsoft/azure-devops-mcp |
+| 5 | Pull Requests Workspace | In progress | 88% | PR readiness workspace with ADO and local repo context. | Azure DevOps MCP, PR-Agent |
 | 6 | Review Queue And Auto-Approval | In progress | 73% | Auditable review decisions and low-risk auto-approval. | PR-Agent, Harness Agents |
-| 7 | Verification, Rollback, And Activity Timeline | In progress | 49% | Checkpoints, validation, replayable audit history. | Aider, OpenHands |
-| 8 | Product Hardening And Distribution | In progress | 25% | Installer, onboarding, auth, workspace policies, real validation. | Goose, OpenCode |
+| 7 | Verification, Rollback, And Activity Timeline | In progress | 52% | Checkpoints, validation, replayable audit history. | Aider, OpenHands |
+| 8 | Product Hardening And Distribution | In progress | 33% | Installer, onboarding, auth, workspace policies, real validation. | Goose, OpenCode |
 
 ## Phase 0: Planning, Audit, And Reuse Strategy
 
@@ -206,7 +206,7 @@ Progress log:
 
 Status: `In progress`
 
-Completion: `11%`
+Completion: `13%`
 
 Goal:
 
@@ -252,9 +252,9 @@ Progress log:
 
 ## Phase 3: Durable Workflow Engine
 
-Status: `Not started`
+Status: `In progress`
 
-Completion: `0%`
+Completion: `12%`
 
 Goal:
 
@@ -298,6 +298,7 @@ Progress log:
 | Date | Update |
 | --- | --- |
 | 2026-06-09 | Phase defined; no implementation started. |
+| 2026-06-11 | Started Phase 3 with structured Conversation Environment workflow actions. Read-only workspace actions now use a daemon workflow endpoint for git status, diff, branch, and remote probes instead of injecting prompt text into Chat. Write actions still use the existing approval-backed agent path until durable templates are complete. |
 
 ## Phase 4: MCP And Azure DevOps Tool Reuse
 
@@ -647,6 +648,124 @@ Expected output of the next session:
 - A first implementation task list for execution-layer approval.
 
 ## Session Updates
+
+### 2026-06-11 Session Update 104
+
+Phase:
+
+Phase 3: Durable Workflow Engine, Phase 4: MCP And Azure DevOps Tool Reuse, Phase 8: Product Hardening And Distribution
+
+Progress changes:
+
+- Recalibrated the tracker from implementation-activity progress to product-readiness progress.
+- Overall implementation readiness is now tracked as `64%` instead of the previous optimistic `96%`.
+- Phase 3 is now `In progress` at `12%` because Conversation Environment read-only actions have a structured daemon workflow path.
+- Phase 4 moved to `74%` with internal PR work-item and PR policy-evaluation capabilities.
+- Phase 8 moved to `33%` with explicit Azure DevOps OAuth consent recovery groundwork.
+
+Implemented:
+
+- Added internal Azure DevOps MCP-style PR work-item detail retrieval:
+  - `listAzurePullRequestWorkItems`
+  - `ado_list_pull_request_work_items`
+- Added internal Azure DevOps MCP-style PR policy evaluation retrieval:
+  - `listAzurePullRequestPolicyEvaluations`
+  - `ado_list_pull_request_policy_evaluations`
+- Added best-effort PR context enrichment for `workItems` and `policies`; failures in these optional signals no longer block the core PR context response.
+- Added `/auth/azure-devops/enable` so the app can explicitly request Azure DevOps OAuth consent instead of relying on a Graph-only sign-in and later failing with `OAuth token unavailable`.
+- Added `/chat/workflow-action` for structured, read-only Conversation Environment actions:
+  - `inspect_environment`
+  - `inspect_changes`
+  - `refresh_branch`
+- Updated the Chat Environment action dispatcher so read-only actions call the structured daemon workflow endpoint and render real tool bubbles instead of sending hidden natural-language prompts.
+
+Verification:
+
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core test -- azureDevOpsInternal.test.ts`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core build`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/desktop build`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- server.test.ts`.
+- Passed `git diff --check`.
+
+Remaining gaps:
+
+- Write actions still use the approval-backed agent path instead of durable workflow templates.
+- Azure DevOps OAuth still needs a visible UI recovery action that calls `/auth/azure-devops/enable`.
+- PR policy artifact-id compatibility should be live-tested against the target Azure DevOps organization.
+
+### 2026-06-11 Session Update 105
+
+Phase:
+
+Phase 8: Product Hardening And Distribution
+
+Progress changes:
+
+- Clarified Azure DevOps OAuth readiness: the portal screenshot confirms the default desktop client ID is the registered `DevCICDAgent` app with Azure DevOps `user_impersonation` consent, so the remaining issue is active-account token acquisition rather than an app-registration ID mismatch.
+
+Implemented:
+
+- Added `getDesktopAzureAuthConfig` so daemon and desktop can report the actual tenant/client used for Microsoft login and Azure DevOps token acquisition.
+- Updated Azure DevOps OAuth acquisition to try both the upstream-compatible `.default` scope and the explicit `user_impersonation` delegated scope.
+- Made browser sign-in fail visibly if the signed-in account cannot acquire an Azure DevOps token, instead of swallowing the failure and surfacing a later `OAuth token unavailable` error.
+- Persisted MSAL account identity fields (`homeAccountId`, `tenantId`, and `username`) after sign-in and cache load.
+- Updated Azure DevOps token acquisition to prefer the requested or cached MSAL account instead of blindly using the first account in the token cache.
+- Added daemon config support for:
+  - `CICD_AGENT_AZURE_TENANT_ID`
+  - `CICD_AGENT_AZURE_CLIENT_ID`
+- Added Settings fields for Azure tenant ID and Azure client ID so the app can be pointed at the registered `DevCICDAgent` application that already has Azure DevOps consent.
+- Extended `/auth/status`, `/auth/me`, and `/daemon/config` to expose non-secret Azure auth configuration diagnostics.
+- Fixed Settings hydration so Azure tenant/client settings can still be written after a failed daemon-config read.
+
+Verification:
+
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core build`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/desktop build`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- server.test.ts`.
+- Passed `git diff --check`.
+
+Observed local diagnostic:
+
+- Current runtime uses the built-in default client ID `03da33ef-7161-4b27-ae80-3079313f131d`, matching the Azure Portal `DevCICDAgent` application shown by the user.
+- The likely failure path was selecting a stale or wrong cached MSAL account for Azure DevOps token acquisition after login.
+
+### 2026-06-12 Session Update 106
+
+Phase:
+
+Phase 4: MCP And Azure DevOps Tool Reuse, Phase 8: Product Hardening And Distribution
+
+Progress changes:
+
+- Improved Project Link Azure DevOps setup ergonomics by making project/repository discovery part of the inputs instead of a separate select-only workflow.
+- Fixed a build-definition discovery compatibility issue with Azure DevOps when filtering pipelines by repository.
+
+Implemented:
+
+- Project Link creation in Chat now auto-discovers Azure DevOps projects when an organization URL is available.
+- Project Link creation in Chat now auto-discovers repositories when organization and project are available.
+- Project Link creation in Chat now auto-discovers pipelines when organization, project, and repository are available.
+- Project and repository inputs now expose discovered values through native input suggestions while still allowing manual typing.
+- Profiles Project Link editing now uses the same auto-discovery behavior for project, repository, and pipeline discovery.
+- Pipeline discovery now sends `repositoryType=TfsGit` whenever it filters build definitions by repository, resolving Azure DevOps `Repository type is missing/invalid` responses.
+
+Verification:
+
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core test -- azureDevOpsInternal.test.ts`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/desktop build`.
+- Passed `git diff --check`.
+
+Notes:
+
+- Automated visual screenshot verification was attempted against the local Vite preview, but the local Node runtime did not have Playwright installed and PATH did not expose a browser screenshot CLI.
+- Follow-up correction replaced native datalist project/repository suggestions with in-place select controls, removed duplicate project/repository discovery buttons, constrained the Chat Project Link setup card to a single-column narrow-panel layout, and made pipeline refresh require a selected repository.
 
 ### 2026-06-09 Session Update
 
@@ -1235,6 +1354,436 @@ Next recommended task:
   - list Azure DevOps projects
   - list repositories for a selected project
   - list pipelines for a selected repository/project
+
+### 2026-06-11 Session Update 31
+
+Phase:
+
+Phase 1: Safety And Event Protocol
+
+Phase 2: Repository Understanding
+
+Phase 8: Product Hardening And Distribution
+
+Status change:
+
+- No broad percentage change; this was the first source-first streaming-output
+  reuse migration slice.
+
+Completed:
+
+- Reviewed concrete OpenHarness upstream source files for streaming/event logic:
+  - `third_party/open-harness/packages/core/src/agent.ts`
+  - `third_party/open-harness/packages/core/src/stream.ts`
+  - `third_party/open-harness/packages/core/src/ui-stream.ts`
+  - `third_party/open-harness/packages/core/src/middleware/turn-tracking.ts`
+  - `third_party/open-harness/packages/core/src/__tests__/ui-stream.test.ts`
+- Created a local source-reuse intake file with selected upstream code blocks,
+  reuse decisions, and migration slices:
+  - `docs/source-reuse-streaming-event-intake.md`
+- Migrated the first OpenHarness UI stream lifecycle pattern into local runtime
+  code:
+  - `packages/core/src/chatUiStream.ts`
+- The new adapter maps current `ChatEvent` values into UI lifecycle chunks:
+  - `start`
+  - `text-start`
+  - `text-delta`
+  - `text-end`
+  - `progress`
+  - `tool-input-start`
+  - `tool-input-available`
+  - `tool-output-available`
+  - `tool-output-error`
+  - `approval-required`
+  - `approval-resolved`
+  - `workflow-updated`
+  - `finish`
+  - `error`
+- Exported the adapter from the core package barrel for future daemon/frontend
+  integration.
+- Added focused tests covering text lifecycle, progress/tool text closure,
+  tool output/error mapping, and approval chunk mapping.
+
+Files changed:
+
+- `docs/source-reuse-streaming-event-intake.md`
+- `packages/core/src/chatUiStream.ts`
+- `packages/core/src/index.ts`
+- `packages/core/test/chatUiStream.test.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatUiStream.test.ts test/gitOptions.test.ts test/chatContext.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+```
+
+Result:
+
+- Focused core tests passed: 3 files, 9 tests.
+- `@cicd-agent/core` typecheck passed.
+- `@cicd-agent/core` build passed.
+
+Next recommended task:
+
+- Wire `chatEventsToUiChunks` into daemon SSE as a parallel compatibility
+  stream or a new `/chat/ui` endpoint.
+- Update Conversation rendering to consume text/tool/progress chunks with
+  explicit text lifecycle instead of relying only on `statusText`.
+- Continue source-first migration by porting OpenHarness stream transforms
+  (`tap`, `map`, `filter`, `takeUntil`) for instrumentation and abort handling.
+
+### 2026-06-11 Session Update 29
+
+Phase:
+
+Phase 2: Repository Understanding
+
+Phase 4: MCP And Azure DevOps Tool Reuse
+
+Phase 8: Product Hardening And Distribution
+
+Status change:
+
+- No broad percentage change; this was a focused UX/auth/tool-capability
+  hardening pass.
+
+Completed:
+
+- Fixed the in-chat Project Link creation branch controls so Default branch and
+  PR target branch no longer overlap in constrained layouts.
+- Applied the same branch-control width safeguards to the Project Links
+  management page.
+- Added shared desktop default ADO organization URL:
+  `https://tebssg.visualstudio.com/`.
+- Improved Project Link discovery error handling so ADO OAuth failures are
+  surfaced as meaningful auth diagnostics instead of opaque HTTP 400 text.
+- Verified the current local user identity can be resolved:
+  `Zhou Ping <Zhou.Ping@totalebizsolutions.com>`.
+- Verified that the same signed-in user currently cannot acquire an Azure
+  DevOps OAuth token for Project Link discovery; `/profiles/discover` returns
+  `Azure DevOps OAuth token is unavailable`, so the next UX step should be an
+  explicit Azure DevOps access/consent action or PAT fallback.
+- Extended structured Git tools with common real-world options:
+  - `git_status` supports short/branch/ignored/untracked options.
+  - `git_diff` supports staged/cached/name-only/stat/context/path filters.
+  - `git_add` supports paths/all/update/intent-to-add/dry-run.
+  - `git_commit` supports amend/no-verify/allow-empty/all.
+  - `git_push` supports set-upstream/force-with-lease/tags/dry-run.
+  - Added `git_switch` for branch switching and branch creation.
+- Updated the chat planner prompt so workspace-change questions should explain
+  what the change is about, not only list files.
+- Added repository context change interpretation and diff excerpts for
+  Git-state questions, giving the model enough context to summarize intent,
+  affected areas, and risk.
+
+Files changed:
+
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `apps/desktop/src/pages/Profiles.tsx`
+- `apps/desktop/src/projectLinks.ts`
+- `packages/core/src/chatContext.ts`
+- `packages/core/src/chatPlanner.ts`
+- `packages/core/src/tools/git.ts`
+- `packages/core/test/chatContext.test.ts`
+- `packages/core/test/gitOptions.test.ts`
+- `packages/daemon/src/server.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/gitOptions.test.ts test/chatContext.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+```
+
+Result:
+
+- Focused core tests passed: 2 files, 6 tests.
+- `@cicd-agent/core` typecheck passed.
+- `@cicd-agent/daemon` typecheck passed.
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/desktop` production build passed.
+- `@cicd-agent/core` build passed.
+- Focused daemon server tests passed: 1 file, 23 tests.
+
+Next recommended task:
+
+- Add an explicit "Enable Azure DevOps access" flow that triggers ADO resource
+  consent/token acquisition separately from basic Microsoft identity sign-in.
+- Continue Git capability expansion with a fuller command/flag matrix and
+  focused tests for `git restore`, `git stash`, `git log`, `git show`,
+  `git branch`, and safe pathspec handling.
+- Improve visible Chat process feedback with progress events such as "reading
+  workspace diff", "summarizing change intent", and "checking ADO auth" while
+  avoiding exposure of private model chain-of-thought.
+
+### 2026-06-11 Session Update 28
+
+Phase:
+
+Phase 2: Repository Understanding, Phase 8: Product Hardening And Distribution
+
+Status change:
+
+- Overall implementation progress moved from 95% to 96%.
+- Phase 2 moved from 13% to 15%.
+- Phase 8 moved from 25% to 27%.
+
+Completed:
+
+- Reframed Project understanding as an agent-internal context/tool capability
+  instead of a right-side visual card in Conversation.
+- Removed the right-side Project understanding status card and its manual
+  refresh control from the Conversation panel.
+- Kept automatic repository index status loading so Conversation suggestions can
+  still adapt to whether the project has been understood.
+- Streamlined in-chat Project Link creation copy and removed over-explaining
+  from the setup card.
+- Reworked the Azure DevOps details area to use theme-aware surfaces instead of
+  hardcoded dark blocks, improving light-theme rendering.
+- Moved Conversation model selection into the composer itself, matching the
+  Codex-style model chooser pattern.
+- Preserved Built-in model as the default and exposed user-configured providers
+  only as additional selectable models.
+- Fixed the desktop API path so `chatStream` actually applies the selected
+  Conversation model when a custom provider is chosen.
+- Reworked the right Conversation panel into an Environment/workflow surface:
+  - changes summary
+  - local repository indicator
+  - branch menu that routes branch actions through the agent
+  - commit/push menu that routes commit and push intents through the agent
+  - active Project Link/repository/ADO mapping summary
+  - workflow progress display
+- Made welcome prompts context-aware:
+  - repository-understanding prompts when the index is missing or not semantic
+  - PR/CI/CD prompts when ADO mapping or pipeline data exists
+  - local test/build/commit prompts when ADO mapping is not ready
+
+Files changed:
+
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/desktop` production build passed.
+
+Next recommended task:
+
+- Add direct Conversation-side workflow affordances for PR insight:
+  - pick a PR from ADO when the Project Link has ADO mapping
+  - show saved PR insight availability inside agent responses, not as raw UI
+    cards
+  - route analyze/refresh/compare requests through the existing PR insight
+    artifact store
+- Continue reducing Project Link parameters by inferring project/repo/pipeline
+  candidates from git remotes and ADO discovery.
+
+### 2026-06-11 Session Update 29
+
+Phase:
+
+Phase 8: Product Hardening And Distribution
+
+Status change:
+
+- No overall percentage change; this was a focused Conversation workflow and
+  visual verification pass.
+
+Completed:
+
+- Removed the Project Link setup info sentence:
+  `Local chat, repository indexing, git analysis, and test/build commands can
+  start now.`
+- Removed the right-side Environment panel's standalone `Local` row.
+- Changed right-side Environment actions from "fill the composer with text" to
+  direct agent workflow triggers:
+  - Changes starts a git status/diff inspection turn.
+  - Refresh branch state starts a branch inspection turn.
+  - Branch checkout actions start a safe checkout workflow through the agent.
+  - New branch creation accepts a branch name in the right panel and starts a
+    safe create-checkout workflow through the agent.
+  - Commit, commit-and-push, and push start the existing agent workflow and
+    approval path directly.
+- Added initial/unknown state handling for the right panel:
+  - Changes shows `not checked` until git status/diff has been inspected.
+  - Branch shows `not checked` when no current branch or Project Link default is
+    available.
+  - Busy actions are disabled and show running/disabled state instead of
+    queueing duplicate work.
+- Constrained branch and commit popovers to the right Environment panel instead
+  of letting them overlap the main Conversation column.
+- Reduced the Conversation middle-panel minimum width from 520px to 420px and
+  increased the default right panel width to 260px so the Environment panel is
+  fully visible in narrower windows.
+- Performed headless Chrome visual verification against the local Vite app:
+  - no-profile Project Link setup plus model menu
+  - Project Link selected with branch menu open
+  - Project Link selected with commit menu open
+- Verified by script that the removed setup text is absent, the `Local` row is
+  absent, and the `not checked` initial state is present.
+
+Files changed:
+
+- `apps/desktop/src/pages/Chat.tsx`
+- `apps/desktop/src/index.css`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests and verification run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+```
+
+Visual verification artifacts:
+
+- `C:\Users\15492\AppData\Local\Temp\cicd-agent-visual-check\no-profile-model-menu-2.png`
+- `C:\Users\15492\AppData\Local\Temp\cicd-agent-visual-check\profile-branch-menu-2.png`
+- `C:\Users\15492\AppData\Local\Temp\cicd-agent-visual-check\profile-commit-menu-2.png`
+
+Result:
+
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/desktop` production build passed.
+- Headless Chrome visual checks passed for the targeted Conversation states.
+
+Next recommended task:
+
+- Continue replacing Conversation quick actions with direct workflow starts for
+  PR insight and CI/CD pipeline actions.
+- Add a richer Environment state source so branch/change counts can initialize
+  from lightweight daemon git endpoints before the first agent turn.
+
+### 2026-06-11 Session Update 102
+
+Phase:
+
+Phase 8: Product Hardening And Distribution
+
+Status change:
+
+- No percentage change; this was a workflow-control correction.
+
+Completed:
+
+- Replaced the right Environment panel's direct prompt/start callback with a
+  typed `WorkspaceAction` dispatcher.
+- Right-side controls now send semantic actions to the parent instead of raw
+  prompt strings:
+  - inspect environment
+  - inspect changes
+  - refresh branch state
+  - checkout branch
+  - create branch
+  - commit / commit-and-push / push
+- Added workflow-state-aware handling in the parent Conversation component:
+  - matching pending action cards are confirmed directly through the structured
+    confirmation path.
+  - matching `workflowState.pendingApproval` is recognized instead of starting
+    another turn.
+  - non-matching pending approvals block new right-panel actions and surface a
+    status message.
+  - active planning/running workflows block duplicate starts.
+  - blocked workflows surface their blocked step instead of launching unrelated
+    work.
+- Kept natural-language workflow starts only as the fallback when there is no
+  active or pending workflow to continue.
+
+Files changed:
+
+- `apps/desktop/src/pages/Chat.tsx`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/desktop` production build passed.
+
+Next recommended task:
+
+- Initialize Environment branch/change state from lightweight daemon git
+  endpoints so the panel can show real state before the first agent workflow
+  turn.
+
+### 2026-06-11 Session Update 103
+
+Phase:
+
+Phase 8: Product Hardening And Distribution
+
+Status change:
+
+- No percentage change; this was a Conversation Environment action guard fix.
+
+Completed:
+
+- Fixed the right Environment panel so `Changes` does not start a chat turn when
+  there is no local repository context.
+- Disabled Environment actions that require a repository until `repoPath` is
+  available.
+- Added silent workflow starts for right-panel actions that do have repository
+  context, so workflow controls no longer render as blue user chat bubbles.
+- Kept normal typed composer messages unchanged.
+
+Files changed:
+
+- `apps/desktop/src/pages/Chat.tsx`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests and verification run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+```
+
+Headless Chrome verification:
+
+- New Conversation with no Project Link/repo:
+  - `Changes` button is disabled.
+  - clicking it does not change the page text.
+  - no `running` state appears.
+  - no `Planning response` appears.
+
+Result:
+
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/desktop` production build passed.
+
+Next recommended task:
+
+- Initialize Environment branch/change state from lightweight daemon git
+  endpoints so controls can become enabled as soon as a repo path is known.
 
 ### 2026-06-11 Session Update 28
 
@@ -5754,6 +6303,77 @@ Next recommended task:
   current index status, refresh action, and a compact explanation of what
   repository context the agent will use for CI/CD and PR insight.
 
+### 2026-06-11 Session Update 101
+
+Phase:
+
+Phase 2: Repository Understanding
+
+Phase 8: Product Hardening And Distribution
+
+Status change:
+
+- Overall implementation progress moved from `94%` to `95%`.
+- Verification remains `99%`.
+- Phase 2 completion moved from `11%` to `13%`.
+- Phase 8 completion remains `25%`.
+
+Completed:
+
+- Added a first visible Project understanding control surface to Conversation.
+- Added `getChatIndexStatus()` in core so the app can inspect repository index
+  readiness without building a full chat prompt.
+- Added daemon endpoints:
+  - `POST /chat/index-status`
+  - `POST /chat/index-refresh`
+- The refresh endpoint reuses the selected Conversation model and current
+  Project Link data so embeddings and ignored/profile context stay aligned with
+  the active chat.
+- Added desktop API helpers:
+  - `fetchChatIndexStatus`
+  - `refreshChatIndexStatus`
+- Added a Project understanding card in the Chat right-side Context panel:
+  - shows semantic-ready, pending-embedding, or quick-scan-only state
+  - shows indexed file count, embedded chunks, and pending chunks
+  - includes a direct Refresh action
+  - updates status after refresh
+- Added focused core test coverage for index status before and after refresh.
+
+Files changed:
+
+- `packages/core/src/chatContext.ts`
+- `packages/core/test/chatContext.test.ts`
+- `packages/daemon/src/server.ts`
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/core build
+.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/chatContext.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- `@cicd-agent/core` build passed.
+- `@cicd-agent/daemon` typecheck passed.
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/core` chat context tests passed: 1 file, 3 tests.
+- `@cicd-agent/desktop` production build passed.
+
+Next recommended task:
+
+- Make Conversation use this project-understanding status more actively:
+  surface whether PR insight artifacts, ADO mapping, and local index are being
+  used before a turn starts, then use that same state to improve suggested
+  prompts for CI/CD and PR insight workflows.
+
 ### 2026-06-10 Session Update 10
 
 Phase:
@@ -7153,3 +7773,347 @@ Next recommended task:
   - list Azure DevOps projects
   - list repositories for a selected project
   - list pipelines for a selected repository/project
+
+### 2026-06-12 Session Update 106
+
+Phase:
+
+Phase 5: Conversational Dev Agent Runtime
+
+Status change:
+
+- Phase 5 moved from 78% to 82%.
+- Overall product progress moved from 68% to 70%.
+
+Completed:
+
+- Continued source-first reuse of OpenHarness-style streaming logic by adding
+  local tool-output delta events instead of calling an external agent runtime.
+- Added command-output streaming at the core execution layer:
+  - `runCommand` now supports redacted `onOutput` chunks for stdout and stderr.
+  - `ToolExecutor.call()` remains backward compatible.
+  - `ToolExecutor.callStream()` emits runtime output events before the final
+    structured tool result.
+- Forwarded command output from local Git, NPM, DotNet, and Pytest tools through
+  `ToolContext.emitToolEvent`.
+- Added `tool_output_delta` chat events and canonical `tool.output.delta` SSE
+  aliases.
+- Mapped tool output deltas into `tool-output-delta` UI chunks.
+- Updated Chat rendering so the active tool card opens and appends live output
+  while the command is still running, then preserves the final structured tool
+  renderer after completion.
+- Applied this to both normal planner tool calls and confirmed-action execution.
+
+Files changed:
+
+- `packages/core/src/tools/executor.ts`
+- `packages/core/src/tools/git.ts`
+- `packages/core/src/tools/npm.ts`
+- `packages/core/src/tools/dotnet.ts`
+- `packages/core/src/tools/pytest.ts`
+- `packages/core/src/chatPlanner.ts`
+- `packages/core/src/chatUiStream.ts`
+- `packages/core/test/toolExecutor.test.ts`
+- `packages/core/test/chatUiStream.test.ts`
+- `packages/daemon/src/chatEvents.ts`
+- `packages/daemon/src/chatSession.ts`
+- `packages/daemon/test/chatEvents.test.ts`
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `docs/source-reuse-streaming-event-intake.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/toolExecutor.test.ts test/chatUiStream.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatEvents.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- Core focused tests passed: 2 files, 16 tests.
+- Core typecheck and build passed.
+- Daemon chat event tests passed: 1 file, 9 tests.
+- Daemon typecheck passed.
+- Daemon HTTP tests passed: 1 file, 24 tests.
+- Desktop typecheck and production build passed.
+
+Next recommended task:
+
+- Continue the source-first stream migration by splitting final/approval
+  metadata out of model text so `__CONTROL_JSON__` can be retired from the
+  long-term architecture.
+
+### 2026-06-12 Session Update 107
+
+Phase:
+
+Phase 5: Conversational Dev Agent Runtime
+
+Status change:
+
+- Phase 5 moved from 82% to 84%.
+- Overall product progress moved from 70% to 71%.
+
+Completed:
+
+- Checked the current runtime against popular agent architecture patterns from:
+  - OpenAI Agents SDK
+  - LangGraph
+  - Vercel AI SDK
+  - AutoGen Core
+- Added an architecture alignment document that records:
+  - where the current project is aligned
+  - where it is only partially aligned
+  - the main remaining deviation
+  - recommended next corrections
+- Confirmed that recent work is directionally aligned with mainstream agent
+  runtime architecture:
+  - application-owned orchestration
+  - typed tool execution
+  - human approval gates
+  - stateful sessions
+  - streaming text/tool/UI events
+  - durable checkpoints
+- Started correcting the main deviation: control metadata embedded in model
+  text via `__CONTROL_JSON__`.
+- Added a typed runtime control event layer:
+  - core `assistant_control`
+  - canonical SSE `assistant.control`
+  - UI chunk `metadata-available`
+- Kept `done` and existing workflow-state behavior as compatibility layers.
+
+Files changed:
+
+- `docs/agent-architecture-alignment.md`
+- `docs/source-reuse-streaming-event-intake.md`
+- `docs/dev-agent-progress-tracker.md`
+- `packages/core/src/chatPlanner.ts`
+- `packages/core/src/chatUiStream.ts`
+- `packages/core/test/chatPlannerApproval.test.ts`
+- `packages/core/test/chatUiStream.test.ts`
+- `packages/daemon/src/chatEvents.ts`
+- `packages/daemon/test/chatEvents.test.ts`
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts test/chatUiStream.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatEvents.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+```
+
+Result:
+
+- Core focused tests passed: 2 files, 17 tests.
+- Core typecheck and build passed.
+- Daemon chat event tests passed: 1 file, 10 tests.
+- Desktop typecheck and production build passed.
+- Daemon typecheck passed.
+- Daemon HTTP tests passed: 1 file, 24 tests.
+
+Next recommended task:
+
+- Replace the legacy `__CONTROL_JSON__` input format with a structured
+  finalization tool or model structured output, using `assistant_control` as
+  the stable runtime event surface.
+
+### 2026-06-12 Session Update 108
+
+Phase:
+
+Phase 5: Conversational Dev Agent Runtime
+
+Status change:
+
+- Phase 5 moved from 84% to 85%.
+- Overall product progress remains at 71% until the structured finalization
+  path is validated against live model traffic.
+
+Completed:
+
+- Started replacing the legacy `__CONTROL_JSON__` control-marker path with a
+  structured internal finalization tool.
+- Added `agent_final` as a synthetic model tool appended by `ChatPlanner`.
+- Kept `agent_final` out of `ToolExecutor`, so it cannot run as an external
+  command or service.
+- Converted `agent_final` tool arguments into the existing typed runtime flow:
+  - `assistant_control`
+  - canonical `assistant.control`
+  - UI `metadata-available`
+  - existing `done` result compatibility
+- Preserved approval proposals from `agent_final` in the same
+  `PendingToolAction` shape used by the current approval workflow.
+- Left `__CONTROL_JSON__` available only as a compatibility fallback for
+  model/provider paths that cannot emit tool calls.
+- Updated architecture and source-reuse notes to reflect the new
+  source-first finalization migration step.
+
+Files changed:
+
+- `packages/core/src/chatPlanner.ts`
+- `packages/core/test/chatPlannerApproval.test.ts`
+- `docs/source-reuse-streaming-event-intake.md`
+- `docs/agent-architecture-alignment.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts test/chatUiStream.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatEvents.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+```
+
+Result:
+
+- Core focused tests passed: 2 files, 18 tests.
+- Core typecheck and build passed.
+- Daemon chat event tests passed: 1 file, 10 tests.
+- Desktop typecheck and production build passed.
+- Daemon typecheck passed.
+- Daemon HTTP tests passed: 1 file, 24 tests.
+
+Next recommended task:
+
+- Validate `agent_final` with the live Conversation model path, then reduce
+  prompt reliance on the fallback `__CONTROL_JSON__` examples.
+
+### 2026-06-12 Session Update 109
+
+Phase:
+
+Phase 5: Conversational Dev Agent Runtime
+
+Status change:
+
+- Phase 5 moved from 85% to 86%.
+- Overall product progress remains at 71% pending live Conversation model
+  validation.
+
+Completed:
+
+- Hardened `agent_final` as the preferred structured finalization path.
+- Removed legacy `__CONTROL_JSON__` examples from the main system-prompt
+  examples and replaced them with `agent_final` argument examples.
+- Changed the no-finalization retry nudge so it asks the model to call
+  `agent_final` first, with `__CONTROL_JSON__` only as compatibility fallback.
+- Added a guard for mixed tool-call batches:
+  - if a batch contains executable tools and `agent_final`, execute the real
+    tools first
+  - then ask the model to finalize after tool results are available
+- Added regression coverage for:
+  - retry nudges preferring `agent_final`
+  - mixed `agent_final` plus read-only tool batches not skipping the real tool
+
+Files changed:
+
+- `packages/core/src/chatPlanner.ts`
+- `packages/core/test/chatPlannerApproval.test.ts`
+- `docs/source-reuse-streaming-event-intake.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts test/chatUiStream.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatEvents.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- Core focused tests passed: 2 files, 20 tests.
+- Core typecheck and build passed.
+- Daemon chat event tests passed: 1 file, 10 tests.
+- Daemon typecheck passed.
+- Daemon HTTP tests passed: 1 file, 24 tests.
+- Desktop typecheck and production build passed.
+
+Next recommended task:
+
+- Add a live-model diagnostics path or development-only trace that confirms
+  whether the selected Conversation model is actually using `agent_final`
+  instead of the fallback marker during normal chat.
+
+### 2026-06-12 Session Update 110
+
+Phase:
+
+Phase 5: Conversational Dev Agent Runtime
+
+Status change:
+
+- Phase 5 moved from 86% to 87%.
+- Overall product progress moved from 71% to 72%.
+
+Completed:
+
+- Closed the structured-finalization observability loop by carrying the
+  resolved finalization path through runtime metadata.
+- Added `finalizationMode` to assistant results and assistant bubble metadata:
+  - `agent_final`
+  - `control_marker`
+  - `plain_json`
+  - `none`
+- Persisted `finalizationMode` on daemon assistant bubbles.
+- Exposed `finalizationMode` through desktop chat event and chat-history types.
+- Updated Chat details rendering so restored assistant messages can show the
+  runtime finalization path, risk level, and actions as compact metadata chips.
+- Updated the source-reuse intake document to record this verification loop.
+
+Files changed:
+
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/chatBubbles.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `packages/daemon/src/chatSession.ts`
+- `docs/source-reuse-streaming-event-intake.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts test/chatUiStream.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts
+```
+
+Result:
+
+- Core focused tests passed: 2 files, 20 tests.
+- Core typecheck passed.
+- Daemon typecheck passed.
+- Desktop typecheck passed.
+- Desktop chat bubble tests passed: 1 file, 3 tests.
+
+Next recommended task:
+
+- Run one manual Conversation turn with the built-in model and confirm the
+  assistant details show `Finalization: agent final`.

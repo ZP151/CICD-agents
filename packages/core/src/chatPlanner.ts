@@ -25,6 +25,7 @@ export interface PendingToolAction {
 export interface ChatPlannerResult {
   response: string;
   streamedResponse?: string;
+  finalizationMode?: "agent_final" | "control_marker" | "plain_json" | "none";
   riskLevel: string;
   actionsTaken: string[];
   suggestions: string[];
@@ -48,6 +49,7 @@ export interface ChatWorkflowState {
 }
 
 export const CHAT_CONTROL_JSON_MARKER = "__CONTROL_JSON__";
+export const CHAT_FINAL_TOOL_NAME = "agent_final";
 
 /** Returns true if the message is a user affirmation (yes/proceed/action-forward). */
 export function isConfirmationMessage(msg: string): boolean {
@@ -74,11 +76,13 @@ export type ChatEvent =
   | { type: "assistant_delta"; delta: string }
   | { type: "progress"; message: string }
   | { type: "tool_start"; name: string; args: Record<string, unknown> }
+  | { type: "tool_output_delta"; name: string; stream: "stdout" | "stderr"; delta: string }
   | { type: "tool_end"; name: string; ok: boolean; summary: string; result: unknown }
   | { type: "confirm_required"; riskLevel: string; plan: string }
   | { type: "workflow_state"; state: ChatWorkflowState }
   | { type: "approval_required"; approval: ChatApprovalRequest }
   | { type: "approval_resolved"; approvalId: string; approved: boolean }
+  | { type: "assistant_control"; control: ChatPlannerResult }
   | { type: "executing" }
   | { type: "message"; text: string }
   | { type: "done"; result: ChatPlannerResult }
@@ -97,11 +101,12 @@ When the user asks you to help with a goal like "until PR", "from review to merg
 1. Quickly understand the user's goal and the lightweight repository context provided in the user message when it is relevant.
 2. Use project docs, file-structure signals, and profile settings when they help answer the request.
 3. Run Git read operations automatically only when they are useful for the user's goal (status, log, diff, branch list).
-4. Summarize what you found: relevant code/docs, modified files, untracked files, risks, recommended scope.
-5. Propose the next write action clearly (e.g. "I'll stage all 4 modified files and generate a commit message. Shall I proceed?").
-6. On user confirmation, execute the write action WITHOUT re-asking.
-7. After each write action, use known context first, then run only the read checks needed for the next decision.
-8. Continue until the goal is complete (PR created or requested endpoint reached) or the user stops you.
+4. When the user asks about current workspace changes, understand what the changes are about, not only which files changed. Prefer git_status with short=true plus git_diff with name_only/stat/staged/path filters as needed, then summarize likely intent, affected areas, risks, and recommended scope.
+5. Summarize what you found: relevant code/docs, modified files, untracked files, risks, recommended scope.
+6. Propose the next write action clearly (e.g. "I'll stage all 4 modified files and generate a commit message. Shall I proceed?").
+7. On user confirmation, execute the write action WITHOUT re-asking.
+8. After each write action, use known context first, then run only the read checks needed for the next decision.
+9. Continue until the goal is complete (PR created or requested endpoint reached) or the user stops you.
 
 ## Repository Context
 The user message may include a "Repository context" section assembled from a quick project scan, project docs, file-structure signals, profile settings, and sometimes existing semantic index data. Treat this context as helpful local knowledge, not as a mandatory first step.
@@ -124,6 +129,7 @@ The user message may include a "Repository context" section assembled from a qui
 - Do not assume every workflow must stage, commit, push, and create a PR.
 - For a proposed next action, choose the registered write tool that directly matches the user's goal.
 - Fill required arguments exactly as the tool schema requires.
+- Use structured Git tool arguments for common flags instead of asking the user to run raw commands. Examples: git_status {"short":true}, git_diff {"staged":true}, git_diff {"name_only":true}, git_add {"paths":["src/file.ts"]}, git_commit {"message":"...","noVerify":true}, git_switch {"branch":"feature/x","create":true}.
 
 ## Risk Classification
 - low    — read-only inspection.
@@ -143,12 +149,15 @@ Examples of correct error handling:
 - git_push fails with "non-fast-forward" → run git_pull --rebase first, then push again.
 - git_add fails with "pathspec not found" → verify the file path with git_status first.
 
-## MANDATORY Response Format
-Stream the user-facing response first as normal prose.
-Then output exactly one final control line beginning with ${CHAT_CONTROL_JSON_MARKER} followed by JSON:
+## MANDATORY Finalization Protocol
+Prefer the \`${CHAT_FINAL_TOOL_NAME}\` tool for the final response metadata.
+Call \`${CHAT_FINAL_TOOL_NAME}\` exactly once when you are ready to finish the turn.
+Pass the user-facing response, risk_level, actions_taken, suggestions, and optional approval_proposal as tool arguments.
+
+Compatibility fallback only: if tool calling is unavailable, stream the user-facing response first as normal prose, then output exactly one final control line beginning with ${CHAT_CONTROL_JSON_MARKER} followed by JSON:
 ${CHAT_CONTROL_JSON_MARKER}{"response":"same user-facing response text","risk_level":"low|medium|high","actions_taken":["..."],"suggestions":[],"approval_proposal":{"tool":"...","args":{},"description":"...","nextHint":"..."}}
 
-Do not show JSON before the ${CHAT_CONTROL_JSON_MARKER} line.
+Never show JSON before the ${CHAT_CONTROL_JSON_MARKER} line.
 
 ## MANDATORY approval_proposal Rules
 - If your "response" text contains "Shall I", "Should I", "Do you want me to", "Ready to", or proposes a next write action → YOU MUST set "approval_proposal" to the exact tool+args.
@@ -159,13 +168,11 @@ Do not show JSON before the ${CHAT_CONTROL_JSON_MARKER} line.
 - If the user goal does not require another write action, omit "approval_proposal".
 
 ## Examples
-Proposing staging → approval_proposal REQUIRED:
-I found 4 modified files. Shall I stage all of them?
-${CHAT_CONTROL_JSON_MARKER}{"response":"I found 4 modified files. Shall I stage all of them?","risk_level":"medium","actions_taken":["git_status"],"suggestions":[],"approval_proposal":{"tool":"git_add","args":{},"description":"Stage all changes","nextHint":"generate commit message"}}
+Proposing staging → call \`${CHAT_FINAL_TOOL_NAME}\` with approval_proposal:
+{"response":"I found 4 modified files. Shall I stage all of them?","risk_level":"medium","actions_taken":["git_status"],"suggestions":[],"approval_proposal":{"tool":"git_add","args":{},"description":"Stage all changes","nextHint":"generate commit message"}}
 
-After executing (no proposal) → no approval_proposal key:
-All files staged successfully.
-${CHAT_CONTROL_JSON_MARKER}{"response":"All files staged successfully.","risk_level":"low","actions_taken":["git_add"],"suggestions":[]}`;
+After executing → call \`${CHAT_FINAL_TOOL_NAME}\` without approval_proposal:
+{"response":"All files staged successfully.","risk_level":"low","actions_taken":["git_add"],"suggestions":[]}`;
 
 // ─── ChatPlanner ──────────────────────────────────────────────────────────────
 
@@ -219,14 +226,17 @@ export class ChatPlanner {
     ];
 
     const registeredTools = this.executor.list();
-    const tools = registeredTools.map((tool) => ({
-      type: "function" as const,
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters,
-      },
-    }));
+    const tools = [
+      ...registeredTools.map((tool) => ({
+        type: "function" as const,
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters,
+        },
+      })),
+      finalizationToolSchema(),
+    ];
     const capabilitiesByName = new Map(
       toolCapabilities(registeredTools).map((cap) => [cap.name, cap]),
     );
@@ -266,24 +276,44 @@ export class ChatPlanner {
 
       // ── Tool calls ──────────────────────────────────────────────────────────
       if (toolFromStream.length > 0) {
+        const finalizationCalls = toolFromStream.filter((tc) => tc.name === CHAT_FINAL_TOOL_NAME);
+        const executableToolCalls = toolFromStream.filter((tc) => tc.name !== CHAT_FINAL_TOOL_NAME);
+
+        if (finalizationCalls.length > 0 && executableToolCalls.length === 0) {
+          const finalCall = finalizationCalls[finalizationCalls.length - 1]!;
+          const args = parseToolArguments(finalCall.arguments);
+          const result = plannerResultFromControl(args, {
+            visibleText: accumulated,
+            fallbackText: accumulated,
+            finalizationMode: "agent_final",
+            streamedResponse: emittedVisibleResponse || undefined,
+            toolCallsMade,
+            usedLlm: true,
+          });
+          yield { type: "assistant_control", control: result };
+          yield { type: "done", result };
+          return;
+        }
+
+        if (finalizationCalls.length > 0) {
+          yield {
+            type: "progress",
+            message: "Continuing tool execution before finalizing the assistant turn.",
+          };
+        }
+
         messages.push({
           role: "assistant",
           content: accumulated || null,
-          tool_calls: toolFromStream.map((tc) => ({
+          tool_calls: executableToolCalls.map((tc) => ({
             id: tc.id,
             type: "function" as const,
             function: { name: tc.name, arguments: tc.arguments },
           })),
         });
 
-        for (const tc of toolFromStream) {
-          let args: Record<string, unknown> = {};
-          try {
-            args = JSON.parse(tc.arguments || "{}") as Record<string, unknown>;
-          } catch {
-            args = {};
-          }
-
+        for (const tc of executableToolCalls) {
+          const args = parseToolArguments(tc.arguments);
           const capability = capabilitiesByName.get(tc.name);
           if (capability?.requiresApproval) {
             const description = approvalDescription(capability.description, tc.name);
@@ -313,7 +343,18 @@ export class ChatPlanner {
           let toolResult: unknown;
           let ok = true;
           try {
-            toolResult = await this.executor.call(tc.name, args);
+            for await (const streamEvent of this.executor.callStream(tc.name, args)) {
+              if (streamEvent.type === "output") {
+                yield {
+                  type: "tool_output_delta",
+                  name: tc.name,
+                  stream: streamEvent.stream,
+                  delta: streamEvent.text,
+                };
+              } else {
+                toolResult = streamEvent.result;
+              }
+            }
           } catch (err) {
             ok = false;
             toolResult = { error: err instanceof Error ? err.message : String(err) };
@@ -375,21 +416,17 @@ export class ChatPlanner {
       const control = parseControlResponse(lastText);
       const parsed = control.control;
       if (parsed) {
-        const riskLevel = String(parsed["risk_level"] ?? "low");
-        const response = String(parsed["response"] ?? control.visibleText ?? lastText);
-        const actionsTaken = ((parsed["actions_taken"] as unknown[]) ?? []).map(String);
-        const suggestions = ((parsed["suggestions"] as unknown[]) ?? []).map(String);
-        const rawApprovalProposal = parsed["approval_proposal"] ?? parsed["pending_action"];
-        const approvalProposal: PendingToolAction | undefined =
-          rawApprovalProposal && typeof rawApprovalProposal === "object"
-            ? {
-                // Strip legacy "functions." prefix that some LLMs emit (e.g. functions.git_commit)
-                tool: String((rawApprovalProposal as Record<string, unknown>)["tool"] ?? "").replace(/^functions\./, ""),
-                args: ((rawApprovalProposal as Record<string, unknown>)["args"] as Record<string, unknown>) ?? {},
-                description: String((rawApprovalProposal as Record<string, unknown>)["description"] ?? ""),
-                nextHint: String((rawApprovalProposal as Record<string, unknown>)["nextHint"] ?? ""),
-              }
-            : undefined;
+        const result = plannerResultFromControl(parsed, {
+          visibleText: control.visibleText,
+          fallbackText: lastText,
+          finalizationMode: control.mode,
+          streamedResponse: emittedVisibleResponse || undefined,
+          toolCallsMade,
+          usedLlm: true,
+        });
+        const riskLevel = result.riskLevel;
+        const response = result.response;
+        const approvalProposal = result.approvalProposal;
 
         // Risk gating: pause for confirmation on medium/high risk actions
         // that haven't been confirmed yet and haven't executed tools yet.
@@ -415,18 +452,10 @@ export class ChatPlanner {
         }
 
         yield {
-          type: "done",
-          result: {
-            response,
-            streamedResponse: emittedVisibleResponse || undefined,
-            riskLevel,
-            actionsTaken,
-            suggestions,
-            toolCallsMade,
-            usedLlm: true,
-            approvalProposal: approvalProposal?.tool ? approvalProposal : undefined,
-          },
+          type: "assistant_control",
+          control: result,
         };
+        yield { type: "done", result };
         return;
       }
 
@@ -434,7 +463,7 @@ export class ChatPlanner {
       messages.push({
         role: "user",
         content:
-          `Please provide the user-facing answer first, then one final control line starting with ${CHAT_CONTROL_JSON_MARKER}. If you are proposing a write action, you MUST include approval_proposal. Format: ${CHAT_CONTROL_JSON_MARKER}{"response":"...","risk_level":"low|medium|high","actions_taken":[],"suggestions":[],"approval_proposal":{"tool":"git_add","args":{},"description":"...","nextHint":"..."}} — omit approval_proposal only if you are NOT proposing any next write action.`,
+          `Call the ${CHAT_FINAL_TOOL_NAME} tool now with response, risk_level, actions_taken, suggestions, and any approval_proposal. If you are proposing a write action, approval_proposal is required. Only if tool calling is unavailable, use the compatibility fallback line starting with ${CHAT_CONTROL_JSON_MARKER}.`,
       });
     }
 
@@ -445,6 +474,7 @@ export class ChatPlanner {
       result: {
         response: lastText || "(no response)",
         streamedResponse: undefined,
+        finalizationMode: "none",
         riskLevel: "low",
         actionsTaken: [],
         suggestions: [],
@@ -467,6 +497,7 @@ export class ChatPlanner {
       result: {
         response,
         streamedResponse: undefined,
+        finalizationMode: "none",
         riskLevel: "low",
         actionsTaken: [],
         suggestions: plan.steps.map((s) => `${s.tool}: ${s.note}`),
@@ -478,6 +509,101 @@ export class ChatPlanner {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function finalizationToolSchema() {
+  return {
+    type: "function" as const,
+    function: {
+      name: CHAT_FINAL_TOOL_NAME,
+      description:
+        "Finalize the assistant turn with typed runtime metadata. Use this instead of writing control JSON in text.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        required: ["response", "risk_level", "actions_taken", "suggestions"],
+        properties: {
+          response: {
+            type: "string",
+            description: "The complete user-facing response text.",
+          },
+          risk_level: {
+            type: "string",
+            enum: ["low", "medium", "high"],
+          },
+          actions_taken: {
+            type: "array",
+            items: { type: "string" },
+          },
+          suggestions: {
+            type: "array",
+            items: { type: "string" },
+          },
+          approval_proposal: {
+            type: "object",
+            additionalProperties: false,
+            required: ["tool", "args", "description"],
+            properties: {
+              tool: { type: "string" },
+              args: { type: "object", additionalProperties: true },
+              description: { type: "string" },
+              nextHint: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+function parseToolArguments(raw: string): Record<string, unknown> {
+  try {
+    return JSON.parse(raw || "{}") as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function plannerResultFromControl(
+  control: Record<string, unknown>,
+  opts: {
+    visibleText?: string;
+    fallbackText: string;
+    finalizationMode: ChatPlannerResult["finalizationMode"];
+    streamedResponse?: string;
+    toolCallsMade: ChatPlannerResult["toolCallsMade"];
+    usedLlm: boolean;
+  },
+): ChatPlannerResult {
+  const rawApprovalProposal = control["approval_proposal"] ?? control["pending_action"];
+  const approvalProposal = pendingActionFromControl(rawApprovalProposal);
+  return {
+    response: String(control["response"] ?? opts.visibleText ?? opts.fallbackText),
+    streamedResponse: opts.streamedResponse,
+    finalizationMode: opts.finalizationMode,
+    riskLevel: String(control["risk_level"] ?? control["riskLevel"] ?? "low"),
+    actionsTaken: arrayOfStrings(control["actions_taken"] ?? control["actionsTaken"]),
+    suggestions: arrayOfStrings(control["suggestions"]),
+    toolCallsMade: opts.toolCallsMade,
+    usedLlm: opts.usedLlm,
+    approvalProposal: approvalProposal?.tool ? approvalProposal : undefined,
+  };
+}
+
+function pendingActionFromControl(raw: unknown): PendingToolAction | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const obj = raw as Record<string, unknown>;
+  return {
+    // Strip legacy "functions." prefix that some LLMs emit (e.g. functions.git_commit)
+    tool: String(obj["tool"] ?? "").replace(/^functions\./, ""),
+    args: (obj["args"] as Record<string, unknown>) ?? {},
+    description: String(obj["description"] ?? ""),
+    nextHint: obj["nextHint"] === undefined ? undefined : String(obj["nextHint"]),
+  };
+}
+
+function arrayOfStrings(raw: unknown): string[] {
+  return Array.isArray(raw) ? raw.map(String) : [];
+}
 
 function parseFinalJson(text: string): Record<string, unknown> | null {
   if (!text) return null;
@@ -503,15 +629,19 @@ function parseFinalJson(text: string): Record<string, unknown> | null {
   return null;
 }
 
-function parseControlResponse(text: string): { visibleText?: string; control: Record<string, unknown> | null } {
+function parseControlResponse(text: string): {
+  visibleText?: string;
+  control: Record<string, unknown> | null;
+  mode: ChatPlannerResult["finalizationMode"];
+} {
   const markerIndex = text.lastIndexOf(CHAT_CONTROL_JSON_MARKER);
   if (markerIndex !== -1) {
     const visibleText = text.slice(0, markerIndex).trim();
     const afterMarker = text.slice(markerIndex + CHAT_CONTROL_JSON_MARKER.length).trim();
     const control = parseFinalJson(afterMarker);
-    return { visibleText, control };
+    return { visibleText, control, mode: "control_marker" };
   }
-  return { control: parseFinalJson(text) };
+  return { control: parseFinalJson(text), mode: "plain_json" };
 }
 
 function extractVisibleStreamingResponse(text: string): string {

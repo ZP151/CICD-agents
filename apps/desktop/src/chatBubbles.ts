@@ -1,5 +1,6 @@
 export interface AssistantBubbleMeta {
   riskLevel?: string;
+  finalizationMode?: "agent_final" | "control_marker" | "plain_json" | "none";
   actionsTaken?: string[];
   suggestions?: string[];
   timestamp?: number;
@@ -23,11 +24,13 @@ export function finaliseAssistantResponseBubbles<T extends ChatBubbleModel>(
 ): T[] {
   const result: T[] = [...prev];
   const last = result[result.length - 1];
+  const lastAssistantText = last?.kind === "assistant" ? (last.text ?? "").trim() : "";
+  const finalText = cleanText.trim();
+  const streamText = streamedText?.trim();
   if (
     last?.kind === "assistant" &&
-    last.streaming &&
-    streamedText &&
-    (last.text ?? "").trim() === streamedText.trim()
+    (last.streaming || !last.meta) &&
+    ((streamText && lastAssistantText === streamText) || (finalText && lastAssistantText === finalText))
   ) {
     result[result.length - 1] = { ...last, streaming: false, meta };
     return result;

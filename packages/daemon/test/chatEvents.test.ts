@@ -16,7 +16,9 @@ describe("chat SSE event compatibility layer", () => {
   it.each([
     ["assistant_delta", "text.delta"],
     ["tool_start", "tool.started"],
+    ["tool_output_delta", "tool.output.delta"],
     ["tool_end", "tool.completed"],
+    ["assistant_control", "assistant.control"],
     ["workflow_state", "workflow.updated"],
     ["approval_required", "approval.required"],
     ["approval_resolved", "approval.resolved"],
@@ -43,8 +45,22 @@ function minimalEvent(type: string): ChatEvent {
       return { type, delta: "hello" };
     case "tool_start":
       return { type, name: "git_status", args: {} };
+    case "tool_output_delta":
+      return { type, name: "git_status", stream: "stdout", delta: "## main\n" };
     case "tool_end":
       return { type, name: "git_status", ok: true, summary: "ok", result: {} };
+    case "assistant_control":
+      return {
+        type,
+        control: {
+          response: "done",
+          riskLevel: "low",
+          actionsTaken: [],
+          suggestions: [],
+          toolCallsMade: [],
+          usedLlm: true,
+        },
+      };
     case "workflow_state":
       return { type, state: { status: "done", currentStep: "done", completedTools: [] } };
     case "approval_required":

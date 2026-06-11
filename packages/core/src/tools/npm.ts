@@ -11,6 +11,9 @@ async function npmRun(ctx: ToolContext, args: string[]): Promise<Record<string, 
     cwd: ctx.repoPath,
     timeoutSec: ctx.timeoutSec,
     allowed: ALLOWED,
+    onOutput: ctx.emitToolEvent
+      ? (chunk) => ctx.emitToolEvent?.({ type: "output", ...chunk })
+      : undefined,
   });
   return {
     returncode: res.returncode,

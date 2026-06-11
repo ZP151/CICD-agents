@@ -11,12 +11,14 @@ import {
   fetchChatHistory,
   fetchChatMessages,
   fetchChatState,
-  refreshChatIndexStatus,
+  runChatWorkflowAction,
   type AdoDiscoveryKind,
   type AdoDiscoveryOption,
   type ChatEventPayload,
   type ChatHistoryEntry,
   type ChatIndexStatus,
+  type ChatUiChunk,
+  type ChatWorkflowAction,
   type WorkspaceProfile,
   type WorkspaceProfileInput,
 } from "../api.js";
@@ -30,6 +32,7 @@ import {
 import {
   fetchAzureDevOpsRemoteSuggestion,
   fetchGitBranches,
+  DEFAULT_ADO_ORG_URL,
   pickRecommendedPipeline,
   type PatStatus,
   projectLinkNameFromRepo,
@@ -53,6 +56,7 @@ interface Bubble {
   toolSummary?: string;
   toolResult?: unknown;
   toolOpen?: boolean;
+  toolLiveOutput?: string;
   // legacy risk-confirm (medium/high risk pre-execution gate)
   riskLevel?: string;
   plan?: string;
@@ -133,6 +137,12 @@ interface GitStatusData {
   modified: string[];
   untracked: string[];
   deleted: string[];
+}
+
+interface DiffStats {
+  files: number;
+  added: number;
+  removed: number;
 }
 
 function parseGitStatus(stdout: string): GitStatusData {
@@ -448,7 +458,8 @@ function ExecutionLog({ tools, onToggleTool }: { tools: Bubble[]; onToggleTool: 
         {tools.map((tool) => {
           const pending = tool.toolOk === undefined;
           const summary = pending ? "" : toolCollapsedSummary(tool.toolName, tool.toolOk, tool.toolResult);
-          const hasOutput = !!tool.toolResult && !pending;
+          const hasLiveOutput = Boolean(tool.toolLiveOutput?.trim());
+          const hasOutput = (!!tool.toolResult && !pending) || hasLiveOutput;
           return (
             <div key={tool.id}>
               <button
@@ -468,14 +479,19 @@ function ExecutionLog({ tools, onToggleTool }: { tools: Bubble[]; onToggleTool: 
                 />
                 <span className="w-36 shrink-0 font-mono text-blue-400/80">{tool.toolName}</span>
                 {!pending && summary && <span className="truncate text-zinc-600">{summary}</span>}
-                {pending && <span className="italic text-zinc-700">running…</span>}
+                {pending && <span className="italic text-zinc-700">{hasLiveOutput ? "streaming output…" : "running…"}</span>}
                 {hasOutput && (
                   <span className="ml-auto shrink-0 text-zinc-700">{tool.toolOpen ? "▲" : "▼"}</span>
                 )}
               </button>
               {tool.toolOpen && hasOutput && (
                 <div className="border-t border-zinc-800/40 bg-zinc-900/60 px-3 py-2">
-                  <ToolOutputRenderer toolName={tool.toolName} toolResult={tool.toolResult} />
+                  {hasLiveOutput && (
+                    <pre className="mb-2 max-h-44 overflow-auto whitespace-pre-wrap rounded border border-zinc-800/60 bg-zinc-950/70 p-2 font-mono text-[11px] leading-relaxed text-zinc-400">
+                      {tool.toolLiveOutput}
+                    </pre>
+                  )}
+                  {!!tool.toolResult && !pending && <ToolOutputRenderer toolName={tool.toolName} toolResult={tool.toolResult} />}
                 </div>
               )}
             </div>
@@ -629,9 +645,23 @@ function MetaPanel({
   const sourceMessages = new Set(insightSources.map((source) => source.raw));
   const contextMessages = new Set(contextSources);
   const otherSuggestions = suggestions.filter((source) => !sourceMessages.has(source) && !contextMessages.has(source));
-  if (suggestions.length === 0) return null;
+  const runtimeSignals = [
+    meta.finalizationMode ? `Finalization: ${meta.finalizationMode.replace(/_/g, " ")}` : "",
+    meta.riskLevel ? `Risk: ${meta.riskLevel}` : "",
+    meta.actionsTaken?.length ? `Actions: ${meta.actionsTaken.join(", ")}` : "",
+  ].filter(Boolean);
+  if (suggestions.length === 0 && runtimeSignals.length === 0) return null;
   return (
     <div className="mt-1.5 ml-1 space-y-1.5 text-xs text-zinc-500">
+      {runtimeSignals.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {runtimeSignals.map((signal) => (
+            <span key={signal} className="rounded-md border border-zinc-800/60 bg-zinc-900/20 px-2 py-0.5 text-[11px] text-zinc-500">
+              {signal}
+            </span>
+          ))}
+        </div>
+      )}
       {contextSources.length > 0 && (
         <div className="space-y-1 rounded-md border border-zinc-800/60 bg-zinc-900/20 px-2 py-1.5">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">Context source</p>
@@ -711,21 +741,34 @@ interface WorkflowEventState {
   pendingApproval?: ApprovalRequest;
 }
 
+type WorkspaceAction =
+  | { type: "inspect_environment" }
+  | { type: "inspect_changes" }
+  | { type: "refresh_branch" }
+  | { type: "checkout_branch"; branch: string }
+  | { type: "create_branch"; branch: string }
+  | {
+      type: "commit_flow";
+      mode: "commit" | "commit-push" | "push";
+      branch?: string;
+      message?: string;
+      includeUnstaged: boolean;
+    };
+
 interface WorkspacePanelProps {
   repoPath: string;
   setRepoPath: (v: string) => void;
   currentBranch: string | null;
   branchList: string[];
+  gitStatus: GitStatusData | null;
+  diffStats: DiffStats | null;
   taskState: TaskState | null;
   busy: boolean;
-  indexStatus: ChatIndexStatus | null;
-  indexLoading: boolean;
-  indexRefreshing: boolean;
-  indexError: string | null;
-  onRefreshIndex: () => void;
   profiles: WorkspaceProfile[];
   activeProfileId: string | null;
   setActiveProfileId: (id: string | null) => void;
+  statusText: string | null;
+  onAction: (action: WorkspaceAction) => void;
 }
 
 const EMPTY_PROJECT_LINK: WorkspaceProfileInput = {
@@ -733,7 +776,7 @@ const EMPTY_PROJECT_LINK: WorkspaceProfileInput = {
   repoPath: "",
   defaultBranch: "main",
   targetBranch: "main",
-  adoOrgUrl: "",
+  adoOrgUrl: DEFAULT_ADO_ORG_URL,
   adoProject: "",
   adoRepoName: "",
   adoPat: "",
@@ -780,6 +823,7 @@ function ProjectLinkSetupCard({
     repositories: [],
     pipelines: [],
   });
+  const discoveryAutoRef = useRef<Partial<Record<AdoDiscoveryKind, string>>>({});
   const [mcpChecking, setMcpChecking] = useState(false);
   const [mcpStatus, setMcpStatus] = useState<string | null>(null);
 
@@ -880,7 +924,42 @@ function ProjectLinkSetupCard({
     if (patStatus === "none") setPatStatus("pending");
   }
 
-  async function handleDiscover(kind: AdoDiscoveryKind) {
+  function applyDiscovery(kind: AdoDiscoveryKind, option: AdoDiscoveryOption) {
+    setDiscoveryError(null);
+    if (kind === "projects") {
+      setDiscovered((current) => ({ ...current, repositories: [], pipelines: [] }));
+      setPipelineHint(null);
+      setForm((current) => ({
+        ...current,
+        adoProject: option.name,
+        adoRepoName: current.adoProject === option.name ? current.adoRepoName : "",
+        adoPipelineId: current.adoProject === option.name ? current.adoPipelineId : "",
+        adoPipelineName: current.adoProject === option.name ? current.adoPipelineName : "",
+      }));
+    } else if (kind === "repositories") {
+      setDiscovered((current) => ({ ...current, pipelines: [] }));
+      setPipelineHint(null);
+      setForm((current) => ({
+        ...current,
+        adoRepoName: option.name,
+        adoPipelineId: current.adoRepoName === option.name ? current.adoPipelineId : "",
+        adoPipelineName: current.adoRepoName === option.name ? current.adoPipelineName : "",
+      }));
+    } else {
+      setForm((current) => ({ ...current, adoPipelineId: option.id, adoPipelineName: option.name }));
+    }
+  }
+
+  async function runDiscovery(kind: AdoDiscoveryKind, mode: "manual" | "auto" = "manual") {
+    const signature = JSON.stringify({
+      kind,
+      org: form.adoOrgUrl.trim(),
+      project: form.adoProject.trim(),
+      repo: form.adoRepoName.trim(),
+      pat: form.adoPat ? "pat" : "",
+    });
+    if (mode === "auto" && discoveryAutoRef.current[kind] === signature) return;
+    if (mode === "auto") discoveryAutoRef.current[kind] = signature;
     setDiscovering(kind);
     setDiscoveryError(null);
     try {
@@ -903,15 +982,36 @@ function ProjectLinkSetupCard({
     }
   }
 
-  function applyDiscovery(kind: AdoDiscoveryKind, option: AdoDiscoveryOption) {
-    if (kind === "projects") {
-      setForm((current) => ({ ...current, adoProject: option.name }));
-    } else if (kind === "repositories") {
-      setForm((current) => ({ ...current, adoRepoName: option.name }));
-    } else {
-      setForm((current) => ({ ...current, adoPipelineId: option.id, adoPipelineName: option.name }));
-    }
+  async function handleDiscover(kind: AdoDiscoveryKind) {
+    await runDiscovery(kind, "manual");
   }
+
+  useEffect(() => {
+    if (!advanced || !form.adoOrgUrl.trim()) return;
+    const timer = setTimeout(() => {
+      void runDiscovery("projects", "auto");
+    }, 650);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [advanced, form.adoOrgUrl, form.adoPat]);
+
+  useEffect(() => {
+    if (!advanced || !form.adoOrgUrl.trim() || !form.adoProject.trim()) return;
+    const timer = setTimeout(() => {
+      void runDiscovery("repositories", "auto");
+    }, 650);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [advanced, form.adoOrgUrl, form.adoProject, form.adoPat]);
+
+  useEffect(() => {
+    if (!advanced || !form.adoOrgUrl.trim() || !form.adoProject.trim() || !form.adoRepoName.trim()) return;
+    const timer = setTimeout(() => {
+      void runDiscovery("pipelines", "auto");
+    }, 650);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [advanced, form.adoOrgUrl, form.adoProject, form.adoRepoName, form.adoPat]);
 
   async function handleCheckMcp() {
     setMcpChecking(true);
@@ -942,9 +1042,9 @@ function ProjectLinkSetupCard({
   }) {
     if (branchLoading) {
       return (
-        <div className="grid gap-1">
-          <span className="text-[11px] font-medium text-zinc-500">{label}</span>
-          <div className="flex items-center gap-2 rounded-lg border border-zinc-700/60 bg-zinc-950 px-3 py-2 text-sm text-zinc-500">
+        <div className="grid min-w-0 gap-1">
+          <span className="text-[11px] font-medium text-[rgb(var(--app-text-muted))]">{label}</span>
+          <div className="flex items-center gap-2 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text-muted))]">
             <svg className="h-3 w-3 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="30 70" />
             </svg>
@@ -955,12 +1055,12 @@ function ProjectLinkSetupCard({
     }
     if (branches.length > 0) {
       return (
-        <label className="grid gap-1">
-          <span className="text-[11px] font-medium text-zinc-500">{label}</span>
-          <select
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            className="rounded-lg border border-emerald-700/60 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none transition focus:border-emerald-500"
+        <label className="grid min-w-0 gap-1">
+        <span className="text-[11px] font-medium text-[rgb(var(--app-text-muted))]">{label}</span>
+        <select
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="w-full min-w-0 rounded-lg border border-emerald-700/60 bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-emerald-500"
           >
             {branches.map((branch) => (
               <option key={branch} value={branch}>{branch}</option>
@@ -971,24 +1071,24 @@ function ProjectLinkSetupCard({
       );
     }
     return (
-      <label className="grid gap-1">
-        <span className="text-[11px] font-medium text-zinc-500">{label}</span>
+      <label className="grid min-w-0 gap-1">
+        <span className="text-[11px] font-medium text-[rgb(var(--app-text-muted))]">{label}</span>
         <input
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="rounded-lg border border-zinc-700/60 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-zinc-500"
+          className="w-full min-w-0 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
           placeholder="main"
         />
       </label>
     );
   }
 
-  const repoInputClass = `rounded-lg border px-3 py-2 font-mono text-sm text-zinc-200 outline-none transition ${
+  const repoInputClass = `rounded-lg border px-3 py-2 font-mono text-sm text-[rgb(var(--app-text))] outline-none transition ${
     !branchLoading && branches.length > 0
-      ? "border-emerald-700/60 bg-zinc-950 focus:border-emerald-500"
+      ? "border-emerald-700/60 bg-[rgb(var(--app-surface-raised))] focus:border-emerald-500"
       : branchError && form.repoPath
-        ? "border-amber-700/60 bg-zinc-950 focus:border-amber-600"
-        : "border-zinc-700/60 bg-zinc-950 focus:border-zinc-500"
+        ? "border-amber-700/60 bg-[rgb(var(--app-surface-raised))] focus:border-amber-600"
+        : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] focus:border-zinc-500"
   }`;
   const hasAdoMapping = Boolean(form.adoOrgUrl.trim() && form.adoProject.trim() && form.adoRepoName.trim());
   const advancedLabel = advanced
@@ -1018,40 +1118,40 @@ function ProjectLinkSetupCard({
   }
 
   return (
-    <div className="w-full max-w-xl rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 text-left shadow-lg">
+    <div className="w-full max-w-full overflow-hidden rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-5 text-left shadow-xl">
       <div className="mb-4 flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-800">
-          <svg className="h-5 w-5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[rgb(var(--app-surface-raised))]">
+          <svg className="h-5 w-5 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 7h7a5 5 0 010 10H6m10-5h5M3 12h8" />
           </svg>
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-medium text-zinc-200">Create a Project Link</p>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-600">
-            Start with the local repository. Dev Agent will infer Azure DevOps mapping from git remote when possible, and you can finish missing CI/CD details later without leaving the chat.
+          <p className="text-sm font-semibold text-[rgb(var(--app-text))]">Create a Project Link</p>
+          <p className="mt-1 text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
+            Choose a local repository. Azure DevOps mapping can be inferred or added later.
           </p>
         </div>
       </div>
 
       <div className="grid gap-3">
         <label className="grid gap-1">
-          <span className="text-[11px] font-medium text-zinc-500">Link name</span>
+          <span className="text-[11px] font-medium text-[rgb(var(--app-text-muted))]">Link name</span>
           <input
             value={form.name}
             onChange={(e) => set("name")(e.target.value)}
-            className="rounded-lg border border-zinc-700/60 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-zinc-500"
+            className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
             placeholder="web-app production"
           />
         </label>
         <label className="grid gap-1">
-          <span className="flex items-center justify-between gap-2 text-[11px] font-medium text-zinc-500">
+          <span className="flex items-center justify-between gap-2 text-[11px] font-medium text-[rgb(var(--app-text-muted))]">
             <span>Local repository path</span>
             {form.repoPath && (
               <button
                 type="button"
                 onClick={() => void loadBranches(form.repoPath)}
                 disabled={branchLoading}
-                className="text-[10px] text-zinc-600 transition hover:text-zinc-400 disabled:opacity-40"
+                className="text-[10px] text-[rgb(var(--app-text-subtle))] transition hover:text-[rgb(var(--app-text-muted))] disabled:opacity-40"
               >
                 {branchLoading ? "Loading..." : branchError ? "Retry branch detection" : branches.length > 0 ? `${branches.length} branches found` : "Detect branches"}
               </button>
@@ -1070,18 +1170,7 @@ function ProjectLinkSetupCard({
             <span className="text-[10px] text-emerald-500/80">Azure DevOps fields inferred from git remote: {remoteHint}</span>
           )}
         </label>
-        <div
-          className={`rounded-lg border px-3 py-2 text-[11px] leading-relaxed ${
-            hasAdoMapping
-              ? "border-emerald-900/40 bg-emerald-950/20 text-emerald-300"
-              : "border-zinc-800 bg-zinc-950/40 text-zinc-600"
-          }`}
-        >
-          {hasAdoMapping
-            ? `ADO mapping ready: ${form.adoProject} / ${form.adoRepoName}. PR insight and CI/CD tools will try Microsoft sign-in first.`
-            : "Local chat, indexing, git analysis, and test/build commands can start now. Add ADO details when you want PR insight, pipeline, or review-queue automation."}
-        </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid min-w-0 grid-cols-1 gap-3">
           <BranchSelect label="Default branch" value={form.defaultBranch} onChange={set("defaultBranch")} />
           <BranchSelect label="PR target branch" value={form.targetBranch} onChange={set("targetBranch")} />
         </div>
@@ -1089,51 +1178,100 @@ function ProjectLinkSetupCard({
         <button
           type="button"
           onClick={() => setAdvanced((value) => !value)}
-          className="mt-1 text-left text-xs text-zinc-600 hover:text-zinc-400"
+          className="mt-1 text-left text-xs text-[rgb(var(--app-text-muted))] hover:text-[rgb(var(--app-text))]"
         >
           {advancedLabel}
         </button>
 
         {advanced && (
-          <div className="grid gap-3 rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
-            <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoOrgUrl} onChange={(e) => set("adoOrgUrl")(e.target.value)} placeholder="https://dev.azure.com/org" />
-            <div className="grid grid-cols-2 gap-2">
-              <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoProject} onChange={(e) => set("adoProject")(e.target.value)} placeholder="ADO project" />
-              <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoRepoName} onChange={(e) => set("adoRepoName")(e.target.value)} placeholder="ADO repo" />
+          <div className="grid min-w-0 gap-3 overflow-hidden rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3">
+            <input className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoOrgUrl} onChange={(e) => { setDiscoveryError(null); set("adoOrgUrl")(e.target.value); }} placeholder="https://dev.azure.com/org" />
+            <div className="grid min-w-0 grid-cols-1 gap-2">
+              {discovered.projects.length > 0 ? (
+                <select
+                  className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
+                  value={discovered.projects.some((option) => option.name === form.adoProject) ? form.adoProject : ""}
+                  onChange={(e) => {
+                    const selected = discovered.projects.find((option) => option.name === e.target.value);
+                    if (selected) applyDiscovery("projects", selected);
+                  }}
+                >
+                  <option value="">{discovering === "projects" ? "Discovering projects..." : "Select project"}</option>
+                  {discovered.projects.map((option) => (
+                    <option key={option.id} value={option.name}>{option.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
+                  value={form.adoProject}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setDiscoveryError(null);
+                    setDiscovered((current) => ({ ...current, repositories: [], pipelines: [] }));
+                    setPipelineHint(null);
+                    setForm((current) => ({
+                      ...current,
+                      adoProject: value,
+                      adoRepoName: current.adoProject === value ? current.adoRepoName : "",
+                      adoPipelineId: current.adoProject === value ? current.adoPipelineId : "",
+                      adoPipelineName: current.adoProject === value ? current.adoPipelineName : "",
+                    }));
+                  }}
+                  placeholder={discovering === "projects" ? "Discovering projects..." : "ADO project"}
+                />
+              )}
+              {discovered.repositories.length > 0 ? (
+                <select
+                  className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
+                  value={discovered.repositories.some((option) => option.name === form.adoRepoName) ? form.adoRepoName : ""}
+                  onChange={(e) => {
+                    const selected = discovered.repositories.find((option) => option.name === e.target.value);
+                    if (selected) applyDiscovery("repositories", selected);
+                  }}
+                >
+                  <option value="">{discovering === "repositories" ? "Discovering repositories..." : "Select repository"}</option>
+                  {discovered.repositories.map((option) => (
+                    <option key={option.id} value={option.name}>{option.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
+                  value={form.adoRepoName}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setDiscoveryError(null);
+                    setDiscovered((current) => ({ ...current, pipelines: [] }));
+                    setPipelineHint(null);
+                    setForm((current) => ({
+                      ...current,
+                      adoRepoName: value,
+                      adoPipelineId: current.adoRepoName === value ? current.adoPipelineId : "",
+                      adoPipelineName: current.adoRepoName === value ? current.adoPipelineName : "",
+                    }));
+                  }}
+                  placeholder={discovering === "repositories" ? "Discovering repositories..." : "ADO repo"}
+                />
+              )}
             </div>
-            <div className="grid gap-2 rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5">
+            <div className="grid gap-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2.5">
               <div className="flex flex-wrap gap-1.5">
                 <button
                   type="button"
-                  onClick={() => void handleDiscover("projects")}
-                  disabled={!form.adoOrgUrl || discovering !== null}
-                  className="rounded-md border border-zinc-800 px-2 py-1 text-[11px] text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300 disabled:opacity-40"
-                >
-                  {discovering === "projects" ? "Discovering..." : "Discover projects"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleDiscover("repositories")}
-                  disabled={!form.adoOrgUrl || !form.adoProject || discovering !== null}
-                  className="rounded-md border border-zinc-800 px-2 py-1 text-[11px] text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300 disabled:opacity-40"
-                >
-                  {discovering === "repositories" ? "Discovering..." : "Discover repos"}
-                </button>
-                <button
-                  type="button"
                   onClick={() => void handleDiscover("pipelines")}
-                  disabled={!form.adoOrgUrl || !form.adoProject || discovering !== null}
-                  className="rounded-md border border-zinc-800 px-2 py-1 text-[11px] text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300 disabled:opacity-40"
+                  disabled={!form.adoOrgUrl || !form.adoProject || !form.adoRepoName || discovering !== null}
+                  className="rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] text-[rgb(var(--app-text-muted))] transition hover:border-zinc-500 hover:text-[rgb(var(--app-text))] disabled:opacity-40"
                 >
-                  {discovering === "pipelines" ? "Discovering..." : "Discover pipelines"}
+                  {discovering === "pipelines" ? "Discovering..." : "Refresh pipelines"}
                 </button>
               </div>
-              {(["projects", "repositories", "pipelines"] as AdoDiscoveryKind[]).map((kind) => (
+              {(["pipelines"] as AdoDiscoveryKind[]).map((kind) => (
                 discovered[kind].length > 0 && (
                   <label key={kind} className="grid gap-1">
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-700">{kind}</span>
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-[rgb(var(--app-text-subtle))]">{kind}</span>
                     <select
-                      className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600"
+                      className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
                       defaultValue=""
                       onChange={(event) => {
                         const selected = discovered[kind].find((option) => option.id === event.target.value);
@@ -1161,18 +1299,18 @@ function ProjectLinkSetupCard({
                 </p>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoPipelineId} onChange={(e) => set("adoPipelineId")(e.target.value)} placeholder="Pipeline ID" />
-              <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoPipelineName} onChange={(e) => set("adoPipelineName")(e.target.value)} placeholder="Pipeline name" />
+            <div className="grid min-w-0 grid-cols-1 gap-2">
+              <input className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoPipelineId} onChange={(e) => set("adoPipelineId")(e.target.value)} placeholder="Pipeline ID" />
+              <input className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoPipelineName} onChange={(e) => set("adoPipelineName")(e.target.value)} placeholder="Pipeline name" />
             </div>
             <div className="grid gap-1.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-medium text-zinc-500">PAT fallback (optional)</span>
+                <span className="text-[11px] font-medium text-[rgb(var(--app-text-muted))]">PAT fallback (optional)</span>
                 <div className="flex items-center gap-2">
                   {patStatus === "pending" && <span className="rounded-full border border-amber-800/40 bg-amber-900/30 px-2 py-0.5 text-[10px] font-medium text-amber-400">Pending</span>}
                   {patStatus === "verified" && <span className="rounded-full border border-emerald-800/40 bg-emerald-900/30 px-2 py-0.5 text-[10px] font-medium text-emerald-400">Verified</span>}
                   {patStatus === "invalid" && <span className="rounded-full border border-red-800/40 bg-red-900/30 px-2 py-0.5 text-[10px] font-medium text-red-400">Invalid</span>}
-                  <button type="button" onClick={handleRequestPat} className="text-[10px] text-zinc-600 underline underline-offset-2 transition hover:text-zinc-400">
+                  <button type="button" onClick={handleRequestPat} className="text-[10px] text-[rgb(var(--app-text-muted))] underline underline-offset-2 transition hover:text-[rgb(var(--app-text))]">
                     Request PAT
                   </button>
                   {form.adoPat && form.adoOrgUrl && (
@@ -1180,7 +1318,7 @@ function ProjectLinkSetupCard({
                       type="button"
                       onClick={() => void handleVerifyPat()}
                       disabled={verifyingPat}
-                      className="text-[10px] text-zinc-600 underline underline-offset-2 transition hover:text-zinc-400 disabled:opacity-50"
+                      className="text-[10px] text-[rgb(var(--app-text-muted))] underline underline-offset-2 transition hover:text-[rgb(var(--app-text))] disabled:opacity-50"
                     >
                       {verifyingPat ? "Verifying..." : "Verify"}
                     </button>
@@ -1188,7 +1326,7 @@ function ProjectLinkSetupCard({
                 </div>
               </div>
               <input
-                className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600"
+                className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
                 type="password"
                 value={form.adoPat}
                 onChange={(e) => set("adoPat")(e.target.value)}
@@ -1200,32 +1338,32 @@ function ProjectLinkSetupCard({
                 </p>
               )}
             </div>
-            <div className="grid gap-2 rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5">
+            <div className="grid gap-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2.5">
               <label className="flex items-start gap-2">
                 <input
                   type="checkbox"
                   checked={form.adoMcpEnabled}
                   onChange={(event) => set("adoMcpEnabled")(event.target.checked)}
-                  className="mt-0.5 h-3.5 w-3.5 rounded border-zinc-700 bg-zinc-900"
+                  className="mt-0.5 h-3.5 w-3.5 rounded border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]"
                 />
                 <span className="min-w-0">
-                  <span className="block text-[11px] font-medium text-zinc-400">Enable external Azure DevOps MCP bridge fallback</span>
-                  <span className="block text-[10px] leading-relaxed text-zinc-700">Optional compatibility path while ADO MCP capabilities are internalized into this app.</span>
+                  <span className="block text-[11px] font-medium text-[rgb(var(--app-text))]">Enable external Azure DevOps MCP bridge fallback</span>
+                  <span className="block text-[10px] leading-relaxed text-[rgb(var(--app-text-subtle))]">Optional fallback while ADO capabilities are internalized into this app.</span>
                 </span>
               </label>
               {form.adoMcpEnabled && (
                 <div className="grid gap-2">
-                  <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoMcpCommand} onChange={(e) => set("adoMcpCommand")(e.target.value)} placeholder="mcp-server-azuredevops" />
+                  <input className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoMcpCommand} onChange={(e) => set("adoMcpCommand")(e.target.value)} placeholder="mcp-server-azuredevops" />
                   <div className="grid grid-cols-2 gap-2">
-                    <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoMcpAuthentication} onChange={(e) => set("adoMcpAuthentication")(e.target.value)} placeholder="pat or azcli" />
-                    <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoMcpDomains} onChange={(e) => set("adoMcpDomains")(e.target.value)} placeholder="repositories,pipelines,work-items" />
+                    <input className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoMcpAuthentication} onChange={(e) => set("adoMcpAuthentication")(e.target.value)} placeholder="pat or azcli" />
+                    <input className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoMcpDomains} onChange={(e) => set("adoMcpDomains")(e.target.value)} placeholder="repositories,pipelines,work-items" />
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => void handleCheckMcp()}
                       disabled={!form.adoOrgUrl || mcpChecking}
-                      className="rounded-md border border-zinc-800 px-2 py-1 text-[11px] text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300 disabled:opacity-40"
+                      className="rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] text-[rgb(var(--app-text-muted))] transition hover:border-zinc-500 hover:text-[rgb(var(--app-text))] disabled:opacity-40"
                     >
                       {mcpChecking ? "Checking..." : "Check ADO auth/tools"}
                     </button>
@@ -1259,19 +1397,41 @@ function ProjectLinkSetupCard({
   );
 }
 
-function WorkspacePanel({ repoPath, setRepoPath, currentBranch, branchList, taskState, busy, profiles, activeProfileId, setActiveProfileId }: WorkspacePanelProps) {
+function WorkspacePanel({
+  repoPath,
+  setRepoPath,
+  currentBranch,
+  branchList,
+  gitStatus,
+  diffStats,
+  taskState,
+  busy,
+  profiles,
+  activeProfileId,
+  setActiveProfileId,
+  statusText,
+  onAction,
+}: WorkspacePanelProps) {
   const repoName = repoPath ? repoPath.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? "" : "";
-
-  const handleBrowse = async () => {
-    if (!("__TAURI__" in window)) return;
-    try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const result = await open({ directory: true, multiple: false });
-      if (result && typeof result === "string") setRepoPath(result);
-    } catch { /* plugin not available */ }
-  };
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const [commitMenuOpen, setCommitMenuOpen] = useState(false);
+  const [commitMessage, setCommitMessage] = useState("");
+  const [includeUnstaged, setIncludeUnstaged] = useState(true);
+  const [newBranchName, setNewBranchName] = useState("");
 
   const activeProfile = profiles.find((p) => p.id === activeProfileId) ?? null;
+  const adoReady = Boolean(activeProfile?.adoOrgUrl && activeProfile.adoProject && activeProfile.adoRepoName);
+  const gitKnown = Boolean(gitStatus || diffStats);
+  const branchName = currentBranch ?? activeProfile?.defaultBranch ?? "";
+  const branchLabel = branchName || "not checked";
+  const branchOptions = Array.from(new Set([branchName, ...branchList].filter(Boolean)));
+  const changedFiles = gitStatus
+    ? gitStatus.staged.length + gitStatus.modified.length + gitStatus.untracked.length + gitStatus.deleted.length
+    : 0;
+  const hasRepoPath = Boolean(repoPath.trim());
+  const hasChanges = Boolean(diffStats ? diffStats.files > 0 : changedFiles > 0);
+  const added = diffStats?.added ?? 0;
+  const removed = diffStats?.removed ?? 0;
 
   const handleProfileSelect = (id: string) => {
     setActiveProfileId(id || null);
@@ -1281,114 +1441,269 @@ function WorkspacePanel({ repoPath, setRepoPath, currentBranch, branchList, task
     }
   };
 
-  return (
-    <div className="flex flex-col h-full w-full bg-zinc-950/40">
+  const runAction = (action: WorkspaceAction) => {
+    if (busy) return;
+    setBranchMenuOpen(false);
+    setCommitMenuOpen(false);
+    onAction(action);
+  };
 
-      {/* Current Task section — pinned to top when active */}
-      {taskState && (
-        <div className="p-3 space-y-2.5 border-b border-zinc-800/60">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600">Current Task</p>
-          <p className="text-xs text-zinc-400 leading-snug line-clamp-2">{taskState.goal}</p>
-          <div className="space-y-1.5">
-            {taskState.steps.map((step, i) => (
-              <div key={i} className={`flex items-center gap-2 text-xs ${
-                step.done ? "text-zinc-600" : step.active ? "text-zinc-200" : "text-zinc-700"
-              }`}>
-                {step.done ? (
-                  <span className="shrink-0 text-emerald-600 text-[10px]">&#10003;</span>
-                ) : step.active ? (
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${busy ? "animate-pulse bg-indigo-400" : "bg-amber-400"}`} />
-                ) : (
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-700" />
-                )}
-                <span className={step.done ? "line-through text-zinc-700" : step.active ? "font-medium" : ""}>{step.label}</span>
+  const commitPrompt = (mode: "commit" | "commit-push" | "push") => {
+    const message = commitMessage.trim();
+    runAction({
+      type: "commit_flow",
+      mode,
+      branch: branchName || undefined,
+      message: message || undefined,
+      includeUnstaged,
+    });
+  };
+
+  const createBranch = () => {
+    const name = newBranchName.trim();
+    if (!name) return;
+    runAction({ type: "create_branch", branch: name });
+  };
+
+  return (
+    <div className="flex h-full w-full flex-col bg-transparent px-3 py-6">
+      <div className="relative rounded-2xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4 text-[rgb(var(--app-text))] shadow-lg">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm text-[rgb(var(--app-text-muted))]">Environment</p>
+          <button
+            type="button"
+            onClick={() => runAction({ type: "inspect_environment" })}
+            disabled={!hasRepoPath || busy}
+            className="rounded-md p-1 text-[rgb(var(--app-text-subtle))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-default disabled:opacity-45"
+            title="Inspect environment"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M10.3 4.3l.7-1.3h2l.7 1.3 1.5.6 1.4-.4 1.4 1.4-.4 1.4.6 1.5 1.3.7v2l-1.3.7-.6 1.5.4 1.4-1.4 1.4-1.4-.4-1.5.6-.7 1.3h-2l-.7-1.3-1.5-.6-1.4.4-1.4-1.4.4-1.4-.6-1.5-1.3-.7v-2l1.3-.7.6-1.5-.4-1.4 1.4-1.4 1.4.4 1.5-.6z" />
+              <circle cx="12" cy="11" r="2.6" strokeWidth={1.7} />
+            </svg>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => runAction({ type: "inspect_changes" })}
+          disabled={!hasRepoPath || busy}
+          className="flex w-full items-center justify-between rounded-md px-1 py-1.5 text-left transition hover:bg-[rgb(var(--app-surface-raised))] disabled:cursor-default disabled:opacity-70"
+        >
+          <span className="flex items-center gap-2 text-sm">
+            <svg className="h-4 w-4 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M7 7h10M7 12h10M7 17h7M5 4h14v16H5z" />
+            </svg>
+            Changes
+          </span>
+          <span className="font-mono text-xs">
+            {busy && statusText ? (
+              <span className="text-blue-500">running</span>
+            ) : !gitKnown ? (
+              <span className="text-[rgb(var(--app-text-subtle))]">not checked</span>
+            ) : hasChanges ? (
+              <>
+                <span className="text-emerald-500">+{added}</span>
+                <span className="ml-1 text-red-500">-{removed}</span>
+              </>
+            ) : (
+              <span className="text-[rgb(var(--app-text-subtle))]">clean</span>
+            )}
+          </span>
+        </button>
+
+        <div className="relative mt-1">
+          <button
+            type="button"
+            onClick={() => setBranchMenuOpen((value) => !value)}
+            disabled={!hasRepoPath || busy}
+            className="flex w-full items-center gap-2 rounded-md bg-[rgb(var(--app-surface-raised))] px-1.5 py-1.5 text-sm transition hover:bg-[rgb(var(--app-accent-soft))]"
+          >
+            <svg className="h-4 w-4 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M6 3v6a3 3 0 003 3h6m0 0l-2-2m2 2l-2 2M6 21v-7m0 0a3 3 0 100-6 3 3 0 000 6zm12 7v-7m0 0a3 3 0 100-6 3 3 0 000 6z" />
+            </svg>
+            <span className="min-w-0 flex-1 truncate text-left font-mono">{branchLabel}</span>
+            <svg className="h-3.5 w-3.5 text-[rgb(var(--app-text-subtle))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+          {branchMenuOpen && (
+            <div className="absolute right-0 top-full z-30 mt-1 w-full rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl">
+              <div className="mb-3 flex items-center gap-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-xs text-[rgb(var(--app-text-muted))]">
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M21 21l-4.3-4.3m1.8-5.2a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                Search branches
               </div>
-            ))}
-          </div>
-          {taskState.risk && (
-            <div className="flex items-center gap-1.5 pt-0.5">
-              <span className="text-[10px] text-zinc-600">Risk</span>
-              <span className={`rounded px-1 text-[10px] font-semibold ${
-                taskState.risk === "high" ? "bg-red-900/40 text-red-400" :
-                taskState.risk === "medium" ? "bg-amber-900/40 text-amber-400" :
-                "bg-emerald-900/30 text-emerald-600"
-              }`}>{taskState.risk}</span>
+              <button
+                type="button"
+                onClick={() => runAction({ type: "refresh_branch" })}
+                disabled={busy}
+                className="mb-2 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 4v6h6M20 20v-6h-6M5 15a7 7 0 0011.9 3M19 9A7 7 0 007.1 6" />
+                </svg>
+                Refresh branch state
+              </button>
+              <p className="mb-2 text-xs text-[rgb(var(--app-text-muted))]">Branches</p>
+              <div className="space-y-1">
+                {branchOptions.map((branch) => (
+                  <button
+                    key={branch}
+                    type="button"
+                    onClick={() => runAction({ type: "checkout_branch", branch })}
+                    disabled={busy}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition hover:bg-[rgb(var(--app-surface-raised))]"
+                  >
+                    <svg className="h-4 w-4 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M6 3v6a3 3 0 003 3h6M6 21v-7m0 0a3 3 0 100-6 3 3 0 000 6zm12 7v-7" />
+                    </svg>
+                    <span className="min-w-0 flex-1 truncate font-mono">{branch}</span>
+                    {branch === branchName && <span className="text-[rgb(var(--app-text-muted))]">✓</span>}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 border-t border-[rgb(var(--app-border))] pt-2">
+                <input
+                  value={newBranchName}
+                  onChange={(event) => setNewBranchName(event.target.value)}
+                  className="mb-2 w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-sm text-[rgb(var(--app-text))] outline-none placeholder:text-[rgb(var(--app-text-subtle))] focus:border-zinc-500"
+                  placeholder="new branch name"
+                />
+                <button
+                  type="button"
+                  onClick={createBranch}
+                  disabled={!newBranchName.trim() || busy}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <span className="text-lg leading-none">+</span>
+                  Create and checkout new branch...
+                </button>
+              </div>
             </div>
           )}
         </div>
-      )}
 
-      {/* Context section */}
-      <div className="p-3 space-y-3.5">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600">Context</p>
+        <div className="relative mt-1">
+          <button
+            type="button"
+            onClick={() => setCommitMenuOpen((value) => !value)}
+            disabled={!hasRepoPath || busy}
+            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-sm transition hover:bg-[rgb(var(--app-surface-raised))]"
+          >
+            <svg className="h-4 w-4 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 12h7m2 0h7M8 8l-4 4 4 4m8-8l4 4-4 4" />
+            </svg>
+            <span>Commit or push</span>
+          </button>
+          {commitMenuOpen && (
+            <div className="absolute right-0 top-full z-30 mt-1 w-full rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl">
+              <div className="mb-2 flex items-center justify-between text-xs">
+                <span className="flex min-w-0 items-center gap-1.5 font-mono text-[rgb(var(--app-text-muted))]">
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M6 3v6a3 3 0 003 3h6M6 21v-7" />
+                  </svg>
+                  {branchLabel}
+                </span>
+                {hasChanges && (
+                  <span className="font-mono">
+                    <span className="text-emerald-500">+{added}</span>
+                    <span className="ml-1 text-red-500">-{removed}</span>
+                  </span>
+                )}
+              </div>
+              <textarea
+                value={commitMessage}
+                onChange={(event) => setCommitMessage(event.target.value)}
+                rows={2}
+                className="mb-3 w-full resize-none rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2.5 py-2 text-sm text-[rgb(var(--app-text))] outline-none placeholder:text-[rgb(var(--app-text-subtle))] focus:border-zinc-500"
+                placeholder="Commit message (leave blank to generate)..."
+              />
+              <label className="mb-2 flex items-center gap-2 text-sm text-[rgb(var(--app-text-muted))]">
+                <input
+                  type="checkbox"
+                  checked={includeUnstaged}
+                  onChange={(event) => setIncludeUnstaged(event.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-[rgb(var(--app-border))]"
+                />
+                Include unstaged changes
+              </label>
+              <div className="space-y-1 border-t border-[rgb(var(--app-border))] pt-2">
+                <button type="button" onClick={() => commitPrompt("commit")} disabled={busy} className="flex w-full items-center gap-2 rounded-md bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-left text-sm transition hover:bg-[rgb(var(--app-accent-soft))] disabled:cursor-wait disabled:opacity-60">
+                  <svg className="h-4 w-4 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 12h16M8 8l-4 4 4 4" />
+                  </svg>
+                  Commit
+                  <span className="ml-auto rounded bg-[rgb(var(--app-border))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">Ctrl+↵</span>
+                </button>
+                <button type="button" onClick={() => commitPrompt("commit-push")} disabled={busy} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 16V4m0 0L8 8m4-4l4 4M5 20h14" />
+                  </svg>
+                  Commit and push
+                </button>
+                <button type="button" onClick={() => commitPrompt("push")} disabled={busy} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 16V4m0 0L8 8m4-4l4 4M5 20h14" />
+                  </svg>
+                  Push
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
-        {/* Project Link selector */}
-        {profiles.length > 0 && (
-          <div className="space-y-1.5">
-            <p className="text-[10px] text-zinc-600">Project Link</p>
+        <div className="mt-2 border-t border-[rgb(var(--app-border))] pt-2">
+          {profiles.length > 0 ? (
             <select
-              className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[11px] text-zinc-300 focus:border-zinc-700 focus:outline-none"
+              className="w-full bg-transparent text-xs text-[rgb(var(--app-text-muted))] outline-none"
               value={activeProfileId ?? ""}
               onChange={(e) => handleProfileSelect(e.target.value)}
+              title="Project Link"
             >
-              <option value="">-- none --</option>
+              <option value="">No Project Link</option>
               {profiles.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
-            {activeProfile?.adoProject && (
-              <p className="text-[10px] text-zinc-600 truncate pl-0.5">
-                {activeProfile.adoProject} / {activeProfile.adoRepoName}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Repository */}
-        <div className="space-y-1.5">
-          <p className="text-[10px] text-zinc-600">Repository</p>
-          <div className="flex items-center gap-1">
-            <input
-              className="min-w-0 flex-1 rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[11px] text-zinc-300 placeholder-zinc-700 focus:border-zinc-700 focus:outline-none"
-              value={repoPath}
-              onChange={(e) => setRepoPath(e.target.value)}
-              placeholder="Path to repository"
-              title={repoPath}
-            />
-            <button
-              onClick={() => void handleBrowse()}
-              className="shrink-0 rounded-md border border-zinc-800 bg-zinc-900/60 p-1 text-zinc-600 hover:border-zinc-700 hover:text-zinc-400 transition-colors"
-              title="Browse for folder"
-            >
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
-            </button>
-          </div>
-          {repoName && <p className="truncate text-[10px] text-zinc-700 pl-0.5">{repoName}</p>}
+          ) : (
+            <p className="text-xs text-[rgb(var(--app-text-subtle))]">No Project Link</p>
+          )}
+          <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-subtle))]" title={repoPath}>
+            {repoName || repoPath || "No local repository selected"}
+          </p>
+          {adoReady && (
+            <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-subtle))]">
+              {activeProfile?.adoProject} / {activeProfile?.adoRepoName}
+            </p>
+          )}
         </div>
 
-        {/* Branch */}
-        <div className="space-y-1.5">
-          <p className="text-[10px] text-zinc-600">Branch</p>
-          {branchList.length > 1 ? (
-            <select
-              className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-2 py-1 text-[11px] text-zinc-300 focus:border-zinc-700 focus:outline-none"
-              value={currentBranch ?? ""}
-              onChange={() => {/* branch switching — future implementation */}}
-            >
-              {branchList.map((b) => (
-                <option key={b} value={b}>{b}</option>
+        <div className="mt-4 border-t border-[rgb(var(--app-border))] pt-4">
+          <p className="mb-2 text-sm text-[rgb(var(--app-text-muted))]">Progress</p>
+          {taskState ? (
+            <div className="space-y-2">
+              {taskState.steps.map((step, i) => (
+                <div key={i} className="flex items-start gap-2 text-sm text-[rgb(var(--app-text-muted))]">
+                  <span className={`mt-1 h-3.5 w-3.5 shrink-0 rounded-full border ${
+                    step.done
+                      ? "border-emerald-500 bg-emerald-500"
+                      : step.active
+                        ? busy ? "border-blue-500 bg-blue-500/20" : "border-amber-500 bg-amber-500/20"
+                        : "border-[rgb(var(--app-border))]"
+                  }`} />
+                  <span className={step.done ? "text-[rgb(var(--app-text-subtle))] line-through" : ""}>{step.label}</span>
+                </div>
               ))}
-            </select>
+            </div>
           ) : (
-            <p className="truncate font-mono text-[11px] text-zinc-500">
-              {currentBranch ?? <span className="text-zinc-700">not detected</span>}
+            <p className="text-sm leading-relaxed text-[rgb(var(--app-text-subtle))]">
+              Ask Dev Agent to inspect changes, run CI/CD checks, analyze PR insight, or prepare a commit.
             </p>
           )}
         </div>
       </div>
-
     </div>
   );
 }
@@ -1452,6 +1767,62 @@ function taskStateFromWorkflow(
     currentStepLabel: currentLabel,
     risk: workflowState.pendingApproval?.riskLevel,
   };
+}
+
+function workspaceActionToolCandidates(action: WorkspaceAction): string[] {
+  switch (action.type) {
+    case "inspect_environment":
+      return ["git_status", "git_diff", "git_current_branch", "git_branch_list", "git_remote"];
+    case "inspect_changes":
+      return ["git_status", "git_diff"];
+    case "refresh_branch":
+      return ["git_current_branch", "git_branch_list"];
+    case "checkout_branch":
+      return ["git_checkout"];
+    case "create_branch":
+      return ["git_create_branch", "git_checkout"];
+    case "commit_flow":
+      if (action.mode === "push") return ["git_push"];
+      if (action.mode === "commit-push") return ["git_add", "git_commit", "git_push"];
+      return ["git_add", "git_commit"];
+  }
+}
+
+function workspaceActionMatchesApproval(action: WorkspaceAction, approval: ApprovalRequest): boolean {
+  return workspaceActionToolCandidates(action).includes(approval.action.tool);
+}
+
+function workspaceActionToDirectWorkflow(action: WorkspaceAction): ChatWorkflowAction | null {
+  if (action.type === "inspect_environment") return "inspect_environment";
+  if (action.type === "inspect_changes") return "inspect_changes";
+  if (action.type === "refresh_branch") return "refresh_branch";
+  return null;
+}
+
+function workspaceActionPrompt(action: WorkspaceAction): string {
+  switch (action.type) {
+    case "inspect_environment":
+      return "Show me the current project environment, git state, Azure DevOps mapping, and CI/CD readiness.";
+    case "inspect_changes":
+      return "Inspect current git status and diff. Summarize changed files and risk before any commit.";
+    case "refresh_branch":
+      return "Inspect the current branch and list local branches.";
+    case "checkout_branch":
+      return `Switch to branch ${action.branch} after checking whether the working tree is safe.`;
+    case "create_branch":
+      return `Create and checkout a new branch named ${action.branch} after checking whether the working tree is safe.`;
+    case "commit_flow": {
+      if (action.mode === "push") {
+        return `Push the current branch${action.branch ? ` (${action.branch})` : ""}.`;
+      }
+      const verb = action.mode === "commit-push" ? "Commit current changes and push" : "Commit current changes";
+      const messagePart = action.message
+        ? ` with commit message: ${action.message}`
+        : " and generate a concise commit message";
+      const unstagedPart = action.includeUnstaged ? " Include unstaged changes." : " Use staged changes only.";
+      return `${verb}${messagePart}.${unstagedPart}`;
+    }
+  }
 }
 
 // ─── Panel toggle icons ───────────────────────────────────────────────────────
@@ -1587,14 +1958,14 @@ export default function Chat({ mini = false }: ChatProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [historyWidth, setHistoryWidth] = useState(220);
-  const [rightWidth, setRightWidth] = useState(240);
+  const [rightWidth, setRightWidth] = useState(260);
   const historyDragRef = useRef<{ startX: number; startW: number } | null>(null);
   const rightDragRef   = useRef<{ startX: number; startW: number } | null>(null);
   // ref to the workspace div so drag handlers can read its live width
   const workspaceRef   = useRef<HTMLDivElement>(null);
 
   /** Middle panel must never be squeezed below this px — guards drag handlers and auto-collapse */
-  const MIDDLE_MIN = 520;
+  const MIDDLE_MIN = 420;
   const HANDLE_GAP = 8; // px reserved for the two drag handle elements
 
   const startHistoryDrag = useCallback((startX: number) => {
@@ -1645,10 +2016,13 @@ export default function Chat({ mini = false }: ChatProps) {
   );
   const [customModel, setCustomModel] = useState<CustomConversationModel>(readCustomConversationModel);
   const [activeModel, setActiveModel] = useState<ConversationModelChoice>(readInitialConversationModelChoice);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [indexStatus, setIndexStatus] = useState<ChatIndexStatus | null>(null);
   // Project Links come from global AppDataContext — loaded once on app start, no per-mount fetch.
   // The underlying storage type is still WorkspaceProfile until the model is migrated.
   const { profiles: availableProfiles, createProfile: createProjectLink } = useAppData();
   const cancelRef = useRef<(() => void) | null>(null);
+  const uiStreamAvailableRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1665,6 +2039,16 @@ export default function Chat({ mini = false }: ChatProps) {
     if (profile.repoPath) setRepoPath(profile.repoPath);
     setTimeout(() => textareaRef.current?.focus(), 0);
   }, []);
+
+  const queuePrompt = useCallback((prompt: string) => {
+    setInput(prompt);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }, []);
+
+  const activeProfile = useMemo(
+    () => availableProfiles.find((profile) => profile.id === activeProfileId) ?? null,
+    [availableProfiles, activeProfileId],
+  );
 
   const refreshModelChoices = useCallback(() => {
     const next = readCustomConversationModel();
@@ -1689,6 +2073,27 @@ export default function Chat({ mini = false }: ChatProps) {
   useEffect(() => {
     localStorage.setItem("dev_agent_active_model", activeModel === "custom" ? "custom" : "built_in");
   }, [activeModel]);
+
+  const loadIndexStatus = useCallback(async () => {
+    const repo = repoPath.trim();
+    if (!repo) {
+      setIndexStatus(null);
+      return;
+    }
+    try {
+      const status = await fetchChatIndexStatus(repo, activeProfileId ?? undefined);
+      setIndexStatus(status);
+    } catch {
+      setIndexStatus(null);
+    }
+  }, [repoPath, activeProfileId]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      void loadIndexStatus();
+    }, 350);
+    return () => clearTimeout(timeout);
+  }, [loadIndexStatus]);
 
   useEffect(() => {
     const raw = sessionStorage.getItem(CHAT_HANDOFF_KEY);
@@ -1847,6 +2252,17 @@ export default function Chat({ mini = false }: ChatProps) {
     return null;
   }, [bubbles]);
 
+  const gitStatus = useMemo(() => {
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i]!;
+      if (b.kind === "tool" && b.toolOk && b.toolName === "git_status" && b.toolResult) {
+        const stdout = String((b.toolResult as Record<string, unknown>)["stdout"] ?? "");
+        return parseGitStatus(stdout);
+      }
+    }
+    return null;
+  }, [bubbles]);
+
   // Derived: group consecutive tool bubbles together for compact rendering
   type RenderItem =
     | { kind: "tool-group"; tools: Bubble[]; key: string }
@@ -1891,6 +2307,39 @@ export default function Chat({ mini = false }: ChatProps) {
     }
     return [] as string[];
   }, [bubbles]);
+
+  const diffStats = useMemo((): DiffStats | null => {
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i]!;
+      if (b.kind === "tool" && b.toolOk && b.toolName === "git_diff" && b.toolResult) {
+        const stdout = String((b.toolResult as Record<string, unknown>)["stdout"] ?? "");
+        const files = parseGitDiff(stdout);
+        if (files.length === 0) return { files: 0, added: 0, removed: 0 };
+        return {
+          files: files.length,
+          added: files.reduce((sum, file) => sum + file.added, 0),
+          removed: files.reduce((sum, file) => sum + file.removed, 0),
+        };
+      }
+    }
+    return null;
+  }, [bubbles]);
+
+  const welcomeSuggestions = useMemo(() => {
+    const hasAdoMapping = Boolean(activeProfile?.adoOrgUrl && activeProfile.adoProject && activeProfile.adoRepoName);
+    const hasPipeline = Boolean(activeProfile?.adoPipelineId || activeProfile?.adoPipelineName);
+    const needsProjectUnderstanding = !indexStatus?.indexed || !indexStatus.semanticReady;
+    const suggestions = [
+      needsProjectUnderstanding ? "Understand this project" : "Explain this project architecture",
+      "Review my changes",
+      "What's on this branch?",
+      hasAdoMapping ? "Analyze PR insight for this repo" : "Run tests",
+      hasPipeline ? "Check the CI/CD pipeline state" : "Find the build and test commands",
+      "Stage and commit",
+      hasAdoMapping ? "Push and create PR" : "Prepare a PR plan",
+    ];
+    return Array.from(new Set(suggestions)).slice(0, 7);
+  }, [activeProfile, indexStatus]);
 
   // Dynamic workflow task state for the right-side panel. The daemon owns this
   // state; the UI no longer infers a fixed Git-to-PR checklist from bubbles.
@@ -1972,6 +2421,74 @@ export default function Chat({ mini = false }: ChatProps) {
     });
   }, []);
 
+  const appendToolOutputDelta = useCallback((toolName: string | undefined, stream: "stdout" | "stderr" | undefined, delta: string | undefined) => {
+    if (!toolName || !delta) return;
+    shouldScrollRef.current = true;
+    const prefix = stream === "stderr" ? "[stderr] " : "";
+    setBubbles((prev) => {
+      const idx = [...prev].reverse().findIndex(
+        (b) => b.kind === "tool" && b.toolName === toolName && b.toolOk === undefined,
+      );
+      if (idx === -1) return prev;
+      const realIdx = prev.length - 1 - idx;
+      return prev.map((b, i) =>
+        i === realIdx
+          ? { ...b, toolLiveOutput: `${b.toolLiveOutput ?? ""}${prefix}${delta}`.slice(-12000), toolOpen: true }
+          : b,
+      );
+    });
+  }, []);
+
+  const handleUiChunk = useCallback((chunk?: ChatUiChunk) => {
+    if (!chunk) return;
+    uiStreamAvailableRef.current = true;
+    switch (chunk.type) {
+      case "start":
+        setStatusText("Thinking");
+        break;
+
+      case "text-start":
+        setStatusText(null);
+        break;
+
+      case "text-delta":
+        setStatusText(null);
+        appendAssistantDelta(chunk.delta);
+        break;
+
+      case "text-end":
+        stopStreaming();
+        break;
+
+      case "progress":
+        setStatusText(chunk.message || "Working");
+        break;
+
+      case "finish":
+        stopStreaming();
+        break;
+
+      case "error":
+        stopStreaming();
+        addBubble({ id: uid(), kind: "error", text: chunk.errorText || "Unknown error" });
+        break;
+
+      case "tool-input-start":
+      case "tool-input-available":
+      case "tool-output-available":
+      case "tool-output-error":
+      case "approval-required":
+      case "approval-resolved":
+      case "metadata-available":
+      case "workflow-updated":
+        break;
+
+      case "tool-output-delta":
+        appendToolOutputDelta(chunk.toolName, chunk.stream, chunk.delta);
+        break;
+    }
+  }, [addBubble, appendAssistantDelta, appendToolOutputDelta, stopStreaming]);
+
   const toggleTool = useCallback((id: string) => {
     setBubbles((prev) =>
       prev.map((b) => (b.id === id ? { ...b, toolOpen: !b.toolOpen } : b)),
@@ -1995,17 +2512,33 @@ export default function Chat({ mini = false }: ChatProps) {
 
   // ── Core streaming turn ────────────────────────────────────────────────────
 
-  const sendMessage = useCallback((msg: string) => {
+  const sendMessage = useCallback((msg: string, options?: { silent?: boolean }) => {
     if (!msg || busy) return;
     setBusy(true);
     setStatusText("Planning");
-    addBubble({ id: uid(), kind: "user", text: msg });
+    if (!options?.silent) {
+      addBubble({ id: uid(), kind: "user", text: msg });
+    }
 
     const repo = repoPath || ".";
-    let resolvedSessionId = sessionId;
+    const resolvedModelChoice = activeModel === "custom" && customModel.available ? "custom" : "built_in";
+    if (activeModel === "custom" && !customModel.available) {
+      setStatusText("Custom model is no longer configured, using built-in model.");
+    }
 
-    const { cancel } = chatStream(msg, repo, sessionId, (ev: ChatEventPayload) => {
-      switch (ev.type) {
+    let resolvedSessionId = sessionId;
+    uiStreamAvailableRef.current = false;
+
+    const { cancel } = chatStream(
+      msg,
+      repo,
+      sessionId,
+      (ev: ChatEventPayload) => {
+        switch (ev.type) {
+        case "ui.chunk":
+          handleUiChunk(ev.uiChunk);
+          break;
+
         case "session":
           if (ev.sessionId) {
             resolvedSessionId = ev.sessionId;
@@ -2014,11 +2547,13 @@ export default function Chat({ mini = false }: ChatProps) {
           break;
 
         case "assistant_delta":
+          if (uiStreamAvailableRef.current) break;
           setStatusText(null);
           appendAssistantDelta(ev.delta ?? "");
           break;
 
         case "progress":
+          if (uiStreamAvailableRef.current) break;
           stopStreaming();
           setStatusText(ev.message ?? "Working");
           break;
@@ -2027,6 +2562,13 @@ export default function Chat({ mini = false }: ChatProps) {
           setStatusText(`Running ${ev.name}`);
           stopStreaming();
           addBubble({ id: uid(), kind: "tool", toolName: ev.name, toolArgs: ev.args, toolOpen: false });
+          break;
+
+        case "tool_output_delta":
+        case "tool.output.delta":
+          if (!uiStreamAvailableRef.current) {
+            appendToolOutputDelta(ev.name, ev.stream, ev.delta);
+          }
           break;
 
         case "tool_end":
@@ -2097,6 +2639,7 @@ export default function Chat({ mini = false }: ChatProps) {
           break;
 
         case "message":
+          if (uiStreamAvailableRef.current) break;
           if (ev.text) { stopStreaming(); addBubble({ id: uid(), kind: "assistant", text: ev.text }); }
           break;
 
@@ -2110,9 +2653,20 @@ export default function Chat({ mini = false }: ChatProps) {
             ),
           );
           const meta: Bubble["meta"] = ev.result
-            ? { riskLevel: ev.result.riskLevel, actionsTaken: ev.result.actionsTaken, suggestions: ev.result.suggestions }
+            ? {
+                riskLevel: ev.result.riskLevel,
+                finalizationMode: ev.result.finalizationMode,
+                actionsTaken: ev.result.actionsTaken,
+                suggestions: ev.result.suggestions,
+              }
             : undefined;
-          finaliseWithResponse(ev.result?.response?.trim() ?? "", meta, ev.result?.streamedResponse);
+          const cleanText = ev.result?.response?.trim() ?? "";
+          finaliseWithResponse(
+            cleanText,
+            meta,
+            ev.result?.streamedResponse ?? (uiStreamAvailableRef.current ? cleanText : undefined),
+          );
+          uiStreamAvailableRef.current = false;
           setBusy(false);
           setStatusText(null);
           cancelRef.current = null;
@@ -2122,19 +2676,39 @@ export default function Chat({ mini = false }: ChatProps) {
 
         case "cancelled":
           stopStreaming();
+          uiStreamAvailableRef.current = false;
           addBubble({ id: uid(), kind: "system", text: "Action cancelled." });
           setBusy(false); setStatusText(null); cancelRef.current = null;
           break;
 
         case "error":
           stopStreaming();
+          uiStreamAvailableRef.current = false;
           addBubble({ id: uid(), kind: "error", text: ev.message ?? "Unknown error" });
           setBusy(false); setStatusText(null); cancelRef.current = null;
           break;
       }
-    }, activeProfileId ?? undefined);
+      },
+      activeProfileId ?? undefined,
+      resolvedModelChoice,
+    );
     cancelRef.current = cancel;
-  }, [busy, sessionId, repoPath, activeProfileId, addBubble, stopStreaming, appendAssistantDelta, finaliseWithResponse, showApprovalRequest, mini]);
+  }, [
+    busy,
+    customModel.available,
+    sessionId,
+    repoPath,
+    activeProfileId,
+    activeModel,
+    addBubble,
+    stopStreaming,
+    appendAssistantDelta,
+    appendToolOutputDelta,
+    handleUiChunk,
+    finaliseWithResponse,
+    showApprovalRequest,
+    mini,
+  ]);
 
   const send = useCallback(() => {
     const msg = input.trim();
@@ -2154,16 +2728,23 @@ export default function Chat({ mini = false }: ChatProps) {
     setBubbles((prev) => prev.map((b) => b.id === bubbleId ? { ...b, pendingStatus: "executing" } : b));
     setBusy(true);
     setStatusText("Executing");
+    uiStreamAvailableRef.current = false;
 
     // Dispatch structured confirm — does NOT send a chat message
     const { cancel } = apiConfirmAction(sessionId, (ev: ChatEventPayload) => {
       switch (ev.type) {
+        case "ui.chunk":
+          handleUiChunk(ev.uiChunk);
+          break;
+
         case "assistant_delta":
+          if (uiStreamAvailableRef.current) break;
           setStatusText(null);
           appendAssistantDelta(ev.delta ?? "");
           break;
 
         case "progress":
+          if (uiStreamAvailableRef.current) break;
           stopStreaming();
           setStatusText(ev.message ?? "Working");
           break;
@@ -2172,6 +2753,13 @@ export default function Chat({ mini = false }: ChatProps) {
           setStatusText(`Running ${ev.name}`);
           stopStreaming();
           addBubble({ id: uid(), kind: "tool", toolName: ev.name, toolArgs: ev.args, toolOpen: false });
+          break;
+
+        case "tool_output_delta":
+        case "tool.output.delta":
+          if (!uiStreamAvailableRef.current) {
+            appendToolOutputDelta(ev.name, ev.stream, ev.delta);
+          }
           break;
 
         case "tool_end":
@@ -2239,9 +2827,20 @@ export default function Chat({ mini = false }: ChatProps) {
             ),
           );
           const meta: Bubble["meta"] = ev.result
-            ? { riskLevel: ev.result.riskLevel, actionsTaken: ev.result.actionsTaken, suggestions: ev.result.suggestions }
+            ? {
+                riskLevel: ev.result.riskLevel,
+                finalizationMode: ev.result.finalizationMode,
+                actionsTaken: ev.result.actionsTaken,
+                suggestions: ev.result.suggestions,
+              }
             : undefined;
-          finaliseWithResponse(ev.result?.response?.trim() ?? "", meta, ev.result?.streamedResponse);
+          const cleanText = ev.result?.response?.trim() ?? "";
+          finaliseWithResponse(
+            cleanText,
+            meta,
+            ev.result?.streamedResponse ?? (uiStreamAvailableRef.current ? cleanText : undefined),
+          );
+          uiStreamAvailableRef.current = false;
           setBusy(false);
           setStatusText(null);
           cancelRef.current = null;
@@ -2250,11 +2849,13 @@ export default function Chat({ mini = false }: ChatProps) {
         }
 
         case "message":
+          if (uiStreamAvailableRef.current) break;
           if (ev.text) { stopStreaming(); addBubble({ id: uid(), kind: "assistant", text: ev.text }); }
           break;
 
         case "cancelled":
           stopStreaming();
+          uiStreamAvailableRef.current = false;
           setBubbles((prev) => prev.map((b) =>
             b.id === bubbleId ? { ...b, pendingStatus: "cancelled" } : b,
           ));
@@ -2263,6 +2864,7 @@ export default function Chat({ mini = false }: ChatProps) {
 
         case "error":
           stopStreaming();
+          uiStreamAvailableRef.current = false;
           setBubbles((prev) => prev.map((b) =>
             b.id === bubbleId ? { ...b, pendingStatus: "cancelled" } : b,
           ));
@@ -2272,13 +2874,95 @@ export default function Chat({ mini = false }: ChatProps) {
       }
     });
     cancelRef.current = cancel;
-  }, [sessionId, busy, addBubble, stopStreaming, appendAssistantDelta, finaliseWithResponse, showApprovalRequest, mini]);
+  }, [sessionId, busy, addBubble, stopStreaming, appendAssistantDelta, appendToolOutputDelta, handleUiChunk, finaliseWithResponse, showApprovalRequest, mini]);
 
   const cancelPendingAction = useCallback((bubbleId: string) => {
     setBubbles((prev) => prev.map((b) => b.id === bubbleId ? { ...b, pendingStatus: "cancelled" } : b));
     // Send explicit cancel message so backend clears the approval proposal state.
     sendMessage("no");
   }, [sendMessage]);
+
+  const runWorkspaceAction = useCallback(async (action: WorkspaceAction) => {
+    const candidateTools = workspaceActionToolCandidates(action);
+    const matchingPendingBubble = [...bubbles].reverse().find(
+      (bubble) =>
+        bubble.kind === "pending_confirm" &&
+        (bubble.pendingStatus ?? "waiting") === "waiting" &&
+        bubble.pendingTool &&
+        candidateTools.includes(bubble.pendingTool),
+    );
+
+    if (matchingPendingBubble) {
+      if (busy) {
+        setStatusText("Current workflow is still updating the approval state.");
+        return;
+      }
+      confirmPendingAction(matchingPendingBubble.id);
+      return;
+    }
+
+    const pendingApproval = workflowState?.pendingApproval;
+    if (pendingApproval) {
+      if (workspaceActionMatchesApproval(action, pendingApproval)) {
+        setStatusText(`Waiting for approval: ${pendingApproval.action.description}`);
+      } else {
+        setStatusText(`Finish current approval first: ${pendingApproval.action.description}`);
+      }
+      return;
+    }
+
+    if (busy || workflowState?.status === "planning" || workflowState?.status === "running") {
+      setStatusText(statusText ? `Workflow already active: ${statusText}` : "Workflow already active");
+      return;
+    }
+
+    if (workflowState?.status === "blocked") {
+      setStatusText(`Workflow blocked: ${workflowState.currentStep}`);
+      return;
+    }
+
+    if (!repoPath.trim()) return;
+
+    const directWorkflow = workspaceActionToDirectWorkflow(action);
+    if (directWorkflow) {
+      setBusy(true);
+      setStatusText("Inspecting workspace");
+      try {
+        const result = await runChatWorkflowAction(directWorkflow, repoPath, activeProfileId);
+        setWorkflowState(result.workflowState ?? null);
+        setBubbles((prev) => [
+          ...prev,
+          ...result.tools.map((tool) => ({
+            id: uid(),
+            kind: "tool" as const,
+            toolName: tool.name,
+            toolArgs: { command: tool.command },
+            toolOk: tool.ok,
+            toolSummary: tool.ok ? tool.stdout.trim().split(/\r?\n/)[0] || "ok" : tool.stderr || "failed",
+            toolResult: {
+              stdout: tool.stdout,
+              stderr: tool.stderr,
+              returncode: tool.returncode,
+            },
+            toolOpen: false,
+          })),
+          {
+            id: uid(),
+            kind: result.ok ? "system" as const : "error" as const,
+            text: result.summary,
+          },
+        ]);
+      } catch (err) {
+        addBubble({ id: uid(), kind: "error", text: err instanceof Error ? err.message : String(err) });
+      } finally {
+        setBusy(false);
+        setStatusText(null);
+      }
+      return;
+    }
+
+    sendMessage(workspaceActionPrompt(action), { silent: true });
+  }, [activeProfileId, bubbles, busy, confirmPendingAction, repoPath, sendMessage, statusText, workflowState]);
 
 
   const loadSession = useCallback(async (sid: string) => {
@@ -2294,6 +2978,7 @@ export default function Chat({ mini = false }: ChatProps) {
         toolSummary?: string;
         toolResult?: unknown;
         riskLevel?: string;
+        finalizationMode?: "agent_final" | "control_marker" | "plain_json" | "none";
         actionsTaken?: string[];
         suggestions?: string[];
         }>>,
@@ -2327,8 +3012,13 @@ export default function Chat({ mini = false }: ChatProps) {
             return { ...base, kind: "error" as const, text: m.content };
           }
           // assistant — content is the clean natural-language response
-          const meta: Bubble["meta"] = (m.riskLevel || m.actionsTaken || m.suggestions)
-            ? { riskLevel: m.riskLevel, actionsTaken: m.actionsTaken, suggestions: m.suggestions }
+          const meta: Bubble["meta"] = (m.riskLevel || m.finalizationMode || m.actionsTaken || m.suggestions)
+            ? {
+                riskLevel: m.riskLevel,
+                finalizationMode: m.finalizationMode,
+                actionsTaken: m.actionsTaken,
+                suggestions: m.suggestions,
+              }
             : undefined;
           return { ...base, kind: "assistant" as const, text: m.content, meta };
         }),
@@ -2509,18 +3199,10 @@ export default function Chat({ mini = false }: ChatProps) {
                       </p>
                     </div>
                     <div className="flex flex-wrap justify-center gap-2 max-w-md">
-                      {[
-                        "Understand this project",
-                        "Review my changes",
-                        "What's on this branch?",
-                        "Refresh project index",
-                        "Stage and commit",
-                        "Push and create PR",
-                        "Run tests",
-                      ].map((suggestion) => (
+                      {welcomeSuggestions.map((suggestion) => (
                         <button
                           key={suggestion}
-                          onClick={() => { setInput(suggestion); setTimeout(() => textareaRef.current?.focus(), 0); }}
+                          onClick={() => queuePrompt(suggestion)}
                           className="rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs text-zinc-500 hover:border-zinc-700 hover:text-zinc-300 transition-colors"
                         >
                           {suggestion}
@@ -2661,32 +3343,12 @@ export default function Chat({ mini = false }: ChatProps) {
                       <span className="text-[11px] text-zinc-700">No Project Link yet — create one above</span>
                     )}
                   </div>
-                  <div className="flex min-w-[170px] items-center justify-end gap-1.5">
-                    <svg className="h-3 w-3 shrink-0 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l3-1.5L15 20l-.75-3M5 4h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1V5a1 1 0 011-1zm3 4h8M8 11h5" />
-                    </svg>
-                    {customModel.available ? (
-                      <select
-                        className="max-w-[260px] cursor-pointer bg-transparent text-right text-[11px] text-zinc-500 transition hover:text-zinc-300 focus:outline-none"
-                        value={activeModel}
-                        onChange={(e) => setActiveModel(e.target.value as ConversationModelChoice)}
-                        title="Conversation model"
-                      >
-                        <option value="built_in">Built-in model</option>
-                        <option value="custom">{customModel.label}</option>
-                      </select>
-                    ) : (
-                      <span className="text-[11px] text-zinc-700" title="Conversation uses the built-in model by default">
-                        Built-in model
-                      </span>
-                    )}
-                  </div>
                 </div>
               )}
-              <div className="flex items-end gap-2 rounded-xl border border-zinc-700/60 bg-zinc-900/80 px-3 py-2 focus-within:border-zinc-600 transition">
+              <div className="rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2 shadow-sm transition focus-within:border-zinc-500">
                 <textarea
                   ref={textareaRef}
-                  className="flex-1 resize-none bg-transparent text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none"
+                  className="w-full resize-none bg-transparent text-sm text-[rgb(var(--app-text))] placeholder:text-[rgb(var(--app-text-subtle))] focus:outline-none"
                   placeholder="Ask Dev Agent… (Shift+Enter for new line)"
                   rows={1}
                   value={input}
@@ -2703,18 +3365,74 @@ export default function Chat({ mini = false }: ChatProps) {
                     }
                   }}
                 />
-                {busy ? (
+                <div className="relative mt-2 flex items-center gap-2">
                   <button
-                    onClick={() => {
-                      cancelRef.current?.();
-                      setBusy(false);
-                      setStatusText(null);
-                    }}
-                    className="shrink-0 rounded-lg bg-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-600 transition active:scale-95"
+                    type="button"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+                    title="Attach context"
                   >
-                    Stop
+                    <span className="text-xl leading-none">+</span>
                   </button>
-                ) : (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setModelMenuOpen((value) => !value)}
+                      className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+                      title="Conversation model"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M13 3L6 13h5l-1 8 7-11h-5l1-7z" />
+                      </svg>
+                      <span className="max-w-[190px] truncate">
+                        {activeModel === "custom" && customModel.available ? customModel.label : "Built-in model"}
+                      </span>
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M6 9l6 6 6-6" />
+                      </svg>
+                    </button>
+                    {modelMenuOpen && (
+                      <div className="absolute bottom-9 left-0 z-40 w-64 rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2 shadow-2xl">
+                        <p className="px-2 pb-1.5 text-xs text-[rgb(var(--app-text-muted))]">Model</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveModel("built_in");
+                            setModelMenuOpen(false);
+                          }}
+                          className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm transition hover:bg-[rgb(var(--app-surface-raised))]"
+                        >
+                          <span>Built-in model</span>
+                          {activeModel !== "custom" && <span className="text-[rgb(var(--app-text-muted))]">✓</span>}
+                        </button>
+                        {customModel.available && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveModel("custom");
+                              setModelMenuOpen(false);
+                            }}
+                            className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm transition hover:bg-[rgb(var(--app-surface-raised))]"
+                          >
+                            <span className="min-w-0 truncate">{customModel.label}</span>
+                            {activeModel === "custom" && <span className="ml-2 text-[rgb(var(--app-text-muted))]">✓</span>}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1" />
+                  {busy ? (
+                    <button
+                      onClick={() => {
+                        cancelRef.current?.();
+                        setBusy(false);
+                        setStatusText(null);
+                      }}
+                      className="shrink-0 rounded-lg bg-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-zinc-600 active:scale-95"
+                    >
+                      Stop
+                    </button>
+                  ) : (
                   <button
                     onClick={send}
                     disabled={!input.trim()}
@@ -2722,7 +3440,8 @@ export default function Chat({ mini = false }: ChatProps) {
                   >
                     Send
                   </button>
-                )}
+                  )}
+                </div>
               </div>
             </div>{/* end input-panel */}
 
@@ -2754,11 +3473,15 @@ export default function Chat({ mini = false }: ChatProps) {
                 setRepoPath={setRepoPath}
                 currentBranch={currentBranch}
                 branchList={branchList}
+                gitStatus={gitStatus}
+                diffStats={diffStats}
                 taskState={taskState}
                 busy={busy}
                 profiles={availableProfiles}
                 activeProfileId={activeProfileId}
                 setActiveProfileId={setActiveProfileId}
+                statusText={statusText}
+                onAction={runWorkspaceAction}
               />
             </aside>
           </>

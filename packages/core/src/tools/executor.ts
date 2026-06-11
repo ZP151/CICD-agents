@@ -52,12 +52,20 @@ export interface CommandResult {
   durationMs: number;
 }
 
+export type CommandOutputStream = "stdout" | "stderr";
+
+export interface CommandOutputChunk {
+  stream: CommandOutputStream;
+  text: string;
+}
+
 export interface RunOptions {
   cwd: string;
   timeoutSec?: number;
   env?: Record<string, string>;
   allowed?: readonly string[];
   inputText?: string;
+  onOutput?: (chunk: CommandOutputChunk) => void;
 }
 
 export function runCommand(cmd: string[], options: RunOptions): Promise<CommandResult> {
@@ -93,8 +101,14 @@ export function runCommand(cmd: string[], options: RunOptions): Promise<CommandR
     }, timeoutMs);
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
-    child.stdout.on("data", (b: Buffer) => stdoutChunks.push(b));
-    child.stderr.on("data", (b: Buffer) => stderrChunks.push(b));
+    child.stdout.on("data", (b: Buffer) => {
+      stdoutChunks.push(b);
+      options.onOutput?.({ stream: "stdout", text: redact(b.toString("utf8")) });
+    });
+    child.stderr.on("data", (b: Buffer) => {
+      stderrChunks.push(b);
+      options.onOutput?.({ stream: "stderr", text: redact(b.toString("utf8")) });
+    });
     if (options.inputText !== undefined) {
       child.stdin.write(options.inputText);
       child.stdin.end();
@@ -125,9 +139,17 @@ export interface ToolContext {
   env: Record<string, string>;
   timeoutSec: number;
   extra: Record<string, unknown>;
+  emitToolEvent?: (event: ToolRuntimeEvent) => void;
 }
 
 export type ToolHandler = (ctx: ToolContext, payload: Record<string, unknown>) => Promise<Record<string, unknown>>;
+
+export type ToolRuntimeEvent =
+  | { type: "output"; stream: CommandOutputStream; text: string };
+
+export type ToolCallStreamEvent =
+  | ToolRuntimeEvent
+  | { type: "result"; result: Record<string, unknown> };
 
 export interface Tool {
   name: string;
@@ -177,6 +199,51 @@ export class ToolExecutor {
   }
 
   async call(name: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.execute(name, payload);
+  }
+
+  async *callStream(name: string, payload: Record<string, unknown>): AsyncGenerator<ToolCallStreamEvent> {
+    const queue: ToolCallStreamEvent[] = [];
+    let done = false;
+    let failure: unknown;
+    let wake: (() => void) | null = null;
+    const notify = () => {
+      wake?.();
+      wake = null;
+    };
+    const wait = () => new Promise<void>((resolve) => {
+      wake = resolve;
+    });
+    const push = (event: ToolCallStreamEvent) => {
+      queue.push(event);
+      notify();
+    };
+
+    void this.execute(name, payload, (event) => push(event))
+      .then((result) => push({ type: "result", result }))
+      .catch((err: unknown) => {
+        failure = err;
+      })
+      .finally(() => {
+        done = true;
+        notify();
+      });
+
+    while (!done || queue.length > 0) {
+      while (queue.length > 0) {
+        yield queue.shift()!;
+      }
+      if (!done) await wait();
+    }
+
+    if (failure) throw failure;
+  }
+
+  private async execute(
+    name: string,
+    payload: Record<string, unknown>,
+    emitToolEvent?: (event: ToolRuntimeEvent) => void,
+  ): Promise<Record<string, unknown>> {
     const tool = this.tools.get(name);
     if (!tool) throw new ToolError(`unknown tool: ${name}`);
     if (this.approve) {
@@ -186,7 +253,8 @@ export class ToolExecutor {
     const beforeExecuteMetadata = this.beforeExecute
       ? await this.beforeExecute({ toolName: name, payload, tool })
       : undefined;
-    const result = await tool.handler(this.context, payload);
+    const context = emitToolEvent ? { ...this.context, emitToolEvent } : this.context;
+    const result = await tool.handler(context, payload);
     if (result === null || typeof result !== "object" || Array.isArray(result)) {
       throw new ToolError(`tool '${name}' did not return an object`);
     }

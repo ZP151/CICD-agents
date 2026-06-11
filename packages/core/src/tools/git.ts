@@ -16,6 +16,9 @@ async function git(
     timeoutSec: timeoutSec ?? ctx.timeoutSec,
     allowed: ALLOWED,
     inputText,
+    onOutput: ctx.emitToolEvent
+      ? (chunk) => ctx.emitToolEvent?.({ type: "output", ...chunk })
+      : undefined,
   });
   return {
     returncode: res.returncode,
@@ -359,27 +362,57 @@ export function gitTools(): Tool[] {
     },
     {
       name: "git_status",
-      description: "Show working-tree status (porcelain v1 including branch info).",
-      parameters: { type: "object", properties: {} },
+      description: "Show working-tree status. Supports common flags such as --short, --branch, --ignored, and --untracked-files.",
+      parameters: {
+        type: "object",
+        properties: {
+          short: { type: "boolean", description: "Use git status --short instead of porcelain v1." },
+          branch: { type: "boolean", description: "Include branch tracking information. Defaults to true." },
+          ignored: { type: "boolean", description: "Include ignored files." },
+          untracked: { type: "string", enum: ["no", "normal", "all"], description: "Control untracked file display." },
+        },
+      },
       allowedCommands: ALLOWED,
-      handler: (ctx) => git(ctx, ["status", "--porcelain=v1", "-b"]),
+      handler: (ctx, payload) => {
+        const args = ["status"];
+        args.push(payload["short"] ? "--short" : "--porcelain=v1");
+        if (payload["branch"] !== false) args.push("-b");
+        const untracked = String(payload["untracked"] ?? "").trim();
+        if (["no", "normal", "all"].includes(untracked)) args.push(`--untracked-files=${untracked}`);
+        if (payload["ignored"]) args.push("--ignored");
+        return git(ctx, args);
+      },
     },
     {
       name: "git_diff",
-      description: "Show diff against an optional target branch (e.g. 'main').",
+      description: "Show diff against an optional target branch or the index. Supports --staged/--cached, --name-only, --stat, context, and path filters.",
       parameters: {
         type: "object",
         properties: {
           target_branch: { type: "string" },
+          staged: { type: "boolean", description: "Show staged changes (git diff --staged)." },
+          cached: { type: "boolean", description: "Alias for staged." },
           name_only: { type: "boolean" },
+          stat: { type: "boolean", description: "Show diffstat instead of full patch." },
+          context: { type: "integer", minimum: 0, maximum: 100, description: "Unified diff context lines." },
+          paths: {
+            type: "array",
+            items: { type: "string" },
+            description: "Optional pathspec filters.",
+          },
         },
       },
       allowedCommands: ALLOWED,
       handler: async (ctx, payload) => {
         const args: string[] = ["diff"];
+        if (payload["staged"] || payload["cached"]) args.push("--staged");
+        if (payload["name_only"]) args.push("--name-only");
+        if (payload["stat"]) args.push("--stat");
+        if (typeof payload["context"] === "number") args.push(`--unified=${Math.max(0, Math.min(100, Math.trunc(payload["context"])))}`);
         const target = String(payload["target_branch"] ?? "");
         if (target) args.push(`${target}...HEAD`);
-        if (payload["name_only"]) args.push("--name-only");
+        const paths = Array.isArray(payload["paths"]) ? payload["paths"].map(String).filter(Boolean) : [];
+        if (paths.length > 0) args.push("--", ...paths);
         return git(ctx, args);
       },
     },
@@ -466,13 +499,17 @@ export function gitTools(): Tool[] {
     },
     {
       name: "git_push",
-      description: "Push a branch to a remote (defaults to origin).",
+      description: "Push a branch to a remote (defaults to origin). Supports --set-upstream, --force-with-lease, --tags, and --dry-run.",
       parameters: {
         type: "object",
         required: ["branch"],
         properties: {
           branch: { type: "string" },
           remote: { type: "string", default: "origin" },
+          setUpstream: { type: "boolean", default: true },
+          forceWithLease: { type: "boolean", default: false },
+          tags: { type: "boolean", default: false },
+          dryRun: { type: "boolean", default: false },
         },
       },
       allowedCommands: ALLOWED,
@@ -480,7 +517,13 @@ export function gitTools(): Tool[] {
         const branch = String(payload["branch"] ?? "");
         if (!branch) throw new ToolError("git_push requires 'branch'");
         const remote = String(payload["remote"] ?? "origin");
-        return git(ctx, ["push", "-u", remote, branch]);
+        const args = ["push"];
+        if (payload["setUpstream"] !== false) args.push("-u");
+        if (payload["forceWithLease"]) args.push("--force-with-lease");
+        if (payload["tags"]) args.push("--tags");
+        if (payload["dryRun"]) args.push("--dry-run");
+        args.push(remote, branch);
+        return git(ctx, args);
       },
     },
     {
@@ -496,6 +539,34 @@ export function gitTools(): Tool[] {
         const name = String(payload["name"] ?? "");
         if (!name) throw new ToolError("git_create_branch requires 'name'");
         return git(ctx, ["checkout", "-b", name]);
+      },
+    },
+    {
+      name: "git_switch",
+      description: "Switch branches using git switch. Can create a branch with create=true.",
+      parameters: {
+        type: "object",
+        required: ["branch"],
+        properties: {
+          branch: { type: "string", description: "Branch name to switch to or create." },
+          create: { type: "boolean", default: false, description: "Create the branch before switching." },
+          startPoint: { type: "string", description: "Optional start point when creating a branch." },
+          detach: { type: "boolean", default: false, description: "Detach HEAD at the target." },
+          track: { type: "boolean", default: false, description: "Set upstream tracking when creating from a remote branch." },
+        },
+      },
+      allowedCommands: ALLOWED,
+      handler: (ctx, payload) => {
+        const branch = String(payload["branch"] ?? "").trim();
+        if (!branch) throw new ToolError("git_switch requires 'branch'");
+        const args = ["switch"];
+        if (payload["create"]) args.push("-c");
+        if (payload["detach"]) args.push("--detach");
+        if (payload["track"]) args.push("--track");
+        args.push(branch);
+        const startPoint = String(payload["startPoint"] ?? "").trim();
+        if (startPoint) args.push(startPoint);
+        return git(ctx, args);
       },
     },
     {
@@ -585,7 +656,7 @@ export function gitTools(): Tool[] {
     },
     {
       name: "git_add",
-      description: "Stage files for commit. Pass paths as an array, or leave empty to stage all changes (git add .).",
+      description: "Stage files for commit. Supports path filters plus common flags such as --all, --update, --intent-to-add, and --dry-run.",
       parameters: {
         type: "object",
         properties: {
@@ -594,12 +665,21 @@ export function gitTools(): Tool[] {
             items: { type: "string" },
             description: "Specific files/dirs to stage. Omit to stage everything.",
           },
+          all: { type: "boolean", description: "Stage all changes including deletions. Defaults to true when paths are omitted." },
+          update: { type: "boolean", description: "Stage modified/deleted tracked files only (git add --update)." },
+          intentToAdd: { type: "boolean", description: "Record only intent to add (git add --intent-to-add)." },
+          dryRun: { type: "boolean", description: "Show what would be staged without staging it." },
         },
       },
       allowedCommands: ALLOWED,
       handler: (ctx, payload) => {
         const paths = payload["paths"] as string[] | undefined;
-        const args = paths && paths.length > 0 ? ["add", "--", ...paths] : ["add", "."];
+        const args = ["add"];
+        if (payload["dryRun"]) args.push("--dry-run");
+        if (payload["intentToAdd"]) args.push("--intent-to-add");
+        if (payload["update"]) args.push("--update");
+        else if (!paths || paths.length === 0 || payload["all"]) args.push("--all");
+        if (paths && paths.length > 0) args.push("--", ...paths);
         return git(ctx, args);
       },
     },
@@ -633,19 +713,29 @@ export function gitTools(): Tool[] {
     },
     {
       name: "git_commit",
-      description: "Commit staged changes with the given message.",
+      description: "Commit staged changes with the given message. Supports --amend, --no-verify, --allow-empty, and --all.",
       parameters: {
         type: "object",
         required: ["message"],
         properties: {
           message: { type: "string", description: "The commit message." },
+          amend: { type: "boolean", default: false },
+          noVerify: { type: "boolean", default: false },
+          allowEmpty: { type: "boolean", default: false },
+          all: { type: "boolean", default: false, description: "Stage tracked modifications before committing (git commit --all)." },
         },
       },
       allowedCommands: ALLOWED,
       handler: (ctx, payload) => {
         const message = String(payload["message"] ?? "").trim();
         if (!message) throw new ToolError("git_commit requires 'message'");
-        return git(ctx, ["commit", "-m", message]);
+        const args = ["commit"];
+        if (payload["all"]) args.push("--all");
+        if (payload["amend"]) args.push("--amend");
+        if (payload["noVerify"]) args.push("--no-verify");
+        if (payload["allowEmpty"]) args.push("--allow-empty");
+        args.push("-m", message);
+        return git(ctx, args);
       },
     },
     {
