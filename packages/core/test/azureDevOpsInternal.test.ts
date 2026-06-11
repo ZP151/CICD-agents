@@ -6,7 +6,9 @@ import {
   listAzurePullRequestChanges,
   listAzureBuildDefinitions,
   listAzureBuilds,
+  listAzurePullRequestPolicyEvaluations,
   listAzurePullRequestThreads,
+  listAzurePullRequestWorkItems,
 } from "../src/tools/azureDevOps.js";
 
 afterEach(() => {
@@ -185,6 +187,30 @@ describe("internal Azure DevOps MCP-style ports", () => {
     }]);
   });
 
+  it("sends repository type when build definition discovery is filtered by repository", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        value: [{ id: "repo-1", name: "web-app", defaultBranch: "refs/heads/main" }],
+      }), { status: 200, headers: { "content-type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        value: [{
+          id: 12,
+          name: "web-app CI",
+          repository: { name: "web-app", type: "TfsGit" },
+        }],
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+
+    await listAzureBuildDefinitions({
+      organization: "demo-org",
+      project: "Agents",
+      repositoryId: "web-app",
+      pat: "pat",
+    });
+
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("repositoryId=repo-1");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("repositoryType=TfsGit");
+  });
+
   it("gets a pipeline run by ID", async () => {
     mockJson({
       id: 88,
@@ -316,5 +342,103 @@ describe("internal Azure DevOps MCP-style ports", () => {
       nextSkip: 1,
       nextTop: undefined,
     });
+  });
+
+  it("lists pull request work item details", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        value: [{ id: "123", url: "https://dev.azure.com/demo-org/_apis/wit/workItems/123" }],
+      }), { status: 200, headers: { "content-type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        value: [{
+          id: 123,
+          url: "https://dev.azure.com/demo-org/_apis/wit/workItems/123",
+          fields: {
+            "System.WorkItemType": "User Story",
+            "System.Title": "Harden token validation",
+            "System.State": "Active",
+            "System.AssignedTo": { displayName: "Ada Lovelace" },
+            "System.Tags": "security; auth",
+          },
+        }],
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+
+    const workItems = await listAzurePullRequestWorkItems({
+      organization: "demo-org",
+      project: "Agents",
+      repository: "cicd-agent",
+      pullRequestId: 42,
+      pat: "pat",
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://dev.azure.com/demo-org/Agents/_apis/git/repositories/cicd-agent/pullrequests/42/workitems?api-version=7.1-preview.1",
+      expect.objectContaining({ redirect: "manual" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://dev.azure.com/demo-org/Agents/_apis/wit/workitems?ids=123&$expand=Relations&api-version=7.1-preview.3",
+      expect.objectContaining({ redirect: "manual" }),
+    );
+    expect(workItems).toEqual([{
+      id: 123,
+      url: "https://dev.azure.com/demo-org/_apis/wit/workItems/123",
+      type: "User Story",
+      title: "Harden token validation",
+      state: "Active",
+      assignedTo: "Ada Lovelace",
+      tags: ["security", "auth"],
+    }]);
+  });
+
+  it("lists pull request policy evaluations", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        pullRequestId: 42,
+        codeReviewId: 420,
+        title: "Improve agent",
+        sourceRefName: "refs/heads/feature/agent",
+        targetRefName: "refs/heads/main",
+        repository: { name: "cicd-agent", project: { id: "project-guid", name: "Agents" } },
+      }), { status: 200, headers: { "content-type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        value: [{
+          evaluationId: "eval-1",
+          status: "approved",
+          startedDate: "2026-06-11T00:00:00Z",
+          completedDate: "2026-06-11T00:01:00Z",
+          configuration: {
+            id: 7,
+            isBlocking: true,
+            settings: { displayName: "Minimum reviewers" },
+            type: { displayName: "Reviewer count" },
+          },
+        }],
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+
+    const policies = await listAzurePullRequestPolicyEvaluations({
+      organization: "demo-org",
+      project: "Agents",
+      repository: "cicd-agent",
+      pullRequestId: 42,
+      pat: "pat",
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://dev.azure.com/demo-org/Agents/_apis/policy/evaluations?artifactId=vstfs%3A%2F%2F%2FCodeReview%2FCodeReviewId%2Fproject-guid%2F420&api-version=7.1-preview.1",
+      expect.objectContaining({ redirect: "manual" }),
+    );
+    expect(policies).toEqual([{
+      id: "eval-1",
+      status: "approved",
+      startedDate: "2026-06-11T00:00:00Z",
+      completedDate: "2026-06-11T00:01:00Z",
+      displayName: "Minimum reviewers",
+      typeName: "Reviewer count",
+      configurationId: 7,
+      isBlocking: true,
+    }]);
   });
 });

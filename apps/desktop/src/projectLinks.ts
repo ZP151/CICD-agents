@@ -9,6 +9,51 @@ import {
 
 export type PatStatus = "none" | "pending" | "verified" | "invalid";
 
+export const DEFAULT_ADO_ORG_URL = "https://tebssg.visualstudio.com/";
+export const ACTIVE_PROJECT_LINK_LS_KEY = "cicd_agent_active_project_link_id";
+const LEGACY_CHAT_PROFILE_LS_KEY = "chat_profile_id";
+
+function browserStorage(): Storage | null {
+  return typeof localStorage === "undefined" ? null : localStorage;
+}
+
+export function loadStoredActiveProjectLinkId(): string {
+  const storage = browserStorage();
+  if (!storage) return "";
+  try {
+    return storage.getItem(ACTIVE_PROJECT_LINK_LS_KEY) || storage.getItem(LEGACY_CHAT_PROFILE_LS_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+export function saveStoredActiveProjectLinkId(profileId: string | null | undefined): void {
+  const storage = browserStorage();
+  if (!storage) return;
+  try {
+    const normalized = profileId?.trim() ?? "";
+    if (normalized) {
+      storage.setItem(ACTIVE_PROJECT_LINK_LS_KEY, normalized);
+      storage.setItem(LEGACY_CHAT_PROFILE_LS_KEY, normalized);
+      return;
+    }
+    storage.removeItem(ACTIVE_PROJECT_LINK_LS_KEY);
+    storage.removeItem(LEGACY_CHAT_PROFILE_LS_KEY);
+  } catch {
+    /* localStorage can be unavailable in restricted browser contexts */
+  }
+}
+
+export function resolveActiveProjectLinkId(profiles: WorkspaceProfile[], currentId?: string | null): string {
+  const current = currentId?.trim() ?? "";
+  if (current && profiles.some((profile) => profile.id === current)) return current;
+
+  const stored = loadStoredActiveProjectLinkId();
+  if (stored && profiles.some((profile) => profile.id === stored)) return stored;
+
+  return profiles[0]?.id ?? "";
+}
+
 // In a Tauri context we invoke the native Rust command first (it uses cmd /c on
 // Windows so it sees the user's full PATH). We fall back to the daemon HTTP API
 // for browser-based dev mode or if the Tauri command returns nothing.
@@ -90,7 +135,7 @@ export function withProjectLinkInputDefaults<T extends Partial<WorkspaceProfileI
     repoPath: "",
     defaultBranch: "main",
     targetBranch: "main",
-    adoOrgUrl: "",
+    adoOrgUrl: DEFAULT_ADO_ORG_URL,
     adoProject: "",
     adoRepoName: "",
     adoPat: "",

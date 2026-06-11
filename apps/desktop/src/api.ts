@@ -21,16 +21,36 @@ const RUNTIME_URL = import.meta.env.VITE_RUNTIME_URL ?? "http://127.0.0.1:8787";
 function messageFromErrorBody(fallback: string, body: string): string {
   try {
     const json = JSON.parse(body) as { authMessage?: string; message?: string; error?: string };
-    return json.authMessage ?? json.message ?? json.error ?? fallback;
+    return explainRuntimeError(json.authMessage ?? json.message ?? json.error ?? fallback);
   } catch {
-    return body || fallback;
+    return explainRuntimeError(body || fallback);
   }
+}
+
+function explainRuntimeError(message: string): string {
+  if (/deployment.*does not exist/i.test(message)) {
+    const envSource = message.match(/Daemon env source:\s*([^.]*)\./i)?.[1]?.trim();
+    const deployment = message.match(/Deployment:\s*([^.]*)\./i)?.[1]?.trim();
+    const details = [
+      envSource ? `Daemon env source: ${envSource}.` : "",
+      deployment ? `Deployment: ${deployment}.` : "",
+    ].filter(Boolean).join(" ");
+    return `Azure OpenAI deployment not found. ${details} Check Settings -> Additional Models deployment name, endpoint, and API version, or restart the daemon after fixing the .env file.`.trim();
+  }
+  return message;
 }
 
 export interface HealthStatus {
   ok: boolean;
   uptimeSec?: number;
   llmConfigured?: boolean;
+  llmProvider?: "azure" | "openai";
+  envSource?: string;
+  azureDeployment?: string;
+  azureApiVersion?: string;
+  azureEndpoint?: string;
+  azureDeploymentAvailable?: boolean;
+  azureDeploymentError?: string;
   cloudProfileStore?: boolean;
   cloudSecrets?: boolean;
   cloudSessions?: boolean;
@@ -426,7 +446,8 @@ export function chatStream(
   })
     .then(async (r) => {
       if (!r.ok || !r.body) {
-        onEvent({ type: "error", message: `HTTP ${r.status}` });
+        const bodyText = await r.text().catch(() => "");
+        onEvent({ type: "error", message: messageFromErrorBody(`HTTP ${r.status}`, bodyText) });
         return;
       }
       const reader = r.body.getReader();
@@ -453,12 +474,16 @@ export function chatStream(
               const doneResult = currentEventType === "done"
                 ? (parsed.result as ChatEventPayload["result"])
                 : undefined;
+              const message = currentEventType === "error" && parsed.message
+                ? explainRuntimeError(parsed.message)
+                : parsed.message;
               onEvent({
                 ...parsed,
                 type: (currentEventType as ChatEventType) || parsed.type,
                 uiChunk: currentEventType === "ui.chunk" ? parsed.chunk : undefined,
                 toolResult,
                 result: doneResult,
+                message,
               });
             } catch {
               /* ignore malformed lines */
@@ -470,7 +495,7 @@ export function chatStream(
     })
     .catch((err: unknown) => {
       if ((err as { name?: string }).name !== "AbortError") {
-        onEvent({ type: "error", message: err instanceof Error ? err.message : String(err) });
+        onEvent({ type: "error", message: explainRuntimeError(err instanceof Error ? err.message : String(err)) });
       }
     });
 
@@ -495,7 +520,8 @@ export function confirmAction(
   })
     .then(async (r) => {
       if (!r.ok || !r.body) {
-        onEvent({ type: "error", message: `HTTP ${r.status}` });
+        const bodyText = await r.text().catch(() => "");
+        onEvent({ type: "error", message: messageFromErrorBody(`HTTP ${r.status}`, bodyText) });
         return;
       }
       const reader = r.body.getReader();
@@ -520,12 +546,16 @@ export function confirmAction(
               const doneResult = currentEventType === "done"
                 ? (parsed.result as ChatEventPayload["result"])
                 : undefined;
+              const message = currentEventType === "error" && parsed.message
+                ? explainRuntimeError(parsed.message)
+                : parsed.message;
               onEvent({
                 ...parsed,
                 type: (currentEventType as ChatEventType) || parsed.type,
                 uiChunk: currentEventType === "ui.chunk" ? parsed.chunk : undefined,
                 toolResult,
                 result: doneResult,
+                message,
               });
             } catch {
               /* ignore malformed lines */
@@ -537,7 +567,7 @@ export function confirmAction(
     })
     .catch((err: unknown) => {
       if ((err as { name?: string }).name !== "AbortError") {
-        onEvent({ type: "error", message: err instanceof Error ? err.message : String(err) });
+        onEvent({ type: "error", message: explainRuntimeError(err instanceof Error ? err.message : String(err)) });
       }
     });
 
@@ -960,7 +990,14 @@ export async function fetchProfilePullRequests(
   profileId: string,
   status = "active",
 ): Promise<PullRequestSummary[]> {
-  const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/pull-requests?status=${encodeURIComponent(status)}`);
+  const profile = readProfileData(profileId);
+  const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/pull-requests?status=${encodeURIComponent(status)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      ...(profile ? { profile } : {}),
+    }),
+  });
   if (!r.ok) throw new Error(`/profiles/${profileId}/pull-requests HTTP ${r.status}: ${await r.text()}`);
   const body = (await r.json()) as { pullRequests: PullRequestSummary[] };
   return body.pullRequests;
@@ -970,7 +1007,14 @@ export async function fetchProfilePullRequestContext(
   profileId: string,
   pullRequestId: number,
 ): Promise<PullRequestContext> {
-  const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/pull-requests/${pullRequestId}/context`);
+  const profile = readProfileData(profileId);
+  const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/pull-requests/${pullRequestId}/context`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      ...(profile ? { profile } : {}),
+    }),
+  });
   if (!r.ok) {
     const fallback = `/profiles/${profileId}/pull-requests/${pullRequestId}/context HTTP ${r.status}`;
     throw new Error(messageFromErrorBody(fallback, await r.text()));

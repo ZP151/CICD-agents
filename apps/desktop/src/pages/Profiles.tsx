@@ -8,7 +8,14 @@ import {
   type WorkspaceProfileInput,
 } from "../api";
 import { useAppData } from "../App";
-import { fetchAzureDevOpsRemoteSuggestion, fetchGitBranches, pickRecommendedPipeline, type PatStatus, verifyPat } from "../projectLinks";
+import {
+  DEFAULT_ADO_ORG_URL,
+  fetchAzureDevOpsRemoteSuggestion,
+  fetchGitBranches,
+  pickRecommendedPipeline,
+  type PatStatus,
+  verifyPat,
+} from "../projectLinks";
 
 // ─── Local-storage fallback ───────────────────────────────────────────────────
 // Used only when the daemon is unreachable.
@@ -107,7 +114,7 @@ const BLANK: WorkspaceProfileInput = {
   repoPath: "",
   defaultBranch: "main",
   targetBranch: "main",
-  adoOrgUrl: "",
+  adoOrgUrl: DEFAULT_ADO_ORG_URL,
   adoProject: "",
   adoRepoName: "",
   adoPat: "",
@@ -141,11 +148,10 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
   const [branches, setBranches] = useState<string[]>([]);
   const [branchLoading, setBranchLoading] = useState(false);
   const [branchError, setBranchError] = useState(false);
-  const [remoteHint, setRemoteHint] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadBranches = useCallback(async (repoPath: string) => {
-    if (!repoPath.trim()) { setBranches([]); setBranchLoading(false); setBranchError(false); setRemoteHint(null); return; }
+    if (!repoPath.trim()) { setBranches([]); setBranchLoading(false); setBranchError(false); return; }
     setBranchLoading(true);
     setBranchError(false);
     const trimmedPath = repoPath.trim();
@@ -157,15 +163,12 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
     setBranchLoading(false);
     setBranchError(b.length === 0);
     if (remote) {
-      setRemoteHint(`${remote.adoProject} / ${remote.adoRepoName} from ${remote.remoteName}`);
       setForm((current) => ({
         ...current,
         adoOrgUrl: current.adoOrgUrl || remote.adoOrgUrl,
         adoProject: current.adoProject || remote.adoProject,
         adoRepoName: current.adoRepoName || remote.adoRepoName,
       }));
-    } else {
-      setRemoteHint(null);
     }
   }, []);
 
@@ -189,6 +192,7 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
     repositories: [],
     pipelines: [],
   });
+  const discoveryAutoRef = useRef<Partial<Record<AdoDiscoveryKind, string>>>({});
   const [mcpChecking, setMcpChecking] = useState(false);
   const [mcpStatus, setMcpStatus] = useState<string | null>(null);
 
@@ -209,7 +213,42 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
     if (patStatus === "none") setPatStatus("pending");
   };
 
-  const handleDiscover = async (kind: AdoDiscoveryKind) => {
+  const applyDiscovery = (kind: AdoDiscoveryKind, option: AdoDiscoveryOption) => {
+    setDiscoveryError(null);
+    if (kind === "projects") {
+      setDiscovered((current) => ({ ...current, repositories: [], pipelines: [] }));
+      setPipelineHint(null);
+      setForm((current) => ({
+        ...current,
+        adoProject: option.name,
+        adoRepoName: current.adoProject === option.name ? current.adoRepoName : "",
+        adoPipelineId: current.adoProject === option.name ? current.adoPipelineId : "",
+        adoPipelineName: current.adoProject === option.name ? current.adoPipelineName : "",
+      }));
+    } else if (kind === "repositories") {
+      setDiscovered((current) => ({ ...current, pipelines: [] }));
+      setPipelineHint(null);
+      setForm((current) => ({
+        ...current,
+        adoRepoName: option.name,
+        adoPipelineId: current.adoRepoName === option.name ? current.adoPipelineId : "",
+        adoPipelineName: current.adoRepoName === option.name ? current.adoPipelineName : "",
+      }));
+    } else {
+      setForm((current) => ({ ...current, adoPipelineId: option.id, adoPipelineName: option.name }));
+    }
+  };
+
+  const runDiscovery = async (kind: AdoDiscoveryKind, mode: "manual" | "auto" = "manual") => {
+    const signature = JSON.stringify({
+      kind,
+      org: form.adoOrgUrl.trim(),
+      project: form.adoProject.trim(),
+      repo: form.adoRepoName.trim(),
+      pat: form.adoPat ? "pat" : "",
+    });
+    if (mode === "auto" && discoveryAutoRef.current[kind] === signature) return;
+    if (mode === "auto") discoveryAutoRef.current[kind] = signature;
     setDiscovering(kind);
     setDiscoveryError(null);
     try {
@@ -232,15 +271,27 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
     }
   };
 
-  const applyDiscovery = (kind: AdoDiscoveryKind, option: AdoDiscoveryOption) => {
-    if (kind === "projects") {
-      setForm((current) => ({ ...current, adoProject: option.name }));
-    } else if (kind === "repositories") {
-      setForm((current) => ({ ...current, adoRepoName: option.name }));
-    } else {
-      setForm((current) => ({ ...current, adoPipelineId: option.id, adoPipelineName: option.name }));
-    }
+  const handleDiscover = async (kind: AdoDiscoveryKind) => {
+    await runDiscovery(kind, "manual");
   };
+
+  useEffect(() => {
+    if (!form.adoOrgUrl.trim()) return;
+    const timer = setTimeout(() => {
+      void runDiscovery("projects", "auto");
+    }, 650);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.adoOrgUrl, form.adoPat]);
+
+  useEffect(() => {
+    if (!form.adoOrgUrl.trim() || !form.adoProject.trim()) return;
+    const timer = setTimeout(() => {
+      void runDiscovery("repositories", "auto");
+    }, 650);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.adoOrgUrl, form.adoProject, form.adoPat]);
 
   const handleCheckMcp = async () => {
     setMcpChecking(true);
@@ -264,7 +315,7 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
   function BranchSelect({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
     if (branchLoading) {
       return (
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <span className="text-xs font-medium text-zinc-400">{label}</span>
           <div className="flex items-center gap-2 rounded-lg border border-zinc-700/60 bg-zinc-900 px-3 py-2 text-sm text-zinc-500">
             <svg className="animate-spin w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none">
@@ -277,12 +328,12 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
     }
     if (branches.length > 0) {
       return (
-        <label className="flex flex-col gap-1">
+        <label className="flex min-w-0 flex-col gap-1">
           <span className="text-xs font-medium text-zinc-400">{label}</span>
           <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="w-full rounded-lg border border-emerald-700/60 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-emerald-500 transition"
+            className="w-full min-w-0 rounded-lg border border-emerald-700/60 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-emerald-500 transition"
           >
             {branches.map((b) => <option key={b} value={b}>{b}</option>)}
             {!branches.includes(value) && value && <option value={value}>{value} (saved)</option>}
@@ -322,7 +373,6 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
           <div>
             <h3 className="text-sm font-semibold text-zinc-200">Workspace</h3>
-            <p className="mt-0.5 text-xs text-zinc-500">Name this project-to-DevOps mapping and point it to a local repo.</p>
           </div>
           <Field label="Project Link name *" value={form.name} onChange={set("name")} placeholder="my-project" />
           <div className="flex flex-col gap-1">
@@ -355,11 +405,6 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
                 Could not read branches. Check the path is a valid git repository.
               </p>
             )}
-            {remoteHint && (
-              <p className="text-[10px] text-emerald-500/80">
-                Azure DevOps fields inferred from git remote: {remoteHint}
-              </p>
-            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <BranchSelect label="Default branch" value={form.defaultBranch} onChange={set("defaultBranch")} />
@@ -371,163 +416,214 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
           <div>
             <h3 className="text-sm font-semibold text-zinc-200">Azure DevOps</h3>
-            <p className="mt-0.5 text-xs text-zinc-500">Connection used by ADO tools when this Project Link is active.</p>
           </div>
           <Field label="Organisation URL" value={form.adoOrgUrl} onChange={set("adoOrgUrl")} placeholder="https://dev.azure.com/myorg" />
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Project" value={form.adoProject} onChange={set("adoProject")} placeholder="MyProject" />
-            <Field label="Repository name" value={form.adoRepoName} onChange={set("adoRepoName")} placeholder="my-repo" />
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Project">
+              {discovered.projects.length > 0 ? (
+                <select
+                  value={discovered.projects.some((option) => option.name === form.adoProject) ? form.adoProject : ""}
+                  onChange={(event) => {
+                    const selected = discovered.projects.find((option) => option.name === event.target.value);
+                    if (selected) applyDiscovery("projects", selected);
+                  }}
+                  className="w-full min-w-0 rounded-lg border border-zinc-700/60 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 outline-none transition focus:border-zinc-600"
+                >
+                  <option value="">{discovering === "projects" ? "Discovering projects..." : "Select project"}</option>
+                  {discovered.projects.map((option) => (
+                    <option key={option.id} value={option.name}>{option.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={form.adoProject}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setDiscoveryError(null);
+                    setDiscovered((current) => ({ ...current, repositories: [], pipelines: [] }));
+                    setPipelineHint(null);
+                    setForm((current) => ({
+                      ...current,
+                      adoProject: value,
+                      adoRepoName: current.adoProject === value ? current.adoRepoName : "",
+                      adoPipelineId: current.adoProject === value ? current.adoPipelineId : "",
+                      adoPipelineName: current.adoProject === value ? current.adoPipelineName : "",
+                    }));
+                  }}
+                  placeholder={discovering === "projects" ? "Discovering projects..." : "MyProject"}
+                  className="w-full min-w-0 rounded-lg border border-zinc-700/60 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 outline-none transition focus:border-zinc-600"
+                />
+              )}
+            </Field>
+            <Field label="Repository name">
+              {discovered.repositories.length > 0 ? (
+                <select
+                  value={discovered.repositories.some((option) => option.name === form.adoRepoName) ? form.adoRepoName : ""}
+                  onChange={(event) => {
+                    const selected = discovered.repositories.find((option) => option.name === event.target.value);
+                    if (selected) applyDiscovery("repositories", selected);
+                  }}
+                  className="w-full min-w-0 rounded-lg border border-zinc-700/60 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 outline-none transition focus:border-zinc-600"
+                >
+                  <option value="">{discovering === "repositories" ? "Discovering repositories..." : "Select repository"}</option>
+                  {discovered.repositories.map((option) => (
+                    <option key={option.id} value={option.name}>{option.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={form.adoRepoName}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setDiscoveryError(null);
+                    setDiscovered((current) => ({ ...current, pipelines: [] }));
+                    setPipelineHint(null);
+                    setForm((current) => ({
+                      ...current,
+                      adoRepoName: value,
+                      adoPipelineId: current.adoRepoName === value ? current.adoPipelineId : "",
+                      adoPipelineName: current.adoRepoName === value ? current.adoPipelineName : "",
+                    }));
+                  }}
+                  placeholder={discovering === "repositories" ? "Discovering repositories..." : "my-repo"}
+                  className="w-full min-w-0 rounded-lg border border-zinc-700/60 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 outline-none transition focus:border-zinc-600"
+                />
+              )}
+            </Field>
           </div>
-          <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => void handleDiscover("projects")}
-                disabled={!form.adoOrgUrl || discovering !== null}
-                className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-200 disabled:opacity-40"
-              >
-                {discovering === "projects" ? "Discovering..." : "Discover projects"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleDiscover("repositories")}
-                disabled={!form.adoOrgUrl || !form.adoProject || discovering !== null}
-                className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-200 disabled:opacity-40"
-              >
-                {discovering === "repositories" ? "Discovering..." : "Discover repositories"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleDiscover("pipelines")}
-                disabled={!form.adoOrgUrl || !form.adoProject || discovering !== null}
-                className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-200 disabled:opacity-40"
-              >
-                {discovering === "pipelines" ? "Discovering..." : "Discover pipelines"}
-              </button>
-            </div>
-            {(["projects", "repositories", "pipelines"] as AdoDiscoveryKind[]).map((kind) => (
-              discovered[kind].length > 0 && (
-                <label key={kind} className="grid gap-1">
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">{kind}</span>
-                  <select
-                    className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600"
-                    defaultValue=""
-                    onChange={(event) => {
-                      const selected = discovered[kind].find((option) => option.id === event.target.value);
-                      if (selected) applyDiscovery(kind, selected);
-                    }}
-                  >
-                    <option value="">Select {kind.slice(0, -1)}</option>
-                    {discovered[kind].map((option) => (
-                      <option key={`${kind}-${option.id}`} value={option.id}>
-                        {option.name}{option.description ? ` - ${option.description}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )
-            ))}
-            {discoveryError && (
-              <p className="rounded-md border border-red-900/40 bg-red-950/20 px-2.5 py-1.5 text-[11px] text-red-300">
-                {discoveryError}
-              </p>
-            )}
-            {pipelineHint && (
-              <p className="rounded-md border border-emerald-900/40 bg-emerald-950/20 px-2.5 py-1.5 text-[11px] text-emerald-300">
-                {pipelineHint}
-              </p>
-            )}
-          </div>
+          {discoveryError && (
+            <p className="rounded-md border border-red-900/40 bg-red-950/20 px-2.5 py-1.5 text-[11px] text-red-300">
+              {discoveryError}
+            </p>
+          )}
 
-          {/* ADO fallback auth */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-400">PAT fallback</span>
-              <div className="flex items-center gap-2">
-                {patStatus === "pending" && (
-                  <span className="rounded-full bg-amber-900/30 px-2 py-0.5 text-[10px] font-medium text-amber-400 border border-amber-800/40">Pending</span>
-                )}
-                {patStatus === "verified" && (
-                  <span className="rounded-full bg-emerald-900/30 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-800/40">Verified</span>
-                )}
-                {patStatus === "invalid" && (
-                  <span className="rounded-full bg-red-900/30 px-2 py-0.5 text-[10px] font-medium text-red-400 border border-red-800/40">Invalid</span>
-                )}
-                <button type="button" onClick={handleRequestPat} className="text-[11px] text-zinc-500 hover:text-zinc-300 transition underline underline-offset-2">
-                  Request PAT
-                </button>
-                {form.adoPat && form.adoOrgUrl && (
-                  <button type="button" onClick={() => void handleVerifyPat()} disabled={verifying}
-                    className="text-[11px] text-zinc-500 hover:text-zinc-300 transition underline underline-offset-2 disabled:opacity-50">
-                    {verifying ? "Verifying…" : "Verify"}
-                  </button>
-                )}
-              </div>
-            </div>
-            <Field type="password" label="" value={form.adoPat} onChange={set("adoPat")}
-              hint="Optional fallback. Microsoft sign-in is tried first for Azure DevOps access; a PAT is only needed when OAuth consent or token acquisition is unavailable." />
-            {patStatus === "pending" && (
-              <p className="rounded-lg bg-amber-950/20 border border-amber-900/30 px-3 py-2 text-[11px] text-amber-400/80 leading-relaxed">
-                For fallback mode, create a PAT with <span className="font-mono">Code (Read &amp; Write), Build (Read &amp; Execute), Pull Request Threads (Read &amp; Write)</span>, paste it above, then click Verify.
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
-            <label className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                checked={form.adoMcpEnabled}
-                onChange={(event) => set("adoMcpEnabled")(event.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-zinc-700 bg-zinc-900"
-              />
-              <span className="min-w-0">
-                <span className="block text-xs font-medium text-zinc-300">Enable external Azure DevOps MCP bridge fallback</span>
-                <span className="mt-0.5 block text-[11px] leading-relaxed text-zinc-600">
-                  Optional compatibility path while Azure DevOps MCP capabilities are being internalized into this app.
-                </span>
+          <details className="group rounded-lg border border-zinc-800 bg-zinc-950/30">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs text-zinc-500 transition hover:text-zinc-300">
+              <span className="flex min-w-0 items-center gap-2">
+                <svg className="h-3.5 w-3.5 shrink-0 transition group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                <span className="font-medium">Optional fallbacks</span>
               </span>
-            </label>
-            {form.adoMcpEnabled && (
-              <div className="space-y-3">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <Field
-                    label="MCP command"
-                    value={form.adoMcpCommand}
-                    onChange={set("adoMcpCommand")}
-                    placeholder="mcp-server-azuredevops"
-                  />
-                  <Field
-                    label="Authentication"
-                    value={form.adoMcpAuthentication}
-                    onChange={set("adoMcpAuthentication")}
-                    placeholder="pat or azcli"
-                  />
-                  <Field
-                    label="Domains"
-                    value={form.adoMcpDomains}
-                    onChange={set("adoMcpDomains")}
-                    placeholder="repositories,pipelines,work-items"
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
+              {(form.adoPipelineName || form.adoPipelineId || form.adoPat || form.adoMcpEnabled) && (
+                <span className="shrink-0 rounded-full border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-500">configured</span>
+              )}
+            </summary>
+            <div className="space-y-4 border-t border-zinc-800 px-3 py-3">
+              <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-medium text-zinc-400">Pipeline matching</p>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => void handleCheckMcp()}
-                    disabled={!form.adoOrgUrl || mcpChecking}
+                    onClick={() => void handleDiscover("pipelines")}
+                    disabled={!form.adoOrgUrl || !form.adoProject || !form.adoRepoName || discovering !== null}
                     className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-200 disabled:opacity-40"
                   >
-                    {mcpChecking ? "Checking..." : "Check ADO auth/tools"}
+                    {discovering === "pipelines" ? "Discovering..." : "Refresh pipelines"}
                   </button>
-                  {mcpStatus && (
-                    <span className={`text-[11px] ${mcpStatus.startsWith("ADO tools ready") ? "text-emerald-400" : "text-amber-400"}`}>
-                      {mcpStatus}
-                    </span>
-                  )}
                 </div>
+                {(["pipelines"] as AdoDiscoveryKind[]).map((kind) => (
+                  discovered[kind].length > 0 && (
+                    <label key={kind} className="grid gap-1">
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">{kind}</span>
+                      <select
+                        className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600"
+                        defaultValue=""
+                        onChange={(event) => {
+                          const selected = discovered[kind].find((option) => option.id === event.target.value);
+                          if (selected) applyDiscovery(kind, selected);
+                        }}
+                      >
+                        <option value="">Select {kind.slice(0, -1)}</option>
+                        {discovered[kind].map((option) => (
+                          <option key={`${kind}-${option.id}`} value={option.id}>
+                            {option.name}{option.description ? ` - ${option.description}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )
+                ))}
+                {pipelineHint && (
+                  <p className="rounded-md border border-emerald-900/40 bg-emerald-950/20 px-2.5 py-1.5 text-[11px] text-emerald-300">
+                    {pipelineHint}
+                  </p>
+                )}
               </div>
-            )}
-          </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-zinc-400">PAT fallback</span>
+                  <div className="flex items-center gap-2">
+                    {patStatus === "pending" && (
+                      <span className="rounded-full bg-amber-900/30 px-2 py-0.5 text-[10px] font-medium text-amber-400 border border-amber-800/40">Pending</span>
+                    )}
+                    {patStatus === "verified" && (
+                      <span className="rounded-full bg-emerald-900/30 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-800/40">Verified</span>
+                    )}
+                    {patStatus === "invalid" && (
+                      <span className="rounded-full bg-red-900/30 px-2 py-0.5 text-[10px] font-medium text-red-400 border border-red-800/40">Invalid</span>
+                    )}
+                    <button type="button" onClick={handleRequestPat} className="text-[11px] text-zinc-500 hover:text-zinc-300 transition underline underline-offset-2">
+                      Request PAT
+                    </button>
+                    {form.adoPat && form.adoOrgUrl && (
+                      <button type="button" onClick={() => void handleVerifyPat()} disabled={verifying}
+                        className="text-[11px] text-zinc-500 hover:text-zinc-300 transition underline underline-offset-2 disabled:opacity-50">
+                        {verifying ? "Verifying…" : "Verify"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <Field type="password" label="" value={form.adoPat} onChange={set("adoPat")} />
+                {patStatus === "pending" && (
+                  <p className="rounded-lg bg-amber-950/20 border border-amber-900/30 px-3 py-2 text-[11px] text-amber-400/80 leading-relaxed">
+                    For fallback mode, create a PAT with <span className="font-mono">Code (Read &amp; Write), Build (Read &amp; Execute), Pull Request Threads (Read &amp; Write)</span>, paste it above, then click Verify.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={form.adoMcpEnabled}
+                    onChange={(event) => set("adoMcpEnabled")(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-zinc-700 bg-zinc-900"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-xs font-medium text-zinc-300">Enable external Azure DevOps MCP bridge fallback</span>
+                  </span>
+                </label>
+                {form.adoMcpEnabled && (
+                  <div className="space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <Field label="MCP command" value={form.adoMcpCommand} onChange={set("adoMcpCommand")} placeholder="mcp-server-azuredevops" />
+                      <Field label="Authentication" value={form.adoMcpAuthentication} onChange={set("adoMcpAuthentication")} placeholder="pat or azcli" />
+                      <Field label="Domains" value={form.adoMcpDomains} onChange={set("adoMcpDomains")} placeholder="repositories,pipelines,work-items" />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleCheckMcp()}
+                        disabled={!form.adoOrgUrl || mcpChecking}
+                        className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-200 disabled:opacity-40"
+                      >
+                        {mcpChecking ? "Checking..." : "Check ADO auth/tools"}
+                      </button>
+                      {mcpStatus && (
+                        <span className={`text-[11px] ${mcpStatus.startsWith("ADO tools ready") ? "text-emerald-400" : "text-amber-400"}`}>
+                          {mcpStatus}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </details>
         </section>
 
         {/* ── Actions ── */}

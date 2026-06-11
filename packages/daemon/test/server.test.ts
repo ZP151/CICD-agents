@@ -1058,6 +1058,78 @@ describe("daemon HTTP", () => {
     });
   });
 
+  it("lists pull requests using an inline browser-local Project Link", async () => {
+    app = await buildApp();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string"
+        ? input
+        : typeof (input as { url?: unknown }).url === "string"
+          ? String((input as { url: string }).url)
+          : String(input);
+      if (url.includes("/_apis/git/repositories/cicd-agent/pullrequests?")) {
+        return new Response(JSON.stringify({
+          value: [{
+            pullRequestId: 42,
+            title: "Improve agent",
+            status: "active",
+            isDraft: false,
+            sourceRefName: "refs/heads/feature/agent",
+            targetRefName: "refs/heads/main",
+            creationDate: "2026-06-10T00:00:00.000Z",
+            createdBy: { displayName: "Ada" },
+            repository: { name: "cicd-agent" },
+            reviewers: [{ vote: 10 }, { vote: 0 }],
+          }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/_apis/pipelines/12/runs?")) {
+        return new Response(JSON.stringify({
+          value: [{
+            id: 77,
+            name: "20260610.1",
+            state: "completed",
+            result: "succeeded",
+            createdDate: "2026-06-10T00:00:00.000Z",
+            finishedDate: "2026-06-10T00:05:00.000Z",
+            resources: { repositories: { self: { refName: "refs/heads/feature/agent" } } },
+            _links: { web: { href: "https://ado/build/77" } },
+          }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ message: `unexpected URL ${url}` }), { status: 404 });
+    });
+
+    const r = await app.inject({
+      method: "POST",
+      url: "/profiles/browser-only-profile/pull-requests?status=active",
+      payload: {
+        profile: {
+          name: "Browser Link",
+          repoPath: process.cwd(),
+          adoOrgUrl: "https://dev.azure.com/demo-org",
+          adoProject: "Agents",
+          adoRepoName: "cicd-agent",
+          adoPat: "test-pat",
+          adoPipelineId: "12",
+        },
+      },
+    });
+
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({
+      pullRequests: [{
+        id: 42,
+        title: "Improve agent",
+        sourceBranch: "feature/agent",
+        pipelineRun: {
+          id: 77,
+          result: "succeeded",
+          sourceBranch: "feature/agent",
+        },
+      }],
+    });
+  });
+
   it("returns a non-mutating heuristic PR insight preview", async () => {
     app = await buildApp();
     const profileResponse = await app.inject({

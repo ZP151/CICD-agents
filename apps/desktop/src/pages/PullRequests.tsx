@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppData } from "../App.js";
 import {
@@ -29,6 +29,11 @@ import {
   type ReviewRunResult,
 } from "../api.js";
 import { saveFindingsLocal } from "../reviewHistoryLocal.js";
+import {
+  loadStoredActiveProjectLinkId,
+  resolveActiveProjectLinkId,
+  saveStoredActiveProjectLinkId,
+} from "../projectLinks.js";
 
 function formatDate(value: string): string {
   if (!value) return "";
@@ -86,6 +91,34 @@ function mergeInsightArtifacts(items: PrInsightArtifact[]): PrInsightArtifact[] 
     if (!byId.has(item.id)) byId.set(item.id, item);
   }
   return [...byId.values()].sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"));
+}
+
+function normalizeBranchName(value: string | undefined): string {
+  return (value ?? "").trim().replace(/^refs\/heads\//, "").toLowerCase();
+}
+
+function projectLinkBranchScope(profile: { defaultBranch?: string } | null): string {
+  return normalizeBranchName(profile?.defaultBranch);
+}
+
+function matchesProjectLinkBranch(pr: PullRequestSummary, profile: { defaultBranch?: string } | null): boolean {
+  const branch = projectLinkBranchScope(profile);
+  if (!branch || branch === "main") return true;
+  return normalizeBranchName(pr.sourceBranch) === branch;
+}
+
+type DisplayPullRequest = PullRequestSummary & {
+  sourceProfileId?: string;
+  sourceProfileName?: string;
+};
+
+function dedupePullRequests(items: DisplayPullRequest[]): DisplayPullRequest[] {
+  const byKey = new Map<string, DisplayPullRequest>();
+  for (const item of items) {
+    const key = `${item.repository}:${item.id}`;
+    if (!byKey.has(key)) byKey.set(key, item);
+  }
+  return [...byKey.values()];
 }
 
 type ContextState =
@@ -240,9 +273,9 @@ function PullRequestContextPanel({ state }: { state: ContextState | undefined })
 export default function PullRequests(): JSX.Element {
   const navigate = useNavigate();
   const { profiles, profilesLoading } = useAppData();
-  const [profileId, setProfileId] = useState("");
+  const [profileId, setProfileId] = useState(() => loadStoredActiveProjectLinkId());
   const [status, setStatus] = useState("active");
-  const [prs, setPrs] = useState<PullRequestSummary[]>([]);
+  const [prs, setPrs] = useState<DisplayPullRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedPrId, setExpandedPrId] = useState<number | null>(null);
@@ -264,19 +297,25 @@ export default function PullRequests(): JSX.Element {
   const [queueing, setQueueing] = useState<Record<number, QueueState>>({});
   const [previews, setPreviews] = useState<Record<number, PreviewState>>({});
   const [insightArtifacts, setInsightArtifacts] = useState<PrInsightArtifact[]>([]);
+  const loadSeqRef = useRef(0);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === profileId) ?? null,
     [profiles, profileId],
   );
+  const branchScope = projectLinkBranchScope(selectedProfile);
+  const profileForPullRequest = useCallback((pr: DisplayPullRequest) => {
+    return pr.sourceProfileId || profileId;
+  }, [profileId]);
 
-  const handleQueueForReview = useCallback(async (pr: PullRequestSummary) => {
-    if (!profileId) return;
+  const handleQueueForReview = useCallback(async (pr: DisplayPullRequest) => {
+    const actionProfileId = profileForPullRequest(pr);
+    if (!actionProfileId) return;
 
     // Step 1 — write a "watching" placeholder so the PR appears in the Review Queue immediately
     setQueueing((prev) => ({ ...prev, [pr.id]: { phase: "watching" } }));
     try {
-      await recordProfileReviewHistory(profileId, {
+      await recordProfileReviewHistory(actionProfileId, {
         pullRequestId: pr.id,
         lastIterationId: 0,
         findingCount: 0,
@@ -313,9 +352,9 @@ export default function PullRequests(): JSX.Element {
     // Step 2 — run the Review Agent immediately
     setQueueing((prev) => ({ ...prev, [pr.id]: { phase: "reviewing" } }));
     try {
-      const result = await runProfileReviewRun(profileId, pr.id, pr.targetBranch);
+      const result = await runProfileReviewRun(actionProfileId, pr.id, pr.targetBranch);
       // Persist the real result into browser localStorage so Review Queue reflects it immediately
-      await recordProfileReviewHistory(profileId, {
+      await recordProfileReviewHistory(actionProfileId, {
         pullRequestId:     result.pullRequestId,
         lastIterationId:   result.iterationId,
         findingCount:      result.findingCount,
@@ -349,15 +388,15 @@ export default function PullRequests(): JSX.Element {
         saveFindingsLocal(result.repository, result.pullRequestId, result.findings);
       }
       const artifact = savePrReviewRunArtifact({
-        profileId,
+        profileId: actionProfileId,
         repository: result.repository,
         pullRequestId: result.pullRequestId,
         title: pr.title,
         result,
       });
-      setInsightArtifacts(listPrInsightArtifacts(profileId));
-      void saveProfilePrInsightArtifact(profileId, artifact);
-      void recordProfileReviewOperation(profileId, {
+      setInsightArtifacts(profileId ? listPrInsightArtifacts(profileId) : listPrInsightArtifacts());
+      void saveProfilePrInsightArtifact(actionProfileId, artifact);
+      void recordProfileReviewOperation(actionProfileId, {
         kind: "review_run",
         repository: result.repository,
         pullRequestId: result.pullRequestId,
@@ -367,7 +406,7 @@ export default function PullRequests(): JSX.Element {
       });
       setQueueing((prev) => ({ ...prev, [pr.id]: { phase: "done", result } }));
     } catch (err) {
-      void recordProfileReviewOperation(profileId, {
+      void recordProfileReviewOperation(actionProfileId, {
         kind: "review_run",
         repository: pr.repository,
         pullRequestId: pr.id,
@@ -380,23 +419,24 @@ export default function PullRequests(): JSX.Element {
         [pr.id]: { phase: "error", message: err instanceof Error ? err.message : String(err) },
       }));
     }
-  }, [profileId]);
+  }, [profileForPullRequest, profileId]);
 
-  const handlePreviewInsight = useCallback(async (pr: PullRequestSummary) => {
-    if (!profileId) return;
+  const handlePreviewInsight = useCallback(async (pr: DisplayPullRequest) => {
+    const actionProfileId = profileForPullRequest(pr);
+    if (!actionProfileId) return;
     setPreviews((prev) => ({ ...prev, [pr.id]: { phase: "loading" } }));
     try {
-      const result = await fetchProfilePullRequestInsightPreview(profileId, pr.id);
+      const result = await fetchProfilePullRequestInsightPreview(actionProfileId, pr.id);
       const artifact = savePrInsightPreviewArtifact({
-        profileId,
+        profileId: actionProfileId,
         repository: pr.repository,
         pullRequestId: pr.id,
         title: pr.title,
         result,
       });
-      setInsightArtifacts(listPrInsightArtifacts(profileId));
-      void saveProfilePrInsightArtifact(profileId, artifact);
-      void recordProfileReviewOperation(profileId, {
+      setInsightArtifacts(profileId ? listPrInsightArtifacts(profileId) : listPrInsightArtifacts());
+      void saveProfilePrInsightArtifact(actionProfileId, artifact);
+      void recordProfileReviewOperation(actionProfileId, {
         kind: "insight_preview",
         repository: pr.repository,
         pullRequestId: pr.id,
@@ -406,7 +446,7 @@ export default function PullRequests(): JSX.Element {
       });
       setPreviews((prev) => ({ ...prev, [pr.id]: { phase: "done", result } }));
     } catch (err) {
-      void recordProfileReviewOperation(profileId, {
+      void recordProfileReviewOperation(actionProfileId, {
         kind: "insight_preview",
         repository: pr.repository,
         pullRequestId: pr.id,
@@ -419,24 +459,27 @@ export default function PullRequests(): JSX.Element {
         [pr.id]: { phase: "error", message: err instanceof Error ? err.message : String(err) },
       }));
     }
-  }, [profileId]);
+  }, [profileForPullRequest, profileId]);
 
-  const openSavedInsightInChat = useCallback((pr: PullRequestSummary, artifact: PrInsightArtifact) => {
+  const openSavedInsightInChat = useCallback((pr: DisplayPullRequest, artifact: PrInsightArtifact) => {
+    const actionProfileId = profileForPullRequest(pr);
+    const actionProfile = profiles.find((profile) => profile.id === actionProfileId) ?? selectedProfile;
     const draft = buildPrInsightChatHandoffDraft({
       pullRequestId: pr.id,
       title: pr.title,
       repository: pr.repository,
-      repoPath: selectedProfile?.repoPath || ".",
-      profileId,
+      repoPath: actionProfile?.repoPath || ".",
+      profileId: actionProfileId,
       kind: artifact.kind,
       artifactId: artifact.id,
     });
     sessionStorage.setItem(CHAT_HANDOFF_KEY, JSON.stringify(draft));
     navigate("/chat");
-  }, [navigate, profileId, selectedProfile]);
+  }, [navigate, profileForPullRequest, profiles, selectedProfile]);
 
-  const toggleContext = useCallback(async (pr: PullRequestSummary) => {
-    if (!profileId) return;
+  const toggleContext = useCallback(async (pr: DisplayPullRequest) => {
+    const actionProfileId = profileForPullRequest(pr);
+    if (!actionProfileId) return;
     const nextExpanded = expandedPrId === pr.id ? null : pr.id;
     setExpandedPrId(nextExpanded);
     if (nextExpanded === null) return;
@@ -446,7 +489,7 @@ export default function PullRequests(): JSX.Element {
 
     setContexts((prev) => ({ ...prev, [pr.id]: { phase: "loading" } }));
     try {
-      const data = await fetchProfilePullRequestContext(profileId, pr.id);
+      const data = await fetchProfilePullRequestContext(actionProfileId, pr.id);
       setContexts((prev) => ({ ...prev, [pr.id]: { phase: "loaded", data } }));
     } catch (err) {
       setContexts((prev) => ({
@@ -454,11 +497,16 @@ export default function PullRequests(): JSX.Element {
         [pr.id]: { phase: "error", message: err instanceof Error ? err.message : String(err) },
       }));
     }
-  }, [contexts, expandedPrId, profileId]);
+  }, [contexts, expandedPrId, profileForPullRequest]);
 
   useEffect(() => {
-    if (!profileId && profiles[0]) setProfileId(profiles[0].id);
-  }, [profileId, profiles]);
+    if (profiles.length === 0) return;
+    setProfileId((current) => resolveActiveProjectLinkId(profiles, current));
+  }, [profiles]);
+
+  useEffect(() => {
+    saveStoredActiveProjectLinkId(profileId);
+  }, [profileId]);
 
   useEffect(() => {
     const raw = sessionStorage.getItem(PULL_REQUESTS_HANDOFF_KEY);
@@ -480,7 +528,7 @@ export default function PullRequests(): JSX.Element {
 
   useEffect(() => {
     if (!profileId) {
-      setInsightArtifacts([]);
+      setInsightArtifacts(listPrInsightArtifacts());
       return;
     }
     const local = listPrInsightArtifacts(profileId);
@@ -500,22 +548,52 @@ export default function PullRequests(): JSX.Element {
   }, [profileId]);
 
   const load = useCallback(async () => {
-    if (!profileId) return;
+    if (!profileId && profiles.length === 0) return;
+    const seq = loadSeqRef.current + 1;
+    loadSeqRef.current = seq;
     setLoading(true);
     setError(null);
     try {
-      setPrs(await fetchProfilePullRequests(profileId, status));
+      const nextPrs = profileId
+        ? (await fetchProfilePullRequests(profileId, status))
+          .filter((pr) => matchesProjectLinkBranch(pr, selectedProfile))
+          .map((pr) => ({
+            ...pr,
+            sourceProfileId: profileId,
+            sourceProfileName: selectedProfile?.name,
+          }))
+        : dedupePullRequests((await Promise.all(profiles.map(async (profile) => {
+          const items = await fetchProfilePullRequests(profile.id, status);
+          return items.map((pr) => ({
+            ...pr,
+            sourceProfileId: profile.id,
+            sourceProfileName: profile.name,
+          }));
+        }))).flat());
+      if (loadSeqRef.current !== seq) return;
+      setPrs(nextPrs);
     } catch (err) {
+      if (loadSeqRef.current !== seq) return;
       setPrs([]);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (loadSeqRef.current === seq) setLoading(false);
     }
-  }, [profileId, status]);
+  }, [profileId, profiles, selectedProfile, status]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setPrs([]);
+    setError(null);
+    setExpandedPrId(null);
+    setHighlightedPrId(null);
+    setContexts({});
+    setQueueing({});
+    setPreviews({});
+  }, [profileId, status]);
 
   useEffect(() => {
     const raw = sessionStorage.getItem(PULL_REQUESTS_HANDOFF_KEY);
@@ -575,6 +653,7 @@ export default function PullRequests(): JSX.Element {
             onChange={(e) => setProfileId(e.target.value)}
           >
             {profiles.length === 0 && <option value="">No Project Links</option>}
+            {profiles.length > 0 && <option value="">All Project Links</option>}
             {profiles.map((profile) => (
               <option key={profile.id} value={profile.id}>{profile.name}</option>
             ))}
@@ -598,12 +677,20 @@ export default function PullRequests(): JSX.Element {
         </div>
       </header>
 
-      {selectedProfile && (
+      {selectedProfile ? (
         <div className="flex flex-wrap gap-2 text-xs text-zinc-600">
           <span className="rounded-full border border-zinc-800 px-2 py-1">{selectedProfile.adoProject || "No project"}</span>
           <span className="rounded-full border border-zinc-800 px-2 py-1">{selectedProfile.adoRepoName || "No repo"}</span>
           <span className="rounded-full border border-zinc-800 px-2 py-1">pipeline: {selectedProfile.adoPipelineName || selectedProfile.adoPipelineId || "not configured"}</span>
+          {branchScope && branchScope !== "main" && (
+            <span className="rounded-full border border-zinc-800 px-2 py-1">branch: {selectedProfile.defaultBranch}</span>
+          )}
           <span className="rounded-full border border-zinc-800 px-2 py-1">target: {selectedProfile.targetBranch || "main"}</span>
+        </div>
+      ) : profiles.length > 0 && (
+        <div className="flex flex-wrap gap-2 text-xs text-zinc-600">
+          <span className="rounded-full border border-zinc-800 px-2 py-1">All Project Links</span>
+          <span className="rounded-full border border-zinc-800 px-2 py-1">status: {status}</span>
         </div>
       )}
 
@@ -638,7 +725,9 @@ export default function PullRequests(): JSX.Element {
               ? insightReadinessTone(qState.result.readiness)
               : null;
             const storedInsightHistory = insightArtifacts.filter((artifact) => (
-              artifact.repository === pr.repository && artifact.pullRequestId === pr.id
+              artifact.repository === pr.repository &&
+              artifact.pullRequestId === pr.id &&
+              (!pr.sourceProfileId || artifact.profileId === pr.sourceProfileId)
             ));
             const storedInsight = storedInsightHistory[0] ?? null;
             const previousStoredInsights = storedInsightHistory.slice(1, 4);
@@ -685,7 +774,7 @@ export default function PullRequests(): JSX.Element {
 
             return (
               <article
-                key={pr.id}
+                key={`${pr.sourceProfileId ?? "profile"}-${pr.repository}-${pr.id}`}
                 className={`rounded-lg border p-4 transition ${
                   highlightedPrId === pr.id
                     ? "border-blue-700/70 bg-blue-950/20 shadow-[0_0_0_1px_rgba(29,78,216,0.25)]"
@@ -700,6 +789,11 @@ export default function PullRequests(): JSX.Element {
                         {state.label}
                       </span>
                       <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400">{pr.status}</span>
+                      {!profileId && pr.sourceProfileName && (
+                        <span className="rounded-full border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-500">
+                          {pr.sourceProfileName}
+                        </span>
+                      )}
                     </div>
                     <h3 className="truncate text-sm font-semibold text-zinc-100">{pr.title || "(untitled)"}</h3>
                     <p className="mt-1 truncate font-mono text-xs text-zinc-600">

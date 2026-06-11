@@ -20,6 +20,7 @@ export * from "./tools/gitIntent.js";
 export * from "./tools/mcp.js";
 export * from "./telemetry.js";
 export * from "./chatPlanner.js";
+export * from "./chatUiStream.js";
 export * from "./reviewQueue.js";
 export * from "./reviewHistoryLocal.js";
 export * from "./reviewOperationsLocal.js";

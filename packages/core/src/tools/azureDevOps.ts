@@ -10,6 +10,7 @@ const API_VERSION_WI = "7.1-preview.3";
 const API_VERSION_PIPELINES = "7.1-preview.1";
 const API_VERSION_CORE = "7.1-preview.4";
 const API_VERSION_BUILD = "7.1-preview.7";
+const API_VERSION_POLICY = "7.1-preview.1";
 
 export type PatProvider = () => Promise<string>;
 export type AdoAuthMode = "oauth" | "pat";
@@ -189,6 +190,7 @@ export interface AzurePipelineRunSummary {
 
 export interface AzurePullRequestDetail extends AzurePullRequestSummary {
   codeReviewId: number;
+  projectId: string;
   project: string;
   description: string;
   closedDate: string;
@@ -250,6 +252,27 @@ export interface AzureBuildSummary {
   url: string;
 }
 
+export interface AzureWorkItemSummary {
+  id: number;
+  url: string;
+  type: string;
+  title: string;
+  state: string;
+  assignedTo: string;
+  tags: string[];
+}
+
+export interface AzurePullRequestPolicyEvaluation {
+  id: string;
+  status: string;
+  startedDate: string;
+  completedDate: string;
+  displayName: string;
+  typeName: string;
+  configurationId: number;
+  isBlocking: boolean;
+}
+
 export interface AzureDevOpsDiscoveryOption {
   id: string;
   name: string;
@@ -276,6 +299,8 @@ export const INTERNAL_AZURE_DEVOPS_TOOL_MANIFEST: Array<{ name: string; descript
   { name: "ado_get_pull_request_by_id", description: "Get Azure DevOps pull request details." },
   { name: "ado_list_pull_request_threads", description: "List Azure DevOps pull request comment threads." },
   { name: "ado_get_pull_request_changes", description: "Get Azure DevOps pull request changed files." },
+  { name: "ado_list_pull_request_work_items", description: "List work item details linked to an Azure DevOps pull request." },
+  { name: "ado_list_pull_request_policy_evaluations", description: "List branch policy evaluations for an Azure DevOps pull request." },
   { name: "ado_pipelines_get_builds", description: "List Azure DevOps builds." },
   { name: "ado_pipelines_get_run", description: "Get an Azure Pipeline run." },
   { name: "ado_list_pipeline_runs", description: "List Azure Pipeline runs." },
@@ -504,7 +529,7 @@ export async function getAzurePullRequestById(args: {
     creationDate?: string;
     closedDate?: string;
     createdBy?: { displayName?: string };
-    repository?: { name?: string; project?: { name?: string } };
+    repository?: { name?: string; project?: { id?: string; name?: string } };
     reviewers?: Array<{ vote?: number }>;
     workItemRefs?: Array<{ id?: string; url?: string }>;
   };
@@ -523,6 +548,7 @@ export async function getAzurePullRequestById(args: {
     creationDate: pr.creationDate ?? "",
     closedDate: pr.closedDate ?? "",
     repository: pr.repository?.name ?? repository,
+    projectId: pr.repository?.project?.id ?? "",
     project: pr.repository?.project?.name ?? project,
     url: `${adoBase(org)}/${project}/_git/${repository}/pullrequest/${id}`,
     reviewerCount: reviewers.length,
@@ -536,6 +562,124 @@ export async function getAzurePullRequestById(args: {
       url: ref.url ?? "",
     })).filter((ref) => ref.id || ref.url),
   };
+}
+
+export async function listAzurePullRequestWorkItems(args: {
+  organization: string;
+  project: string;
+  repository: string;
+  pullRequestId: string | number;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzureWorkItemSummary[]> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const repository = args.repository.trim();
+  const pullRequestId = Number(args.pullRequestId ?? 0);
+  if (!org || !project || !repository || !pullRequestId) {
+    throw new ToolError("ADO organization, project, repository, and pull request ID are required.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const refsUrl =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories/` +
+    `${encodeURIComponent(repository)}/pullrequests/${pullRequestId}/workitems?api-version=${API_VERSION_GIT}`;
+  const refsResp = await adoFetch(refsUrl, auth);
+  const refs = await parseAdoJson(refsResp, "list pull request work items") as {
+    value?: Array<{ id?: string | number; url?: string }>;
+  };
+  const ids = (refs.value ?? [])
+    .map((ref) => Number(ref.id ?? extractWorkItemId(ref.url ?? "")))
+    .filter((id) => Number.isInteger(id) && id > 0);
+  if (ids.length === 0) return [];
+
+  const detailsUrl =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/wit/workitems` +
+    `?ids=${ids.join(",")}&$expand=Relations&api-version=${API_VERSION_WI}`;
+  const detailsResp = await adoFetch(detailsUrl, auth);
+  const details = await parseAdoJson(detailsResp, "get work item details") as {
+    value?: Array<{
+      id?: number;
+      url?: string;
+      fields?: Record<string, unknown>;
+    }>;
+  };
+  return (details.value ?? []).map((item) => {
+    const fields = item.fields ?? {};
+    const assigned = fields["System.AssignedTo"];
+    return {
+      id: Number(item.id ?? 0),
+      url: item.url ?? "",
+      type: String(fields["System.WorkItemType"] ?? ""),
+      title: String(fields["System.Title"] ?? ""),
+      state: String(fields["System.State"] ?? ""),
+      assignedTo: typeof assigned === "object" && assigned !== null
+        ? String((assigned as Record<string, unknown>)["displayName"] ?? "")
+        : String(assigned ?? ""),
+      tags: String(fields["System.Tags"] ?? "")
+        .split(";")
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+    };
+  });
+}
+
+export async function listAzurePullRequestPolicyEvaluations(args: {
+  organization: string;
+  project: string;
+  repository: string;
+  pullRequestId: string | number;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzurePullRequestPolicyEvaluation[]> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const repository = args.repository.trim();
+  const pullRequestId = Number(args.pullRequestId ?? 0);
+  if (!org || !project || !repository || !pullRequestId) {
+    throw new ToolError("ADO organization, project, repository, and pull request ID are required.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const pr = await getAzurePullRequestById({
+    organization: org,
+    project,
+    repository,
+    pullRequestId,
+    auth,
+  });
+  const projectArtifactPart = pr.projectId || project;
+  const codeReviewId = pr.codeReviewId || pullRequestId;
+  const artifactId = `vstfs:///CodeReview/CodeReviewId/${projectArtifactPart}/${codeReviewId}`;
+  const params = new URLSearchParams({
+    artifactId,
+    "api-version": API_VERSION_POLICY,
+  });
+  const url = `${adoBase(org)}/${encodeURIComponent(project)}/_apis/policy/evaluations?${params.toString()}`;
+  const resp = await adoFetch(url, auth);
+  const data = await parseAdoJson(resp, "list pull request policy evaluations") as {
+    value?: Array<{
+      evaluationId?: string;
+      id?: string;
+      status?: string;
+      startedDate?: string;
+      completedDate?: string;
+      configuration?: {
+        id?: number;
+        isBlocking?: boolean;
+        settings?: { displayName?: string };
+        type?: { displayName?: string };
+      };
+    }>;
+  };
+  return (data.value ?? []).map((policy) => ({
+    id: policy.evaluationId ?? policy.id ?? "",
+    status: policy.status ?? "",
+    startedDate: policy.startedDate ?? "",
+    completedDate: policy.completedDate ?? "",
+    displayName: policy.configuration?.settings?.displayName ?? policy.configuration?.type?.displayName ?? "",
+    typeName: policy.configuration?.type?.displayName ?? "",
+    configurationId: Number(policy.configuration?.id ?? 0),
+    isBlocking: Boolean(policy.configuration?.isBlocking ?? false),
+  }));
 }
 
 export async function listAzurePullRequestThreads(args: {
@@ -765,6 +909,7 @@ export async function listAzureBuildDefinitions(args: {
   organization: string;
   project: string;
   repositoryId?: string;
+  repositoryType?: string;
   pat?: string;
   auth?: AdoAuth;
   top?: number;
@@ -778,7 +923,10 @@ export async function listAzureBuildDefinitions(args: {
     "api-version": API_VERSION_BUILD,
   });
   const repository = args.repositoryId?.trim();
-  if (repository) params.set("repositoryId", await resolveRepositoryId(org, project, repository, auth));
+  if (repository) {
+    params.set("repositoryId", await resolveRepositoryId(org, project, repository, auth));
+    params.set("repositoryType", args.repositoryType?.trim() || "TfsGit");
+  }
   const url = `${adoBase(org)}/${encodeURIComponent(project)}/_apis/build/definitions?${params.toString()}`;
   const resp = await adoFetch(url, auth);
   const data = (await parseAdoJson(resp, "list build definitions")) as {
@@ -960,6 +1108,10 @@ function normalizeBranchRef(branch: string): string {
   return `refs/heads/${trimmed}`;
 }
 
+function extractWorkItemId(url: string): string {
+  return url.match(/workItems\/(\d+)/i)?.[1] ?? "";
+}
+
 /** Parse an ADO REST response; surface HTML auth pages as a clear ToolError. */
 async function parseAdoJson(resp: Response, action: string): Promise<unknown> {
   const text = await resp.text();
@@ -984,6 +1136,77 @@ async function parseAdoJson(resp: Response, action: string): Promise<unknown> {
 
 export function azureDevOpsTools(): Tool[] {
   return [
+    {
+      name: "ado_list_pull_request_work_items",
+      description: "List work item details linked to an Azure DevOps pull request.",
+      parameters: {
+        type: "object",
+        required: ["pull_request_id"],
+        properties: {
+          organization: { type: "string" },
+          project: { type: "string" },
+          repository: { type: "string" },
+          pull_request_id: { type: "integer" },
+        },
+      },
+      handler: async (ctx, payload) => {
+        const { org, project } = resolveOrgProject(ctx, payload);
+        const repository =
+          String(payload["repository"] ?? "") || String(ctx.extra["ado_repository"] ?? "");
+        const pullRequestId = Number(payload["pull_request_id"] ?? 0);
+        if (!repository || !pullRequestId) {
+          throw new ToolError("list_pull_request_work_items requires 'repository' and 'pull_request_id'.");
+        }
+        const auth = await resolveAdoAuth(ctx);
+        const workItems = await listAzurePullRequestWorkItems({
+          organization: org,
+          project,
+          repository,
+          pullRequestId,
+          auth,
+        });
+        return {
+          workItems,
+          count: workItems.length,
+        };
+      },
+    },
+    {
+      name: "ado_list_pull_request_policy_evaluations",
+      description: "List branch policy evaluations for an Azure DevOps pull request.",
+      parameters: {
+        type: "object",
+        required: ["pull_request_id"],
+        properties: {
+          organization: { type: "string" },
+          project: { type: "string" },
+          repository: { type: "string" },
+          pull_request_id: { type: "integer" },
+        },
+      },
+      handler: async (ctx, payload) => {
+        const { org, project } = resolveOrgProject(ctx, payload);
+        const repository =
+          String(payload["repository"] ?? "") || String(ctx.extra["ado_repository"] ?? "");
+        const pullRequestId = Number(payload["pull_request_id"] ?? 0);
+        if (!repository || !pullRequestId) {
+          throw new ToolError("list_pull_request_policy_evaluations requires 'repository' and 'pull_request_id'.");
+        }
+        const auth = await resolveAdoAuth(ctx);
+        const policies = await listAzurePullRequestPolicyEvaluations({
+          organization: org,
+          project,
+          repository,
+          pullRequestId,
+          auth,
+        });
+        return {
+          policies,
+          count: policies.length,
+          blocking: policies.filter((policy) => policy.isBlocking),
+        };
+      },
+    },
     {
       name: "ado_create_pr",
       description: "Create an Azure DevOps pull request.",

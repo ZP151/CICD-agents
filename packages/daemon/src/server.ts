@@ -4,28 +4,37 @@ import nodePath from "node:path";
 import nodeFs from "node:fs";
 import nodeOs from "node:os";
 
+let activeEnvFile: string | null = null;
+let azureDeploymentProbeCache: {
+  key: string;
+  checkedAt: number;
+  available: boolean;
+  error: string;
+} | null = null;
+
 // Resolve .env in priority order:
 //   1. CICD_AGENT_ENV_FILE env var (explicit override)
-//   2. ~/.cicd-agent/.env  (production / after installer)
-//   3. <cwd>/.env          (docker / manual)
-//   4. monorepo root       (development)
+//   2. <cwd>/.env          (development / manual)
+//   3. monorepo root       (development when cwd is a package)
+//   4. ~/.cicd-agent/.env  (installed app / user-level fallback)
 (function loadEnv() {
+  const moduleDir = (() => {
+    try {
+      return nodePath.dirname(fileURLToPath(import.meta.url));
+    } catch {
+      return null;
+    }
+  })();
   const candidates = [
     process.env.CICD_AGENT_ENV_FILE,
-    nodePath.join(nodeOs.homedir(), ".cicd-agent", ".env"),
     nodePath.join(process.cwd(), ".env"),
-    // Development: walk up from packages/daemon/src to repo root
-    (() => {
-      try {
-        return nodePath.resolve(fileURLToPath(import.meta.url), "../../../../.env");
-      } catch {
-        return null;
-      }
-    })(),
+    moduleDir ? nodePath.resolve(moduleDir, "../../..", ".env") : null,
+    nodePath.join(nodeOs.homedir(), ".cicd-agent", ".env"),
   ].filter((p): p is string => typeof p === "string");
 
   for (const p of candidates) {
     if (nodeFs.existsSync(p)) {
+      activeEnvFile = p;
       dotenv.config({ path: p });
       break;
     }
@@ -53,6 +62,8 @@ import {
   getAzurePullRequestById,
   listAzurePullRequestThreads,
   listAzurePullRequestChanges,
+  listAzurePullRequestPolicyEvaluations,
+  listAzurePullRequestWorkItems,
   listAzureBuilds,
   getAzureDevOpsAuth,
   adoAuthDiagnosticFromError,
@@ -70,11 +81,13 @@ import {
   AzureTableProfileStore,
   KeyVaultSecrets,
   getCurrentUser,
+  getDesktopAzureAuthConfig,
   isAzureAuthAvailable,
   persistUserCache,
   loadPersistedUser,
   clearPersistedUser,
   getCachedAzureAccounts,
+  getAzureDevOpsToken,
   loginWithBrowser,
   loginWithCachedAccount,
   isAzureAuthenticationRequiredError,
@@ -83,6 +96,7 @@ import {
   previewGitCheckpoint,
   planGitCheckpointRollback,
   LLMClient,
+  ChatUiChunkAdapter,
   type BrowserLoginChoice,
   type Settings,
 } from "@cicd-agent/core";
@@ -153,6 +167,7 @@ const InlineProfileSchema = z.object({
   templateProfile: z.string().default(""),
   buildCommand:    z.string().default(""),
   testCommand:     z.string().default(""),
+  ignoredGlobs:    z.array(z.string()).default([]),
 }).optional();
 
 
@@ -164,11 +179,24 @@ const ChatStartSchema = z.object({
   llmConfig: LlmConfigSchema,        // inline LLM config from localStorage Settings
   profile:   InlineProfileSchema,    // inline profile data from localStorage Profiles
 });
+const ChatWorkflowActionSchema = z.object({
+  action: z.enum(["inspect_environment", "inspect_changes", "refresh_branch"]),
+  repoPath: z.string().min(1),
+  profile: InlineProfileSchema,
+});
 const ChatIndexSchema = z.object({
   repoPath: z.string().default(process.cwd()),
   llmConfig: LlmConfigSchema,
   profile: InlineProfileSchema,
 });
+const ProfilePayloadSchema = z.object({
+  profile: InlineProfileSchema,
+}).default({});
+const AuthAzureDevOpsEnableSchema = z.object({
+  browser: z.enum(["default", "edge", "chrome"]).default("default"),
+  loginHint: z.string().optional(),
+  accountHomeId: z.string().optional(),
+}).default({});
 const SessionIdParam = z.object({ sessionId: z.string().min(1) });
 const CheckpointIdParam = z.object({ checkpointId: z.string().min(1) });
 const CheckpointPreviewQuery = z.object({
@@ -352,6 +380,7 @@ async function discoverAdoOptions(
     organization,
     project: profile.adoProject,
     repositoryId: profile.adoRepoName || undefined,
+    repositoryType: profile.adoRepoName ? "TfsGit" : undefined,
     pat,
     top: 100,
   });
@@ -360,6 +389,7 @@ async function discoverAdoOptions(
 function sendAdoDiagnostic(reply: FastifyReply, err: unknown, authMode?: "oauth" | "pat") {
   const diagnostic = adoAuthDiagnosticFromError(err, authMode);
   return reply.code(diagnostic.status === "oauth_unavailable" ? 401 : 400).send({
+    source: "internal" as const,
     error: diagnostic.message,
     authStatus: diagnostic.status,
     authMode: diagnostic.authMode,
@@ -428,6 +458,166 @@ function parseAzureDevOpsRemote(remoteName: string, remoteUrl: string): AzureDev
   }
 
   return null;
+}
+
+async function runGitProbe(repoPath: string, args: string[], timeoutSec = 10) {
+  const result = await runCommand(["git", ...args], {
+    cwd: repoPath,
+    allowed: ["git"],
+    timeoutSec,
+  });
+  return {
+    command: `git ${args.join(" ")}`,
+    ok: result.returncode === 0,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+    returncode: result.returncode,
+  };
+}
+
+async function runWorkspaceWorkflowAction(action: z.infer<typeof ChatWorkflowActionSchema>["action"], repoPath: string) {
+  const tools: Array<Awaited<ReturnType<typeof runGitProbe>> & { name: string }> = [];
+  const add = async (name: string, args: string[], timeoutSec?: number) => {
+    tools.push({ name, ...await runGitProbe(repoPath, args, timeoutSec) });
+  };
+
+  if (action === "inspect_environment") {
+    await add("git_current_branch", ["branch", "--show-current"]);
+    await add("git_branch_list", ["branch", "-a"]);
+    await add("git_status", ["status", "--porcelain=v1", "-b"]);
+    await add("git_remote", ["remote", "-v"]);
+    await add("git_diff", ["diff", "--stat"], 20);
+  } else if (action === "inspect_changes") {
+    await add("git_status", ["status", "--porcelain=v1", "-b"]);
+    await add("git_diff", ["diff", "--stat"], 20);
+    await add("git_diff_name_only", ["diff", "--name-only"], 20);
+  } else if (action === "refresh_branch") {
+    await add("git_current_branch", ["branch", "--show-current"]);
+    await add("git_branch_list", ["branch", "-a"]);
+  }
+
+  const failed = tools.find((tool) => !tool.ok);
+  const currentBranch = tools.find((tool) => tool.name === "git_current_branch")?.stdout.trim() || "";
+  const statusText = tools.find((tool) => tool.name === "git_status")?.stdout.trim() || "";
+  const diffStat = tools.find((tool) => tool.name === "git_diff")?.stdout.trim() || "";
+  const changedFiles = (tools.find((tool) => tool.name === "git_diff_name_only")?.stdout ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return {
+    ok: !failed,
+    action,
+    repoPath,
+    summary: summarizeWorkspaceWorkflow(action, { currentBranch, statusText, diffStat, changedFiles }),
+    workflowState: {
+      status: failed ? "failed" : "done",
+      currentStep: failed ? `${failed.name} failed` : `${action} complete`,
+      completedTools: tools.filter((tool) => tool.ok).map((tool) => tool.name),
+    },
+    tools,
+  };
+}
+
+function summarizeWorkspaceWorkflow(action: string, args: {
+  currentBranch: string;
+  statusText: string;
+  diffStat: string;
+  changedFiles: string[];
+}): string {
+  const lines: string[] = [];
+  if (args.currentBranch) lines.push(`Branch: ${args.currentBranch}`);
+  if (args.statusText) {
+    const statusLines = args.statusText.split(/\r?\n/).filter(Boolean);
+    lines.push(`Git status: ${statusLines.length} line(s)`);
+  } else if (action !== "refresh_branch") {
+    lines.push("Git status: clean");
+  }
+  if (args.changedFiles.length > 0) lines.push(`Changed files: ${args.changedFiles.slice(0, 12).join(", ")}${args.changedFiles.length > 12 ? ", ..." : ""}`);
+  if (args.diffStat) lines.push(args.diffStat);
+  return lines.join("\n") || "Workspace state refreshed.";
+}
+
+function envSourceLabel(): string {
+  return activeEnvFile ?? "process environment";
+}
+
+function azureDeploymentProbeKey(settings: Settings): string {
+  return [
+    settings.azureOpenAiEndpoint,
+    settings.azureOpenAiApiVersion,
+    settings.azureOpenAiChatDeployment,
+    settings.azureOpenAiApiKey ? settings.azureOpenAiApiKey.slice(0, 8) : "",
+  ].join("|");
+}
+
+async function probeAzureDeployment(settings: Settings): Promise<{ available: boolean; error: string }> {
+  if (settings.llmProvider !== "azure") return { available: false, error: "" };
+  if (!settings.azureOpenAiEndpoint || !settings.azureOpenAiApiKey || !settings.azureOpenAiChatDeployment) {
+    return { available: false, error: "Azure OpenAI endpoint, key, or chat deployment is missing." };
+  }
+
+  const key = azureDeploymentProbeKey(settings);
+  const now = Date.now();
+  if (azureDeploymentProbeCache?.key === key && now - azureDeploymentProbeCache.checkedAt < 30_000) {
+    return {
+      available: azureDeploymentProbeCache.available,
+      error: azureDeploymentProbeCache.error,
+    };
+  }
+
+  const ctrl = new AbortController();
+  const timeout = setTimeout(() => ctrl.abort(), 3000);
+  try {
+    const endpoint = settings.azureOpenAiEndpoint.replace(/\/+$/, "");
+    const deployment = encodeURIComponent(settings.azureOpenAiChatDeployment);
+    const apiVersion = encodeURIComponent(settings.azureOpenAiApiVersion);
+    const response = await fetch(`${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`, {
+      method: "POST",
+      headers: {
+        "api-key": settings.azureOpenAiApiKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: "system", content: "Reply with ok." },
+          { role: "user", content: "health" },
+        ],
+        max_tokens: 1,
+        temperature: 0,
+      }),
+      signal: ctrl.signal,
+    });
+    const body = response.ok ? "" : (await response.text()).trim();
+    const error = response.ok
+      ? ""
+      : response.status === 404
+        ? "Azure OpenAI deployment was not found on this resource."
+        : body || `Azure OpenAI deployment check failed with HTTP ${response.status}.`;
+    const result = { available: response.ok, error };
+    azureDeploymentProbeCache = { key, checkedAt: now, ...result };
+    return result;
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    const result = { available: false, error };
+    azureDeploymentProbeCache = { key, checkedAt: now, ...result };
+    return result;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function explainChatSseError(err: unknown, settings: Settings): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/deployment.*does not exist|deployment.*not found/i.test(message)) {
+    return [
+      "Azure OpenAI deployment not found.",
+      `Daemon env source: ${envSourceLabel()}.`,
+      `Deployment: ${settings.azureOpenAiChatDeployment || "(missing)"}.`,
+      "Open Settings and set the chat deployment to an existing Azure OpenAI deployment, then restart the daemon.",
+    ].join(" ");
+  }
+  return message;
 }
 
 export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -501,24 +691,46 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     await queue.stop();
   });
 
-  app.get("/healthz", async () => ({
-    ok: true,
-    version: process.env.npm_package_version ?? "0.1.0",
-    uptimeSec: (Date.now() - startedAt) / 1000,
-    llmConfigured: settings.llmConfigured,
-    // Read live settings values so Apply in the UI is reflected immediately
-    cloudProfileStore: !!(settings.azureStorageAccount),
-    cloudSecrets:      !!(settings.azureKeyVaultUrl),
-    cloudSessions:     !!(settings.azureCosmosEndpoint),
-  }));
+  app.get("/healthz", async () => {
+    const azureDeployment = await probeAzureDeployment(settings);
+    return {
+      ok: true,
+      version: process.env.npm_package_version ?? "0.1.0",
+      uptimeSec: (Date.now() - startedAt) / 1000,
+      llmConfigured: settings.llmConfigured,
+      llmProvider: settings.llmProvider,
+      envSource: envSourceLabel(),
+      azureDeployment: settings.azureOpenAiChatDeployment,
+      azureApiVersion: settings.azureOpenAiApiVersion,
+      azureEndpoint: settings.azureOpenAiEndpoint,
+      azureDeploymentAvailable: azureDeployment.available,
+      azureDeploymentError: azureDeployment.error,
+      // Read live settings values so Apply in the UI is reflected immediately
+      cloudProfileStore: !!(settings.azureStorageAccount),
+      cloudSecrets:      !!(settings.azureKeyVaultUrl),
+      cloudSessions:     !!(settings.azureCosmosEndpoint),
+    };
+  });
 
   // ── /auth/status — instant cached user (no Azure round-trip) ────────────────
   app.get("/auth/status", async () => {
+    const azureAuthConfig = getDesktopAzureAuthConfig();
     const cached = loadPersistedUser(settings.dataDir);
     if (cached && cached.oid !== "anonymous") {
-      return { authenticated: true, oid: cached.oid, upn: cached.upn, name: cached.name, avatarDataUrl: cached.avatarDataUrl, fromCache: true };
+      return {
+        authenticated: true,
+        oid: cached.oid,
+        homeAccountId: cached.homeAccountId,
+        tenantId: cached.tenantId,
+        username: cached.username,
+        upn: cached.upn,
+        name: cached.name,
+        avatarDataUrl: cached.avatarDataUrl,
+        fromCache: true,
+        azureAuthConfig,
+      };
     }
-    return { authenticated: false, fromCache: true };
+    return { authenticated: false, fromCache: true, azureAuthConfig };
   });
 
   // ── /auth/me — resolve live Azure user identity and persist result ───────────
@@ -536,9 +748,13 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     return {
       authenticated: true,
       oid:  user.oid,
+      homeAccountId: user.homeAccountId,
+      tenantId: user.tenantId,
+      username: user.username,
       upn:  user.upn,
       name: user.name,
       avatarDataUrl: user.avatarDataUrl,
+      azureAuthConfig: getDesktopAzureAuthConfig(),
     };
   });
 
@@ -581,6 +797,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
           send("done", {
             authenticated: true,
             oid:  cachedUser.oid,
+            homeAccountId: cachedUser.homeAccountId,
+            tenantId: cachedUser.tenantId,
+            username: cachedUser.username,
             upn:  cachedUser.upn,
             name: cachedUser.name,
             avatarDataUrl: cachedUser.avatarDataUrl,
@@ -604,6 +823,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       send("done", {
         authenticated: user.oid !== "anonymous",
         oid:  user.oid,
+        homeAccountId: user.homeAccountId,
+        tenantId: user.tenantId,
+        username: user.username,
         upn:  user.upn,
         name: user.name,
         avatarDataUrl: user.avatarDataUrl,
@@ -612,6 +834,37 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       if (!cancelled) send("error", { message: err instanceof Error ? err.message : String(err) });
     } finally {
       if (!reply.raw.destroyed) reply.raw.end();
+    }
+  });
+
+  app.post("/auth/azure-devops/enable", async (req, reply) => {
+    const parsed = AuthAzureDevOpsEnableSchema.safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    try {
+      const token = await getAzureDevOpsToken({
+        interactive: true,
+        browser: parsed.data.browser,
+        loginHint: parsed.data.loginHint,
+        homeAccountId: parsed.data.accountHomeId,
+      });
+      const user = await getCurrentUser();
+      if (user.oid !== "anonymous") persistUserCache(user, settings.dataDir);
+      return {
+        ok: true,
+        authMode: "oauth" as const,
+        tokenAvailable: Boolean(token),
+        message: "Azure DevOps OAuth consent is available for this signed-in account.",
+        user,
+      };
+    } catch (err) {
+      const diagnostic = adoAuthDiagnosticFromError(err, "oauth");
+      return reply.code(401).send({
+        ok: false,
+        authMode: "oauth" as const,
+        authStatus: diagnostic.status,
+        authMessage: diagnostic.message,
+        retryable: diagnostic.retryable,
+      });
     }
   });
 
@@ -705,6 +958,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     azureStorageAccount: settings.azureStorageAccount ?? "",
     azureKeyVaultUrl:    settings.azureKeyVaultUrl ?? "",
     azureCosmosEndpoint: settings.azureCosmosEndpoint ?? "",
+    azureTenantId:       getDesktopAzureAuthConfig().tenantId ?? "",
+    azureClientId:       getDesktopAzureAuthConfig().clientId ?? "",
+    azureAuthUsesDefaultTenant: getDesktopAzureAuthConfig().usesDefaultTenant,
+    azureAuthUsesDefaultClient: getDesktopAzureAuthConfig().usesDefaultClient,
     reviewAutoApproveEnabled: settings.reviewAutoApproveEnabled,
     reviewStaleAgeHours: settings.reviewStaleAgeHours,
   }));
@@ -725,6 +982,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     azureStorageAccount: z.string().optional(),
     azureKeyVaultUrl:    z.string().optional(),
     azureCosmosEndpoint: z.string().optional(),
+    azureTenantId:       z.string().optional(),
+    azureClientId:       z.string().optional(),
     reviewAutoApproveEnabled: z.boolean().optional(),
     reviewStaleAgeHours: z.coerce.number().positive().optional(),
   });
@@ -771,6 +1030,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     if (cfg.azureStorageAccount !== undefined) lines.push(`AZURE_STORAGE_ACCOUNT=${cfg.azureStorageAccount}`);
     if (cfg.azureKeyVaultUrl    !== undefined) lines.push(`AZURE_KEYVAULT_URL=${cfg.azureKeyVaultUrl}`);
     if (cfg.azureCosmosEndpoint !== undefined) lines.push(`AZURE_COSMOS_ENDPOINT=${cfg.azureCosmosEndpoint}`);
+    if (cfg.azureTenantId       !== undefined) lines.push(`CICD_AGENT_AZURE_TENANT_ID=${cfg.azureTenantId}`);
+    if (cfg.azureClientId       !== undefined) lines.push(`CICD_AGENT_AZURE_CLIENT_ID=${cfg.azureClientId}`);
     if (cfg.reviewAutoApproveEnabled !== undefined) lines.push(`REVIEW_AUTO_APPROVE_ENABLED=${cfg.reviewAutoApproveEnabled ? "true" : "false"}`);
     if (cfg.reviewStaleAgeHours !== undefined) lines.push(`REVIEW_STALE_AGE_HOURS=${cfg.reviewStaleAgeHours}`);
 
@@ -937,6 +1198,33 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     return profile;
   }
 
+  async function getProfileForRequest(
+    profileId: string,
+    inlineProfile?: z.infer<typeof InlineProfileSchema>,
+  ): Promise<Awaited<ReturnType<typeof getWorkspaceProfile>> | null> {
+    if (inlineProfile?.adoOrgUrl && inlineProfile.adoProject && inlineProfile.adoRepoName) {
+      return {
+        id: profileId,
+        name: inlineProfile.name ?? "",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        ...inlineProfile,
+      };
+    }
+
+    const ts = getTableStore();
+    if (ts) {
+      try {
+        const cloudProfile = await ts.get(profileId);
+        return cloudProfile ? await injectAdoPat(cloudProfile) : null;
+      } catch (err) {
+        if (isAzureAuthenticationRequiredError(err)) throw err;
+        return getWorkspaceProfile(settings.dataDir, profileId);
+      }
+    }
+    return getWorkspaceProfile(settings.dataDir, profileId);
+  }
+
   app.get("/profiles", async () => {
     const ts = getTableStore();
     if (ts) {
@@ -1028,7 +1316,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         items: await discoverAdoOptions(parsed.data.kind, profile),
       };
     } catch (err) {
-      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+      return sendAdoDiagnostic(reply, err, profile.adoPat ? "pat" : "oauth");
     }
   });
 
@@ -1058,9 +1346,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.post("/profiles/check-ado-tools", checkAdoToolsHandler);
   app.post("/profiles/check-mcp", checkAdoToolsHandler);
 
-  app.get("/profiles/:id/pull-requests", async (req, reply) => {
+  const pullRequestsHandler = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = ProfileIdParam.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send({ error: "invalid id" });
+    const parsedBody = ProfilePayloadSchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) return reply.code(400).send({ error: parsedBody.error.flatten() });
     const statusParam = typeof (req.query as Record<string, unknown>)["status"] === "string"
       ? String((req.query as Record<string, unknown>)["status"])
       : "active";
@@ -1068,19 +1358,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       ? statusParam as "active" | "completed" | "abandoned" | "all"
       : "active";
 
-    const ts = getTableStore();
-    let profile: Awaited<ReturnType<typeof getWorkspaceProfile>> | null = null;
-    if (ts) {
-      try {
-        const cloudProfile = await ts.get(parsed.data.id);
-        profile = cloudProfile ? await injectAdoPat(cloudProfile) : null;
-      } catch (err) {
-        if (isAzureAuthenticationRequiredError(err)) throw err;
-        profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
-      }
-    } else {
-      profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
-    }
+    const profile = await getProfileForRequest(parsed.data.id, parsedBody.data.profile);
     if (!profile) return reply.code(404).send({ error: "profile not found" });
     if (!profile.adoOrgUrl || !profile.adoProject || !profile.adoRepoName) {
       return reply.code(400).send({ error: "ado_profile_incomplete" });
@@ -1111,25 +1389,17 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         pipelineRun: runs.find((run) => run.sourceBranch === pr.sourceBranch),
       })),
     };
-  });
+  };
+  app.get("/profiles/:id/pull-requests", pullRequestsHandler);
+  app.post("/profiles/:id/pull-requests", pullRequestsHandler);
 
-  app.get("/profiles/:id/pull-requests/:pullRequestId/context", async (req, reply) => {
+  const pullRequestContextHandler = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = ProfilePullRequestParam.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send({ error: "invalid id" });
+    const parsedBody = ProfilePayloadSchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) return reply.code(400).send({ error: parsedBody.error.flatten() });
 
-    const ts = getTableStore();
-    let profile: Awaited<ReturnType<typeof getWorkspaceProfile>> | null = null;
-    if (ts) {
-      try {
-        const cloudProfile = await ts.get(parsed.data.id);
-        profile = cloudProfile ? await injectAdoPat(cloudProfile) : null;
-      } catch (err) {
-        if (isAzureAuthenticationRequiredError(err)) throw err;
-        profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
-      }
-    } else {
-      profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
-    }
+    const profile = await getProfileForRequest(parsed.data.id, parsedBody.data.profile);
     if (!profile) return reply.code(404).send({ error: "profile not found" });
     if (!profile.adoOrgUrl || !profile.adoProject || !profile.adoRepoName) {
       return reply.code(400).send({ error: "ado_profile_incomplete" });
@@ -1145,6 +1415,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     let threads: Awaited<ReturnType<typeof listAzurePullRequestThreads>>;
     let changes: Awaited<ReturnType<typeof listAzurePullRequestChanges>>;
     let builds: Awaited<ReturnType<typeof listAzureBuilds>>;
+    let workItems: Awaited<ReturnType<typeof listAzurePullRequestWorkItems>>;
+    let policies: Awaited<ReturnType<typeof listAzurePullRequestPolicyEvaluations>>;
     try {
       pullRequest = await getAzurePullRequestById({
         organization: profile.adoOrgUrl,
@@ -1154,7 +1426,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         auth: adoAuth,
         includeWorkItemRefs: true,
       });
-      [threads, changes, builds] = await Promise.all([
+      [threads, changes, builds, workItems, policies] = await Promise.all([
         listAzurePullRequestThreads({
           organization: profile.adoOrgUrl,
           project: profile.adoProject,
@@ -1181,6 +1453,20 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
             top: 20,
           })
           : Promise.resolve([]),
+        listAzurePullRequestWorkItems({
+          organization: profile.adoOrgUrl,
+          project: profile.adoProject,
+          repository: profile.adoRepoName,
+          pullRequestId: parsed.data.pullRequestId,
+          auth: adoAuth,
+        }).catch(() => []),
+        listAzurePullRequestPolicyEvaluations({
+          organization: profile.adoOrgUrl,
+          project: profile.adoProject,
+          repository: profile.adoRepoName,
+          pullRequestId: parsed.data.pullRequestId,
+          auth: adoAuth,
+        }).catch(() => []),
       ]);
     } catch (err) {
       return sendAdoDiagnostic(reply, err, adoAuth.mode);
@@ -1192,8 +1478,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       threads,
       changes,
       builds,
+      workItems,
+      policies,
     };
-  });
+  };
+  app.get("/profiles/:id/pull-requests/:pullRequestId/context", pullRequestContextHandler);
+  app.post("/profiles/:id/pull-requests/:pullRequestId/context", pullRequestContextHandler);
 
   const PrInsightPreviewBodySchema = z.object({
     llmConfig: LlmConfigSchema,
@@ -2235,6 +2525,27 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     }
   });
 
+  app.post("/chat/workflow-action", async (req, reply) => {
+    const parsed = ChatWorkflowActionSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    try {
+      return await runWorkspaceWorkflowAction(parsed.data.action, parsed.data.repoPath);
+    } catch (err) {
+      return reply.code(500).send({
+        ok: false,
+        action: parsed.data.action,
+        repoPath: parsed.data.repoPath,
+        summary: err instanceof Error ? err.message : String(err),
+        workflowState: {
+          status: "failed",
+          currentStep: "Workflow action failed",
+          completedTools: [],
+        },
+        tools: [],
+      });
+    }
+  });
+
   app.post("/chat", async (req, reply) => {
     const parsed = ChatStartSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
@@ -2252,6 +2563,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     const send = (event: string, payload: unknown): void => {
       reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
     };
+    const uiAdapter = new ChatUiChunkAdapter();
+    const sendUiChunk = (chunk: unknown): void => send("ui.chunk", { type: "ui.chunk", chunk });
+    for (const chunk of uiAdapter.start()) sendUiChunk(chunk);
 
     // Always send the sessionId first so the client can store it
     for (const sse of sessionStartedEvent(sessionId)) send(sse.event, sse.payload);
@@ -2261,6 +2575,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         try {
           for await (const event of chatSessions.run(sessionId, message, repoPath, profileId, llmConfig, profile)) {
             for (const sse of chatEventToSseEvents(event)) send(sse.event, sse.payload);
+            for (const chunk of uiAdapter.push(event)) sendUiChunk(chunk);
             if (
               event.type === "done" ||
               event.type === "error" ||
@@ -2272,7 +2587,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
             }
           }
         } catch (err) {
-          send("error", { type: "error", message: err instanceof Error ? err.message : String(err) });
+          send("error", { type: "error", message: explainChatSseError(err, settings) });
         }
         reply.raw.end();
         resolve();
@@ -2309,12 +2624,16 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     const send = (event: string, payload: unknown): void => {
       reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
     };
+    const uiAdapter = new ChatUiChunkAdapter();
+    const sendUiChunk = (chunk: unknown): void => send("ui.chunk", { type: "ui.chunk", chunk });
+    for (const chunk of uiAdapter.start()) sendUiChunk(chunk);
 
     return new Promise<void>((resolve) => {
       (async () => {
         try {
           for await (const event of chatSessions.confirmAction(sessionId)) {
             for (const sse of chatEventToSseEvents(event)) send(sse.event, sse.payload);
+            for (const chunk of uiAdapter.push(event)) sendUiChunk(chunk);
             if (event.type === "done" || event.type === "error" || event.type === "cancelled") {
               reply.raw.end();
               resolve();
@@ -2322,7 +2641,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
             }
           }
         } catch (err) {
-          send("error", { type: "error", message: err instanceof Error ? err.message : String(err) });
+          send("error", { type: "error", message: explainChatSseError(err, settings) });
         }
         reply.raw.end();
         resolve();

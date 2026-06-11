@@ -14,6 +14,11 @@ import {
 } from "../api.js";
 import { buildReviewAuditCardSummary, buildReviewAuditViewModel, dispositionLabel } from "../reviewAudit.js";
 import { compareReviewQueueItems, loadFindingsLocal, reviewQueuePriorityReasons, saveFindingsLocal } from "../reviewHistoryLocal.js";
+import {
+  loadStoredActiveProjectLinkId,
+  resolveActiveProjectLinkId,
+  saveStoredActiveProjectLinkId,
+} from "../projectLinks.js";
 import type { ReviewOperationEvent } from "../reviewOperations.js";
 import {
   applyReviewRunToQueueItem,
@@ -256,7 +261,7 @@ function FindingsPanel({ item, findings, onClose }: FindingsPanelProps): JSX.Ele
 
 export default function ReviewFindings(): JSX.Element {
   const { profiles, profilesLoading } = useAppData();
-  const [profileId, setProfileId] = useState("");
+  const [profileId, setProfileId] = useState(() => loadStoredActiveProjectLinkId());
   const [items, setItems] = useState<ReviewQueueItem[]>([]);
   const [configured, setConfigured] = useState(true);
   const [storage, setStorage] = useState<"azure" | "local" | "browser" | undefined>();
@@ -279,8 +284,13 @@ export default function ReviewFindings(): JSX.Element {
   const [operationEvents, setOperationEvents] = useState<ReviewOperationEvent[]>([]);
 
   useEffect(() => {
-    if (!profileId && profiles[0]) setProfileId(profiles[0].id);
-  }, [profileId, profiles]);
+    if (profiles.length === 0) return;
+    setProfileId((current) => resolveActiveProjectLinkId(profiles, current));
+  }, [profiles]);
+
+  useEffect(() => {
+    saveStoredActiveProjectLinkId(profileId);
+  }, [profileId]);
 
   useEffect(() => {
     fetchDaemonConfig()
@@ -719,7 +729,7 @@ export default function ReviewFindings(): JSX.Element {
         </section>
       )}
 
-      <section className="grid gap-3 lg:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {lanes.map((lane) => (
           <div key={lane.key} className={`rounded-lg border p-4 ${lane.tone}`}>
             <div className="flex items-start justify-between gap-3">

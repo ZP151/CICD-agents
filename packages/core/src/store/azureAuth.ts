@@ -27,10 +27,17 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import open, { apps } from "open";
+import { getSettings } from "../settings.js";
 
 export interface AzureUser {
   /** AAD Object ID — stable, unique per user per tenant */
   oid: string;
+  /** MSAL account id used to acquire tokens for the currently selected account */
+  homeAccountId?: string;
+  /** Tenant associated with the selected MSAL account */
+  tenantId?: string;
+  /** MSAL username for the selected account */
+  username?: string;
   /** User Principal Name (email) if present in token */
   upn?: string;
   /** Display name if present */
@@ -63,6 +70,11 @@ let pluginRegistered = false;
 
 const IDENTITY_SCOPE = "https://graph.microsoft.com/User.Read";
 export const AZURE_DEVOPS_SCOPE = "499b84ac-1321-427f-aa17-267ca6975798/.default";
+export const AZURE_DEVOPS_USER_IMPERSONATION_SCOPE = "499b84ac-1321-427f-aa17-267ca6975798/user_impersonation";
+const AZURE_DEVOPS_SCOPES = [
+  AZURE_DEVOPS_SCOPE,
+  AZURE_DEVOPS_USER_IMPERSONATION_SCOPE,
+];
 const TOKEN_CACHE_NAME = "cicd-agent";
 const REDIRECT_URI = "http://localhost";
 const MSAL_CACHE_SERVICE = "Microsoft.Developer.IdentityService";
@@ -82,6 +94,22 @@ function desktopClientId(): string | undefined {
   return process.env.CICD_AGENT_AZURE_CLIENT_ID
     ?? process.env.AZURE_CLIENT_ID
     ?? DEFAULT_DESKTOP_CLIENT_ID;
+}
+
+export function getDesktopAzureAuthConfig(): {
+  tenantId?: string;
+  clientId?: string;
+  usesDefaultTenant: boolean;
+  usesDefaultClient: boolean;
+  azureDevOpsScopes: string[];
+} {
+  return {
+    tenantId: desktopTenantId(),
+    clientId: desktopClientId(),
+    usesDefaultTenant: !process.env.CICD_AGENT_AZURE_TENANT_ID && !process.env.AZURE_TENANT_ID,
+    usesDefaultClient: !process.env.CICD_AGENT_AZURE_CLIENT_ID && !process.env.AZURE_CLIENT_ID,
+    azureDevOpsScopes: AZURE_DEVOPS_SCOPES,
+  };
 }
 
 function registerCachePersistence(): void {
@@ -193,6 +221,9 @@ export async function trySilentMsalLogin(homeAccountId?: string): Promise<AzureU
     if (!result?.accessToken) return null;
     return {
       ...decodeUserFromJwt(result.idToken ?? result.accessToken),
+      homeAccountId: account.homeAccountId,
+      tenantId: account.tenantId,
+      username: account.username,
       avatarDataUrl: await fetchGraphAvatar(result.accessToken),
     };
   } catch {
@@ -228,8 +259,33 @@ export async function getCachedAzureAccounts(): Promise<AzureCachedAccount[]> {
 export async function loginWithCachedAccount(homeAccountId: string): Promise<AzureUser | null> {
   const user = await trySilentMsalLogin(homeAccountId);
   if (!user) return null;
+  try {
+    await getAzureDevOpsToken({ homeAccountId });
+  } catch {
+    // The caller can trigger interactive ADO consent explicitly when needed.
+  }
   cached = user;
   return cached;
+}
+
+function selectMsalAccount<T extends { homeAccountId?: string; username?: string }>(
+  accounts: T[],
+  requestedHomeAccountId?: string,
+): T | undefined {
+  if (requestedHomeAccountId) {
+    const requested = accounts.find((candidate) => candidate.homeAccountId === requestedHomeAccountId);
+    if (requested) return requested;
+  }
+  if (cached?.homeAccountId) {
+    const active = accounts.find((candidate) => candidate.homeAccountId === cached?.homeAccountId);
+    if (active) return active;
+  }
+  if (cached?.upn || cached?.username) {
+    const activeName = (cached.upn ?? cached.username ?? "").toLowerCase();
+    const active = accounts.find((candidate) => candidate.username?.toLowerCase() === activeName);
+    if (active) return active;
+  }
+  return accounts[0];
 }
 
 export async function getAzureDevOpsToken(opts: {
@@ -240,46 +296,62 @@ export async function getAzureDevOpsToken(opts: {
 } = {}): Promise<string> {
   const clientId = desktopClientId();
   if (clientId) {
+    if (!cached?.homeAccountId) {
+      try {
+        const persisted = loadPersistedUser(getSettings().dataDir);
+        if (persisted?.homeAccountId) cached = persisted;
+      } catch {
+        // Best-effort active account hydration.
+      }
+    }
     const client = await createMsalClient();
     const accounts = await client.getTokenCache().getAllAccounts();
-    const account = opts.homeAccountId
-      ? accounts.find((candidate) => candidate.homeAccountId === opts.homeAccountId)
-      : accounts[0];
+    const account = selectMsalAccount(accounts, opts.homeAccountId);
 
     if (account) {
-      try {
-        const result = await client.acquireTokenSilent({
-          scopes: [AZURE_DEVOPS_SCOPE],
-          account,
-        });
-        if (result?.accessToken) return result.accessToken;
-      } catch {
-        // Consent may not have been granted yet; fall through to interactive or identity cache.
+      for (const scope of AZURE_DEVOPS_SCOPES) {
+        try {
+          const result = await client.acquireTokenSilent({
+            scopes: [scope],
+            account,
+          });
+          if (result?.accessToken) return result.accessToken;
+        } catch {
+          // Consent may not have been granted yet; try the next ADO scope or interactive flow.
+        }
       }
     }
 
     if (opts.interactive) {
-      const result = await client.acquireTokenInteractive({
-        scopes: [AZURE_DEVOPS_SCOPE],
-        account: account ?? undefined,
-        loginHint: opts.loginHint ?? account?.username,
-        openBrowser: (url) => openBrowser(url, opts.browser ?? "default"),
-        successTemplate: "Azure DevOps access is enabled. You can close this browser tab and return to CICD Agent.",
-        errorTemplate: "Azure DevOps sign-in did not complete. Return to CICD Agent and try again.",
-      });
-      if (result?.accessToken) return result.accessToken;
+      for (const scope of AZURE_DEVOPS_SCOPES) {
+        try {
+          const result = await client.acquireTokenInteractive({
+            scopes: [scope],
+            account: account ?? undefined,
+            loginHint: opts.loginHint ?? account?.username,
+            openBrowser: (url) => openBrowser(url, opts.browser ?? "default"),
+            successTemplate: "Azure DevOps access is enabled. You can close this browser tab and return to CICD Agent.",
+            errorTemplate: "Azure DevOps sign-in did not complete. Return to CICD Agent and try again.",
+          });
+          if (result?.accessToken) return result.accessToken;
+        } catch {
+          // Try the alternate ADO delegated scope before falling back.
+        }
+      }
     }
   }
 
-  try {
-    const token = await getAzureCredential({ interactive: false }).getToken(AZURE_DEVOPS_SCOPE);
-    if (token?.token) return token.token;
-  } catch {
-    // Normalize below.
+  for (const scope of AZURE_DEVOPS_SCOPES) {
+    try {
+      const token = await getAzureCredential({ interactive: false }).getToken(scope);
+      if (token?.token) return token.token;
+    } catch {
+      // Normalize below after all ADO scopes are exhausted.
+    }
   }
 
   throw new AzureAuthenticationRequiredError(
-    "Azure DevOps OAuth token is unavailable. Sign in again or configure an ADO PAT fallback.",
+    "Azure DevOps OAuth token is unavailable for the signed-in account. Sign in again with the account that has Azure DevOps access, then retry Azure DevOps consent.",
   );
 }
 
@@ -314,18 +386,17 @@ export async function loginWithBrowser(
   if (!result?.accessToken) return { oid: "anonymous" };
   cached = {
     ...decodeUserFromJwt(result.idToken ?? result.accessToken),
+    homeAccountId: result.account?.homeAccountId,
+    tenantId: result.account?.tenantId,
+    username: result.account?.username,
     avatarDataUrl: await fetchGraphAvatar(result.accessToken),
   };
-  try {
-    await getAzureDevOpsToken({
-      interactive: true,
-      browser,
-      loginHint: opts.loginHint ?? result.account?.username,
-      homeAccountId: result.account?.homeAccountId,
-    });
-  } catch {
-    // ADO OAuth is optional at sign-in time; ADO calls can still use PAT fallback.
-  }
+  await getAzureDevOpsToken({
+    interactive: true,
+    browser,
+    loginHint: opts.loginHint ?? result.account?.username,
+    homeAccountId: result.account?.homeAccountId,
+  });
   return cached;
 }
 
@@ -485,6 +556,9 @@ function findWindowsBrowserExe(browser: BrowserLoginChoice): string | null {
 
 interface PersistedAuth {
   oid: string;
+  homeAccountId?: string;
+  tenantId?: string;
+  username?: string;
   upn?: string;
   name?: string;
   avatarDataUrl?: string;
@@ -502,6 +576,7 @@ function authCachePath(dataDir: string): string {
 export function persistUserCache(user: AzureUser, dataDir: string): void {
   if (user.oid === "anonymous") return;
   try {
+    cached = user;
     fs.mkdirSync(dataDir, { recursive: true });
     const data: PersistedAuth = { ...user, cachedAt: Math.floor(Date.now() / 1000) };
     fs.writeFileSync(authCachePath(dataDir), JSON.stringify(data, null, 2), "utf-8");
@@ -520,7 +595,17 @@ export function loadPersistedUser(dataDir: string): AzureUser | null {
     const data = JSON.parse(raw) as PersistedAuth;
     const age = Math.floor(Date.now() / 1000) - (data.cachedAt ?? 0);
     if (age > 7 * 24 * 3600) return null; // stale after 7 days
-    return { oid: data.oid, upn: data.upn, name: data.name, avatarDataUrl: data.avatarDataUrl };
+    const user = {
+      oid: data.oid,
+      homeAccountId: data.homeAccountId,
+      tenantId: data.tenantId,
+      username: data.username,
+      upn: data.upn,
+      name: data.name,
+      avatarDataUrl: data.avatarDataUrl,
+    };
+    cached = user;
+    return user;
   } catch {
     return null;
   }

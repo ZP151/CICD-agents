@@ -109,7 +109,6 @@ export class LLMClient {
           endpoint: this.settings.azureOpenAiEndpoint,
           apiKey: this.settings.azureOpenAiApiKey,
           apiVersion: this.settings.azureOpenAiApiVersion,
-          deployment: this.settings.azureOpenAiChatDeployment,
         });
     return this.client;
   }

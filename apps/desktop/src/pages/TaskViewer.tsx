@@ -10,7 +10,7 @@ import {
   buildPullRequestsPrHandoffDraft,
   buildPrInsightChatHandoffDraft,
 } from "../checkpointHandoff.js";
-import { comparePrInsightArtifacts } from "../prInsightArtifacts.js";
+import { comparePrInsightArtifacts, listPrInsightArtifacts } from "../prInsightArtifacts.js";
 import {
   fetchChatCheckpointActivity,
   fetchChatCheckpointPreview,
@@ -214,9 +214,16 @@ export default function TaskViewer(): JSX.Element {
     setPrInsightLoading(true);
     try {
       const nested = await Promise.all(profiles.map(async (profile) => {
-        const result = await fetchProfilePrInsightArtifactsWithHistory(profile.id);
+        const localItems = listPrInsightArtifacts(profile.id);
+        const result = await fetchProfilePrInsightArtifactsWithHistory(profile.id).catch(() => ({
+          items: localItems as PrInsightArtifactRecord[],
+          history: [],
+        }));
         return {
-          items: result.items.map((item) => ({
+          items: [...result.items, ...localItems]
+            .sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"))
+            .filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index)
+            .map((item) => ({
             ...item,
             profileName: profile.name,
             repoPath: profile.repoPath || ".",

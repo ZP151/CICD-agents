@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  configureDaemon,
   fetchAuthStatus,
+  fetchDaemonConfig,
   fetchHealth,
   type AuthUser,
   type HealthStatus,
@@ -27,6 +29,8 @@ interface AppSettings {
   azureApiVersion: string;
   openaiApiKey: string;
   openaiModel: string;
+  azureTenantId: string;
+  azureClientId: string;
 }
 
 const DEFAULTS: AppSettings = {
@@ -47,6 +51,8 @@ const DEFAULTS: AppSettings = {
   azureApiVersion: "2024-02-01",
   openaiApiKey: "",
   openaiModel: "",
+  azureTenantId: "",
+  azureClientId: "",
 };
 
 type DaemonStatus = "unknown" | "checking" | "configured" | "unconfigured" | "unreachable";
@@ -63,13 +69,6 @@ function loadSettings(): AppSettings {
 
 function saveSettings(settings: AppSettings) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-}
-
-function hasCustomApi(settings: AppSettings): boolean {
-  if (settings.llmProvider === "azure") {
-    return Boolean(settings.azureEndpoint.trim() && settings.azureApiKey.trim() && settings.azureDeployment.trim());
-  }
-  return Boolean(settings.openaiApiKey.trim() && settings.openaiModel.trim());
 }
 
 function TextInput({
@@ -239,6 +238,7 @@ export default function Settings(): JSX.Element {
   const [authUser, setAuthUser] = useState<AuthUser>({ authenticated: false });
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didHydrateDaemonRef = useRef(false);
 
   useEffect(() => {
     setDaemonStatus("checking");
@@ -251,6 +251,16 @@ export default function Settings(): JSX.Element {
 
     fetchAuthStatus().then(setAuthUser).catch(() => {
       setAuthUser({ authenticated: false });
+    });
+    fetchDaemonConfig().then((config) => {
+      if (!config) return;
+      setSettings((current) => ({
+        ...current,
+        azureTenantId: config.azureTenantId ?? current.azureTenantId,
+        azureClientId: config.azureClientId ?? current.azureClientId,
+      }));
+    }).catch(() => undefined).finally(() => {
+      didHydrateDaemonRef.current = true;
     });
   }, []);
 
@@ -267,11 +277,23 @@ export default function Settings(): JSX.Element {
     };
   }, [settings]);
 
+  useEffect(() => {
+    if (!didHydrateDaemonRef.current) return;
+    const tenantId = settings.azureTenantId.trim();
+    const clientId = settings.azureClientId.trim();
+    const timer = setTimeout(() => {
+      configureDaemon({
+        azureTenantId: tenantId,
+        azureClientId: clientId,
+      }).catch(() => undefined);
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [settings.azureTenantId, settings.azureClientId]);
+
   function set<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
     setSettings((current) => ({ ...current, [key]: value }));
   }
 
-  const customApiReady = hasCustomApi(settings);
   const statusBadge: Record<DaemonStatus, { label: string; tone: "neutral" | "success" | "warning" | "danger"; cls: string }> = {
     unknown: { label: "Model routing", tone: "neutral", cls: "text-zinc-500" },
     checking: { label: "Checking daemon...", tone: "warning", cls: "text-zinc-400" },
@@ -285,7 +307,6 @@ export default function Settings(): JSX.Element {
     <div className="settings-page">
       <div className="settings-hero">
         <div>
-          <p className="settings-eyebrow">Workspace preferences</p>
           <h2 className="settings-title">Settings</h2>
           <p className="settings-subtitle">
             Tune the local workspace, permissions, identity context, and optional custom model providers.
@@ -296,79 +317,6 @@ export default function Settings(): JSX.Element {
           <span className={`text-xs font-medium ${badge.cls}`}>{badge.label}</span>
         </div>
       </div>
-
-      <SettingsSection title="General">
-        <SettingsRow title="Work mode" description="Choose how much technical detail the agent shows.">
-          <SegmentedChoice
-            value={settings.workMode}
-            onChange={(value) => set("workMode", value)}
-            options={[
-              { label: "For coding", value: "coding" },
-              { label: "Everyday", value: "everyday" },
-            ]}
-          />
-        </SettingsRow>
-        <SettingsRow title="Default open destination" description="Where files and folders open by default.">
-          <SelectControl
-            value={settings.defaultOpenDestination}
-            onChange={(value) => set("defaultOpenDestination", value)}
-            options={[
-              { label: "VS Code", value: "vscode" },
-              { label: "System default", value: "system" },
-              { label: "Do not open", value: "none" },
-            ]}
-          />
-        </SettingsRow>
-        <SettingsRow title="Agent environment" description="Choose where the agent runs on Windows.">
-          <StatusPill>Windows native</StatusPill>
-        </SettingsRow>
-        <SettingsRow title="Integrated terminal shell" description="Choose which shell opens in the integrated terminal.">
-          <SelectControl
-            value={settings.terminalShell}
-            onChange={(value) => set("terminalShell", value)}
-            options={[
-              { label: "PowerShell", value: "powershell" },
-              { label: "Command Prompt", value: "cmd" },
-              { label: "Git Bash", value: "git_bash" },
-            ]}
-          />
-        </SettingsRow>
-        <SettingsRow title="Language" description="Language for the app UI.">
-          <SelectControl
-            value={settings.language}
-            onChange={(value) => set("language", value)}
-            options={[
-              { label: "Auto Detect", value: "auto" },
-              { label: "English", value: "en" },
-              { label: "Simplified Chinese", value: "zh-CN" },
-            ]}
-          />
-        </SettingsRow>
-        <SettingsRow title="Speed" description="Choose the inference tier used across chats and compaction.">
-          <SelectControl
-            value={settings.inferenceSpeed}
-            onChange={(value) => set("inferenceSpeed", value)}
-            options={[
-              { label: "Fast", value: "fast" },
-              { label: "Balanced", value: "balanced" },
-              { label: "Deep", value: "deep" },
-            ]}
-          />
-        </SettingsRow>
-        <SettingsRow title="Code review" description="Start review in the current chat when possible or launch a separate review chat.">
-          <SegmentedChoice
-            value={settings.codeReviewMode}
-            onChange={(value) => set("codeReviewMode", value)}
-            options={[
-              { label: "Inline", value: "inline" },
-              { label: "Detached", value: "detached" },
-            ]}
-          />
-        </SettingsRow>
-        <SettingsRow title="Suggested prompts" description="Suggest what to do next from project files and connected services.">
-          <ToggleSwitch checked={settings.suggestedPrompts} onChange={(value) => set("suggestedPrompts", value)} />
-        </SettingsRow>
-      </SettingsSection>
 
       <SettingsSection title="Appearance">
         <SettingsRow title="Theme">
@@ -469,16 +417,28 @@ export default function Settings(): JSX.Element {
           </>
         )}
 
-        <SettingsRow title="Conversation availability" description="Complete providers become selectable from Conversation; the built-in model remains the default.">
-          <div className="settings-inline-status">
-            <StatusPill tone={customApiReady ? "success" : "neutral"}>
-              {customApiReady ? "Additional model available" : "Built-in model only"}
-            </StatusPill>
-            <StatusPill tone={badge.tone}>{badge.label}</StatusPill>
-          </div>
-        </SettingsRow>
         {daemonStatus === "unreachable" && (
           <p className="settings-message settings-message-warning">Daemon is not reachable. Local preferences will still be saved.</p>
+        )}
+        {health && (
+          <>
+            <SettingsRow title="Daemon env source" description="The .env file the daemon used at startup.">
+              <p className="max-w-[420px] truncate text-xs text-zinc-400" title={health.envSource ?? ""}>
+                {health.envSource ?? "process environment"}
+              </p>
+            </SettingsRow>
+            <SettingsRow title="Active chat deployment" description="The deployment currently used by the daemon's built-in Azure OpenAI client.">
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="truncate text-xs text-zinc-300">{health.azureDeployment || "Not configured"}</p>
+                <StatusPill tone={health.azureDeploymentAvailable ? "success" : "warning"}>
+                  {health.azureDeploymentAvailable ? "Available" : "Needs check"}
+                </StatusPill>
+              </div>
+            </SettingsRow>
+            {health.azureDeploymentError && (
+              <p className="settings-message settings-message-warning">{health.azureDeploymentError}</p>
+            )}
+          </>
         )}
       </SettingsSection>
 
@@ -502,6 +462,27 @@ export default function Settings(): JSX.Element {
           <StatusPill tone={authUser.authenticated ? "success" : "neutral"}>
             {authUser.authenticated ? (authUser.fromCache ? "Cached" : "Active") : "No account"}
           </StatusPill>
+        </SettingsRow>
+        <SettingsRow title="Azure tenant ID" description="Must match the tenant of the DevCICDAgent app registration.">
+          <TextInput
+            label="Azure tenant ID"
+            placeholder="Tenant ID"
+            value={settings.azureTenantId}
+            onChange={(value) => set("azureTenantId", value)}
+          />
+        </SettingsRow>
+        <SettingsRow title="Azure client ID" description="Application client ID for the registered app that has Azure DevOps user_impersonation consent.">
+          <div className="flex min-w-0 items-center gap-2">
+            <TextInput
+              label="Azure client ID"
+              placeholder="Application (client) ID"
+              value={settings.azureClientId}
+              onChange={(value) => set("azureClientId", value)}
+            />
+            <StatusPill tone={authUser.azureAuthConfig?.usesDefaultClient ? "warning" : "success"}>
+              {authUser.azureAuthConfig?.usesDefaultClient ? "Default" : "Configured"}
+            </StatusPill>
+          </div>
         </SettingsRow>
         <SettingsRow title="Profile store" description="Project Link records can use managed cloud storage when configured.">
           <StatusPill tone={health?.cloudProfileStore ? "success" : "neutral"}>
