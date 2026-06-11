@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ReviewQueueItem } from "./reviewQueue.js";
+import { compareReviewQueueItems, type ReviewQueueItem } from "./reviewQueue.js";
 
 /** Durable review history record (matches Azure ReviewHistory + queue UI fields). */
 export interface ReviewHistoryRecord {
@@ -13,10 +13,28 @@ export interface ReviewHistoryRecord {
   decisionQueue: ReviewQueueItem["decisionQueue"];
   decisionRiskLevel: ReviewQueueItem["decisionRiskLevel"];
   decisionReason: string;
+  decisionReasonCodes?: string[];
+  contextConfidence?: ReviewQueueItem["contextConfidence"];
   autoApprovedAt: string;
   autoApprovalActor: string;
   lastTokensIn?: number;
   lastTokensOut?: number;
+  discardedFindingCount?: number;
+  hunkCoverageFiles?: number;
+  wholeFileFallbackFiles?: number;
+  changedHunkLines?: number;
+  manualDisposition?: ReviewQueueItem["manualDisposition"];
+  manualDispositionAt?: string;
+  manualDispositionActor?: string;
+  manualDispositionNote?: string;
+  manualDispositionEvents?: ReviewQueueItem["manualDispositionEvents"];
+  manualDispositionWriteBackAttempted?: boolean;
+  manualDispositionWriteBackOk?: boolean;
+  manualDispositionWriteBackError?: string;
+  manualDispositionWriteBackAt?: string;
+  manualDispositionWriteBackThreadId?: string;
+  manualDispositionWriteBackUrl?: string;
+  manualDispositionWriteBackEvents?: ReviewQueueItem["manualDispositionWriteBackEvents"];
 }
 
 type ReviewHistoryStore = Record<string, Record<string, ReviewHistoryRecord>>;
@@ -52,8 +70,26 @@ export function recordToQueueItem(record: ReviewHistoryRecord): ReviewQueueItem 
     decisionQueue: record.decisionQueue,
     decisionRiskLevel: record.decisionRiskLevel,
     decisionReason: record.decisionReason,
+    decisionReasonCodes: record.decisionReasonCodes ?? [],
+    contextConfidence: record.contextConfidence ?? "",
     autoApprovedAt: record.autoApprovedAt,
     autoApprovalActor: record.autoApprovalActor,
+    discardedFindingCount: record.discardedFindingCount ?? 0,
+    hunkCoverageFiles: record.hunkCoverageFiles ?? 0,
+    wholeFileFallbackFiles: record.wholeFileFallbackFiles ?? 0,
+    changedHunkLines: record.changedHunkLines ?? 0,
+    manualDisposition: record.manualDisposition ?? "",
+    manualDispositionAt: record.manualDispositionAt ?? "",
+    manualDispositionActor: record.manualDispositionActor ?? "",
+    manualDispositionNote: record.manualDispositionNote ?? "",
+    manualDispositionEvents: record.manualDispositionEvents ?? [],
+    manualDispositionWriteBackAttempted: record.manualDispositionWriteBackAttempted ?? false,
+    manualDispositionWriteBackOk: record.manualDispositionWriteBackOk ?? false,
+    manualDispositionWriteBackError: record.manualDispositionWriteBackError ?? "",
+    manualDispositionWriteBackAt: record.manualDispositionWriteBackAt ?? "",
+    manualDispositionWriteBackThreadId: record.manualDispositionWriteBackThreadId ?? "",
+    manualDispositionWriteBackUrl: record.manualDispositionWriteBackUrl ?? "",
+    manualDispositionWriteBackEvents: record.manualDispositionWriteBackEvents ?? [],
   };
 }
 
@@ -80,7 +116,7 @@ export function listLocalReviewHistory(args: {
   if (!repository) return [];
   const store = loadStore(args.dataDir);
   const items = Object.values(store[repository] ?? {}).map(recordToQueueItem);
-  const sorted = items.sort((a, b) => Date.parse(b.lastRunAt || "0") - Date.parse(a.lastRunAt || "0"));
+  const sorted = items.sort(compareReviewQueueItems);
   if (args.limit && args.limit > 0) return sorted.slice(0, args.limit);
   return sorted;
 }

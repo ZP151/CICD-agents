@@ -23,6 +23,7 @@ const SettingsSchema = z.object({
   telemetryEnabled: z.coerce.boolean().default(false),
   appInsightsConnectionString: z.string().default(""),
   reviewAutoApproveEnabled: z.coerce.boolean().default(true),
+  reviewStaleAgeHours: z.coerce.number().positive().default(24),
   // ── Azure cloud persistence (optional — falls back to local JSON when unset) ──
   /** Azure Storage account name for profile persistence (Table Storage) */
   azureStorageAccount: z.string().default(""),
@@ -63,6 +64,7 @@ function readEnv(): Record<string, string | undefined> {
     telemetryEnabled: process.env.TELEMETRY_ENABLED,
     appInsightsConnectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING,
     reviewAutoApproveEnabled: process.env.REVIEW_AUTO_APPROVE_ENABLED,
+    reviewStaleAgeHours: process.env.REVIEW_STALE_AGE_HOURS,
     azureStorageAccount:      process.env.AZURE_STORAGE_ACCOUNT,
     azureKeyVaultUrl:         process.env.AZURE_KEYVAULT_URL,
     azureCosmosEndpoint:      process.env.AZURE_COSMOS_ENDPOINT,

@@ -11,6 +11,8 @@ export interface ToolCapability {
 }
 
 const READ_ONLY_TOOLS = new Set([
+  "git_checkpoint",
+  "git_checkpoint_show",
   "git_status",
   "git_log",
   "git_diff",

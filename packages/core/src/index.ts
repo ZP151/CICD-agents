@@ -22,6 +22,8 @@ export * from "./telemetry.js";
 export * from "./chatPlanner.js";
 export * from "./reviewQueue.js";
 export * from "./reviewHistoryLocal.js";
+export * from "./reviewOperationsLocal.js";
+export * from "./prInsightArtifactsLocal.js";
 
 // Azure cloud persistence (opt-in — requires env vars)
 export * from "./store/azureAuth.js";

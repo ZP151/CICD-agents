@@ -69,6 +69,10 @@ export class ReviewService {
       changedFiles: bundle.files,
       findings: review.findings,
       reviewUsedLlm: review.tokensIn > 0 || review.tokensOut > 0,
+      discardedFindingCount: review.discardedFindings.length,
+      hunkCoverageFiles: review.coverage.filesWithHunks,
+      wholeFileFallbackFiles: review.coverage.wholeFileOnlyFiles,
+      changedHunkLines: review.coverage.changedHunkLines,
     });
 
     if (review.summary || review.findings.length > 0) {
@@ -122,7 +126,9 @@ export class ReviewService {
           queue: "needs_human_review",
           riskLevel: decision.riskLevel,
           autoApprove: false,
+          contextConfidence: decision.contextConfidence,
           reason: `Auto-approval failed: ${err instanceof Error ? err.message : String(err)}`,
+          reasonCodes: [...decision.reasonCodes, "auto_approval.failed"],
         };
         log?.warn({ prId, err }, "auto-approval failed");
       }
@@ -140,8 +146,14 @@ export class ReviewService {
       decisionQueue: decision.queue,
       decisionRiskLevel: decision.riskLevel,
       decisionReason: decision.reason,
+      decisionReasonCodes: decision.reasonCodes,
+      contextConfidence: decision.contextConfidence,
       autoApprovedAt: decision.autoApprove ? new Date().toISOString() : "",
       autoApprovalActor: decision.autoApprove ? this.autoApprovalPolicy().reviewerId : "",
+      discardedFindingCount: review.discardedFindings.length,
+      hunkCoverageFiles: review.coverage.filesWithHunks,
+      wholeFileFallbackFiles: review.coverage.wholeFileOnlyFiles,
+      changedHunkLines: review.coverage.changedHunkLines,
     });
 
     log?.info({ prId, findings: review.findings.length, decision: decision.queue }, "review posted");

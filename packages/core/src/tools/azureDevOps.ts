@@ -8,13 +8,38 @@ export const PAT_KEYRING_USER = "azure-devops-pat";
 const API_VERSION_GIT = "7.1-preview.1";
 const API_VERSION_WI = "7.1-preview.3";
 const API_VERSION_PIPELINES = "7.1-preview.1";
+const API_VERSION_CORE = "7.1-preview.4";
+const API_VERSION_BUILD = "7.1-preview.7";
 
 export type PatProvider = () => Promise<string>;
 export type AdoAuthMode = "oauth" | "pat";
+export type AdoAuthStatus =
+  | "ok"
+  | "oauth_unavailable"
+  | "oauth_no_org_access"
+  | "pat_invalid_or_missing_scope"
+  | "unknown_error";
 
 export interface AdoAuth {
   mode: AdoAuthMode;
   header: string;
+}
+
+export interface AdoAuthDiagnostic {
+  status: AdoAuthStatus;
+  authMode?: AdoAuthMode;
+  message: string;
+  retryable: boolean;
+}
+
+export class AdoAuthDiagnosticError extends ToolError {
+  readonly diagnostic: AdoAuthDiagnostic;
+
+  constructor(diagnostic: AdoAuthDiagnostic) {
+    super(diagnostic.message);
+    this.name = "AdoAuthDiagnosticError";
+    this.diagnostic = diagnostic;
+  }
 }
 
 let patProvider: PatProvider = async () => {
@@ -65,13 +90,62 @@ async function adoFetch(url: string, auth: AdoAuth, init: RequestInit = {}): Pro
     },
   });
   if (ADO_REDIRECT_STATUSES.has(resp.status)) {
-    throw new ToolError(
-      auth.mode === "oauth"
-        ? "ADO OAuth authentication failed (redirect to sign-in). Sign in again and make sure your account can access this Azure DevOps organization."
-        : "ADO authentication failed (redirect to sign-in). Check org URL, PAT value, and Code (Read) scope.",
-    );
+    throw new AdoAuthDiagnosticError(auth.mode === "oauth"
+      ? {
+        status: "oauth_no_org_access",
+        authMode: "oauth",
+        message: "ADO OAuth redirected to sign-in. Sign in again and confirm this account can access the Azure DevOps organization.",
+        retryable: true,
+      }
+      : {
+        status: "pat_invalid_or_missing_scope",
+        authMode: "pat",
+        message: "ADO PAT authentication redirected to sign-in. Check the organization URL, PAT value, and required scopes.",
+        retryable: false,
+      });
+  }
+  if (resp.status === 401 || resp.status === 403) {
+    throw new AdoAuthDiagnosticError(auth.mode === "oauth"
+      ? {
+        status: "oauth_no_org_access",
+        authMode: "oauth",
+        message: `ADO OAuth was rejected with HTTP ${resp.status}. Confirm organization access and Azure DevOps OAuth consent.`,
+        retryable: true,
+      }
+      : {
+        status: "pat_invalid_or_missing_scope",
+        authMode: "pat",
+        message: `ADO PAT was rejected with HTTP ${resp.status}. Check the PAT value and scopes.`,
+        retryable: false,
+      });
   }
   return resp;
+}
+
+export function adoAuthDiagnosticFromError(err: unknown, authMode?: AdoAuthMode): AdoAuthDiagnostic {
+  if (err instanceof AdoAuthDiagnosticError) return err.diagnostic;
+  if (isAzureAuthenticationRequiredError(err)) {
+    return {
+      status: "oauth_unavailable",
+      authMode: "oauth",
+      message: err instanceof Error ? err.message : "Azure DevOps OAuth token is unavailable. Sign in again or configure a PAT fallback.",
+      retryable: true,
+    };
+  }
+  if (err instanceof ToolError && /PAT|scope|sign-in|authentication/i.test(err.message)) {
+    return {
+      status: authMode === "oauth" ? "oauth_no_org_access" : "pat_invalid_or_missing_scope",
+      authMode,
+      message: err.message,
+      retryable: authMode !== "pat",
+    };
+  }
+  return {
+    status: "unknown_error",
+    authMode,
+    message: err instanceof Error ? err.message : String(err),
+    retryable: true,
+  };
 }
 
 function adoBase(org: string): string {
@@ -112,6 +186,103 @@ export interface AzurePipelineRunSummary {
   sourceBranch: string;
   url: string;
 }
+
+export interface AzurePullRequestDetail extends AzurePullRequestSummary {
+  codeReviewId: number;
+  project: string;
+  description: string;
+  closedDate: string;
+  workItemRefs: Array<{ id: string; url: string }>;
+}
+
+export interface AzurePullRequestThread {
+  id: number;
+  publishedDate: string;
+  lastUpdatedDate: string;
+  status: string | number;
+  comments: Array<{
+    id: number;
+    author: {
+      displayName: string;
+      uniqueName: string;
+    };
+    content: string;
+    publishedDate: string;
+    lastUpdatedDate: string;
+    lastContentUpdatedDate: string;
+  }>;
+  threadContext: unknown;
+}
+
+export interface AzurePullRequestChange {
+  changeId: number;
+  changeType: string | number;
+  path: string;
+  originalPath: string;
+  gitObjectType: string;
+  commitId: string;
+}
+
+export interface AzurePullRequestChanges {
+  iterationId: number;
+  sourceCommit: string;
+  targetCommit: string;
+  commonCommit: string;
+  fileCount: number;
+  changes: AzurePullRequestChange[];
+  nextSkip?: number;
+  nextTop?: number;
+}
+
+export interface AzureBuildSummary {
+  id: number;
+  buildNumber: string;
+  status: string;
+  result: string;
+  queueTime: string;
+  startTime: string;
+  finishTime: string;
+  sourceBranch: string;
+  sourceVersion: string;
+  definitionName: string;
+  repository: string;
+  requestedFor: string;
+  url: string;
+}
+
+export interface AzureDevOpsDiscoveryOption {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
+}
+
+export interface AzureDevOpsToolHealth {
+  ok: boolean;
+  source: "internal";
+  authMode: AdoAuthMode;
+  authStatus: AdoAuthStatus;
+  authMessage: string;
+  toolCount: number;
+  tools: Array<{ name: string; description: string }>;
+  projectCount: number;
+}
+
+export const INTERNAL_AZURE_DEVOPS_TOOL_MANIFEST: Array<{ name: string; description: string }> = [
+  { name: "ado_core_list_projects", description: "List Azure DevOps projects." },
+  { name: "ado_repo_list_repos_by_project", description: "List Azure Repos repositories by project." },
+  { name: "ado_pipelines_get_build_definitions", description: "List Azure Pipelines build definitions." },
+  { name: "ado_list_pull_requests", description: "List Azure DevOps pull requests." },
+  { name: "ado_get_pull_request_by_id", description: "Get Azure DevOps pull request details." },
+  { name: "ado_list_pull_request_threads", description: "List Azure DevOps pull request comment threads." },
+  { name: "ado_get_pull_request_changes", description: "Get Azure DevOps pull request changed files." },
+  { name: "ado_pipelines_get_builds", description: "List Azure DevOps builds." },
+  { name: "ado_pipelines_get_run", description: "Get an Azure Pipeline run." },
+  { name: "ado_list_pipeline_runs", description: "List Azure Pipeline runs." },
+  { name: "ado_create_pr", description: "Create an Azure DevOps pull request." },
+  { name: "ado_link_work_item", description: "Attach a work item to a pull request." },
+  { name: "ado_trigger_pipeline", description: "Queue a run of an Azure DevOps pipeline." },
+];
 
 function resolveOrgProject(ctx: ToolContext, payload: Record<string, unknown>): {
   org: string;
@@ -296,8 +467,497 @@ export async function listAzurePipelineRuns(args: {
   }));
 }
 
+export async function getAzurePullRequestById(args: {
+  organization: string;
+  project: string;
+  repository: string;
+  pullRequestId: string | number;
+  pat?: string;
+  auth?: AdoAuth;
+  includeWorkItemRefs?: boolean;
+}): Promise<AzurePullRequestDetail> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const repository = args.repository.trim();
+  const pullRequestId = Number(args.pullRequestId ?? 0);
+  if (!org || !project || !repository || !pullRequestId) {
+    throw new ToolError("ADO organization, project, repository, and pull request ID are required.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const params = new URLSearchParams({
+    "api-version": API_VERSION_GIT,
+  });
+  if (args.includeWorkItemRefs) params.set("includeWorkItemRefs", "true");
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories/` +
+    `${encodeURIComponent(repository)}/pullrequests/${pullRequestId}?${params.toString()}`;
+  const resp = await adoFetch(url, auth);
+  const pr = await parseAdoJson(resp, "get pull request") as {
+    pullRequestId?: number;
+    codeReviewId?: number;
+    title?: string;
+    description?: string;
+    status?: string;
+    isDraft?: boolean;
+    sourceRefName?: string;
+    targetRefName?: string;
+    creationDate?: string;
+    closedDate?: string;
+    createdBy?: { displayName?: string };
+    repository?: { name?: string; project?: { name?: string } };
+    reviewers?: Array<{ vote?: number }>;
+    workItemRefs?: Array<{ id?: string; url?: string }>;
+  };
+  const reviewers = pr.reviewers ?? [];
+  const id = Number(pr.pullRequestId ?? pullRequestId);
+  return {
+    id,
+    codeReviewId: Number(pr.codeReviewId ?? 0),
+    title: pr.title ?? "",
+    description: pr.description ?? "",
+    status: pr.status ?? "",
+    isDraft: Boolean(pr.isDraft ?? false),
+    sourceBranch: stripRef(pr.sourceRefName ?? ""),
+    targetBranch: stripRef(pr.targetRefName ?? ""),
+    createdBy: pr.createdBy?.displayName ?? "",
+    creationDate: pr.creationDate ?? "",
+    closedDate: pr.closedDate ?? "",
+    repository: pr.repository?.name ?? repository,
+    project: pr.repository?.project?.name ?? project,
+    url: `${adoBase(org)}/${project}/_git/${repository}/pullrequest/${id}`,
+    reviewerCount: reviewers.length,
+    voteSummary: {
+      approved: reviewers.filter((r) => Number(r.vote ?? 0) > 0).length,
+      waiting: reviewers.filter((r) => Number(r.vote ?? 0) === 0).length,
+      rejected: reviewers.filter((r) => Number(r.vote ?? 0) < 0).length,
+    },
+    workItemRefs: (pr.workItemRefs ?? []).map((ref) => ({
+      id: ref.id ?? "",
+      url: ref.url ?? "",
+    })).filter((ref) => ref.id || ref.url),
+  };
+}
+
+export async function listAzurePullRequestThreads(args: {
+  organization: string;
+  project: string;
+  repository: string;
+  pullRequestId: string | number;
+  pat?: string;
+  auth?: AdoAuth;
+  top?: number;
+  skip?: number;
+  status?: string | number;
+  authorEmail?: string;
+  authorDisplayName?: string;
+}): Promise<AzurePullRequestThread[]> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const repository = args.repository.trim();
+  const pullRequestId = Number(args.pullRequestId ?? 0);
+  if (!org || !project || !repository || !pullRequestId) {
+    throw new ToolError("ADO organization, project, repository, and pull request ID are required.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const params = new URLSearchParams({ "api-version": API_VERSION_GIT });
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories/` +
+    `${encodeURIComponent(repository)}/pullrequests/${pullRequestId}/threads?${params.toString()}`;
+  const resp = await adoFetch(url, auth);
+  const data = await parseAdoJson(resp, "list pull request threads") as {
+    value?: Array<{
+      id?: number;
+      publishedDate?: string;
+      lastUpdatedDate?: string;
+      status?: string | number;
+      comments?: Array<{
+        id?: number;
+        isDeleted?: boolean;
+        author?: { displayName?: string; uniqueName?: string };
+        content?: string;
+        publishedDate?: string;
+        lastUpdatedDate?: string;
+        lastContentUpdatedDate?: string;
+      }>;
+      threadContext?: unknown;
+    }>;
+  };
+  const authorEmail = args.authorEmail?.toLowerCase();
+  const authorDisplayName = args.authorDisplayName?.toLowerCase();
+  const status = args.status;
+  const top = Math.max(1, args.top ?? 100);
+  const skip = Math.max(0, args.skip ?? 0);
+  return (data.value ?? [])
+    .filter((thread) => status === undefined || String(thread.status ?? "") === String(status))
+    .filter((thread) => {
+      const first = thread.comments?.[0];
+      if (authorEmail && first?.author?.uniqueName?.toLowerCase() !== authorEmail) return false;
+      if (authorDisplayName && !first?.author?.displayName?.toLowerCase().includes(authorDisplayName)) return false;
+      return true;
+    })
+    .sort((a, b) => Number(a.id ?? 0) - Number(b.id ?? 0))
+    .slice(skip, skip + top)
+    .map((thread) => ({
+      id: Number(thread.id ?? 0),
+      publishedDate: thread.publishedDate ?? "",
+      lastUpdatedDate: thread.lastUpdatedDate ?? "",
+      status: thread.status ?? "",
+      comments: (thread.comments ?? [])
+        .filter((comment) => !comment.isDeleted)
+        .map((comment) => ({
+          id: Number(comment.id ?? 0),
+          author: {
+            displayName: comment.author?.displayName ?? "",
+            uniqueName: comment.author?.uniqueName ?? "",
+          },
+          content: comment.content ?? "",
+          publishedDate: comment.publishedDate ?? "",
+          lastUpdatedDate: comment.lastUpdatedDate ?? "",
+          lastContentUpdatedDate: comment.lastContentUpdatedDate ?? "",
+        })),
+      threadContext: thread.threadContext ?? null,
+    }));
+}
+
+export async function listAzurePullRequestChanges(args: {
+  organization: string;
+  project: string;
+  repository: string;
+  pullRequestId: string | number;
+  pat?: string;
+  auth?: AdoAuth;
+  iterationId?: string | number;
+  compareTo?: string | number;
+  top?: number;
+  skip?: number;
+}): Promise<AzurePullRequestChanges> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const repository = args.repository.trim();
+  const pullRequestId = Number(args.pullRequestId ?? 0);
+  if (!org || !project || !repository || !pullRequestId) {
+    throw new ToolError("ADO organization, project, repository, and pull request ID are required.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  let targetIteration = args.iterationId ? Number(args.iterationId) : 0;
+  let iterationInfo: {
+    id?: number;
+    sourceRefCommit?: { commitId?: string };
+    targetRefCommit?: { commitId?: string };
+    commonRefCommit?: { commitId?: string };
+  } | undefined;
+
+  if (!targetIteration) {
+    const iterationsUrl =
+      `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories/` +
+      `${encodeURIComponent(repository)}/pullrequests/${pullRequestId}/iterations?api-version=${API_VERSION_GIT}`;
+    const iterationsResp = await adoFetch(iterationsUrl, auth);
+    const iterations = await parseAdoJson(iterationsResp, "list pull request iterations") as {
+      value?: Array<{
+        id?: number;
+        sourceRefCommit?: { commitId?: string };
+        targetRefCommit?: { commitId?: string };
+        commonRefCommit?: { commitId?: string };
+      }>;
+    };
+    iterationInfo = iterations.value?.[iterations.value.length - 1];
+    targetIteration = Number(iterationInfo?.id ?? 0);
+  }
+
+  if (!targetIteration) throw new ToolError("No iterations found for this pull request.");
+
+  const params = new URLSearchParams({
+    "api-version": API_VERSION_GIT,
+  });
+  if (args.top) params.set("$top", String(args.top));
+  if (args.skip) params.set("$skip", String(args.skip));
+  if (args.compareTo) params.set("$compareTo", String(args.compareTo));
+  const changesUrl =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories/` +
+    `${encodeURIComponent(repository)}/pullrequests/${pullRequestId}/iterations/${targetIteration}/changes?${params.toString()}`;
+  const changesResp = await adoFetch(changesUrl, auth);
+  const changes = await parseAdoJson(changesResp, "list pull request changes") as {
+    changeEntries?: Array<{
+      changeId?: number;
+      changeType?: string | number;
+      originalPath?: string;
+      item?: {
+        path?: string;
+        gitObjectType?: string;
+        commitId?: string;
+      };
+    }>;
+    nextSkip?: number;
+    nextTop?: number;
+  };
+
+  return {
+    iterationId: targetIteration,
+    sourceCommit: iterationInfo?.sourceRefCommit?.commitId ?? "",
+    targetCommit: iterationInfo?.targetRefCommit?.commitId ?? "",
+    commonCommit: iterationInfo?.commonRefCommit?.commitId ?? "",
+    fileCount: changes.changeEntries?.length ?? 0,
+    changes: (changes.changeEntries ?? []).map((entry) => ({
+      changeId: Number(entry.changeId ?? 0),
+      changeType: entry.changeType ?? "",
+      path: entry.item?.path ?? "",
+      originalPath: entry.originalPath ?? "",
+      gitObjectType: entry.item?.gitObjectType ?? "",
+      commitId: entry.item?.commitId ?? "",
+    })),
+    nextSkip: changes.nextSkip,
+    nextTop: changes.nextTop,
+  };
+}
+
+export async function listAzureProjects(args: {
+  organization: string;
+  pat?: string;
+  auth?: AdoAuth;
+  top?: number;
+}): Promise<AzureDevOpsDiscoveryOption[]> {
+  const org = args.organization.trim();
+  if (!org) throw new ToolError("ADO organization is required to list projects.");
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const params = new URLSearchParams({
+    "$top": String(args.top ?? 100),
+    "api-version": API_VERSION_CORE,
+  });
+  const url = `${adoBase(org)}/_apis/projects?${params.toString()}`;
+  const resp = await adoFetch(url, auth);
+  const data = (await parseAdoJson(resp, "list projects")) as {
+    value?: Array<{ id?: string; name?: string; description?: string; url?: string }>;
+  };
+  return (data.value ?? []).map((project) => ({
+    id: project.id ?? project.name ?? "",
+    name: project.name ?? project.id ?? "",
+    description: project.description ?? "",
+    url: project.url ?? "",
+  })).filter((project) => project.id || project.name);
+}
+
+export async function listAzureRepositories(args: {
+  organization: string;
+  project: string;
+  pat?: string;
+  auth?: AdoAuth;
+  top?: number;
+}): Promise<AzureDevOpsDiscoveryOption[]> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  if (!org || !project) throw new ToolError("ADO organization and project are required to list repositories.");
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const params = new URLSearchParams({ "api-version": API_VERSION_GIT });
+  const url = `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories?${params.toString()}`;
+  const resp = await adoFetch(url, auth);
+  const data = (await parseAdoJson(resp, "list repositories")) as {
+    value?: Array<{ id?: string; name?: string; defaultBranch?: string; webUrl?: string; remoteUrl?: string; url?: string }>;
+  };
+  return (data.value ?? []).slice(0, args.top ?? 100).map((repo) => ({
+    id: repo.id ?? repo.name ?? "",
+    name: repo.name ?? repo.id ?? "",
+    description: stripRef(repo.defaultBranch ?? ""),
+    url: repo.webUrl ?? repo.remoteUrl ?? repo.url ?? "",
+  })).filter((repo) => repo.id || repo.name);
+}
+
+export async function listAzureBuildDefinitions(args: {
+  organization: string;
+  project: string;
+  repositoryId?: string;
+  pat?: string;
+  auth?: AdoAuth;
+  top?: number;
+}): Promise<AzureDevOpsDiscoveryOption[]> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  if (!org || !project) throw new ToolError("ADO organization and project are required to list build definitions.");
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const params = new URLSearchParams({
+    "$top": String(args.top ?? 100),
+    "api-version": API_VERSION_BUILD,
+  });
+  const repository = args.repositoryId?.trim();
+  if (repository) params.set("repositoryId", await resolveRepositoryId(org, project, repository, auth));
+  const url = `${adoBase(org)}/${encodeURIComponent(project)}/_apis/build/definitions?${params.toString()}`;
+  const resp = await adoFetch(url, auth);
+  const data = (await parseAdoJson(resp, "list build definitions")) as {
+    value?: Array<{
+      id?: number;
+      name?: string;
+      path?: string;
+      url?: string;
+      repository?: { id?: string; name?: string; type?: string };
+      process?: { yamlFilename?: string };
+      _links?: { web?: { href?: string } };
+    }>;
+  };
+  return (data.value ?? []).map((definition) => {
+    const id = String(definition.id ?? definition.name ?? "");
+    const descriptionParts = [
+      definition.path,
+      definition.repository?.name ? `repo:${definition.repository.name}` : "",
+      definition.repository?.type ? `type:${definition.repository.type}` : "",
+      definition.process?.yamlFilename ? `yaml:${definition.process.yamlFilename}` : "",
+    ].filter(Boolean);
+    return {
+      id,
+      name: definition.name ?? id,
+      description: descriptionParts.join(" · "),
+      url: definition._links?.web?.href ?? definition.url ?? "",
+    };
+  }).filter((definition) => definition.id || definition.name);
+}
+
+export async function listAzureBuilds(args: {
+  organization: string;
+  project: string;
+  pat?: string;
+  auth?: AdoAuth;
+  definitions?: Array<string | number>;
+  branchName?: string;
+  repositoryId?: string;
+  repositoryType?: string;
+  top?: number;
+  buildIds?: Array<string | number>;
+}): Promise<AzureBuildSummary[]> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  if (!org || !project) throw new ToolError("ADO organization and project are required to list builds.");
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const params = new URLSearchParams({
+    "queryOrder": "queueTimeDescending",
+    "$top": String(args.top ?? 50),
+    "api-version": API_VERSION_BUILD,
+  });
+  if (args.definitions?.length) params.set("definitions", args.definitions.map(String).join(","));
+  if (args.buildIds?.length) params.set("buildIds", args.buildIds.map(String).join(","));
+  if (args.branchName) params.set("branchName", normalizeBranchRef(args.branchName));
+  if (args.repositoryId) params.set("repositoryId", args.repositoryId);
+  if (args.repositoryType) params.set("repositoryType", args.repositoryType);
+  const url = `${adoBase(org)}/${encodeURIComponent(project)}/_apis/build/builds?${params.toString()}`;
+  const resp = await adoFetch(url, auth);
+  const data = await parseAdoJson(resp, "list builds") as {
+    value?: Array<{
+      id?: number;
+      buildNumber?: string;
+      status?: string;
+      result?: string;
+      queueTime?: string;
+      startTime?: string;
+      finishTime?: string;
+      sourceBranch?: string;
+      sourceVersion?: string;
+      definition?: { name?: string };
+      repository?: { name?: string };
+      requestedFor?: { displayName?: string };
+      _links?: { web?: { href?: string } };
+      url?: string;
+    }>;
+  };
+  return (data.value ?? []).map((build) => ({
+    id: Number(build.id ?? 0),
+    buildNumber: build.buildNumber ?? "",
+    status: build.status ?? "",
+    result: build.result ?? "",
+    queueTime: build.queueTime ?? "",
+    startTime: build.startTime ?? "",
+    finishTime: build.finishTime ?? "",
+    sourceBranch: stripRef(build.sourceBranch ?? ""),
+    sourceVersion: build.sourceVersion ?? "",
+    definitionName: build.definition?.name ?? "",
+    repository: build.repository?.name ?? "",
+    requestedFor: build.requestedFor?.displayName ?? "",
+    url: build._links?.web?.href ?? build.url ?? "",
+  }));
+}
+
+export async function getAzurePipelineRun(args: {
+  organization: string;
+  project: string;
+  pipelineId: string | number;
+  runId: string | number;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzurePipelineRunSummary> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const pipelineId = String(args.pipelineId ?? "").trim();
+  const runId = String(args.runId ?? "").trim();
+  if (!org || !project || !pipelineId || !runId) {
+    throw new ToolError("ADO organization, project, pipeline ID, and run ID are required.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const params = new URLSearchParams({ "api-version": "7.1" });
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/pipelines/` +
+    `${encodeURIComponent(pipelineId)}/runs/${encodeURIComponent(runId)}?${params.toString()}`;
+  const resp = await adoFetch(url, auth);
+  const run = await parseAdoJson(resp, "get pipeline run") as {
+    id?: number;
+    name?: string;
+    state?: string;
+    result?: string;
+    createdDate?: string;
+    finishedDate?: string;
+    _links?: { web?: { href?: string } };
+    resources?: { repositories?: { self?: { refName?: string } } };
+  };
+  return {
+    id: Number(run.id ?? 0),
+    name: run.name ?? "",
+    state: run.state ?? "",
+    result: run.result ?? "",
+    createdDate: run.createdDate ?? "",
+    finishedDate: run.finishedDate ?? "",
+    sourceBranch: stripRef(run.resources?.repositories?.self?.refName ?? ""),
+    url: run._links?.web?.href ?? "",
+  };
+}
+
+export async function checkAzureDevOpsTools(args: {
+  organization: string;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzureDevOpsToolHealth> {
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const projects = await listAzureProjects({
+    organization: args.organization,
+    auth,
+    top: 1,
+  });
+  return {
+    ok: true,
+    source: "internal",
+    authMode: auth.mode,
+    authStatus: "ok",
+    authMessage: `ADO tools are reachable via ${auth.mode === "oauth" ? "OAuth" : "PAT fallback"}.`,
+    toolCount: INTERNAL_AZURE_DEVOPS_TOOL_MANIFEST.length,
+    tools: INTERNAL_AZURE_DEVOPS_TOOL_MANIFEST,
+    projectCount: projects.length,
+  };
+}
+
+async function resolveRepositoryId(
+  organization: string,
+  project: string,
+  repository: string,
+  auth: AdoAuth,
+): Promise<string> {
+  const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(repository);
+  if (isGuid) return repository;
+  const repos = await listAzureRepositories({ organization, project, auth });
+  return repos.find((repo) => repo.name === repository || repo.id === repository)?.id ?? repository;
+}
+
 function stripRef(ref: string): string {
   return ref.replace(/^refs\/heads\//, "");
+}
+
+function normalizeBranchRef(branch: string): string {
+  const trimmed = branch.trim();
+  if (!trimmed || trimmed.startsWith("refs/")) return trimmed;
+  return `refs/heads/${trimmed}`;
 }
 
 /** Parse an ADO REST response; surface HTML auth pages as a clear ToolError. */

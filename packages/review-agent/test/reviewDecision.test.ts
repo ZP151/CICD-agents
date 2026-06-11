@@ -19,6 +19,8 @@ describe("review decision", () => {
     expect(decision.queue).toBe("auto_approved");
     expect(decision.autoApprove).toBe(true);
     expect(decision.riskLevel).toBe("low");
+    expect(decision.contextConfidence).toBe("high");
+    expect(decision.reasonCodes).toContain("auto_approval.eligible");
   });
 
   it("routes warnings to human review", () => {
@@ -38,6 +40,7 @@ describe("review decision", () => {
     expect(decision.queue).toBe("needs_human_review");
     expect(decision.autoApprove).toBe(false);
     expect(decision.riskLevel).toBe("medium");
+    expect(decision.reasonCodes).toContain("risk.medium");
   });
 
   it("watches low-risk PRs when auto-approval is disabled", () => {
@@ -89,6 +92,7 @@ describe("review decision", () => {
     expect(decision.queue).toBe("blocked");
     expect(decision.autoApprove).toBe(false);
     expect(decision.riskLevel).toBe("high");
+    expect(decision.reasonCodes).toContain("risk.high");
   });
 
   it("does not approve when the review model did not run", () => {
@@ -101,5 +105,30 @@ describe("review decision", () => {
     });
     expect(decision.queue).toBe("needs_human_review");
     expect(decision.autoApprove).toBe(false);
+    expect(decision.contextConfidence).toBe("low");
+    expect(decision.reasonCodes).toContain("review.no_llm");
+  });
+
+  it("routes low-risk PRs to human review when context quality is not high enough", () => {
+    const decision = decideReviewOutcome({
+      policy,
+      targetBranch: "main",
+      changedFiles: [{ path: "src/app.ts", changeType: "edit", content: "export {}" }],
+      findings: [],
+      reviewUsedLlm: true,
+      discardedFindingCount: 1,
+      hunkCoverageFiles: 0,
+      wholeFileFallbackFiles: 1,
+      changedHunkLines: 0,
+    });
+    expect(decision.queue).toBe("needs_human_review");
+    expect(decision.autoApprove).toBe(false);
+    expect(decision.riskLevel).toBe("medium");
+    expect(decision.contextConfidence).toBe("low");
+    expect(decision.reasonCodes).toEqual(expect.arrayContaining([
+      "model_output.discarded_findings",
+      "context.whole_file_fallback",
+      "context.no_hunk_coverage",
+    ]));
   });
 });

@@ -33,6 +33,9 @@ export interface ToolCallInfo {
  * Return true to allow tool execution, false to deny it.
  */
 export type ToolApproveFn = (toolCall: ToolCallInfo) => boolean | Promise<boolean>;
+export type ToolBeforeExecuteFn = (
+  toolCall: ToolCallInfo,
+) => void | Record<string, unknown> | Promise<void | Record<string, unknown>>;
 
 export class ToolDeniedError extends Error {
   constructor(toolName: string) {
@@ -154,6 +157,7 @@ export class ToolExecutor {
   constructor(
     public readonly context: ToolContext,
     private readonly approve?: ToolApproveFn,
+    private readonly beforeExecute?: ToolBeforeExecuteFn,
   ) {}
 
   register(tool: Tool): void {
@@ -179,9 +183,20 @@ export class ToolExecutor {
       const allowed = await this.approve({ toolName: name, payload, tool });
       if (!allowed) throw new ToolDeniedError(name);
     }
+    const beforeExecuteMetadata = this.beforeExecute
+      ? await this.beforeExecute({ toolName: name, payload, tool })
+      : undefined;
     const result = await tool.handler(this.context, payload);
     if (result === null || typeof result !== "object" || Array.isArray(result)) {
       throw new ToolError(`tool '${name}' did not return an object`);
+    }
+    if (beforeExecuteMetadata && typeof beforeExecuteMetadata === "object" && !Array.isArray(beforeExecuteMetadata)) {
+      return {
+        ...result,
+        execution_metadata: {
+          beforeExecute: beforeExecuteMetadata,
+        },
+      };
     }
     return result;
   }

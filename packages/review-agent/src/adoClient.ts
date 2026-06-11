@@ -103,7 +103,13 @@ export class AdoClient {
     project: string,
     repositoryId: string,
     prId: number,
-  ): Promise<{ value: Array<{ id: number; description: string; sourceRefCommit: { commitId: string } }> }> {
+  ): Promise<{ value: Array<{
+    id: number;
+    description: string;
+    sourceRefCommit: { commitId: string };
+    commonRefCommit?: { commitId: string };
+    targetRefCommit?: { commitId: string };
+  }> }> {
     return this.json(
       `${this.baseUrl}/${project}/_apis/git/repositories/${repositoryId}/pullrequests/${prId}/iterations?api-version=7.1-preview.1`,
     );
@@ -144,6 +150,27 @@ export class AdoClient {
     const r = await fetch(url, { headers: { Authorization: await this.authHeader() } });
     if (!r.ok) throw new Error(`getItemContent failed: HTTP ${r.status}`);
     return r.text();
+  }
+
+  async getFileDiffs(
+    project: string,
+    repositoryId: string,
+    criteria: FileDiffsCriteria,
+  ): Promise<FileDiff[]> {
+    const url =
+      `${this.baseUrl}/${project}/_apis/git/repositories/${repositoryId}` +
+      `/diffs/filediffs?api-version=7.1-preview.1`;
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: await this.authHeader(),
+      },
+      body: JSON.stringify(criteria),
+    });
+    if (!r.ok) throw new Error(`getFileDiffs failed: HTTP ${r.status}: ${(await r.text()).slice(0, 400)}`);
+    const data = await r.json() as FileDiff[] | { value?: FileDiff[] };
+    return Array.isArray(data) ? data : data.value ?? [];
   }
 
   async createThread(args: {
@@ -207,6 +234,26 @@ export interface ReviewThreadPayload {
     rightFileStart: { line: number; offset: number };
     rightFileEnd: { line: number; offset: number };
   };
+}
+
+export interface FileDiffsCriteria {
+  baseVersionCommit: string;
+  targetVersionCommit: string;
+  fileDiffParams: Array<{ path: string; originalPath?: string }>;
+}
+
+export interface FileDiff {
+  path?: string | null;
+  originalPath?: string | null;
+  lineDiffBlocks?: Array<{
+    changeType?: string | number;
+    originalLineNumberStart?: number;
+    originalLinesCount?: number;
+    modifiedLineNumberStart?: number;
+    modifiedLinesCount?: number;
+    originalLines?: string[];
+    modifiedLines?: string[];
+  }>;
 }
 
 export const COMMENT_TYPE_TEXT = 1;

@@ -26,6 +26,7 @@ import PullRequests from "./pages/PullRequests.js";
 import Settings from "./pages/Settings.js";
 import Chat from "./pages/Chat.js";
 import Profiles from "./pages/Profiles.js";
+import { withProjectLinkDefaults, withProjectLinkInputDefaults } from "./projectLinks.js";
 
 // ─── Global app data (profiles, etc.) ────────────────────────────────────────
 // Loaded once after daemon is ready. All pages read from here — no per-page fetching.
@@ -33,7 +34,10 @@ import Profiles from "./pages/Profiles.js";
 const PROFILES_LS_KEY = "cicd_agent_profiles_v1";
 
 function lsProfiles(): WorkspaceProfile[] {
-  try { return JSON.parse(localStorage.getItem(PROFILES_LS_KEY) ?? "[]") as WorkspaceProfile[]; }
+  try {
+    const raw = JSON.parse(localStorage.getItem(PROFILES_LS_KEY) ?? "[]") as Array<Partial<WorkspaceProfile>>;
+    return raw.map(withProjectLinkDefaults);
+  }
   catch { return []; }
 }
 
@@ -71,13 +75,13 @@ function AppDataProvider({ children, daemonReady }: { children: React.ReactNode;
   const loadedRef = useRef(false);
 
   const syncToLs = (ps: WorkspaceProfile[]) => {
-    localStorage.setItem(PROFILES_LS_KEY, JSON.stringify(ps));
+    localStorage.setItem(PROFILES_LS_KEY, JSON.stringify(ps.map(withProjectLinkDefaults)));
   };
 
   const refreshProfiles = useCallback(async () => {
     setProfilesLoading(true);
     try {
-      const remote = await listProfiles();
+      const remote = (await listProfiles()).map(withProjectLinkDefaults);
       setProfiles(remote);
       setUsingDaemon(true);
       syncToLs(remote);
@@ -103,17 +107,17 @@ function AppDataProvider({ children, daemonReady }: { children: React.ReactNode;
   function genId() { return crypto.randomUUID(); }
   function lsCreate(data: WorkspaceProfileInput): WorkspaceProfile {
     const now = Date.now() / 1000;
-    return { ...data, id: genId(), createdAt: now, updatedAt: now };
+    return { ...withProjectLinkInputDefaults(data), id: genId(), createdAt: now, updatedAt: now };
   }
   function lsUpdate(id: string, data: Partial<WorkspaceProfileInput>, prev: WorkspaceProfile[]): WorkspaceProfile {
     const existing = prev.find(p => p.id === id);
     if (!existing) throw new Error("Profile not found");
-    return { ...existing, ...data, id, updatedAt: Date.now() / 1000 };
+    return { ...withProjectLinkDefaults({ ...existing, ...data }), id, updatedAt: Date.now() / 1000 };
   }
 
   const createProfile = useCallback(async (data: WorkspaceProfileInput): Promise<WorkspaceProfile> => {
     try {
-      const p = await apiCreateProfile(data);
+      const p = withProjectLinkDefaults(await apiCreateProfile(withProjectLinkInputDefaults(data)));
       setUsingDaemon(true);
       setProfiles(prev => { const next = [...prev, p]; syncToLs(next); return next; });
       return p;
@@ -128,7 +132,7 @@ function AppDataProvider({ children, daemonReady }: { children: React.ReactNode;
 
   const updateProfile = useCallback(async (id: string, data: Partial<WorkspaceProfileInput>): Promise<WorkspaceProfile> => {
     try {
-      const updated = await apiUpdateProfile(id, data);
+      const updated = withProjectLinkDefaults(await apiUpdateProfile(id, data));
       setUsingDaemon(true);
       setProfiles(prev => { const next = prev.map(p => p.id === id ? updated : p); syncToLs(next); return next; });
       return updated;

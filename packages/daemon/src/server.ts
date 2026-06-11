@@ -31,7 +31,7 @@ import nodeOs from "node:os";
     }
   }
 })();
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import {
   getSettings,
   runPipelineTask,
@@ -44,13 +44,27 @@ import {
   updateWorkspaceProfile,
   deleteWorkspaceProfile,
   type WorkspaceProfileInput,
+  checkAzureDevOpsTools,
+  listAzureBuildDefinitions,
+  listAzureProjects,
+  listAzureRepositories,
   listAzurePullRequests,
   listAzurePipelineRuns,
+  getAzurePullRequestById,
+  listAzurePullRequestThreads,
+  listAzurePullRequestChanges,
+  listAzureBuilds,
   getAzureDevOpsAuth,
+  adoAuthDiagnosticFromError,
   listReviewQueueItems,
   listLocalReviewHistory,
   upsertLocalReviewHistory,
   type ReviewHistoryRecord,
+  appendLocalReviewOperation,
+  listLocalReviewOperations,
+  type ReviewOperationKind,
+  listLocalPrInsightArtifacts,
+  upsertLocalPrInsightArtifact,
   AzureTableProfileStore,
   KeyVaultSecrets,
   getCurrentUser,
@@ -64,6 +78,8 @@ import {
   isAzureAuthenticationRequiredError,
   resetUserCache,
   runCommand,
+  previewGitCheckpoint,
+  planGitCheckpointRollback,
   LLMClient,
   type BrowserLoginChoice,
 } from "@cicd-agent/core";
@@ -73,6 +89,8 @@ import { ChatSessionManager, type InlineLlmConfig, type InlineProfile } from "./
 import { chatEventToSseEvents, sessionStartedEvent } from "./chatEvents.js";
 import {
   AdoClient,
+  COMMENT_TYPE_TEXT,
+  THREAD_STATUS_ACTIVE,
   buildCloudContext,
   runReviewPlanner,
   decideReviewOutcome,
@@ -84,6 +102,15 @@ import { z } from "zod";
 export interface BuildAppOptions {
   /** Override the task runner. Defaults to runPipelineTask. */
   runner?: TaskRunner;
+}
+
+type AdoDiscoveryKind = "projects" | "repositories" | "pipelines";
+
+interface AdoDiscoveryOption {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
 }
 
 // Inline LLM config sent from the frontend Settings page (localStorage).
@@ -131,7 +158,15 @@ const ChatStartSchema = z.object({
   profile:   InlineProfileSchema,    // inline profile data from localStorage Profiles
 });
 const SessionIdParam = z.object({ sessionId: z.string().min(1) });
+const CheckpointIdParam = z.object({ checkpointId: z.string().min(1) });
+const CheckpointPreviewQuery = z.object({
+  maxDiffChars: z.coerce.number().int().min(0).max(100_000).optional(),
+});
 const ProfileIdParam = z.object({ id: z.string().min(1) });
+const ProfilePullRequestParam = z.object({
+  id: z.string().min(1),
+  pullRequestId: z.coerce.number().int().positive(),
+});
 
 const ReviewHistoryUpsertSchema = z.object({
   pullRequestId: z.coerce.number().int().positive(),
@@ -142,10 +177,84 @@ const ReviewHistoryUpsertSchema = z.object({
   decisionQueue: z.enum(["auto_approved", "needs_human_review", "blocked", "watching"]).default("needs_human_review"),
   decisionRiskLevel: z.enum(["low", "medium", "high"]).default("medium"),
   decisionReason: z.string().default(""),
+  decisionReasonCodes: z.array(z.string()).default([]),
+  contextConfidence: z.enum(["high", "medium", "low", ""]).default(""),
   autoApprovedAt: z.string().default(""),
   autoApprovalActor: z.string().default(""),
   lastTokensIn: z.coerce.number().int().nonnegative().optional(),
   lastTokensOut: z.coerce.number().int().nonnegative().optional(),
+  discardedFindingCount: z.coerce.number().int().nonnegative().optional(),
+  hunkCoverageFiles: z.coerce.number().int().nonnegative().optional(),
+  wholeFileFallbackFiles: z.coerce.number().int().nonnegative().optional(),
+  changedHunkLines: z.coerce.number().int().nonnegative().optional(),
+  manualDisposition: z.enum(["", "acknowledged", "marked_safe", "marked_blocked", "changes_requested"]).default(""),
+  manualDispositionAt: z.string().default(""),
+  manualDispositionActor: z.string().default(""),
+  manualDispositionNote: z.string().default(""),
+  manualDispositionEvents: z.array(z.object({
+    disposition: z.enum(["acknowledged", "marked_safe", "marked_blocked", "changes_requested"]),
+    at: z.string().default(""),
+    actor: z.string().default(""),
+    note: z.string().default(""),
+  })).default([]),
+  manualDispositionWriteBackAttempted: z.boolean().default(false),
+  manualDispositionWriteBackOk: z.boolean().default(false),
+  manualDispositionWriteBackError: z.string().default(""),
+  manualDispositionWriteBackAt: z.string().default(""),
+  manualDispositionWriteBackThreadId: z.string().default(""),
+  manualDispositionWriteBackUrl: z.string().default(""),
+  manualDispositionWriteBackEvents: z.array(z.object({
+    disposition: z.enum(["acknowledged", "marked_safe", "marked_blocked", "changes_requested"]),
+    at: z.string().default(""),
+    ok: z.boolean().default(false),
+    actor: z.string().default(""),
+    note: z.string().default(""),
+    error: z.string().default(""),
+    threadId: z.string().default(""),
+    url: z.string().default(""),
+  })).default([]),
+});
+const ReviewDispositionUpsertSchema = ReviewHistoryUpsertSchema.extend({
+  writeBackToAdo: z.boolean().default(true),
+});
+const ReviewOperationSchema = z.object({
+  kind: z.enum(["rerun", "batch_rerun", "stale_rerun", "disposition", "ado_retry", "insight_preview", "review_run"]),
+  at: z.string().optional(),
+  pullRequestId: z.coerce.number().int().nonnegative().default(0),
+  actor: z.string().default("desktop-user"),
+  label: z.string().default(""),
+  ok: z.boolean().default(true),
+  details: z.string().default(""),
+});
+const PrInsightArtifactSchema = z.object({
+  kind: z.enum(["insight_preview", "review_run"]),
+  at: z.string().optional(),
+  repository: z.string().default(""),
+  pullRequestId: z.coerce.number().int().nonnegative(),
+  title: z.string().default(""),
+  summary: z.string().default(""),
+  readiness: z.enum(["ready", "needs_attention", "blocked"]).optional(),
+  decisionQueue: z.enum(["auto_approved", "needs_human_review", "blocked", "watching"]).optional(),
+  decisionRiskLevel: z.enum(["low", "medium", "high"]).optional(),
+  contextConfidence: z.enum(["high", "medium", "low", ""]).optional(),
+  risks: z.array(z.string()).default([]),
+  categories: z.object({
+    blocking: z.array(z.string()).default([]),
+    warnings: z.array(z.string()).default([]),
+    info: z.array(z.string()).default([]),
+  }).optional(),
+  signals: z.object({
+    fileCount: z.coerce.number().int().nonnegative().default(0),
+    threadCount: z.coerce.number().int().nonnegative().default(0),
+    failedBuildCount: z.coerce.number().int().nonnegative().default(0),
+    workItemCount: z.coerce.number().int().nonnegative().default(0),
+  }).optional(),
+  iterationId: z.coerce.number().int().nonnegative().optional(),
+  sourceCommit: z.string().optional(),
+  findingCount: z.coerce.number().int().nonnegative().optional(),
+  discardedFindingCount: z.coerce.number().int().nonnegative().optional(),
+  tokensIn: z.coerce.number().int().nonnegative().default(0),
+  tokensOut: z.coerce.number().int().nonnegative().default(0),
 });
 const ProfileBodySchema = z.object({
   name: z.string().min(1),
@@ -166,6 +275,111 @@ const ProfileBodySchema = z.object({
   buildCommand: z.string().default(""),
   testCommand: z.string().default(""),
 });
+
+const AdoDiscoverySchema = z.object({
+  kind: z.enum(["projects", "repositories", "pipelines"]),
+  profile: ProfileBodySchema.partial().default({}),
+});
+
+const AdoMcpCheckSchema = z.object({
+  profile: ProfileBodySchema.partial().default({}),
+});
+
+async function discoverAdoOptions(
+  kind: AdoDiscoveryKind,
+  profile: Partial<z.infer<typeof ProfileBodySchema>>,
+): Promise<AdoDiscoveryOption[]> {
+  const organization = profile.adoOrgUrl ?? "";
+  const pat = profile.adoPat ?? "";
+  if (kind === "projects") {
+    return listAzureProjects({ organization, pat, top: 100 });
+  }
+  if (kind === "repositories") {
+    if (!profile.adoProject) throw new Error("ado_project_required");
+    return listAzureRepositories({ organization, project: profile.adoProject, pat, top: 100 });
+  }
+  if (!profile.adoProject) throw new Error("ado_project_required");
+  return listAzureBuildDefinitions({
+    organization,
+    project: profile.adoProject,
+    repositoryId: profile.adoRepoName || undefined,
+    pat,
+    top: 100,
+  });
+}
+
+function sendAdoDiagnostic(reply: FastifyReply, err: unknown, authMode?: "oauth" | "pat") {
+  const diagnostic = adoAuthDiagnosticFromError(err, authMode);
+  return reply.code(diagnostic.status === "oauth_unavailable" ? 401 : 400).send({
+    error: diagnostic.message,
+    authStatus: diagnostic.status,
+    authMode: diagnostic.authMode,
+    authMessage: diagnostic.message,
+    retryable: diagnostic.retryable,
+  });
+}
+
+interface AzureDevOpsRemoteSuggestion {
+  remoteName: string;
+  remoteUrl: string;
+  adoOrgUrl: string;
+  adoProject: string;
+  adoRepoName: string;
+}
+
+function cleanRemotePart(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function parseAzureDevOpsRemote(remoteName: string, remoteUrl: string): AzureDevOpsRemoteSuggestion | null {
+  const raw = remoteUrl.trim();
+  if (!raw) return null;
+
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.toLowerCase();
+    const parts = parsed.pathname.split("/").filter(Boolean).map(cleanRemotePart);
+    if (host === "dev.azure.com" && parts.length >= 4 && parts[2] === "_git") {
+      return {
+        remoteName,
+        remoteUrl: raw,
+        adoOrgUrl: `https://dev.azure.com/${parts[0]}`,
+        adoProject: parts[1] ?? "",
+        adoRepoName: parts[3] ?? "",
+      };
+    }
+    if (host.endsWith(".visualstudio.com") && parts.length >= 3 && parts[1] === "_git") {
+      const org = host.slice(0, -".visualstudio.com".length);
+      return {
+        remoteName,
+        remoteUrl: raw,
+        adoOrgUrl: `https://dev.azure.com/${org}`,
+        adoProject: parts[0] ?? "",
+        adoRepoName: parts[2] ?? "",
+      };
+    }
+  } catch {
+    // SSH remotes and scp-like remotes are parsed below.
+  }
+
+  const sshMatch = raw.match(/(?:^|@)(?:ssh\.)?dev\.azure\.com[:/]v3\/([^/]+)\/([^/]+)\/([^/\s]+?)(?:\.git)?$/i);
+  if (sshMatch) {
+    const [, org = "", project = "", repo = ""] = sshMatch;
+    return {
+      remoteName,
+      remoteUrl: raw,
+      adoOrgUrl: `https://dev.azure.com/${cleanRemotePart(org)}`,
+      adoProject: cleanRemotePart(project),
+      adoRepoName: cleanRemotePart(repo),
+    };
+  }
+
+  return null;
+}
 
 export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInstance> {
   const settings = getSettings();
@@ -397,6 +611,33 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     }
   });
 
+  // ── /git/azure-devops-remote — infer ADO fields from local git remotes ──────
+  app.get("/git/azure-devops-remote", async (req, reply) => {
+    const repoPath = (req.query as Record<string, string>)["repoPath"] ?? "";
+    if (!repoPath) return reply.code(400).send({ error: "repoPath required" });
+    try {
+      const result = await runCommand(["git", "remote", "-v"], {
+        cwd: repoPath,
+        allowed: ["git"],
+        timeoutSec: 8,
+      });
+      if (result.returncode !== 0) {
+        return reply.send({ suggestion: null, error: result.stderr?.trim() || `git exited ${result.returncode}` });
+      }
+      const suggestions = (result.stdout ?? "")
+        .split(/\r?\n/)
+        .map((line) => line.trim().match(/^(\S+)\s+(\S+)\s+\((fetch|push)\)$/))
+        .filter((match): match is RegExpMatchArray => !!match)
+        .filter((match) => match[3] === "fetch")
+        .map((match) => parseAzureDevOpsRemote(match[1] ?? "", match[2] ?? ""))
+        .filter((suggestion): suggestion is AzureDevOpsRemoteSuggestion => !!suggestion);
+      const origin = suggestions.find((suggestion) => suggestion.remoteName === "origin");
+      return reply.send({ suggestion: origin ?? suggestions[0] ?? null });
+    } catch (err) {
+      return reply.send({ suggestion: null, error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
   // Returns everything the Settings UI needs to pre-fill its fields, but never
   // returns API keys, PATs, or other credentials.
   app.get("/daemon/config", async () => ({
@@ -414,6 +655,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     azureKeyVaultUrl:    settings.azureKeyVaultUrl ?? "",
     azureCosmosEndpoint: settings.azureCosmosEndpoint ?? "",
     reviewAutoApproveEnabled: settings.reviewAutoApproveEnabled,
+    reviewStaleAgeHours: settings.reviewStaleAgeHours,
   }));
 
   // ── /daemon/configure — persist LLM credentials and hot-reload settings ───
@@ -433,6 +675,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     azureKeyVaultUrl:    z.string().optional(),
     azureCosmosEndpoint: z.string().optional(),
     reviewAutoApproveEnabled: z.boolean().optional(),
+    reviewStaleAgeHours: z.coerce.number().positive().optional(),
   });
 
   app.post("/daemon/configure", async (req, reply) => {
@@ -476,6 +719,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     if (cfg.azureKeyVaultUrl    !== undefined) lines.push(`AZURE_KEYVAULT_URL=${cfg.azureKeyVaultUrl}`);
     if (cfg.azureCosmosEndpoint !== undefined) lines.push(`AZURE_COSMOS_ENDPOINT=${cfg.azureCosmosEndpoint}`);
     if (cfg.reviewAutoApproveEnabled !== undefined) lines.push(`REVIEW_AUTO_APPROVE_ENABLED=${cfg.reviewAutoApproveEnabled ? "true" : "false"}`);
+    if (cfg.reviewStaleAgeHours !== undefined) lines.push(`REVIEW_STALE_AGE_HOURS=${cfg.reviewStaleAgeHours}`);
 
     if (lines.length > 0) {
       // Merge with existing file: keep lines whose key we are NOT overwriting
@@ -516,6 +760,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       (settings as Record<string, unknown>)["azureCosmosEndpoint"] = cfg.azureCosmosEndpoint;
     if (cfg.reviewAutoApproveEnabled !== undefined)
       (settings as Record<string, unknown>)["reviewAutoApproveEnabled"] = cfg.reviewAutoApproveEnabled;
+    if (cfg.reviewStaleAgeHours !== undefined)
+      (settings as Record<string, unknown>)["reviewStaleAgeHours"] = cfg.reviewStaleAgeHours;
 
     const cloudStores = {
       cloudProfileStore: !!(settings.azureStorageAccount),
@@ -703,6 +949,48 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     return { ok: true };
   });
 
+  app.post("/profiles/discover", async (req, reply) => {
+    const parsed = AdoDiscoverySchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const profile = parsed.data.profile;
+    if (!profile.adoOrgUrl) return reply.code(400).send({ error: "ado_org_required" });
+    try {
+      return {
+        source: "internal" as const,
+        kind: parsed.data.kind,
+        items: await discoverAdoOptions(parsed.data.kind, profile),
+      };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  const checkAdoToolsHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+    const parsed = AdoMcpCheckSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const profile = parsed.data.profile;
+    if (!profile.adoOrgUrl) return reply.code(400).send({ error: "ado_org_required" });
+    try {
+      return await checkAzureDevOpsTools({
+        organization: profile.adoOrgUrl,
+        pat: profile.adoPat,
+      });
+    } catch (err) {
+      const diagnostic = adoAuthDiagnosticFromError(err, profile.adoPat ? "pat" : "oauth");
+      return reply.code(400).send({
+        ok: false,
+        source: "internal" as const,
+        authMode: diagnostic.authMode,
+        authStatus: diagnostic.status,
+        authMessage: diagnostic.message,
+        retryable: diagnostic.retryable,
+        error: diagnostic.message,
+      });
+    }
+  };
+  app.post("/profiles/check-ado-tools", checkAdoToolsHandler);
+  app.post("/profiles/check-mcp", checkAdoToolsHandler);
+
   app.get("/profiles/:id/pull-requests", async (req, reply) => {
     const parsed = ProfileIdParam.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send({ error: "invalid id" });
@@ -755,6 +1043,338 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         ...pr,
         pipelineRun: runs.find((run) => run.sourceBranch === pr.sourceBranch),
       })),
+    };
+  });
+
+  app.get("/profiles/:id/pull-requests/:pullRequestId/context", async (req, reply) => {
+    const parsed = ProfilePullRequestParam.safeParse(req.params);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid id" });
+
+    const ts = getTableStore();
+    let profile: Awaited<ReturnType<typeof getWorkspaceProfile>> | null = null;
+    if (ts) {
+      try {
+        const cloudProfile = await ts.get(parsed.data.id);
+        profile = cloudProfile ? await injectAdoPat(cloudProfile) : null;
+      } catch (err) {
+        if (isAzureAuthenticationRequiredError(err)) throw err;
+        profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
+      }
+    } else {
+      profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
+    }
+    if (!profile) return reply.code(404).send({ error: "profile not found" });
+    if (!profile.adoOrgUrl || !profile.adoProject || !profile.adoRepoName) {
+      return reply.code(400).send({ error: "ado_profile_incomplete" });
+    }
+
+    let adoAuth: Awaited<ReturnType<typeof getAzureDevOpsAuth>>;
+    try {
+      adoAuth = await getAzureDevOpsAuth(profile.adoPat);
+    } catch (err) {
+      return sendAdoDiagnostic(reply, err, profile.adoPat ? "pat" : "oauth");
+    }
+    let pullRequest: Awaited<ReturnType<typeof getAzurePullRequestById>>;
+    let threads: Awaited<ReturnType<typeof listAzurePullRequestThreads>>;
+    let changes: Awaited<ReturnType<typeof listAzurePullRequestChanges>>;
+    let builds: Awaited<ReturnType<typeof listAzureBuilds>>;
+    try {
+      pullRequest = await getAzurePullRequestById({
+        organization: profile.adoOrgUrl,
+        project: profile.adoProject,
+        repository: profile.adoRepoName,
+        pullRequestId: parsed.data.pullRequestId,
+        auth: adoAuth,
+        includeWorkItemRefs: true,
+      });
+      [threads, changes, builds] = await Promise.all([
+        listAzurePullRequestThreads({
+          organization: profile.adoOrgUrl,
+          project: profile.adoProject,
+          repository: profile.adoRepoName,
+          pullRequestId: parsed.data.pullRequestId,
+          auth: adoAuth,
+          top: 100,
+        }),
+        listAzurePullRequestChanges({
+          organization: profile.adoOrgUrl,
+          project: profile.adoProject,
+          repository: profile.adoRepoName,
+          pullRequestId: parsed.data.pullRequestId,
+          auth: adoAuth,
+          top: 100,
+        }),
+        profile.adoPipelineId
+          ? listAzureBuilds({
+            organization: profile.adoOrgUrl,
+            project: profile.adoProject,
+            auth: adoAuth,
+            definitions: [profile.adoPipelineId],
+            branchName: pullRequest.sourceBranch,
+            top: 20,
+          })
+          : Promise.resolve([]),
+      ]);
+    } catch (err) {
+      return sendAdoDiagnostic(reply, err, adoAuth.mode);
+    }
+
+    return {
+      source: "internal" as const,
+      pullRequest,
+      threads,
+      changes,
+      builds,
+    };
+  });
+
+  const PrInsightPreviewBodySchema = z.object({
+    llmConfig: LlmConfigSchema,
+    profile: InlineProfileSchema,
+  }).default({});
+
+  function heuristicPrInsight(args: {
+    title: string;
+    description: string;
+    fileCount: number;
+    threadCount: number;
+    unresolvedThreadCount: number;
+    failedBuildCount: number;
+    changedPaths: string[];
+  }): string {
+    const lines: string[] = [];
+    lines.push(`PR insight for "${args.title || "untitled PR"}": ${args.fileCount} changed file(s), ${args.threadCount} thread(s), and ${args.failedBuildCount} failed build(s).`);
+    if (args.unresolvedThreadCount > 0) lines.push(`${args.unresolvedThreadCount} thread(s) may need attention before merge.`);
+    if (args.failedBuildCount > 0) lines.push("Pipeline history includes failed or canceled builds; inspect the latest run before approving.");
+    if (args.changedPaths.length > 0) lines.push(`Touched areas: ${args.changedPaths.slice(0, 8).join(", ")}${args.changedPaths.length > 8 ? ", ..." : ""}.`);
+    if (args.description) lines.push("The PR description is available and should be checked against the changed files.");
+    return lines.join("\n");
+  }
+
+  function buildPrInsightSignals(args: {
+    description: string;
+    fileCount: number;
+    threadCount: number;
+    unresolvedThreadCount: number;
+    failedBuildCount: number;
+    workItemCount: number;
+    changedPaths: string[];
+  }) {
+    const blocking: string[] = [];
+    const warnings: string[] = [];
+    const info: string[] = [];
+    if (args.failedBuildCount > 0) {
+      blocking.push(`${args.failedBuildCount} failed/canceled build(s)`);
+    }
+    if (args.unresolvedThreadCount > 0) {
+      warnings.push(`${args.unresolvedThreadCount} active thread(s)`);
+    }
+    if (args.fileCount >= 20) {
+      warnings.push(`large PR: ${args.fileCount} changed file(s)`);
+    } else if (args.fileCount >= 10) {
+      info.push(`medium-sized PR: ${args.fileCount} changed file(s)`);
+    }
+    if (!args.description.trim()) {
+      warnings.push("missing PR description");
+    }
+    if (args.workItemCount === 0) {
+      info.push("no linked work items");
+    }
+    const touched = args.changedPaths.map((path) => path.toLowerCase());
+    if (touched.some((path) => path.includes("auth") || path.includes("security") || path.includes("permission"))) {
+      warnings.push("security/auth-sensitive files changed");
+    }
+    if (touched.some((path) => path.includes("migration") || path.includes("schema") || path.endsWith(".sql"))) {
+      warnings.push("database/schema files changed");
+    }
+    const readiness =
+      blocking.length > 0 ? "blocked" :
+      warnings.length > 0 ? "needs_attention" :
+      "ready";
+    return {
+      readiness,
+      risks: [...blocking, ...warnings],
+      categories: { blocking, warnings, info },
+    };
+  }
+
+  function readinessFromDecision(queue: "auto_approved" | "needs_human_review" | "blocked" | "watching") {
+    if (queue === "auto_approved") return "ready" as const;
+    if (queue === "blocked") return "blocked" as const;
+    return "needs_attention" as const;
+  }
+
+  function categoriesFromReviewFindings(findings: Array<{ severity: string; category: string; file: string; line: number }>) {
+    const format = (finding: { category: string; file: string; line: number }) =>
+      `${finding.category}: ${finding.file}:${finding.line}`;
+    return {
+      blocking: findings.filter((finding) => finding.severity === "blocking").map(format),
+      warnings: findings.filter((finding) => finding.severity === "warning").map(format),
+      info: findings.filter((finding) => finding.severity === "info").map(format),
+    };
+  }
+
+  app.post("/profiles/:id/pull-requests/:pullRequestId/insight-preview", async (req, reply) => {
+    const parsed = ProfilePullRequestParam.safeParse(req.params);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid id" });
+    const parsedBody = PrInsightPreviewBodySchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) return reply.code(400).send({ error: parsedBody.error.flatten() });
+
+    const inlineProfile = parsedBody.data.profile;
+    const ts = getTableStore();
+    let profile: Awaited<ReturnType<typeof getWorkspaceProfile>> | null = null;
+    if (inlineProfile?.adoOrgUrl && inlineProfile.adoProject && inlineProfile.adoRepoName) {
+      profile = {
+        id: parsed.data.id,
+        name: inlineProfile.name ?? "",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        ...inlineProfile,
+      };
+    } else if (ts) {
+      try {
+        const cloudProfile = await ts.get(parsed.data.id);
+        profile = cloudProfile ? await injectAdoPat(cloudProfile) : null;
+      } catch (err) {
+        if (isAzureAuthenticationRequiredError(err)) throw err;
+        profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
+      }
+    } else {
+      profile = getWorkspaceProfile(settings.dataDir, parsed.data.id);
+    }
+    if (!profile) return reply.code(404).send({ error: "profile not found" });
+    if (!profile.adoOrgUrl || !profile.adoProject || !profile.adoRepoName) {
+      return reply.code(400).send({ error: "ado_profile_incomplete" });
+    }
+
+    let adoAuth: Awaited<ReturnType<typeof getAzureDevOpsAuth>>;
+    try {
+      adoAuth = await getAzureDevOpsAuth(profile.adoPat);
+    } catch (err) {
+      return sendAdoDiagnostic(reply, err, profile.adoPat ? "pat" : "oauth");
+    }
+    let pullRequest: Awaited<ReturnType<typeof getAzurePullRequestById>>;
+    let threads: Awaited<ReturnType<typeof listAzurePullRequestThreads>>;
+    let changes: Awaited<ReturnType<typeof listAzurePullRequestChanges>>;
+    let builds: Awaited<ReturnType<typeof listAzureBuilds>>;
+    try {
+      pullRequest = await getAzurePullRequestById({
+        organization: profile.adoOrgUrl,
+        project: profile.adoProject,
+        repository: profile.adoRepoName,
+        pullRequestId: parsed.data.pullRequestId,
+        auth: adoAuth,
+        includeWorkItemRefs: true,
+      });
+      [threads, changes, builds] = await Promise.all([
+        listAzurePullRequestThreads({
+          organization: profile.adoOrgUrl,
+          project: profile.adoProject,
+          repository: profile.adoRepoName,
+          pullRequestId: parsed.data.pullRequestId,
+          auth: adoAuth,
+          top: 100,
+        }),
+        listAzurePullRequestChanges({
+          organization: profile.adoOrgUrl,
+          project: profile.adoProject,
+          repository: profile.adoRepoName,
+          pullRequestId: parsed.data.pullRequestId,
+          auth: adoAuth,
+          top: 100,
+        }),
+        profile.adoPipelineId
+          ? listAzureBuilds({
+            organization: profile.adoOrgUrl,
+            project: profile.adoProject,
+            auth: adoAuth,
+            definitions: [profile.adoPipelineId],
+            branchName: pullRequest.sourceBranch,
+            top: 20,
+          })
+          : Promise.resolve([]),
+      ]);
+    } catch (err) {
+      return sendAdoDiagnostic(reply, err, adoAuth.mode);
+    }
+
+    const failedBuildCount = builds.filter((build) => build.result === "failed" || build.result === "canceled").length;
+    const threadCount = threads.filter((thread) => thread.comments.length > 0).length;
+    const unresolvedThreadCount = threads.filter((thread) => thread.comments.length > 0 && String(thread.status) !== "2").length;
+    const changedPaths = changes.changes.map((change) => change.path || change.originalPath).filter(Boolean);
+    const fallbackSummary = heuristicPrInsight({
+      title: pullRequest.title,
+      description: pullRequest.description,
+      fileCount: changes.fileCount,
+      threadCount,
+      unresolvedThreadCount,
+      failedBuildCount,
+      changedPaths,
+    });
+    const insightSignals = buildPrInsightSignals({
+      description: pullRequest.description,
+      fileCount: changes.fileCount,
+      threadCount,
+      unresolvedThreadCount,
+      failedBuildCount,
+      workItemCount: pullRequest.workItemRefs.length,
+      changedPaths,
+    });
+
+    const effectiveSettings = buildReviewLlmSettings(parsedBody.data.llmConfig);
+    const llm = new LLMClient(effectiveSettings);
+    if (!llm.configured) {
+      return {
+        source: "heuristic" as const,
+        summary: fallbackSummary,
+        readiness: insightSignals.readiness,
+        risks: insightSignals.risks,
+        categories: insightSignals.categories,
+        signals: {
+          fileCount: changes.fileCount,
+          threadCount,
+          failedBuildCount,
+          workItemCount: pullRequest.workItemRefs.length,
+        },
+        tokensIn: 0,
+        tokensOut: 0,
+      };
+    }
+
+    const prompt = [
+      `PR #${pullRequest.id}: ${pullRequest.title}`,
+      `Description: ${pullRequest.description || "(none)"}`,
+      `Source: ${pullRequest.sourceBranch} -> ${pullRequest.targetBranch}`,
+      `Files (${changes.fileCount}): ${changedPaths.slice(0, 30).join(", ") || "(none)"}`,
+      `Threads: ${threadCount}, likely active: ${unresolvedThreadCount}`,
+      `Builds: ${builds.length}, failed/canceled: ${failedBuildCount}`,
+      `Work items: ${pullRequest.workItemRefs.map((item) => item.id).join(", ") || "(none)"}`,
+      "",
+      "Write a concise PR insight summary for a developer. Include risk signals, readiness, and next checks. Do not invent code details.",
+    ].join("\n");
+    const result = await llm.chat({
+      messages: [
+        { role: "system", content: "You summarize Azure DevOps pull request metadata for developer review readiness." },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.1,
+      maxTokens: 700,
+    });
+
+    return {
+      source: "llm" as const,
+      summary: result.content || fallbackSummary,
+      readiness: insightSignals.readiness,
+      risks: insightSignals.risks,
+      categories: insightSignals.categories,
+      signals: {
+        fileCount: changes.fileCount,
+        threadCount,
+        failedBuildCount,
+        workItemCount: pullRequest.workItemRefs.length,
+      },
+      tokensIn: llm.usage.promptTokens,
+      tokensOut: llm.usage.completionTokens,
     };
   });
 
@@ -819,10 +1439,28 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       decisionQueue: parsedBody.data.decisionQueue,
       decisionRiskLevel: parsedBody.data.decisionRiskLevel,
       decisionReason: parsedBody.data.decisionReason,
+      decisionReasonCodes: parsedBody.data.decisionReasonCodes,
+      contextConfidence: parsedBody.data.contextConfidence,
       autoApprovedAt: parsedBody.data.autoApprovedAt,
       autoApprovalActor: parsedBody.data.autoApprovalActor,
       lastTokensIn: parsedBody.data.lastTokensIn,
       lastTokensOut: parsedBody.data.lastTokensOut,
+      discardedFindingCount: parsedBody.data.discardedFindingCount,
+      hunkCoverageFiles: parsedBody.data.hunkCoverageFiles,
+      wholeFileFallbackFiles: parsedBody.data.wholeFileFallbackFiles,
+      changedHunkLines: parsedBody.data.changedHunkLines,
+      manualDisposition: parsedBody.data.manualDisposition,
+      manualDispositionAt: parsedBody.data.manualDispositionAt,
+      manualDispositionActor: parsedBody.data.manualDispositionActor,
+      manualDispositionNote: parsedBody.data.manualDispositionNote,
+      manualDispositionEvents: parsedBody.data.manualDispositionEvents,
+      manualDispositionWriteBackAttempted: parsedBody.data.manualDispositionWriteBackAttempted,
+      manualDispositionWriteBackOk: parsedBody.data.manualDispositionWriteBackOk,
+      manualDispositionWriteBackError: parsedBody.data.manualDispositionWriteBackError,
+      manualDispositionWriteBackAt: parsedBody.data.manualDispositionWriteBackAt,
+      manualDispositionWriteBackThreadId: parsedBody.data.manualDispositionWriteBackThreadId,
+      manualDispositionWriteBackUrl: parsedBody.data.manualDispositionWriteBackUrl,
+      manualDispositionWriteBackEvents: parsedBody.data.manualDispositionWriteBackEvents,
     };
 
     if (settings.azureStorageAccount) {
@@ -834,6 +1472,251 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
     const saved = upsertLocalReviewHistory(settings.dataDir, record);
     return { ok: true, record: saved, storage: "local" as const };
+  });
+
+  app.get("/profiles/:id/review-operations", async (req, reply) => {
+    const parsedId = ProfileIdParam.safeParse(req.params);
+    if (!parsedId.success) return reply.code(400).send({ error: "invalid id" });
+
+    const profile = getWorkspaceProfile(settings.dataDir, parsedId.data.id);
+    if (!profile) return reply.code(404).send({ error: "profile not found" });
+    const repository = profile.adoRepoName.trim();
+    if (!repository) return reply.code(400).send({ error: "profile has no adoRepoName" });
+
+    return {
+      items: listLocalReviewOperations({
+        dataDir: settings.dataDir,
+        repository,
+        limit: 50,
+      }),
+      storage: "local" as const,
+    };
+  });
+
+  app.post("/profiles/:id/review-operations", async (req, reply) => {
+    const parsedId = ProfileIdParam.safeParse(req.params);
+    if (!parsedId.success) return reply.code(400).send({ error: "invalid id" });
+    const parsedBody = ReviewOperationSchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) return reply.code(400).send({ error: parsedBody.error.flatten() });
+
+    const profile = getWorkspaceProfile(settings.dataDir, parsedId.data.id);
+    if (!profile) return reply.code(404).send({ error: "profile not found" });
+    const repository = profile.adoRepoName.trim();
+    if (!repository) return reply.code(400).send({ error: "profile has no adoRepoName" });
+
+    const saved = appendLocalReviewOperation(settings.dataDir, {
+      kind: parsedBody.data.kind as ReviewOperationKind,
+      at: parsedBody.data.at,
+      repository,
+      pullRequestId: parsedBody.data.pullRequestId,
+      actor: parsedBody.data.actor,
+      label: parsedBody.data.label,
+      ok: parsedBody.data.ok,
+      details: parsedBody.data.details,
+    });
+    return { ok: true, record: saved, storage: "local" as const };
+  });
+
+  app.get("/profiles/:id/pr-insights", async (req, reply) => {
+    const parsedId = ProfileIdParam.safeParse(req.params);
+    if (!parsedId.success) return reply.code(400).send({ error: "invalid id" });
+
+    const profile = getWorkspaceProfile(settings.dataDir, parsedId.data.id);
+    if (!profile) return reply.code(404).send({ error: "profile not found" });
+    const repository = profile.adoRepoName.trim();
+    if (!repository) return reply.code(400).send({ error: "profile has no adoRepoName" });
+
+    const query = z.object({
+      pullRequestId: z.coerce.number().int().nonnegative().optional(),
+      limit: z.coerce.number().int().positive().max(200).default(50),
+    }).safeParse(req.query ?? {});
+    if (!query.success) return reply.code(400).send({ error: query.error.flatten() });
+
+    return {
+      items: listLocalPrInsightArtifacts({
+        dataDir: settings.dataDir,
+        profileId: parsedId.data.id,
+        repository,
+        pullRequestId: query.data.pullRequestId,
+        limit: query.data.limit,
+      }),
+      storage: "local" as const,
+    };
+  });
+
+  app.post("/profiles/:id/pr-insights", async (req, reply) => {
+    const parsedId = ProfileIdParam.safeParse(req.params);
+    if (!parsedId.success) return reply.code(400).send({ error: "invalid id" });
+    const parsedBody = PrInsightArtifactSchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) return reply.code(400).send({ error: parsedBody.error.flatten() });
+
+    const profile = getWorkspaceProfile(settings.dataDir, parsedId.data.id);
+    if (!profile) return reply.code(404).send({ error: "profile not found" });
+    const repository = parsedBody.data.repository.trim() || profile.adoRepoName.trim();
+    if (!repository) return reply.code(400).send({ error: "profile has no adoRepoName" });
+
+    const saved = upsertLocalPrInsightArtifact(settings.dataDir, {
+      profileId: parsedId.data.id,
+      repository,
+      pullRequestId: parsedBody.data.pullRequestId,
+      title: parsedBody.data.title,
+      kind: parsedBody.data.kind,
+      at: parsedBody.data.at,
+      summary: parsedBody.data.summary,
+      readiness: parsedBody.data.readiness,
+      decisionQueue: parsedBody.data.decisionQueue,
+      decisionRiskLevel: parsedBody.data.decisionRiskLevel,
+      contextConfidence: parsedBody.data.contextConfidence,
+      risks: parsedBody.data.risks,
+      categories: parsedBody.data.categories,
+      signals: parsedBody.data.signals,
+      iterationId: parsedBody.data.iterationId,
+      sourceCommit: parsedBody.data.sourceCommit,
+      findingCount: parsedBody.data.findingCount,
+      discardedFindingCount: parsedBody.data.discardedFindingCount,
+      tokensIn: parsedBody.data.tokensIn,
+      tokensOut: parsedBody.data.tokensOut,
+    });
+    return { ok: true, record: saved, storage: "local" as const };
+  });
+
+  app.post("/profiles/:id/review-disposition", async (req, reply) => {
+    const parsedId = ProfileIdParam.safeParse(req.params);
+    if (!parsedId.success) return reply.code(400).send({ error: "invalid id" });
+    const parsedBody = ReviewDispositionUpsertSchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) return reply.code(400).send({ error: parsedBody.error.flatten() });
+
+    const ts = getTableStore();
+    let profile = getWorkspaceProfile(settings.dataDir, parsedId.data.id);
+    if (ts) {
+      try {
+        const cloudProfile = await ts.get(parsedId.data.id);
+        profile = cloudProfile ? await injectAdoPat(cloudProfile) : profile;
+      } catch {
+        /* local fallback */
+      }
+    }
+    if (!profile) return reply.code(404).send({ error: "profile not found" });
+    const repository = profile.adoRepoName.trim();
+    if (!repository) return reply.code(400).send({ error: "profile has no adoRepoName" });
+
+    const record: ReviewHistoryRecord = {
+      repository,
+      pullRequestId: parsedBody.data.pullRequestId,
+      lastIterationId: parsedBody.data.lastIterationId,
+      findingCount: parsedBody.data.findingCount,
+      lastRunAt: parsedBody.data.lastRunAt,
+      sourceCommit: parsedBody.data.sourceCommit,
+      decisionQueue: parsedBody.data.decisionQueue,
+      decisionRiskLevel: parsedBody.data.decisionRiskLevel,
+      decisionReason: parsedBody.data.decisionReason,
+      decisionReasonCodes: parsedBody.data.decisionReasonCodes,
+      contextConfidence: parsedBody.data.contextConfidence,
+      autoApprovedAt: parsedBody.data.autoApprovedAt,
+      autoApprovalActor: parsedBody.data.autoApprovalActor,
+      lastTokensIn: parsedBody.data.lastTokensIn,
+      lastTokensOut: parsedBody.data.lastTokensOut,
+      discardedFindingCount: parsedBody.data.discardedFindingCount,
+      hunkCoverageFiles: parsedBody.data.hunkCoverageFiles,
+      wholeFileFallbackFiles: parsedBody.data.wholeFileFallbackFiles,
+      changedHunkLines: parsedBody.data.changedHunkLines,
+      manualDisposition: parsedBody.data.manualDisposition,
+      manualDispositionAt: parsedBody.data.manualDispositionAt,
+      manualDispositionActor: parsedBody.data.manualDispositionActor,
+      manualDispositionNote: parsedBody.data.manualDispositionNote,
+      manualDispositionEvents: parsedBody.data.manualDispositionEvents,
+      manualDispositionWriteBackAttempted: parsedBody.data.manualDispositionWriteBackAttempted,
+      manualDispositionWriteBackOk: parsedBody.data.manualDispositionWriteBackOk,
+      manualDispositionWriteBackError: parsedBody.data.manualDispositionWriteBackError,
+      manualDispositionWriteBackAt: parsedBody.data.manualDispositionWriteBackAt,
+      manualDispositionWriteBackThreadId: parsedBody.data.manualDispositionWriteBackThreadId,
+      manualDispositionWriteBackUrl: parsedBody.data.manualDispositionWriteBackUrl,
+      manualDispositionWriteBackEvents: parsedBody.data.manualDispositionWriteBackEvents,
+    };
+    let saved = upsertLocalReviewHistory(settings.dataDir, record);
+
+    let adoWriteBack: { attempted: boolean; ok: boolean; error?: string; at?: string; threadId?: string; url?: string } = {
+      attempted: false,
+      ok: false,
+    };
+    const shouldWriteBack =
+      parsedBody.data.writeBackToAdo &&
+      (parsedBody.data.manualDisposition === "changes_requested" || parsedBody.data.manualDisposition === "marked_blocked");
+    if (shouldWriteBack) {
+      adoWriteBack = { attempted: true, ok: false };
+      try {
+        if (!profile.adoOrgUrl || !profile.adoProject || !profile.adoRepoName) {
+          throw new Error("Project Link is missing Azure DevOps organization, project, or repository.");
+        }
+        const ado = new AdoClient({
+          organization: extractAdoOrg(profile.adoOrgUrl),
+          authHeaderProvider: async () => (await getAzureDevOpsAuth(profile.adoPat)).header,
+        });
+        const thread = await ado.createThread({
+          project: profile.adoProject,
+          repositoryId: profile.adoRepoName,
+          pullRequestId: parsedBody.data.pullRequestId,
+          body: {
+            status: THREAD_STATUS_ACTIVE,
+            comments: [{
+              commentType: COMMENT_TYPE_TEXT,
+              content: [
+                `**Review Queue disposition: ${parsedBody.data.manualDisposition.replace(/_/g, " ")}**`,
+                "",
+                parsedBody.data.manualDispositionNote || parsedBody.data.decisionReason || "No note provided.",
+                "",
+                `Actor: ${parsedBody.data.manualDispositionActor || "Dev Agent"}`,
+              ].join("\n"),
+            }],
+          },
+        });
+        const threadId = extractAdoThreadId(thread);
+        adoWriteBack = {
+          attempted: true,
+          ok: true,
+          at: new Date().toISOString(),
+          threadId,
+          url: extractAdoThreadUrl(thread) || buildAdoThreadUrl({
+            orgUrl: profile.adoOrgUrl,
+            project: profile.adoProject,
+            repository: profile.adoRepoName,
+            pullRequestId: parsedBody.data.pullRequestId,
+            threadId,
+          }),
+        };
+      } catch (err) {
+        adoWriteBack = {
+          attempted: true,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+          at: new Date().toISOString(),
+        };
+      }
+      saved = upsertLocalReviewHistory(settings.dataDir, {
+        ...record,
+        manualDispositionWriteBackAttempted: adoWriteBack.attempted,
+        manualDispositionWriteBackOk: adoWriteBack.ok,
+        manualDispositionWriteBackError: adoWriteBack.error ?? "",
+        manualDispositionWriteBackAt: adoWriteBack.at ?? "",
+        manualDispositionWriteBackThreadId: adoWriteBack.threadId ?? "",
+        manualDispositionWriteBackUrl: adoWriteBack.url ?? "",
+        manualDispositionWriteBackEvents: [
+          ...(record.manualDispositionWriteBackEvents ?? []),
+          {
+            disposition: parsedBody.data.manualDisposition,
+            at: adoWriteBack.at ?? new Date().toISOString(),
+            ok: adoWriteBack.ok,
+            actor: parsedBody.data.manualDispositionActor || "Dev Agent",
+            note: parsedBody.data.manualDispositionNote || parsedBody.data.decisionReason || "",
+            error: adoWriteBack.error ?? "",
+            threadId: adoWriteBack.threadId ?? "",
+            url: adoWriteBack.url ?? "",
+          },
+        ],
+      });
+    }
+
+    return { ok: true, record: saved, storage: "local" as const, adoWriteBack };
   });
 
   // ── POST /profiles/:id/review-run — run Review Agent immediately on a PR ────
@@ -861,6 +1744,35 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     } catch {
       return adoOrgUrl;
     }
+  }
+
+  function extractAdoThreadId(value: unknown): string {
+    if (!value || typeof value !== "object") return "";
+    const id = (value as { id?: unknown; threadId?: unknown }).id ?? (value as { threadId?: unknown }).threadId;
+    if (typeof id === "number" && Number.isFinite(id)) return String(id);
+    if (typeof id === "string" && id.trim()) return id.trim();
+    return "";
+  }
+
+  function extractAdoThreadUrl(value: unknown): string {
+    if (!value || typeof value !== "object") return "";
+    const url = (value as { url?: unknown; _links?: { web?: { href?: unknown } } })._links?.web?.href ??
+      (value as { url?: unknown }).url;
+    return typeof url === "string" && url.trim() ? url.trim() : "";
+  }
+
+  function buildAdoThreadUrl(args: {
+    orgUrl: string;
+    project: string;
+    repository: string;
+    pullRequestId: number;
+    threadId: string;
+  }): string {
+    const base = args.orgUrl.replace(/\/$/, "");
+    if (!base || !args.project || !args.repository || !args.threadId) return "";
+    const project = encodeURIComponent(args.project);
+    const repository = encodeURIComponent(args.repository);
+    return `${base}/${project}/_git/${repository}/pullrequest/${args.pullRequestId}?_a=files&discussionId=${encodeURIComponent(args.threadId)}`;
   }
 
   function buildReviewLlmSettings(override?: InlineLlmConfig) {
@@ -891,7 +1803,14 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     const { pullRequestId, targetBranch: bodyTargetBranch, llmConfig, profile: inlineProfile } = parsedBody.data;
 
     // Resolve profile — prefer inline data from the frontend, fall back to store.
-    type MinProfile = { adoOrgUrl: string; adoProject: string; adoRepoName: string; adoPat: string; targetBranch: string };
+    type MinProfile = {
+      adoOrgUrl: string;
+      adoProject: string;
+      adoRepoName: string;
+      adoPat: string;
+      targetBranch: string;
+      adoPipelineId: string;
+    };
     let profileData: MinProfile;
     if (
       inlineProfile?.adoOrgUrl &&
@@ -904,6 +1823,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         adoRepoName: inlineProfile.adoRepoName,
         adoPat:      inlineProfile.adoPat,
         targetBranch: inlineProfile.targetBranch,
+        adoPipelineId: inlineProfile.adoPipelineId,
       };
     } else {
       const ts = getTableStore();
@@ -925,6 +1845,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         adoRepoName: stored.adoRepoName,
         adoPat:      stored.adoPat,
         targetBranch: stored.targetBranch,
+        adoPipelineId: stored.adoPipelineId,
       };
     }
 
@@ -943,10 +1864,17 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     const llm = new LLMClient(effectiveSettings);
 
     // Fetch PR iterations to determine the latest revision
-    let iter: { value: Array<{ id: number; sourceRefCommit: { commitId: string } }> };
+    let iter: { value: Array<{
+      id: number;
+      sourceRefCommit: { commitId: string };
+      commonRefCommit?: { commitId: string };
+      targetRefCommit?: { commitId: string };
+    }> };
     try {
       iter = await ado.getPullRequestIterations(profileData.adoProject, profileData.adoRepoName, pullRequestId);
     } catch (err) {
+      const diagnostic = adoAuthDiagnosticFromError(err, profileData.adoPat ? "pat" : "oauth");
+      if (diagnostic.status !== "unknown_error") return sendAdoDiagnostic(reply, err, profileData.adoPat ? "pat" : "oauth");
       return reply.code(400).send({ error: `ADO error: ${err instanceof Error ? err.message : String(err)}` });
     }
 
@@ -956,6 +1884,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     }
 
     const sourceCommit = (latest.sourceRefCommit as { commitId?: string })?.commitId ?? "";
+    const baseCommit = (latest.commonRefCommit as { commitId?: string } | undefined)?.commitId
+      ?? (latest.targetRefCommit as { commitId?: string } | undefined)?.commitId
+      ?? "";
     const repository   = profileData.adoRepoName.trim();
     const conventions  = await stateStore.listConventions(repository);
 
@@ -969,10 +1900,68 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         prId:         pullRequestId,
         iterationId:  latest.id,
         sourceCommit,
+        baseCommit,
         maxFiles: 40,
       });
     } catch (err) {
+      const diagnostic = adoAuthDiagnosticFromError(err, profileData.adoPat ? "pat" : "oauth");
+      if (diagnostic.status !== "unknown_error") return sendAdoDiagnostic(reply, err, profileData.adoPat ? "pat" : "oauth");
       return reply.code(400).send({ error: `context error: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    try {
+      const adoAuth = await getAzureDevOpsAuth(profileData.adoPat);
+      const pullRequest = await getAzurePullRequestById({
+        organization: profileData.adoOrgUrl,
+        project: profileData.adoProject,
+        repository,
+        pullRequestId,
+        auth: adoAuth,
+        includeWorkItemRefs: true,
+      });
+      const [threads, builds] = await Promise.all([
+        listAzurePullRequestThreads({
+          organization: profileData.adoOrgUrl,
+          project: profileData.adoProject,
+          repository,
+          pullRequestId,
+          auth: adoAuth,
+          top: 100,
+        }),
+        profileData.adoPipelineId
+          ? listAzureBuilds({
+            organization: profileData.adoOrgUrl,
+            project: profileData.adoProject,
+            auth: adoAuth,
+            definitions: [profileData.adoPipelineId],
+            branchName: pullRequest.sourceBranch,
+            top: 20,
+          })
+          : Promise.resolve([]),
+      ]);
+      const latestBuild = builds[0];
+      bundle = {
+        ...bundle,
+        pullRequest: {
+          title: pullRequest.title,
+          description: pullRequest.description,
+          status: pullRequest.status,
+          isDraft: pullRequest.isDraft,
+          sourceBranch: pullRequest.sourceBranch,
+          targetBranch: pullRequest.targetBranch,
+          createdBy: pullRequest.createdBy,
+          workItemIds: pullRequest.workItemRefs.map((item) => item.id),
+          reviewerCount: pullRequest.reviewerCount,
+          voteSummary: pullRequest.voteSummary,
+          threadCount: threads.filter((thread) => thread.comments.length > 0).length,
+          activeThreadCount: threads.filter((thread) => thread.comments.length > 0 && String(thread.status) !== "2").length,
+          failedBuildCount: builds.filter((build) => build.result === "failed" || build.result === "canceled").length,
+          latestBuildResult: latestBuild?.result ?? "",
+          latestBuildStatus: latestBuild?.status ?? "",
+        },
+      };
+    } catch (err) {
+      app.log.warn({ err }, "could not enrich review context with ADO PR signals");
     }
 
     const review = await runReviewPlanner({ llm, bundle, conventions });
@@ -997,6 +1986,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       changedFiles: bundle.files,
       findings:     review.findings,
       reviewUsedLlm: review.tokensIn > 0 || review.tokensOut > 0,
+      discardedFindingCount: review.discardedFindings.length,
+      hunkCoverageFiles: review.coverage.filesWithHunks,
+      wholeFileFallbackFiles: review.coverage.wholeFileOnlyFiles,
+      changedHunkLines: review.coverage.changedHunkLines,
     });
 
     const now = new Date().toISOString();
@@ -1014,7 +2007,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
           queue: "needs_human_review",
           riskLevel: decision.riskLevel,
           autoApprove: false,
+          contextConfidence: decision.contextConfidence,
           reason: `Auto-approval failed: ${err instanceof Error ? err.message : String(err)}`,
+          reasonCodes: [...decision.reasonCodes, "auto_approval.failed"],
         };
       }
     }
@@ -1029,10 +2024,28 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       decisionQueue:      decision.queue,
       decisionRiskLevel:  decision.riskLevel,
       decisionReason:     decision.reason,
+      decisionReasonCodes: decision.reasonCodes,
+      contextConfidence:  decision.contextConfidence,
       autoApprovedAt:     decision.autoApprove ? now : "",
       autoApprovalActor:  decision.autoApprove ? autoApprovalActor : "",
       lastTokensIn:       review.tokensIn,
       lastTokensOut:      review.tokensOut,
+      discardedFindingCount: review.discardedFindings.length,
+      hunkCoverageFiles:  review.coverage.filesWithHunks,
+      wholeFileFallbackFiles: review.coverage.wholeFileOnlyFiles,
+      changedHunkLines:   review.coverage.changedHunkLines,
+      manualDisposition: "",
+      manualDispositionAt: "",
+      manualDispositionActor: "",
+      manualDispositionNote: "",
+      manualDispositionEvents: [],
+      manualDispositionWriteBackAttempted: false,
+      manualDispositionWriteBackOk: false,
+      manualDispositionWriteBackError: "",
+      manualDispositionWriteBackAt: "",
+      manualDispositionWriteBackThreadId: "",
+      manualDispositionWriteBackUrl: "",
+      manualDispositionWriteBackEvents: [],
     });
 
     return {
@@ -1044,12 +2057,20 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       decisionQueue:    decision.queue,
       decisionRiskLevel: decision.riskLevel,
       decisionReason:   decision.reason,
+      decisionReasonCodes: decision.reasonCodes,
+      contextConfidence: decision.contextConfidence,
+      readiness:        readinessFromDecision(decision.queue),
+      categories:       categoriesFromReviewFindings(review.findings),
       lastRunAt:        now,
       autoApprovalActor: decision.autoApprove ? autoApprovalActor : "",
       tokensIn:         review.tokensIn,
       tokensOut:        review.tokensOut,
       summary:          review.summary,
       findings:         review.findings,
+      discardedFindings: review.discardedFindings,
+      metadata:         review.metadata,
+      compression:      review.compression,
+      coverage:         review.coverage,
     };
   });
 
@@ -1198,6 +2219,42 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   app.get("/chat/history", async () => {
     return chatSessions.listRecent(30);
+  });
+
+  app.get("/chat/checkpoints", async () => {
+    return chatSessions.listCheckpointActivity(50);
+  });
+
+  app.get("/chat/checkpoints/:checkpointId/preview", async (req, reply) => {
+    const parsedParam = CheckpointIdParam.safeParse(req.params);
+    if (!parsedParam.success) return reply.code(400).send({ error: "invalid checkpointId" });
+    const parsedQuery = CheckpointPreviewQuery.safeParse(req.query ?? {});
+    if (!parsedQuery.success) return reply.code(400).send({ error: parsedQuery.error.flatten() });
+    try {
+      return await previewGitCheckpoint({
+        repoPath: ".",
+        env: {},
+        timeoutSec: 30,
+        extra: { data_dir: settings.dataDir },
+      }, parsedParam.data.checkpointId, parsedQuery.data.maxDiffChars ?? 12_000);
+    } catch (err) {
+      return reply.code(404).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.get("/chat/checkpoints/:checkpointId/rollback-plan", async (req, reply) => {
+    const parsedParam = CheckpointIdParam.safeParse(req.params);
+    if (!parsedParam.success) return reply.code(400).send({ error: "invalid checkpointId" });
+    try {
+      return await planGitCheckpointRollback({
+        repoPath: ".",
+        env: {},
+        timeoutSec: 30,
+        extra: { data_dir: settings.dataDir },
+      }, parsedParam.data.checkpointId);
+    } catch (err) {
+      return reply.code(404).send({ error: err instanceof Error ? err.message : String(err) });
+    }
   });
 
   app.get("/chat/:sessionId/messages", async (req, reply) => {

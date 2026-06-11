@@ -5,6 +5,11 @@ import {
   upsertReviewHistoryLocal,
   type ReviewHistoryRecord,
 } from "./reviewHistoryLocal.js";
+import {
+  appendReviewOperation,
+  listReviewOperations,
+  type ReviewOperationEvent,
+} from "./reviewOperations.js";
 
 // Daemon base URL.  In dev (Vite / tauri dev) this is always port 8787.
 // In a packaged release it is also 8787 – using a single consistent port
@@ -12,6 +17,15 @@ import {
 // to the wrong port before the Rust backend had a chance to report it.
 // Override with VITE_RUNTIME_URL if you need a non-default address.
 const RUNTIME_URL = import.meta.env.VITE_RUNTIME_URL ?? "http://127.0.0.1:8787";
+
+function messageFromErrorBody(fallback: string, body: string): string {
+  try {
+    const json = JSON.parse(body) as { authMessage?: string; message?: string; error?: string };
+    return json.authMessage ?? json.message ?? json.error ?? fallback;
+  } catch {
+    return body || fallback;
+  }
+}
 
 export interface HealthStatus {
   ok: boolean;
@@ -159,6 +173,63 @@ export interface ChatHistoryEntry {
   sessionId: string;
   preview: string;
   createdAt: number;
+}
+
+export interface ChatCheckpointActivity {
+  id: string;
+  sessionId: string;
+  repoPath: string;
+  profileId?: string;
+  at: number;
+  toolName: string;
+  toolSummary?: string;
+  toolOk?: boolean;
+  checkpointId: string;
+  checkpointPath: string;
+  safetyCheckpointId?: string;
+  safetyCheckpointPath?: string;
+  targetCheckpointId?: string;
+  applyMode?: string;
+  restoredFiles?: string[];
+}
+
+export interface ChatCheckpointPreview {
+  ok: boolean;
+  checkpointId: string;
+  path: string;
+  createdAt: string;
+  repoPath: string;
+  reason: string;
+  branch: string;
+  head: string;
+  statusLines: string[];
+  files: string[];
+  diffPreview: string;
+  diffChars: number;
+  diffTruncated: boolean;
+}
+
+export interface ChatCheckpointRollbackPlan {
+  ok: boolean;
+  checkpointId: string;
+  repoPath: string;
+  branch: string;
+  head: string;
+  supported: boolean;
+  mode: "apply_checkpoint_patch" | "already_at_checkpoint" | "restore_tracked_to_clean_checkpoint" | "untracked_only";
+  reason: string;
+  checkpointFiles: string[];
+  currentStatusLines: string[];
+  currentTrackedPaths: string[];
+  currentUntrackedPaths: string[];
+  requiredCapability?: string;
+  proposal: null | {
+    tool: string;
+    args: Record<string, unknown>;
+    description: string;
+    nextHint?: string;
+  };
+  warnings: string[];
 }
 
 export interface ChatMessageEntry {
@@ -359,6 +430,29 @@ export async function fetchChatHistory(): Promise<ChatHistoryEntry[]> {
   return (await r.json()) as ChatHistoryEntry[];
 }
 
+export async function fetchChatCheckpointActivity(): Promise<ChatCheckpointActivity[]> {
+  const r = await fetch(`${RUNTIME_URL}/chat/checkpoints`);
+  if (!r.ok) throw new Error(`/chat/checkpoints HTTP ${r.status}`);
+  return (await r.json()) as ChatCheckpointActivity[];
+}
+
+export async function fetchChatCheckpointPreview(
+  checkpointId: string,
+  maxDiffChars = 12000,
+): Promise<ChatCheckpointPreview> {
+  const r = await fetch(`${RUNTIME_URL}/chat/checkpoints/${encodeURIComponent(checkpointId)}/preview?maxDiffChars=${maxDiffChars}`);
+  if (!r.ok) throw new Error(`/chat/checkpoints/${checkpointId}/preview HTTP ${r.status}: ${await r.text()}`);
+  return (await r.json()) as ChatCheckpointPreview;
+}
+
+export async function fetchChatCheckpointRollbackPlan(
+  checkpointId: string,
+): Promise<ChatCheckpointRollbackPlan> {
+  const r = await fetch(`${RUNTIME_URL}/chat/checkpoints/${encodeURIComponent(checkpointId)}/rollback-plan`);
+  if (!r.ok) throw new Error(`/chat/checkpoints/${checkpointId}/rollback-plan HTTP ${r.status}: ${await r.text()}`);
+  return (await r.json()) as ChatCheckpointRollbackPlan;
+}
+
 export async function fetchChatMessages(sessionId: string): Promise<ChatMessageEntry[]> {
   const r = await fetch(`${RUNTIME_URL}/chat/${sessionId}/messages`);
   if (!r.ok) throw new Error(`/chat/messages HTTP ${r.status}`);
@@ -400,6 +494,33 @@ export type WorkspaceProfileInput = Omit<WorkspaceProfile, "id" | "createdAt" | 
 export type ProjectLink = WorkspaceProfile;
 export type ProjectLinkInput = WorkspaceProfileInput;
 
+export type AdoDiscoveryKind = "projects" | "repositories" | "pipelines";
+
+export interface AdoDiscoveryOption {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
+}
+
+export interface AdoDiscoveryResult {
+  source: "internal" | "mcp";
+  kind: AdoDiscoveryKind;
+  items: AdoDiscoveryOption[];
+}
+
+export interface AdoMcpCheckResult {
+  ok: boolean;
+  source: "internal" | "mcp";
+  authMode?: "oauth" | "pat";
+  authStatus?: "ok" | "oauth_unavailable" | "oauth_no_org_access" | "pat_invalid_or_missing_scope" | "unknown_error";
+  authMessage?: string;
+  retryable?: boolean;
+  toolCount: number;
+  tools: Array<{ name: string; description: string }>;
+  projectCount?: number;
+}
+
 export interface PipelineRunSummary {
   id: number;
   name: string;
@@ -431,6 +552,121 @@ export interface PullRequestSummary {
   pipelineRun?: PipelineRunSummary;
 }
 
+export interface PullRequestThreadSummary {
+  id: number;
+  publishedDate: string;
+  lastUpdatedDate: string;
+  status: string | number;
+  comments: Array<{
+    id: number;
+    author: {
+      displayName: string;
+      uniqueName: string;
+    };
+    content: string;
+    publishedDate: string;
+    lastUpdatedDate: string;
+    lastContentUpdatedDate: string;
+  }>;
+  threadContext: unknown;
+}
+
+export interface BuildSummary {
+  id: number;
+  buildNumber: string;
+  status: string;
+  result: string;
+  queueTime: string;
+  startTime: string;
+  finishTime: string;
+  sourceBranch: string;
+  sourceVersion: string;
+  definitionName: string;
+  repository: string;
+  requestedFor: string;
+  url: string;
+}
+
+export interface PullRequestChangesSummary {
+  iterationId: number;
+  sourceCommit: string;
+  targetCommit: string;
+  commonCommit: string;
+  fileCount: number;
+  changes: Array<{
+    changeId: number;
+    changeType: string | number;
+    path: string;
+    originalPath: string;
+    gitObjectType: string;
+    commitId: string;
+  }>;
+  nextSkip?: number;
+  nextTop?: number;
+}
+
+export interface PullRequestContext {
+  source: "internal";
+  pullRequest: PullRequestSummary & {
+    codeReviewId: number;
+    project: string;
+    description: string;
+    closedDate: string;
+    workItemRefs: Array<{ id: string; url: string }>;
+  };
+  threads: PullRequestThreadSummary[];
+  changes: PullRequestChangesSummary;
+  builds: BuildSummary[];
+}
+
+export interface PullRequestInsightPreview {
+  source: "llm" | "heuristic";
+  summary: string;
+  readiness?: "ready" | "needs_attention" | "blocked";
+  risks: string[];
+  categories?: {
+    blocking: string[];
+    warnings: string[];
+    info: string[];
+  };
+  signals: {
+    fileCount: number;
+    threadCount: number;
+    failedBuildCount: number;
+    workItemCount: number;
+  };
+  tokensIn: number;
+  tokensOut: number;
+}
+
+export interface PrInsightArtifactRecord {
+  id: string;
+  profileId: string;
+  repository: string;
+  pullRequestId: number;
+  title: string;
+  kind: "insight_preview" | "review_run";
+  at: string;
+  summary: string;
+  readiness?: "ready" | "needs_attention" | "blocked";
+  decisionQueue?: "auto_approved" | "needs_human_review" | "blocked" | "watching";
+  decisionRiskLevel?: "low" | "medium" | "high";
+  contextConfidence?: "high" | "medium" | "low" | "";
+  risks: string[];
+  categories?: {
+    blocking: string[];
+    warnings: string[];
+    info: string[];
+  };
+  signals?: PullRequestInsightPreview["signals"];
+  iterationId?: number;
+  sourceCommit?: string;
+  findingCount?: number;
+  discardedFindingCount?: number;
+  tokensIn: number;
+  tokensOut: number;
+}
+
 export type { ReviewHistoryRecord } from "./reviewHistoryLocal.js";
 export { REVIEW_HISTORY_LS_KEY } from "./reviewHistoryLocal.js";
 
@@ -444,8 +680,44 @@ export interface ReviewQueueItem {
   decisionQueue: "auto_approved" | "needs_human_review" | "blocked" | "watching";
   decisionRiskLevel: "low" | "medium" | "high";
   decisionReason: string;
+  decisionReasonCodes: string[];
+  contextConfidence: "high" | "medium" | "low" | "";
   autoApprovedAt: string;
   autoApprovalActor: string;
+  discardedFindingCount: number;
+  hunkCoverageFiles: number;
+  wholeFileFallbackFiles: number;
+  changedHunkLines: number;
+  manualDisposition: "" | "acknowledged" | "marked_safe" | "marked_blocked" | "changes_requested";
+  manualDispositionAt: string;
+  manualDispositionActor: string;
+  manualDispositionNote: string;
+  manualDispositionEvents: ReviewDispositionEvent[];
+  manualDispositionWriteBackAttempted: boolean;
+  manualDispositionWriteBackOk: boolean;
+  manualDispositionWriteBackError: string;
+  manualDispositionWriteBackAt: string;
+  manualDispositionWriteBackThreadId: string;
+  manualDispositionWriteBackUrl: string;
+  manualDispositionWriteBackEvents: ReviewWriteBackEvent[];
+}
+
+export interface ReviewDispositionEvent {
+  disposition: ReviewQueueItem["manualDisposition"];
+  at: string;
+  actor: string;
+  note: string;
+}
+
+export interface ReviewWriteBackEvent {
+  disposition: ReviewQueueItem["manualDisposition"];
+  at: string;
+  ok: boolean;
+  actor: string;
+  note: string;
+  error: string;
+  threadId: string;
+  url: string;
 }
 
 export async function listProfiles(): Promise<WorkspaceProfile[]> {
@@ -485,6 +757,52 @@ export async function deleteProfile(id: string): Promise<void> {
   if (!r.ok) throw new Error(`deleteProfile HTTP ${r.status}`);
 }
 
+export async function discoverAdoProjectLinkOptions(
+  kind: AdoDiscoveryKind,
+  profile: Partial<WorkspaceProfileInput>,
+): Promise<AdoDiscoveryResult> {
+  const r = await fetch(`${RUNTIME_URL}/profiles/discover`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind, profile }),
+  });
+  if (!r.ok) throw new Error(`discover ${kind} HTTP ${r.status}: ${await r.text()}`);
+  return (await r.json()) as AdoDiscoveryResult;
+}
+
+export async function checkAdoProjectLinkTools(
+  profile: Partial<WorkspaceProfileInput>,
+): Promise<AdoMcpCheckResult> {
+  const r = await fetch(`${RUNTIME_URL}/profiles/check-ado-tools`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ profile }),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    try {
+      const diagnostic = JSON.parse(text) as Partial<AdoMcpCheckResult> & { error?: string };
+      if (diagnostic.authStatus || diagnostic.authMessage) {
+        return {
+          ok: false,
+          source: diagnostic.source ?? "internal",
+          authMode: diagnostic.authMode,
+          authStatus: diagnostic.authStatus,
+          authMessage: diagnostic.authMessage ?? diagnostic.error ?? `check ADO tools HTTP ${r.status}`,
+          retryable: diagnostic.retryable,
+          toolCount: diagnostic.toolCount ?? 0,
+          tools: diagnostic.tools ?? [],
+          projectCount: diagnostic.projectCount,
+        };
+      }
+    } catch {
+      /* throw below */
+    }
+    throw new Error(`check ADO tools HTTP ${r.status}: ${text}`);
+  }
+  return (await r.json()) as AdoMcpCheckResult;
+}
+
 export async function fetchProfilePullRequests(
   profileId: string,
   status = "active",
@@ -493,6 +811,68 @@ export async function fetchProfilePullRequests(
   if (!r.ok) throw new Error(`/profiles/${profileId}/pull-requests HTTP ${r.status}: ${await r.text()}`);
   const body = (await r.json()) as { pullRequests: PullRequestSummary[] };
   return body.pullRequests;
+}
+
+export async function fetchProfilePullRequestContext(
+  profileId: string,
+  pullRequestId: number,
+): Promise<PullRequestContext> {
+  const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/pull-requests/${pullRequestId}/context`);
+  if (!r.ok) {
+    const fallback = `/profiles/${profileId}/pull-requests/${pullRequestId}/context HTTP ${r.status}`;
+    throw new Error(messageFromErrorBody(fallback, await r.text()));
+  }
+  return (await r.json()) as PullRequestContext;
+}
+
+export async function fetchProfilePullRequestInsightPreview(
+  profileId: string,
+  pullRequestId: number,
+): Promise<PullRequestInsightPreview> {
+  const profile = readProfileData(profileId);
+  const llmConfig = readLlmConfig();
+  const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/pull-requests/${pullRequestId}/insight-preview`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      ...(llmConfig ? { llmConfig } : {}),
+      ...(profile ? { profile } : {}),
+    }),
+  });
+  if (!r.ok) {
+    const fallback = `/profiles/${profileId}/pull-requests/${pullRequestId}/insight-preview HTTP ${r.status}`;
+    throw new Error(messageFromErrorBody(fallback, await r.text()));
+  }
+  return (await r.json()) as PullRequestInsightPreview;
+}
+
+export async function fetchProfilePrInsightArtifacts(
+  profileId: string,
+  pullRequestId?: number,
+): Promise<PrInsightArtifactRecord[]> {
+  const suffix = pullRequestId === undefined ? "" : `?pullRequestId=${encodeURIComponent(String(pullRequestId))}`;
+  const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/pr-insights${suffix}`);
+  if (!r.ok) throw new Error(`/profiles/${profileId}/pr-insights HTTP ${r.status}: ${await r.text()}`);
+  const body = (await r.json()) as { items?: PrInsightArtifactRecord[] };
+  return body.items ?? [];
+}
+
+export async function saveProfilePrInsightArtifact(
+  profileId: string,
+  artifact: Omit<PrInsightArtifactRecord, "id" | "profileId"> & {
+    id?: string;
+    profileId?: string;
+  },
+): Promise<PrInsightArtifactRecord> {
+  const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/pr-insights`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(artifact),
+  });
+  if (!r.ok) throw new Error(`/profiles/${profileId}/pr-insights HTTP ${r.status}: ${await r.text()}`);
+  const body = (await r.json()) as { record?: PrInsightArtifactRecord };
+  if (!body.record) throw new Error("PR insight artifact response did not include a record");
+  return body.record;
 }
 
 export async function fetchProfileReviewQueue(profileId: string): Promise<{
@@ -560,8 +940,26 @@ export async function recordProfileReviewHistory(
         decisionQueue: full.decisionQueue,
         decisionRiskLevel: full.decisionRiskLevel,
         decisionReason: full.decisionReason,
+        decisionReasonCodes: full.decisionReasonCodes,
+        contextConfidence: full.contextConfidence,
         autoApprovedAt: full.autoApprovedAt,
         autoApprovalActor: full.autoApprovalActor,
+        discardedFindingCount: full.discardedFindingCount,
+        hunkCoverageFiles: full.hunkCoverageFiles,
+        wholeFileFallbackFiles: full.wholeFileFallbackFiles,
+        changedHunkLines: full.changedHunkLines,
+        manualDisposition: full.manualDisposition,
+        manualDispositionAt: full.manualDispositionAt,
+        manualDispositionActor: full.manualDispositionActor,
+        manualDispositionNote: full.manualDispositionNote,
+        manualDispositionEvents: full.manualDispositionEvents,
+        manualDispositionWriteBackAttempted: full.manualDispositionWriteBackAttempted,
+        manualDispositionWriteBackOk: full.manualDispositionWriteBackOk,
+        manualDispositionWriteBackError: full.manualDispositionWriteBackError,
+        manualDispositionWriteBackAt: full.manualDispositionWriteBackAt,
+        manualDispositionWriteBackThreadId: full.manualDispositionWriteBackThreadId,
+        manualDispositionWriteBackUrl: full.manualDispositionWriteBackUrl,
+        manualDispositionWriteBackEvents: full.manualDispositionWriteBackEvents,
       }),
     });
     if (!r.ok && r.status !== 400) {
@@ -569,6 +967,115 @@ export async function recordProfileReviewHistory(
     }
   } catch {
     // Daemon unreachable — browser copy is enough for this session.
+  }
+}
+
+export async function recordProfileReviewDisposition(
+  profileId: string,
+  record: Omit<ReviewHistoryRecord, "repository"> & {
+    repository?: string;
+  },
+  options: { writeBackToAdo?: boolean } = {},
+): Promise<ReviewQueueItem | null> {
+  const profile = readProfileData(profileId);
+  const repository =
+    record.repository ??
+    (typeof profile?.["adoRepoName"] === "string" ? profile["adoRepoName"] : "");
+  if (!repository.trim()) throw new Error("profile has no adoRepoName");
+
+  const full = { ...record, repository: repository.trim() };
+  upsertReviewHistoryLocal(full);
+
+  try {
+    const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/review-disposition`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        pullRequestId: full.pullRequestId,
+        lastIterationId: full.lastIterationId,
+        findingCount: full.findingCount,
+        lastRunAt: full.lastRunAt,
+        sourceCommit: full.sourceCommit,
+        decisionQueue: full.decisionQueue,
+        decisionRiskLevel: full.decisionRiskLevel,
+        decisionReason: full.decisionReason,
+        decisionReasonCodes: full.decisionReasonCodes,
+        contextConfidence: full.contextConfidence,
+        autoApprovedAt: full.autoApprovedAt,
+        autoApprovalActor: full.autoApprovalActor,
+        discardedFindingCount: full.discardedFindingCount,
+        hunkCoverageFiles: full.hunkCoverageFiles,
+        wholeFileFallbackFiles: full.wholeFileFallbackFiles,
+        changedHunkLines: full.changedHunkLines,
+        manualDisposition: full.manualDisposition,
+        manualDispositionAt: full.manualDispositionAt,
+        manualDispositionActor: full.manualDispositionActor,
+        manualDispositionNote: full.manualDispositionNote,
+        manualDispositionEvents: full.manualDispositionEvents,
+        manualDispositionWriteBackAttempted: full.manualDispositionWriteBackAttempted,
+        manualDispositionWriteBackOk: full.manualDispositionWriteBackOk,
+        manualDispositionWriteBackError: full.manualDispositionWriteBackError,
+        manualDispositionWriteBackAt: full.manualDispositionWriteBackAt,
+        manualDispositionWriteBackThreadId: full.manualDispositionWriteBackThreadId,
+        manualDispositionWriteBackUrl: full.manualDispositionWriteBackUrl,
+        manualDispositionWriteBackEvents: full.manualDispositionWriteBackEvents,
+        writeBackToAdo: options.writeBackToAdo ?? true,
+      }),
+    });
+    if (!r.ok && r.status !== 400) {
+      throw new Error(`/profiles/${profileId}/review-disposition HTTP ${r.status}: ${await r.text()}`);
+    }
+    if (r.ok) {
+      const body = (await r.json()) as { record?: ReviewQueueItem };
+      if (body.record) {
+        upsertReviewHistoryLocal(body.record);
+        return body.record;
+      }
+    }
+  } catch {
+    // Daemon unreachable - browser copy is enough for this session.
+  }
+  return null;
+}
+
+export async function fetchProfileReviewOperations(profileId: string): Promise<ReviewOperationEvent[]> {
+  try {
+    const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/review-operations`);
+    if (!r.ok) throw new Error(`/profiles/${profileId}/review-operations HTTP ${r.status}: ${await r.text()}`);
+    const body = (await r.json()) as { items?: ReviewOperationEvent[] };
+    return body.items ?? [];
+  } catch {
+    return listReviewOperations();
+  }
+}
+
+export async function recordProfileReviewOperation(
+  profileId: string,
+  event: Omit<ReviewOperationEvent, "id" | "at" | "actor"> & {
+    at?: string;
+    actor?: string;
+  },
+): Promise<ReviewOperationEvent> {
+  const local = appendReviewOperation(event);
+  try {
+    const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/review-operations`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        kind: local.kind,
+        at: local.at,
+        pullRequestId: local.pullRequestId,
+        actor: local.actor,
+        label: local.label,
+        ok: local.ok,
+        details: local.details,
+      }),
+    });
+    if (!r.ok) return local;
+    const body = (await r.json()) as { record?: ReviewOperationEvent };
+    return body.record ?? local;
+  } catch {
+    return local;
   }
 }
 
@@ -697,28 +1204,62 @@ export interface ReviewFinding {
   message: string;
 }
 
+export interface ReviewDiscardedFinding extends ReviewFinding {
+  reason: "unknown_file" | "invalid_line" | "outside_changed_hunk" | "empty_message" | "duplicate";
+}
+
 export interface ReviewRunResult {
   ok: boolean;
   pullRequestId: number;
   repository: string;
   iterationId: number;
+  sourceCommit?: string;
   findingCount: number;
   decisionQueue: "auto_approved" | "needs_human_review" | "blocked" | "watching";
   decisionRiskLevel: "low" | "medium" | "high";
   decisionReason: string;
+  decisionReasonCodes?: string[];
+  contextConfidence?: "high" | "medium" | "low";
+  readiness?: "ready" | "needs_attention" | "blocked";
+  categories?: {
+    blocking: string[];
+    warnings: string[];
+    info: string[];
+  };
   lastRunAt: string;
   autoApprovalActor: string;
   tokensIn: number;
   tokensOut: number;
   summary: string;
+  metadata?: {
+    estimatedEffort: 1 | 2 | 3 | 4 | 5;
+    testsRequired: boolean;
+    securityConcern: boolean;
+    canBeSplit: boolean;
+    keyIssues: string[];
+  };
+  compression?: {
+    compressed: boolean;
+    includedFiles: string[];
+    omittedFiles: string[];
+  };
+  coverage?: {
+    totalFiles: number;
+    filesWithHunks: number;
+    wholeFileOnlyFiles: number;
+    hunkCount: number;
+    changedHunkLines: number;
+  };
   findings?: ReviewFinding[];
+  discardedFindings?: ReviewDiscardedFinding[];
 }
 
 /**
  * POST /profiles/:id/review-run
  * Invokes the Review Agent immediately on the given PR.
- * The daemon uses the profile's ADO PAT + the daemon's LLM config to build
- * context, run the LLM planner, decide the queue lane, and persist the result.
+ * The daemon uses ADO OAuth first, then optional profile PAT fallback, plus the
+ * daemon's LLM config to build context, run the planner, decide the queue lane,
+ * and persist the result.
  * Returns the decision so the frontend can update the history record in-place.
  */
 export async function runProfileReviewRun(
@@ -742,12 +1283,7 @@ export async function runProfileReviewRun(
 
   if (!r.ok) {
     const body = await r.text();
-    let msg = `review-run HTTP ${r.status}`;
-    try {
-      const json = JSON.parse(body) as { error?: string; message?: string };
-      msg = json.error ?? json.message ?? msg;
-    } catch { /* keep default */ }
-    throw new Error(msg);
+    throw new Error(messageFromErrorBody(`review-run HTTP ${r.status}`, body));
   }
 
   return (await r.json()) as ReviewRunResult;
@@ -788,6 +1324,7 @@ export interface DaemonConfigPayload {
   azureKeyVaultUrl?: string;
   azureCosmosEndpoint?: string;
   reviewAutoApproveEnabled?: boolean;
+  reviewStaleAgeHours?: number;
 }
 
 export interface DaemonConfig {
@@ -801,6 +1338,15 @@ export interface DaemonConfig {
   azureKeyVaultUrl: string;
   azureCosmosEndpoint: string;
   reviewAutoApproveEnabled: boolean;
+  reviewStaleAgeHours: number;
+}
+
+export interface AzureDevOpsRemoteSuggestion {
+  remoteName: string;
+  remoteUrl: string;
+  adoOrgUrl: string;
+  adoProject: string;
+  adoRepoName: string;
 }
 
 /** List git branches for a repo path by asking the daemon (which uses shell:true to find git). */
@@ -812,6 +1358,18 @@ export async function fetchGitBranchesFromDaemon(repoPath: string): Promise<stri
     return data.branches ?? [];
   } catch {
     return [];
+  }
+}
+
+/** Infer Azure DevOps Project Link fields from the local repository's git remotes. */
+export async function fetchAzureDevOpsRemoteSuggestionFromDaemon(repoPath: string): Promise<AzureDevOpsRemoteSuggestion | null> {
+  try {
+    const r = await fetch(`${RUNTIME_URL}/git/azure-devops-remote?repoPath=${encodeURIComponent(repoPath)}`);
+    if (!r.ok) return null;
+    const data = await r.json() as { suggestion: AzureDevOpsRemoteSuggestion | null };
+    return data.suggestion ?? null;
+  } catch {
+    return null;
   }
 }
 

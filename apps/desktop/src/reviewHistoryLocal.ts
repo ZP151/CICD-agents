@@ -46,8 +46,26 @@ export interface ReviewHistoryRecord {
   decisionQueue: ReviewQueueItem["decisionQueue"];
   decisionRiskLevel: ReviewQueueItem["decisionRiskLevel"];
   decisionReason: string;
+  decisionReasonCodes?: string[];
+  contextConfidence?: ReviewQueueItem["contextConfidence"];
   autoApprovedAt: string;
   autoApprovalActor: string;
+  discardedFindingCount?: number;
+  hunkCoverageFiles?: number;
+  wholeFileFallbackFiles?: number;
+  changedHunkLines?: number;
+  manualDisposition?: ReviewQueueItem["manualDisposition"];
+  manualDispositionAt?: string;
+  manualDispositionActor?: string;
+  manualDispositionNote?: string;
+  manualDispositionEvents?: ReviewQueueItem["manualDispositionEvents"];
+  manualDispositionWriteBackAttempted?: boolean;
+  manualDispositionWriteBackOk?: boolean;
+  manualDispositionWriteBackError?: string;
+  manualDispositionWriteBackAt?: string;
+  manualDispositionWriteBackThreadId?: string;
+  manualDispositionWriteBackUrl?: string;
+  manualDispositionWriteBackEvents?: ReviewQueueItem["manualDispositionWriteBackEvents"];
 }
 
 type ReviewHistoryStore = Record<string, Record<string, ReviewHistoryRecord>>;
@@ -77,9 +95,69 @@ function recordToItem(record: ReviewHistoryRecord): ReviewQueueItem {
     decisionQueue: record.decisionQueue,
     decisionRiskLevel: record.decisionRiskLevel,
     decisionReason: record.decisionReason,
+    decisionReasonCodes: record.decisionReasonCodes ?? [],
+    contextConfidence: record.contextConfidence ?? "",
     autoApprovedAt: record.autoApprovedAt,
     autoApprovalActor: record.autoApprovalActor,
+    discardedFindingCount: record.discardedFindingCount ?? 0,
+    hunkCoverageFiles: record.hunkCoverageFiles ?? 0,
+    wholeFileFallbackFiles: record.wholeFileFallbackFiles ?? 0,
+    changedHunkLines: record.changedHunkLines ?? 0,
+    manualDisposition: record.manualDisposition ?? "",
+    manualDispositionAt: record.manualDispositionAt ?? "",
+    manualDispositionActor: record.manualDispositionActor ?? "",
+    manualDispositionNote: record.manualDispositionNote ?? "",
+    manualDispositionEvents: record.manualDispositionEvents ?? [],
+    manualDispositionWriteBackAttempted: record.manualDispositionWriteBackAttempted ?? false,
+    manualDispositionWriteBackOk: record.manualDispositionWriteBackOk ?? false,
+    manualDispositionWriteBackError: record.manualDispositionWriteBackError ?? "",
+    manualDispositionWriteBackAt: record.manualDispositionWriteBackAt ?? "",
+    manualDispositionWriteBackThreadId: record.manualDispositionWriteBackThreadId ?? "",
+    manualDispositionWriteBackUrl: record.manualDispositionWriteBackUrl ?? "",
+    manualDispositionWriteBackEvents: record.manualDispositionWriteBackEvents ?? [],
   };
+}
+
+function reviewQueuePriorityScore(item: ReviewQueueItem): number {
+  const queuePriority: Record<ReviewQueueItem["decisionQueue"], number> = {
+    blocked: 4000,
+    needs_human_review: 3000,
+    watching: 2000,
+    auto_approved: 1000,
+  };
+  const riskPriority: Record<ReviewQueueItem["decisionRiskLevel"], number> = {
+    high: 300,
+    medium: 200,
+    low: 100,
+  };
+  return (
+    queuePriority[item.decisionQueue] +
+    riskPriority[item.decisionRiskLevel] +
+    item.findingCount * 10 +
+    item.discardedFindingCount * 12 +
+    item.wholeFileFallbackFiles * 35 +
+    (item.hunkCoverageFiles === 0 && item.wholeFileFallbackFiles > 0 ? 50 : 0)
+  );
+}
+
+export function compareReviewQueueItems(a: ReviewQueueItem, b: ReviewQueueItem): number {
+  const priorityDelta = reviewQueuePriorityScore(b) - reviewQueuePriorityScore(a);
+  if (priorityDelta !== 0) return priorityDelta;
+  return Date.parse(b.lastRunAt || "0") - Date.parse(a.lastRunAt || "0");
+}
+
+export function reviewQueuePriorityReasons(item: ReviewQueueItem): string[] {
+  const reasons: string[] = [];
+  if (item.decisionQueue === "blocked") reasons.push("blocked queue");
+  if (item.decisionQueue === "needs_human_review") reasons.push("needs human review");
+  if (item.decisionRiskLevel === "high") reasons.push("high risk");
+  if (item.decisionRiskLevel === "medium") reasons.push("medium risk");
+  for (const code of item.decisionReasonCodes ?? []) reasons.push(code.replace(/[._]/g, " "));
+  if (item.findingCount > 0) reasons.push(`${item.findingCount} finding(s)`);
+  if (item.discardedFindingCount > 0) reasons.push(`${item.discardedFindingCount} discarded finding(s)`);
+  if (item.wholeFileFallbackFiles > 0) reasons.push(`${item.wholeFileFallbackFiles} whole-file fallback file(s)`);
+  if (item.hunkCoverageFiles === 0 && item.wholeFileFallbackFiles > 0) reasons.push("no hunk coverage");
+  return reasons;
 }
 
 export function listReviewHistoryLocal(repository: string): ReviewQueueItem[] {
@@ -88,7 +166,7 @@ export function listReviewHistoryLocal(repository: string): ReviewQueueItem[] {
   const store = loadStore();
   return Object.values(store[repo] ?? {})
     .map(recordToItem)
-    .sort((a, b) => Date.parse(b.lastRunAt || "0") - Date.parse(a.lastRunAt || "0"));
+    .sort(compareReviewQueueItems);
 }
 
 export function upsertReviewHistoryLocal(record: ReviewHistoryRecord): void {
@@ -113,8 +191,26 @@ export function syncReviewHistoryLocal(items: ReviewQueueItem[]): void {
       decisionQueue: item.decisionQueue,
       decisionRiskLevel: item.decisionRiskLevel,
       decisionReason: item.decisionReason,
+      decisionReasonCodes: item.decisionReasonCodes ?? [],
+      contextConfidence: item.contextConfidence ?? "",
       autoApprovedAt: item.autoApprovedAt,
       autoApprovalActor: item.autoApprovalActor,
+      discardedFindingCount: item.discardedFindingCount,
+      hunkCoverageFiles: item.hunkCoverageFiles,
+      wholeFileFallbackFiles: item.wholeFileFallbackFiles,
+      changedHunkLines: item.changedHunkLines,
+      manualDisposition: item.manualDisposition ?? "",
+      manualDispositionAt: item.manualDispositionAt ?? "",
+      manualDispositionActor: item.manualDispositionActor ?? "",
+      manualDispositionNote: item.manualDispositionNote ?? "",
+      manualDispositionEvents: item.manualDispositionEvents ?? [],
+      manualDispositionWriteBackAttempted: item.manualDispositionWriteBackAttempted ?? false,
+      manualDispositionWriteBackOk: item.manualDispositionWriteBackOk ?? false,
+      manualDispositionWriteBackError: item.manualDispositionWriteBackError ?? "",
+      manualDispositionWriteBackAt: item.manualDispositionWriteBackAt ?? "",
+      manualDispositionWriteBackThreadId: item.manualDispositionWriteBackThreadId ?? "",
+      manualDispositionWriteBackUrl: item.manualDispositionWriteBackUrl ?? "",
+      manualDispositionWriteBackEvents: item.manualDispositionWriteBackEvents ?? [],
     });
   }
 }
@@ -130,7 +226,5 @@ export function mergeReviewQueueItems(...groups: ReviewQueueItem[][]): ReviewQue
       }
     }
   }
-  return [...byKey.values()].sort(
-    (a, b) => Date.parse(b.lastRunAt || "0") - Date.parse(a.lastRunAt || "0"),
-  );
+  return [...byKey.values()].sort(compareReviewQueueItems);
 }

@@ -11,6 +11,7 @@ import {
   StdioMcpClient,
   createMcpToolsFromClient,
   runCommand,
+  splitCommand,
   isConfirmationMessage,
   isDenialMessage,
   getWorkspaceProfile,
@@ -25,6 +26,7 @@ import {
   type Settings,
   azureDevOpsTools,
   dotnetTools,
+  createGitCheckpoint,
   gitTools,
   gitIntentTool,
   npmTools,
@@ -32,6 +34,8 @@ import {
   CosmosSessionStore,
   resetCosmosClient,
   isAzureAuthenticationRequiredError,
+  listLocalPrInsightArtifacts,
+  type PrInsightArtifactRecord,
   type CosmosStoredSession,
 } from "@cicd-agent/core";
 import {
@@ -105,6 +109,8 @@ interface StoredBubble {
   toolOk?: boolean;
   toolSummary?: string;
   toolResult?: unknown;   // full structured output for renderers
+  checkpointId?: string;
+  checkpointPath?: string;
   // assistant result metadata (hidden from main bubble, shown in Details)
   riskLevel?: string;
   actionsTaken?: string[];
@@ -131,6 +137,24 @@ type HistoryStore = Record<string, StoredSession>;
 
 type ChatExecutorMode = "planner" | "confirmed-action";
 
+export interface ChatCheckpointActivity {
+  id: string;
+  sessionId: string;
+  repoPath: string;
+  profileId?: string;
+  at: number;
+  toolName: string;
+  toolSummary?: string;
+  toolOk?: boolean;
+  checkpointId: string;
+  checkpointPath: string;
+  safetyCheckpointId?: string;
+  safetyCheckpointPath?: string;
+  targetCheckpointId?: string;
+  applyMode?: string;
+  restoredFiles?: string[];
+}
+
 function chatTools(): Tool[] {
   return [
     ...gitTools(),
@@ -148,7 +172,12 @@ interface ChatToolExecutors {
   close: () => Promise<void>;
 }
 
-async function createChatToolExecutors(ctx: ToolContext): Promise<ChatToolExecutors> {
+interface BuiltContextPrompt {
+  prompt?: string;
+  notes: string[];
+}
+
+export async function createChatToolExecutors(ctx: ToolContext): Promise<ChatToolExecutors> {
   const clients: StdioMcpClient[] = [];
   const tools = [...chatTools(), ...await optionalAzureDevOpsMcpTools(ctx, clients)];
   const plannerExecutor = createChatToolExecutor(ctx, "planner", tools);
@@ -168,9 +197,57 @@ function createChatToolExecutor(ctx: ToolContext, mode: ChatExecutorMode, tools:
     mode === "planner"
       ? ({ tool }) => !toolRequiresApproval(tool)
       : undefined,
+    mode === "confirmed-action"
+      ? async ({ toolName, tool }) => {
+          if (toolName === "git_checkpoint") return;
+          if (!toolName.startsWith("git_")) return;
+          if (!toolRequiresApproval(tool)) return;
+          const checkpoint = await createGitCheckpoint(ctx, `before ${toolName}`);
+          return {
+            checkpointId: checkpoint["checkpointId"],
+            checkpointPath: checkpoint["path"],
+          };
+        }
+      : undefined,
   );
   executor.registerMany(tools);
   return executor;
+}
+
+export function checkpointMetadataFromToolResult(
+  toolResult: unknown,
+): { checkpointId: string; checkpointPath: string } | undefined {
+  if (typeof toolResult !== "object" || toolResult === null) return undefined;
+  const result = toolResult as Record<string, unknown>;
+  const metadata = result["execution_metadata"];
+  if (typeof metadata !== "object" || metadata === null) return undefined;
+  const beforeExecute = (metadata as Record<string, unknown>)["beforeExecute"];
+  if (typeof beforeExecute !== "object" || beforeExecute === null) return undefined;
+  const checkpointId = (beforeExecute as Record<string, unknown>)["checkpointId"];
+  const checkpointPath = (beforeExecute as Record<string, unknown>)["checkpointPath"];
+  if (typeof checkpointId !== "string" || !checkpointId) return undefined;
+  if (typeof checkpointPath !== "string" || !checkpointPath) return undefined;
+  return { checkpointId, checkpointPath };
+}
+
+function checkpointApplyMetadataFromToolResult(
+  toolName: string | undefined,
+  toolResult: unknown,
+): Pick<ChatCheckpointActivity, "targetCheckpointId" | "applyMode" | "restoredFiles"> | undefined {
+  if (toolName !== "git_checkpoint_apply") return undefined;
+  if (typeof toolResult !== "object" || toolResult === null) return undefined;
+  const result = toolResult as Record<string, unknown>;
+  const checkpointId = result["checkpointId"];
+  if (typeof checkpointId !== "string" || !checkpointId) return undefined;
+  const mode = result["mode"];
+  const restoredFiles = result["restoredFiles"];
+  return {
+    targetCheckpointId: checkpointId,
+    applyMode: typeof mode === "string" ? mode : undefined,
+    restoredFiles: Array.isArray(restoredFiles)
+      ? restoredFiles.filter((file): file is string => typeof file === "string")
+      : undefined,
+  };
 }
 
 async function optionalAzureDevOpsMcpTools(ctx: ToolContext, clients: StdioMcpClient[]): Promise<Tool[]> {
@@ -181,7 +258,9 @@ async function optionalAzureDevOpsMcpTools(ctx: ToolContext, clients: StdioMcpCl
   const pat = String(ctx.extra["ado_pat"] ?? "").trim();
   const env: Record<string, string> = {};
   if (pat) env.PERSONAL_ACCESS_TOKEN = Buffer.from(`:${pat}`).toString("base64");
-  const command = nonEmptyString(ctx.extra["ado_mcp_command"]) || process.env.CICD_AGENT_ADO_MCP_COMMAND || "mcp-server-azuredevops";
+  const commandSpec = nonEmptyString(ctx.extra["ado_mcp_command"]) || process.env.CICD_AGENT_ADO_MCP_COMMAND || "mcp-server-azuredevops";
+  const [command, ...commandArgs] = splitCommand(commandSpec);
+  if (!command) return [];
   const authentication =
     nonEmptyString(ctx.extra["ado_mcp_authentication"]) ||
     (pat ? "pat" : (process.env.CICD_AGENT_ADO_MCP_AUTHENTICATION || "azcli"));
@@ -193,6 +272,7 @@ async function optionalAzureDevOpsMcpTools(ctx: ToolContext, clients: StdioMcpCl
     name: "ado",
     command,
     args: [
+      ...commandArgs,
       org,
       "--authentication",
       authentication,
@@ -482,6 +562,49 @@ export class ChatSessionManager {
       });
   }
 
+  async listCheckpointActivity(limit = 50): Promise<ChatCheckpointActivity[]> {
+    const sessions: StoredSession[] = [];
+    const cosmos = getCosmosStore();
+    if (cosmos) {
+      try {
+        const recent = await cosmos.listRecent(Math.max(limit * 2, 30));
+        for (const item of recent) {
+          const session = await loadSession(item.sessionId);
+          if (session) sessions.push(session);
+        }
+      } catch {
+        // fall through to local
+      }
+    }
+    if (sessions.length === 0) {
+      sessions.push(...Object.values(loadStoreSync()));
+    }
+
+    return sessions
+      .flatMap((session) => session.bubbles
+        .filter((bubble) => bubble.role === "tool" && bubble.checkpointId && bubble.checkpointPath)
+        .map((bubble) => {
+          const applyMetadata = checkpointApplyMetadataFromToolResult(bubble.toolName, bubble.toolResult);
+          return {
+            id: `${session.id}:${bubble.timestamp}:${bubble.toolName ?? "tool"}:${bubble.checkpointId}`,
+            sessionId: session.id,
+            repoPath: session.repoPath,
+            profileId: session.profileId,
+            at: bubble.timestamp,
+            toolName: bubble.toolName ?? "tool",
+            toolSummary: bubble.toolSummary,
+            toolOk: bubble.toolOk,
+            checkpointId: bubble.checkpointId!,
+            checkpointPath: bubble.checkpointPath!,
+            safetyCheckpointId: applyMetadata ? bubble.checkpointId! : undefined,
+            safetyCheckpointPath: applyMetadata ? bubble.checkpointPath! : undefined,
+            ...applyMetadata,
+          };
+        }))
+      .sort((a, b) => b.at - a.at)
+      .slice(0, limit);
+  }
+
   async *run(
     sessionId: string,
     message: string,
@@ -623,6 +746,7 @@ export class ChatSessionManager {
               toolResult = { error: err instanceof Error ? err.message : String(err) };
             }
             const summary = truncateStr(JSON.stringify(toolResult), 300);
+            const checkpointMetadata = checkpointMetadataFromToolResult(toolResult);
             yield { type: "tool_end", name: pending.tool, ok, summary, result: toolResult };
 
             // Persist tool bubble
@@ -635,6 +759,7 @@ export class ChatSessionManager {
               toolOk: ok,
               toolSummary: summary,
               toolResult: toolResult,
+              ...checkpointMetadata,
             });
 
             // Add context to LLM history so it knows what was done
@@ -652,11 +777,11 @@ export class ChatSessionManager {
             await this.appendMessage(sessionId, "user", continuationMsg);
             const history22 = await this.getHistory(sessionId, 22);
             yield { type: "progress", message: "Refreshing project context" };
-            const contextPrompt = await this.buildContextPrompt(session.repoPath, continuationMsg, llm, inlineProfile);
+            const context = await this.buildContextPrompt(session.repoPath, continuationMsg, llm, inlineProfile, profileId);
             yield { type: "progress", message: "Planning next step" };
 
             yield* this._runPlannerAndPersist(
-              sessionId, continuationMsg, history22, session.repoPath, planner, waitForConfirm, contextPrompt,
+              sessionId, continuationMsg, history22, session.repoPath, planner, waitForConfirm, context.prompt, context.notes,
             );
             return;
           }
@@ -666,10 +791,10 @@ export class ChatSessionManager {
       // ── Normal LLM flow ────────────────────────────────────────────────────
       const history = await this.getHistory(sessionId, 20);
       yield { type: "progress", message: "Reading project context" };
-      const contextPrompt = await this.buildContextPrompt(session.repoPath, message, llm, inlineProfile);
+      const context = await this.buildContextPrompt(session.repoPath, message, llm, inlineProfile, profileId);
       yield { type: "progress", message: "Planning response" };
       yield* this._runPlannerAndPersist(
-        sessionId, message, history, session.repoPath, planner, waitForConfirm, contextPrompt,
+        sessionId, message, history, session.repoPath, planner, waitForConfirm, context.prompt, context.notes,
       );
     } finally {
       await toolRuntime.close();
@@ -751,6 +876,7 @@ export class ChatSessionManager {
         toolResult = { error: err instanceof Error ? err.message : String(err) };
       }
       const summary = truncateStr(JSON.stringify(toolResult), 300);
+      const checkpointMetadata = checkpointMetadataFromToolResult(toolResult);
       yield { type: "tool_end", name: pending.tool, ok, summary, result: toolResult };
 
       // Persist tool bubble
@@ -763,6 +889,7 @@ export class ChatSessionManager {
         toolOk: ok,
         toolSummary: summary,
         toolResult,
+        ...checkpointMetadata,
       });
 
       // Record in LLM history
@@ -786,11 +913,17 @@ export class ChatSessionManager {
       await this.appendMessage(sessionId, "user", continuationMsg);
       const history = await this.getHistory(sessionId, 22);
       yield { type: "progress", message: "Refreshing project context" };
-      const contextPrompt = await this.buildContextPrompt(session.repoPath, continuationMsg, llm, storedSession.inlineProfile);
+      const context = await this.buildContextPrompt(
+        session.repoPath,
+        continuationMsg,
+        llm,
+        storedSession.inlineProfile,
+        storedSession.profileId,
+      );
       yield { type: "progress", message: "Planning next step" };
 
       yield* this._runPlannerAndPersist(
-        sessionId, continuationMsg, history, session.repoPath, planner, () => Promise.resolve(true), contextPrompt,
+        sessionId, continuationMsg, history, session.repoPath, planner, () => Promise.resolve(true), context.prompt, context.notes,
       );
     } finally {
       await toolRuntime?.close();
@@ -807,6 +940,7 @@ export class ChatSessionManager {
     planner: ChatPlanner,
     waitForConfirm: () => Promise<boolean>,
     contextPrompt?: string,
+    contextNotes: string[] = [],
   ): AsyncGenerator<ChatEvent> {
     let assistantReply = "";
     const pendingToolArgs = new Map<string, Record<string, unknown>>();
@@ -827,39 +961,45 @@ export class ChatSessionManager {
           toolOk: event.ok,
           toolSummary: event.summary,
           toolResult: event.result,
+          ...checkpointMetadataFromToolResult(event.result),
         });
         yield event;
       } else if (event.type === "done") {
         // ── Workflow-state enrichment ──────────────────────────────────────
         const bubbles = await this.getBubbles(sessionId);
         const enrichedResult = deriveWorkflowPendingAction(sessionId, event.result, bubbles);
-        const userFacingResult: ChatPlannerResult = {
+        const suggestions = [...(enrichedResult.suggestions ?? []), ...contextNotes];
+        const enrichedWithContext: ChatPlannerResult = {
           ...enrichedResult,
+          suggestions,
+        };
+        const userFacingResult: ChatPlannerResult = {
+          ...enrichedWithContext,
           approvalProposal: undefined,
         };
         const enrichedEvent: ChatEvent = { type: "done", result: userFacingResult };
 
-        assistantReply = enrichedResult.response;
+        assistantReply = enrichedWithContext.response;
         await this.appendBubble(sessionId, {
           role: "assistant",
-          content: enrichedResult.response,
+          content: enrichedWithContext.response,
           timestamp: now(),
-          riskLevel: enrichedResult.riskLevel,
-          actionsTaken: enrichedResult.actionsTaken,
-          suggestions: enrichedResult.suggestions,
+          riskLevel: enrichedWithContext.riskLevel,
+          actionsTaken: enrichedWithContext.actionsTaken,
+          suggestions: enrichedWithContext.suggestions,
         });
         // Store the enriched approval proposal
         const storedForPending = await loadSession(sessionId);
         const workflowState = buildWorkflowState(
           bubbles,
-          approvalProposalFromResult(enrichedResult),
-          approvalProposalFromResult(enrichedResult) ? "waiting_for_approval" : "done",
-          approvalProposalFromResult(enrichedResult)?.tool ?? "done",
-          enrichedResult.riskLevel,
-          enrichedResult.response,
+          approvalProposalFromResult(enrichedWithContext),
+          approvalProposalFromResult(enrichedWithContext) ? "waiting_for_approval" : "done",
+          approvalProposalFromResult(enrichedWithContext)?.tool ?? "done",
+          enrichedWithContext.riskLevel,
+          enrichedWithContext.response,
         );
         if (storedForPending) {
-          setStoredApprovalProposal(storedForPending, approvalProposalFromResult(enrichedResult));
+          setStoredApprovalProposal(storedForPending, approvalProposalFromResult(enrichedWithContext));
           storedForPending.workflowState = workflowState;
           await saveSession(storedForPending);
         }
@@ -893,8 +1033,10 @@ export class ChatSessionManager {
     message: string,
     llm: LLMClient,
     inlineProfile?: InlineProfile,
-  ): Promise<string | undefined> {
+    profileId?: string,
+  ): Promise<BuiltContextPrompt> {
     try {
+      const notes: string[] = [];
       const profile = inlineProfileToChatContextProfile(inlineProfile);
       const bundle = await buildChatContext({ repoPath, message, llm, profile });
       this.refreshContextIndexInBackground(repoPath, llm, profile);
@@ -925,9 +1067,20 @@ export class ChatSessionManager {
         // branch info is best-effort; ignore errors
       }
 
-      return prompt || undefined;
+      const insightContext = buildPrInsightContextBundle({
+        dataDir: getSettings().dataDir,
+        message,
+        profileId: profileId ?? inlineProfile?.id,
+        repository: inlineProfile?.adoRepoName,
+      });
+      if (insightContext.prompt) {
+        prompt = prompt ? `${prompt}\n${insightContext.prompt}` : insightContext.prompt;
+        notes.push(...insightContext.notes);
+      }
+
+      return { prompt: prompt || undefined, notes };
     } catch {
-      return undefined;
+      return { notes: [] };
     }
   }
 
@@ -961,6 +1114,114 @@ function inlineProfileToChatContextProfile(profile?: InlineProfile): ChatContext
     targetBranch: profile.targetBranch || profile.defaultBranch || "main",
     pipelineName: profile.adoPipelineName,
   };
+}
+
+export function extractPullRequestIdFromMessage(message: string): number | undefined {
+  const patterns = [
+    /\bPR\s*#?\s*(\d{1,8})\b/i,
+    /\bpull\s+request\s*#?\s*(\d{1,8})\b/i,
+    /#(\d{1,8})\b/,
+  ];
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (!match?.[1]) continue;
+    const id = Number(match[1]);
+    if (Number.isInteger(id) && id >= 0) return id;
+  }
+  return undefined;
+}
+
+export function extractPrInsightArtifactIdFromMessage(message: string): string | undefined {
+  const match = message.match(/\bartifact(?:\s+id)?\s+([^\s]+)/i);
+  const raw = match?.[1]?.trim();
+  if (!raw) return undefined;
+  return raw.replace(/[),.;:]+$/g, "");
+}
+
+function wantsPrInsightContext(message: string): boolean {
+  return /\b(pr|pull request|review|insight|finding|risk|approval|approve|blocked|artifact)\b/i.test(message);
+}
+
+export function formatPrInsightArtifactsForChat(artifacts: PrInsightArtifactRecord[]): string | undefined {
+  if (artifacts.length === 0) return undefined;
+  const lines = [
+    "\n## Saved PR AI Insights",
+    "Use these saved AI conclusions as context. Do not rerun analysis unless the user asks for a fresh result.",
+  ];
+  for (const artifact of artifacts.slice(0, 3)) {
+    lines.push(
+      `- PR #${artifact.pullRequestId} (${artifact.kind === "review_run" ? "full review" : "preview"}) at ${artifact.at}`,
+      `  - Artifact id: ${artifact.id}`,
+      `  - Title: ${artifact.title || "(untitled)"}`,
+      `  - Summary: ${truncateStr(artifact.summary || "No summary saved.", 500)}`,
+    );
+    if (artifact.readiness) lines.push(`  - Readiness: ${artifact.readiness}`);
+    if (artifact.decisionQueue || artifact.decisionRiskLevel || artifact.contextConfidence) {
+      lines.push([
+        "  - Decision:",
+        artifact.decisionQueue ? `queue=${artifact.decisionQueue}` : "",
+        artifact.decisionRiskLevel ? `risk=${artifact.decisionRiskLevel}` : "",
+        artifact.contextConfidence ? `confidence=${artifact.contextConfidence}` : "",
+      ].filter(Boolean).join(" "));
+    }
+    if (typeof artifact.findingCount === "number") {
+      lines.push(`  - Findings: ${artifact.findingCount}; discarded=${artifact.discardedFindingCount ?? 0}`);
+    }
+    if (artifact.signals) {
+      lines.push(`  - Signals: files=${artifact.signals.fileCount}; threads=${artifact.signals.threadCount}; failedBuilds=${artifact.signals.failedBuildCount}; workItems=${artifact.signals.workItemCount}`);
+    }
+    if (artifact.risks.length > 0) {
+      lines.push(`  - Risks: ${artifact.risks.slice(0, 8).join("; ")}`);
+    }
+    lines.push(`  - Tokens: ${artifact.tokensIn}/${artifact.tokensOut}`);
+  }
+  return lines.join("\n");
+}
+
+export interface PrInsightContextBundle {
+  prompt?: string;
+  notes: string[];
+  artifactIds: string[];
+}
+
+export function buildPrInsightContextBundle(args: {
+  dataDir: string;
+  message: string;
+  profileId?: string;
+  repository?: string;
+}): PrInsightContextBundle {
+  if (!args.profileId || !args.repository?.trim()) return { notes: [], artifactIds: [] };
+  if (!wantsPrInsightContext(args.message)) return { notes: [], artifactIds: [] };
+  const artifactId = extractPrInsightArtifactIdFromMessage(args.message);
+  const pullRequestId = extractPullRequestIdFromMessage(args.message);
+  const candidates = listLocalPrInsightArtifacts({
+    dataDir: args.dataDir,
+    profileId: args.profileId,
+    repository: args.repository.trim(),
+    pullRequestId,
+    limit: artifactId ? 100 : pullRequestId === undefined ? 3 : 2,
+  });
+  const artifacts = artifactId
+    ? candidates.filter((artifact) => artifact.id === artifactId).slice(0, 1)
+    : candidates;
+  const prompt = formatPrInsightArtifactsForChat(artifacts);
+  if (!prompt) return { notes: [], artifactIds: [] };
+  return {
+    prompt,
+    artifactIds: artifacts.map((artifact) => artifact.id),
+    notes: artifacts.map((artifact) => (
+      `Used saved PR AI insight artifact ${artifact.id} for PR #${artifact.pullRequestId} (${artifact.kind}, ${artifact.at}).`
+    )),
+  };
+}
+
+export function buildPrInsightContextPrompt(args: {
+  dataDir: string;
+  message: string;
+  profileId?: string;
+  repository?: string;
+}): string | undefined {
+  return buildPrInsightContextBundle(args).prompt;
 }
 
 function approvalIdFor(action: PendingToolAction): string {

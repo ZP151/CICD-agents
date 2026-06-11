@@ -7,6 +7,23 @@ describe("tool capability registry", () => {
     const caps = toolCapabilities(gitTools());
     expect(caps.find((cap) => cap.name === "git_status")?.riskLevel).toBe("low");
     expect(caps.find((cap) => cap.name === "git_status")?.readOnly).toBe(true);
+    expect(caps.find((cap) => cap.name === "git_checkpoint")).toMatchObject({
+      riskLevel: "low",
+      readOnly: true,
+      requiresApproval: false,
+    });
+    expect(caps.find((cap) => cap.name === "git_checkpoint_show")).toMatchObject({
+      riskLevel: "low",
+      readOnly: true,
+      requiresApproval: false,
+      required: ["checkpointId"],
+    });
+    expect(caps.find((cap) => cap.name === "git_checkpoint_apply")).toMatchObject({
+      riskLevel: "medium",
+      readOnly: false,
+      requiresApproval: true,
+      required: ["checkpointId"],
+    });
     expect(caps.find((cap) => cap.name === "git_fetch")?.riskLevel).toBe("medium");
     expect(caps.find((cap) => cap.name === "git_fetch")?.requiresApproval).toBe(true);
     expect(caps.find((cap) => cap.name === "git_merge_base")?.readOnly).toBe(true);
@@ -26,6 +43,8 @@ describe("tool capability registry", () => {
     expect(prompt).toContain("Available tool capabilities");
     expect(prompt).toContain("approval_proposal.tool");
     expect(prompt).toContain("git_branch_list");
+    expect(prompt).toContain("git_checkpoint_apply");
+    expect(prompt).toContain("git_checkpoint_show");
     expect(prompt).toContain("git_fetch");
     expect(prompt).toContain("git_merge_base");
     expect(prompt).toContain("git_rebase");

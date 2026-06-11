@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
+  checkAdoProjectLinkTools,
   chatStream,
   confirmAction as apiConfirmAction,
   confirmPlan,
   cancelPlan,
+  discoverAdoProjectLinkOptions,
   fetchChatHistory,
   fetchChatMessages,
   fetchChatState,
+  type AdoDiscoveryKind,
+  type AdoDiscoveryOption,
   type ChatEventPayload,
   type ChatHistoryEntry,
   type WorkspaceProfile,
@@ -14,7 +19,15 @@ import {
 } from "../api.js";
 import { useAppData } from "../App.js";
 import {
+  ACTIVITY_HANDOFF_KEY,
+  CHAT_HANDOFF_KEY,
+  buildActivityPrInsightHandoffDraft,
+  type ChatHandoffDraft,
+} from "../checkpointHandoff.js";
+import {
+  fetchAzureDevOpsRemoteSuggestion,
   fetchGitBranches,
+  pickRecommendedPipeline,
   type PatStatus,
   projectLinkNameFromRepo,
   verifyPat,
@@ -565,15 +578,63 @@ function PendingActionCard({
   );
 }
 
-function MetaPanel({ meta }: { meta: NonNullable<Bubble["meta"]> }) {
+function MetaPanel({
+  meta,
+  onOpenPrInsightSource,
+}: {
+  meta: NonNullable<Bubble["meta"]>;
+  onOpenPrInsightSource?: (source: { artifactId: string }) => void;
+}) {
   const suggestions = meta.suggestions?.filter(Boolean) ?? [];
+  const insightSources = suggestions
+    .map((source) => {
+      const match = source.match(/^Used saved PR AI insight artifact (.+) for PR #(\d+) \(([^,]+), (.+)\)\.$/);
+      return match
+        ? {
+            raw: source,
+            artifactId: match[1] ?? "",
+            pullRequestId: match[2] ?? "",
+            kind: match[3] ?? "",
+            at: match[4] ?? "",
+          }
+        : null;
+    })
+    .filter((source): source is { raw: string; artifactId: string; pullRequestId: string; kind: string; at: string } => Boolean(source));
+  const sourceMessages = new Set(insightSources.map((source) => source.raw));
+  const otherSuggestions = suggestions.filter((source) => !sourceMessages.has(source));
   if (suggestions.length === 0) return null;
   return (
-    <ul className="mt-1.5 ml-1 space-y-0.5 text-xs text-zinc-500">
-      {suggestions.map((s, i) => (
-        <li key={i} className="flex gap-1"><span className="text-zinc-600">›</span>{s}</li>
-      ))}
-    </ul>
+    <div className="mt-1.5 ml-1 space-y-1.5 text-xs text-zinc-500">
+      {insightSources.length > 0 && (
+        <div className="space-y-1 rounded-md border border-blue-950/60 bg-blue-950/10 px-2 py-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-400/70">Saved PR insight source</p>
+          {insightSources.map((source) => (
+            <div key={source.raw} className="flex flex-wrap items-start justify-between gap-2">
+              <p className="min-w-0 flex-1 break-words leading-relaxed text-zinc-500">
+                PR #{source.pullRequestId} · {source.kind.replace(/_/g, " ")} · {source.at}
+                <span className="block font-mono text-[11px] text-zinc-600">{source.artifactId}</span>
+              </p>
+              {onOpenPrInsightSource && (
+                <button
+                  type="button"
+                  onClick={() => onOpenPrInsightSource({ artifactId: source.artifactId })}
+                  className="shrink-0 rounded-md border border-blue-900/60 px-2 py-1 text-[11px] text-blue-300/80 transition hover:border-blue-700 hover:text-blue-200"
+                >
+                  Open in Activity
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {otherSuggestions.length > 0 && (
+        <ul className="space-y-0.5">
+          {otherSuggestions.map((s, i) => (
+            <li key={i} className="flex gap-1"><span className="text-zinc-600">›</span>{s}</li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -665,9 +726,20 @@ function ProjectLinkSetupCard({
   const [branches, setBranches] = useState<string[]>([]);
   const [branchLoading, setBranchLoading] = useState(false);
   const [branchError, setBranchError] = useState(false);
+  const [remoteHint, setRemoteHint] = useState<string | null>(null);
   const branchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [patStatus, setPatStatus] = useState<PatStatus>("none");
   const [verifyingPat, setVerifyingPat] = useState(false);
+  const [discovering, setDiscovering] = useState<AdoDiscoveryKind | null>(null);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+  const [pipelineHint, setPipelineHint] = useState<string | null>(null);
+  const [discovered, setDiscovered] = useState<Record<AdoDiscoveryKind, AdoDiscoveryOption[]>>({
+    projects: [],
+    repositories: [],
+    pipelines: [],
+  });
+  const [mcpChecking, setMcpChecking] = useState(false);
+  const [mcpStatus, setMcpStatus] = useState<string | null>(null);
 
   useEffect(() => {
     setForm((current) => ({
@@ -686,11 +758,16 @@ function ProjectLinkSetupCard({
       setBranches([]);
       setBranchLoading(false);
       setBranchError(false);
+      setRemoteHint(null);
       return;
     }
     setBranchLoading(true);
     setBranchError(false);
-    const detected = await fetchGitBranches(path.trim());
+    const trimmedPath = path.trim();
+    const [detected, remote] = await Promise.all([
+      fetchGitBranches(trimmedPath),
+      fetchAzureDevOpsRemoteSuggestion(trimmedPath),
+    ]);
     setBranches(detected);
     setBranchLoading(false);
     setBranchError(detected.length === 0);
@@ -710,6 +787,17 @@ function ProjectLinkSetupCard({
             : preferred;
         return { ...current, defaultBranch: preferred, targetBranch: target };
       });
+    }
+    if (remote) {
+      setRemoteHint(`${remote.adoProject} / ${remote.adoRepoName} from ${remote.remoteName}`);
+      setForm((current) => ({
+        ...current,
+        adoOrgUrl: current.adoOrgUrl || remote.adoOrgUrl,
+        adoProject: current.adoProject || remote.adoProject,
+        adoRepoName: current.adoRepoName || remote.adoRepoName,
+      }));
+    } else {
+      setRemoteHint(null);
     }
   }, []);
 
@@ -748,6 +836,57 @@ function ProjectLinkSetupCard({
     const org = form.adoOrgUrl.replace(/\/$/, "");
     window.open(org ? `${org}/_usersSettings/tokens` : "https://dev.azure.com", "_blank");
     if (patStatus === "none") setPatStatus("pending");
+  }
+
+  async function handleDiscover(kind: AdoDiscoveryKind) {
+    setDiscovering(kind);
+    setDiscoveryError(null);
+    try {
+      const result = await discoverAdoProjectLinkOptions(kind, {
+        ...form,
+      });
+      setDiscovered((current) => ({ ...current, [kind]: result.items }));
+      if (result.items.length === 1) applyDiscovery(kind, result.items[0]!);
+      if (kind === "pipelines" && result.items.length > 1 && !form.adoPipelineId) {
+        const recommended = pickRecommendedPipeline(result.items, form);
+        if (recommended) {
+          applyDiscovery(kind, recommended);
+          setPipelineHint(`Recommended pipeline selected: ${recommended.name}`);
+        }
+      }
+    } catch (err) {
+      setDiscoveryError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDiscovering(null);
+    }
+  }
+
+  function applyDiscovery(kind: AdoDiscoveryKind, option: AdoDiscoveryOption) {
+    if (kind === "projects") {
+      setForm((current) => ({ ...current, adoProject: option.name }));
+    } else if (kind === "repositories") {
+      setForm((current) => ({ ...current, adoRepoName: option.name }));
+    } else {
+      setForm((current) => ({ ...current, adoPipelineId: option.id, adoPipelineName: option.name }));
+    }
+  }
+
+  async function handleCheckMcp() {
+    setMcpChecking(true);
+    setMcpStatus(null);
+    try {
+      const result = await checkAdoProjectLinkTools({
+        ...form,
+      });
+      const authLabel = result.authMode === "pat" ? "PAT fallback" : "OAuth";
+      setMcpStatus(result.ok
+        ? `ADO tools ready via ${authLabel} · ${result.toolCount} internal tools`
+        : `${authLabel} issue · ${result.authMessage ?? result.authStatus ?? "ADO tools unavailable"}`);
+    } catch (err) {
+      setMcpStatus(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMcpChecking(false);
+    }
   }
 
   function BranchSelect({
@@ -879,6 +1018,9 @@ function ProjectLinkSetupCard({
           {branchError && form.repoPath && (
             <span className="text-[10px] text-amber-500/80">Could not read branches. Check this is a valid git repository.</span>
           )}
+          {remoteHint && (
+            <span className="text-[10px] text-emerald-500/80">Azure DevOps fields inferred from git remote: {remoteHint}</span>
+          )}
         </label>
         <div className="grid grid-cols-2 gap-3">
           <BranchSelect label="Default branch" value={form.defaultBranch} onChange={set("defaultBranch")} />
@@ -900,13 +1042,73 @@ function ProjectLinkSetupCard({
               <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoProject} onChange={(e) => set("adoProject")(e.target.value)} placeholder="ADO project" />
               <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoRepoName} onChange={(e) => set("adoRepoName")(e.target.value)} placeholder="ADO repo" />
             </div>
+            <div className="grid gap-2 rounded-md border border-zinc-800 bg-zinc-950/60 p-2.5">
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => void handleDiscover("projects")}
+                  disabled={!form.adoOrgUrl || discovering !== null}
+                  className="rounded-md border border-zinc-800 px-2 py-1 text-[11px] text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300 disabled:opacity-40"
+                >
+                  {discovering === "projects" ? "Discovering..." : "Discover projects"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDiscover("repositories")}
+                  disabled={!form.adoOrgUrl || !form.adoProject || discovering !== null}
+                  className="rounded-md border border-zinc-800 px-2 py-1 text-[11px] text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300 disabled:opacity-40"
+                >
+                  {discovering === "repositories" ? "Discovering..." : "Discover repos"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDiscover("pipelines")}
+                  disabled={!form.adoOrgUrl || !form.adoProject || discovering !== null}
+                  className="rounded-md border border-zinc-800 px-2 py-1 text-[11px] text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300 disabled:opacity-40"
+                >
+                  {discovering === "pipelines" ? "Discovering..." : "Discover pipelines"}
+                </button>
+              </div>
+              {(["projects", "repositories", "pipelines"] as AdoDiscoveryKind[]).map((kind) => (
+                discovered[kind].length > 0 && (
+                  <label key={kind} className="grid gap-1">
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-700">{kind}</span>
+                    <select
+                      className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600"
+                      defaultValue=""
+                      onChange={(event) => {
+                        const selected = discovered[kind].find((option) => option.id === event.target.value);
+                        if (selected) applyDiscovery(kind, selected);
+                      }}
+                    >
+                      <option value="">Select {kind.slice(0, -1)}</option>
+                      {discovered[kind].map((option) => (
+                        <option key={`${kind}-${option.id}`} value={option.id}>
+                          {option.name}{option.description ? ` - ${option.description}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )
+              ))}
+              {discoveryError && (
+                <p className="rounded-md border border-red-900/40 bg-red-950/20 px-2.5 py-1.5 text-[11px] text-red-300">
+                  {discoveryError}
+                </p>
+              )}
+              {pipelineHint && (
+                <p className="rounded-md border border-emerald-900/40 bg-emerald-950/20 px-2.5 py-1.5 text-[11px] text-emerald-300">
+                  {pipelineHint}
+                </p>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoPipelineId} onChange={(e) => set("adoPipelineId")(e.target.value)} placeholder="Pipeline ID" />
               <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoPipelineName} onChange={(e) => set("adoPipelineName")(e.target.value)} placeholder="Pipeline name" />
             </div>
             <div className="grid gap-1.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-medium text-zinc-500">Personal Access Token</span>
+                <span className="text-[11px] font-medium text-zinc-500">PAT fallback</span>
                 <div className="flex items-center gap-2">
                   {patStatus === "pending" && <span className="rounded-full border border-amber-800/40 bg-amber-900/30 px-2 py-0.5 text-[10px] font-medium text-amber-400">Pending</span>}
                   {patStatus === "verified" && <span className="rounded-full border border-emerald-800/40 bg-emerald-900/30 px-2 py-0.5 text-[10px] font-medium text-emerald-400">Verified</span>}
@@ -931,11 +1133,11 @@ function ProjectLinkSetupCard({
                 type="password"
                 value={form.adoPat}
                 onChange={(e) => set("adoPat")(e.target.value)}
-                placeholder="Personal Access Token"
+                placeholder="Optional PAT fallback"
               />
               {patStatus === "pending" && (
                 <p className="rounded-lg border border-amber-900/30 bg-amber-950/20 px-3 py-2 text-[11px] leading-relaxed text-amber-400/80">
-                  Create a PAT with Code, Build, and Pull Request thread permissions, paste it here, then click Verify.
+                  Microsoft sign-in is tried first. For fallback mode, create a PAT with Code, Build, and Pull Request thread permissions, paste it here, then click Verify.
                 </p>
               )}
             </div>
@@ -948,8 +1150,8 @@ function ProjectLinkSetupCard({
                   className="mt-0.5 h-3.5 w-3.5 rounded border-zinc-700 bg-zinc-900"
                 />
                 <span className="min-w-0">
-                  <span className="block text-[11px] font-medium text-zinc-400">Enable Azure DevOps MCP bridge</span>
-                  <span className="block text-[10px] leading-relaxed text-zinc-700">Registers reusable upstream ADO MCP tools for this Project Link.</span>
+                  <span className="block text-[11px] font-medium text-zinc-400">Enable external Azure DevOps MCP bridge fallback</span>
+                  <span className="block text-[10px] leading-relaxed text-zinc-700">Optional compatibility path while ADO MCP capabilities are internalized into this app.</span>
                 </span>
               </label>
               {form.adoMcpEnabled && (
@@ -958,6 +1160,21 @@ function ProjectLinkSetupCard({
                   <div className="grid grid-cols-2 gap-2">
                     <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoMcpAuthentication} onChange={(e) => set("adoMcpAuthentication")(e.target.value)} placeholder="pat or azcli" />
                     <input className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-zinc-600" value={form.adoMcpDomains} onChange={(e) => set("adoMcpDomains")(e.target.value)} placeholder="repositories,pipelines,work-items" />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleCheckMcp()}
+                      disabled={!form.adoOrgUrl || mcpChecking}
+                      className="rounded-md border border-zinc-800 px-2 py-1 text-[11px] text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300 disabled:opacity-40"
+                    >
+                      {mcpChecking ? "Checking..." : "Check ADO auth/tools"}
+                    </button>
+                    {mcpStatus && (
+                      <span className={`text-[10px] ${mcpStatus.startsWith("ADO tools ready") ? "text-emerald-400" : "text-amber-400"}`}>
+                        {mcpStatus}
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
@@ -1299,6 +1516,7 @@ interface ChatProps {
 }
 
 export default function Chat({ mini = false }: ChatProps) {
+  const navigate = useNavigate();
   const [repoPath, setRepoPath] = useState(
     typeof window !== "undefined" ? (localStorage.getItem("chat_repo") ?? "") : "",
   );
@@ -1374,10 +1592,43 @@ export default function Chat({ mini = false }: ChatProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const openPrInsightSourceInActivity = useCallback((source: { artifactId: string }) => {
+    sessionStorage.setItem(ACTIVITY_HANDOFF_KEY, JSON.stringify(buildActivityPrInsightHandoffDraft({
+      artifactId: source.artifactId,
+    })));
+    navigate("/activity");
+  }, [navigate]);
+
   const useProjectLink = useCallback((profile: WorkspaceProfile) => {
     setActiveProfileId(profile.id);
     if (profile.repoPath) setRepoPath(profile.repoPath);
     setTimeout(() => textareaRef.current?.focus(), 0);
+  }, []);
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem(CHAT_HANDOFF_KEY);
+    if (!raw) return;
+    sessionStorage.removeItem(CHAT_HANDOFF_KEY);
+    try {
+      const draft = JSON.parse(raw) as ChatHandoffDraft;
+      const message = typeof draft.message === "string" ? draft.message.trim() : "";
+      if (!message) return;
+      setSessionId(null);
+      setBubbles([]);
+      setWorkflowState(null);
+      setCustomTitle(null);
+      setInput(message);
+      if (typeof draft.repoPath === "string" && draft.repoPath.trim()) {
+        setRepoPath(draft.repoPath.trim());
+      }
+      if (typeof draft.profileId === "string" && draft.profileId.trim()) {
+        setActiveProfileId(draft.profileId.trim());
+      }
+      setStatusText("Rollback proposal loaded");
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    } catch {
+      /* ignore malformed handoff payloads */
+    }
   }, []);
 
   // ── Auto-expand the Tauri window when opening panels would clip content ───
@@ -2228,7 +2479,7 @@ export default function Chat({ mini = false }: ChatProps) {
                       <span className="whitespace-pre-wrap">{b.text}</span>
                       {b.streaming && <ThinkingDots />}
                     </div>
-                    {b.meta && <MetaPanel meta={b.meta} />}
+                    {b.meta && <MetaPanel meta={b.meta} onOpenPrInsightSource={openPrInsightSourceInActivity} />}
                   </div>
                 </div>
               );
