@@ -22,6 +22,7 @@ const READ_ONLY_TOOLS = new Set([
   "git_show",
   "git_merge_base",
   "git_intent_translator",
+  "repo_refresh_index",
 ]);
 
 const HIGH_RISK_TOOLS = new Set([

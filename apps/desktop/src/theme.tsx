@@ -1,17 +1,20 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-export type AppTheme = "dark" | "light";
+export type AppTheme = "dark" | "light" | "system";
+export type ResolvedTheme = "dark" | "light";
 
 const THEME_STORAGE_KEY = "dev_agent_theme";
 
 interface ThemeContextValue {
   theme: AppTheme;
+  resolvedTheme: ResolvedTheme;
   setTheme: (theme: AppTheme) => void;
   toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: "dark",
+  theme: "system",
+  resolvedTheme: "dark",
   setTheme: () => {},
   toggleTheme: () => {},
 });
@@ -19,26 +22,47 @@ const ThemeContext = createContext<ThemeContextValue>({
 function readStoredTheme(): AppTheme {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return stored === "light" ? "light" : "dark";
+    return stored === "dark" || stored === "light" || stored === "system" ? stored : "system";
   } catch {
-    return "dark";
+    return "system";
   }
+}
+
+function resolveTheme(theme: AppTheme): ResolvedTheme {
+  if (theme !== "system") return theme;
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }): JSX.Element {
   const [theme, setThemeState] = useState<AppTheme>(readStoredTheme);
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => resolveTheme(readStoredTheme()));
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.style.colorScheme = theme;
+    const applyTheme = () => {
+      const next = resolveTheme(theme);
+      setResolvedTheme(next);
+      document.documentElement.dataset.theme = next;
+      document.documentElement.style.colorScheme = next;
+    };
+
+    applyTheme();
     localStorage.setItem(THEME_STORAGE_KEY, theme);
+    if (theme !== "system") return;
+
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    media?.addEventListener("change", applyTheme);
+    return () => media?.removeEventListener("change", applyTheme);
   }, [theme]);
 
   const value = useMemo<ThemeContextValue>(() => ({
     theme,
+    resolvedTheme,
     setTheme: setThemeState,
-    toggleTheme: () => setThemeState((current) => current === "dark" ? "light" : "dark"),
-  }), [theme]);
+    toggleTheme: () => setThemeState((current) => {
+      const currentResolved = current === "system" ? resolveTheme(current) : current;
+      return currentResolved === "dark" ? "light" : "dark";
+    }),
+  }), [resolvedTheme, theme]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

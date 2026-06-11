@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PROJECT_CHAT_DEPLOYMENT } from "@cicd-agent/core";
 
 const ConfigSchema = z.object({
   port: z.coerce.number().default(8080),
@@ -7,7 +8,7 @@ const ConfigSchema = z.object({
   azureOpenAiEndpoint: z.string().default(""),
   azureOpenAiApiKey: z.string().default(""),
   azureOpenAiApiVersion: z.string().default("2024-08-01-preview"),
-  azureOpenAiChatDeployment: z.string().default("gpt-4o"),
+  azureOpenAiChatDeployment: z.string().default(PROJECT_CHAT_DEPLOYMENT),
   azureDevOpsOrg: z.string().default(""),
   azureDevOpsProject: z.string().default(""),
   servicePrincipalSecret: z.string().default(""),

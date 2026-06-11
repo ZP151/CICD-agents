@@ -41,6 +41,7 @@ import {
 import {
   buildChatContext,
   chatContextToPrompt,
+  describeChatContext,
   refreshChatIndex,
   type ChatContextProfile,
 } from "@cicd-agent/core/chatContext";
@@ -166,6 +167,32 @@ function chatTools(): Tool[] {
   ];
 }
 
+function chatContextTools(llm: LLMClient): Tool[] {
+  return [
+    {
+      name: "repo_refresh_index",
+      description:
+        "Refresh the local repository understanding index for the current Project Link. Use when the user asks the agent to understand, scan, index, or re-index the project before answering.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {},
+      },
+      handler: async (ctx) => {
+        const stats = await refreshChatIndex({ repoPath: ctx.repoPath, llm });
+        return {
+          ok: true,
+          repoPath: ctx.repoPath,
+          filesSeen: stats.filesSeen,
+          filesIndexed: stats.filesIndexed,
+          embedded: stats.embedded,
+          summary: `Refreshed repository index: ${stats.filesSeen} files seen, ${stats.filesIndexed} updated, ${stats.embedded} embedded.`,
+        };
+      },
+    },
+  ];
+}
+
 interface ChatToolExecutors {
   plannerExecutor: ToolExecutor;
   actionExecutor: ToolExecutor;
@@ -177,9 +204,9 @@ interface BuiltContextPrompt {
   notes: string[];
 }
 
-export async function createChatToolExecutors(ctx: ToolContext): Promise<ChatToolExecutors> {
+export async function createChatToolExecutors(ctx: ToolContext, llm = new LLMClient()): Promise<ChatToolExecutors> {
   const clients: StdioMcpClient[] = [];
-  const tools = [...chatTools(), ...await optionalAzureDevOpsMcpTools(ctx, clients)];
+  const tools = [...chatTools(), ...chatContextTools(llm), ...await optionalAzureDevOpsMcpTools(ctx, clients)];
   const plannerExecutor = createChatToolExecutor(ctx, "planner", tools);
   const actionExecutor = createChatToolExecutor(ctx, "confirmed-action", tools);
   return {
@@ -452,16 +479,22 @@ function buildEffectiveSettings(override?: InlineLlmConfig): Settings {
   const isAzure = (override.llmProvider ?? "azure") === "azure";
   return {
     ...base,
+    llmProvider: isAzure ? "azure" : "openai",
     azureOpenAiEndpoint:        isAzure ? (override.azureEndpoint   ?? base.azureOpenAiEndpoint)        : base.azureOpenAiEndpoint,
     azureOpenAiApiKey:          isAzure ? (override.azureApiKey     ?? base.azureOpenAiApiKey)          : base.azureOpenAiApiKey,
     azureOpenAiChatDeployment:  isAzure ? (override.azureDeployment ?? base.azureOpenAiChatDeployment)  : base.azureOpenAiChatDeployment,
     azureOpenAiApiVersion:      isAzure ? (override.azureApiVersion ?? base.azureOpenAiApiVersion)      : base.azureOpenAiApiVersion,
+    openAiApiKey:               !isAzure ? (override.openaiApiKey   ?? base.openAiApiKey)               : base.openAiApiKey,
+    openAiModel:                !isAzure ? (override.openaiModel    ?? base.openAiModel)                : base.openAiModel,
     llmConfigured: isAzure
       ? Boolean(
           (override.azureEndpoint ?? base.azureOpenAiEndpoint) &&
           (override.azureApiKey   ?? base.azureOpenAiApiKey),
         )
-      : Boolean(override.openaiApiKey ?? base.azureOpenAiApiKey),
+      : Boolean(
+          (override.openaiApiKey ?? base.openAiApiKey) &&
+          (override.openaiModel  ?? base.openAiModel),
+        ),
   };
 }
 
@@ -673,10 +706,10 @@ export class ChatSessionManager {
       timeoutSec: 60,
       extra: profileExtra,
     };
-    const toolRuntime = await createChatToolExecutors(toolCtx);
-    const { plannerExecutor, actionExecutor } = toolRuntime;
     const effectiveSettings = buildEffectiveSettings(llmConfig);
     const llm = new LLMClient(effectiveSettings);
+    const toolRuntime = await createChatToolExecutors(toolCtx, llm);
+    const { plannerExecutor, actionExecutor } = toolRuntime;
     const planner = new ChatPlanner(llm, plannerExecutor);
     const waitForConfirm = (): Promise<boolean> =>
       new Promise<boolean>((resolve) => {
@@ -856,13 +889,13 @@ export class ChatSessionManager {
         timeoutSec: 60,
         extra: profileExtra,
       };
-      toolRuntime = await createChatToolExecutors(toolCtx);
-      const { actionExecutor, plannerExecutor } = toolRuntime;
       // Reuse the LLM config that was persisted when the session's last /chat
       // request ran — this ensures confirm-action works without the frontend
       // having to re-send credentials.
       const effectiveSettings = buildEffectiveSettings(storedSession.llmConfig);
       const llm = new LLMClient(effectiveSettings);
+      toolRuntime = await createChatToolExecutors(toolCtx, llm);
+      const { actionExecutor, plannerExecutor } = toolRuntime;
       const planner = new ChatPlanner(llm, plannerExecutor);
 
       // ── Execute the confirmed tool ─────────────────────────────────────────
@@ -1040,6 +1073,7 @@ export class ChatSessionManager {
       const profile = inlineProfileToChatContextProfile(inlineProfile);
       const bundle = await buildChatContext({ repoPath, message, llm, profile });
       this.refreshContextIndexInBackground(repoPath, llm, profile);
+      notes.push(describeChatContext(bundle));
       let prompt = chatContextToPrompt(bundle) ?? "";
 
       // Always inject the current git branch so the agent knows the source

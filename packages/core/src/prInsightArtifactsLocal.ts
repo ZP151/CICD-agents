@@ -36,6 +36,13 @@ export interface PrInsightArtifactRecord {
   tokensOut: number;
 }
 
+export interface PrInsightArtifactHistoryMeta {
+  artifactId: string;
+  index: number;
+  total: number;
+  latest: boolean;
+}
+
 type PrInsightArtifactStore = PrInsightArtifactRecord[];
 
 const MAX_PR_INSIGHT_ARTIFACTS = 500;
@@ -103,4 +110,41 @@ export function listLocalPrInsightArtifacts(args: {
     .sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"));
   if (args.limit && args.limit > 0) return events.slice(0, args.limit);
   return events;
+}
+
+export function getLocalPrInsightArtifact(args: {
+  dataDir: string;
+  profileId?: string;
+  artifactId: string;
+}): PrInsightArtifactRecord | null {
+  const artifactId = args.artifactId.trim();
+  if (!artifactId) return null;
+  const profileId = args.profileId?.trim() ?? "";
+  return loadStore(args.dataDir).find((artifact) => (
+    artifact.id === artifactId &&
+    (!profileId || artifact.profileId === profileId)
+  )) ?? null;
+}
+
+export function summarizePrInsightArtifactHistory(
+  artifacts: PrInsightArtifactRecord[],
+): PrInsightArtifactHistoryMeta[] {
+  const groups = new Map<string, PrInsightArtifactRecord[]>();
+  for (const artifact of artifacts) {
+    const key = `${artifact.profileId}/${artifact.repository}/${artifact.pullRequestId}/${artifact.kind}`;
+    groups.set(key, [...(groups.get(key) ?? []), artifact]);
+  }
+  const summary: PrInsightArtifactHistoryMeta[] = [];
+  for (const group of groups.values()) {
+    const sorted = [...group].sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"));
+    sorted.forEach((artifact, index) => {
+      summary.push({
+        artifactId: artifact.id,
+        index,
+        total: sorted.length,
+        latest: index === 0,
+      });
+    });
+  }
+  return summary.sort((a, b) => a.artifactId.localeCompare(b.artifactId));
 }

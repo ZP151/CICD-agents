@@ -1,19 +1,25 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  fetchHealth,
   fetchAuthStatus,
-  fetchDaemonConfig,
-  configureDaemon,
-  type DaemonConfigPayload,
+  fetchHealth,
   type AuthUser,
+  type HealthStatus,
 } from "../api";
-import { useTheme } from "../theme.js";
-
-// Persistence
+import { useTheme, type AppTheme } from "../theme.js";
 
 const STORAGE_KEY = "dev_agent_settings";
 
 interface AppSettings {
+  workMode: "coding" | "everyday";
+  defaultOpenDestination: "vscode" | "system" | "none";
+  terminalShell: "powershell" | "cmd" | "git_bash";
+  language: "auto" | "en" | "zh-CN";
+  inferenceSpeed: "fast" | "balanced" | "deep";
+  codeReviewMode: "inline" | "detached";
+  suggestedPrompts: boolean;
+  defaultWorkspacePermissions: boolean;
+  autoReviewPermissions: boolean;
+  fullAccessPreference: boolean;
   llmProvider: "azure" | "openai";
   azureEndpoint: string;
   azureApiKey: string;
@@ -24,28 +30,47 @@ interface AppSettings {
 }
 
 const DEFAULTS: AppSettings = {
+  workMode: "coding",
+  defaultOpenDestination: "vscode",
+  terminalShell: "powershell",
+  language: "auto",
+  inferenceSpeed: "fast",
+  codeReviewMode: "inline",
+  suggestedPrompts: true,
+  defaultWorkspacePermissions: true,
+  autoReviewPermissions: true,
+  fullAccessPreference: false,
   llmProvider: "azure",
   azureEndpoint: "",
   azureApiKey: "",
   azureDeployment: "",
   azureApiVersion: "2024-02-01",
   openaiApiKey: "",
-  openaiModel: "gpt-4o",
+  openaiModel: "",
 };
+
+type DaemonStatus = "unknown" | "checking" | "configured" | "unconfigured" | "unreachable";
 
 function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<AppSettings>) };
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return { ...DEFAULTS };
 }
 
-function saveSettings(s: AppSettings) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+function saveSettings(settings: AppSettings) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
 }
 
-// Sub-components
+function hasCustomApi(settings: AppSettings): boolean {
+  if (settings.llmProvider === "azure") {
+    return Boolean(settings.azureEndpoint.trim() && settings.azureApiKey.trim() && settings.azureDeployment.trim());
+  }
+  return Boolean(settings.openaiApiKey.trim() && settings.openaiModel.trim());
+}
 
 function TextInput({
   label,
@@ -57,7 +82,7 @@ function TextInput({
   label: string;
   type?: string;
   value: string;
-  onChange: (v: string) => void;
+  onChange: (value: string) => void;
   placeholder?: string;
 }) {
   const [show, setShow] = useState(false);
@@ -69,15 +94,15 @@ function TextInput({
         <input
           type={isSecret && !show ? "password" : "text"}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
           className="settings-input"
         />
         {isSecret && (
           <button
             type="button"
-            onClick={() => setShow((v) => !v)}
-            className="absolute right-2.5 text-zinc-600 hover:text-zinc-400 transition"
+            onClick={() => setShow((value) => !value)}
+            className="absolute right-2.5 text-zinc-600 transition hover:text-zinc-400"
             title={show ? "Hide" : "Show"}
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -94,13 +119,7 @@ function TextInput({
   );
 }
 
-function SettingsSection({
-  children,
-  title,
-}: {
-  children: React.ReactNode;
-  title: string;
-}) {
+function SettingsSection({ children, title }: { children: React.ReactNode; title: string }) {
   return (
     <section className="settings-section">
       <h3 className="settings-section-title">{title}</h3>
@@ -155,6 +174,47 @@ function SegmentedChoice<T extends string>({
   );
 }
 
+function SelectControl<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  options: Array<{ label: string; value: T }>;
+}) {
+  return (
+    <select
+      className="settings-select"
+      value={value}
+      onChange={(event) => onChange(event.target.value as T)}
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>{option.label}</option>
+      ))}
+    </select>
+  );
+}
+
+function ToggleSwitch({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`settings-toggle ${checked ? "is-on" : ""}`}
+      onClick={() => onChange(!checked)}
+      aria-pressed={checked}
+    >
+      <span />
+    </button>
+  );
+}
+
 function StatusPill({
   children,
   tone = "neutral",
@@ -165,81 +225,39 @@ function StatusPill({
   return <span className={`settings-status settings-status-${tone}`}>{children}</span>;
 }
 
-// Main Settings page
-
-type DaemonStatus = "unknown" | "checking" | "configured" | "unconfigured" | "unreachable" | "applying" | "applied" | "error";
+function accountLabel(authUser: AuthUser): string {
+  if (!authUser.authenticated) return "Not signed in";
+  return authUser.name ?? authUser.upn ?? "Signed in";
+}
 
 export default function Settings(): JSX.Element {
-  const [s, setS] = useState<AppSettings>(loadSettings);
+  const [settings, setSettings] = useState<AppSettings>(loadSettings);
   const { theme, setTheme } = useTheme();
-  // "saved" flash indicator
   const [saved, setSaved] = useState(false);
+  const [daemonStatus, setDaemonStatus] = useState<DaemonStatus>("unknown");
+  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [authUser, setAuthUser] = useState<AuthUser>({ authenticated: false });
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Daemon / LLM status
-  const [daemonStatus, setDaemonStatus] = useState<DaemonStatus>("unknown");
-  const [applyError, setApplyError] = useState<string | null>(null);
-
-  const [authUser, setAuthUser] = useState<AuthUser>({ authenticated: false });
-  const [aoaiKeyInVault, setAoaiKeyInVault] = useState(false);
-
-  // Check daemon health + pre-fill config on mount
   useEffect(() => {
     setDaemonStatus("checking");
-
-    // Load non-secret config from daemon and merge into local settings
-    // Daemon values win only for fields the user hasn't filled in locally
-    fetchDaemonConfig().then((cfg) => {
-      if (!cfg) return;
-      setAoaiKeyInVault(cfg.aoaiKeyInVault ?? false);
-      setS((prev) => ({
-        ...prev,
-        llmProvider:         (prev.llmProvider || cfg.llmProvider as "azure" | "openai") ?? prev.llmProvider,
-        azureEndpoint:       prev.azureEndpoint    || cfg.azureEndpoint,
-        azureDeployment:     prev.azureDeployment  || cfg.azureDeployment,
-        azureApiVersion:     prev.azureApiVersion  || cfg.azureApiVersion,
-        openaiModel:         prev.openaiModel      || cfg.openaiModel,
-      }));
-    }).catch(() => {/* non-fatal */});
-
     fetchHealth()
-      .then((h) => {
-        setDaemonStatus(h.llmConfigured ? "configured" : "unconfigured");
+      .then((result) => {
+        setHealth(result);
+        setDaemonStatus(result.llmConfigured ? "configured" : "unconfigured");
       })
       .catch(() => setDaemonStatus("unreachable"));
 
-    fetchAuthStatus().then(setAuthUser).catch(() => {/* non-fatal */});
+    fetchAuthStatus().then(setAuthUser).catch(() => {
+      setAuthUser({ authenticated: false });
+    });
   }, []);
 
-  const applyToDaemon = useCallback(async (settings: AppSettings) => {
-    setDaemonStatus("applying");
-    setApplyError(null);
-    try {
-      const cfg: DaemonConfigPayload = { llmProvider: settings.llmProvider };
-      if (settings.llmProvider === "azure") {
-        cfg.azureEndpoint   = settings.azureEndpoint;
-        cfg.azureApiKey     = settings.azureApiKey;
-        cfg.azureDeployment = settings.azureDeployment;
-        cfg.azureApiVersion = settings.azureApiVersion;
-      } else {
-        cfg.openaiApiKey = settings.openaiApiKey;
-        cfg.openaiModel  = settings.openaiModel;
-      }
-      const res = await configureDaemon(cfg);
-      setDaemonStatus(res.llmConfigured ? "applied" : "unconfigured");
-      setTimeout(() => setDaemonStatus(res.llmConfigured ? "configured" : "unconfigured"), 2500);
-    } catch (e) {
-      setApplyError(e instanceof Error ? e.message : String(e));
-      setDaemonStatus("error");
-    }
-  }, []);
-
-  // Auto-save with 800 ms debounce after any change
   useEffect(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      saveSettings(s);
+      saveSettings(settings);
       setSaved(true);
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
       flashTimerRef.current = setTimeout(() => setSaved(false), 1500);
@@ -247,24 +265,19 @@ export default function Settings(): JSX.Element {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  // We intentionally re-run whenever `s` changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [s]);
+  }, [settings]);
 
   function set<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
-    setS((prev) => ({ ...prev, [key]: value }));
+    setSettings((current) => ({ ...current, [key]: value }));
   }
 
-  // Daemon status badge helpers
-  const statusBadge: Record<DaemonStatus, { label: string; cls: string }> = {
-    unknown:      { label: "Unknown",       cls: "text-zinc-500" },
-    checking:     { label: "Checking...",   cls: "text-zinc-400" },
-    configured:   { label: "LLM Ready",     cls: "text-emerald-500" },
-    unconfigured: { label: "Not Configured", cls: "text-amber-400" },
-    unreachable:  { label: "Daemon Offline", cls: "text-red-400" },
-    applying:     { label: "Applying...",   cls: "text-blue-400" },
-    applied:      { label: "Applied",       cls: "text-emerald-400" },
-    error:        { label: "Apply Failed",  cls: "text-red-400" },
+  const customApiReady = hasCustomApi(settings);
+  const statusBadge: Record<DaemonStatus, { label: string; tone: "neutral" | "success" | "warning" | "danger"; cls: string }> = {
+    unknown: { label: "Model routing", tone: "neutral", cls: "text-zinc-500" },
+    checking: { label: "Checking daemon...", tone: "warning", cls: "text-zinc-400" },
+    configured: { label: "Built-in default", tone: "success", cls: "text-emerald-500" },
+    unconfigured: { label: "Built-in default", tone: "success", cls: "text-emerald-500" },
+    unreachable: { label: "Daemon offline", tone: "danger", cls: "text-red-400" },
   };
   const badge = statusBadge[daemonStatus];
 
@@ -275,21 +288,95 @@ export default function Settings(): JSX.Element {
           <p className="settings-eyebrow">Workspace preferences</p>
           <h2 className="settings-title">Settings</h2>
           <p className="settings-subtitle">
-            Tune the local workspace, model connection, and review behavior.
+            Tune the local workspace, permissions, identity context, and optional custom model providers.
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1 shrink-0">
+        <div className="flex shrink-0 flex-col items-end gap-1">
           {saved && <span className="text-xs text-emerald-500">Saved</span>}
           <span className={`text-xs font-medium ${badge.cls}`}>{badge.label}</span>
         </div>
       </div>
 
+      <SettingsSection title="General">
+        <SettingsRow title="Work mode" description="Choose how much technical detail the agent shows.">
+          <SegmentedChoice
+            value={settings.workMode}
+            onChange={(value) => set("workMode", value)}
+            options={[
+              { label: "For coding", value: "coding" },
+              { label: "Everyday", value: "everyday" },
+            ]}
+          />
+        </SettingsRow>
+        <SettingsRow title="Default open destination" description="Where files and folders open by default.">
+          <SelectControl
+            value={settings.defaultOpenDestination}
+            onChange={(value) => set("defaultOpenDestination", value)}
+            options={[
+              { label: "VS Code", value: "vscode" },
+              { label: "System default", value: "system" },
+              { label: "Do not open", value: "none" },
+            ]}
+          />
+        </SettingsRow>
+        <SettingsRow title="Agent environment" description="Choose where the agent runs on Windows.">
+          <StatusPill>Windows native</StatusPill>
+        </SettingsRow>
+        <SettingsRow title="Integrated terminal shell" description="Choose which shell opens in the integrated terminal.">
+          <SelectControl
+            value={settings.terminalShell}
+            onChange={(value) => set("terminalShell", value)}
+            options={[
+              { label: "PowerShell", value: "powershell" },
+              { label: "Command Prompt", value: "cmd" },
+              { label: "Git Bash", value: "git_bash" },
+            ]}
+          />
+        </SettingsRow>
+        <SettingsRow title="Language" description="Language for the app UI.">
+          <SelectControl
+            value={settings.language}
+            onChange={(value) => set("language", value)}
+            options={[
+              { label: "Auto Detect", value: "auto" },
+              { label: "English", value: "en" },
+              { label: "Simplified Chinese", value: "zh-CN" },
+            ]}
+          />
+        </SettingsRow>
+        <SettingsRow title="Speed" description="Choose the inference tier used across chats and compaction.">
+          <SelectControl
+            value={settings.inferenceSpeed}
+            onChange={(value) => set("inferenceSpeed", value)}
+            options={[
+              { label: "Fast", value: "fast" },
+              { label: "Balanced", value: "balanced" },
+              { label: "Deep", value: "deep" },
+            ]}
+          />
+        </SettingsRow>
+        <SettingsRow title="Code review" description="Start review in the current chat when possible or launch a separate review chat.">
+          <SegmentedChoice
+            value={settings.codeReviewMode}
+            onChange={(value) => set("codeReviewMode", value)}
+            options={[
+              { label: "Inline", value: "inline" },
+              { label: "Detached", value: "detached" },
+            ]}
+          />
+        </SettingsRow>
+        <SettingsRow title="Suggested prompts" description="Suggest what to do next from project files and connected services.">
+          <ToggleSwitch checked={settings.suggestedPrompts} onChange={(value) => set("suggestedPrompts", value)} />
+        </SettingsRow>
+      </SettingsSection>
+
       <SettingsSection title="Appearance">
         <SettingsRow title="Theme">
-          <SegmentedChoice
+          <SegmentedChoice<AppTheme>
             value={theme}
             onChange={setTheme}
             options={[
+              { label: "System", value: "system" },
               { label: "Dark", value: "dark" },
               { label: "Light", value: "light" },
             ]}
@@ -297,10 +384,25 @@ export default function Settings(): JSX.Element {
         </SettingsRow>
       </SettingsSection>
 
-      <SettingsSection title="Model">
-        <SettingsRow title="Provider">
+      <SettingsSection title="Permissions">
+        <SettingsRow title="Default permissions" description="Allow the agent to read and edit files in its workspace by default.">
+          <ToggleSwitch checked={settings.defaultWorkspacePermissions} onChange={(value) => set("defaultWorkspacePermissions", value)} />
+        </SettingsRow>
+        <SettingsRow title="Auto-review" description="Let the app review permission requests and surface risky actions before execution.">
+          <ToggleSwitch checked={settings.autoReviewPermissions} onChange={(value) => set("autoReviewPermissions", value)} />
+        </SettingsRow>
+        <SettingsRow title="Full access preference" description="Preference only. Actual filesystem and network access still follow the current runtime policy.">
+          <ToggleSwitch checked={settings.fullAccessPreference} onChange={(value) => set("fullAccessPreference", value)} />
+        </SettingsRow>
+      </SettingsSection>
+
+      <SettingsSection title="Additional Models">
+        <SettingsRow
+          title="Model provider"
+          description="Optional. Conversation keeps using the built-in model by default; saved providers appear there as additional model choices."
+        >
           <SegmentedChoice
-            value={s.llmProvider}
+            value={settings.llmProvider}
             onChange={(value) => set("llmProvider", value)}
             options={[
               { label: "Azure OpenAI", value: "azure" },
@@ -309,119 +411,86 @@ export default function Settings(): JSX.Element {
           />
         </SettingsRow>
 
-        {s.llmProvider === "azure" ? (
+        {settings.llmProvider === "azure" ? (
           <>
-            <SettingsRow title="Endpoint">
+            <SettingsRow title="Endpoint" description="For an additional user-owned Azure OpenAI resource.">
               <TextInput
                 label="Endpoint"
                 placeholder="https://your-resource.openai.azure.com"
-                value={s.azureEndpoint}
-                onChange={(v) => set("azureEndpoint", v)}
+                value={settings.azureEndpoint}
+                onChange={(value) => set("azureEndpoint", value)}
               />
             </SettingsRow>
-            <SettingsRow title="API key">
-              {aoaiKeyInVault ? (
-                <div className="settings-inline-status">
-                  <StatusPill tone="success">Stored in Key Vault</StatusPill>
-                  <button
-                    type="button"
-                    onClick={() => { setAoaiKeyInVault(false); set("azureApiKey", ""); }}
-                    className="settings-text-button"
-                  >
-                    Replace
-                  </button>
-                </div>
-              ) : (
-                <TextInput
-                  label="API key"
-                  type="password"
-                  placeholder="••••••••••••••••"
-                  value={s.azureApiKey}
-                  onChange={(v) => set("azureApiKey", v)}
-                />
-              )}
+            <SettingsRow title="API key" description="Stored locally for this additional model provider.">
+              <TextInput
+                label="API key"
+                type="password"
+                placeholder="Optional custom key"
+                value={settings.azureApiKey}
+                onChange={(value) => set("azureApiKey", value)}
+              />
             </SettingsRow>
-            <SettingsRow title="Deployment">
+            <SettingsRow title="Deployment" description="The deployment name that will appear as a Conversation model choice.">
               <TextInput
                 label="Deployment"
-                placeholder="gpt-4o"
-                value={s.azureDeployment}
-                onChange={(v) => set("azureDeployment", v)}
+                placeholder="my-chat-deployment"
+                value={settings.azureDeployment}
+                onChange={(value) => set("azureDeployment", value)}
               />
             </SettingsRow>
             <SettingsRow title="API version">
               <TextInput
                 label="API version"
                 placeholder="2024-02-01"
-                value={s.azureApiVersion}
-                onChange={(v) => set("azureApiVersion", v)}
+                value={settings.azureApiVersion}
+                onChange={(value) => set("azureApiVersion", value)}
               />
             </SettingsRow>
           </>
         ) : (
           <>
-            <SettingsRow title="API key">
+            <SettingsRow title="API key" description="Stored locally for this additional model provider.">
               <TextInput
                 label="API key"
                 type="password"
-                placeholder="sk-••••••••••••••••"
-                value={s.openaiApiKey}
-                onChange={(v) => set("openaiApiKey", v)}
+                placeholder="Optional custom key"
+                value={settings.openaiApiKey}
+                onChange={(value) => set("openaiApiKey", value)}
               />
             </SettingsRow>
-            <SettingsRow title="Model">
+            <SettingsRow title="Model" description="The model name that will appear as a Conversation model choice.">
               <TextInput
                 label="Model"
-                placeholder="gpt-4o"
-                value={s.openaiModel}
-                onChange={(v) => set("openaiModel", v)}
+                placeholder="Optional custom model"
+                value={settings.openaiModel}
+                onChange={(value) => set("openaiModel", value)}
               />
             </SettingsRow>
           </>
         )}
 
-        <SettingsRow title="Daemon status">
+        <SettingsRow title="Conversation availability" description="Complete providers become selectable from Conversation; the built-in model remains the default.">
           <div className="settings-inline-status">
-            <StatusPill
-              tone={
-                daemonStatus === "configured" || daemonStatus === "applied"
-                  ? "success"
-                  : daemonStatus === "unconfigured" || daemonStatus === "checking" || daemonStatus === "applying"
-                    ? "warning"
-                    : daemonStatus === "unreachable" || daemonStatus === "error"
-                      ? "danger"
-                      : "neutral"
-              }
-            >
-              {badge.label}
+            <StatusPill tone={customApiReady ? "success" : "neutral"}>
+              {customApiReady ? "Additional model available" : "Built-in model only"}
             </StatusPill>
-            <button
-              type="button"
-              onClick={() => void applyToDaemon(s)}
-              disabled={daemonStatus === "applying" || daemonStatus === "unreachable"}
-              className="settings-action-button"
-            >
-              {daemonStatus === "applying" ? "Applying..." : "Apply"}
-            </button>
+            <StatusPill tone={badge.tone}>{badge.label}</StatusPill>
           </div>
         </SettingsRow>
-        {applyError && (
-          <p className="settings-message settings-message-danger">{applyError}</p>
-        )}
         {daemonStatus === "unreachable" && (
-          <p className="settings-message settings-message-warning">Daemon is not reachable. The app will retry on next start.</p>
+          <p className="settings-message settings-message-warning">Daemon is not reachable. Local preferences will still be saved.</p>
         )}
       </SettingsSection>
 
       <SettingsSection title="Account">
-        <SettingsRow title="Microsoft sign-in">
+        <SettingsRow title="Identity" description="Authentication actions stay in the workspace account menu.">
           {authUser.authenticated ? (
             <div className="settings-account">
               <div className="settings-avatar">
-                {(authUser.name ?? authUser.upn ?? "?").slice(0, 1).toUpperCase()}
+                {accountLabel(authUser).slice(0, 1).toUpperCase()}
               </div>
               <div className="min-w-0 text-right">
-                <p className="truncate text-xs font-medium text-zinc-200">{authUser.name ?? authUser.upn}</p>
+                <p className="truncate text-xs font-medium text-zinc-200">{accountLabel(authUser)}</p>
                 <p className="truncate text-[10px] text-zinc-500">{authUser.upn ?? authUser.oid}</p>
               </div>
             </div>
@@ -429,29 +498,27 @@ export default function Settings(): JSX.Element {
             <StatusPill>Not signed in</StatusPill>
           )}
         </SettingsRow>
+        <SettingsRow title="Tenant account" description="Used for Azure DevOps OAuth and managed cloud storage when available.">
+          <StatusPill tone={authUser.authenticated ? "success" : "neutral"}>
+            {authUser.authenticated ? (authUser.fromCache ? "Cached" : "Active") : "No account"}
+          </StatusPill>
+        </SettingsRow>
+        <SettingsRow title="Profile store" description="Project Link records can use managed cloud storage when configured.">
+          <StatusPill tone={health?.cloudProfileStore ? "success" : "neutral"}>
+            {health?.cloudProfileStore ? "Cloud enabled" : "Local fallback"}
+          </StatusPill>
+        </SettingsRow>
+        <SettingsRow title="Secret storage" description="Custom secrets and service credentials should use managed storage when configured.">
+          <StatusPill tone={health?.cloudSecrets ? "success" : "neutral"}>
+            {health?.cloudSecrets ? "Cloud enabled" : "Local fallback"}
+          </StatusPill>
+        </SettingsRow>
+        <SettingsRow title="Session storage" description="Conversation and checkpoint metadata can use managed cloud storage when configured.">
+          <StatusPill tone={health?.cloudSessions ? "success" : "neutral"}>
+            {health?.cloudSessions ? "Cloud enabled" : "Local fallback"}
+          </StatusPill>
+        </SettingsRow>
       </SettingsSection>
-
-      <SettingsSection title="Data">
-        <SettingsRow title="Settings" description="Saved on this device">
-          <StatusPill>Local</StatusPill>
-        </SettingsRow>
-        <SettingsRow title="API keys" description="Applied only to the local daemon">
-          <StatusPill>Device only</StatusPill>
-        </SettingsRow>
-      </SettingsSection>
-
-      <SettingsSection title="Review defaults">
-        <SettingsRow title="Queue scope" description="Uses the selected Project Link">
-          <StatusPill>Project Link</StatusPill>
-        </SettingsRow>
-        <SettingsRow title="Audit records" description="Keeps timestamps and actors when available">
-          <StatusPill>Retained</StatusPill>
-        </SettingsRow>
-      </SettingsSection>
-
-      <p className="text-xs text-zinc-600">
-        Sensitive values stay on this device unless your organization configures managed storage outside this page.
-      </p>
     </div>
   );
 }

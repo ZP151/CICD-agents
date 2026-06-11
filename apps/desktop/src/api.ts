@@ -163,6 +163,7 @@ export interface ChatEventPayload {
   // done
   result?: {
     response: string;
+    streamedResponse?: string;
     riskLevel: string;
     actionsTaken: string[];
     suggestions: string[];
@@ -240,18 +241,54 @@ export interface ChatMessageEntry {
 
 export type ChatWorkflowState = NonNullable<ChatEventPayload["state"]>;
 
+export interface ChatIndexStatus {
+  repoPath: string;
+  indexed: boolean;
+  semanticReady: boolean;
+  retrievalMode: "semantic-index" | "quick-scan";
+  stats: {
+    filesIndexed: number;
+    chunksIndexed: number;
+    chunksEmbedded: number;
+    chunksPendingEmbedding: number;
+  };
+  summary: string;
+}
+
+export interface ChatIndexRefreshResult {
+  ok: boolean;
+  refresh: {
+    filesSeen: number;
+    filesIndexed: number;
+    embedded: number;
+  };
+  status: ChatIndexStatus;
+}
+
 // ─── localStorage config readers ─────────────────────────────────────────────
 // Read at call time so any changes the user makes in Settings / Profiles are
 // picked up immediately without a page reload.
 
 function readLlmConfig(): Record<string, unknown> | undefined {
   try {
+    const activeModel = localStorage.getItem("dev_agent_active_model");
+    if (activeModel !== "custom") return undefined;
+
     const raw = localStorage.getItem("dev_agent_settings");
     if (!raw) return undefined;
     const s = JSON.parse(raw) as Record<string, unknown>;
+    // Settings stores optional user-provided API candidates. Conversation uses
+    // the built-in model by default and must explicitly choose the custom model
+    // before we send these fields to the daemon.
+    const provider = s["llmProvider"] === "openai" ? "openai" : "azure";
+    const hasAzureCustomModel = Boolean(s["azureEndpoint"] && s["azureApiKey"] && s["azureDeployment"]);
+    const hasOpenAiCustomModel = Boolean(s["openaiApiKey"] && s["openaiModel"]);
+    if (provider === "azure" && !hasAzureCustomModel) return undefined;
+    if (provider === "openai" && !hasOpenAiCustomModel) return undefined;
+
     // Only include fields the daemon understands; omit empty strings.
     const config: Record<string, unknown> = {};
-    if (s["llmProvider"]) config["llmProvider"] = s["llmProvider"];
+    config["llmProvider"] = provider;
     if (s["azureEndpoint"]) config["azureEndpoint"] = s["azureEndpoint"];
     if (s["azureApiKey"]) config["azureApiKey"] = s["azureApiKey"];
     if (s["azureDeployment"]) config["azureDeployment"] = s["azureDeployment"];
@@ -270,6 +307,35 @@ function readProfileData(profileId: string | undefined): Record<string, unknown>
     const all = JSON.parse(raw) as Array<Record<string, unknown>>;
     return all.find((p) => p["id"] === profileId);
   } catch { return undefined; }
+}
+
+function chatIndexBody(repoPath: string, profileId?: string): Record<string, unknown> {
+  const body: Record<string, unknown> = { repoPath };
+  const llmConfig = readLlmConfig();
+  if (llmConfig) body["llmConfig"] = llmConfig;
+  const profile = readProfileData(profileId);
+  if (profile) body["profile"] = profile;
+  return body;
+}
+
+export async function fetchChatIndexStatus(repoPath: string, profileId?: string): Promise<ChatIndexStatus> {
+  const r = await fetch(`${RUNTIME_URL}/chat/index-status`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(chatIndexBody(repoPath, profileId)),
+  });
+  if (!r.ok) throw new Error(`/chat/index-status HTTP ${r.status}: ${await r.text()}`);
+  return (await r.json()) as ChatIndexStatus;
+}
+
+export async function refreshChatIndexStatus(repoPath: string, profileId?: string): Promise<ChatIndexRefreshResult> {
+  const r = await fetch(`${RUNTIME_URL}/chat/index-refresh`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(chatIndexBody(repoPath, profileId)),
+  });
+  if (!r.ok) throw new Error(`/chat/index-refresh HTTP ${r.status}: ${await r.text()}`);
+  return (await r.json()) as ChatIndexRefreshResult;
 }
 
 /**
@@ -667,6 +733,13 @@ export interface PrInsightArtifactRecord {
   tokensOut: number;
 }
 
+export interface PrInsightArtifactHistoryMeta {
+  artifactId: string;
+  index: number;
+  total: number;
+  latest: boolean;
+}
+
 export type { ReviewHistoryRecord } from "./reviewHistoryLocal.js";
 export { REVIEW_HISTORY_LS_KEY } from "./reviewHistoryLocal.js";
 
@@ -850,11 +923,36 @@ export async function fetchProfilePrInsightArtifacts(
   profileId: string,
   pullRequestId?: number,
 ): Promise<PrInsightArtifactRecord[]> {
+  return (await fetchProfilePrInsightArtifactsWithHistory(profileId, pullRequestId)).items;
+}
+
+export async function fetchProfilePrInsightArtifactsWithHistory(
+  profileId: string,
+  pullRequestId?: number,
+): Promise<{ items: PrInsightArtifactRecord[]; history: PrInsightArtifactHistoryMeta[] }> {
   const suffix = pullRequestId === undefined ? "" : `?pullRequestId=${encodeURIComponent(String(pullRequestId))}`;
   const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/pr-insights${suffix}`);
   if (!r.ok) throw new Error(`/profiles/${profileId}/pr-insights HTTP ${r.status}: ${await r.text()}`);
-  const body = (await r.json()) as { items?: PrInsightArtifactRecord[] };
-  return body.items ?? [];
+  const body = (await r.json()) as {
+    items?: PrInsightArtifactRecord[];
+    history?: PrInsightArtifactHistoryMeta[];
+  };
+  return {
+    items: body.items ?? [],
+    history: body.history ?? [],
+  };
+}
+
+export async function fetchProfilePrInsightArtifactById(
+  profileId: string,
+  artifactId: string,
+): Promise<PrInsightArtifactRecord> {
+  const suffix = `?artifactId=${encodeURIComponent(artifactId)}`;
+  const r = await fetch(`${RUNTIME_URL}/profiles/${profileId}/pr-insights/artifact${suffix}`);
+  if (!r.ok) throw new Error(`/profiles/${profileId}/pr-insights/artifact HTTP ${r.status}: ${await r.text()}`);
+  const body = (await r.json()) as { record?: PrInsightArtifactRecord };
+  if (!body.record) throw new Error("PR insight artifact lookup response did not include a record");
+  return body.record;
 }
 
 export async function saveProfilePrInsightArtifact(

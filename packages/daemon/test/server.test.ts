@@ -386,6 +386,7 @@ describe("daemon HTTP", () => {
         ok: true,
       }],
     });
+
   });
 
   it("persists and lists PR insight artifacts for a profile repository", async () => {
@@ -462,6 +463,28 @@ describe("daemon HTTP", () => {
         iterationId: 5,
         sourceCommit: "abc123",
       }],
+      history: [{
+        index: 0,
+        total: 1,
+        latest: true,
+      }],
+    });
+
+    const savedBody = saved.json() as { record: { id: string } };
+    const byId = await app.inject({
+      method: "GET",
+      url: `/profiles/${id}/pr-insights/artifact?artifactId=${encodeURIComponent(savedBody.record.id)}`,
+    });
+    expect(byId.statusCode).toBe(200);
+    expect(byId.json()).toMatchObject({
+      storage: "local",
+      record: {
+        id: savedBody.record.id,
+        profileId: id,
+        repository: "cicd-agent-insights",
+        pullRequestId: 88,
+        summary: "Full review summary.",
+      },
     });
   });
 

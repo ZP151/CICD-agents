@@ -32,7 +32,7 @@ Status values:
 | Product roadmap | Complete | 100% | Roadmap and source-first reuse plan documented in `docs/dev-agent-product-roadmap-and-reuse-plan.md`. |
 | Current-state audit | Complete | 100% | Main shortfalls identified: prompt-driven approval, shallow workflow state, incomplete semantic retrieval, weak rollback, custom ADO tooling. |
 | Source-first reuse strategy | Complete | 100% | Reuse modes, license gate, priority table, risk register, and third-party source registry documented. OpenHarness and Azure DevOps MCP source have been vendored for direct reuse. |
-| Implementation phases | In progress | 88% | Phase 1 has execution-layer approval enforcement, explicit risky-tool tests, a backward-compatible canonical event alias layer, and first source-first upstream reuse from OpenHarness wired into the daemon runtime. Phase 4 now has Azure DevOps MCP source intake, an MCP stdio bridge as temporary compatibility infrastructure, Project Link-level MCP fallback configuration, internally ported Azure DevOps MCP-style capabilities for discovery/health/PR/build context, local git remote inference for ADO Project Link fields, structured ADO auth diagnostics, enriched pipeline discovery metadata, and pipeline recommendation during setup. Phase 5 now has PR-Agent source intake, PR context, non-mutating insight preview, readiness/risk categorization, PR-Agent-style review metadata, hunk-aware priority compression for larger PRs, compression boundary reporting, hunk coverage reporting, route-level review-run contract coverage, ADO PR signal enrichment for full review runs, ADO filediffs/hunk context, finding post-processing, full AI review output from the reused Review Agent path, Activity-tracked AI insight preview/full review-run events for PR analysis traceability, a PR insight artifact store that lets users reopen saved preview/full review summaries without rerunning analysis, daemon-backed local persistence/sync for those saved AI conclusions, Chat-side retrieval of saved PR AI insights as reusable context when users ask about already analyzed PRs, visible Chat metadata showing exactly which saved PR insight artifact ids/timestamps were reused, a Pull Requests-to-Chat handoff that opens saved PR insights in Chat with the right Project Link/repo context, global Activity visibility/details for saved PR insight artifacts with Chat handoff, preview-vs-full-review artifact comparison in Activity, same-kind refresh-to-refresh comparison in Activity, saved PR insight analysis-baseline persistence for full-review iteration/source commit, Pull Requests freshness/staleness labeling for saved insights once current PR context is loaded, one-click refresh for stale saved insights using the existing preview/full-review flows, versioned saved insight artifacts so refreshes preserve previous AI conclusions while latest views still show the newest run, and a Pull Requests card-level saved-run history list with Chat handoff for older runs. Phase 6 now persists low-confidence review signals, policy results, manual disposition summary fields, append-only manual disposition audit events, ADO write-back status/thread links, and append-only ADO write-back attempt events into Review History; uses them for Review Queue attention ordering/filtering/reason-code explanations; feeds context confidence into auto-approval decisions; has daemon endpoints for review dispositions and review-operation activity; can optionally write blocking/request-change decisions back to ADO PR threads; exposes guarded retry for failed or pending ADO write-back; shows a richer Review Queue audit panel; supports single-PR rerun, visible-list batch rerun, stale-review rerun, configurable stale-review age, per-item freshness badges, compact card-level audit summaries, a recent review-operation activity feed backed by daemon local persistence with browser fallback, global Activity page visibility for review operations, and Activity-page filtering by Project Link plus review event type. Phase 7 has a non-destructive Git checkpoint snapshot tool, automatically creates checkpoints before confirmed medium/high-risk Git write tools run, returns checkpoint metadata with tool results, persists checkpoint ids into chat/session tool bubbles, exposes checkpoint activity through the daemon, displays checkpoint activity/detail records in the global Activity page, provides a low-risk `git_checkpoint_show` tool for reading stored checkpoint snapshots, exposes safe checkpoint previews in Activity with status, changed files, and truncated diff content, provides rollback planning with explicit confirmed-action proposals, includes a medium-risk `git_checkpoint_apply` write tool that restores tracked files to a stored checkpoint patch after approval, lets Activity hand rollback proposals to Chat for the existing approval workflow through a tested shared draft builder, and distinguishes checkpoint-apply target snapshots from pre-apply safety snapshots in Activity metadata and UI. Product UX uses Project Link wording and supports richer in-chat Project Link creation. |
+| Implementation phases | In progress | 94% | Phase 1 has execution-layer approval enforcement, explicit risky-tool tests, a backward-compatible canonical event alias layer, and first source-first upstream reuse from OpenHarness wired into the daemon runtime. Phase 2 now has index-aware chat context, repository context metadata, an internal `repo_refresh_index` tool, light-theme conversation polish, raw JSON removal from normal Chat, and an intermediate visible/control streaming protocol using `__CONTROL_JSON__`. Phase 4 now has Azure DevOps MCP source intake, an MCP stdio bridge as temporary compatibility infrastructure, Project Link-level MCP fallback configuration, internally ported Azure DevOps MCP-style capabilities for discovery/health/PR/build context, local git remote inference for ADO Project Link fields, structured ADO auth diagnostics, enriched pipeline discovery metadata, and pipeline recommendation during setup. Phase 5 now has PR-Agent source intake, PR context, non-mutating insight preview, readiness/risk categorization, PR-Agent-style review metadata, hunk-aware priority compression for larger PRs, compression boundary reporting, hunk coverage reporting, route-level review-run contract coverage, ADO PR signal enrichment for full review runs, ADO filediffs/hunk context, finding post-processing, full AI review output from the reused Review Agent path, Activity-tracked AI insight preview/full review-run events for PR analysis traceability, a PR insight artifact store that lets users reopen saved preview/full review summaries without rerunning analysis, daemon-backed local persistence/sync for those saved AI conclusions, Chat-side retrieval of saved PR AI insights as reusable context when users ask about already analyzed PRs, visible Chat metadata showing exactly which saved PR insight artifact ids/timestamps were reused, a Pull Requests-to-Chat handoff that opens saved PR insights in Chat with the right Project Link/repo context, global Activity visibility/details for saved PR insight artifacts with Chat handoff, preview-vs-full-review artifact comparison in Activity, same-kind refresh-to-refresh comparison in Activity, saved PR insight analysis-baseline persistence for full-review iteration/source commit, Pull Requests freshness/staleness labeling for saved insights once current PR context is loaded, one-click refresh for stale saved insights using the existing preview/full-review flows, versioned saved insight artifacts so refreshes preserve previous AI conclusions while latest views still show the newest run, and a Pull Requests card-level saved-run history list with Chat handoff for older runs. Phase 6 now persists low-confidence review signals, policy results, manual disposition summary fields, append-only manual disposition audit events, ADO write-back status/thread links, and append-only ADO write-back attempt events into Review History; uses them for Review Queue attention ordering/filtering/reason-code explanations; feeds context confidence into auto-approval decisions; has daemon endpoints for review dispositions and review-operation activity; can optionally write blocking/request-change decisions back to ADO PR threads; exposes guarded retry for failed or pending ADO write-back; shows a richer Review Queue audit panel; supports single-PR rerun, visible-list batch rerun, stale-review rerun, configurable stale-review age, per-item freshness badges, compact card-level audit summaries, a recent review-operation activity feed backed by daemon local persistence with browser fallback, global Activity page visibility for review operations, and Activity-page filtering by Project Link plus review event type. Phase 7 has a non-destructive Git checkpoint snapshot tool, automatically creates checkpoints before confirmed medium/high-risk Git write tools run, returns checkpoint metadata with tool results, persists checkpoint ids into chat/session tool bubbles, exposes checkpoint activity through the daemon, displays checkpoint activity/detail records in the global Activity page, provides a low-risk `git_checkpoint_show` tool for reading stored checkpoint snapshots, exposes safe checkpoint previews in Activity with status, changed files, and truncated diff content, provides rollback planning with explicit confirmed-action proposals, includes a medium-risk `git_checkpoint_apply` write tool that restores tracked files to a stored checkpoint patch after approval, lets Activity hand rollback proposals to Chat for the existing approval workflow through a tested shared draft builder, and distinguishes checkpoint-apply target snapshots from pre-apply safety snapshots in Activity metadata and UI. Product UX uses Project Link wording, supports richer in-chat Project Link creation, treats the built-in model as the default Conversation model, and exposes user-added APIs as additional selectable model choices. |
 | Verification | Partial | 99% | `.tools` runner works when `.tools/node-v22.11.0-win-x64` and `.tools` are prepended to `PATH`. Core full tests, daemon full tests, core/daemon/desktop/review-agent typechecks, and desktop/review-agent production builds pass. Daemon tests now cover internal ADO discovery, repository-filtered pipeline discovery, internal ADO tool health with auth diagnostics, PR context routing, PR insight preview readiness categories, `review-run` metadata/compression/coverage/context-confidence response fields, review disposition persistence, ADO write-back endpoint contract without network write-back, mocked successful ADO PR-thread write-back payloads, mocked failed ADO PR-thread write-back payloads, persisted write-back status/thread-link fields, append-only write-back attempt events for both success and failure, review-operation POST/GET route persistence, automatic Git checkpoint creation before confirmed Git write actions, checkpoint metadata returned with confirmed Git write results, checkpoint metadata extraction, checkpoint activity listing from persisted tool bubbles, checkpoint-apply target/safety metadata in activity records, checkpoint preview routing with truncation, read-only checkpoint rollback planning that does not mutate the repo, and automatic safety checkpoint creation before confirmed checkpoint apply; review-agent tests cover PR-Agent-style metadata parsing, ADO PR readiness signals in review prompts, ADO hunk context extraction, hunk coverage summaries, changed-hunk prompt rendering, hunk-aware compression priority, finding post-processing, large PR prompt compression, security-sensitive file prioritization, context-quality auto-approval gating, review policy persistence through state stores, manual disposition compatibility, and append-only disposition/write-back event serialization; core local review-history tests cover confidence metadata persistence, attention-priority ordering, priority reason codes, manual disposition persistence, disposition event round-tripping, and write-back status/thread-link/attempt-event persistence; core review-operation tests cover daemon-local activity persistence, repository filtering, limits, and corrupt-store fallback; core PR insight artifact tests cover daemon-local versioned refresh history plus explicit-id replacement compatibility; core Git checkpoint tests cover non-destructive status/diff snapshot creation, low-risk capability classification, ToolExecutor before-execute hook ordering, before-execute metadata propagation, checkpoint readback, checkpoint preview summaries, checkpoint rollback planning, checkpoint patch apply, clean-checkpoint restore behavior, HEAD mismatch rejection, and medium-risk checkpoint apply classification; core settings tests cover the configurable review stale age default and environment override; desktop tests cover Project Link pipeline recommendation, browser review-history persistence, daemon-to-browser sync, merge behavior, corrupt-cache handling for write-back attempt events, review operation activity persistence/capping/corrupt-cache fallback, PR insight artifact freshness and versioned refresh history, pure Review Queue audit presentation data for labels, summary, ordering, fallbacks, empty state, and compact card summaries, Review Queue stable item keys, stale review selection rules, and Review Queue rerun result mapping that preserves manual disposition plus ADO write-back audit history; desktop typecheck covers the Activity page checkpoint activity integration and checkpoint apply metadata rendering; desktop build covers the PR context panel, Project Link autofill integration, preview readiness display, full insight metadata/compression/coverage/context-confidence display, discarded finding count display, Review Queue confidence signal display, attention sorting/filtering controls, configurable stale age control, compact card-level audit summaries, recent review-operation activity feed, global Activity page review-operation list/detail rendering, Activity-page checkpoint preview and rollback-plan rendering, Activity-page Project Link and review event-type filters, disposition event display, ADO write-back status/thread-link display, guarded retry write-back controls, richer audit panel rendering, write-back attempt history rendering, single-item Review Queue rerun controls, visible-list batch rerun controls, stale-review batch rerun controls, and AI insight output. Low-level MCP bridge registration remains covered as compatibility infrastructure. |
 
 ## Phase Progress Summary
@@ -41,13 +41,13 @@ Status values:
 | --- | --- | --- | ---: | --- | --- |
 | 0 | Planning, Audit, And Reuse Strategy | Complete | 100% | Understand current gaps and choose source-first reuse path. | All candidate repos |
 | 1 | Safety And Event Protocol | In progress | 60% | Hard approval gate and clean event protocol. | OpenHarness, Goose |
-| 2 | Repository Understanding | Not started | 0% | Make semantic repo context first-class. | Aider, Continue, OpenHands |
+| 2 | Repository Understanding | In progress | 11% | Make semantic repo context first-class. | Aider, Continue, OpenHands |
 | 3 | Durable Workflow Engine | Not started | 0% | Replace shallow workflow state with real workflow model. | OpenHarness, mcp-agent, Harness Agents |
 | 4 | MCP And Azure DevOps Tool Reuse | In progress | 70% | Internalize ADO MCP capabilities and map them into local policies. | microsoft/azure-devops-mcp |
-| 5 | Pull Requests Workspace | In progress | 77% | PR readiness workspace with ADO and local repo context. | Azure DevOps MCP, PR-Agent |
+| 5 | Pull Requests Workspace | In progress | 85% | PR readiness workspace with ADO and local repo context. | Azure DevOps MCP, PR-Agent |
 | 6 | Review Queue And Auto-Approval | In progress | 73% | Auditable review decisions and low-risk auto-approval. | PR-Agent, Harness Agents |
 | 7 | Verification, Rollback, And Activity Timeline | In progress | 49% | Checkpoints, validation, replayable audit history. | Aider, OpenHands |
-| 8 | Product Hardening And Distribution | In progress | 20% | Installer, onboarding, auth, workspace policies, real validation. | Goose, OpenCode |
+| 8 | Product Hardening And Distribution | In progress | 25% | Installer, onboarding, auth, workspace policies, real validation. | Goose, OpenCode |
 
 ## Phase 0: Planning, Audit, And Reuse Strategy
 
@@ -204,9 +204,9 @@ Progress log:
 
 ## Phase 2: Repository Understanding
 
-Status: `Not started`
+Status: `In progress`
 
-Completion: `0%`
+Completion: `11%`
 
 Goal:
 
@@ -248,6 +248,7 @@ Progress log:
 | Date | Update |
 | --- | --- |
 | 2026-06-09 | Phase defined; no implementation started. |
+| 2026-06-11 | Started Conversation repository-understanding work: Chat context now records index stats, defaults to using available semantic index hits when embeddings already exist, reports quick-scan versus index-backed retrieval in assistant metadata, and exposes an internal `repo_refresh_index` tool for explicit project-understanding/index-refresh requests. |
 
 ## Phase 3: Durable Workflow Engine
 
@@ -544,7 +545,7 @@ Progress log:
 
 Status: `In progress`
 
-Completion: `20%`
+Completion: `25%`
 
 Goal:
 
@@ -585,6 +586,7 @@ Progress log:
 | --- | --- |
 | 2026-06-09 | Phase defined; no implementation started. |
 | 2026-06-09 | Started product UX hardening by introducing `Project Link` as the user-facing name for the repo-to-DevOps mapping concept and adding in-chat creation instead of forcing navigation to the management page. |
+| 2026-06-11 | Improved Conversation onboarding and light-theme polish: assistant/status chat bubbles now use semantic theme variables, light theme maps additional zinc opacity classes, and the in-chat Project Link setup now clearly supports local-repo-first creation with inferred ADO mapping and optional PAT fallback messaging. |
 
 ## Active Phase Protocol
 
@@ -4881,6 +4883,876 @@ Next recommended task:
 - Continue Phase 5 by adding artifact-aware Chat prompts for explicit historical
   run selection, so users can ask about a specific saved artifact id instead of
   only the latest PR insight context.
+
+### 2026-06-11 Session Update 87
+
+Phase:
+
+Phase 5: Pull Requests Workspace
+
+Status change:
+
+- Overall implementation progress remains `88%`.
+- Verification remains `99%`.
+- Phase 5 completion moved from `77%` to `78%`.
+
+Completed:
+
+- Added Chat-side parsing for explicit saved PR insight artifact ids.
+- Chat context selection now prefers an exact artifact id when the user says
+  `artifact <id>` or `artifact id <id>`.
+- Artifact-id selection works even when the same PR has a newer saved run.
+- The previous behavior remains unchanged when no artifact id is specified:
+  Chat still selects by PR number when present or recent saved insights when the
+  user asks generally about PR review, risks, findings, approval, or insights.
+
+Files changed:
+
+- `packages/daemon/src/chatSession.ts`
+- `packages/daemon/test/chatSessionCheckpoint.test.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+```
+
+Result:
+
+- `@cicd-agent/daemon` checkpoint/chat-context tests passed: 1 file, 10 tests.
+- `@cicd-agent/daemon` typecheck passed.
+
+Next recommended task:
+
+- Add a concise saved-insight provenance line to Chat handoff prompts so source
+  cards, copied artifact ids, and explicit artifact-id questions all use the
+  same user-facing vocabulary.
+
+### 2026-06-11 Session Update 88
+
+Phase:
+
+Phase 5: Pull Requests Workspace
+
+Status change:
+
+- Overall implementation progress remains `88%`.
+- Verification remains `99%`.
+- Phase 5 completion moved from `78%` to `79%`.
+
+Completed:
+
+- Saved PR insight Chat handoff prompts now include a concise provenance line
+  when the originating artifact id is known.
+- Pull Requests-to-Chat handoff now passes the saved artifact id.
+- Activity-to-Chat handoff now passes the saved artifact id.
+- The handoff prompt vocabulary now aligns with Chat source cards and explicit
+  `artifact <id>` questions:
+  - `Saved insight artifact: <artifact id>`
+- Updated handoff tests to assert the artifact provenance line.
+
+Files changed:
+
+- `apps/desktop/src/checkpointHandoff.ts`
+- `apps/desktop/src/checkpointHandoff.test.ts`
+- `apps/desktop/src/pages/PullRequests.tsx`
+- `apps/desktop/src/pages/TaskViewer.tsx`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/checkpointHandoff.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- `@cicd-agent/desktop` handoff tests passed: 1 file, 5 tests.
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/desktop` production build passed.
+
+Next recommended task:
+
+- Add a small saved PR insight provenance summary to Activity detail itself,
+  including direct copy-ready artifact id text and the available navigation
+  paths.
+
+### 2026-06-11 Session Update 89
+
+Phase:
+
+Phase 5: Pull Requests Workspace
+
+Status change:
+
+- Overall implementation progress remains `88%`.
+- Verification remains `99%`.
+- Phase 5 completion moved from `79%` to `80%`.
+
+Completed:
+
+- Added a saved PR insight provenance summary block to Activity detail.
+- The provenance block shows:
+  - saved artifact id
+  - saved timestamp
+  - PR number
+  - artifact kind
+- Added a copy action for the saved artifact id.
+- Added compact navigation actions from the provenance block to:
+  - Pull Requests
+  - Chat
+- This makes saved PR AI insight artifacts easier to cite, copy, reopen, and
+  trace across the PR analysis workflow.
+
+Files changed:
+
+- `apps/desktop/src/pages/TaskViewer.tsx`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/desktop` production build passed.
+
+Next recommended task:
+
+- Continue Phase 5 by adding a compact artifact history count and latest/older
+  marker to the global Activity saved PR insight list.
+
+### 2026-06-11 Session Update 90
+
+Phase:
+
+Phase 5: Pull Requests Workspace
+
+Status change:
+
+- Overall implementation progress remains `88%`.
+- Verification remains `99%`.
+- Phase 5 completion moved from `80%` to `81%`.
+
+Completed:
+
+- Added saved PR insight history metadata to the Activity page.
+- Activity now groups saved PR insight artifacts by Project Link, repository, PR,
+  and artifact kind.
+- The Saved PR Insights list now marks versioned histories with:
+  - `latest of N`
+  - `older X/N`
+- This lets users distinguish the current saved conclusion from older preserved
+  refresh history before opening a detail panel.
+
+Files changed:
+
+- `apps/desktop/src/pages/TaskViewer.tsx`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/desktop` production build passed.
+
+Next recommended task:
+
+- Continue Phase 5 by adding a similar latest/older marker to Pull Requests'
+  inline previous saved-runs list.
+
+### 2026-06-11 Session Update 91
+
+Phase:
+
+Phase 5: Pull Requests Workspace
+
+Status change:
+
+- Overall implementation progress remains `88%`.
+- Verification remains `99%`.
+- Phase 5 completion moved from `81%` to `82%`.
+
+Completed:
+
+- Pull Requests inline previous saved-runs list now uses the same version
+  vocabulary as Activity.
+- Older saved PR insight runs are marked as `older X/N` relative to the latest
+  saved run shown in the main card.
+- This makes versioned saved AI conclusions easier to understand consistently
+  across Pull Requests and Activity.
+
+Files changed:
+
+- `apps/desktop/src/pages/PullRequests.tsx`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/desktop` production build passed.
+
+Next recommended task:
+
+- Continue Phase 5 by exposing saved PR insight artifact counts in the daemon
+  API response metadata, so the UI does not need to infer all version counts
+  locally forever.
+
+### 2026-06-11 Session Update 92
+
+Phase:
+
+Phase 5: Pull Requests Workspace
+
+Status change:
+
+- Overall implementation progress moved from `88%` to `89%`.
+- Verification remains `99%`.
+- Phase 5 completion moved from `82%` to `83%`.
+
+Completed:
+
+- Added core PR insight artifact history metadata summarization.
+- History metadata groups artifacts by:
+  - Project Link id
+  - repository
+  - PR number
+  - artifact kind
+- Each artifact now has backend-computable metadata:
+  - artifact id
+  - index within its version history
+  - total history length
+  - whether it is the latest artifact in that group
+- Daemon `GET /profiles/:id/pr-insights` now returns `history` metadata next
+  to the existing `items` array.
+- Added route-level coverage for the new `history` response field.
+
+Files changed:
+
+- `packages/core/src/prInsightArtifactsLocal.ts`
+- `packages/core/test/prInsightArtifactsLocal.test.ts`
+- `packages/daemon/src/server.ts`
+- `packages/daemon/test/server.test.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/prInsightArtifactsLocal.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/core build
+.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+```
+
+Result:
+
+- `@cicd-agent/core` PR insight artifact tests passed: 1 file, 5 tests.
+- `@cicd-agent/core` build passed.
+- `@cicd-agent/daemon` server tests passed: 1 file, 21 tests.
+- `@cicd-agent/daemon` typecheck passed.
+
+Next recommended task:
+
+- Update the desktop API wrapper to expose daemon-returned PR insight history
+  metadata and let Activity use backend metadata when available, with local
+  inference as fallback.
+
+### 2026-06-11 Session Update 93
+
+Phase:
+
+Phase 5: Pull Requests Workspace
+
+Status change:
+
+- Overall implementation progress remains `89%`.
+- Verification remains `99%`.
+- Phase 5 completion moved from `83%` to `84%`.
+
+Completed:
+
+- Added a desktop API wrapper for daemon-returned PR insight history metadata.
+- Kept the existing artifact-list API wrapper compatible by returning only
+  `items`.
+- Activity now reads PR insight artifacts with backend `history` metadata.
+- Activity prefers backend history metadata for latest/older badges when
+  available.
+- Activity keeps local history inference as a fallback for older daemon
+  responses or browser-local-only data.
+
+Files changed:
+
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/pages/TaskViewer.tsx`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/desktop` production build passed.
+
+Next recommended task:
+
+- Continue Phase 5 by adding saved PR insight artifact-id lookup to the desktop
+  API layer or Activity actions, so direct artifact links can be resolved without
+  scanning all visible artifacts.
+
+### 2026-06-11 Session Update 94
+
+Phase:
+
+Phase 5: Pull Requests Workspace
+
+Status change:
+
+- Overall implementation progress remains `89%`.
+- Verification remains `99%`.
+- Phase 5 completion moved from `84%` to `85%`.
+
+Completed:
+
+- Added core direct lookup for saved PR insight artifacts by artifact id.
+- Added daemon direct lookup route:
+  - `GET /profiles/:id/pr-insights/artifact?artifactId=...`
+- Added desktop API helper for artifact-id lookup.
+- The direct lookup route respects Project Link/profile isolation.
+- This finishes the Activity-side artifact resolution path so future source
+  cards, direct artifact links, and Chat references do not need to scan all
+  visible artifacts.
+
+Files changed:
+
+- `packages/core/src/prInsightArtifactsLocal.ts`
+- `packages/core/test/prInsightArtifactsLocal.test.ts`
+- `packages/daemon/src/server.ts`
+- `packages/daemon/test/server.test.ts`
+- `apps/desktop/src/api.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/prInsightArtifactsLocal.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/core build
+.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+```
+
+Result:
+
+- `@cicd-agent/core` PR insight artifact tests passed: 1 file, 6 tests.
+- `@cicd-agent/core` build passed.
+- `@cicd-agent/daemon` server tests passed: 1 file, 21 tests.
+- `@cicd-agent/daemon` typecheck passed.
+- `@cicd-agent/desktop` typecheck passed.
+
+Next recommended task:
+
+- Shift focus back to Conversation work:
+  - context design
+  - reducing required Project Link parameters
+  - agent indexing and project-understanding flow
+  - conversation interaction quality
+  - light-theme chat bubble rendering issues
+  - necessary conversation-side agent capabilities for CI/CD and PR insight.
+
+### 2026-06-11 Session Update 95
+
+Phase:
+
+Phase 2: Repository Understanding
+
+Phase 8: Product Hardening And Distribution
+
+Status change:
+
+- Overall implementation progress moved from `89%` to `90%`.
+- Verification remains `99%`.
+- Phase 2 moved from `Not started` to `In progress`.
+- Phase 2 completion moved from `0%` to `8%`.
+- Phase 8 completion moved from `20%` to `22%`.
+
+Completed:
+
+- Returned development focus from Activity/PR insight traceability back to
+  Conversation, as planned.
+- Fixed Chat light-theme bubble rendering by moving user, assistant, system, and
+  busy/status bubbles onto semantic app theme variables.
+- Added light-theme compatibility mappings for `bg-zinc-800/70` and
+  `bg-zinc-800/80`, which were still rendering too dark in light mode.
+- Made Chat repository context more truthful and useful:
+  - tracks indexed file/chunk counts
+  - tracks embedded versus pending chunks
+  - defaults to semantic retrieval when embeddings already exist
+  - avoids spending embedding calls when no embedded chunks are available
+  - reports quick-scan versus index-backed context in assistant metadata
+- Added an internal Conversation tool:
+  - `repo_refresh_index`
+  - refreshes the local repository understanding index for the current Project
+    Link
+  - is classified as low-risk/read-only from the user repository perspective
+  - gives the planner a direct path for "understand this project" and "refresh
+    project index" requests
+- Improved no-Project-Link onboarding in Chat:
+  - the setup card now presents local-repo-first creation as the default path
+  - inferred ADO mapping is shown as ready for PR insight/CI/CD when available
+  - missing ADO mapping is framed as only needed for PR insight, pipelines, and
+    review automation
+  - PAT is explicitly described as optional fallback because Microsoft sign-in
+    is tried first
+- Added Conversation quick suggestions for:
+  - `Understand this project`
+  - `Refresh project index`
+
+Files changed:
+
+- `apps/desktop/src/index.css`
+- `apps/desktop/src/pages/Chat.tsx`
+- `packages/core/src/chatContext.ts`
+- `packages/core/src/vectorIndex.ts`
+- `packages/core/src/tools/capabilities.ts`
+- `packages/core/test/chatContext.test.ts`
+- `packages/daemon/src/chatSession.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/chatContext.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/core build
+.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionMcp.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+```
+
+Result:
+
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/core` chat context tests passed: 1 file, 3 tests.
+- `@cicd-agent/core` build passed.
+- `@cicd-agent/daemon` checkpoint tests passed: 1 file, 10 tests.
+- `@cicd-agent/daemon` MCP/chat registration tests passed: 1 file, 1 test.
+- `@cicd-agent/daemon` typecheck passed.
+- `@cicd-agent/desktop` production build passed.
+- `@cicd-agent/desktop` typecheck passed after adding Conversation quick
+  suggestions.
+
+Next recommended task:
+
+- Continue Conversation work by adding visible context/index status controls in
+  Chat, then reduce Project Link ADO parameters further by auto-discovering
+  project/repo/pipeline choices from OAuth-authenticated ADO when remote
+  inference is incomplete.
+
+### 2026-06-11 Session Update 96
+
+Phase:
+
+Phase 8: Product Hardening And Distribution
+
+Phase 2: Repository Understanding
+
+Status change:
+
+- Overall implementation progress remains `90%`.
+- Verification remains `99%`.
+- Phase 8 completion moved from `22%` to `23%`.
+- Phase 2 completion remains `8%`.
+
+Completed:
+
+- Removed raw tool JSON from normal Chat tool details.
+- Added a dedicated Chat metadata card for repository context source, so quick
+  scan/index/semantic-index provenance is not mixed into ordinary suggestions.
+- Confirmed and documented the current Conversation streaming state:
+  - daemon-to-desktop transport is SSE/event-stream based
+  - workflow/tool/approval events are incremental
+  - frontend already supports `assistant_delta`
+  - the main planner currently consumes LLM token deltas internally because it
+    requires final structured JSON for workflow control
+  - user-visible prose is therefore not yet true token-by-token streaming in the
+    main planner path
+- Added `docs/conversation-streaming-design.md` with the target design:
+  - user-facing text channel
+  - separate structured control channel
+  - no raw protocol JSON in assistant bubbles
+  - final `done.result.response` as reconciliation metadata or fallback text
+- Added a core planner regression test proving structured planner JSON is not
+  emitted as visible `assistant_delta` text.
+- Clarified the model/API configuration boundary:
+  - project-bundled API remains daemon-owned
+  - Settings is now framed as optional additional model providers
+  - empty/default Settings no longer sends an inline `llmConfig`
+  - `gpt-4o` is no longer exposed as a Settings page default or placeholder
+  - Conversation keeps the built-in model as the default unless a complete
+    additional provider is explicitly selected
+
+Files changed:
+
+- `apps/desktop/src/App.tsx`
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `apps/desktop/src/pages/Settings.tsx`
+- `packages/core/test/chatPlannerApproval.test.ts`
+- `docs/conversation-streaming-design.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/core build
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+```
+
+Result:
+
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/desktop` production build passed.
+- `@cicd-agent/core` ChatPlanner approval/JSON guard tests passed: 1 file, 9
+  tests.
+- `@cicd-agent/core` build passed.
+- `@cicd-agent/desktop` typecheck passed after Context source metadata rendering.
+
+Next recommended task:
+
+- Implement the streaming split described in
+  `docs/conversation-streaming-design.md` so visible assistant prose can stream
+  without exposing structured planner JSON.
+
+### 2026-06-11 Session Update 97
+
+Phase:
+
+Phase 2: Repository Understanding
+
+Phase 8: Product Hardening And Distribution
+
+Status change:
+
+- Overall implementation progress moved from `90%` to `91%`.
+- Verification remains `99%`.
+- Phase 2 completion moved from `8%` to `10%`.
+- Phase 8 completion remains `23%`.
+
+Completed:
+
+- Implemented the first layer of the Conversation streaming split.
+- `ChatPlanner` now extracts only the structured JSON `response` field from LLM
+  deltas and emits that value as `assistant_delta`.
+- JSON syntax and control fields such as `risk_level`, `actions_taken`,
+  `suggestions`, and `approval_proposal` are not emitted into assistant bubbles.
+- `ChatPlannerResult` now carries `streamedResponse` so the desktop can
+  reconcile final metadata without duplicating a streamed assistant bubble.
+- Chat finalization now attaches metadata to the last streamed assistant bubble
+  when the final response matches the streamed text.
+- Extracted Chat assistant-bubble finalization into a pure helper and added
+  desktop tests proving streamed/final reconciliation does not duplicate
+  assistant bubbles.
+- Added focused planner tests proving:
+  - visible deltas contain only response prose
+  - structured JSON keys are not exposed as assistant text
+  - response text can stream incrementally across multiple JSON chunks
+- Updated `docs/conversation-streaming-design.md` to mark this temporary
+  response-field extraction layer as implemented and to keep the later true
+  two-channel protocol as the next target.
+
+Files changed:
+
+- `packages/core/src/chatPlanner.ts`
+- `packages/core/test/chatPlannerApproval.test.ts`
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/chatBubbles.ts`
+- `apps/desktop/src/chatBubbles.test.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `docs/conversation-streaming-design.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/core build
+.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- `@cicd-agent/core` ChatPlanner approval/streaming tests passed: 1 file, 10
+  tests.
+- `@cicd-agent/core` build passed.
+- `@cicd-agent/daemon` typecheck passed.
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/desktop` Chat bubble finalization tests passed: 1 file, 3 tests.
+- `@cicd-agent/desktop` production build passed.
+
+Next recommended task:
+
+- Continue toward a true two-channel planner protocol where visible prose no
+  longer has to be embedded inside the structured JSON response field.
+
+### 2026-06-11 Session Update 98
+
+Phase:
+
+Phase 2: Repository Understanding
+
+Phase 8: Product Hardening And Distribution
+
+Status change:
+
+- Overall implementation progress moved from `91%` to `92%`.
+- Verification remains `99%`.
+- Phase 2 completion moved from `10%` to `11%`.
+- Phase 8 completion remains `23%`.
+
+Completed:
+
+- Advanced Conversation streaming from response-field extraction to an explicit
+  visible/control marker protocol.
+- `ChatPlanner` now asks the model to stream normal user-facing prose first,
+  then emit one final `__CONTROL_JSON__{...}` control line.
+- The planner emits only visible prose before the marker as `assistant_delta`.
+- The marker payload is parsed as internal control state for final response
+  text, risk level, actions, suggestions, and approval proposals.
+- Legacy structured JSON response parsing remains as a compatibility fallback.
+- Partial marker prefixes are suppressed so fragments such as `__CON` do not
+  leak into assistant bubbles.
+- Updated the Conversation streaming design document to describe the current
+  marker protocol and the remaining future target: a transport-level structured
+  control channel.
+
+Files changed:
+
+- `packages/core/src/chatPlanner.ts`
+- `packages/core/test/chatPlannerApproval.test.ts`
+- `docs/conversation-streaming-design.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/core build
+.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- `@cicd-agent/core` ChatPlanner approval/streaming tests passed: 1 file, 12
+  tests.
+- `@cicd-agent/core` build passed.
+- `@cicd-agent/daemon` typecheck passed.
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/desktop` production build passed.
+
+Next recommended task:
+
+- Continue Conversation work by making the built-in API/custom API boundary
+  visible in runtime health state, then improve project-understanding UX with a
+  visible index status/control surface in Chat.
+
+### 2026-06-11 Session Update 99
+
+Phase:
+
+Phase 8: Product Hardening And Distribution
+
+Phase 2: Repository Understanding
+
+Status change:
+
+- Overall implementation progress moved from `92%` to `93%`.
+- Verification remains `99%`.
+- Phase 8 completion moved from `23%` to `24%`.
+- Phase 2 completion remains `11%`.
+
+Completed:
+
+- Tightened the built-in API versus custom API boundary requested for
+  Conversation and Settings.
+- Removed remaining hard-coded `gpt-4o` defaults from runtime config and
+  deployment template defaults.
+- Added project-owned deployment aliases:
+  - `PROJECT_CHAT_DEPLOYMENT`
+  - `PROJECT_EMBEDDING_DEPLOYMENT`
+- Extended core settings and `LLMClient` so both supported providers are
+  encapsulated in the project runtime:
+  - Azure-backed built-in/project API
+  - OpenAI-compatible custom API when the user explicitly configures one
+- Updated daemon custom API config persistence:
+  - writes `LLM_PROVIDER`
+  - writes `AZURE_OPENAI_CHAT_DEPLOYMENT` instead of the old
+    `AZURE_OPENAI_DEPLOYMENT`
+  - still reads the old deployment env var as a compatibility fallback
+  - hot-reloads provider, endpoint, key, deployment, API version, and OpenAI
+    custom model into the live settings object
+- Updated Chat and review-run settings merging so selected additional model
+  providers set the correct fields instead of pretending OpenAI settings were
+  Azure settings.
+- Added focused settings tests for:
+  - Azure project API configuration
+  - OpenAI custom API configuration
+  - OpenAI custom API not being considered configured when no model is supplied
+
+Files changed:
+
+- `packages/core/src/settings.ts`
+- `packages/core/src/llm.ts`
+- `packages/core/test/settings.test.ts`
+- `packages/daemon/src/chatSession.ts`
+- `packages/daemon/src/server.ts`
+- `packages/review-agent/src/config.ts`
+- `packages/review-agent/deploy/containerapp.bicep`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/settings.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/core build
+.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- `@cicd-agent/core` settings tests passed: 1 file, 5 tests.
+- `@cicd-agent/core` build passed.
+- `@cicd-agent/daemon` typecheck passed.
+- `@cicd-agent/review-agent` typecheck passed.
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/desktop` production build passed.
+
+Next recommended task:
+
+- Continue Conversation work with a visible project index/status control in Chat
+  and a clearer runtime health card that distinguishes the default model,
+  Microsoft sign-in/ADO auth, and additional model providers.
+
+### 2026-06-11 Session Update 100
+
+Phase:
+
+Phase 8: Product Hardening And Distribution
+
+Phase 2: Repository Understanding
+
+Status change:
+
+- Overall implementation progress moved from `93%` to `94%`.
+- Verification remains `99%`.
+- Phase 8 completion moved from `24%` to `25%`.
+- Phase 2 completion remains `11%`.
+
+Completed:
+
+- Corrected the Conversation model-selection product semantics:
+  - the built-in model is the default Conversation model
+  - the UI no longer warns users that the built-in API is unavailable
+  - user-provided APIs are additional selectable model choices, not global
+    overrides
+- Removed the daemon-ready setup banner that prompted users about a missing
+  built-in API.
+- Added a Conversation model selector beside the Project Link selector:
+  - defaults to `Built-in model`
+  - shows a saved Azure OpenAI deployment or OpenAI model only when the
+    additional provider has the required fields
+  - persists selection through `dev_agent_active_model`
+  - resets back to the built-in model when the additional provider is no
+    longer complete
+- Tightened frontend custom-model validation:
+  - Azure additional provider requires endpoint, API key, and deployment
+  - OpenAI additional provider requires API key and model
+- Updated Settings copy from `Custom API`/override language to `Additional
+  Models`.
+- Updated selected-model fallback text so deterministic fallback does not tell
+  users the built-in API is unavailable.
+
+Files changed:
+
+- `apps/desktop/src/App.tsx`
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `apps/desktop/src/pages/Settings.tsx`
+- `packages/core/src/llm.ts`
+- `packages/core/src/chatPlanner.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/core build
+.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- `@cicd-agent/desktop` typecheck passed.
+- `@cicd-agent/core` build passed.
+- `@cicd-agent/desktop` production build passed.
+
+Next recommended task:
+
+- Continue Conversation work with visible project-understanding controls:
+  current index status, refresh action, and a compact explanation of what
+  repository context the agent will use for CI/CD and PR insight.
 
 ### 2026-06-10 Session Update 10
 

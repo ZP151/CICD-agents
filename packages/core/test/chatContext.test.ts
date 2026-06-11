@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { LLMClient, resetSettingsForTests } from "../src/index.js";
-import { buildChatContext, chatContextToPrompt, shouldInspectGit } from "../src/chatContext.js";
+import { buildChatContext, chatContextToPrompt, describeChatContext, refreshChatIndex, shouldInspectGit } from "../src/chatContext.js";
 
 function write(file: string, text: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -43,6 +43,7 @@ describe("chat context", () => {
     });
 
     expect(bundle.indexed).toBe(false);
+    expect(bundle.indexStats.filesIndexed).toBe(0);
     expect(bundle.fallbackUsed).toBe(true);
     expect(bundle.changedFiles).toEqual([]);
     expect(bundle.projectStructure.some((item) => item.path.includes("src/chatSession.ts"))).toBe(true);
@@ -53,5 +54,29 @@ describe("chat context", () => {
     expect(prompt).toContain("Repository context");
     expect(prompt).toContain("Build command: npm run build");
     expect(prompt).toContain("src/chatSession.ts");
+    expect(describeChatContext(bundle)).toContain("quick scan used");
+  });
+
+  it("reports when a repository index is available", async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-context-indexed-repo-"));
+    write(path.join(repo, "src", "chatSession.ts"), "export function runChat() { return 'indexed chat'; }\n");
+
+    const llm = new LLMClient();
+    await refreshChatIndex({ repoPath: repo, llm });
+
+    const bundle = await buildChatContext({
+      repoPath: repo,
+      message: "Where is chat implemented?",
+      llm,
+    });
+
+    expect(bundle.indexed).toBe(true);
+    expect(bundle.indexStats.filesIndexed).toBe(1);
+    expect(bundle.indexStats.chunksIndexed).toBeGreaterThan(0);
+    expect(bundle.embedded).toBe(false);
+    expect(describeChatContext(bundle)).toContain("index is available");
+
+    const prompt = chatContextToPrompt(bundle);
+    expect(prompt).toContain("indexed (1 files");
   });
 });

@@ -41,6 +41,13 @@ export interface SearchHit {
   text: string;
 }
 
+export interface VectorIndexStats {
+  filesIndexed: number;
+  chunksIndexed: number;
+  chunksEmbedded: number;
+  chunksPendingEmbedding: number;
+}
+
 export class VectorIndex {
   private readonly handle: RepoDatabase;
   private readonly db: DbType;
@@ -54,6 +61,25 @@ export class VectorIndex {
 
   close(): void {
     this.handle.close();
+  }
+
+  stats(): VectorIndexStats {
+    const files = this.db.prepare("SELECT COUNT(*) AS count FROM files").get() as { count: number };
+    const chunks = this.db
+      .prepare(
+        "SELECT COUNT(*) AS total, " +
+          "SUM(CASE WHEN embedded = 1 THEN 1 ELSE 0 END) AS embedded " +
+          "FROM chunks",
+      )
+      .get() as { total: number; embedded: number | null };
+    const chunksIndexed = chunks.total ?? 0;
+    const chunksEmbedded = chunks.embedded ?? 0;
+    return {
+      filesIndexed: files.count ?? 0,
+      chunksIndexed,
+      chunksEmbedded,
+      chunksPendingEmbedding: Math.max(0, chunksIndexed - chunksEmbedded),
+    };
   }
 
   async embedPending(llm: LLMClient): Promise<number> {

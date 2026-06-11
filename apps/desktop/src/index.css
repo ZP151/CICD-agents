@@ -85,6 +85,8 @@ body {
 }
 
 [data-theme="light"] .bg-zinc-800,
+[data-theme="light"] .bg-zinc-800\/80,
+[data-theme="light"] .bg-zinc-800\/70,
 [data-theme="light"] .bg-zinc-800\/60,
 [data-theme="light"] .bg-zinc-800\/50,
 [data-theme="light"] .bg-zinc-800\/40,
@@ -411,6 +413,53 @@ body {
 
 .settings-input:focus {
   box-shadow: 0 0 0 2px rgb(var(--app-accent) / 0.35);
+}
+
+.settings-select {
+  min-width: 12rem;
+  border: 0;
+  border-radius: 0.625rem;
+  background: rgb(var(--app-bg-muted) / 0.82);
+  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  color: rgb(var(--app-text));
+  font-size: 0.8125rem;
+  outline: none;
+  transition: box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.settings-select:focus {
+  box-shadow: 0 0 0 2px rgb(var(--app-accent) / 0.35);
+}
+
+.settings-toggle {
+  position: relative;
+  display: inline-flex;
+  width: 2.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  border-radius: 999px;
+  background: rgb(var(--app-bg-muted) / 0.92);
+  transition: background-color 160ms ease;
+}
+
+.settings-toggle span {
+  position: absolute;
+  left: 0.1875rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 999px;
+  background: rgb(var(--app-text-muted));
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+
+.settings-toggle.is-on {
+  background: rgb(var(--app-accent) / 0.26);
+}
+
+.settings-toggle.is-on span {
+  transform: translateX(1rem);
+  background: rgb(var(--app-accent));
 }
 
 .settings-inline-status,

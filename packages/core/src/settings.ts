@@ -3,12 +3,19 @@ import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 
+export const PROJECT_CHAT_DEPLOYMENT = "cicd-agent-chat";
+export const PROJECT_EMBEDDING_DEPLOYMENT = "cicd-agent-embeddings";
+
 const SettingsSchema = z.object({
+  llmProvider: z.enum(["azure", "openai"]).default("azure"),
   azureOpenAiEndpoint: z.string().default(""),
   azureOpenAiApiVersion: z.string().default("2024-08-01-preview"),
   azureOpenAiApiKey: z.string().default(""),
-  azureOpenAiChatDeployment: z.string().default("gpt-4o"),
-  azureOpenAiEmbeddingDeployment: z.string().default("text-embedding-3-small"),
+  azureOpenAiChatDeployment: z.string().default(PROJECT_CHAT_DEPLOYMENT),
+  azureOpenAiEmbeddingDeployment: z.string().default(PROJECT_EMBEDDING_DEPLOYMENT),
+  openAiApiKey: z.string().default(""),
+  openAiModel: z.string().default(""),
+  openAiEmbeddingModel: z.string().default("text-embedding-3-small"),
   azureDevOpsOrg: z.string().default(""),
   azureDevOpsProject: z.string().default(""),
   runtimeHost: z.string().default("127.0.0.1"),
@@ -45,11 +52,15 @@ let cached: Settings | null = null;
 
 function readEnv(): Record<string, string | undefined> {
   return {
+    llmProvider: process.env.LLM_PROVIDER,
     azureOpenAiEndpoint: process.env.AZURE_OPENAI_ENDPOINT,
     azureOpenAiApiVersion: process.env.AZURE_OPENAI_API_VERSION,
     azureOpenAiApiKey: process.env.AZURE_OPENAI_API_KEY,
     azureOpenAiChatDeployment: process.env.AZURE_OPENAI_CHAT_DEPLOYMENT,
     azureOpenAiEmbeddingDeployment: process.env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
+    openAiApiKey: process.env.OPENAI_API_KEY,
+    openAiModel: process.env.OPENAI_MODEL,
+    openAiEmbeddingModel: process.env.OPENAI_EMBEDDING_MODEL,
     azureDevOpsOrg: process.env.AZURE_DEVOPS_ORG,
     azureDevOpsProject: process.env.AZURE_DEVOPS_PROJECT,
     runtimeHost: process.env.RUNTIME_HOST,
@@ -83,13 +94,20 @@ export function getSettings(): Settings {
     Object.entries(raw).filter(([, v]) => v !== undefined && v !== ""),
   );
   const parsed = SettingsSchema.parse(cleaned);
+  const llmProvider =
+    parsed.llmProvider === "openai" || (!parsed.azureOpenAiEndpoint && parsed.openAiApiKey)
+      ? "openai"
+      : "azure";
   const dataDir = parsed.runtimeDataDir || defaultDataDir();
   fs.mkdirSync(dataDir, { recursive: true });
   cached = {
     ...parsed,
+    llmProvider,
     dataDir,
     runtimeUrl: `http://${parsed.runtimeHost}:${parsed.runtimePort}`,
-    llmConfigured: Boolean(parsed.azureOpenAiEndpoint && parsed.azureOpenAiApiKey),
+    llmConfigured: llmProvider === "azure"
+      ? Boolean(parsed.azureOpenAiEndpoint && parsed.azureOpenAiApiKey)
+      : Boolean(parsed.openAiApiKey && parsed.openAiModel),
   };
   return cached;
 }

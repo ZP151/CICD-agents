@@ -92,6 +92,7 @@ export function buildPrInsightChatHandoffDraft(input: {
   repoPath: string;
   profileId?: string;
   kind?: "insight_preview" | "review_run";
+  artifactId?: string;
 }): ChatHandoffDraft {
   const message = [
     `Use the saved AI insight for PR #${input.pullRequestId}.`,
@@ -103,6 +104,7 @@ export function buildPrInsightChatHandoffDraft(input: {
     `PR: #${input.pullRequestId}`,
     `Title: ${input.title || "(untitled)"}`,
     input.kind ? `Saved insight type: ${input.kind === "review_run" ? "full review" : "preview"}` : "",
+    input.artifactId ? `Saved insight artifact: ${input.artifactId}` : "",
   ].filter(Boolean).join("\n");
 
   return {

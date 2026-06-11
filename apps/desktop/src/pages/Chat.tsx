@@ -7,13 +7,16 @@ import {
   confirmPlan,
   cancelPlan,
   discoverAdoProjectLinkOptions,
+  fetchChatIndexStatus,
   fetchChatHistory,
   fetchChatMessages,
   fetchChatState,
+  refreshChatIndexStatus,
   type AdoDiscoveryKind,
   type AdoDiscoveryOption,
   type ChatEventPayload,
   type ChatHistoryEntry,
+  type ChatIndexStatus,
   type WorkspaceProfile,
   type WorkspaceProfileInput,
 } from "../api.js";
@@ -32,6 +35,7 @@ import {
   projectLinkNameFromRepo,
   verifyPat,
 } from "../projectLinks.js";
+import { finaliseAssistantResponseBubbles, type AssistantBubbleMeta } from "../chatBubbles.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,18 +65,56 @@ interface Bubble {
   pendingNextHint?: string;
   pendingStatus?: "waiting" | "executing" | "done" | "cancelled";
   // metadata shown in collapsible Details panel
-  meta?: {
-    riskLevel?: string;
-    actionsTaken?: string[];
-    suggestions?: string[];
-    timestamp?: number;
-  };
+  meta?: AssistantBubbleMeta;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 9);
+}
+
+type ConversationModelChoice = "built_in" | "custom";
+
+interface CustomConversationModel {
+  available: boolean;
+  label: string;
+  provider: "azure" | "openai";
+}
+
+function readCustomConversationModel(): CustomConversationModel {
+  try {
+    const raw = localStorage.getItem("dev_agent_settings");
+    if (!raw) return { available: false, label: "Additional model", provider: "azure" };
+    const settings = JSON.parse(raw) as Record<string, unknown>;
+    const provider = settings["llmProvider"] === "openai" ? "openai" : "azure";
+    if (provider === "openai") {
+      const model = String(settings["openaiModel"] ?? "").trim();
+      const key = String(settings["openaiApiKey"] ?? "").trim();
+      return {
+        available: Boolean(key && model),
+        label: model ? `OpenAI · ${model}` : "OpenAI custom model",
+        provider,
+      };
+    }
+    const deployment = String(settings["azureDeployment"] ?? "").trim();
+    const endpoint = String(settings["azureEndpoint"] ?? "").trim();
+    const key = String(settings["azureApiKey"] ?? "").trim();
+    return {
+      available: Boolean(endpoint && key && deployment),
+      label: deployment ? `Azure OpenAI · ${deployment}` : "Azure OpenAI custom deployment",
+      provider,
+    };
+  } catch {
+    return { available: false, label: "Additional model", provider: "azure" };
+  }
+}
+
+function readInitialConversationModelChoice(): ConversationModelChoice {
+  const customModel = readCustomConversationModel();
+  return localStorage.getItem("dev_agent_active_model") === "custom" && customModel.available
+    ? "custom"
+    : "built_in";
 }
 
 function riskColor(level = "low") {
@@ -434,29 +476,12 @@ function ExecutionLog({ tools, onToggleTool }: { tools: Bubble[]; onToggleTool: 
               {tool.toolOpen && hasOutput && (
                 <div className="border-t border-zinc-800/40 bg-zinc-900/60 px-3 py-2">
                   <ToolOutputRenderer toolName={tool.toolName} toolResult={tool.toolResult} />
-                  <RawDebug label="Raw JSON" data={tool.toolResult} />
                 </div>
               )}
             </div>
           );
         })}
       </div>
-    </div>
-  );
-}
-
-function RawDebug({ label, data }: { label: string; data: unknown }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="mt-1.5">
-      <button onClick={() => setOpen((v) => !v)} className="text-[10px] text-zinc-700 hover:text-zinc-500">
-        {open ? "▼" : "▶"} {label}
-      </button>
-      {open && (
-        <pre className="mt-1 max-h-28 overflow-y-auto rounded bg-zinc-900/80 p-1.5 text-[10px] font-mono text-zinc-600 whitespace-pre-wrap break-all">
-          {JSON.stringify(data, null, 2)}
-        </pre>
-      )}
     </div>
   );
 }
@@ -600,11 +625,23 @@ function MetaPanel({
         : null;
     })
     .filter((source): source is { raw: string; artifactId: string; pullRequestId: string; kind: string; at: string } => Boolean(source));
+  const contextSources = suggestions.filter((source) => source.startsWith("Repository context: "));
   const sourceMessages = new Set(insightSources.map((source) => source.raw));
-  const otherSuggestions = suggestions.filter((source) => !sourceMessages.has(source));
+  const contextMessages = new Set(contextSources);
+  const otherSuggestions = suggestions.filter((source) => !sourceMessages.has(source) && !contextMessages.has(source));
   if (suggestions.length === 0) return null;
   return (
     <div className="mt-1.5 ml-1 space-y-1.5 text-xs text-zinc-500">
+      {contextSources.length > 0 && (
+        <div className="space-y-1 rounded-md border border-zinc-800/60 bg-zinc-900/20 px-2 py-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">Context source</p>
+          {contextSources.map((source) => (
+            <p key={source} className="leading-relaxed text-zinc-500">
+              {source.replace(/^Repository context:\s*/, "")}
+            </p>
+          ))}
+        </div>
+      )}
       {insightSources.length > 0 && (
         <div className="space-y-1 rounded-md border border-blue-950/60 bg-blue-950/10 px-2 py-1.5">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-400/70">Saved PR insight source</p>
@@ -681,6 +718,11 @@ interface WorkspacePanelProps {
   branchList: string[];
   taskState: TaskState | null;
   busy: boolean;
+  indexStatus: ChatIndexStatus | null;
+  indexLoading: boolean;
+  indexRefreshing: boolean;
+  indexError: string | null;
+  onRefreshIndex: () => void;
   profiles: WorkspaceProfile[];
   activeProfileId: string | null;
   setActiveProfileId: (id: string | null) => void;
@@ -948,6 +990,12 @@ function ProjectLinkSetupCard({
         ? "border-amber-700/60 bg-zinc-950 focus:border-amber-600"
         : "border-zinc-700/60 bg-zinc-950 focus:border-zinc-500"
   }`;
+  const hasAdoMapping = Boolean(form.adoOrgUrl.trim() && form.adoProject.trim() && form.adoRepoName.trim());
+  const advancedLabel = advanced
+    ? "Hide Azure DevOps details"
+    : hasAdoMapping
+      ? "Review inferred Azure DevOps details"
+      : "Add Azure DevOps details";
 
   async function save() {
     if (!canSave || saving) return;
@@ -980,7 +1028,7 @@ function ProjectLinkSetupCard({
         <div className="min-w-0">
           <p className="text-sm font-medium text-zinc-200">Create a Project Link</p>
           <p className="mt-1 text-xs leading-relaxed text-zinc-600">
-            Connect this local repository to its Azure DevOps project, repo, branches, and pipeline defaults. You can finish it here and continue the chat.
+            Start with the local repository. Dev Agent will infer Azure DevOps mapping from git remote when possible, and you can finish missing CI/CD details later without leaving the chat.
           </p>
         </div>
       </div>
@@ -1022,6 +1070,17 @@ function ProjectLinkSetupCard({
             <span className="text-[10px] text-emerald-500/80">Azure DevOps fields inferred from git remote: {remoteHint}</span>
           )}
         </label>
+        <div
+          className={`rounded-lg border px-3 py-2 text-[11px] leading-relaxed ${
+            hasAdoMapping
+              ? "border-emerald-900/40 bg-emerald-950/20 text-emerald-300"
+              : "border-zinc-800 bg-zinc-950/40 text-zinc-600"
+          }`}
+        >
+          {hasAdoMapping
+            ? `ADO mapping ready: ${form.adoProject} / ${form.adoRepoName}. PR insight and CI/CD tools will try Microsoft sign-in first.`
+            : "Local chat, indexing, git analysis, and test/build commands can start now. Add ADO details when you want PR insight, pipeline, or review-queue automation."}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <BranchSelect label="Default branch" value={form.defaultBranch} onChange={set("defaultBranch")} />
           <BranchSelect label="PR target branch" value={form.targetBranch} onChange={set("targetBranch")} />
@@ -1032,7 +1091,7 @@ function ProjectLinkSetupCard({
           onClick={() => setAdvanced((value) => !value)}
           className="mt-1 text-left text-xs text-zinc-600 hover:text-zinc-400"
         >
-          {advanced ? "Hide" : "Add"} Azure DevOps details
+          {advancedLabel}
         </button>
 
         {advanced && (
@@ -1108,7 +1167,7 @@ function ProjectLinkSetupCard({
             </div>
             <div className="grid gap-1.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-medium text-zinc-500">PAT fallback</span>
+                <span className="text-[11px] font-medium text-zinc-500">PAT fallback (optional)</span>
                 <div className="flex items-center gap-2">
                   {patStatus === "pending" && <span className="rounded-full border border-amber-800/40 bg-amber-900/30 px-2 py-0.5 text-[10px] font-medium text-amber-400">Pending</span>}
                   {patStatus === "verified" && <span className="rounded-full border border-emerald-800/40 bg-emerald-900/30 px-2 py-0.5 text-[10px] font-medium text-emerald-400">Verified</span>}
@@ -1137,7 +1196,7 @@ function ProjectLinkSetupCard({
               />
               {patStatus === "pending" && (
                 <p className="rounded-lg border border-amber-900/30 bg-amber-950/20 px-3 py-2 text-[11px] leading-relaxed text-amber-400/80">
-                  Microsoft sign-in is tried first. For fallback mode, create a PAT with Code, Build, and Pull Request thread permissions, paste it here, then click Verify.
+                  Microsoft sign-in is tried first. Use PAT only if OAuth cannot reach this organization, with Code, Build, and Pull Request thread permissions.
                 </p>
               )}
             </div>
@@ -1584,6 +1643,8 @@ export default function Chat({ mini = false }: ChatProps) {
   const [activeProfileId, setActiveProfileId] = useState<string | null>(
     typeof window !== "undefined" ? (localStorage.getItem("chat_profile_id") ?? null) : null,
   );
+  const [customModel, setCustomModel] = useState<CustomConversationModel>(readCustomConversationModel);
+  const [activeModel, setActiveModel] = useState<ConversationModelChoice>(readInitialConversationModelChoice);
   // Project Links come from global AppDataContext — loaded once on app start, no per-mount fetch.
   // The underlying storage type is still WorkspaceProfile until the model is migrated.
   const { profiles: availableProfiles, createProfile: createProjectLink } = useAppData();
@@ -1604,6 +1665,30 @@ export default function Chat({ mini = false }: ChatProps) {
     if (profile.repoPath) setRepoPath(profile.repoPath);
     setTimeout(() => textareaRef.current?.focus(), 0);
   }, []);
+
+  const refreshModelChoices = useCallback(() => {
+    const next = readCustomConversationModel();
+    setCustomModel(next);
+    setActiveModel((current) => (current === "custom" && !next.available ? "built_in" : current));
+  }, []);
+
+  useEffect(() => {
+    refreshModelChoices();
+    const onFocus = () => refreshModelChoices();
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === "dev_agent_settings" || event.key === "dev_agent_active_model") refreshModelChoices();
+    };
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [refreshModelChoices]);
+
+  useEffect(() => {
+    localStorage.setItem("dev_agent_active_model", activeModel === "custom" ? "custom" : "built_in");
+  }, [activeModel]);
 
   useEffect(() => {
     const raw = sessionStorage.getItem(CHAT_HANDOFF_KEY);
@@ -1823,20 +1908,17 @@ export default function Chat({ mini = false }: ChatProps) {
   const finaliseWithResponse = useCallback((
     cleanText: string,
     meta?: Bubble["meta"],
+    streamedText?: string,
   ) => {
     shouldScrollRef.current = true;
     setBubbles((prev) => {
-      const result: Bubble[] = [...prev];
-      // When an approval card is the last bubble, the card already shows the
-      // assistant's explanation — adding a separate text bubble would duplicate it.
-      const lastBubble = result[result.length - 1];
-      const hasWaitingCard =
-        lastBubble?.kind === "pending_confirm" &&
-        lastBubble.pendingStatus === "waiting";
-      if (cleanText && !hasWaitingCard) {
-        result.push({ id: uid(), kind: "assistant", text: cleanText, streaming: false, meta });
-      }
-      return result;
+      return finaliseAssistantResponseBubbles(
+        prev,
+        cleanText,
+        meta,
+        streamedText,
+        (text, bubbleMeta) => ({ id: uid(), kind: "assistant", text, streaming: false, meta: bubbleMeta }),
+      );
     });
   }, []);
 
@@ -2030,7 +2112,7 @@ export default function Chat({ mini = false }: ChatProps) {
           const meta: Bubble["meta"] = ev.result
             ? { riskLevel: ev.result.riskLevel, actionsTaken: ev.result.actionsTaken, suggestions: ev.result.suggestions }
             : undefined;
-          finaliseWithResponse(ev.result?.response?.trim() ?? "", meta);
+          finaliseWithResponse(ev.result?.response?.trim() ?? "", meta, ev.result?.streamedResponse);
           setBusy(false);
           setStatusText(null);
           cancelRef.current = null;
@@ -2159,7 +2241,7 @@ export default function Chat({ mini = false }: ChatProps) {
           const meta: Bubble["meta"] = ev.result
             ? { riskLevel: ev.result.riskLevel, actionsTaken: ev.result.actionsTaken, suggestions: ev.result.suggestions }
             : undefined;
-          finaliseWithResponse(ev.result?.response?.trim() ?? "", meta);
+          finaliseWithResponse(ev.result?.response?.trim() ?? "", meta, ev.result?.streamedResponse);
           setBusy(false);
           setStatusText(null);
           cancelRef.current = null;
@@ -2428,8 +2510,10 @@ export default function Chat({ mini = false }: ChatProps) {
                     </div>
                     <div className="flex flex-wrap justify-center gap-2 max-w-md">
                       {[
+                        "Understand this project",
                         "Review my changes",
                         "What's on this branch?",
+                        "Refresh project index",
                         "Stage and commit",
                         "Push and create PR",
                         "Run tests",
@@ -2464,7 +2548,7 @@ export default function Chat({ mini = false }: ChatProps) {
             if (b.kind === "user") {
               return (
                 <div key={b.id} className="mb-3 flex justify-end">
-                  <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-indigo-600/80 px-4 py-2.5 text-sm text-white/95 shadow-md ring-1 ring-indigo-500/30">
+                  <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-[rgb(var(--app-accent))] px-4 py-2.5 text-sm text-white shadow-md ring-1 ring-[rgb(var(--app-accent))]/25">
                     {b.text}
                   </div>
                 </div>
@@ -2475,7 +2559,7 @@ export default function Chat({ mini = false }: ChatProps) {
               return (
                 <div key={b.id} className="mb-3 flex justify-start">
                   <div className="max-w-[85%]">
-                    <div className="rounded-2xl rounded-tl-sm bg-zinc-800/70 px-4 py-2.5 text-sm text-zinc-100 shadow-sm">
+                    <div className="rounded-2xl rounded-tl-sm border border-[rgb(var(--app-border))]/70 bg-[rgb(var(--app-surface))] px-4 py-2.5 text-sm text-[rgb(var(--app-text))] shadow-sm">
                       <span className="whitespace-pre-wrap">{b.text}</span>
                       {b.streaming && <ThinkingDots />}
                     </div>
@@ -2512,9 +2596,9 @@ export default function Chat({ mini = false }: ChatProps) {
             if (b.kind === "system") {
               return (
                 <div key={b.id} className="mb-2 flex items-center justify-center gap-1">
-                  <span className="h-px w-8 bg-zinc-800" />
-                  <span className="text-xs text-zinc-600">{b.text}</span>
-                  <span className="h-px w-8 bg-zinc-800" />
+                  <span className="h-px w-8 bg-[rgb(var(--app-border))]" />
+                  <span className="text-xs text-[rgb(var(--app-text-subtle))]">{b.text}</span>
+                  <span className="h-px w-8 bg-[rgb(var(--app-border))]" />
                 </div>
               );
             }
@@ -2536,7 +2620,7 @@ export default function Chat({ mini = false }: ChatProps) {
           {/* Status bar shown while busy and no streaming bubble */}
           {busy && statusText && !bubbles.some((b) => b.kind === "assistant" && b.streaming) && (
             <div className="mb-2 flex items-center gap-2 pl-1">
-              <div className="rounded-2xl rounded-tl-sm bg-zinc-800/80 px-4 py-2.5 text-sm text-zinc-400">
+              <div className="rounded-2xl rounded-tl-sm border border-[rgb(var(--app-border))]/70 bg-[rgb(var(--app-surface-raised))] px-4 py-2.5 text-sm text-[rgb(var(--app-text-muted))]">
                 {statusText}
                 <ThinkingDots />
               </div>
@@ -2550,31 +2634,53 @@ export default function Chat({ mini = false }: ChatProps) {
             <div className="input-panel border-t border-zinc-800/80 px-3 py-2">
               {/* Project Link context chip */}
               {!mini && (
-                <div className="flex items-center gap-1.5 px-1 pb-1.5">
-                  {availableProfiles.length > 0 ? (
-                    <>
-                      <svg className="h-3 w-3 shrink-0 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                      </svg>
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-1 pb-1.5">
+                  <div className="flex min-w-[180px] flex-1 items-center gap-1.5">
+                    {availableProfiles.length > 0 ? (
+                      <>
+                        <svg className="h-3 w-3 shrink-0 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                        <select
+                          className="min-w-0 flex-1 cursor-pointer bg-transparent text-[11px] text-zinc-500 transition hover:text-zinc-300 focus:outline-none"
+                          value={activeProfileId ?? ""}
+                          onChange={(e) => {
+                            const id = e.target.value;
+                            setActiveProfileId(id || null);
+                            const p = availableProfiles.find((pr) => pr.id === id);
+                            if (p?.repoPath) setRepoPath(p.repoPath);
+                          }}
+                        >
+                          <option value="">No Project Link selected</option>
+                          {availableProfiles.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                      </>
+                    ) : (
+                      <span className="text-[11px] text-zinc-700">No Project Link yet — create one above</span>
+                    )}
+                  </div>
+                  <div className="flex min-w-[170px] items-center justify-end gap-1.5">
+                    <svg className="h-3 w-3 shrink-0 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l3-1.5L15 20l-.75-3M5 4h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1V5a1 1 0 011-1zm3 4h8M8 11h5" />
+                    </svg>
+                    {customModel.available ? (
                       <select
-                        className="flex-1 min-w-0 bg-transparent text-[11px] text-zinc-500 focus:outline-none cursor-pointer hover:text-zinc-300 transition"
-                        value={activeProfileId ?? ""}
-                        onChange={(e) => {
-                          const id = e.target.value;
-                          setActiveProfileId(id || null);
-                          const p = availableProfiles.find((pr) => pr.id === id);
-                          if (p?.repoPath) setRepoPath(p.repoPath);
-                        }}
+                        className="max-w-[260px] cursor-pointer bg-transparent text-right text-[11px] text-zinc-500 transition hover:text-zinc-300 focus:outline-none"
+                        value={activeModel}
+                        onChange={(e) => setActiveModel(e.target.value as ConversationModelChoice)}
+                        title="Conversation model"
                       >
-                        <option value="">No Project Link selected</option>
-                        {availableProfiles.map((p) => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
+                        <option value="built_in">Built-in model</option>
+                        <option value="custom">{customModel.label}</option>
                       </select>
-                    </>
-                  ) : (
-                    <span className="text-[11px] text-zinc-700">No Project Link yet — create one above</span>
-                  )}
+                    ) : (
+                      <span className="text-[11px] text-zinc-700" title="Conversation uses the built-in model by default">
+                        Built-in model
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
               <div className="flex items-end gap-2 rounded-xl border border-zinc-700/60 bg-zinc-900/80 px-3 py-2 focus-within:border-zinc-600 transition">

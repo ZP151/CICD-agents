@@ -63,7 +63,9 @@ import {
   appendLocalReviewOperation,
   listLocalReviewOperations,
   type ReviewOperationKind,
+  getLocalPrInsightArtifact,
   listLocalPrInsightArtifacts,
+  summarizePrInsightArtifactHistory,
   upsertLocalPrInsightArtifact,
   AzureTableProfileStore,
   KeyVaultSecrets,
@@ -82,11 +84,16 @@ import {
   planGitCheckpointRollback,
   LLMClient,
   type BrowserLoginChoice,
+  type Settings,
 } from "@cicd-agent/core";
 import { spawnSync } from "node:child_process";
 import { SubmitPipelineSchema, TaskIdParam } from "./schemas.js";
 import { ChatSessionManager, type InlineLlmConfig, type InlineProfile } from "./chatSession.js";
 import { chatEventToSseEvents, sessionStartedEvent } from "./chatEvents.js";
+import {
+  getChatIndexStatus,
+  refreshChatIndex,
+} from "@cicd-agent/core/chatContext";
 import {
   AdoClient,
   COMMENT_TYPE_TEXT,
@@ -157,6 +164,11 @@ const ChatStartSchema = z.object({
   llmConfig: LlmConfigSchema,        // inline LLM config from localStorage Settings
   profile:   InlineProfileSchema,    // inline profile data from localStorage Profiles
 });
+const ChatIndexSchema = z.object({
+  repoPath: z.string().default(process.cwd()),
+  llmConfig: LlmConfigSchema,
+  profile: InlineProfileSchema,
+});
 const SessionIdParam = z.object({ sessionId: z.string().min(1) });
 const CheckpointIdParam = z.object({ checkpointId: z.string().min(1) });
 const CheckpointPreviewQuery = z.object({
@@ -167,6 +179,43 @@ const ProfilePullRequestParam = z.object({
   id: z.string().min(1),
   pullRequestId: z.coerce.number().int().positive(),
 });
+
+function buildInlineLlmSettings(override?: InlineLlmConfig): Settings {
+  const base = getSettings();
+  if (!override) return base;
+  const isAzure = (override.llmProvider ?? "azure") === "azure";
+  const provider: "azure" | "openai" = isAzure ? "azure" : "openai";
+  return {
+    ...base,
+    llmProvider: provider,
+    azureOpenAiEndpoint:       isAzure ? (override.azureEndpoint   ?? base.azureOpenAiEndpoint)       : base.azureOpenAiEndpoint,
+    azureOpenAiApiKey:         isAzure ? (override.azureApiKey     ?? base.azureOpenAiApiKey)         : base.azureOpenAiApiKey,
+    azureOpenAiChatDeployment: isAzure ? (override.azureDeployment ?? base.azureOpenAiChatDeployment) : base.azureOpenAiChatDeployment,
+    azureOpenAiApiVersion:     isAzure ? (override.azureApiVersion ?? base.azureOpenAiApiVersion)     : base.azureOpenAiApiVersion,
+    openAiApiKey:              !isAzure ? (override.openaiApiKey   ?? base.openAiApiKey)              : base.openAiApiKey,
+    openAiModel:               !isAzure ? (override.openaiModel    ?? base.openAiModel)               : base.openAiModel,
+    llmConfigured: isAzure
+      ? Boolean(
+          (override.azureEndpoint ?? base.azureOpenAiEndpoint) &&
+          (override.azureApiKey   ?? base.azureOpenAiApiKey),
+        )
+      : Boolean(
+          (override.openaiApiKey ?? base.openAiApiKey) &&
+          (override.openaiModel  ?? base.openAiModel),
+        ),
+  };
+}
+
+function inlineProfileToIndexProfile(profile?: InlineProfile) {
+  if (!profile) return undefined;
+  return {
+    buildCommand: profile.buildCommand,
+    testCommand: profile.testCommand,
+    targetBranch: profile.targetBranch || profile.defaultBranch,
+    pipelineName: profile.adoPipelineName,
+    ignoredGlobs: profile.ignoredGlobs,
+  };
+}
 
 const ReviewHistoryUpsertSchema = z.object({
   pullRequestId: z.coerce.number().int().positive(),
@@ -641,10 +690,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   // Returns everything the Settings UI needs to pre-fill its fields, but never
   // returns API keys, PATs, or other credentials.
   app.get("/daemon/config", async () => ({
-    llmProvider:     process.env["AZURE_OPENAI_ENDPOINT"] ? "azure"
-                   : process.env["OPENAI_API_KEY"]        ? "openai"
+    llmProvider:     process.env["LLM_PROVIDER"] === "openai" ? "openai"
+                   : process.env["LLM_PROVIDER"] === "azure"  ? "azure"
+                   : process.env["AZURE_OPENAI_ENDPOINT"]     ? "azure"
+                   : process.env["OPENAI_API_KEY"]            ? "openai"
                    : "",
-    azureDeployment:  process.env["AZURE_OPENAI_DEPLOYMENT"] ?? "",
+    azureDeployment:  process.env["AZURE_OPENAI_CHAT_DEPLOYMENT"] ?? process.env["AZURE_OPENAI_DEPLOYMENT"] ?? "",
     azureApiVersion:  process.env["AZURE_OPENAI_API_VERSION"] ?? "",
     azureEndpoint:    process.env["AZURE_OPENAI_ENDPOINT"] ?? "",
     openaiModel:      process.env["OPENAI_MODEL"] ?? "",
@@ -692,8 +743,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     const effectiveKvUrl = cfg.azureKeyVaultUrl ?? settings.azureKeyVaultUrl;
 
     if (cfg.llmProvider === "azure" || (!cfg.llmProvider && cfg.azureEndpoint)) {
+      lines.push("LLM_PROVIDER=azure");
       if (cfg.azureEndpoint)   lines.push(`AZURE_OPENAI_ENDPOINT=${cfg.azureEndpoint}`);
-      if (cfg.azureDeployment) lines.push(`AZURE_OPENAI_DEPLOYMENT=${cfg.azureDeployment}`);
+      if (cfg.azureDeployment) lines.push(`AZURE_OPENAI_CHAT_DEPLOYMENT=${cfg.azureDeployment}`);
       if (cfg.azureApiVersion) lines.push(`AZURE_OPENAI_API_VERSION=${cfg.azureApiVersion}`);
       if (cfg.azureApiKey) {
         if (effectiveKvUrl) {
@@ -711,6 +763,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         }
       }
     } else if (cfg.llmProvider === "openai" || cfg.openaiApiKey) {
+      lines.push("LLM_PROVIDER=openai");
       if (cfg.openaiApiKey) lines.push(`OPENAI_API_KEY=${cfg.openaiApiKey}`);
       if (cfg.openaiModel)  lines.push(`OPENAI_MODEL=${cfg.openaiModel}`);
     }
@@ -746,12 +799,26 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     }
 
     // Re-evaluate llmConfigured from the freshly set env vars
-    const isAzure = !!(process.env["AZURE_OPENAI_ENDPOINT"] && process.env["AZURE_OPENAI_API_KEY"]);
-    const isOpenAI = !!process.env["OPENAI_API_KEY"];
+    const provider = process.env["LLM_PROVIDER"] === "openai" ? "openai" : "azure";
+    const isAzure = provider === "azure" && !!(process.env["AZURE_OPENAI_ENDPOINT"] && process.env["AZURE_OPENAI_API_KEY"]);
+    const isOpenAI = provider === "openai" && !!(process.env["OPENAI_API_KEY"] && process.env["OPENAI_MODEL"]);
     const nowConfigured = isAzure || isOpenAI;
 
     // Patch the live settings object so /healthz reflects the new state immediately
+    (settings as Record<string, unknown>)["llmProvider"] = provider;
     (settings as Record<string, unknown>)["llmConfigured"] = nowConfigured;
+    if (cfg.azureEndpoint !== undefined)
+      (settings as Record<string, unknown>)["azureOpenAiEndpoint"] = cfg.azureEndpoint;
+    if (cfg.azureApiKey !== undefined)
+      (settings as Record<string, unknown>)["azureOpenAiApiKey"] = cfg.azureApiKey || settings.azureOpenAiApiKey;
+    if (cfg.azureDeployment !== undefined)
+      (settings as Record<string, unknown>)["azureOpenAiChatDeployment"] = cfg.azureDeployment || settings.azureOpenAiChatDeployment;
+    if (cfg.azureApiVersion !== undefined)
+      (settings as Record<string, unknown>)["azureOpenAiApiVersion"] = cfg.azureApiVersion || settings.azureOpenAiApiVersion;
+    if (cfg.openaiApiKey !== undefined)
+      (settings as Record<string, unknown>)["openAiApiKey"] = cfg.openaiApiKey;
+    if (cfg.openaiModel !== undefined)
+      (settings as Record<string, unknown>)["openAiModel"] = cfg.openaiModel;
     if (cfg.azureStorageAccount !== undefined)
       (settings as Record<string, unknown>)["azureStorageAccount"] = cfg.azureStorageAccount;
     if (cfg.azureKeyVaultUrl !== undefined)
@@ -1532,16 +1599,39 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     }).safeParse(req.query ?? {});
     if (!query.success) return reply.code(400).send({ error: query.error.flatten() });
 
-    return {
-      items: listLocalPrInsightArtifacts({
+    const items = listLocalPrInsightArtifacts({
         dataDir: settings.dataDir,
         profileId: parsedId.data.id,
         repository,
         pullRequestId: query.data.pullRequestId,
         limit: query.data.limit,
-      }),
+      });
+    return {
+      items,
+      history: summarizePrInsightArtifactHistory(items),
       storage: "local" as const,
     };
+  });
+
+  app.get("/profiles/:id/pr-insights/artifact", async (req, reply) => {
+    const parsedId = ProfileIdParam.safeParse(req.params);
+    if (!parsedId.success) return reply.code(400).send({ error: "invalid id" });
+
+    const query = z.object({
+      artifactId: z.string().min(1),
+    }).safeParse(req.query ?? {});
+    if (!query.success) return reply.code(400).send({ error: query.error.flatten() });
+
+    const profile = getWorkspaceProfile(settings.dataDir, parsedId.data.id);
+    if (!profile) return reply.code(404).send({ error: "profile not found" });
+
+    const record = getLocalPrInsightArtifact({
+      dataDir: settings.dataDir,
+      profileId: parsedId.data.id,
+      artifactId: query.data.artifactId,
+    });
+    if (!record) return reply.code(404).send({ error: "artifact not found" });
+    return { record, storage: "local" as const };
   });
 
   app.post("/profiles/:id/pr-insights", async (req, reply) => {
@@ -1775,22 +1865,29 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     return `${base}/${project}/_git/${repository}/pullrequest/${args.pullRequestId}?_a=files&discussionId=${encodeURIComponent(args.threadId)}`;
   }
 
-  function buildReviewLlmSettings(override?: InlineLlmConfig) {
+  function buildReviewLlmSettings(override?: InlineLlmConfig): Settings {
     const base = getSettings();
     if (!override) return base;
     const isAzure = (override.llmProvider ?? "azure") === "azure";
+    const provider: "azure" | "openai" = isAzure ? "azure" : "openai";
     return {
       ...base,
+      llmProvider: provider,
       azureOpenAiEndpoint:       isAzure ? (override.azureEndpoint   ?? base.azureOpenAiEndpoint)       : base.azureOpenAiEndpoint,
       azureOpenAiApiKey:         isAzure ? (override.azureApiKey     ?? base.azureOpenAiApiKey)         : base.azureOpenAiApiKey,
       azureOpenAiChatDeployment: isAzure ? (override.azureDeployment ?? base.azureOpenAiChatDeployment) : base.azureOpenAiChatDeployment,
       azureOpenAiApiVersion:     isAzure ? (override.azureApiVersion ?? base.azureOpenAiApiVersion)     : base.azureOpenAiApiVersion,
+      openAiApiKey:              !isAzure ? (override.openaiApiKey   ?? base.openAiApiKey)              : base.openAiApiKey,
+      openAiModel:               !isAzure ? (override.openaiModel    ?? base.openAiModel)               : base.openAiModel,
       llmConfigured: isAzure
         ? Boolean(
             (override.azureEndpoint ?? base.azureOpenAiEndpoint) &&
             (override.azureApiKey   ?? base.azureOpenAiApiKey),
           )
-        : Boolean(override.openaiApiKey ?? base.azureOpenAiApiKey),
+        : Boolean(
+            (override.openaiApiKey ?? base.openAiApiKey) &&
+            (override.openaiModel  ?? base.openAiModel),
+          ),
     };
   }
 
@@ -2109,6 +2206,34 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   });
 
   // ── Chat endpoints ───────────────────────────────────────────────────────────
+
+  app.post("/chat/index-status", async (req, reply) => {
+    const parsed = ChatIndexSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    try {
+      return getChatIndexStatus(parsed.data.repoPath);
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.post("/chat/index-refresh", async (req, reply) => {
+    const parsed = ChatIndexSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    try {
+      const settings = buildInlineLlmSettings(parsed.data.llmConfig);
+      const llm = new LLMClient(settings);
+      const refresh = await refreshChatIndex({
+        repoPath: parsed.data.repoPath,
+        llm,
+        profile: inlineProfileToIndexProfile(parsed.data.profile),
+      });
+      const status = getChatIndexStatus(parsed.data.repoPath);
+      return { ok: true, refresh, status };
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
 
   app.post("/chat", async (req, reply) => {
     const parsed = ChatStartSchema.safeParse(req.body);

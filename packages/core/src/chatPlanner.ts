@@ -24,6 +24,7 @@ export interface PendingToolAction {
 
 export interface ChatPlannerResult {
   response: string;
+  streamedResponse?: string;
   riskLevel: string;
   actionsTaken: string[];
   suggestions: string[];
@@ -45,6 +46,8 @@ export interface ChatWorkflowState {
   completedTools: string[];
   pendingApproval?: ChatApprovalRequest;
 }
+
+export const CHAT_CONTROL_JSON_MARKER = "__CONTROL_JSON__";
 
 /** Returns true if the message is a user affirmation (yes/proceed/action-forward). */
 export function isConfirmationMessage(msg: string): boolean {
@@ -141,8 +144,11 @@ Examples of correct error handling:
 - git_add fails with "pathspec not found" → verify the file path with git_status first.
 
 ## MANDATORY Response Format
-After completing your work, output ONLY this JSON on its own line (no other text after it):
-{"response":"...","risk_level":"low|medium|high","actions_taken":["..."],"suggestions":[],"approval_proposal":{"tool":"...","args":{},"description":"...","nextHint":"..."}}
+Stream the user-facing response first as normal prose.
+Then output exactly one final control line beginning with ${CHAT_CONTROL_JSON_MARKER} followed by JSON:
+${CHAT_CONTROL_JSON_MARKER}{"response":"same user-facing response text","risk_level":"low|medium|high","actions_taken":["..."],"suggestions":[],"approval_proposal":{"tool":"...","args":{},"description":"...","nextHint":"..."}}
+
+Do not show JSON before the ${CHAT_CONTROL_JSON_MARKER} line.
 
 ## MANDATORY approval_proposal Rules
 - If your "response" text contains "Shall I", "Should I", "Do you want me to", "Ready to", or proposes a next write action → YOU MUST set "approval_proposal" to the exact tool+args.
@@ -154,10 +160,12 @@ After completing your work, output ONLY this JSON on its own line (no other text
 
 ## Examples
 Proposing staging → approval_proposal REQUIRED:
-{"response":"I found 4 modified files. Shall I stage all of them?","risk_level":"medium","actions_taken":["git_status"],"suggestions":[],"approval_proposal":{"tool":"git_add","args":{},"description":"Stage all changes","nextHint":"generate commit message"}}
+I found 4 modified files. Shall I stage all of them?
+${CHAT_CONTROL_JSON_MARKER}{"response":"I found 4 modified files. Shall I stage all of them?","risk_level":"medium","actions_taken":["git_status"],"suggestions":[],"approval_proposal":{"tool":"git_add","args":{},"description":"Stage all changes","nextHint":"generate commit message"}}
 
 After executing (no proposal) → no approval_proposal key:
-{"response":"All files staged successfully.","risk_level":"low","actions_taken":["git_add"],"suggestions":[]}`;
+All files staged successfully.
+${CHAT_CONTROL_JSON_MARKER}{"response":"All files staged successfully.","risk_level":"low","actions_taken":["git_add"],"suggestions":[]}`;
 
 // ─── ChatPlanner ──────────────────────────────────────────────────────────────
 
@@ -231,12 +239,19 @@ export class ChatPlanner {
 
     for (let step = 0; step < this.maxSteps; step++) {
       let accumulated = "";
+      let emittedVisibleResponse = "";
       let toolFromStream: import("./llm.js").ChatToolCall[] = [];
 
       try {
         for await (const ev of this.llm.chatStream({ messages, tools, maxTokens: 2000 })) {
           if (ev.type === "delta" && ev.delta) {
             accumulated += ev.delta;
+            const visibleResponse = extractVisibleStreamingResponse(accumulated);
+            if (visibleResponse && visibleResponse.length > emittedVisibleResponse.length) {
+              const delta = visibleResponse.slice(emittedVisibleResponse.length);
+              emittedVisibleResponse = visibleResponse;
+              yield { type: "assistant_delta", delta };
+            }
           } else if (ev.type === "tool_call" && ev.toolCalls) {
             toolFromStream = ev.toolCalls;
           }
@@ -357,10 +372,11 @@ export class ChatPlanner {
       lastText = accumulated;
       messages.push({ role: "assistant", content: lastText });
 
-      const parsed = parseFinalJson(lastText);
+      const control = parseControlResponse(lastText);
+      const parsed = control.control;
       if (parsed) {
         const riskLevel = String(parsed["risk_level"] ?? "low");
-        const response = String(parsed["response"] ?? lastText);
+        const response = String(parsed["response"] ?? control.visibleText ?? lastText);
         const actionsTaken = ((parsed["actions_taken"] as unknown[]) ?? []).map(String);
         const suggestions = ((parsed["suggestions"] as unknown[]) ?? []).map(String);
         const rawApprovalProposal = parsed["approval_proposal"] ?? parsed["pending_action"];
@@ -402,6 +418,7 @@ export class ChatPlanner {
           type: "done",
           result: {
             response,
+            streamedResponse: emittedVisibleResponse || undefined,
             riskLevel,
             actionsTaken,
             suggestions,
@@ -417,7 +434,7 @@ export class ChatPlanner {
       messages.push({
         role: "user",
         content:
-          'Please provide your final response as a single JSON line. If you are proposing a write action, you MUST include approval_proposal. Format: {"response":"...","risk_level":"low|medium|high","actions_taken":[],"suggestions":[],"approval_proposal":{"tool":"git_add","args":{},"description":"...","nextHint":"..."}} — omit approval_proposal only if you are NOT proposing any next write action.',
+          `Please provide the user-facing answer first, then one final control line starting with ${CHAT_CONTROL_JSON_MARKER}. If you are proposing a write action, you MUST include approval_proposal. Format: ${CHAT_CONTROL_JSON_MARKER}{"response":"...","risk_level":"low|medium|high","actions_taken":[],"suggestions":[],"approval_proposal":{"tool":"git_add","args":{},"description":"...","nextHint":"..."}} — omit approval_proposal only if you are NOT proposing any next write action.`,
       });
     }
 
@@ -427,6 +444,7 @@ export class ChatPlanner {
       type: "done",
       result: {
         response: lastText || "(no response)",
+        streamedResponse: undefined,
         riskLevel: "low",
         actionsTaken: [],
         suggestions: [],
@@ -440,7 +458,7 @@ export class ChatPlanner {
     const plan = translateIntent(message);
     const stepList = plan.steps.map((s, i) => `${i + 1}. ${s.tool} — ${s.note}`).join("\n");
     const response =
-      `LLM not configured — showing intent analysis only.\n\n` +
+      `Selected model is temporarily unavailable — showing deterministic intent analysis only.\n\n` +
       `Intent: ${plan.intent}\n${plan.notes}\n\n` +
       (stepList ? `Suggested steps:\n${stepList}` : "");
     yield { type: "message", text: response };
@@ -448,6 +466,7 @@ export class ChatPlanner {
       type: "done",
       result: {
         response,
+        streamedResponse: undefined,
         riskLevel: "low",
         actionsTaken: [],
         suggestions: plan.steps.map((s) => `${s.tool}: ${s.note}`),
@@ -482,6 +501,91 @@ function parseFinalJson(text: string): Record<string, unknown> | null {
     }
   }
   return null;
+}
+
+function parseControlResponse(text: string): { visibleText?: string; control: Record<string, unknown> | null } {
+  const markerIndex = text.lastIndexOf(CHAT_CONTROL_JSON_MARKER);
+  if (markerIndex !== -1) {
+    const visibleText = text.slice(0, markerIndex).trim();
+    const afterMarker = text.slice(markerIndex + CHAT_CONTROL_JSON_MARKER.length).trim();
+    const control = parseFinalJson(afterMarker);
+    return { visibleText, control };
+  }
+  return { control: parseFinalJson(text) };
+}
+
+function extractVisibleStreamingResponse(text: string): string {
+  const markerIndex = text.indexOf(CHAT_CONTROL_JSON_MARKER);
+  if (markerIndex !== -1) return text.slice(0, markerIndex);
+  const responseField = extractStreamingJsonStringField(text, "response");
+  if (responseField) return responseField;
+  if (looksLikeStructuredJsonPrefix(text)) return "";
+  return trimPotentialControlMarkerPrefix(text);
+}
+
+function looksLikeStructuredJsonPrefix(text: string): boolean {
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith("{")) return false;
+  return (
+    trimmed.includes("\"response\"") ||
+    trimmed.includes("\"risk_level\"") ||
+    trimmed.includes("\"approval_proposal\"") ||
+    trimmed.includes("\"actions_taken\"")
+  );
+}
+
+function trimPotentialControlMarkerPrefix(text: string): string {
+  const max = Math.min(text.length, CHAT_CONTROL_JSON_MARKER.length - 1);
+  for (let len = max; len > 0; len--) {
+    if (CHAT_CONTROL_JSON_MARKER.startsWith(text.slice(-len))) {
+      return text.slice(0, -len);
+    }
+  }
+  return text;
+}
+
+function extractStreamingJsonStringField(text: string, field: string): string {
+  const key = `"${field}"`;
+  const keyIndex = text.indexOf(key);
+  if (keyIndex === -1) return "";
+  const colonIndex = text.indexOf(":", keyIndex + key.length);
+  if (colonIndex === -1) return "";
+
+  let quoteIndex = -1;
+  for (let i = colonIndex + 1; i < text.length; i++) {
+    const ch = text[i];
+    if (/\s/.test(ch ?? "")) continue;
+    if (ch !== "\"") return "";
+    quoteIndex = i;
+    break;
+  }
+  if (quoteIndex === -1) return "";
+
+  let out = "";
+  for (let i = quoteIndex + 1; i < text.length; i++) {
+    const ch = text[i]!;
+    if (ch === "\"") return out;
+    if (ch !== "\\") {
+      out += ch;
+      continue;
+    }
+
+    if (i + 1 >= text.length) return out;
+    const esc = text[++i]!;
+    if (esc === "\"" || esc === "\\" || esc === "/") out += esc;
+    else if (esc === "b") out += "\b";
+    else if (esc === "f") out += "\f";
+    else if (esc === "n") out += "\n";
+    else if (esc === "r") out += "\r";
+    else if (esc === "t") out += "\t";
+    else if (esc === "u") {
+      const hex = text.slice(i + 1, i + 5);
+      if (!/^[0-9a-fA-F]{4}$/.test(hex)) return out;
+      out += String.fromCharCode(Number.parseInt(hex, 16));
+      i += 4;
+    }
+  }
+  return out;
 }
 
 function truncate(text: string, max: number): string {

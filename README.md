@@ -177,6 +177,26 @@ GitHub Actions workflows live in `.github/workflows/`.
 - `release.yml` is triggered by semantic version tags such as `v0.5.3` and
   creates GitHub Releases with installer assets.
 
+## Local Toolchain
+
+Use the repository-local Node.js and pnpm when running tests, typechecks, and
+builds. On Windows, prefer the wrapper script:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/checkpointHandoff.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+```
+
+The wrapper prepends `.tools\node-v22.11.0-win-x64` and `.tools` to `PATH`, then
+executes `.tools\pnpm.exe`. This keeps local runs from accidentally using a
+Codex, system, nvm, or globally installed Node.js runtime.
+
+For Codex runs, do not request elevated sandbox permission for normal pnpm test,
+typecheck, or build commands unless the normal project-local command fails with
+a clear sandbox permission error. The sandbox is a permission boundary; it is
+not the Node.js runtime.
+
 ## Further Architecture Documents
 
 - `docs/architecture.md`

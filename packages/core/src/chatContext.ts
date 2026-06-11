@@ -4,7 +4,7 @@ import fastGlob from "fast-glob";
 import { parseDiff, type ChangedFile } from "./contextBuilder.js";
 import type { LLMClient } from "./llm.js";
 import { RepoIndexer } from "./indexer/repoIndexer.js";
-import { VectorIndex } from "./vectorIndex.js";
+import { VectorIndex, type VectorIndexStats } from "./vectorIndex.js";
 import { runCommand } from "./tools/executor.js";
 
 export interface ChatContextProfile {
@@ -31,6 +31,7 @@ export interface ChatContextBundle {
   changedFiles: ChangedFile[];
   memories: Array<{ key: string; value: string }>;
   profile?: ChatContextProfile;
+  indexStats: VectorIndexStats;
   indexed: boolean;
   embedded: boolean;
   fallbackUsed: boolean;
@@ -84,22 +85,32 @@ export async function buildChatContext(args: {
   const repoFiles = await listQuickRepoFiles(repoPath, args.profile?.ignoredGlobs ?? []);
   const projectStructure = summarizeProjectStructure(repoFiles);
   const importantChunks = readImportantFiles(repoPath);
+  const semanticEnabled = args.useSemanticIndex ?? true;
+  let indexStats: VectorIndexStats = {
+    filesIndexed: 0,
+    chunksIndexed: 0,
+    chunksEmbedded: 0,
+    chunksPendingEmbedding: 0,
+  };
 
   let relevantChunks: ChatContextChunk[] = [];
   let semanticUsed = false;
-  if (args.useSemanticIndex && args.llm.configured) {
+  if (semanticEnabled) {
     const vectors = new VectorIndex(repoPath);
     try {
-      const hits = await vectors.searchText(args.llm, args.message, maxChunks);
-      relevantChunks = hits.map((hit) => ({
-        path: hit.filePath,
-        startLine: hit.startLine,
-        endLine: hit.endLine,
-        text: hit.text,
-        score: hit.score,
-        reason: "semantic-search",
-      }));
-      semanticUsed = relevantChunks.length > 0;
+      indexStats = vectors.stats();
+      if (args.llm.configured && indexStats.chunksEmbedded > 0) {
+        const hits = await vectors.searchText(args.llm, args.message, maxChunks);
+        relevantChunks = hits.map((hit) => ({
+          path: hit.filePath,
+          startLine: hit.startLine,
+          endLine: hit.endLine,
+          text: hit.text,
+          score: hit.score,
+          reason: "semantic-search",
+        }));
+        semanticUsed = relevantChunks.length > 0;
+      }
     } finally {
       vectors.close();
     }
@@ -121,7 +132,8 @@ export async function buildChatContext(args: {
     changedFiles,
     memories: [],
     profile: args.profile,
-    indexed: false,
+    indexStats,
+    indexed: indexStats.filesIndexed > 0 || indexStats.chunksIndexed > 0,
     embedded: semanticUsed,
     fallbackUsed,
   };
@@ -145,11 +157,44 @@ export async function refreshChatIndex(args: {
   }
 }
 
+export function getChatIndexStatus(repoPath: string): {
+  repoPath: string;
+  indexed: boolean;
+  semanticReady: boolean;
+  stats: VectorIndexStats;
+  retrievalMode: "semantic-index" | "quick-scan";
+  summary: string;
+} {
+  const resolvedRepoPath = path.resolve(repoPath);
+  const vectors = new VectorIndex(resolvedRepoPath);
+  try {
+    const stats = vectors.stats();
+    const indexed = stats.filesIndexed > 0 || stats.chunksIndexed > 0;
+    const semanticReady = stats.chunksEmbedded > 0;
+    return {
+      repoPath: resolvedRepoPath,
+      indexed,
+      semanticReady,
+      stats,
+      retrievalMode: semanticReady ? "semantic-index" : "quick-scan",
+      summary: semanticReady
+        ? `Semantic index ready (${stats.filesIndexed} files, ${stats.chunksEmbedded} embedded chunks).`
+        : indexed
+          ? `Index exists but embeddings are pending (${stats.filesIndexed} files, ${stats.chunksEmbedded}/${stats.chunksIndexed} embedded chunks).`
+          : "Quick scan only; refresh the project index for stronger repository context.",
+    };
+  } finally {
+    vectors.close();
+  }
+}
+
 export function chatContextToPrompt(bundle: ChatContextBundle, charBudget = 12000): string {
   const parts: string[] = ["## Repository context"];
   if (bundle.repoSummary) parts.push(bundle.repoSummary);
-  parts.push(`Index status: ${bundle.indexed ? "indexed" : "quick scan; background index may refresh separately"}`);
-  parts.push(`Context retrieval: ${bundle.fallbackUsed ? "project docs and file-structure scan" : "semantic embeddings"}`);
+  parts.push(
+    `Index status: ${bundle.indexed ? `indexed (${bundle.indexStats.filesIndexed} files, ${bundle.indexStats.chunksEmbedded}/${bundle.indexStats.chunksIndexed} embedded chunks)` : "quick scan; background index may refresh separately"}`,
+  );
+  parts.push(`Context retrieval: ${bundle.fallbackUsed ? "project docs, changed files, and file-structure scan" : "semantic embeddings"}`);
 
   if (bundle.profile) {
     parts.push("\n## Profile");
@@ -195,6 +240,16 @@ export function chatContextToPrompt(bundle: ChatContextBundle, charBudget = 1200
   }
 
   return parts.join("\n");
+}
+
+export function describeChatContext(bundle: ChatContextBundle): string {
+  if (bundle.embedded) {
+    return `Repository context: semantic index used (${bundle.indexStats.filesIndexed} indexed files, ${bundle.indexStats.chunksEmbedded} embedded chunks).`;
+  }
+  if (bundle.indexed) {
+    return `Repository context: quick scan used; index is available (${bundle.indexStats.filesIndexed} indexed files, ${bundle.indexStats.chunksEmbedded}/${bundle.indexStats.chunksIndexed} embedded chunks).`;
+  }
+  return `Repository context: quick scan used; background indexing may improve future answers.`;
 }
 
 async function listQuickRepoFiles(repoPath: string, ignoredGlobs: string[]): Promise<string[]> {

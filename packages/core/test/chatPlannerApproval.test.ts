@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ChatPlanner } from "../src/chatPlanner.js";
+import { CHAT_CONTROL_JSON_MARKER, ChatPlanner } from "../src/chatPlanner.js";
 import type { ChatStreamEvent, LLMClient } from "../src/llm.js";
 import { ToolExecutor, type Tool } from "../src/tools/executor.js";
 
@@ -8,6 +8,16 @@ function fakeLlm(json: string): LLMClient {
     configured: true,
     async *chatStream(): AsyncGenerator<ChatStreamEvent> {
       yield { type: "delta", delta: json };
+      yield { type: "done", finishReason: "stop" };
+    },
+  } as unknown as LLMClient;
+}
+
+function fakeChunkedLlm(chunks: string[]): LLMClient {
+  return {
+    configured: true,
+    async *chatStream(): AsyncGenerator<ChatStreamEvent> {
+      for (const chunk of chunks) yield { type: "delta", delta: chunk };
       yield { type: "done", finishReason: "stop" };
     },
   } as unknown as LLMClient;
@@ -77,6 +87,103 @@ describe("ChatPlanner approval proposal parsing", () => {
 
     expect(result.approvalProposal?.tool).toBe("git_add");
     expect(result.approvalProposal?.description).toBe("Stage all changes");
+  });
+
+  it("streams only the response field, never structured planner JSON", async () => {
+    const executor = new ToolExecutor({ repoPath: ".", env: {}, timeoutSec: 1, extra: {} });
+    const plannerJson = JSON.stringify({
+      response: "I checked the project context.",
+      risk_level: "low",
+      actions_taken: [],
+      suggestions: [],
+    });
+    const planner = new ChatPlanner(fakeLlm(plannerJson), executor, { maxSteps: 1 });
+    const events = [];
+
+    for await (const event of planner.run("understand project", [], ".", async () => true)) {
+      events.push(event);
+    }
+
+    const deltas = events
+      .filter((event): event is Extract<typeof event, { type: "assistant_delta" }> => event.type === "assistant_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(deltas).toBe("I checked the project context.");
+    expect(deltas).not.toContain("\"response\"");
+    expect(deltas).not.toContain("risk_level");
+    const done = events.find((event) => event.type === "done");
+    expect(done?.type).toBe("done");
+    if (done?.type === "done") {
+      expect(done.result.response).toBe("I checked the project context.");
+      expect(done.result.streamedResponse).toBe("I checked the project context.");
+    }
+  });
+
+  it("streams response text incrementally across JSON chunks", async () => {
+    const executor = new ToolExecutor({ repoPath: ".", env: {}, timeoutSec: 1, extra: {} });
+    const chunks = [
+      "{\"response\":\"Hel",
+      "lo\\npro",
+      "ject\",\"risk_level\":\"low\",\"actions_taken\":[],\"suggestions\":[]}",
+    ];
+    const planner = new ChatPlanner(fakeChunkedLlm(chunks), executor, { maxSteps: 1 });
+    const deltas: string[] = [];
+
+    for await (const event of planner.run("understand project", [], ".", async () => true)) {
+      if (event.type === "assistant_delta") deltas.push(event.delta);
+    }
+
+    expect(deltas.join("")).toBe("Hello\nproject");
+    expect(deltas.length).toBeGreaterThan(1);
+  });
+
+  it("streams visible prose before the control JSON marker", async () => {
+    const executor = new ToolExecutor({ repoPath: ".", env: {}, timeoutSec: 1, extra: {} });
+    const chunks = [
+      "I checked ",
+      "the project.",
+      `\n${CHAT_CONTROL_JSON_MARKER}`,
+      "{\"response\":\"I checked the project.\",\"risk_level\":\"low\",\"actions_taken\":[\"repo_refresh_index\"],\"suggestions\":[]}",
+    ];
+    const planner = new ChatPlanner(fakeChunkedLlm(chunks), executor, { maxSteps: 1 });
+    const events = [];
+
+    for await (const event of planner.run("understand project", [], ".", async () => true)) {
+      events.push(event);
+    }
+
+    const deltas = events
+      .filter((event): event is Extract<typeof event, { type: "assistant_delta" }> => event.type === "assistant_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(deltas).toBe("I checked the project.\n");
+    expect(deltas).not.toContain(CHAT_CONTROL_JSON_MARKER);
+    expect(deltas).not.toContain("risk_level");
+
+    const done = events.find((event) => event.type === "done");
+    expect(done?.type).toBe("done");
+    if (done?.type === "done") {
+      expect(done.result.response).toBe("I checked the project.");
+      expect(done.result.actionsTaken).toEqual(["repo_refresh_index"]);
+    }
+  });
+
+  it("does not leak partial control marker chunks into visible prose", async () => {
+    const executor = new ToolExecutor({ repoPath: ".", env: {}, timeoutSec: 1, extra: {} });
+    const chunks = [
+      "Ready.",
+      "\n__CON",
+      "TROL_JSON__",
+      "{\"response\":\"Ready.\",\"risk_level\":\"low\",\"actions_taken\":[],\"suggestions\":[]}",
+    ];
+    const planner = new ChatPlanner(fakeChunkedLlm(chunks), executor, { maxSteps: 1 });
+    const deltas: string[] = [];
+
+    for await (const event of planner.run("continue", [], ".", async () => true)) {
+      if (event.type === "assistant_delta") deltas.push(event.delta);
+    }
+
+    expect(deltas.join("")).toBe("Ready.\n");
   });
 
   it("keeps legacy pending_action output as parser fallback", async () => {

@@ -3,8 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  getLocalPrInsightArtifact,
   listLocalPrInsightArtifacts,
   prInsightArtifactsStorePath,
+  summarizePrInsightArtifactHistory,
   upsertLocalPrInsightArtifact,
 } from "../src/prInsightArtifactsLocal.js";
 
@@ -153,5 +155,80 @@ describe("prInsightArtifactsLocal", () => {
 
     fs.writeFileSync(prInsightArtifactsStorePath(dataDir), "{not-json", "utf8");
     expect(listLocalPrInsightArtifacts({ dataDir })).toEqual([]);
+  });
+
+  it("summarizes artifact history by profile, repository, PR, and kind", () => {
+    const oldRun = upsertLocalPrInsightArtifact(dataDir, {
+      profileId: "profile-1",
+      repository: "demo-repo",
+      pullRequestId: 42,
+      title: "Preview",
+      kind: "insight_preview",
+      at: "2026-06-11T00:00:00.000Z",
+      summary: "Old summary.",
+      risks: [],
+      tokensIn: 10,
+      tokensOut: 5,
+    });
+    const newRun = upsertLocalPrInsightArtifact(dataDir, {
+      profileId: "profile-1",
+      repository: "demo-repo",
+      pullRequestId: 42,
+      title: "Preview",
+      kind: "insight_preview",
+      at: "2026-06-11T00:01:00.000Z",
+      summary: "New summary.",
+      risks: [],
+      tokensIn: 10,
+      tokensOut: 5,
+    });
+    const otherKind = upsertLocalPrInsightArtifact(dataDir, {
+      profileId: "profile-1",
+      repository: "demo-repo",
+      pullRequestId: 42,
+      title: "Full review",
+      kind: "review_run",
+      at: "2026-06-11T00:02:00.000Z",
+      summary: "Review summary.",
+      risks: [],
+      tokensIn: 10,
+      tokensOut: 5,
+    });
+
+    expect(summarizePrInsightArtifactHistory(listLocalPrInsightArtifacts({ dataDir }))).toEqual(expect.arrayContaining([
+      { artifactId: newRun.id, index: 0, total: 2, latest: true },
+      { artifactId: oldRun.id, index: 1, total: 2, latest: false },
+      { artifactId: otherKind.id, index: 0, total: 1, latest: true },
+    ]));
+  });
+
+  it("looks up a saved artifact by id with optional profile isolation", () => {
+    const saved = upsertLocalPrInsightArtifact(dataDir, {
+      profileId: "profile-1",
+      repository: "demo-repo",
+      pullRequestId: 42,
+      title: "Preview",
+      kind: "insight_preview",
+      at: "2026-06-11T00:00:00.000Z",
+      summary: "Lookup summary.",
+      risks: [],
+      tokensIn: 10,
+      tokensOut: 5,
+    });
+
+    expect(getLocalPrInsightArtifact({
+      dataDir,
+      profileId: "profile-1",
+      artifactId: saved.id,
+    })).toMatchObject({ id: saved.id, summary: "Lookup summary." });
+    expect(getLocalPrInsightArtifact({
+      dataDir,
+      profileId: "profile-2",
+      artifactId: saved.id,
+    })).toBeNull();
+    expect(getLocalPrInsightArtifact({
+      dataDir,
+      artifactId: "missing",
+    })).toBeNull();
   });
 });

@@ -429,6 +429,7 @@ export default function PullRequests(): JSX.Element {
       repoPath: selectedProfile?.repoPath || ".",
       profileId,
       kind: artifact.kind,
+      artifactId: artifact.id,
     });
     sessionStorage.setItem(CHAT_HANDOFF_KEY, JSON.stringify(draft));
     navigate("/chat");
@@ -865,12 +866,17 @@ export default function PullRequests(): JSX.Element {
                     {previousStoredInsights.length > 0 && (
                       <div className="space-y-1.5 border-t border-zinc-800/70 pt-2">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">Previous saved runs</p>
-                        {previousStoredInsights.map((artifact) => (
+                        {previousStoredInsights.map((artifact, index) => (
                           <div key={artifact.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-zinc-800/70 px-2 py-1.5">
                             <div className="min-w-0">
-                              <p className="truncate text-[11px] text-zinc-500">
-                                {artifact.kind === "review_run" ? "full review" : "preview"} · {formatDate(artifact.at)}
-                              </p>
+                              <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
+                                <span className="truncate text-[11px] text-zinc-500">
+                                  {artifact.kind === "review_run" ? "full review" : "preview"} · {formatDate(artifact.at)}
+                                </span>
+                                <span className="rounded border border-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600">
+                                  older {index + 2}/{storedInsightHistory.length}
+                                </span>
+                              </div>
                               <p className="max-w-xl truncate text-[11px] text-zinc-600" title={artifact.summary}>
                                 {artifact.summary || "No summary stored."}
                               </p>

@@ -1,4 +1,4 @@
-import { AzureOpenAI } from "openai";
+import OpenAI, { AzureOpenAI } from "openai";
 import type {
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionMessageParam,
@@ -83,7 +83,7 @@ export interface UsageTotals {
 }
 
 export class LLMClient {
-  private client: AzureOpenAI | null = null;
+  private client: AzureOpenAI | OpenAI | null = null;
   public readonly usage: UsageTotals = {
     promptTokens: 0,
     completionTokens: 0,
@@ -96,20 +96,34 @@ export class LLMClient {
     return this.settings.llmConfigured;
   }
 
-  private get(): AzureOpenAI {
+  private get(): AzureOpenAI | OpenAI {
     if (this.client) return this.client;
     if (!this.configured) {
       throw new LLMUnavailableError(
-        "Azure OpenAI is not configured (AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY required).",
+        "The selected model provider is not reachable.",
       );
     }
-    this.client = new AzureOpenAI({
-      endpoint: this.settings.azureOpenAiEndpoint,
-      apiKey: this.settings.azureOpenAiApiKey,
-      apiVersion: this.settings.azureOpenAiApiVersion,
-      deployment: this.settings.azureOpenAiChatDeployment,
-    });
+    this.client = this.settings.llmProvider === "openai"
+      ? new OpenAI({ apiKey: this.settings.openAiApiKey })
+      : new AzureOpenAI({
+          endpoint: this.settings.azureOpenAiEndpoint,
+          apiKey: this.settings.azureOpenAiApiKey,
+          apiVersion: this.settings.azureOpenAiApiVersion,
+          deployment: this.settings.azureOpenAiChatDeployment,
+        });
     return this.client;
+  }
+
+  private chatModel(): string {
+    return this.settings.llmProvider === "openai"
+      ? this.settings.openAiModel
+      : this.settings.azureOpenAiChatDeployment;
+  }
+
+  private embeddingModel(): string {
+    return this.settings.llmProvider === "openai"
+      ? this.settings.openAiEmbeddingModel
+      : this.settings.azureOpenAiEmbeddingDeployment;
   }
 
   async chat(opts: {
@@ -121,7 +135,7 @@ export class LLMClient {
   }): Promise<ChatResult> {
     const retries = opts.retries ?? 3;
     const params: ChatCompletionCreateParamsNonStreaming = {
-      model: this.settings.azureOpenAiChatDeployment,
+      model: this.chatModel(),
       messages: opts.messages,
       temperature: opts.temperature ?? 0.2,
       max_tokens: opts.maxTokens ?? 1024,
@@ -172,7 +186,7 @@ export class LLMClient {
     maxTokens?: number;
   }): AsyncGenerator<ChatStreamEvent, void, unknown> {
     const stream = await this.get().chat.completions.create({
-      model: this.settings.azureOpenAiChatDeployment,
+      model: this.chatModel(),
       messages: opts.messages,
       temperature: opts.temperature ?? 0.2,
       max_tokens: opts.maxTokens ?? 1024,
@@ -219,7 +233,7 @@ export class LLMClient {
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
         const resp = await this.get().embeddings.create({
-          model: this.settings.azureOpenAiEmbeddingDeployment,
+          model: this.embeddingModel(),
           input: inputs,
         });
         if (resp.usage) {

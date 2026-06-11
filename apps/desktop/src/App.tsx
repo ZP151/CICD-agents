@@ -219,9 +219,6 @@ function useDaemonReady(): DaemonInfo {
 
 function DaemonGate({ children }: { children: (info: DaemonInfo) => React.ReactNode }) {
   const info = useDaemonReady();
-  const [setupDismissed, setSetupDismissed] = useState(
-    () => localStorage.getItem("setup_banner_dismissed") === "1"
-  );
 
   if (info.state === "starting") {
     return (
@@ -249,41 +246,10 @@ function DaemonGate({ children }: { children: (info: DaemonInfo) => React.ReactN
     );
   }
 
-  // Show first-run setup banner when the daemon is reachable but LLM is not configured
-  const showSetup = info.state === "ready" && !info.llmConfigured && !setupDismissed;
-
   return (
     <>
-      {showSetup && (
-        <SetupBanner onDismiss={() => {
-          setSetupDismissed(true);
-          localStorage.setItem("setup_banner_dismissed", "1");
-        }} />
-      )}
       {children(info)}
     </>
-  );
-}
-
-function SetupBanner({ onDismiss }: { onDismiss: () => void }) {
-  return (
-    <div className="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-3 bg-amber-900/90 px-4 py-2.5 text-sm text-amber-100 backdrop-blur-sm border-b border-amber-700/60">
-      <div className="flex items-center gap-2">
-        <svg className="h-4 w-4 shrink-0 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-        </svg>
-        <span>
-          <strong>LLM not configured.</strong>{" "}
-          Open <strong>Settings</strong>, enter your Azure OpenAI or OpenAI credentials, then click <strong>Apply to Daemon</strong>.
-        </span>
-      </div>
-      <button
-        onClick={onDismiss}
-        className="shrink-0 rounded px-2 py-0.5 text-xs text-amber-300 hover:bg-amber-800/50 transition"
-      >
-        Dismiss
-      </button>
-    </div>
   );
 }
 

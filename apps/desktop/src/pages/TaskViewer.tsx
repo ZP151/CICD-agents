@@ -15,7 +15,7 @@ import {
   fetchChatCheckpointActivity,
   fetchChatCheckpointPreview,
   fetchChatCheckpointRollbackPlan,
-  fetchProfilePrInsightArtifacts,
+  fetchProfilePrInsightArtifactsWithHistory,
   fetchProfileReviewOperations,
   fetchTask,
   fetchTasks,
@@ -23,6 +23,7 @@ import {
   type ChatCheckpointActivity,
   type ChatCheckpointPreview,
   type ChatCheckpointRollbackPlan,
+  type PrInsightArtifactHistoryMeta,
   type PrInsightArtifactRecord,
   type TaskView,
 } from "../api.js";
@@ -153,6 +154,7 @@ export default function TaskViewer(): JSX.Element {
   const [selected, setSelected] = useState<TaskView | null>(null);
   const [reviewActivity, setReviewActivity] = useState<ReviewActivityItem[]>([]);
   const [prInsightActivity, setPrInsightActivity] = useState<PrInsightActivityItem[]>([]);
+  const [prInsightHistory, setPrInsightHistory] = useState<PrInsightArtifactHistoryMeta[]>([]);
   const [checkpointActivity, setCheckpointActivity] = useState<ChatCheckpointActivity[]>([]);
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [selectedPrInsightId, setSelectedPrInsightId] = useState<string | null>(null);
@@ -169,6 +171,7 @@ export default function TaskViewer(): JSX.Element {
   const [checkpointLoading, setCheckpointLoading] = useState(false);
   const [checkpointPreviewLoading, setCheckpointPreviewLoading] = useState(false);
   const [checkpointRollbackLoading, setCheckpointRollbackLoading] = useState(false);
+  const [copiedPrInsightId, setCopiedPrInsightId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -211,17 +214,21 @@ export default function TaskViewer(): JSX.Element {
     setPrInsightLoading(true);
     try {
       const nested = await Promise.all(profiles.map(async (profile) => {
-        const items = await fetchProfilePrInsightArtifacts(profile.id);
-        return items.map((item) => ({
-          ...item,
-          profileName: profile.name,
-          repoPath: profile.repoPath || ".",
-        }));
+        const result = await fetchProfilePrInsightArtifactsWithHistory(profile.id);
+        return {
+          items: result.items.map((item) => ({
+            ...item,
+            profileName: profile.name,
+            repoPath: profile.repoPath || ".",
+          })),
+          history: result.history,
+        };
       }));
       const next = nested
-        .flat()
+        .flatMap((entry) => entry.items)
         .sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"))
         .slice(0, 50);
+      setPrInsightHistory(nested.flatMap((entry) => entry.history));
       setPrInsightActivity(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -344,6 +351,33 @@ export default function TaskViewer(): JSX.Element {
     () => prInsightActivity.find((event) => event.id === selectedPrInsightId) ?? null,
     [prInsightActivity, selectedPrInsightId],
   );
+
+  const prInsightHistoryMeta = useMemo(() => {
+    if (prInsightHistory.length > 0) {
+      const fromBackend = new Map<string, { index: number; total: number; latest: boolean }>();
+      for (const item of prInsightHistory) {
+        fromBackend.set(item.artifactId, {
+          index: item.index,
+          total: item.total,
+          latest: item.latest,
+        });
+      }
+      return fromBackend;
+    }
+    const groups = new Map<string, PrInsightActivityItem[]>();
+    for (const event of prInsightActivity) {
+      const key = `${event.profileId}/${event.repository}/${event.pullRequestId}/${event.kind}`;
+      groups.set(key, [...(groups.get(key) ?? []), event]);
+    }
+    const meta = new Map<string, { index: number; total: number; latest: boolean }>();
+    for (const events of groups.values()) {
+      const sorted = [...events].sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"));
+      sorted.forEach((event, index) => {
+        meta.set(event.id, { index, total: sorted.length, latest: index === 0 });
+      });
+    }
+    return meta;
+  }, [prInsightActivity, prInsightHistory]);
 
   const selectedPrInsightComparison = useMemo(() => {
     if (!selectedPrInsight) return null;
@@ -499,6 +533,7 @@ export default function TaskViewer(): JSX.Element {
       repoPath: item.repoPath || ".",
       profileId: item.profileId,
       kind: item.kind,
+      artifactId: item.id,
     })));
     navigate("/chat");
   }
@@ -511,6 +546,15 @@ export default function TaskViewer(): JSX.Element {
       artifactId: item.id,
     })));
     navigate("/pulls");
+  }
+
+  function copyPrInsightArtifactId(item: PrInsightActivityItem): void {
+    const write = navigator.clipboard?.writeText(item.id);
+    if (!write) return;
+    void write.then(() => {
+      setCopiedPrInsightId(item.id);
+      window.setTimeout(() => setCopiedPrInsightId((current) => current === item.id ? null : current), 2000);
+    });
   }
 
   return (
@@ -640,6 +684,7 @@ export default function TaskViewer(): JSX.Element {
             )}
             {filteredPrInsightActivity.slice(0, 10).map((event) => {
               const selectedEvent = event.id === selectedPrInsightId;
+              const historyMeta = prInsightHistoryMeta.get(event.id);
               return (
                 <button
                   key={event.id}
@@ -654,6 +699,16 @@ export default function TaskViewer(): JSX.Element {
                     <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-300 ring-1 ring-blue-500/20">
                       {event.kind === "review_run" ? "full review" : "preview"}
                     </span>
+                    {historyMeta && historyMeta.total > 1 && (
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] ring-1 ${
+                        historyMeta.latest
+                          ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/20"
+                          : "bg-zinc-800/70 text-zinc-500 ring-zinc-700"
+                      }`}
+                      >
+                        {historyMeta.latest ? `latest of ${historyMeta.total}` : `older ${historyMeta.index + 1}/${historyMeta.total}`}
+                      </span>
+                    )}
                     <span className="truncate text-xs text-zinc-600">{formatTime(Date.parse(event.at || "0") / 1000)}</span>
                   </div>
                   <p className="truncate text-sm font-medium text-zinc-200">#{event.pullRequestId} · {event.title || "(untitled)"}</p>
@@ -1015,6 +1070,37 @@ export default function TaskViewer(): JSX.Element {
                 </div>
               </div>
             </header>
+
+            <section className="rounded-lg border border-blue-950/60 bg-blue-950/10 p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-blue-400/70">Provenance</h3>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => copyPrInsightArtifactId(selectedPrInsight)}
+                    className="rounded-md border border-blue-900/60 px-2 py-1 text-xs text-blue-300/80 transition hover:border-blue-700 hover:text-blue-200"
+                  >
+                    {copiedPrInsightId === selectedPrInsight.id ? "Copied" : "Copy artifact id"}
+                  </button>
+                  <button
+                    onClick={() => openPrInsightInPullRequests(selectedPrInsight)}
+                    className="rounded-md border border-zinc-800 px-2 py-1 text-xs text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-200"
+                  >
+                    Pull Requests
+                  </button>
+                  <button
+                    onClick={() => openPrInsightInChat(selectedPrInsight)}
+                    className="rounded-md border border-zinc-800 px-2 py-1 text-xs text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-200"
+                  >
+                    Chat
+                  </button>
+                </div>
+              </div>
+              <div className="grid gap-2 text-xs sm:grid-cols-2">
+                <p className="break-words font-mono text-zinc-500 sm:col-span-2">{selectedPrInsight.id}</p>
+                <p className="text-zinc-600">Saved at: <span className="text-zinc-400">{selectedPrInsight.at}</span></p>
+                <p className="text-zinc-600">Source: <span className="text-zinc-400">PR #{selectedPrInsight.pullRequestId} · {selectedPrInsight.kind}</span></p>
+              </div>
+            </section>
 
             <section className="grid gap-3 text-sm sm:grid-cols-2">
               <div className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">

@@ -54,6 +54,7 @@ describe("checkpoint rollback chat handoff", () => {
       repoPath: "C:\\work\\repo",
       profileId: "profile-1",
       kind: "review_run",
+      artifactId: "artifact-42",
     });
 
     expect(draft).toMatchObject({
@@ -66,6 +67,7 @@ describe("checkpoint rollback chat handoff", () => {
     expect(draft.message).toContain("Repository: demo-repo");
     expect(draft.message).toContain("Title: Improve pipeline checks");
     expect(draft.message).toContain("Saved insight type: full review");
+    expect(draft.message).toContain("Saved insight artifact: artifact-42");
   });
 
   it("builds an Activity handoff draft for a saved PR insight artifact", () => {
