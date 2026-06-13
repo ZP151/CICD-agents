@@ -71,7 +71,7 @@ export class ChatUiChunkAdapter {
 
       case "tool_start": {
         yield* this.closeText();
-        const toolCallId = nextToolCallId(event.name, event.args);
+        const toolCallId = event.toolCallId ?? nextToolCallId(event.name, event.args);
         this.toolCallIds.set(event.name, toolCallId);
         yield { type: "tool-input-start", toolCallId, toolName: event.name };
         yield { type: "tool-input-available", toolCallId, toolName: event.name, input: event.args };
@@ -80,7 +80,7 @@ export class ChatUiChunkAdapter {
 
       case "tool_end": {
         yield* this.closeText();
-        const toolCallId = this.toolCallIds.get(event.name) ?? nextToolCallId(event.name, {});
+        const toolCallId = event.toolCallId ?? this.toolCallIds.get(event.name) ?? nextToolCallId(event.name, {});
         this.toolCallIds.delete(event.name);
         if (event.ok) {
           yield {
@@ -104,7 +104,7 @@ export class ChatUiChunkAdapter {
 
       case "tool_output_delta": {
         yield* this.closeText();
-        const toolCallId = this.toolCallIds.get(event.name) ?? nextToolCallId(event.name, {});
+        const toolCallId = event.toolCallId ?? this.toolCallIds.get(event.name) ?? nextToolCallId(event.name, {});
         yield {
           type: "tool-output-delta",
           toolCallId,

@@ -4,7 +4,15 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { LLMClient, resetSettingsForTests } from "../src/index.js";
-import { buildChatContext, chatContextToPrompt, describeChatContext, getChatIndexStatus, refreshChatIndex, shouldInspectGit } from "../src/chatContext.js";
+import {
+  buildChatContext,
+  chatContextSources,
+  chatContextToPrompt,
+  describeChatContext,
+  getChatIndexStatus,
+  refreshChatIndex,
+  shouldInspectGit,
+} from "../src/chatContext.js";
 
 function write(file: string, text: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -57,6 +65,15 @@ describe("chat context", () => {
     const prompt = chatContextToPrompt(bundle);
     expect(prompt).toContain("Change interpretation");
     expect(prompt).toContain("Diff excerpt for understanding the change");
+
+    const sources = chatContextSources(bundle);
+    expect(sources[0]).toMatchObject({
+      type: "source_document",
+      title: "src/ClaimsController.cs:1",
+      file: "src/ClaimsController.cs",
+      line: 1,
+    });
+    expect(sources[0]?.type === "source_document" ? sources[0].snippet : "").toContain("Retry");
   });
 
   it("builds repository context without embeddings", async () => {
@@ -91,6 +108,16 @@ describe("chat context", () => {
     expect(prompt).toContain("Build command: npm run build");
     expect(prompt).toContain("src/chatSession.ts");
     expect(describeChatContext(bundle)).toContain("quick scan used");
+
+    const sources = chatContextSources(bundle);
+    expect(sources.some((source) => source.type === "source_document" && source.file === "README.md")).toBe(true);
+    expect(sources.some((source) => source.type === "source_document" && source.file === "src/chatSession.ts")).toBe(true);
+    expect(sources.some((source) =>
+      source.type === "source_document" &&
+      source.file === "src/chatSession.ts" &&
+      source.title.includes("(source)") &&
+      source.snippet?.includes("Project structure signal"),
+    )).toBe(true);
   });
 
   it("reports when a repository index is available", async () => {

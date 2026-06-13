@@ -28,9 +28,9 @@ import {
   dotnetTools,
   createGitCheckpoint,
   gitTools,
-  gitIntentTool,
   npmTools,
   pytestTools,
+  validationTools,
   CosmosSessionStore,
   resetCosmosClient,
   isAzureAuthenticationRequiredError,
@@ -40,6 +40,7 @@ import {
 } from "@cicd-agent/core";
 import {
   buildChatContext,
+  chatContextSources,
   chatContextToPrompt,
   describeChatContext,
   refreshChatIndex,
@@ -118,6 +119,8 @@ interface StoredBubble {
   finalizationMode?: ChatPlannerResult["finalizationMode"];
   actionsTaken?: string[];
   suggestions?: string[];
+  sources?: ChatPlannerResult["sources"];
+  artifacts?: ChatPlannerResult["artifacts"];
   repoPath?: string;
 }
 
@@ -164,8 +167,8 @@ function chatTools(): Tool[] {
     ...dotnetTools(),
     ...npmTools(),
     ...pytestTools(),
+    ...validationTools(),
     ...azureDevOpsTools(),
-    gitIntentTool(),
   ];
 }
 
@@ -202,6 +205,7 @@ function chatContextTools(llm: LLMClient): Tool[] {
         const repositoryContextPrompt = followUpContext
           ? chatContextToPrompt(followUpContext, 10_000)
           : "";
+        const contextSources = followUpContext ? chatContextSources(followUpContext) : [];
         return {
           ok: true,
           repoPath: ctx.repoPath,
@@ -217,8 +221,9 @@ function chatContextTools(llm: LLMClient): Tool[] {
           totalChunksEmbedded: followUpContext?.indexStats.chunksEmbedded ?? 0,
           contextSummary: followUpContext ? describeChatContext(followUpContext) : "",
           repositoryContextPrompt,
+          contextSources,
           instruction:
-            "Use repositoryContextPrompt to answer the user's original request now. filesIndexedThisRun is only the incremental update count, not the total indexed repository size. Do not stop after refreshing the index, and do not ask the user to provide a high-level overview when repository context is available.",
+            "Use repositoryContextPrompt to answer the user's original request now. Copy relevant entries from contextSources into final sources. filesIndexedThisRun is only the incremental update count, not the total indexed repository size. Do not stop after refreshing the index, and do not ask the user to provide a high-level overview when repository context is available.",
           summary:
             `Repository index refresh complete. Current index: ${followUpContext?.indexStats.filesIndexed ?? 0} files, ` +
             `${followUpContext?.indexStats.chunksIndexed ?? 0} chunks, ` +
@@ -241,6 +246,7 @@ interface ChatToolExecutors {
 interface BuiltContextPrompt {
   prompt?: string;
   notes: string[];
+  sources?: ChatPlannerResult["sources"];
 }
 
 export async function createChatToolExecutors(ctx: ToolContext, llm = new LLMClient()): Promise<ChatToolExecutors> {
@@ -579,6 +585,42 @@ export class ChatSessionManager {
     return session?.workflowState;
   }
 
+  async createApprovalProposal(args: {
+    sessionId?: string;
+    repoPath: string;
+    profileId?: string;
+    inlineProfile?: InlineProfile;
+    llmConfig?: InlineLlmConfig;
+    proposal: PendingToolAction;
+    currentStep: string;
+    riskLevel?: string;
+    explanation?: string;
+    completedTools?: string[];
+  }): Promise<{ sessionId: string; workflowState: ChatWorkflowState }> {
+    const sessionId = args.sessionId ?? this.createSession(args.repoPath, args.profileId);
+    const session = await loadSession(sessionId);
+    if (!session) throw new Error(`Chat session not found: ${sessionId}`);
+    session.repoPath = args.repoPath || session.repoPath;
+    if (args.profileId) session.profileId = args.profileId;
+    if (args.inlineProfile) session.inlineProfile = args.inlineProfile;
+    if (args.llmConfig) session.llmConfig = args.llmConfig;
+    setStoredApprovalProposal(session, args.proposal);
+    const workflowState = buildWorkflowState(
+      session.bubbles,
+      args.proposal,
+      "waiting_for_approval",
+      args.currentStep,
+      args.riskLevel ?? "medium",
+      args.explanation ?? args.proposal.description,
+    );
+    if (args.completedTools) {
+      workflowState.completedTools = Array.from(new Set([...workflowState.completedTools, ...args.completedTools]));
+    }
+    session.workflowState = workflowState;
+    await saveSession(session);
+    return { sessionId, workflowState };
+  }
+
   private async appendMessage(sessionId: string, role: "user" | "assistant", content: string): Promise<void> {
     const session = await loadSession(sessionId);
     if (!session) return;
@@ -816,7 +858,8 @@ export class ChatSessionManager {
             yield { type: "approval_resolved", approvalId: approvalIdFor(pending), approved: true };
             yield { type: "workflow_state", state: buildWorkflowState([], undefined, "running", pending.tool) };
             // ── Execute the tool directly — no LLM round trip ───────────────
-            yield { type: "tool_start", name: pending.tool, args: pending.args };
+            const toolCallId = approvalIdFor(pending);
+            yield { type: "tool_start", name: pending.tool, args: pending.args, toolCallId };
             let toolResult: unknown;
             let ok = true;
             try {
@@ -827,6 +870,7 @@ export class ChatSessionManager {
                     name: pending.tool,
                     stream: streamEvent.stream,
                     delta: streamEvent.text,
+                    toolCallId,
                   };
                 } else {
                   toolResult = streamEvent.result;
@@ -838,7 +882,7 @@ export class ChatSessionManager {
             }
             const summary = truncateStr(JSON.stringify(toolResult), 300);
             const checkpointMetadata = checkpointMetadataFromToolResult(toolResult);
-            yield { type: "tool_end", name: pending.tool, ok, summary, result: toolResult };
+            yield { type: "tool_end", name: pending.tool, ok, summary, result: toolResult, toolCallId };
 
             // Persist tool bubble
             await this.appendBubble(sessionId, {
@@ -872,7 +916,7 @@ export class ChatSessionManager {
             yield { type: "progress", message: "Planning next step" };
 
             yield* this._runPlannerAndPersist(
-              sessionId, continuationMsg, history22, session.repoPath, planner, waitForConfirm, context.prompt, context.notes,
+              sessionId, continuationMsg, history22, session.repoPath, planner, waitForConfirm, context.prompt, context.notes, context.sources,
             );
             return;
           }
@@ -885,7 +929,7 @@ export class ChatSessionManager {
       const context = await this.buildContextPrompt(session.repoPath, message, llm, inlineProfile, profileId);
       yield { type: "progress", message: "Planning response" };
       yield* this._runPlannerAndPersist(
-        sessionId, message, history, session.repoPath, planner, waitForConfirm, context.prompt, context.notes,
+        sessionId, message, history, session.repoPath, planner, waitForConfirm, context.prompt, context.notes, context.sources,
       );
     } finally {
       await toolRuntime.close();
@@ -957,7 +1001,8 @@ export class ChatSessionManager {
       const planner = new ChatPlanner(llm, plannerExecutor);
 
       // ── Execute the confirmed tool ─────────────────────────────────────────
-      yield { type: "tool_start", name: pending.tool, args: pending.args };
+      const toolCallId = approvalIdFor(pending);
+      yield { type: "tool_start", name: pending.tool, args: pending.args, toolCallId };
       let toolResult: unknown;
       let ok = true;
       try {
@@ -968,6 +1013,7 @@ export class ChatSessionManager {
               name: pending.tool,
               stream: streamEvent.stream,
               delta: streamEvent.text,
+              toolCallId,
             };
           } else {
             toolResult = streamEvent.result;
@@ -979,7 +1025,7 @@ export class ChatSessionManager {
       }
       const summary = truncateStr(JSON.stringify(toolResult), 300);
       const checkpointMetadata = checkpointMetadataFromToolResult(toolResult);
-      yield { type: "tool_end", name: pending.tool, ok, summary, result: toolResult };
+      yield { type: "tool_end", name: pending.tool, ok, summary, result: toolResult, toolCallId };
 
       // Persist tool bubble
       await this.appendBubble(sessionId, {
@@ -1000,6 +1046,60 @@ export class ChatSessionManager {
         "assistant",
         `[confirmed & executed] ${pending.tool}(${JSON.stringify(pending.args)}): ${summary}`,
       );
+
+      const structuredNext = ok ? await nextStructuredApprovalAfterConfirmedAction(pending, session.repoPath) : undefined;
+      if (structuredNext) {
+        const sessionForNext = await loadSession(sessionId);
+        if (sessionForNext) {
+          setStoredApprovalProposal(sessionForNext, structuredNext.proposal);
+          const workflowState = buildWorkflowState(
+            sessionForNext.bubbles,
+            structuredNext.proposal,
+            "waiting_for_approval",
+            structuredNext.currentStep,
+            structuredNext.riskLevel,
+            structuredNext.explanation,
+          );
+          sessionForNext.workflowState = workflowState;
+          await saveSession(sessionForNext);
+          yield { type: "workflow_state", state: workflowState };
+          if (workflowState.pendingApproval) {
+            yield { type: "approval_required", approval: workflowState.pendingApproval };
+          }
+          return;
+        }
+      }
+
+      const structuredDone = ok ? structuredDoneAfterConfirmedAction(pending, toolResult) : undefined;
+      if (structuredDone) {
+        const sessionForDone = await loadSession(sessionId);
+        if (sessionForDone) {
+          setStoredApprovalProposal(sessionForDone, undefined);
+          const workflowState = buildWorkflowState(
+            sessionForDone.bubbles,
+            undefined,
+            "done",
+            structuredDone.currentStep,
+          );
+          workflowState.workflowKind = structuredDone.workflowKind;
+          workflowState.workflowPhase = structuredDone.workflowPhase;
+          sessionForDone.workflowState = workflowState;
+          await saveSession(sessionForDone);
+          await this.appendBubble(sessionId, {
+            role: "assistant",
+            content: structuredDone.result.response,
+            timestamp: now(),
+            riskLevel: structuredDone.result.riskLevel,
+            finalizationMode: structuredDone.result.finalizationMode,
+          actionsTaken: structuredDone.result.actionsTaken,
+          suggestions: structuredDone.result.suggestions,
+          artifacts: structuredDone.result.artifacts,
+        });
+          yield { type: "workflow_state", state: workflowState };
+          yield { type: "done", result: structuredDone.result };
+          return;
+        }
+      }
 
       // ── Ask LLM for the NEXT step only — no re-running of read tools ───────
       const nextHint = pending.nextHint ?? "continue workflow";
@@ -1025,7 +1125,7 @@ export class ChatSessionManager {
       yield { type: "progress", message: "Planning next step" };
 
       yield* this._runPlannerAndPersist(
-        sessionId, continuationMsg, history, session.repoPath, planner, () => Promise.resolve(true), context.prompt, context.notes,
+        sessionId, continuationMsg, history, session.repoPath, planner, () => Promise.resolve(true), context.prompt, context.notes, context.sources,
       );
     } finally {
       await toolRuntime?.close();
@@ -1043,6 +1143,7 @@ export class ChatSessionManager {
     waitForConfirm: () => Promise<boolean>,
     contextPrompt?: string,
     contextNotes: string[] = [],
+    contextSources: ChatPlannerResult["sources"] = [],
   ): AsyncGenerator<ChatEvent> {
     let assistantReply = "";
     const pendingToolArgs = new Map<string, Record<string, unknown>>();
@@ -1074,6 +1175,7 @@ export class ChatSessionManager {
         const enrichedWithContext: ChatPlannerResult = {
           ...enrichedResult,
           suggestions,
+          sources: mergePlannerSources(enrichedResult.sources, contextSources),
         };
         const userFacingResult: ChatPlannerResult = {
           ...enrichedWithContext,
@@ -1090,6 +1192,8 @@ export class ChatSessionManager {
           finalizationMode: enrichedWithContext.finalizationMode,
           actionsTaken: enrichedWithContext.actionsTaken,
           suggestions: enrichedWithContext.suggestions,
+          sources: enrichedWithContext.sources,
+          artifacts: enrichedWithContext.artifacts,
         });
         // Store the enriched approval proposal
         const storedForPending = await loadSession(sessionId);
@@ -1144,6 +1248,7 @@ export class ChatSessionManager {
       const bundle = await buildChatContext({ repoPath, message, llm, profile });
       this.refreshContextIndexInBackground(repoPath, llm, profile);
       notes.push(describeChatContext(bundle));
+      const sources = chatContextSources(bundle);
       let prompt = chatContextToPrompt(bundle) ?? "";
 
       // Always inject the current git branch so the agent knows the source
@@ -1182,7 +1287,7 @@ export class ChatSessionManager {
         notes.push(...insightContext.notes);
       }
 
-      return { prompt: prompt || undefined, notes };
+      return { prompt: prompt || undefined, notes, sources };
     } catch {
       return { notes: [] };
     }
@@ -1364,6 +1469,7 @@ function buildWorkflowState(
     status,
     currentStep,
     completedTools,
+    ...workflowStateMetadata(approvalProposal, status),
     pendingApproval: approvalProposal
       ? {
           id: approvalIdFor(approvalProposal),
@@ -1375,8 +1481,524 @@ function buildWorkflowState(
   };
 }
 
+function mergePlannerSources(
+  primary: ChatPlannerResult["sources"] = [],
+  secondary: ChatPlannerResult["sources"] = [],
+  maxSources = 10,
+): ChatPlannerResult["sources"] {
+  const out: NonNullable<ChatPlannerResult["sources"]> = [];
+  const seen = new Set<string>();
+  for (const source of [...primary, ...secondary]) {
+    const key = source.type === "source_url"
+      ? source.url
+      : `${source.file ?? source.title}:${source.line ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(source);
+    if (out.length >= maxSources) break;
+  }
+  return out.length ? out : undefined;
+}
+
+function workflowStateMetadata(
+  approvalProposal: PendingToolAction | undefined,
+  status: ChatWorkflowState["status"],
+): Pick<ChatWorkflowState, "workflowKind" | "workflowPhase"> {
+  if (approvalProposal?.workflow?.kind === "commit") {
+    return {
+      workflowKind: "commit",
+      workflowPhase: commitWorkflowPhaseForApproval(approvalProposal),
+    };
+  }
+  if (approvalProposal?.workflow?.kind === "pr") {
+    return {
+      workflowKind: "pr",
+      workflowPhase: approvalProposal.tool === "ado_create_pr" ? "waiting_for_create_pr_approval" : `waiting_for_${approvalProposal.workflow.phase}`,
+    };
+  }
+  if (approvalProposal?.workflow?.kind === "git") {
+    return {
+      workflowKind: "git",
+      workflowPhase: `waiting_for_${approvalProposal.workflow.phase}_approval`,
+    };
+  }
+  if (approvalProposal?.workflow?.kind === "ci") {
+    return {
+      workflowKind: "ci",
+      workflowPhase: `waiting_for_${approvalProposal.workflow.phase}_approval`,
+    };
+  }
+  if (status === "running" && approvalProposal?.tool.startsWith("git_")) {
+    return {
+      workflowKind: "git",
+      workflowPhase: `running_${approvalProposal.tool}`,
+    };
+  }
+  return {};
+}
+
+function commitWorkflowPhaseForApproval(action: PendingToolAction): string {
+  if (action.tool === "git_add" && action.workflow?.phase === "stage") return "waiting_for_stage_approval";
+  if (action.tool === "git_commit" && action.workflow?.phase === "commit") return "waiting_for_commit_approval";
+  if (action.tool === "git_push" && action.workflow?.phase === "push") return "waiting_for_push_approval";
+  return `waiting_for_${action.workflow?.phase ?? action.tool}`;
+}
+
 function hashShort(value: string): string {
   return crypto.createHash("sha1").update(value).digest("hex").slice(0, 10);
+}
+
+async function nextStructuredApprovalAfterConfirmedAction(action: PendingToolAction, repoPath: string): Promise<{
+  proposal: PendingToolAction;
+  currentStep: string;
+  riskLevel: string;
+  explanation: string;
+} | undefined> {
+  const workflow = action.workflow;
+  if (workflow?.kind !== "commit") return undefined;
+  const branch = workflow.branch?.trim();
+  const message = workflow.message?.trim() || await generateCommitMessageForRepo(repoPath);
+  if (action.tool === "git_add" && workflow.phase === "stage") {
+    const proposal: PendingToolAction = {
+      tool: "git_commit",
+      args: { message },
+      description: workflow.message?.trim()
+        ? `Commit staged changes with message: ${message}`
+        : `Commit staged changes with generated message: ${message}`,
+      nextHint: workflow.pushAfterCommit ? "push the branch" : "done",
+      workflow: {
+        kind: "commit",
+        phase: "commit",
+        branch,
+        message,
+        pushAfterCommit: workflow.pushAfterCommit,
+      },
+    };
+    return {
+      proposal,
+      currentStep: proposal.description,
+      riskLevel: "medium",
+      explanation: proposal.description,
+    };
+  }
+
+  if (action.tool === "git_commit" && workflow.phase === "commit" && workflow.pushAfterCommit && branch) {
+    const readiness = await pushReadinessForRepo(repoPath);
+    const readinessSummary = readiness?.summary ? ` ${readiness.summary}` : "";
+    const proposal: PendingToolAction = {
+      tool: "git_push",
+      args: { branch, setUpstream: true },
+      description: `Push branch ${branch} to origin.${readinessSummary}`,
+      nextHint: "report push result",
+      readiness,
+      workflow: {
+        kind: "commit",
+        phase: "push",
+        branch,
+        message: workflow.message,
+        pushAfterCommit: true,
+      },
+    };
+    return {
+      proposal,
+      currentStep: proposal.description,
+      riskLevel: "high",
+      explanation: proposal.description,
+    };
+  }
+
+  return undefined;
+}
+
+export function structuredDoneAfterConfirmedAction(action: PendingToolAction, toolResult: unknown): {
+  currentStep: string;
+  workflowKind: NonNullable<ChatWorkflowState["workflowKind"]>;
+  workflowPhase: string;
+  result: ChatPlannerResult;
+} | undefined {
+  if (action.workflow?.kind === "git" && isGitRecoveryTool(action.tool)) {
+    const gitAction = String(action.args["action"] ?? "").trim();
+    const operation = gitRecoveryOperationFromTool(action.tool);
+    if (operation && ["continue", "abort", "skip"].includes(gitAction)) {
+      const past = gitAction === "continue" ? "continued" : gitAction === "abort" ? "aborted" : "skipped";
+      const label = `${operation.label} ${past}`;
+      return {
+        currentStep: label,
+        workflowKind: "git",
+        workflowPhase: `${operation.phase}_${past}`,
+        result: {
+          response: `The in-progress ${operation.displayName} was ${past}. I stopped here so the next step can be based on the updated Git state.`,
+          finalizationMode: "none",
+          riskLevel: "low",
+          actionsTaken: [label],
+          suggestions: [
+            "Inspect changes",
+            "Check branch status",
+            "Continue project workflow",
+          ],
+          toolCallsMade: [{
+            name: action.tool,
+            args: action.args,
+            ok: true,
+          }],
+          usedLlm: false,
+        },
+      };
+    }
+  }
+
+  if (action.tool === "git_add" && action.workflow?.kind === "git" && action.workflow.phase === "stage_conflicts") {
+    const operation = gitRecoveryOperationFromPhase(String(action.workflow.message ?? ""));
+    const paths = Array.isArray(action.args["paths"]) ? action.args["paths"].map(String).filter(Boolean) : [];
+    const fileLabel = `${paths.length || "selected"} conflict file${paths.length === 1 ? "" : "s"}`;
+    const operationLabel = operation?.displayName ?? "Git operation";
+    return {
+      currentStep: `Staged ${fileLabel}`,
+      workflowKind: "git",
+      workflowPhase: `${operation?.phase ?? "git"}_conflicts_staged`,
+      result: {
+        response: `The ${fileLabel} were staged for the in-progress ${operationLabel}. I stopped here so you can continue, abort, or skip that operation explicitly.`,
+        finalizationMode: "none",
+        riskLevel: "low",
+        actionsTaken: [`Staged ${fileLabel}`],
+        suggestions: [
+          operation ? `Continue ${operation.displayName}` : "Continue Git operation",
+          "Inspect changes",
+          "Abort recovery",
+        ],
+        toolCallsMade: [{
+          name: action.tool,
+          args: action.args,
+          ok: true,
+        }],
+        usedLlm: false,
+      },
+    };
+  }
+
+  if (action.tool === "git_push" && action.workflow?.kind === "commit" && action.workflow.phase === "push") {
+    const branch = String(action.args["branch"] ?? action.workflow.branch ?? "").trim();
+    const response = [
+      branch ? `The committed changes have been pushed to ${branch}.` : "The committed changes have been pushed.",
+      "I stopped here because the requested scope was stage, commit, and push.",
+      "I will not create a pull request, link work items, or trigger a pipeline unless you ask for those steps.",
+    ].join(" ");
+    return {
+      currentStep: branch ? `Pushed branch ${branch}` : "Pushed branch",
+      workflowKind: "commit",
+      workflowPhase: "pushed",
+      result: {
+        response,
+        finalizationMode: "none",
+        riskLevel: "low",
+        actionsTaken: ["Pushed branch"],
+        suggestions: [
+          "Review pushed changes",
+          "Create pull request",
+          "Run pipeline",
+        ],
+        toolCallsMade: [{
+          name: action.tool,
+          args: action.args,
+          ok: true,
+        }],
+        usedLlm: false,
+      },
+    };
+  }
+
+  if (action.tool === "ado_link_work_item" && action.workflow?.kind === "pr") {
+    const result = typeof toolResult === "object" && toolResult !== null ? toolResult as Record<string, unknown> : {};
+    const prId = Number(result["pull_request_id"] ?? action.args["pull_request_id"] ?? 0);
+    const workItemId = Number(result["work_item_id"] ?? action.args["work_item_id"] ?? 0);
+    const ok = result["ok"] !== false;
+    const response = ok
+      ? `Work item ${workItemId || ""} is linked to pull request #${prId || ""}. Next: refresh linked work items, policy status, or PR insight.`
+      : `Azure DevOps did not confirm the work item link. Check the tool output and retry with a valid work item ID.`;
+    return {
+      currentStep: ok
+        ? `Work item ${workItemId || ""} linked to PR #${prId || ""}`.trim()
+        : "Work item link failed",
+      workflowKind: "pr",
+      workflowPhase: ok ? "work_item_linked" : "work_item_link_failed",
+      result: {
+        response,
+        finalizationMode: "none",
+        riskLevel: ok ? "low" : "medium",
+        actionsTaken: ["Linked work item"],
+        suggestions: [
+          "List linked work items",
+          "Check policy status",
+          "Inspect PR insight",
+        ],
+        toolCallsMade: [{
+          name: action.tool,
+          args: action.args,
+          ok,
+        }],
+        usedLlm: false,
+      },
+    };
+  }
+
+  if (action.tool === "validation_command" && action.workflow?.kind === "ci") {
+    const result = typeof toolResult === "object" && toolResult !== null ? toolResult as Record<string, unknown> : {};
+    const returncode = Number(result["returncode"] ?? 1);
+    const kind = action.workflow.phase === "build" ? "build" : "test";
+    const passed = returncode === 0;
+    const command = String(action.args["command"] ?? result["command"] ?? "").trim();
+    const failureExcerpt = String(result["failure_excerpt"] ?? "").trim();
+    const artifact = validationResultArtifact(kind, passed, command, result, action);
+    return {
+      currentStep: passed ? `${kind === "build" ? "Build" : "Tests"} passed` : `${kind === "build" ? "Build" : "Tests"} failed`,
+      workflowKind: "ci",
+      workflowPhase: passed ? `${kind}_passed` : `${kind}_failed`,
+      result: {
+        response: passed
+          ? `${kind === "build" ? "Build" : "Tests"} passed${command ? `: ${command}` : ""}.`
+          : [
+              `${kind === "build" ? "Build" : "Tests"} failed${command ? `: ${command}` : ""}.`,
+              failureExcerpt ? `Key output:\n${failureExcerpt}` : "Check the tool output, fix the failing area, then rerun validation.",
+            ].join("\n"),
+        finalizationMode: "none",
+        riskLevel: passed ? "low" : "medium",
+        actionsTaken: [passed ? `${kind} passed` : `${kind} failed`],
+        suggestions: passed
+          ? ["Review changes", "Prepare commit", "Create pull request"]
+          : ["Inspect failing output", "Review changed files", "Rerun validation"],
+        artifacts: artifact ? [artifact] : undefined,
+        toolCallsMade: [{
+          name: action.tool,
+          args: action.args,
+          ok: passed,
+        }],
+        usedLlm: false,
+      },
+    };
+  }
+
+  if (action.tool !== "ado_create_pr" || action.workflow?.kind !== "pr") return undefined;
+  const result = typeof toolResult === "object" && toolResult !== null ? toolResult as Record<string, unknown> : {};
+  const prId = Number(result["pull_request_id"] ?? 0);
+  const url = String(result["url"] ?? "");
+  const title = String(action.args["title"] ?? action.workflow.message ?? "Pull request");
+  const source = String(action.args["source_branch"] ?? action.workflow.branch ?? "");
+  const target = String(action.args["target_branch"] ?? "");
+  const prLabel = prId ? `#${prId}` : "created";
+  const response = [
+    `Pull request ${prLabel} is created: ${title}.`,
+    source && target ? `Source: ${source} -> ${target}.` : "",
+    url ? `URL: ${url}` : "",
+    "Next: inspect PR insight, policy status, builds, and linked work items.",
+  ].filter(Boolean).join(" ");
+  return {
+    currentStep: prId ? `Pull request #${prId} created` : "Pull request created",
+    workflowKind: "pr",
+    workflowPhase: "created",
+    result: {
+      response,
+      finalizationMode: "none",
+      riskLevel: "low",
+      actionsTaken: ["Created pull request"],
+      suggestions: [
+        "Inspect PR insight",
+        "Check policy status",
+        "Link related work items",
+      ],
+      toolCallsMade: [{
+        name: action.tool,
+        args: action.args,
+        ok: true,
+      }],
+      usedLlm: false,
+    },
+  };
+}
+
+function validationResultArtifact(
+  kind: "test" | "build",
+  passed: boolean,
+  command: string,
+  result: Record<string, unknown>,
+  action: PendingToolAction,
+): NonNullable<ChatPlannerResult["artifacts"]>[number] | undefined {
+  if (passed) return undefined;
+  const returncode = Number(result["returncode"] ?? 1);
+  const durationMs = Number(result["duration_ms"] ?? 0);
+  const summary = String(result["summary"] ?? "").trim();
+  const failureExcerpt = String(result["failure_excerpt"] ?? "").trim();
+  const stdout = String(result["stdout"] ?? "").trim();
+  const stderr = String(result["stderr"] ?? "").trim();
+  const preflight = action.preflight?.kind === "validation" ? action.preflight : undefined;
+  const content = [
+    `# ${kind === "build" ? "Build" : "Test"} Failure Report`,
+    "",
+    `- Command: \`${command || "(unknown)"}\``,
+    `- Exit code: ${Number.isFinite(returncode) ? returncode : 1}`,
+    durationMs > 0 ? `- Duration: ${durationMs} ms` : "",
+    preflight?.commandSource ? `- Command source: ${preflight.commandSource}` : "",
+    preflight?.selectedScript ? `- Script: \`${preflight.selectedScript}\`` : "",
+    preflight?.packageFilters?.length ? `- Package filters: ${preflight.packageFilters.map((item) => `\`${item}\``).join(", ")}` : "",
+    preflight?.packageRoots?.length ? `- Package roots: ${preflight.packageRoots.map((item) => `\`${item}\``).join(", ")}` : "",
+    preflight?.changedFileCount !== undefined ? `- Changed files considered: ${preflight.changedFileCount}` : "",
+    summary ? `- Summary: ${summary}` : "",
+    "",
+    "## Key Output",
+    "",
+    failureExcerpt ? fencedText(failureExcerpt) : "_No failure excerpt was captured._",
+    stdout ? ["", "## stdout", "", fencedText(truncateStr(stdout, 8000))].join("\n") : "",
+    stderr ? ["", "## stderr", "", fencedText(truncateStr(stderr, 8000))].join("\n") : "",
+  ].filter(Boolean).join("\n");
+  const hash = crypto
+    .createHash("sha1")
+    .update(`${kind}\0${command}\0${returncode}\0${failureExcerpt}`)
+    .digest("hex")
+    .slice(0, 12);
+  return {
+    type: "artifact",
+    artifactId: `validation-${kind}-failed-${hash}`,
+    title: `${kind === "build" ? "Build" : "Test"} failure report`,
+    artifactType: "markdown",
+    status: "error",
+    content,
+  };
+}
+
+function fencedText(text: string): string {
+  const fence = text.includes("```") ? "~~~~" : "```";
+  return `${fence}\n${text}\n${fence}`;
+}
+
+function isGitRecoveryTool(tool: string): boolean {
+  return ["git_rebase", "git_merge", "git_cherry_pick", "git_revert"].includes(tool);
+}
+
+function gitRecoveryOperationFromTool(tool: string): { phase: string; label: string; displayName: string } | null {
+  if (tool === "git_rebase") return { phase: "rebase", label: "Rebase", displayName: "rebase" };
+  if (tool === "git_merge") return { phase: "merge", label: "Merge", displayName: "merge" };
+  if (tool === "git_cherry_pick") return { phase: "cherry_pick", label: "Cherry-pick", displayName: "cherry-pick" };
+  if (tool === "git_revert") return { phase: "revert", label: "Revert", displayName: "revert" };
+  return null;
+}
+
+function gitRecoveryOperationFromPhase(phase: string): { phase: string; label: string; displayName: string } | null {
+  if (phase === "rebase") return { phase: "rebase", label: "Rebase", displayName: "rebase" };
+  if (phase === "merge") return { phase: "merge", label: "Merge", displayName: "merge" };
+  if (phase === "cherry_pick") return { phase: "cherry_pick", label: "Cherry-pick", displayName: "cherry-pick" };
+  if (phase === "revert") return { phase: "revert", label: "Revert", displayName: "revert" };
+  return null;
+}
+
+async function generateCommitMessageForRepo(repoPath: string): Promise<string> {
+  const diffProbe = await runCommand(["git", "diff", "--cached", "--name-status"], {
+    cwd: repoPath,
+    allowed: ["git"],
+    timeoutSec: 10,
+  });
+  if (diffProbe.returncode !== 0) return "chore: update project files";
+  const entries = parseNameStatus(diffProbe.stdout ?? "");
+  if (entries.length === 0) return "chore: update project files";
+
+  const types = entries.map((entry) => commitTypeForPath(entry.path));
+  const type = types.every((candidate) => candidate === types[0]) ? types[0] : "chore";
+  if (entries.length === 1) {
+    const entry = entries[0]!;
+    return `${type}: ${commitVerbForStatus(entry.status)} ${commitSubjectForPath(entry.path)}`;
+  }
+  return `${type}: update ${entries.length} files`;
+}
+
+function parseNameStatus(output: string): Array<{ status: string; path: string }> {
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split(/\t+/).filter(Boolean);
+      const status = (parts[0] ?? "M").slice(0, 1);
+      const path = parts.length >= 3 ? parts[2]! : parts[1] ?? "";
+      return { status, path };
+    })
+    .filter((entry) => entry.path);
+}
+
+function commitTypeForPath(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, "/").toLowerCase();
+  if (normalized.startsWith("docs/") || normalized.endsWith(".md") || normalized.endsWith(".mdx")) return "docs";
+  if (normalized.includes(".test.") || normalized.includes(".spec.") || normalized.startsWith("test/") || normalized.includes("/test/")) return "test";
+  if (normalized.startsWith(".github/workflows/") || normalized.includes("/workflows/")) return "ci";
+  if (normalized.endsWith("package.json") || normalized.endsWith("pnpm-lock.yaml") || normalized.endsWith("package-lock.json")) return "build";
+  return "chore";
+}
+
+function commitVerbForStatus(status: string): string {
+  if (status === "A") return "add";
+  if (status === "D") return "remove";
+  if (status === "R") return "rename";
+  return "update";
+}
+
+function commitSubjectForPath(filePath: string): string {
+  const base = path.basename(filePath).replace(/\.[^.]+$/, "");
+  return base
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase() || "project files";
+}
+
+async function pushReadinessForRepo(repoPath: string): Promise<PendingToolAction["readiness"]> {
+  const upstreamProbe = await runCommand(["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], {
+    cwd: repoPath,
+    allowed: ["git"],
+    timeoutSec: 10,
+  });
+  const upstream = upstreamProbe.returncode === 0 ? (upstreamProbe.stdout ?? "").trim() : "";
+  if (!upstream) {
+    return {
+      kind: "push",
+      status: "no_upstream",
+      summary: "No upstream branch is configured; this push will set upstream on origin.",
+    };
+  }
+
+  const divergenceProbe = await runCommand(["git", "rev-list", "--left-right", "--count", `${upstream}...HEAD`], {
+    cwd: repoPath,
+    allowed: ["git"],
+    timeoutSec: 10,
+  });
+  if (divergenceProbe.returncode !== 0) {
+    return {
+      kind: "push",
+      status: "unknown",
+      upstream,
+      summary: `Upstream is ${upstream}, but ahead/behind status could not be determined.`,
+    };
+  }
+  const [behindRaw, aheadRaw] = (divergenceProbe.stdout ?? "").trim().split(/\s+/);
+  const behind = Number.parseInt(behindRaw ?? "0", 10) || 0;
+  const ahead = Number.parseInt(aheadRaw ?? "0", 10) || 0;
+  const status =
+    behind > 0 && ahead > 0 ? "diverged"
+      : behind > 0 ? "behind"
+        : ahead > 0 ? "ahead"
+          : "up_to_date";
+  const summary =
+    status === "diverged"
+      ? `Branch has diverged from ${upstream}: ahead ${ahead}, behind ${behind}. Consider pull/rebase before pushing.`
+      : status === "behind"
+        ? `Branch is behind ${upstream} by ${behind} commit${behind === 1 ? "" : "s"}. Push may fail until you pull or rebase.`
+        : status === "ahead"
+          ? `Branch is ahead of ${upstream} by ${ahead} commit${ahead === 1 ? "" : "s"}.`
+          : `Branch is up to date with ${upstream}.`;
+  return {
+    kind: "push",
+    status,
+    upstream,
+    ahead,
+    behind,
+    summary,
+  };
 }
 
 // ── Write-action derivation ──────────────────────────────────────────────────
@@ -1458,7 +2080,11 @@ const ACTION_DERIVERS: Array<{
     description: "Rebase current branch",
     nextHint: "continue workflow",
     buildArgs: (response) => {
-      return { onto: extractGitRef(response) ?? "main", autostash: response.toLowerCase().includes("autostash") };
+      const lower = response.toLowerCase();
+      if (/rebase\b.{0,40}\bcontinue\b|\bcontinue\b.{0,40}\brebase\b/.test(lower)) return { action: "continue" };
+      if (/rebase\b.{0,40}\babort\b|\babort\b.{0,40}\brebase\b/.test(lower)) return { action: "abort" };
+      if (/rebase\b.{0,40}\bskip\b|\bskip\b.{0,40}\brebase\b/.test(lower)) return { action: "skip" };
+      return { onto: extractGitRef(response) ?? "main", autostash: lower.includes("autostash") };
     },
   },
   {
@@ -1518,7 +2144,7 @@ export function deriveWorkflowPendingAction(
   // If LLM correctly provided an approval proposal, trust it
   const providedProposal = approvalProposalFromResult(result);
   if (providedProposal?.tool) {
-    return isProposalWithinUserScope(providedProposal.tool, bubbles) ? result : {
+    return isProposalWithinUserScope(providedProposal.tool, bubbles, providedProposal.args) ? result : {
       ...result,
       approvalProposal: undefined,
     };
@@ -1534,12 +2160,16 @@ export function deriveWorkflowPendingAction(
   if (!isAskingConfirmation) return result;
 
   const explicitTool = inferWriteToolFromResponse(response);
-  if (explicitTool && isProposalWithinUserScope(explicitTool, bubbles)) {
-    return withDerivedAction(result, explicitTool, bubbles);
+  if (explicitTool) {
+    const candidate = buildPendingAction(explicitTool, result.response, bubbles);
+    if (isProposalWithinUserScope(candidate.tool, bubbles, candidate.args)) {
+      return {
+        ...result,
+        approvalProposal: candidate,
+      };
+    }
+    return result;
   }
-
-  const nextPrTool = inferNextPrWorkflowTool(response, bubbles);
-  if (nextPrTool) return withDerivedAction(result, nextPrTool, bubbles);
 
   return result;  // all steps done, no approval proposal needed
 }
@@ -1561,20 +2191,9 @@ export function inferPendingAction(messages: ChatMessage[]): PendingToolAction |
     t.includes("ready to") || t.includes("want me to");
   if (!isAskingConfirmation) return undefined;
 
-  const tool = inferWriteToolFromResponse(t) ?? inferNextPrWorkflowTool(t, []);
+  const tool = inferWriteToolFromResponse(t);
   if (tool && !isToolWithinChatMessageScope(tool, messages)) return undefined;
   return tool ? buildPendingAction(tool, lastAssistant.content, []) : undefined;
-}
-
-function withDerivedAction(
-  result: ChatPlannerResult,
-  tool: string,
-  bubbles: StoredBubble[],
-): ChatPlannerResult {
-  return {
-    ...result,
-    approvalProposal: buildPendingAction(tool, result.response, bubbles),
-  };
 }
 
 function buildPendingAction(
@@ -1609,35 +2228,60 @@ function inferWriteToolFromResponse(response: string): string | undefined {
   return undefined;
 }
 
-function inferNextPrWorkflowTool(response: string, bubbles: StoredBubble[]): string | undefined {
-  const prWorkflow = /\b(pr|pull request|commit|push|stage|staged|branch)\b/.test(response) ||
-    bubbles.some((b) => ["git_add", "git_commit", "git_push", "ado_create_pr"].includes(b.toolName ?? ""));
-  if (!prWorkflow) return undefined;
-
-  const executedTools = new Set(
-    bubbles.filter((b) => b.role === "tool" && b.toolOk === true).map((b) => b.toolName ?? ""),
-  );
-  if (!executedTools.has("git_add")) return "git_add";
-  if (!executedTools.has("git_commit")) return "git_commit";
-  if (!executedTools.has("git_push")) return "git_push";
-  if (userScopeAllowsAdoStep(bubbles, "pr") && !executedTools.has("ado_create_pr")) return "ado_create_pr";
-  return undefined;
-}
-
-function isProposalWithinUserScope(tool: string, bubbles: StoredBubble[]): boolean {
+function isProposalWithinUserScope(tool: string, bubbles: StoredBubble[], args: Record<string, unknown> = {}): boolean {
+  if (isGitWriteBlockedByConflict(tool, args, bubbles)) return false;
+  if (tool === "git_push") return userScopeAllowsGitStep(bubbles, "push");
+  if (tool === "git_pull") return userScopeAllowsGitStep(bubbles, "pull") || hasInScopeFailedPush(bubbles);
+  if (tool === "git_rebase") return userScopeAllowsGitStep(bubbles, "rebase") || hasInScopeFailedPush(bubbles);
   if (tool === "ado_create_pr") return userScopeAllowsAdoStep(bubbles, "pr");
   if (/work_item|workitem/.test(tool)) return userScopeAllowsAdoStep(bubbles, "work_item");
   if (tool === "ado_trigger_pipeline") return userScopeAllowsAdoStep(bubbles, "pipeline");
   return true;
 }
 
+function isGitWriteBlockedByConflict(tool: string, args: Record<string, unknown>, bubbles: StoredBubble[]): boolean {
+  if (!tool.startsWith("git_")) return false;
+  if (!hasUnresolvedGitOperationHistory(bubbles)) return false;
+  if (tool === "git_rebase" && ["continue", "abort", "skip"].includes(String(args["action"] ?? ""))) return false;
+  if (tool === "git_add") return Array.isArray(args["paths"]) ? args["paths"].length === 0 : true;
+  if (tool === "git_restore") return Array.isArray(args["paths"]) ? args["paths"].length === 0 : true;
+  return true;
+}
+
+function hasUnresolvedGitOperationHistory(bubbles: StoredBubble[]): boolean {
+  for (const bubble of [...bubbles].reverse()) {
+    if (bubble.toolName === "git_rebase" && bubble.toolOk && isRebaseResolutionAction(bubble.toolArgs)) return false;
+    if (bubble.toolName === "git_merge" && bubble.toolOk) return false;
+    if (isConflictToolBubble(bubble)) return true;
+  }
+  return false;
+}
+
+function isRebaseResolutionAction(args: Record<string, unknown> | undefined): boolean {
+  return ["continue", "abort", "skip"].includes(String(args?.["action"] ?? ""));
+}
+
+function isConflictToolBubble(bubble: StoredBubble): boolean {
+  if (!["git_rebase", "git_pull", "git_merge"].includes(String(bubble.toolName ?? ""))) return false;
+  if (bubble.toolOk !== false) return false;
+  const text = [
+    bubble.content,
+    bubble.toolSummary,
+    typeof bubble.toolResult === "string" ? bubble.toolResult : JSON.stringify(bubble.toolResult ?? {}),
+  ].join("\n").toLowerCase();
+  return /\bconflict\b|unmerged|rebase-merge|merge_head|resolve all conflicts/.test(text);
+}
+
 function isToolWithinChatMessageScope(tool: string, messages: ChatMessage[]): boolean {
-  if (!["ado_create_pr", "ado_trigger_pipeline"].includes(tool) && !/work_item|workitem/.test(tool)) return true;
   const userText = messages
     .filter((message) => message.role === "user")
     .map((message) => message.content)
     .join("\n")
     .toLowerCase();
+  if (tool === "git_push") return /\b(push|publish|remote|pr|pull request)\b/.test(userText);
+  if (tool === "git_pull") return /\b(pull|sync|latest|update|behind|rebase|push|publish|remote)\b/.test(userText);
+  if (tool === "git_rebase") return /\b(rebase|sync|latest|update|behind|push|publish|remote)\b/.test(userText);
+  if (!["ado_create_pr", "ado_trigger_pipeline"].includes(tool) && !/work_item|workitem/.test(tool)) return true;
   if (tool === "ado_create_pr") return /\b(pr|pull request)\b/.test(userText);
   if (/work_item|workitem/.test(tool)) return /\b(work item|workitem|user story|task|bug|link)\b/.test(userText);
   return /\b(pipeline|build|run ci|trigger)\b/.test(userText);
@@ -1655,6 +2299,25 @@ function userScopeAllowsAdoStep(
   if (step === "pr") return /\b(pr|pull request)\b/.test(userText);
   if (step === "work_item") return /\b(work item|workitem|user story|task|bug|link)\b/.test(userText);
   return /\b(pipeline|build|run ci|trigger)\b/.test(userText);
+}
+
+function userScopeAllowsGitStep(
+  bubbles: StoredBubble[],
+  step: "push" | "pull" | "rebase",
+): boolean {
+  const userText = bubbles
+    .filter((bubble) => bubble.role === "user")
+    .map((bubble) => bubble.content)
+    .join("\n")
+    .toLowerCase();
+  if (step === "push") return /\b(push|publish|remote|pr|pull request)\b/.test(userText);
+  if (step === "pull") return /\b(pull|sync|latest|update|behind|rebase|push|publish|remote)\b/.test(userText);
+  return /\b(rebase|sync|latest|update|behind|push|publish|remote)\b/.test(userText);
+}
+
+function hasInScopeFailedPush(bubbles: StoredBubble[]): boolean {
+  return userScopeAllowsGitStep(bubbles, "push") &&
+    bubbles.some((bubble) => bubble.toolName === "git_push" && bubble.toolOk === false);
 }
 
 function currentBranchFromBubbles(bubbles: StoredBubble[]): string {

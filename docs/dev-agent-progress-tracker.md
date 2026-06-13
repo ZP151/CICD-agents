@@ -32,8 +32,8 @@ Status values:
 | Product roadmap | Complete | 100% | Roadmap and source-first reuse plan documented in `docs/dev-agent-product-roadmap-and-reuse-plan.md`. |
 | Current-state audit | Complete | 100% | Main shortfalls identified: prompt-driven approval, shallow workflow state, incomplete semantic retrieval, weak rollback, custom ADO tooling. |
 | Source-first reuse strategy | Complete | 100% | Reuse modes, license gate, priority table, risk register, and third-party source registry documented. OpenHarness and Azure DevOps MCP source have been vendored for direct reuse. |
-| Implementation phases | In progress | 64% | Progress is now tracked against product readiness rather than accumulated implementation activity. PR insight, Review Queue, Activity, checkpointing, and internal ADO read/write tools are usable foundations. The largest remaining gaps are durable workflow execution, richer repository understanding, complete ADO OAuth consent recovery, automatic Project Link field reduction, and production hardening. Recent work moved Conversation Environment actions from prompt shortcuts toward structured workflow actions, added internal PR work-item and PR policy-evaluation capabilities, and kept external ADO MCP strictly as fallback infrastructure. |
-| Verification | Partial | 86% | Focused typechecks/builds and a broad historical test suite have passed during recent sessions, but the new product-readiness score is lower because structured workflow actions, ADO OAuth recovery, and PR policy/work-item enrichment still need fresh focused tests and at least one live ADO validation pass. |
+| Implementation phases | In progress | 82% | Progress is tracked against product readiness rather than accumulated implementation activity. PR insight, Review Queue, Activity, checkpointing, internal ADO tools, and Chat use-case coverage are usable foundations. The largest remaining gaps are durable workflow execution for broader write workflows, richer repository understanding UX, complete ADO OAuth recovery, live ADO validation, and production hardening. Recent work added explicit workflow kind/phase metadata, right-panel phase rendering for structured commit workflows, push readiness checks before push approval, structured commit-message generation after staging, branch checkout/create preflight, right-panel metadata details, a first-class create-PR workflow action, deterministic PR-created completion state, retired fixed Git-to-PR continuation from the production chat path, structured PR insight/policy/work-item follow-up actions, conflict-aware Git workflow blocking, first-class structured rebase/merge/cherry-pick/revert recovery approvals, and guarded selected-conflict-file staging. |
+| Verification | Partial | 98% | Focused typechecks/builds and a broad historical test suite have passed during recent sessions. Chat use-case catalog, offline Git intent routing, structured commit workflows, generated commit-message continuation, push readiness, branch preflight, create-PR workflow, PR-created completion, structured PR insight/policy/work-item follow-ups, legacy workflow retirement, conflict-aware Git workflow blocking, structured rebase and merge abort recovery, selected conflict-file staging, Git recovery tool options, conversation part rendering, and Chat layout browser smoke coverage now have focused tests, but broader durable write workflows, ADO OAuth recovery, live ADO PR/pipeline validation, and live-agent desktop verification still need coverage. |
 
 ## Phase Progress Summary
 
@@ -41,13 +41,13 @@ Status values:
 | --- | --- | --- | ---: | --- | --- |
 | 0 | Planning, Audit, And Reuse Strategy | Complete | 100% | Understand current gaps and choose source-first reuse path. | All candidate repos |
 | 1 | Safety And Event Protocol | In progress | 60% | Hard approval gate and clean event protocol. | OpenHarness, Goose |
-| 2 | Repository Understanding | In progress | 22% | Make semantic repo context first-class. | Aider, Continue, OpenHands |
-| 3 | Durable Workflow Engine | In progress | 12% | Replace shallow workflow state with real workflow model. | OpenHarness, mcp-agent, Harness Agents |
+| 2 | Repository Understanding | In progress | 24% | Make semantic repo context first-class. | Aider, Continue, OpenHands |
+| 3 | Durable Workflow Engine | In progress | 48% | Replace shallow workflow state with real workflow model. | OpenHarness, mcp-agent, Harness Agents |
 | 4 | MCP And Azure DevOps Tool Reuse | In progress | 74% | Internalize ADO MCP capabilities and map them into local policies. | microsoft/azure-devops-mcp |
-| 5 | Pull Requests Workspace | In progress | 88% | PR readiness workspace with ADO and local repo context. | Azure DevOps MCP, PR-Agent |
+| 5 | Pull Requests Workspace | In progress | 91% | PR readiness workspace with ADO and local repo context. | Azure DevOps MCP, PR-Agent |
 | 6 | Review Queue And Auto-Approval | In progress | 73% | Auditable review decisions and low-risk auto-approval. | PR-Agent, Harness Agents |
 | 7 | Verification, Rollback, And Activity Timeline | In progress | 52% | Checkpoints, validation, replayable audit history. | Aider, OpenHands |
-| 8 | Product Hardening And Distribution | In progress | 33% | Installer, onboarding, auth, workspace policies, real validation. | Goose, OpenCode |
+| 8 | Product Hardening And Distribution | In progress | 34% | Installer, onboarding, auth, workspace policies, real validation. | Goose, OpenCode |
 
 ## Phase 0: Planning, Audit, And Reuse Strategy
 
@@ -254,7 +254,7 @@ Progress log:
 
 Status: `In progress`
 
-Completion: `12%`
+Completion: `42%`
 
 Goal:
 
@@ -766,6 +766,742 @@ Notes:
 
 - Automated visual screenshot verification was attempted against the local Vite preview, but the local Node runtime did not have Playwright installed and PATH did not expose a browser screenshot CLI.
 - Follow-up correction replaced native datalist project/repository suggestions with in-place select controls, removed duplicate project/repository discovery buttons, constrained the Chat Project Link setup card to a single-column narrow-panel layout, and made pipeline refresh require a selected repository.
+
+### 2026-06-12 Session Update 111
+
+Phase:
+
+Phase 2: Repository Understanding, Phase 3: Durable Workflow Engine, Phase 5: Pull Requests Workspace
+
+Progress changes:
+
+- Re-audited current code and git history at `v0.5.4`.
+- Chat implementation readiness moves from scattered workflow coverage toward a catalog-backed agent responsibility model.
+- Phase 2 remains in progress because repository understanding is now part of the use-case contract but still needs richer dedicated UX/workflow state.
+- Phase 3 remains in progress because only read-only Environment actions have structured direct workflow endpoints; write workflows still rely on planner approvals.
+
+Implemented:
+
+- Added `packages/core/src/chatUseCases.ts` as the single code-level catalog of Chat agent responsibilities.
+- Injected the Chat use-case catalog into the `ChatPlanner` system prompt so planning sees the expected behavior for project understanding, change review, validation, branch management, commit workflows, remote sync, PR insight, PR creation, rollback, and CI/CD operations.
+- Expanded the offline Git intent translator to cover:
+  - summarize/review changes
+  - stash changes
+  - restore a specific path
+  - fetch and compare with a remote target
+  - pull latest
+  - rebase and merge
+  - switch branch
+  - commit/amend
+  - push without inventing PR creation
+  - push/create PR as an explicit PR workflow
+- Updated `docs/conversation-git-agent-optimization.md` with a git-history-based implementation audit and Chat agent use-case matrix.
+- Added tests for Chat use-case coverage, approval boundaries, prompt injection, and offline Git intent routing.
+
+Verification:
+
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core test -- chatUseCases.test.ts`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core test -- chatPlannerApproval.test.ts`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core build`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck`.
+
+Remaining gaps:
+
+- Add durable daemon workflow actions for branch switching, branch creation, validation runs, commit flows, push, and PR creation.
+- Make the right-side Chat workflow panel reflect initialized/running/approval/done/failed states for each workflow family instead of depending mainly on natural-language prompts.
+- Add live UI validation for narrow Chat layouts after the desktop app can be reliably driven in-browser.
+
+### 2026-06-12 Session Update 112
+
+Phase:
+
+Phase 3: Durable Workflow Engine, Phase 7: Verification, Rollback, And Activity Timeline
+
+Progress changes:
+
+- Converted a real Chat execution failure into scoped workflow safety fixes and regression tests.
+- Phase 3 remains in progress because write workflow execution still needs durable first-class templates, but approval derivation is now safer for commit-only and rebase-conflict flows.
+
+Implemented:
+
+- Added scope checks for derived `git_push`, `git_pull`, and `git_rebase` approval proposals.
+- Prevented out-of-scope explicit write actions from falling back into the older fixed PR workflow sequence.
+- Allowed pull/rebase recovery only after an in-scope failed push.
+- Extended `git_rebase` with `action: "continue" | "abort" | "skip"` for in-progress rebase recovery.
+- Added regression tests based on the real use case:
+  - stage+commit does not escalate into push
+  - push recovery is allowed only when push was requested
+  - out-of-scope push recovery does not fall back to staging
+  - rebase conflict recovery proposes `git_rebase` continue
+- Documented the real failure case in `docs/conversation-git-agent-optimization.md`.
+
+Verification:
+
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- chatSessionWorkflow.test.ts`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core test -- gitOptions.test.ts`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core build`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core typecheck`.
+
+Remaining gaps:
+
+- Add explicit `rebase_in_progress` / `conflict_blocked` workflow state in the daemon and right-side Chat panel.
+- Improve approval-card copy so users see concise action-specific text instead of generic tool descriptions.
+- Add Git divergence readiness warnings before commit/push workflows.
+
+### 2026-06-12 Session Update 113
+
+Phase:
+
+Phase 3: Durable Workflow Engine, Phase 8: Product Hardening And Distribution
+
+Progress changes:
+
+- Reviewed current popular open-source agent architecture against this project's Chat/Git workflow direction.
+- Phase 3 moved from 14% to 16% because the legacy workflow retirement boundary is now documented and tied to concrete code locations.
+- Phase 8 moved from 33% to 34% because tool permission and workspace-boundary expectations are now aligned with mature agent products.
+- Overall implementation progress moved from 66% to 67%.
+
+Reviewed upstream patterns:
+
+- Aider: Git-first repository assistant with diff and commit-message discipline.
+- OpenHands: agent/tool/workspace/conversation loop.
+- Cline: per-tool policy and interactive approval controller.
+- OpenCode: permission service plus bash tool with read-only command detection and Git/PR guidance.
+- Continue: terminal command tool with security evaluation and tool dispatcher.
+- Goose: tool confirmation router and declined-tool response that tells the agent not to retry.
+- VS Code Copilot Agent: tool picker, editable tool parameters, and terminal command approval UX.
+
+Decision:
+
+- Keep high-level workflow knowledge as planner guidance and UI intent.
+- Do not keep hidden fixed Git execution chains as the production path.
+- Require parameterized, state-aware Git tools for write operations.
+- Enforce user-request scope at every write proposal.
+- Treat right-panel actions as structured workflow intents, not natural-language chat prompt injections.
+
+Documented:
+
+- Added `Popular Agent Source Alignment Audit` to `docs/conversation-git-agent-optimization.md`.
+- Added a `Preset Workflow vs Agent-Generated Git Operations` decision.
+- Added a `Legacy Workflow Retirement Decision` table covering:
+  - `inferNextPrWorkflowTool`
+  - `inferPendingAction`
+  - `ACTION_DERIVERS`
+  - `workspaceActionPrompt`
+  - `commit_flow`
+  - `git_intent_translator`
+- Added target Chat/Git boundary rules for read-only actions, approval-required actions, and stop/ask conditions.
+
+Verification:
+
+- Documentation-only change in this session; no code tests were required.
+
+Next recommended task:
+
+- Replace `workspaceActionPrompt` for right-panel Git actions with structured workflow action events, starting with `inspect_changes`, `prepare_commit`, `switch_branch`, and `push_branch`.
+
+### 2026-06-13 Session Update 114
+
+Phase:
+
+Phase 3: Durable Workflow Engine
+
+Progress changes:
+
+- Phase 3 moved from 16% to 18%.
+- Overall implementation progress moved from 67% to 68%.
+- The right-side Chat Git panel now has a first real structured write-action path instead of relying only on natural-language prompt injection.
+
+Implemented:
+
+- Extended `/chat/workflow-action` beyond read-only actions:
+  - `checkout_branch`
+  - `create_branch`
+  - `push_branch`
+  - `prepare_commit`
+- Added `ChatSessionManager.createApprovalProposal(...)` so structured workflow actions can persist an approval proposal in the active or newly created Chat session.
+- Updated desktop Chat workspace actions so right-panel Git actions call `/chat/workflow-action` with structured parameters instead of falling back to `workspaceActionPrompt`.
+- Added session creation/return for workflow actions started before any normal chat message, allowing approval cards to execute through the existing `/chat/:sessionId/confirm-action` path.
+- Implemented structured write proposals:
+  - branch checkout -> `git_checkout { ref }`
+  - branch creation -> `git_create_branch { name }`
+  - branch push -> `git_push { branch, setUpstream: true }`
+  - commit preparation with unstaged changes -> `git_add { all: true }` plus a next-step hint to generate/use the commit message
+  - staged-only commit with explicit message -> `git_commit { message }`
+- Kept commit-message generation out of the backend; the backend now prepares the workflow and lets the agent continue after the approved staging step.
+- Treated `git_log` and staged diff preflight failures as non-blocking for new repositories during commit preparation.
+- Added dirty-working-tree warnings to structured branch checkout/create approvals and raised those approvals to high risk when pending changes exist.
+
+Verification:
+
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+
+Remaining gaps:
+
+- `prepare_commit` is still a first-step workflow, not a full durable multi-step state machine.
+- The next implementation should add explicit workflow states for `preflight`, `waiting_for_stage_approval`, `staged`, `waiting_for_commit_approval`, `committed`, and optional `waiting_for_push_approval`.
+- The right-side UI should show these workflow states directly instead of relying on only generic approval-card text.
+- Branch switching still needs richer branch existence/upstream validation before approval.
+
+### 2026-06-13 Session Update 115
+
+Phase:
+
+Phase 3: Durable Workflow Engine
+
+Progress changes:
+
+- Phase 3 moved from 18% to 21%.
+- Overall implementation progress moved from 68% to 69%.
+- Structured commit workflows now advance across multiple write approvals without converting the flow back into a natural-language prompt.
+
+Implemented:
+
+- Added optional workflow metadata to `PendingToolAction`.
+- Structured `prepare_commit` proposals now carry commit workflow context:
+  - phase
+  - branch
+  - optional commit message
+  - whether push should follow commit
+- After confirmed `git_add` succeeds, daemon can directly create the next `git_commit` approval when the workflow already has an explicit commit message.
+- After confirmed `git_commit` succeeds, daemon can directly create the next `git_push` approval when the workflow was started as commit-and-push.
+- These deterministic next approvals bypass LLM continuation and are persisted in session workflow state.
+- `prepare_commit` now probes the current branch so later commit/push steps keep the exact branch context.
+
+Verification:
+
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+
+Remaining gaps:
+
+- Blank commit-message generation still falls back to planner continuation after staging.
+- The workflow state should expose richer UI phases, not only `waiting_for_approval` plus current step text.
+- Push readiness should inspect upstream/divergence before approval.
+- The right-side panel should render commit workflow phases directly.
+
+### 2026-06-13 Session Update 116
+
+Phase:
+
+Phase 3: Durable Workflow Engine
+
+Progress changes:
+
+- Phase 3 moved from 21% to 23%.
+- Overall implementation progress moved from 69% to 70%.
+- Commit workflow state is now explicit enough for the right-side panel to render business phases instead of raw tool history.
+
+Implemented:
+
+- Added `workflowKind` and `workflowPhase` to `ChatWorkflowState`.
+- Derived commit workflow phases from structured approval metadata:
+  - `waiting_for_stage_approval`
+  - `waiting_for_commit_approval`
+  - `waiting_for_push_approval`
+- Extended commit workflow metadata with a `push` phase so commit-and-push flows keep their workflow identity through the final push approval.
+- Updated the desktop right-side panel to render commit workflow phases as:
+  - Inspect changes
+  - Stage changes
+  - Commit changes
+  - Push branch, only when the workflow includes push
+- Added regression assertions that workflow kind/phase are returned from `/chat/workflow-action` and from `/chat/:sessionId/confirm-action` SSE workflow events.
+
+Verification:
+
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+
+Remaining gaps:
+
+- Push readiness still needs upstream/divergence checks before presenting approval.
+- Blank commit-message generation still falls back to planner continuation after staging.
+- The commit workflow panel should include richer branch/message metadata once the UI has space for it.
+
+### 2026-06-13 Session Update 117
+
+Phase:
+
+Phase 3: Durable Workflow Engine
+
+Progress changes:
+
+- Phase 3 moved from 23% to 25%.
+- Overall implementation progress moved from 70% to 71%.
+- Push actions from Chat workflow controls now run a real readiness preflight before presenting approval.
+
+Implemented:
+
+- Added push readiness metadata to structured approval proposals.
+- `push_branch` workflow actions now probe:
+  - current branch
+  - working-tree status
+  - remotes
+  - configured upstream
+  - ahead/behind divergence against upstream when available
+- Approval proposals now describe no-upstream, up-to-date, ahead, behind, diverged, and unknown push readiness states before the user approves `git_push`.
+- Commit-and-push workflow continuation now performs the same readiness check before generating the final push approval.
+- Added a regression test that creates a real local repository, pushes to a bare upstream, creates one local commit, and verifies the approval reports `ahead` with the expected upstream and commit counts.
+
+Verification:
+
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
+
+Remaining gaps:
+
+- Blank commit-message generation still falls back to planner continuation after staging.
+- Branch switching needs richer branch existence/upstream validation before approval.
+- The commit workflow panel should include richer branch/message/readiness metadata once the UI has space for it.
+
+### 2026-06-13 Session Update 118
+
+Phase:
+
+Phase 3: Durable Workflow Engine
+
+Progress changes:
+
+- Phase 3 moved from 25% to 27%.
+- Overall implementation progress moved from 71% to 72%.
+- Blank commit-message flows now stay inside the structured commit workflow after staging.
+
+Implemented:
+
+- Added deterministic commit-message generation from staged diff metadata after an approved `git_add`.
+- Empty-message `prepare_commit` workflows now advance to a stored `git_commit` approval instead of falling back to planner continuation.
+- Generated commit approvals preserve the workflow metadata:
+  - phase: `commit`
+  - branch
+  - generated message
+  - optional push-after-commit flag
+- Added helper logic to infer simple conventional commit prefixes from changed paths:
+  - docs
+  - test
+  - ci
+  - build
+  - chore
+- Added a regression test covering `Commit message (leave blank to generate)` with a real staged diff and confirming the generated `git_commit` approval.
+
+Verification:
+
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
+
+Remaining gaps:
+
+- Generated commit messages are deterministic and safe, but later can be refined with an LLM-backed summarizer before approval.
+- The commit workflow panel should include richer branch/message/readiness metadata once the UI has space for it.
+
+### 2026-06-13 Session Update 119
+
+Phase:
+
+Phase 3: Durable Workflow Engine
+
+Progress changes:
+
+- Phase 3 moved from 27% to 29%.
+- Overall implementation progress moved from 72% to 73%.
+- Branch checkout/create actions now perform branch-state preflight before creating approval proposals.
+
+Implemented:
+
+- Added structured branch preflight metadata to approval proposals.
+- `checkout_branch` now probes current branch and `git branch -a` before proposing a write action.
+- Current-branch checkout is treated as a no-op and does not request approval.
+- Local branch checkout produces a normal `git_checkout` approval.
+- Remote-only branch checkout produces a `git_switch` approval with:
+  - `create: true`
+  - `startPoint`
+  - `track: true`
+- Missing or unsafe branch names do not produce checkout approval proposals.
+- `create_branch` now suppresses duplicate approvals when the local/current branch already exists or when a matching remote branch should be switched to instead.
+- Desktop approval matching now recognizes `git_switch` as a valid structured checkout approval.
+
+Verification:
+
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+
+Remaining gaps:
+
+- Branch preflight is visible in the right-side panel only as compact text; it can later become richer branch-specific controls.
+- Generated commit messages are deterministic and safe, but later can be refined with an LLM-backed summarizer before approval.
+- The commit workflow panel should include richer branch/message/readiness metadata once the UI has space for it.
+
+### 2026-06-13 Session Update 120
+
+Phase:
+
+Phase 3: Durable Workflow Engine
+
+Progress changes:
+
+- Phase 3 moved from 29% to 30%.
+- Overall implementation progress moved from 73% to 74%.
+- The right-side Chat progress panel now consumes workflow metadata instead of only rendering generic step labels.
+
+Implemented:
+
+- Added compact progress details for structured approval metadata:
+  - branch preflight summaries
+  - push readiness summaries
+  - commit workflow branch
+  - commit workflow message
+- Added truncation for long commit messages in the progress panel while preserving the full text in the tooltip.
+- Tightened conversation-part source/metadata TypeScript narrowing so desktop typecheck remains stable with the richer conversation part model.
+
+Verification:
+
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts src/components/conversation/ConversationPartRenderer.test.tsx`.
+
+Remaining gaps:
+
+- Branch preflight details are currently compact text, not dedicated branch controls.
+- Generated commit messages are deterministic and safe, but later can be refined with an LLM-backed summarizer before approval.
+- PR creation now has a first-class workflow action; follow-up PR insight and work-item linking still need durable continuation templates.
+
+### 2026-06-13 Session Update 121
+
+Phase:
+
+Phase 3: Durable Workflow Engine
+
+Progress changes:
+
+- Phase 3 moved from 30% to 33%.
+- Overall implementation progress moved from 74% to 75%.
+- PR creation now has a durable first-class Chat workflow path instead of relying only on planner inference.
+
+Implemented:
+
+- Added `create_pr` to `/chat/workflow-action`.
+- Added structured PR preflight metadata:
+  - source branch
+  - target branch
+  - Azure DevOps organization
+  - ADO project
+  - ADO repository
+  - generated or supplied title
+  - dirty working-tree warning
+- Added `workflowKind: "pr"` and `workflowPhase: "waiting_for_create_pr_approval"` for pending PR creation approvals.
+- `create_pr` now creates a stored `ado_create_pr` approval proposal and does not call Azure DevOps until the user confirms.
+- Missing ADO Project Link mapping fails before any write proposal is made.
+- Dirty working-tree PR creation is allowed only as a high-risk approval with an explicit warning that uncommitted changes are not included.
+- Added a right-panel `Create pull request` action that calls the structured workflow endpoint.
+
+Verification:
+
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+
+Remaining gaps:
+
+- PR creation confirmation now completes as `pr/created`; post-create PR insight, work-item linking, and policy follow-up are not yet deterministic workflow continuations.
+- Missing Project Link UX should eventually guide the user inline instead of only failing the workflow action.
+- Live ADO validation for create-PR remains covered by integration/manual testing rather than offline tests.
+
+### 2026-06-13 Session Update 122
+
+Phase:
+
+Phase 3: Durable Workflow Engine
+
+Progress changes:
+
+- Phase 3 moved from 33% to 35%.
+- Overall implementation progress moved from 75% to 76%.
+- Confirmed PR creation now completes through structured workflow state instead of falling back to planner continuation.
+
+Implemented:
+
+- Persisted inline Project Link data when structured workflow actions create stored approval proposals, so `/confirm-action` has the same ADO context that was used to create the approval.
+- Added deterministic completion handling after confirmed `ado_create_pr` succeeds:
+  - clears pending approval
+  - sets workflow status to `done`
+  - sets `workflowKind` to `pr`
+  - sets `workflowPhase` to `created`
+  - emits a user-facing final result without asking the LLM to infer the next step
+- The final result suggests the next structured product actions:
+  - Inspect PR insight
+  - Check policy status
+  - Link related work items
+- Added an offline regression test that mocks ADO create-PR, confirms the approval, and verifies the session ends in `pr/created` with no new approval request.
+
+Verification:
+
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+
+Remaining gaps:
+
+- `pr/created` suggests PR insight, policies, and work-item linking, but those follow-up actions are not yet first-class structured actions from the Chat workflow endpoint.
+- Missing Project Link UX should eventually guide the user inline instead of only failing the workflow action.
+- Live ADO validation for create-PR remains covered by integration/manual testing rather than offline tests.
+
+### 2026-06-13 Session Update 123
+
+Phase:
+
+Phase 3: Durable Workflow Engine
+
+Progress changes:
+
+- Phase 3 moved from 35% to 37%.
+- Overall implementation progress moved from 76% to 77%.
+- Verification moved from 92% to 93% after adding a regression check for fixed workflow retirement.
+
+Implemented:
+
+- Removed `git_intent_translator` from the production Conversation tool registry so chat planning no longer exposes a canned Git workflow translator as a callable runtime tool.
+- Kept `git_intent_translator` available for CLI/offline deterministic analysis and tests, where it is useful as a fixture rather than as the source of truth for live project maintenance.
+- Retired `inferNextPrWorkflowTool` from `deriveWorkflowPendingAction` and `inferPendingAction`.
+- Conversation approval derivation now requires either:
+  - an explicit structured `approvalProposal` from the planner
+  - an explicit write action mentioned in the assistant proposal
+  - a structured workflow action such as `prepare_commit`, `push_branch`, `checkout_branch`, or `create_pr`
+- A generic "continue toward the PR" confirmation no longer auto-expands into the fixed `git_add -> git_commit -> git_push -> ado_create_pr` sequence.
+
+Design decision:
+
+- Git operations remain broad capability tools.
+- Prebuilt product workflows remain allowed as stateful shortcuts.
+- Fixed hidden execution chains are not the default agent architecture and should be retired as durable workflow state covers each use case.
+
+Verification:
+
+- Added a regression update proving executed Git history alone does not create the next PR workflow approval.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
+- `git diff --check` was clean apart from expected CRLF warnings.
+
+Remaining gaps:
+
+- `ACTION_DERIVERS` still parses explicit assistant wording into write proposals for legacy compatibility; it should continue shrinking as planner-native approval proposals become reliable.
+- `inferPendingAction` still exists for old session recovery; the target state is persisted approval state only.
+- PR insight, PR policy, and work-item follow-ups should become first-class structured workflow actions.
+
+### 2026-06-13 Session Update 124
+
+Phase:
+
+Phase 3: Durable Workflow Engine / Phase 5: Pull Requests Workspace
+
+Progress changes:
+
+- Phase 3 moved from 37% to 40%.
+- Phase 5 moved from 89% to 91%.
+- Overall implementation progress moved from 77% to 78%.
+- Verification moved from 93% to 94%.
+
+Implemented:
+
+- Added structured Conversation workflow actions for PR follow-up work:
+  - `inspect_pr_insight`
+  - `check_pr_policy`
+  - `list_pr_work_items`
+  - `link_work_item`
+- `inspect_pr_insight`, `check_pr_policy`, and `list_pr_work_items` are read-only workflow actions that execute directly and return `workflowKind: "pr"` done states.
+- `link_work_item` creates a stored high-risk approval proposal for `ado_link_work_item` instead of mutating Azure DevOps immediately.
+- Confirmed `ado_link_work_item` now completes as deterministic `pr/work_item_linked` workflow state instead of falling back to planner continuation.
+- PR follow-up actions can default to the latest active pull request for the Project Link when no `pullRequestId` is supplied.
+- Desktop Chat API types now expose the new workflow actions and `pullRequestId` / `workItemId` inputs.
+- The Chat right-side Project Link area now shows compact PR action buttons when ADO mapping is available:
+  - PR insight
+  - Policy
+  - Work items
+- Right-panel progress rendering now recognizes PR insight, policy, work-item, and link-work-item workflow phases.
+
+Verification:
+
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+
+Remaining gaps:
+
+- Manual visual verification is still needed for the new right-panel PR buttons in the desktop app.
+- PR insight workflow currently returns a concise deterministic summary; richer artifact rendering in Conversation remains future work.
+
+### 2026-06-13 Session Update 125
+
+Phase:
+
+Phase 3: Durable Workflow Engine / Phase 5: Conversational Dev Agent Runtime
+
+Progress changes:
+
+- Phase 3 moved from 40% to 42%.
+- Overall implementation progress moved from 78% to 79%.
+- Verification moved from 94% to 95%.
+
+Implemented:
+
+- Added structured Git operation-state detection inside `/chat/workflow-action`:
+  - detects unresolved index conflicts from `git status --porcelain`
+  - detects in-progress `rebase`, `merge`, `cherry-pick`, and `revert` operations from `.git` state files
+- Structured workspace actions now block normal `prepare_commit`, `push_branch`, branch switch/create, and `create_pr` proposals while a Git operation is conflicted or in progress.
+- Blocked workflow responses now return `workflowKind: "git"` and phases such as `merge_conflict` instead of creating unsafe approvals.
+- Chat legacy write-action derivation now filters ordinary `git_commit` / `git_push` proposals after an unresolved rebase/merge conflict history, while still allowing explicit rebase recovery actions.
+
+Verification:
+
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts test/server.test.ts`.
+- Added a real Git merge-conflict daemon test proving `prepare_commit` becomes a blocked workflow state and does not create `git_add`.
+- Added a chat workflow regression proving unresolved rebase conflicts strip normal `git_commit` approval proposals.
+
+Remaining gaps:
+
+- The right-side UI should render `merge_conflict`, `rebase_conflict`, and `*_in_progress` phases with dedicated recovery controls rather than a generic blocked summary.
+- The structured workflow API still needs first-class recovery actions such as `continue_rebase`, `abort_rebase`, and selected-path conflict staging.
+
+### 2026-06-13 Session Update 126
+
+Phase:
+
+Phase 3: Durable Workflow Engine / Phase 5: Conversational Dev Agent Runtime
+
+Progress changes:
+
+- Phase 3 moved from 42% to 44%.
+- Overall implementation progress moved from 79% to 80%.
+- Verification moved from 95% to 96%.
+
+Implemented:
+
+- Added first-class structured rebase recovery workflow actions:
+  - `continue_rebase`
+  - `abort_rebase`
+  - `skip_rebase`
+- `/chat/workflow-action` now turns those actions into stored high-risk `git_rebase` approvals with exact `{ action: "continue" | "abort" | "skip" }` arguments.
+- Rebase recovery proposals are only created when the repository is actually in an in-progress rebase state.
+- Confirmed rebase recovery actions now complete deterministically with `workflowKind: "git"` and phases such as `rebase_aborted`, instead of asking the planner to infer a follow-up.
+- Desktop Chat now carries `git` workflow evidence through approval cards and shows dedicated right-panel controls for continue, abort, and skip when the workflow state is rebase-related.
+- The right-panel rebase controls now call structured workflow actions rather than inserting hidden text into the chat input.
+
+Verification:
+
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts test/server.test.ts` with 62 tests.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build`.
+- Added a real Git rebase-conflict daemon test proving structured `abort_rebase` creates an approval and confirmed execution completes the workflow.
+
+Remaining gaps:
+
+- Conflict-file staging should become a selected-path recovery action instead of relying on generic `git_add`.
+- Merge, cherry-pick, and revert recovery should receive the same first-class structured treatment as rebase recovery.
+- The right-side recovery UI still needs visual verification inside the running desktop app.
+
+### 2026-06-13 Session Update 127
+
+Phase:
+
+Phase 3: Durable Workflow Engine / Phase 5: Conversational Dev Agent Runtime
+
+Progress changes:
+
+- Phase 3 moved from 44% to 46%.
+- Overall implementation progress moved from 80% to 81%.
+- Verification moved from 96% to 97%.
+
+Implemented:
+
+- Extended the structured Git tool surface:
+  - `git_merge` now supports `action: "continue" | "abort"` in addition to starting a merge with `ref`.
+  - Added `git_cherry_pick` with `action: "start" | "continue" | "abort" | "skip"`.
+  - Added `git_revert` with `action: "start" | "continue" | "abort" | "skip"`.
+- Added high-risk capability classification for `git_cherry_pick` and `git_revert`.
+- Generalized workspace Git recovery actions beyond rebase:
+  - `continue_merge`, `abort_merge`
+  - `continue_cherry_pick`, `abort_cherry_pick`, `skip_cherry_pick`
+  - `continue_revert`, `abort_revert`, `skip_revert`
+- `/chat/workflow-action` now maps those recovery actions to exact stored approval proposals and only allows them when the matching Git operation state is detected.
+- Confirmed Git recovery actions now finish with deterministic workflow states such as `merge_aborted`, `cherry_pick_skipped`, and `revert_continued`.
+- Desktop Chat now exposes a generic recovery panel for rebase, merge, cherry-pick, and revert states, using structured workflow actions instead of hidden prompt injection.
+- The Chat use-case catalog now advertises cherry-pick and revert as approval-required Git capabilities.
+
+Verification:
+
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/gitOptions.test.ts test/toolCapabilities.test.ts` with 6 tests.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts test/server.test.ts` with 63 tests.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build`.
+- Added a real Git merge-conflict daemon test proving structured `abort_merge` creates an approval and confirmed execution completes the workflow.
+- Added core Git tool tests proving merge, cherry-pick, and revert recovery actions do not require a start `ref`.
+
+Remaining gaps:
+
+- Conflict-file staging still needs a selected-path recovery action.
+- Cherry-pick and revert should receive real conflicted-repository daemon tests like rebase and merge.
+- The right-side recovery UI still needs visual verification inside the running desktop app.
+
+### 2026-06-13 Session Update 128
+
+Phase:
+
+Phase 3: Durable Workflow Engine / Phase 5: Conversational Dev Agent Runtime
+
+Progress changes:
+
+- Phase 3 moved from 46% to 48%.
+- Overall implementation progress moved from 81% to 82%.
+- Verification moved from 97% to 98%.
+
+Implemented:
+
+- Added a guarded `stage_resolved_conflicts` workspace action for conflict recovery.
+- The action probes current Git operation state before proposing any write and only works while a rebase, merge, cherry-pick, or revert conflict is actually in progress.
+- The action requires explicit file paths, stages only those provided paths, and every requested path must be one of the current conflict files reported by Git.
+- The approval proposal uses exact stored tool arguments: `git_add { paths: [...] }` with workflow metadata `kind: "git"` and `phase: "stage_conflicts"`.
+- Confirmed selected-conflict staging now completes deterministically with workflow states such as `merge_conflicts_staged`, then stops so the user can explicitly continue, skip, or abort the active Git operation.
+- Approval evidence now explains the boundary: this action only stages selected files that belong to the active conflict recovery.
+- This keeps conflict resolution aligned with mature agent patterns: the agent can propose a precise safe-range tool call, but it does not silently convert conflict recovery into normal commit/push automation.
+
+Verification:
+
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/gitOptions.test.ts test/toolCapabilities.test.ts` with 6 tests.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts test/server.test.ts` with 64 tests.
+- Added a real Git merge-conflict daemon test proving `stage_resolved_conflicts` rejects missing paths, creates a selected-path `git_add` approval, and confirmed execution stages only the selected conflict file.
+
+Remaining gaps:
+
+- Desktop still needs a dedicated conflict-file picker before exposing selected staging as a right-panel control.
+- Cherry-pick and revert should receive real conflicted-repository daemon tests like rebase and merge.
+- The right-side recovery UI still needs visual verification inside the running desktop app.
 
 ### 2026-06-09 Session Update
 
@@ -8117,3 +8853,1535 @@ Next recommended task:
 
 - Run one manual Conversation turn with the built-in model and confirm the
   assistant details show `Finalization: agent final`.
+
+### 2026-06-13 Session Update 111
+
+Phase:
+
+Phase 8: Product Hardening And Distribution
+
+Status change:
+
+- Verification remains at 98%.
+- Conversation frontend browser QA is no longer blocked on missing Playwright
+  dependencies.
+
+Completed:
+
+- Installed Playwright test dependencies in the root workspace.
+- Installed the Chromium browser binary for repository-local Playwright runs.
+- Added root Playwright configuration for desktop Chat smoke tests.
+- Added `e2e:chat` for the focused Chat layout smoke suite.
+- Added a Playwright regression test that:
+  - mocks daemon health/profile/history/index responses
+  - seeds a Project Link in local storage
+  - opens a new Chat session
+  - expands the right Environment panel
+  - opens the model menu
+  - checks normal and narrow widths for visible horizontal overflow
+- Fixed the right Environment panel width and text constraints so Changes,
+  branch, commit/push, and PR follow-up controls stay inside the viewport.
+
+Files changed:
+
+- `package.json`
+- `pnpm-lock.yaml`
+- `playwright.config.ts`
+- `tests/e2e/chat-layout.spec.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `docs/conversation-frontend-ux-progress-tracker.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+git diff --check
+```
+
+Result:
+
+- Playwright Chat layout suite passed: 2 tests.
+- Desktop typecheck passed.
+- `git diff --check` reported only existing Windows line-ending warnings and no
+  patch whitespace errors.
+
+Next recommended task:
+
+- Extend Playwright from static layout smoke coverage into live Conversation
+  workflows: composer state transitions, suggested actions, approval/timeline
+  attachment, and project-context answers.
+
+### 2026-06-13 Session Update 112
+
+Phase:
+
+Phase 8: Product Hardening And Distribution
+
+Status change:
+
+- Verification remains at 98%.
+- Conversation input upgrade moved forward by making approval-pending composer
+  state explicit and test-covered.
+
+Completed:
+
+- Added a centralized composer input-state helper for:
+  - textarea disabled state
+  - Send disabled state
+  - attachment/model control disabled state
+  - state-specific placeholders and titles
+- Locked the composer while a protected action approval is pending so the user
+  cannot start a second request from a typed draft before approving or
+  cancelling the current workflow action.
+- Expanded focused desktop tests for idle, busy, and approval-pending composer
+  input states.
+- Expanded Playwright Chat layout coverage to verify:
+  - command-chip density and composer-fill routing
+  - approval notice visibility
+  - approval-pending textarea lockout
+  - Send/model/attachment disabled state
+  - no visible horizontal overflow
+
+Files changed:
+
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.tsx`
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
+- `apps/desktop/src/pages/Chat.tsx`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/conversation-frontend-ux-progress-tracker.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+```
+
+Result:
+
+- Desktop focused composer/suggestion tests passed: 26 tests.
+- Desktop typecheck passed.
+- Playwright Chat layout suite passed: 4 tests.
+
+Next recommended task:
+
+- Continue from composer state polish into live workflow QA: queued follow-up
+  state, approval/timeline attachment, and project-context answers in a running
+  Conversation session.
+
+### 2026-06-13 Session Update 113
+
+Phase:
+
+Phase 8: Product Hardening And Distribution
+
+Status change:
+
+- Verification remains at 98%.
+- Conversation execution timeline quality improved with exact row-level
+  approval attachment.
+
+Completed:
+
+- Extended `ExecutionTimelineItem` with pending approval metadata.
+- Added an `Approval pending` badge and optional row-level approval render slot
+  inside `ExecutionTimeline`.
+- Updated Chat execution rendering so a pending approval is attached to the
+  exact matching tool row by `pendingTool`, falling back to the last tool only
+  when no exact match exists.
+- Removed the separate group-level approval card rendering path for tool-group
+  approvals.
+- Expanded Playwright pending-approval coverage so the browser verifies a
+  `git_add` approval on the `git_add` execution row, plus composer lockout and
+  no visible horizontal overflow.
+
+Files changed:
+
+- `apps/desktop/src/components/conversation/ExecutionTimeline.tsx`
+- `apps/desktop/src/components/conversation/ExecutionTimeline.test.tsx`
+- `apps/desktop/src/pages/Chat.tsx`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/conversation-frontend-ux-progress-tracker.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ExecutionTimeline.test.tsx src/chatRenderItems.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+```
+
+Result:
+
+- Desktop timeline/grouping tests passed: 6 tests.
+- Desktop typecheck passed.
+- Playwright Chat layout suite passed: 4 tests.
+
+Next recommended task:
+
+- Continue live workflow QA by exercising queued follow-ups and project-context
+  answers in a running Conversation session.
+
+### 2026-06-13 Session Update 114
+
+Phase:
+
+Phase 8: Product Hardening And Distribution
+
+Status change:
+
+- Verification remains at 98%.
+- Conversation input workflow state handling improved for restored running
+  sessions and queued follow-ups.
+
+Completed:
+
+- Extended composer notice and input-state helpers so restored
+  `workflowState.status` values of `planning` or `running` are treated as busy
+  even when the local React `busy` flag is false.
+- Restored running workflows now show the Working notice, disable textarea,
+  Send, attachment, and model selector controls, and still allow suggestion
+  buttons to queue a follow-up.
+- Added browser coverage for selecting a suggestion while a restored workflow is
+  running, showing the queued follow-up notice, cancelling it, and preserving
+  no visible horizontal overflow.
+
+Files changed:
+
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.tsx`
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
+- `apps/desktop/src/pages/Chat.tsx`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/conversation-frontend-ux-progress-tracker.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+```
+
+Result:
+
+- Desktop focused composer/suggestion tests passed: 28 tests.
+- Desktop typecheck passed.
+- Playwright Chat layout suite passed: 5 tests.
+
+Next recommended task:
+
+- Continue live workflow QA by validating project-context answers and source
+  references in a running Conversation session.
+
+### 2026-06-13 Session Update 115
+
+Phase:
+
+Phase 2: Repository Understanding
+
+Status change:
+
+- Verification remains at 98%.
+- Repository-understanding source grounding improved for architecture and
+  project-context answers.
+
+Completed:
+
+- Extended `chatContextSources` so project-structure signals become structured
+  `source_document` references, not only prompt text.
+- Architecture/project-understanding answers can now receive source references
+  for app/package/source/test files even when the user did not ask about Git
+  changes and no diff exists.
+- Extended `repo_refresh_index` tool results with `contextSources` so an agent
+  that refreshes the repository index has normalized source references ready to
+  copy into final answer metadata.
+- Updated the refresh-index instruction to tell the planner to copy relevant
+  `contextSources` into final `sources`.
+
+Files changed:
+
+- `packages/core/src/chatContext.ts`
+- `packages/core/test/chatContext.test.ts`
+- `packages/daemon/src/chatSession.ts`
+- `packages/daemon/test/chatSessionWorkflow.test.ts`
+- `docs/conversation-frontend-ux-progress-tracker.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatContext.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+```
+
+Result:
+
+- Core chat context tests passed: 5 tests.
+- Core typecheck passed.
+- Daemon chat workflow tests passed: 19 tests.
+- Daemon typecheck passed.
+
+Next recommended task:
+
+- Add browser or route-level QA for a project architecture prompt to verify the
+  final Conversation UI shows these `source_document` references as cards.
+
+### 2026-06-13 Session Update 129
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Artifact Workspace
+
+Status change:
+
+- Verification remains at 98%.
+- Conversation PR insight artifacts are now usable from the Chat result
+  workspace, not only from Pull Requests or Activity surfaces.
+
+Completed:
+
+- Completed the F10.4 persisted PR insight artifact loading batch.
+- Saved PR insight source metadata in assistant details can now open the
+  Conversation Result workspace.
+- The workspace loads the persisted PR insight artifact record through the
+  active Project Link and renders it as a markdown report.
+- Loading and lookup-error states are visible in the workspace.
+- Ordinary artifact shells without inline content no longer accidentally call
+  the PR insight artifact lookup route.
+- Replaced fragile local lookup cancellation with request-id tracking so
+  persisted artifact responses are not dropped by React effect cleanup during
+  development/browser QA.
+
+Files changed:
+
+- `apps/desktop/src/pages/Chat.tsx`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/conversation-frontend-ux-progress-tracker.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+```
+
+Result:
+
+- Playwright Chat layout suite passed: 10 tests.
+- Desktop typecheck passed.
+
+Next recommended task:
+
+- Continue F10.5 with Mermaid rendering and artifact actions: safe diagram
+  rendering, copy/export affordances, render-error states, and Playwright
+  coverage.
+
+### 2026-06-13 Session Update 130
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Artifact Workspace
+
+Status change:
+
+- Verification remains at 98%.
+- Conversation artifact workspace moved forward from source-only Mermaid
+  display to real diagram rendering with browser-covered error fallback.
+
+Completed:
+
+- Added `mermaid` to the desktop app dependencies.
+- Implemented dynamic Mermaid rendering in the Conversation Result workspace so
+  architecture and PR insight diagram artifacts render as SVG without forcing
+  the base Chat bundle to eagerly load the diagram library.
+- Kept Mermaid source visible below the rendered diagram.
+- Added clear Mermaid parse/render error UI that preserves source visibility.
+- Preserved the artifact copy-content action for Mermaid, markdown, text, and
+  persisted PR insight report content.
+- Hardened the Playwright overflow helper against a one-time Vite page reload
+  while newly optimized dependencies are being served.
+
+Files changed:
+
+- `apps/desktop/package.json`
+- `apps/desktop/src/pages/Chat.tsx`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/conversation-frontend-ux-progress-tracker.md`
+- `docs/dev-agent-progress-tracker.md`
+- `pnpm-lock.yaml`
+
+Tests run:
+
+```powershell
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+```
+
+Result:
+
+- Playwright Chat layout suite passed: 11 tests.
+- Desktop typecheck passed.
+
+Next recommended task:
+
+- Finish the remaining artifact action edge with export/save behavior, or move
+  to F7.1 visual-system polish if export should wait for packaging and Tauri
+  file-dialog hardening.
+
+### 2026-06-13 Session Update 131
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Artifact Workspace
+
+Status change:
+
+- Verification remains at 98%.
+- Conversation browser QA is now installed, runnable, and verified through the
+  repository-local Playwright stack.
+- F10.5 artifact actions are complete: rendered artifacts can now be copied or
+  downloaded from the Conversation Result workspace.
+
+Completed:
+
+- Confirmed the root Playwright dependencies are installed and the pnpm lockfile
+  is already synchronized.
+- Installed or refreshed the Chromium browser binary for repository-local
+  Playwright runs.
+- Added browser download/export coverage for artifact workspace content,
+  including the generated `.mmd` filename and downloaded Mermaid source.
+- Verified that Mermaid rendering, Mermaid parse-error fallback, persisted PR
+  insight loading, ordinary artifact bypass, copy action, and download action
+  are all covered by the Chat layout suite.
+- Ran a production desktop build after the Playwright and artifact-action
+  verification pass.
+
+Files changed:
+
+- `apps/desktop/package.json`
+- `apps/desktop/src/pages/Chat.tsx`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/conversation-frontend-ux-progress-tracker.md`
+- `docs/dev-agent-progress-tracker.md`
+- `package.json`
+- `playwright.config.ts`
+- `pnpm-lock.yaml`
+
+Tests run:
+
+```powershell
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe install
+.\.tools\pnpm.exe exec playwright install chromium
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- pnpm install reported the workspace was already up to date.
+- Playwright Chromium install completed successfully.
+- Playwright Chat layout suite passed: 11 tests.
+- Desktop typecheck passed.
+- Desktop production build passed.
+- Vite still reports large chunk warnings from Mermaid/Shiki-related dynamic
+  chunks, but the build succeeds.
+
+Next recommended task:
+
+- Move to `F7.2 Full visual system pass`: align response blocks, timeline rows,
+  references, artifact workspace controls, and composer controls around the same
+  restrained workbench visual language.
+
+### 2026-06-13 Session Update 132
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Visual System
+
+Status change:
+
+- Verification remains at 98%.
+- F7.4 is now partially complete: timeline rows, approval evidence, composer
+  input, model menu, branch menu, commit menu, and composer popover behavior
+  have moved into the same restrained workbench visual language.
+
+Completed:
+
+- Used the `impeccable` product-register flow with `PRODUCT.md` to keep the pass
+  focused on task-oriented developer-tool UI rather than decorative polish.
+- Updated `ConversationPartRenderer` response blocks so grouped references,
+  source cards, inline tool calls, inline approvals, artifact cards, and code
+  controls share consistent surface layering, focus rings, compact radii, and
+  current Result workspace language.
+- Removed stale artifact-card copy that still described the Result workspace as
+  a future plan.
+- Updated `ExecutionTimeline` and `ApprovalEvidence` to use the same evidence
+  block hierarchy as approvals and artifacts.
+- Polished Result workspace panels and artifact action buttons so copy/download
+  controls have consistent hover, focus, and active states.
+- Adjusted composer/model controls and right-panel branch/commit menus to use
+  the same radii, focus color, and surface vocabulary.
+- Changed the input panel from `overflow: hidden` to `overflow: visible` with a
+  local z-index so composer popovers are not clipped by the fixed input area.
+
+Files changed:
+
+- `apps/desktop/src/components/conversation/ConversationPartRenderer.tsx`
+- `apps/desktop/src/components/conversation/ConversationPartRenderer.test.tsx`
+- `apps/desktop/src/components/conversation/ExecutionTimeline.tsx`
+- `apps/desktop/src/components/conversation/ApprovalEvidence.tsx`
+- `apps/desktop/src/pages/Chat.tsx`
+- `apps/desktop/src/index.css`
+- `docs/conversation-frontend-ux-progress-tracker.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- Focused conversation component tests passed: 4 files, 49 tests.
+- Desktop typecheck passed.
+- Playwright Chat layout suite passed: 11 tests.
+- Desktop production build passed.
+- Vite still reports large chunk warnings from Mermaid/Shiki-related dynamic
+  chunks, but the build succeeds.
+
+Next recommended task:
+
+- Finish the remaining F7.4 visual pass for suggestion chips, queued notices,
+  command-chip edge states, and broader live visual screenshot review before
+  moving into F8.1 streaming stability.
+
+### 2026-06-13 Session Update 133
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Visual System
+
+Status change:
+
+- Verification remains at 98%.
+- F7.4 visual-system polish is complete in the current tracker.
+- The next active batch is `F8.1 Streaming stability pass`.
+
+Completed:
+
+- Polished suggestion chips and command chips with compact state indicators
+  that distinguish composer-fill, workspace-action, and approval-gated actions
+  without changing their behavior or accessible labels.
+- Added `data-action-kind` hooks to suggestion and command chips so future
+  browser/visual tests can target the intended interaction class directly.
+- Polished queued/busy/approval composer notices with visible state dots,
+  `data-composer-notice`, `aria-live`, and a consistent cancel button treatment.
+- Preserved existing Playwright-visible text such as `Queued follow-up:` and
+  command button names so current browser scenarios remain stable.
+
+Files changed:
+
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.tsx`
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
+- `apps/desktop/src/pages/Chat.tsx`
+- `docs/conversation-frontend-ux-progress-tracker.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+```
+
+Result:
+
+- SuggestionReplyBar focused tests passed: 29 tests.
+- Focused conversation component tests passed: 4 files, 50 tests.
+- Desktop typecheck passed.
+- Playwright Chat layout suite passed: 11 tests.
+- Desktop production build passed.
+- Vite still reports large chunk warnings from Mermaid/Shiki-related dynamic
+  chunks, but the build succeeds.
+
+Next recommended task:
+
+- Start `F8.1 Streaming stability pass`: audit streaming merge/finalization for
+  long markdown, reference streaming, tool output deltas, and scroll-state
+  assumptions before changing behavior.
+
+### 2026-06-13 Session Update 134
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Streaming UX Hardening
+
+Status change:
+
+- Verification remains at 98%.
+- `F8.1 Streaming stability pass` advanced from planned/start state to 84% in
+  the conversation frontend tracker.
+- The streaming architecture now has a stable tool lifecycle identifier across
+  planner events, daemon confirm-action events, UI chunks, and desktop tool
+  bubbles.
+
+Completed:
+
+- Added optional `toolCallId` to chat tool lifecycle events so repeated
+  same-name tools do not depend on tool name matching during streaming.
+- Updated the UI chunk adapter to preserve explicit tool call ids for
+  `tool-input-*`, `tool-output-delta`, `tool-output-available`, and
+  `tool-output-error`.
+- Added `toolCallId` to direct stored-approval execution paths, including the
+  legacy yes/no confirmation path and the structured `/confirm-action` path.
+- Updated desktop SSE parsing to recognize canonical `tool.completed` and
+  `final` events when mapping result payloads.
+- Made the Chat UI upsert tool bubbles from structured UI chunks instead of
+  relying only on legacy `tool_start`/`tool_end` events.
+- Added a regression test proving final metadata and sources still attach to
+  the existing streamed assistant bubble after UI `text-end` has already
+  stopped the visible stream.
+- Fixed the real UI-stream ordering bug where an assistant answer could be
+  duplicated when tool bubbles arrived between `text-end` and final `done`.
+- Added a core UI-stream regression test proving repeated same-name tool calls
+  keep distinct ids when explicit tool call ids are available.
+- Added Playwright SSE coverage for a UI-chunk-only streamed tool lifecycle so
+  the desktop app proves one final answer, tool evidence, and source references
+  without relying on legacy tool events.
+
+Files changed:
+
+- `packages/core/src/chatPlanner.ts`
+- `packages/core/src/chatUiStream.ts`
+- `packages/core/test/chatUiStream.test.ts`
+- `packages/daemon/src/chatSession.ts`
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `apps/desktop/src/chatBubbles.test.ts`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/conversation-frontend-ux-progress-tracker.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatUiStream.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatEvents.test.ts test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+git diff --check
+```
+
+Result:
+
+- Desktop chat bubble focused tests passed: 22 tests.
+- Core UI stream tests passed: 6 tests.
+- Core typecheck passed.
+- Core build passed and refreshed `dist` declarations for daemon consumers.
+- Daemon chat event/server tests passed: 2 files, 55 tests.
+- Daemon typecheck passed.
+- Focused desktop conversation tests passed: 4 files, 65 tests.
+- Desktop typecheck passed.
+- Playwright Chat layout suite passed: 12 tests.
+- `git diff --check` only reported existing LF/CRLF conversion warnings.
+
+Next recommended task:
+
+- Continue F8.1 with live long-answer/reference-streaming QA: simulate long
+  markdown with sources, long-running tool output, cancellation, and resume
+  finalization to prove the UI does not duplicate answers, lose references, or
+  misplace tool output.
+
+### 2026-06-13 Session Update 135
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Streaming UX Hardening
+
+Status change:
+
+- `F8.1 Streaming stability pass` advanced from 88% to 90% in the
+  conversation frontend tracker.
+- Streaming UX advanced from 88% to 90%.
+- Conversation test coverage advanced from 94% to 95%.
+
+Completed:
+
+- Added a deduplicated desktop error-bubble path so a real daemon response that
+  emits both legacy `error` events and UI-stream `error` chunks only creates
+  one visible error.
+- Updated UI-stream `error` chunks to release busy state, clear status text,
+  clear the cancel handle, and restore the composer without requiring a legacy
+  event to arrive afterward.
+- Updated UI-stream `finish` chunks to clear UI-stream state and release the
+  composer for UI-chunk-only terminal streams.
+- Added Playwright coverage for duplicate legacy plus UI-stream errors,
+  including partial streamed text preservation, single visible error rendering,
+  Stop-button cleanup, composer re-enable, and overflow checks.
+
+Files changed:
+
+- `apps/desktop/src/pages/Chat.tsx`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/conversation-frontend-ux-progress-tracker.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "deduplicates legacy and UI stream error events"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+```
+
+Result:
+
+- Desktop typecheck passed.
+- Focused duplicate stream-error Playwright test passed.
+- Full Playwright Chat layout suite passed: 14 tests.
+
+Next recommended task:
+
+- Continue F8.1 with live long-answer and resume streaming QA, then either add
+  resumable finalization coverage if it can be represented without a live LLM
+  dependency or move into the next Conversation workflow hardening slice.
+
+### 2026-06-13 Session Update 136
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Streaming UX Hardening
+
+Status change:
+
+- `F8.1 Streaming stability pass` advanced from 90% to 92% in the
+  conversation frontend tracker.
+- Streaming UX advanced from 90% to 92%.
+- Conversation test coverage advanced from 95% to 96%.
+
+Completed:
+
+- Added browser coverage for a long streamed markdown answer with source
+  metadata and tool output arriving in the middle of the text stream.
+- Fixed the bug exposed by that coverage: text deltas that arrive after a tool
+  output card now append to the active streaming assistant bubble instead of
+  creating a second assistant answer.
+- Updated stream stopping/finalization to find the active streaming assistant
+  bubble even when it is no longer the last bubble because tool evidence was
+  inserted after it.
+- Verified that the long streamed answer remains one response, source
+  references render once, tool evidence renders once, the composer is restored,
+  and the chat shell has no visible horizontal overflow.
+
+Files changed:
+
+- `apps/desktop/src/pages/Chat.tsx`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/conversation-frontend-ux-progress-tracker.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "renders long streamed markdown with sources and tool output"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+```
+
+Result:
+
+- Focused long streamed markdown/source/tool-output Playwright test passed.
+- Desktop typecheck passed.
+- Full Playwright Chat layout suite passed: 16 tests.
+
+Next recommended task:
+
+- Continue F8.1 with real-backend/manual long-answer and resume streaming QA, or
+  move into the next Conversation workflow hardening slice if the mockable
+  streaming failure modes remain green.
+
+### 2026-06-13 Session Update 137
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Streaming UX Hardening
+
+Status change:
+
+- `F8.1 Streaming stability pass` advanced from 92% to 93% in the
+  conversation frontend tracker.
+- Streaming UX advanced from 92% to 93%.
+
+Completed:
+
+- Added Playwright coverage proving a UI-stream-only response can finish without
+  a legacy `done` event while still restoring the composer and hiding Stop.
+- Kept the visible assistant answer stable for that terminal UI-stream-only
+  path.
+- Fixed the untracked desktop `api.test.ts` controller typing issue that was
+  blocking full desktop typecheck, then verified the test itself still passes.
+
+Files changed:
+
+- `apps/desktop/src/api.test.ts`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/conversation-frontend-ux-progress-tracker.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/api.test.ts
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "releases the composer after a UI-stream-only finish"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+```
+
+Result:
+
+- Focused UI-stream-only finish Playwright test passed.
+- Desktop typecheck passed.
+- Desktop API streaming test passed: 1 test.
+- Full Playwright Chat layout suite passed: 17 tests.
+
+Next recommended task:
+
+- Continue with real-backend/manual long-answer streaming QA and then shift
+  back toward Conversation workflow breadth: project-context tool use,
+  state-aware actions, and git/PR insight interactions.
+
+### 2026-06-13 Session Update 138
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Conversation workflow hardening resumed after the F8.1 mockable streaming
+  failure modes reached stable coverage.
+- Git workflow alignment improved by removing a remaining deterministic
+  translator path from production chat fallback behavior.
+
+Completed:
+
+- Removed `translateIntent()` from `ChatPlanner` production offline fallback.
+- The model-unavailable fallback now explicitly says no Git/PR workflow was
+  inferred or executed, preserving the user's goal boundary instead of emitting
+  canned `git_push` / `ado_create_pr` style step lists.
+- Removed `git_intent_translator` from the read-only production capability
+  classification set.
+- Added planner regression coverage proving an unavailable model does not turn
+  "push and create PR" into concrete Git/ADO steps or approval proposals.
+- Added capability prompt coverage proving registered chat capabilities do not
+  expose `git_intent_translator`.
+- Updated the Git agent optimization document to record that the translator is
+  retained only as an offline/test reference, not as production chat behavior.
+
+Files changed:
+
+- `packages/core/src/chatPlanner.ts`
+- `packages/core/src/tools/capabilities.ts`
+- `packages/core/test/chatPlannerApproval.test.ts`
+- `packages/core/test/toolCapabilities.test.ts`
+- `docs/conversation-git-agent-optimization.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts test/chatUseCases.test.ts test/toolCapabilities.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+```
+
+Result:
+
+- Focused core planner/use-case/capability tests passed: 3 files, 28 tests.
+- Core typecheck passed.
+- Core build passed.
+- Daemon typecheck passed against the rebuilt core package.
+
+Next recommended task:
+
+- Continue reducing canned workflow behavior in Conversation by splitting
+  `commit_flow` UI/state handling into more explicit state-aware actions, then
+  verify PR insight/policy/work-item actions still use latest-active-PR fallback
+  without requiring users to type PR IDs.
+
+### 2026-06-13 Session Update 139
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Reduced another canned workflow surface in the Conversation right panel.
+- The commit/push menu now routes through explicit state-aware frontend actions
+  instead of a generic `commit_flow` action.
+
+Completed:
+
+- Replaced the frontend `WorkspaceAction` union member `commit_flow` with:
+  - `prepare_commit`
+  - `commit_and_push`
+  - `push_branch`
+- Kept backend API behavior explicit:
+  - Commit maps to `prepare_commit` with `commitMode: "commit"`.
+  - Commit and push maps to `prepare_commit` with `commitMode:
+    "commit-push"`.
+  - Push maps directly to `push_branch`.
+- Added accessible action labels for right-panel commit controls so tests and
+  users can distinguish the action boundaries.
+- Added Playwright coverage that clicks the right-panel commit controls and
+  verifies the exact `/chat/workflow-action` payloads.
+- Updated the Git agent optimization document to mark the generic frontend
+  `commit_flow` path as split.
+
+Files changed:
+
+- `apps/desktop/src/pages/Chat.tsx`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/conversation-git-agent-optimization.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "routes right-panel commit controls as explicit structured actions"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+```
+
+Result:
+
+- Desktop typecheck passed.
+- Focused right-panel commit action Playwright test passed.
+- Full Playwright Chat layout suite passed: 19 tests.
+
+Next recommended task:
+
+- Verify PR insight, policy, and work-item Conversation actions from the
+  command chips/right panel use latest-active-PR fallback cleanly and present
+  missing ADO mapping/auth states without asking users to manually fill PR IDs.
+
+### 2026-06-13 Session Update 140
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- PR insight Conversation actions now have stronger evidence that they do not
+  require users to manually type PR IDs for the common latest-active-PR path.
+
+Completed:
+
+- Updated daemon coverage so `check_pr_policy` and `list_pr_work_items` are
+  tested without an explicit `pullRequestId`, forcing the same latest-active-PR
+  fallback already used by `inspect_pr_insight`.
+- Added Playwright coverage proving Conversation PR controls send structured
+  workflow actions without a `pullRequestId`:
+  - command chip `PR insight` -> `inspect_pr_insight`
+  - command chip `ADO policy` -> `check_pr_policy`
+  - right-panel `Work items` -> `list_pr_work_items`
+- Confirmed the frontend does not ask for or inject a PR ID in those controls;
+  the daemon remains responsible for resolving the latest active PR from Azure
+  DevOps.
+- Updated the Git agent optimization document with this PR follow-up behavior.
+
+Files changed:
+
+- `packages/daemon/test/server.test.ts`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/conversation-git-agent-optimization.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts -t "latest active PR fallback"
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "routes PR insight controls without requiring a typed PR id"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+```
+
+Result:
+
+- Daemon HTTP test suite passed: 45 tests.
+- Desktop typecheck passed.
+- Daemon typecheck passed.
+- Focused PR-control Playwright test passed.
+- Full Playwright Chat layout suite passed: 20 tests.
+
+Next recommended task:
+
+- Add explicit missing-state coverage for PR follow-up controls: Project Link
+  without ADO mapping and ADO authentication failure should surface clear
+  Conversation errors without asking users to fill low-level parameters.
+
+### 2026-06-13 Session Update 141
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- PR follow-up Conversation failure states are now more product-ready for the
+  two most important blocked states: incomplete Project Link mapping and Azure
+  DevOps OAuth/token failure.
+
+Completed:
+
+- Added a structured workflow-action failure formatter for `/chat/workflow-action`.
+- ADO PR workflow action failures now preserve auth diagnostics in the response
+  and `workflowState`:
+  - `authStatus`
+  - `authMode`
+  - `authMessage`
+  - `retryable`
+  - `workflowPhase: "auth_required"` for auth failures
+- OAuth-unavailable PR workflow failures now return HTTP 401 with
+  `currentStep: "Azure DevOps OAuth unavailable"` instead of a generic
+  workflow failure.
+- Kept missing Project Link mapping as a normal failed workflow state with a
+  clear summary explaining which ADO fields are missing.
+- Extended the shared chat workflow state and desktop workflow state typings so
+  Conversation can carry ADO auth diagnostics without lossy casts.
+- Updated the right-side Progress details so failed ADO workflow states can show
+  the human-readable auth message and whether the issue is retryable.
+- Added daemon regression coverage proving OAuth-unavailable PR actions surface
+  structured diagnostics without telling the user to configure a PAT fallback.
+- Updated the Git agent optimization document to mark structured ADO failure
+  states as implemented.
+
+Files changed:
+
+- `packages/daemon/src/server.ts`
+- `packages/daemon/test/server.test.ts`
+- `packages/core/src/chatPlanner.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `docs/conversation-git-agent-optimization.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+```
+
+Result:
+
+- Daemon HTTP test suite passed: 47 tests.
+- Daemon typecheck passed.
+- Desktop typecheck passed.
+- Core typecheck passed.
+- Full Playwright Chat layout suite passed: 20 tests.
+
+Next recommended task:
+
+- Continue the Conversation workflow breadth pass by adding a dedicated
+  validation workflow state for build/test execution: initialization, running,
+  passed, failed, and recommended follow-up.
+
+### 2026-06-13 Session Update 142
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Conversation validation moved from generic prompt/tool behavior toward a
+  structured CI workflow with explicit approval and progress state.
+
+Completed:
+
+- Added a constrained `validation_command` core tool for Project Link build/test
+  commands.
+- Registered `validation_command` in the chat runtime so Conversation approval
+  proposals can execute it.
+- Added `/chat/workflow-action` actions:
+  - `run_tests`
+  - `run_build`
+- `run_tests` and `run_build` now inspect lightweight workspace state and create
+  a medium-risk approval proposal instead of executing immediately.
+- The proposal reuses the selected Project Link's configured `testCommand` or
+  `buildCommand`, with safe defaults when no command is configured.
+- Added deterministic post-confirmation CI completion:
+  - `ci/test_passed`
+  - `ci/test_failed`
+  - `ci/build_passed`
+  - `ci/build_failed`
+- Added CI workflow state rendering in the right-side Progress panel:
+  inspect workspace, approve validation, run validation, review result.
+- Changed command chips so `Run tests` starts `run_tests` as a structured
+  workflow action instead of inserting text into the composer.
+- Changed the welcome `Run tests` chip to do the same, preserving the earlier
+  fix that workflow controls should not send hidden natural-language prompts.
+- Extended approval evidence rendering to show `ci:test` and `ci:build`
+  boundaries and command previews.
+- Added daemon regression coverage for `run_tests` approval proposals.
+- Updated desktop command chip tests and Playwright layout coverage for the new
+  structured validation behavior.
+
+Files changed:
+
+- `packages/core/src/tools/validation.ts`
+- `packages/core/src/index.ts`
+- `packages/core/src/chatPlanner.ts`
+- `packages/daemon/src/chatSession.ts`
+- `packages/daemon/src/server.ts`
+- `packages/daemon/test/server.test.ts`
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/components/conversation/ApprovalEvidence.tsx`
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.tsx`
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
+- `apps/desktop/src/pages/Chat.tsx`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/conversation-git-agent-optimization.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+```
+
+Result:
+
+- Core build passed.
+- Core typecheck passed.
+- Daemon typecheck passed.
+- Desktop typecheck passed.
+- Daemon HTTP test suite passed: 48 tests.
+- Desktop SuggestionReplyBar tests passed: 29 tests.
+- Full Playwright Chat layout suite passed: 20 tests.
+
+Next recommended task:
+
+- Improve validation intelligence by selecting focused test/build commands from
+  repo context and changed files, then preserve failing output as a structured
+  Conversation artifact instead of only showing raw tool output.
+
+### 2026-06-13 Session Update 143
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Conversation validation gained a stronger agent-style preflight layer:
+  validation actions now explain which command will run, where it came from,
+  which changed files were considered, and what failed when the command exits
+  non-zero.
+
+Completed:
+
+- Added validation preflight metadata to pending approval proposals:
+  - validation kind: `test` or `build`
+  - selected command
+  - command source: override, Project Link profile, or default
+  - changed files gathered from `git diff --name-only` and porcelain status
+  - compact summary for the approval card/right-panel workflow state
+- Extended `/chat/workflow-action` validation probes to include changed-file
+  discovery before creating `run_tests` or `run_build` approvals.
+- Added structured failure summaries to `validation_command` results:
+  - `summary`
+  - `failure_excerpt`
+- Updated deterministic post-confirmation CI responses so failed test/build
+  workflows include the concise failure excerpt instead of forcing users to
+  inspect raw tool output first.
+- Fixed Windows validation execution for `npm`/`pnpm.cmd` style runners by
+  wrapping only validation command shims through `cmd.exe /d /s /c`; generic Git
+  command execution remains shell-free.
+- Added core regression coverage for failed validation output extraction.
+- Extended daemon coverage so `run_tests` approvals prove profile command
+  selection and changed-file preflight.
+- Updated the Git agent optimization document with the current validation
+  workflow status and remaining gaps.
+
+Files changed:
+
+- `packages/core/src/tools/validation.ts`
+- `packages/core/test/validationTools.test.ts`
+- `packages/core/src/chatPlanner.ts`
+- `packages/daemon/src/server.ts`
+- `packages/daemon/src/chatSession.ts`
+- `packages/daemon/test/server.test.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `apps/desktop/src/components/conversation/ApprovalEvidence.tsx`
+- `docs/conversation-git-agent-optimization.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/validationTools.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
+```
+
+Result:
+
+- Core validation tool test passed: 1 test.
+- Core typecheck passed.
+- Desktop typecheck passed.
+- Core build passed.
+- Daemon typecheck passed.
+- Daemon HTTP test suite passed: 48 tests.
+- Desktop SuggestionReplyBar tests passed: 29 tests.
+- Full Playwright Chat layout suite passed: 20 tests.
+
+Next recommended task:
+
+- Continue validation intelligence by deriving focused test/build commands from
+  repo metadata, changed paths, package/workspace ownership, and known test
+  framework conventions, then render failed validation as a first-class
+  Conversation artifact.
+
+### 2026-06-13 Session Update 144
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Validation command selection now has an initial package-aware derivation path
+  instead of only using explicit Project Link commands or root-level defaults.
+
+Completed:
+
+- Added `derived` as a validation command source in shared approval/preflight
+  types.
+- Added daemon-side package ownership detection for validation actions:
+  - inspect changed files from Git status/diff
+  - find the nearest owning `package.json`
+  - select a matching `test`, `test:unit`, `vitest`, or `build` script
+  - use pnpm workspace filters when a pnpm workspace and local wrapper are
+    available
+  - fall back to `npm --prefix <package> run <script>` for package-local npm
+    execution
+- Kept explicit user overrides and Project Link `testCommand`/`buildCommand`
+  higher priority than derived commands.
+- Added daemon regression coverage proving a changed file under
+  `packages/core` derives `npm --prefix packages/core run test` when no
+  Project Link test command is configured.
+- Updated the Git agent optimization document to show that validation now has
+  single-package command derivation, while multi-package selection remains a
+  future gap.
+
+Files changed:
+
+- `packages/core/src/chatPlanner.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `apps/desktop/src/components/conversation/ApprovalEvidence.tsx`
+- `packages/daemon/src/server.ts`
+- `packages/daemon/test/server.test.ts`
+- `docs/conversation-git-agent-optimization.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/validationTools.test.ts
+```
+
+Result:
+
+- Daemon HTTP test suite passed: 49 tests.
+- Daemon typecheck passed after rebuilding core declarations.
+- Desktop typecheck passed.
+- Core build passed.
+- Core typecheck passed.
+- Core validation tool test passed: 1 test.
+
+Next recommended task:
+
+- Extend validation derivation from the single-package case to multi-package
+  changes and root/package mixed changes, then expose the selected validation
+  scope more explicitly in the Conversation approval UI.
+
+### 2026-06-13 Session Update 145
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Validation command derivation now covers compatible multi-package pnpm
+  workspace changes, reducing unnecessary root-level validation when multiple
+  packages are touched.
+
+Completed:
+
+- Extended daemon validation derivation from the single-package case to the
+  compatible multi-package case.
+- Multi-package derivation now:
+  - finds changed files' nearest `package.json` owners
+  - requires every touched package to expose the same selected validation script
+  - requires package names for every touched package
+  - requires a pnpm workspace plus repository-local `pnpm-project.ps1`
+  - generates one approval command with repeated pnpm `--filter` selectors
+- Left unsafe or ambiguous cases as fallback behavior instead of generating
+  shell command chains.
+- Added daemon regression coverage for two changed pnpm workspace packages
+  producing:
+  `.\scripts\windows\pnpm-project.ps1 --filter @demo/desktop --filter @demo/core test`
+- Updated the Conversation Git agent optimization document to mark compatible
+  multi-package derivation as implemented and narrow the remaining validation
+  gap to richer framework-specific selection and artifact rendering.
+
+Files changed:
+
+- `packages/daemon/src/server.ts`
+- `packages/daemon/test/server.test.ts`
+- `docs/conversation-git-agent-optimization.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+```
+
+Result:
+
+- Daemon HTTP test suite passed: 50 tests.
+- Daemon typecheck passed.
+- Core typecheck passed.
+
+Next recommended task:
+
+- Expose validation scope in the approval UI more clearly: package filters,
+  selected script, changed-file count, and why the agent selected that command.
+
+### 2026-06-13 Session Update 146
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Validation approvals now expose their selection evidence in the Conversation
+  approval card, making test/build approvals easier to audit before execution.
+
+Completed:
+
+- Extended validation preflight metadata with:
+  - `changedFileCount`
+  - `selectedScript`
+  - `packageFilters`
+  - `packageRoots`
+  - `selectionReason`
+- Populated these fields from derived validation command selection in the
+  daemon.
+- Preserved existing command priority:
+  - explicit validation override
+  - Project Link test/build command
+  - derived package/workspace command
+  - root-level default
+- Updated desktop `ApprovalEvidence` so validation approvals render structured
+  scope rows instead of hiding all selection details inside a summary sentence.
+- Added desktop regression coverage for validation approval evidence rendering.
+- Extended daemon validation tests so derived single-package and multi-package
+  approvals assert scope metadata.
+- Fixed a stale TypeScript incremental cache issue by clearing generated
+  `tsconfig.tsbuildinfo` files after core declaration changes; core build and
+  daemon typecheck then passed.
+
+Files changed:
+
+- `packages/core/src/chatPlanner.ts`
+- `packages/daemon/src/server.ts`
+- `packages/daemon/test/server.test.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `apps/desktop/src/components/conversation/ApprovalEvidence.tsx`
+- `apps/desktop/src/components/conversation/ApprovalEvidence.test.tsx`
+- `docs/conversation-git-agent-optimization.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ApprovalEvidence.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+```
+
+Result:
+
+- Desktop ApprovalEvidence tests passed: 4 tests.
+- Daemon HTTP test suite passed: 50 tests.
+- Core typecheck passed.
+- Core build passed using repository-local `.tools` Node/pnpm.
+- Desktop typecheck passed using repository-local `.tools` Node/pnpm.
+- Daemon typecheck passed after clearing stale TypeScript incremental cache and
+  rebuilding core declarations.
+
+Note:
+
+- The managed sandbox blocked Node from reading `node_modules/.pnpm` TypeScript
+  files. Verification commands were rerun through the repository-local
+  `.tools` toolchain with approved elevated execution.
+
+Next recommended task:
+
+- Turn validation failures into richer Conversation artifacts so users can see
+  failing command, package scope, key output excerpt, and suggested next action
+  without opening raw tool output.
+
+### 2026-06-13 Session Update 147
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Failed test/build confirmations now produce structured Conversation artifacts
+  instead of forcing users to inspect raw tool output.
+
+Completed:
+
+- Added `artifacts` to the core `ChatPlannerResult` contract and regenerated
+  core declaration output.
+- Extended desktop assistant metadata handling so planner/daemon artifacts are:
+  - parsed from metadata chunks
+  - merged into existing assistant bubbles
+  - appended as `artifact` conversation parts
+  - preserved when loading saved chat history
+- Added daemon validation failure artifact generation for confirmed
+  `validation_command` actions.
+- The generated validation artifact includes:
+  - command
+  - exit code
+  - duration
+  - command source
+  - selected script
+  - package filters and package roots
+  - changed-file count
+  - key failure excerpt
+  - stdout/stderr excerpts
+- Kept successful validation confirmations lightweight; they do not create an
+  artifact unless there is failure content worth inspecting.
+- Added regression coverage for desktop artifact metadata mapping and daemon
+  validation failure artifact generation.
+
+Files changed:
+
+- `packages/core/src/chatPlanner.ts`
+- `packages/core/dist/chatPlanner.d.ts`
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/chatBubbles.ts`
+- `apps/desktop/src/chatBubbles.test.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `packages/daemon/src/chatSession.ts`
+- `packages/daemon/test/chatSessionWorkflow.test.ts`
+- `docs/conversation-git-agent-optimization.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+```
+
+Result:
+
+- Desktop chat bubble tests passed: 23 tests.
+- Daemon chat session workflow tests passed: 20 tests.
+- Core build passed.
+- Desktop typecheck passed.
+- Daemon typecheck passed after clearing stale TypeScript incremental cache and
+  rebuilding core declarations.
+
+Note:
+
+- The first normal sandbox test attempt could not resolve workspace Vitest
+  links. Verification was rerun through the repository-local `.tools` Node/pnpm
+  toolchain with approved elevated execution.
+
+Next recommended task:
+
+- Use the validation failure artifact as input for the next recovery turn:
+  suggest targeted reruns, likely failing files, and safe follow-up actions
+  based on the artifact content and changed-file context.

@@ -174,6 +174,7 @@ export interface ChatEventPayload {
   // assistant_delta
   delta?: string;
   // tool_start / tool_end
+  toolCallId?: string;
   name?: string;
   args?: Record<string, unknown>;
   stream?: "stdout" | "stderr";
@@ -213,8 +214,37 @@ export interface ChatEventPayload {
     riskLevel: string;
     actionsTaken: string[];
     suggestions: string[];
+    sources?: ChatSource[];
+    artifacts?: ChatArtifact[];
   };
 }
+
+export interface ChatArtifact {
+  type: "artifact";
+  artifactId: string;
+  title: string;
+  artifactType: "react" | "html" | "markdown" | "mermaid" | "text";
+  status: "streaming" | "ready" | "error";
+  content?: string;
+}
+
+export type ChatSource =
+  | {
+      type: "source_document";
+      sourceId?: string;
+      title: string;
+      file?: string;
+      line?: number;
+      snippet?: string;
+    }
+  | {
+      type: "source_url";
+      sourceId?: string;
+      title: string;
+      url: string;
+      domain?: string;
+      snippet?: string;
+    };
 
 export interface ChatHistoryEntry {
   sessionId: string;
@@ -292,11 +322,56 @@ export interface ChatMessageEntry {
   finalizationMode?: "agent_final" | "control_marker" | "plain_json" | "none";
   actionsTaken?: string[];
   suggestions?: string[];
+  sources?: ChatSource[];
+  artifacts?: ChatArtifact[];
 }
 
 export type ChatWorkflowState = NonNullable<ChatEventPayload["state"]>;
 
-export type ChatWorkflowAction = "inspect_environment" | "inspect_changes" | "refresh_branch";
+export type ChatWorkflowAction =
+  | "inspect_environment"
+  | "inspect_changes"
+  | "refresh_branch"
+  | "checkout_branch"
+  | "create_branch"
+  | "push_branch"
+  | "prepare_commit"
+  | "run_tests"
+  | "run_build"
+  | "stage_resolved_conflicts"
+  | "continue_rebase"
+  | "abort_rebase"
+  | "skip_rebase"
+  | "continue_merge"
+  | "abort_merge"
+  | "continue_cherry_pick"
+  | "abort_cherry_pick"
+  | "skip_cherry_pick"
+  | "continue_revert"
+  | "abort_revert"
+  | "skip_revert"
+  | "create_pr"
+  | "inspect_pr_insight"
+  | "check_pr_policy"
+  | "list_pr_work_items"
+  | "link_work_item";
+
+export interface ChatWorkflowActionInput {
+  sessionId?: string | null;
+  pullRequestId?: number;
+  workItemId?: number;
+  branch?: string;
+  targetBranch?: string;
+  title?: string;
+  description?: string;
+  draft?: boolean;
+  message?: string;
+  paths?: string[];
+  includeUnstaged?: boolean;
+  commitMode?: "commit" | "commit-push";
+  validationScript?: string;
+  validationArgs?: string[];
+}
 
 export interface ChatWorkflowToolResult {
   name: string;
@@ -310,6 +385,7 @@ export interface ChatWorkflowToolResult {
 export interface ChatWorkflowActionResult {
   ok: boolean;
   action: ChatWorkflowAction;
+  sessionId?: string;
   repoPath: string;
   summary: string;
   workflowState: ChatWorkflowState;
@@ -470,8 +546,10 @@ export function chatStream(
               const parsed = JSON.parse(raw) as ChatEventPayload & { result?: unknown; chunk?: ChatUiChunk };
               // For tool_end, the backend sends { type, name, ok, summary, result }
               // Map `result` → `toolResult` to avoid collision with the done `result`
-              const toolResult = currentEventType === "tool_end" ? parsed.result : undefined;
-              const doneResult = currentEventType === "done"
+              const toolResult = currentEventType === "tool_end" || currentEventType === "tool.completed"
+                ? parsed.result
+                : undefined;
+              const doneResult = currentEventType === "done" || currentEventType === "final"
                 ? (parsed.result as ChatEventPayload["result"])
                 : undefined;
               const message = currentEventType === "error" && parsed.message
@@ -542,8 +620,10 @@ export function confirmAction(
             const raw = line.slice(6);
             try {
               const parsed = JSON.parse(raw) as ChatEventPayload & { result?: unknown; chunk?: ChatUiChunk };
-              const toolResult = currentEventType === "tool_end" ? parsed.result : undefined;
-              const doneResult = currentEventType === "done"
+              const toolResult = currentEventType === "tool_end" || currentEventType === "tool.completed"
+                ? parsed.result
+                : undefined;
+              const doneResult = currentEventType === "done" || currentEventType === "final"
                 ? (parsed.result as ChatEventPayload["result"])
                 : undefined;
               const message = currentEventType === "error" && parsed.message
@@ -623,12 +703,19 @@ export async function runChatWorkflowAction(
   action: ChatWorkflowAction,
   repoPath: string,
   profileId?: string | null,
+  input?: ChatWorkflowActionInput,
 ): Promise<ChatWorkflowActionResult> {
   const profile = readProfileData(profileId ?? undefined);
   const r = await fetch(`${RUNTIME_URL}/chat/workflow-action`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ action, repoPath, ...(profile ? { profile } : {}) }),
+    body: JSON.stringify({
+      action,
+      repoPath,
+      profileId,
+      ...(input ?? {}),
+      ...(profile ? { profile } : {}),
+    }),
   });
   if (!r.ok) throw new Error(`/chat/workflow-action HTTP ${r.status}: ${await r.text()}`);
   return (await r.json()) as ChatWorkflowActionResult;

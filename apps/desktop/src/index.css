@@ -654,7 +654,9 @@ body {
 /* Input bar: owned by middle column, never scrolls */
 .input-panel {
   flex-shrink: 0;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+  z-index: 30;
 }
 
 /* ── Right context panel ─────────────────────────────────────────────────── */

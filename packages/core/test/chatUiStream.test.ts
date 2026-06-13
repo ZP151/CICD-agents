@@ -153,4 +153,28 @@ describe("chatEventsToUiChunks", () => {
     ]);
     expect(chunks[3]).toMatchObject({ type: "tool-output-error", errorText: "missing credentials" });
   });
+
+  it("preserves explicit tool call ids across repeated same-name tools", async () => {
+    const chunks = await collect([
+      { type: "tool_start", name: "git_status", args: { short: true }, toolCallId: "call_1" },
+      { type: "tool_output_delta", name: "git_status", stream: "stdout", delta: "first\n", toolCallId: "call_1" },
+      { type: "tool_end", name: "git_status", ok: true, summary: "first", result: { stdout: "first\n" }, toolCallId: "call_1" },
+      { type: "tool_start", name: "git_status", args: { short: true }, toolCallId: "call_2" },
+      { type: "tool_output_delta", name: "git_status", stream: "stdout", delta: "second\n", toolCallId: "call_2" },
+      { type: "tool_end", name: "git_status", ok: true, summary: "second", result: { stdout: "second\n" }, toolCallId: "call_2" },
+    ]);
+
+    const lifecycleChunks = chunks.filter((chunk) => "toolCallId" in chunk);
+
+    expect(lifecycleChunks.map((chunk) => chunk.toolCallId)).toEqual([
+      "call_1",
+      "call_1",
+      "call_1",
+      "call_1",
+      "call_2",
+      "call_2",
+      "call_2",
+      "call_2",
+    ]);
+  });
 });

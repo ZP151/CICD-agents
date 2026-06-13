@@ -31,6 +31,8 @@ describe("tool capability registry", () => {
     expect(caps.find((cap) => cap.name === "git_restore")?.riskLevel).toBe("medium");
     expect(caps.find((cap) => cap.name === "git_pull")?.riskLevel).toBe("medium");
     expect(caps.find((cap) => cap.name === "git_rebase")?.riskLevel).toBe("high");
+    expect(caps.find((cap) => cap.name === "git_cherry_pick")?.riskLevel).toBe("high");
+    expect(caps.find((cap) => cap.name === "git_revert")?.riskLevel).toBe("high");
     expect(caps.find((cap) => cap.name === "git_commit")?.riskLevel).toBe("medium");
     expect(caps.find((cap) => cap.name === "git_commit")?.requiresApproval).toBe(true);
     expect(caps.find((cap) => cap.name === "git_push")?.riskLevel).toBe("high");
@@ -48,8 +50,11 @@ describe("tool capability registry", () => {
     expect(prompt).toContain("git_fetch");
     expect(prompt).toContain("git_merge_base");
     expect(prompt).toContain("git_rebase");
+    expect(prompt).toContain("git_cherry_pick");
+    expect(prompt).toContain("git_revert");
     expect(prompt).toContain("git_restore");
     expect(prompt).toContain("git_stash");
     expect(prompt).toContain("[git; high; approval-required; required: branch]");
+    expect(prompt).not.toContain("git_intent_translator");
   });
 });

@@ -36,6 +36,27 @@ function fakeToolCallLlm(name: string, args: Record<string, unknown>): LLMClient
   } as unknown as LLMClient;
 }
 
+function fakeStreamingToolCallLlm(name: string, argumentChunks: string[]): LLMClient {
+  return {
+    configured: true,
+    async *chatStream(): AsyncGenerator<ChatStreamEvent> {
+      let accumulated = "";
+      for (const chunk of argumentChunks) {
+        accumulated += chunk;
+        yield {
+          type: "tool_call_delta",
+          toolCalls: [{ id: "call_1", name, arguments: accumulated }],
+        };
+      }
+      yield {
+        type: "tool_call",
+        toolCalls: [{ id: "call_1", name, arguments: accumulated }],
+      };
+      yield { type: "done", finishReason: "tool_calls" };
+    },
+  } as unknown as LLMClient;
+}
+
 function fakeSequenceLlm(
   sequences: ChatStreamEvent[][],
   calls?: Array<{ messages?: unknown[] }>,
@@ -47,6 +68,15 @@ function fakeSequenceLlm(
       calls?.push({ messages: opts.messages });
       const events = sequences[index++] ?? [];
       for (const event of events) yield event;
+    },
+  } as unknown as LLMClient;
+}
+
+function unavailableLlm(): LLMClient {
+  return {
+    configured: false,
+    async *chatStream(): AsyncGenerator<ChatStreamEvent> {
+      throw new Error("chatStream should not be called when unconfigured");
     },
   } as unknown as LLMClient;
 }
@@ -166,6 +196,36 @@ describe("ChatPlanner approval proposal parsing", () => {
     expect(deltas.length).toBeGreaterThan(1);
   });
 
+  it("streams response text from finalization tool-call argument deltas", async () => {
+    const executor = new ToolExecutor({ repoPath: ".", env: {}, timeoutSec: 1, extra: {} });
+    const chunks = [
+      "{\"response\":\"Hel",
+      "lo from ",
+      "agent final\",\"risk_level\":\"low\",\"actions_taken\":[],\"suggestions\":[]}",
+    ];
+    const planner = new ChatPlanner(fakeStreamingToolCallLlm(CHAT_FINAL_TOOL_NAME, chunks), executor, { maxSteps: 1 });
+    const events = [];
+
+    for await (const event of planner.run("understand project", [], ".", async () => true)) {
+      events.push(event);
+    }
+
+    const deltas = events
+      .filter((event): event is Extract<typeof event, { type: "assistant_delta" }> => event.type === "assistant_delta")
+      .map((event) => event.delta);
+    expect(deltas.join("")).toBe("Hello from agent final");
+    expect(deltas.length).toBeGreaterThan(1);
+    const firstDeltaIndex = events.findIndex((event) => event.type === "assistant_delta");
+    const doneIndex = events.findIndex((event) => event.type === "done");
+    expect(firstDeltaIndex).toBeGreaterThanOrEqual(0);
+    expect(firstDeltaIndex).toBeLessThan(doneIndex);
+    const done = events[doneIndex];
+    if (done?.type !== "done") throw new Error("missing done");
+    expect(done.result.response).toBe("Hello from agent final");
+    expect(done.result.streamedResponse).toBe("Hello from agent final");
+    expect(done.result.finalizationMode).toBe("agent_final");
+  });
+
   it("streams visible prose before the control JSON marker", async () => {
     const executor = new ToolExecutor({ repoPath: ".", env: {}, timeoutSec: 1, extra: {} });
     const chunks = [
@@ -243,6 +303,21 @@ describe("ChatPlanner approval proposal parsing", () => {
         risk_level: "medium",
         actions_taken: ["git_status"],
         suggestions: [],
+        sources: [
+          {
+            type: "source_document",
+            title: "Chat.tsx",
+            file: "apps/desktop/src/pages/Chat.tsx",
+            line: 3590,
+            snippet: "ConversationPartRenderer",
+          },
+          {
+            type: "source_url",
+            title: "AI SDK UIMessage",
+            url: "https://ai-sdk.dev/docs/reference/ai-sdk-core/ui-message",
+            domain: "ai-sdk.dev",
+          },
+        ],
         approval_proposal: {
           tool: "git_add",
           args: { paths: ["src/a.ts", "src/b.ts"] },
@@ -267,11 +342,30 @@ describe("ChatPlanner approval proposal parsing", () => {
     if (control?.type === "assistant_control") {
       expect(control.control.approvalProposal?.tool).toBe("git_add");
       expect(control.control.actionsTaken).toEqual(["git_status"]);
+      expect(control.control.sources).toEqual([
+        {
+          type: "source_document",
+          sourceId: "document-0",
+          title: "Chat.tsx",
+          file: "apps/desktop/src/pages/Chat.tsx",
+          line: 3590,
+          snippet: "ConversationPartRenderer",
+        },
+        {
+          type: "source_url",
+          sourceId: "url-1",
+          title: "AI SDK UIMessage",
+          url: "https://ai-sdk.dev/docs/reference/ai-sdk-core/ui-message",
+          domain: "ai-sdk.dev",
+          snippet: undefined,
+        },
+      ]);
     }
     if (done?.type === "done") {
       expect(done.result.response).toBe("I found two modified files. Shall I stage them?");
       expect(done.result.approvalProposal?.args).toEqual({ paths: ["src/a.ts", "src/b.ts"] });
       expect(done.result.finalizationMode).toBe("agent_final");
+      expect(done.result.sources?.map((source) => source.type)).toEqual(["source_document", "source_url"]);
     }
   });
 
@@ -524,5 +618,31 @@ describe("ChatPlanner approval proposal parsing", () => {
     expect(called).toBe(false);
     expect(result.approvalProposal).toBeUndefined();
     expect(result.response).toContain("does not include creating a pull request");
+  });
+
+  it("does not turn offline fallback into a deterministic Git workflow plan", async () => {
+    const executor = new ToolExecutor({ repoPath: ".", env: {}, timeoutSec: 1, extra: {} });
+    const planner = new ChatPlanner(unavailableLlm(), executor, { maxSteps: 1 });
+    const events = [];
+
+    for await (const event of planner.run("push and create PR for branch feature/chat-agent", [], ".", async () => true)) {
+      events.push(event);
+    }
+
+    const done = events.find((event) => event.type === "done");
+    if (!done || done.type !== "done") throw new Error("missing done event");
+
+    expect(done.result.usedLlm).toBe(false);
+    expect(done.result.toolCallsMade).toEqual([]);
+    expect(done.result.actionsTaken).toEqual([]);
+    expect(done.result.approvalProposal).toBeUndefined();
+    expect(done.result.response).toContain("did not infer or execute a Git/PR workflow");
+    expect(done.result.response).not.toContain("git_push");
+    expect(done.result.response).not.toContain("ado_create_pr");
+    expect(done.result.suggestions).toEqual([
+      "Review changes",
+      "Check branch status",
+      "Restore model connection",
+    ]);
   });
 });

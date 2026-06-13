@@ -60,4 +60,27 @@ describe("git tool options", () => {
     const branch = await tool("git_current_branch").handler(context(repo), {});
     expect(branch["branch"]).toBe("feature/options");
   });
+
+  it("supports rebase continuation actions without requiring an onto ref", async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-git-rebase-action-repo-"));
+    git(repo, ["init"]);
+
+    const result = await tool("git_rebase").handler(context(repo), { action: "continue" });
+
+    expect(result["returncode"]).not.toBe(0);
+    expect(String(result["stderr"]).toLowerCase()).toContain("no rebase in progress");
+  });
+
+  it("supports merge, cherry-pick, and revert recovery actions without requiring a ref", async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-git-recovery-action-repo-"));
+    git(repo, ["init"]);
+
+    const merge = await tool("git_merge").handler(context(repo), { action: "abort" });
+    const cherryPick = await tool("git_cherry_pick").handler(context(repo), { action: "skip" });
+    const revert = await tool("git_revert").handler(context(repo), { action: "abort" });
+
+    expect(merge["returncode"]).not.toBe(0);
+    expect(cherryPick["returncode"]).not.toBe(0);
+    expect(revert["returncode"]).not.toBe(0);
+  });
 });

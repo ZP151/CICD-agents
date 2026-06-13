@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   checkAdoProjectLinkTools,
@@ -11,6 +11,7 @@ import {
   fetchChatHistory,
   fetchChatMessages,
   fetchChatState,
+  fetchProfilePrInsightArtifactById,
   runChatWorkflowAction,
   type AdoDiscoveryKind,
   type AdoDiscoveryOption,
@@ -18,6 +19,7 @@ import {
   type ChatHistoryEntry,
   type ChatIndexStatus,
   type ChatUiChunk,
+  type PrInsightArtifactRecord,
   type ChatWorkflowAction,
   type WorkspaceProfile,
   type WorkspaceProfileInput,
@@ -41,7 +43,52 @@ import {
   saveStoredActiveProjectLinkId,
   verifyPat,
 } from "../projectLinks.js";
-import { finaliseAssistantResponseBubbles, type AssistantBubbleMeta } from "../chatBubbles.js";
+import {
+  appendTextDeltaToConversationParts,
+  appendToolOutputDeltaToConversationParts,
+  assistantBubbleMetaFromUnknown,
+  conversationPartsFromAssistantBubble,
+  conversationTextFromParts,
+  finaliseAssistantResponseBubbles,
+  mergeAssistantMetadataIntoLatestBubble,
+  primaryToolCallPart,
+  toolApprovalPartFromSnapshot,
+  toolCallPartFromSnapshot,
+  upsertToolCallPart,
+  type AssistantBubbleMeta,
+  type ConversationArtifactPart,
+  type ConversationPart,
+  type ConversationToolCallPart,
+  type ToolCallPartSnapshot,
+} from "../chatBubbles.js";
+import {
+  isNearChatBottom,
+  readChatScrollMetrics,
+  shouldFollowIncomingChatContent,
+} from "../chatScroll.js";
+import { groupChatRenderItems, type ChatRenderItem } from "../chatRenderItems.js";
+import { ConversationPartRenderer } from "../components/conversation/ConversationPartRenderer.js";
+import {
+  ApprovalEvidence,
+  type ApprovalPreflightEvidence,
+  type ApprovalReadinessEvidence,
+  type ApprovalWorkflowEvidence,
+} from "../components/conversation/ApprovalEvidence.js";
+import {
+  ExecutionTimeline,
+  type ExecutionTimelineItem,
+} from "../components/conversation/ExecutionTimeline.js";
+import {
+  CommandChipBar,
+  SuggestionReplyBar,
+  deriveComposerInputState,
+  deriveCommandChips,
+  deriveComposerStateNotice,
+  deriveSuggestionReplies,
+  shouldQueueSuggestionReply,
+  type ComposerStateNotice,
+  type SuggestionReply,
+} from "../components/conversation/SuggestionReplyBar.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,8 +98,10 @@ interface Bubble {
   id: string;
   kind: BubbleKind;
   text?: string;
+  parts?: ConversationPart[];
   streaming?: boolean;
   // tool
+  toolCallId?: string;
   toolName?: string;
   toolArgs?: Record<string, unknown>;
   toolOk?: boolean;
@@ -70,15 +119,50 @@ interface Bubble {
   pendingArgs?: Record<string, unknown>;
   pendingDescription?: string;
   pendingNextHint?: string;
+  pendingWorkflow?: ApprovalWorkflowEvidence;
+  pendingReadiness?: ApprovalReadinessEvidence;
+  pendingPreflight?: ApprovalPreflightEvidence;
   pendingStatus?: "waiting" | "executing" | "done" | "cancelled";
   // metadata shown in collapsible Details panel
   meta?: AssistantBubbleMeta;
 }
 
+interface SavedPrInsightSource {
+  artifactId: string;
+  pullRequestId: string;
+  kind: string;
+  at: string;
+}
+
+type ArtifactLookupState =
+  | { status: "loading" }
+  | { status: "loaded"; record: PrInsightArtifactRecord }
+  | { status: "error"; message: string };
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 9);
+}
+
+function makeToolCallId(toolName?: string, args?: Record<string, unknown>): string {
+  if (args !== undefined) return `tool-${toolName ?? "unknown"}-${hashShort(JSON.stringify(args ?? {}))}`;
+  return `tool-${toolName ?? "unknown"}-${uid()}`;
+}
+
+function hashShort(text: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function toolPartStateFromResult(toolOk?: boolean): "result" | "error" | "running" {
+  if (toolOk === false) return "error";
+  if (toolOk === true) return "result";
+  return "running";
 }
 
 type ConversationModelChoice = "built_in" | "custom";
@@ -128,6 +212,59 @@ function riskColor(level = "low") {
   if (level === "high") return "text-red-400 bg-red-900/30";
   if (level === "medium") return "text-yellow-400 bg-yellow-900/30";
   return "text-green-400 bg-green-900/30";
+}
+
+function collectConversationArtifacts(bubbles: Bubble[]): ConversationArtifactPart[] {
+  const artifacts = new Map<string, ConversationArtifactPart>();
+  for (const bubble of bubbles) {
+    if (bubble.kind !== "assistant") continue;
+    for (const part of conversationPartsFromAssistantBubble(bubble)) {
+      if (part.type === "artifact") artifacts.set(part.artifactId, part);
+    }
+  }
+  return [...artifacts.values()];
+}
+
+function prInsightArtifactTitle(source: SavedPrInsightSource): string {
+  return `PR #${source.pullRequestId} ${source.kind.replace(/_/g, " ")} insight`;
+}
+
+function prInsightArtifactRecordToMarkdown(record: PrInsightArtifactRecord): string {
+  const lines = [
+    `## ${record.title || `PR #${record.pullRequestId} insight`}`,
+    "",
+    record.summary || "No summary saved.",
+    "",
+    "| Field | Value |",
+    "| --- | --- |",
+    `| Repository | ${record.repository} |`,
+    `| Pull request | #${record.pullRequestId} |`,
+    `| Kind | ${record.kind.replace(/_/g, " ")} |`,
+    `| Saved | ${record.at} |`,
+    `| Readiness | ${record.readiness ?? "unknown"} |`,
+    `| Decision queue | ${record.decisionQueue ?? "unknown"} |`,
+    `| Risk | ${record.decisionRiskLevel ?? "unknown"} |`,
+    `| Confidence | ${record.contextConfidence || "unknown"} |`,
+  ];
+
+  if (record.signals) {
+    lines.push(
+      "",
+      "### Signals",
+      "",
+      `- Files: ${record.signals.fileCount}`,
+      `- Threads: ${record.signals.threadCount}`,
+      `- Failed builds: ${record.signals.failedBuildCount}`,
+      `- Work items: ${record.signals.workItemCount}`,
+    );
+  }
+
+  if (record.risks.length > 0) {
+    lines.push("", "### Risks", "", ...record.risks.map((risk) => `- ${risk}`));
+  }
+
+  lines.push("", `Tokens: ${record.tokensIn}/${record.tokensOut}`);
+  return lines.join("\n");
 }
 
 // ─── Tool output parsers ──────────────────────────────────────────────────────
@@ -440,69 +577,89 @@ function ThinkingDots() {
 }
 
 /** Groups consecutive tool bubbles into a compact execution log. */
-function ExecutionLog({ tools, onToggleTool }: { tools: Bubble[]; onToggleTool: (id: string) => void }) {
-  const running = tools.some((t) => t.toolOk === undefined);
-  const hasError = tools.some((t) => t.toolOk === false);
-  const statusColor = hasError ? "text-red-400" : running ? "text-zinc-500" : "text-emerald-500";
-  const statusLabel = running ? "running…" : hasError ? "error" : `${tools.length} step${tools.length > 1 ? "s" : ""}`;
+function ExecutionLog({
+  tools,
+  approval,
+  onToggleTool,
+  onConfirmApproval,
+  onCancelApproval,
+}: {
+  tools: Bubble[];
+  approval?: Bubble;
+  onToggleTool: (id: string) => void;
+  onConfirmApproval?: (id: string) => void;
+  onCancelApproval?: (id: string) => void;
+}) {
+  const approvalTool = approval?.kind === "pending_confirm" ? approval.pendingTool : undefined;
+  const approvalTargetId = approvalTool
+    ? (tools.find((tool) => toolNameFromBubble(tool) === approvalTool)?.id ?? tools.at(-1)?.id)
+    : undefined;
+
+  const items: ExecutionTimelineItem[] = tools.map((tool) => {
+    const part = primaryToolCallPart(tool.parts);
+    const output = part?.output ?? tool.toolResult;
+    const toolName = toolNameFromBubble(tool);
+    const state = part?.state ?? toolPartStateFromResult(tool.toolOk);
+    const pending = part ? isToolPartRunning(part) : tool.toolOk === undefined;
+    const summary = pending
+      ? undefined
+      : part?.summary ?? tool.toolSummary ?? toolCollapsedSummary(toolName, tool.toolOk, output);
+
+    return {
+      id: tool.id,
+      toolName,
+      state,
+      ok: tool.toolOk,
+      input: part?.input ?? tool.toolArgs,
+      output,
+      summary,
+      open: tool.toolOpen,
+      liveOutput: toolLiveOutputFromPart(part) || tool.toolLiveOutput,
+      approval: approval?.kind === "pending_confirm" && tool.id === approvalTargetId
+        ? {
+            id: approval.id,
+            toolName: approval.pendingTool,
+            description: approval.pendingDescription,
+            riskLevel: approval.riskLevel,
+          }
+        : undefined,
+    };
+  });
 
   return (
-    <div className="mb-2 overflow-hidden rounded-lg border border-zinc-800/50 bg-zinc-900/25 text-xs">
-      {/* Header row */}
-      <div className="flex items-center gap-2 border-b border-zinc-800/40 px-3 py-1 text-zinc-600">
-        <svg className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-        </svg>
-        <span className="font-medium">Execution</span>
-        <span className={`ml-1 ${statusColor}`}>{statusLabel}</span>
-      </div>
-      {/* Tool rows */}
-      <div className="divide-y divide-zinc-800/30">
-        {tools.map((tool) => {
-          const pending = tool.toolOk === undefined;
-          const summary = pending ? "" : toolCollapsedSummary(tool.toolName, tool.toolOk, tool.toolResult);
-          const hasLiveOutput = Boolean(tool.toolLiveOutput?.trim());
-          const hasOutput = (!!tool.toolResult && !pending) || hasLiveOutput;
-          return (
-            <div key={tool.id}>
-              <button
-                onClick={hasOutput ? () => onToggleTool(tool.id) : undefined}
-                className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left ${
-                  hasOutput ? "cursor-pointer hover:bg-zinc-800/30" : "cursor-default"
-                }`}
-              >
-                <span
-                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                    pending
-                      ? "bg-zinc-600 animate-pulse"
-                      : tool.toolOk === false
-                        ? "bg-red-500"
-                        : "bg-emerald-500"
-                  }`}
-                />
-                <span className="w-36 shrink-0 font-mono text-blue-400/80">{tool.toolName}</span>
-                {!pending && summary && <span className="truncate text-zinc-600">{summary}</span>}
-                {pending && <span className="italic text-zinc-700">{hasLiveOutput ? "streaming output…" : "running…"}</span>}
-                {hasOutput && (
-                  <span className="ml-auto shrink-0 text-zinc-700">{tool.toolOpen ? "▲" : "▼"}</span>
-                )}
-              </button>
-              {tool.toolOpen && hasOutput && (
-                <div className="border-t border-zinc-800/40 bg-zinc-900/60 px-3 py-2">
-                  {hasLiveOutput && (
-                    <pre className="mb-2 max-h-44 overflow-auto whitespace-pre-wrap rounded border border-zinc-800/60 bg-zinc-950/70 p-2 font-mono text-[11px] leading-relaxed text-zinc-400">
-                      {tool.toolLiveOutput}
-                    </pre>
-                  )}
-                  {!!tool.toolResult && !pending && <ToolOutputRenderer toolName={tool.toolName} toolResult={tool.toolResult} />}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <ExecutionTimeline
+      items={items}
+      onToggleItem={onToggleTool}
+      renderOutput={(item) => <ToolOutputRenderer toolName={item.toolName} toolResult={item.output} />}
+      renderApproval={(item) => {
+        if (!approval || item.approval?.id !== approval.id) return null;
+        return (
+          <PendingActionCard
+            bubble={approval}
+            onConfirm={() => onConfirmApproval?.(approval.id)}
+            onCancel={() => onCancelApproval?.(approval.id)}
+          />
+        );
+      }}
+    />
   );
+}
+
+function toolNameFromBubble(tool: Bubble): string | undefined {
+  return primaryToolCallPart(tool.parts)?.toolName ?? tool.toolName;
+}
+
+function isToolPartRunning(part: ConversationToolCallPart | null): boolean {
+  return part?.state === "input-streaming" || part?.state === "input-available" || part?.state === "running";
+}
+
+function toolLiveOutputFromPart(part: ConversationToolCallPart | null): string {
+  if (!part?.output || typeof part.output !== "object") return "";
+  const output = part.output as Record<string, unknown>;
+  return [
+    String(output["stdout"] ?? ""),
+    String(output["stderr"] ?? ""),
+  ].filter(Boolean).join("");
 }
 
 function ConfirmCard({
@@ -565,69 +722,154 @@ function PendingActionCard({
 
   if (status === "executing") {
     return (
-      <div className="my-2 flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/40 px-3 py-2 text-sm">
-        <span className="text-zinc-400">Executing:</span>
-        <span className="text-zinc-300">{bubble.pendingDescription}</span>
-        <ThinkingDots />
-      </div>
+      <ApprovalStateCard
+        status="executing"
+        label="Executing approved action"
+        description={bubble.pendingDescription}
+      />
     );
   }
   if (status === "done") {
     return (
-      <div className="my-2 flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-600">
-        <span className="text-emerald-600">[+]</span>
-        <span>{bubble.pendingDescription}</span>
-        <span className="ml-auto text-zinc-700">done</span>
-      </div>
+      <ApprovalStateCard
+        status="done"
+        label="Approved action finished"
+        description={bubble.pendingDescription}
+      />
     );
   }
   if (status === "cancelled") {
     return (
-      <div className="my-2 rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-600">
-        Skipped: {bubble.pendingDescription}
-      </div>
+      <ApprovalStateCard
+        status="cancelled"
+        label="Approval skipped"
+        description={bubble.pendingDescription}
+      />
     );
   }
 
-  // waiting — show the action card
+  const riskLevel = bubble.riskLevel ?? "medium";
+
   return (
-    <div className="my-2 rounded-xl border border-blue-700/40 bg-blue-950/20 p-3">
-      <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-400/70">
-        Action required
+    <section className="my-2 overflow-hidden rounded-lg border border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-surface))] text-xs shadow-[0_10px_28px_rgba(15,23,42,0.08)]">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgb(var(--app-border))] px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500" />
+          <span className="font-semibold text-[rgb(var(--app-text))]">Approval required</span>
+          {bubble.pendingTool && (
+            <span className="truncate rounded border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5 font-mono text-[10px] text-[rgb(var(--app-text-subtle))]">
+              {bubble.pendingTool}
+            </span>
+          )}
+        </div>
+        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${approvalRiskClass(riskLevel)}`}>
+          {riskLevel.toUpperCase()} risk
+        </span>
       </div>
-      <p className="text-sm font-medium text-zinc-200">{bubble.pendingDescription}</p>
-      {bubble.pendingTool && (
-        <p className="mt-0.5 font-mono text-xs text-zinc-600">{bubble.pendingTool}</p>
-      )}
-      {bubble.pendingNextHint && (
-        <p className="mt-1 text-xs text-zinc-600">
-          <span className="text-zinc-500">Next: </span>{bubble.pendingNextHint}
-        </p>
-      )}
-      <div className="mt-3 flex gap-2">
-        <button
-          onClick={onConfirm}
-          className="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 active:scale-95 transition"
-        >
-          Confirm
-        </button>
-        <button
-          onClick={onCancel}
-          className="rounded-lg border border-zinc-700 px-4 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 active:scale-95 transition"
-        >
-          Skip
-        </button>
+      <div className="grid gap-3 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_12rem]">
+        <div className="min-w-0">
+          <p className="text-sm font-medium leading-relaxed text-[rgb(var(--app-text))]">
+            {bubble.pendingDescription}
+          </p>
+          {bubble.pendingNextHint && (
+            <p className="mt-1.5 leading-relaxed text-[rgb(var(--app-text-muted))]">
+              <span className="font-medium text-[rgb(var(--app-text-subtle))]">Next: </span>
+              {bubble.pendingNextHint}
+            </p>
+          )}
+          <ApprovalEvidence
+            toolName={bubble.pendingTool}
+            args={bubble.pendingArgs}
+            nextHint={bubble.pendingNextHint}
+            workflow={bubble.pendingWorkflow}
+            readiness={bubble.pendingReadiness}
+            preflight={bubble.pendingPreflight}
+          />
+        </div>
+        <div className="flex flex-col justify-between gap-3 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-2.5">
+          <div>
+            <p className="font-medium text-[rgb(var(--app-text))]">Decision</p>
+            <p className="mt-1 leading-relaxed text-[rgb(var(--app-text-muted))]">
+              Approving runs only the scoped action shown here.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[rgb(var(--app-surface-raised))] active:translate-y-px"
+            >
+              Confirm
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-md border border-[rgb(var(--app-border-strong))] px-3 py-2 text-xs font-medium text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[rgb(var(--app-surface-raised))] active:translate-y-px"
+            >
+              Skip
+            </button>
+          </div>
+        </div>
       </div>
+    </section>
+  );
+}
+
+function ApprovalStateCard({
+  status,
+  label,
+  description,
+}: {
+  status: "executing" | "done" | "cancelled";
+  label: string;
+  description?: string;
+}) {
+  return (
+    <div className="my-2 flex items-center gap-2 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2 text-xs text-[rgb(var(--app-text-muted))]">
+      <span className={`h-2 w-2 shrink-0 rounded-full ${approvalStatusDotClass(status)}`} />
+      <span className="font-medium text-[rgb(var(--app-text-subtle))]">{label}</span>
+      {description && <span className="min-w-0 truncate">{description}</span>}
+      {status === "executing" ? <ThinkingDots /> : <span className="ml-auto text-[10px] uppercase">{status}</span>}
     </div>
   );
+}
+
+function approvalRiskClass(level?: string): string {
+  if (level === "high") return "border-red-400/40 bg-red-500/10 text-red-500";
+  if (level === "low") return "border-emerald-400/40 bg-emerald-500/10 text-emerald-600";
+  return "border-amber-400/40 bg-amber-500/10 text-amber-600";
+}
+
+function approvalStatusDotClass(status: "executing" | "done" | "cancelled"): string {
+  if (status === "done") return "bg-emerald-500";
+  if (status === "cancelled") return "bg-zinc-400";
+  return "bg-blue-500";
+}
+
+function composerNoticeClass(tone: ComposerStateNotice["tone"]): string {
+  if (tone === "approval") {
+    return "border-amber-500/30 bg-amber-500/10 text-[rgb(var(--app-warning))]";
+  }
+  if (tone === "queued") {
+    return "border-blue-500/30 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text-muted))]";
+  }
+  return "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))]";
+}
+
+function composerNoticeDotClass(tone: ComposerStateNotice["tone"]): string {
+  if (tone === "approval") return "bg-amber-500";
+  if (tone === "queued") return "bg-[rgb(var(--app-accent))]";
+  return "bg-[rgb(var(--app-text-subtle))]";
 }
 
 function MetaPanel({
   meta,
   onOpenPrInsightSource,
+  onOpenPrInsightWorkspace,
 }: {
   meta: NonNullable<Bubble["meta"]>;
   onOpenPrInsightSource?: (source: { artifactId: string }) => void;
+  onOpenPrInsightWorkspace?: (source: SavedPrInsightSource) => void;
 }) {
   const suggestions = meta.suggestions?.filter(Boolean) ?? [];
   const insightSources = suggestions
@@ -643,7 +885,7 @@ function MetaPanel({
           }
         : null;
     })
-    .filter((source): source is { raw: string; artifactId: string; pullRequestId: string; kind: string; at: string } => Boolean(source));
+    .filter((source): source is SavedPrInsightSource & { raw: string } => Boolean(source));
   const contextSources = suggestions.filter((source) => source.startsWith("Repository context: "));
   const sourceMessages = new Set(insightSources.map((source) => source.raw));
   const contextMessages = new Set(contextSources);
@@ -685,13 +927,24 @@ function MetaPanel({
                 <span className="block font-mono text-[11px] text-zinc-600">{source.artifactId}</span>
               </p>
               {onOpenPrInsightSource && (
-                <button
-                  type="button"
-                  onClick={() => onOpenPrInsightSource({ artifactId: source.artifactId })}
-                  className="shrink-0 rounded-md border border-blue-900/60 px-2 py-1 text-[11px] text-blue-300/80 transition hover:border-blue-700 hover:text-blue-200"
-                >
-                  Open in Activity
-                </button>
+                <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                  {onOpenPrInsightWorkspace && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenPrInsightWorkspace(source)}
+                      className="rounded-md border border-blue-900/60 px-2 py-1 text-[11px] text-blue-300/80 transition hover:border-blue-700 hover:text-blue-200"
+                    >
+                      Open workspace
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onOpenPrInsightSource({ artifactId: source.artifactId })}
+                    className="rounded-md border border-blue-900/60 px-2 py-1 text-[11px] text-blue-300/80 transition hover:border-blue-700 hover:text-blue-200"
+                  >
+                    Open Activity
+                  </button>
+                </div>
               )}
             </div>
           ))}
@@ -720,6 +973,7 @@ interface TaskState {
   goal: string;
   steps: WorkflowStep[];
   currentStepLabel: string;
+  details?: string[];
   risk?: string;
 }
 
@@ -732,6 +986,76 @@ interface ApprovalRequest {
     args: Record<string, unknown>;
     description: string;
     nextHint?: string;
+    readiness?: {
+      kind: "push";
+      status: "no_upstream" | "up_to_date" | "ahead" | "behind" | "diverged" | "unknown";
+      upstream?: string;
+      ahead?: number;
+      behind?: number;
+      summary: string;
+    };
+    preflight?:
+      | {
+          kind: "branch";
+          action: "checkout" | "create";
+          status: "current" | "local_exists" | "remote_only" | "missing" | "would_create" | "already_exists" | "invalid" | "unknown";
+          branch: string;
+          currentBranch?: string;
+          localBranch?: string;
+          remoteBranch?: string;
+          summary: string;
+        }
+      | {
+          kind: "pr";
+          status: "ready" | "missing_ado_mapping" | "missing_source_branch" | "dirty_worktree" | "unknown";
+          sourceBranch?: string;
+          targetBranch?: string;
+          repository?: string;
+          project?: string;
+          organization?: string;
+          title?: string;
+          summary: string;
+        }
+      | {
+          kind: "validation";
+          status: "ready" | "default_command" | "missing_command" | "unknown";
+          validationKind: "test" | "build";
+          command: string;
+          commandSource: "override" | "profile" | "derived" | "default";
+          changedFiles?: string[];
+          changedFileCount?: number;
+          selectedScript?: string;
+          packageFilters?: string[];
+          packageRoots?: string[];
+          selectionReason?: string;
+          summary: string;
+        };
+    workflow?: {
+      kind: "commit" | "pr" | "git" | "ci";
+      phase:
+        | "stage"
+        | "commit"
+        | "push"
+        | "test"
+        | "build"
+        | "create"
+        | "link_work_item"
+        | "stage_conflicts"
+        | "continue_rebase"
+        | "abort_rebase"
+        | "skip_rebase"
+        | "continue_merge"
+        | "abort_merge"
+        | "continue_cherry_pick"
+        | "abort_cherry_pick"
+        | "skip_cherry_pick"
+        | "continue_revert"
+        | "abort_revert"
+        | "skip_revert";
+      branch?: string;
+      message?: string;
+      pushAfterCommit?: boolean;
+    };
   };
   riskLevel: string;
   explanation: string;
@@ -741,6 +1065,12 @@ interface WorkflowEventState {
   status: WorkflowStatus;
   currentStep: string;
   completedTools: string[];
+  workflowKind?: "commit" | "git" | "ado" | "ci" | "pr";
+  workflowPhase?: string;
+  authStatus?: "ok" | "oauth_unavailable" | "oauth_no_org_access" | "pat_invalid_or_missing_scope" | "unknown_error";
+  authMode?: "oauth" | "pat";
+  authMessage?: string;
+  retryable?: boolean;
   pendingApproval?: ApprovalRequest;
 }
 
@@ -750,13 +1080,27 @@ type WorkspaceAction =
   | { type: "refresh_branch" }
   | { type: "checkout_branch"; branch: string }
   | { type: "create_branch"; branch: string }
-  | {
-      type: "commit_flow";
-      mode: "commit" | "commit-push" | "push";
-      branch?: string;
-      message?: string;
-      includeUnstaged: boolean;
-    };
+  | { type: "continue_rebase" }
+  | { type: "abort_rebase" }
+  | { type: "skip_rebase" }
+  | { type: "continue_merge" }
+  | { type: "abort_merge" }
+  | { type: "continue_cherry_pick" }
+  | { type: "abort_cherry_pick" }
+  | { type: "skip_cherry_pick" }
+  | { type: "continue_revert" }
+  | { type: "abort_revert" }
+  | { type: "skip_revert" }
+  | { type: "create_pr"; branch?: string; targetBranch?: string; title?: string; description?: string; draft?: boolean }
+  | { type: "inspect_pr_insight"; pullRequestId?: number }
+  | { type: "check_pr_policy"; pullRequestId?: number }
+  | { type: "list_pr_work_items"; pullRequestId?: number }
+  | { type: "link_work_item"; pullRequestId?: number; workItemId: number }
+  | { type: "prepare_commit"; branch?: string; message?: string; includeUnstaged: boolean }
+  | { type: "commit_and_push"; branch?: string; message?: string; includeUnstaged: boolean }
+  | { type: "push_branch"; branch?: string }
+  | { type: "run_tests" }
+  | { type: "run_build" };
 
 interface WorkspacePanelProps {
   repoPath: string;
@@ -766,11 +1110,16 @@ interface WorkspacePanelProps {
   gitStatus: GitStatusData | null;
   diffStats: DiffStats | null;
   taskState: TaskState | null;
+  workflowState: WorkflowEventState | null;
   busy: boolean;
   profiles: WorkspaceProfile[];
   activeProfileId: string | null;
   setActiveProfileId: (id: string | null) => void;
   statusText: string | null;
+  selectedArtifact: ConversationArtifactPart | null;
+  selectedArtifactLookupState: ArtifactLookupState | null;
+  artifactCount: number;
+  onClearArtifact: () => void;
   onAction: (action: WorkspaceAction) => void;
 }
 
@@ -1403,11 +1752,16 @@ function WorkspacePanel({
   gitStatus,
   diffStats,
   taskState,
+  workflowState,
   busy,
   profiles,
   activeProfileId,
   setActiveProfileId,
   statusText,
+  selectedArtifact,
+  selectedArtifactLookupState,
+  artifactCount,
+  onClearArtifact,
   onAction,
 }: WorkspacePanelProps) {
   const repoName = repoPath ? repoPath.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? "" : "";
@@ -1430,6 +1784,7 @@ function WorkspacePanel({
   const hasChanges = Boolean(diffStats ? diffStats.files > 0 : changedFiles > 0);
   const added = diffStats?.added ?? 0;
   const removed = diffStats?.removed ?? 0;
+  const gitRecovery = gitRecoveryPanelState(workflowState);
 
   const handleProfileSelect = (id: string) => {
     setActiveProfileId(id || null);
@@ -1448,12 +1803,29 @@ function WorkspacePanel({
 
   const commitPrompt = (mode: "commit" | "commit-push" | "push") => {
     const message = commitMessage.trim();
+    if (mode === "push") {
+      runAction({
+        type: "push_branch",
+        branch: branchName || undefined,
+      });
+      return;
+    }
     runAction({
-      type: "commit_flow",
-      mode,
+      type: mode === "commit-push" ? "commit_and_push" : "prepare_commit",
       branch: branchName || undefined,
       message: message || undefined,
       includeUnstaged,
+    });
+  };
+
+  const createPullRequest = () => {
+    const message = commitMessage.trim();
+    runAction({
+      type: "create_pr",
+      branch: branchName || undefined,
+      targetBranch: activeProfile?.targetBranch || activeProfile?.defaultBranch || "main",
+      title: message || undefined,
+      draft: false,
     });
   };
 
@@ -1464,15 +1836,15 @@ function WorkspacePanel({
   };
 
   return (
-    <div className="flex h-full w-full flex-col bg-transparent px-3 py-6">
-      <div className="relative rounded-2xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4 text-[rgb(var(--app-text))] shadow-lg">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm text-[rgb(var(--app-text-muted))]">Environment</p>
+    <div className="flex h-full w-full min-w-0 flex-col bg-transparent px-3 py-6">
+      <div className="relative min-w-0 rounded-2xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4 text-[rgb(var(--app-text))] shadow-lg">
+        <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-sm text-[rgb(var(--app-text-muted))]">Environment</p>
           <button
             type="button"
             onClick={() => runAction({ type: "inspect_environment" })}
             disabled={!hasRepoPath || busy}
-            className="rounded-md p-1 text-[rgb(var(--app-text-subtle))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-default disabled:opacity-45"
+            className="shrink-0 rounded-md p-1 text-[rgb(var(--app-text-subtle))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-default disabled:opacity-45"
             title="Inspect environment"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1486,15 +1858,15 @@ function WorkspacePanel({
           type="button"
           onClick={() => runAction({ type: "inspect_changes" })}
           disabled={!hasRepoPath || busy}
-          className="flex w-full items-center justify-between rounded-md px-1 py-1.5 text-left transition hover:bg-[rgb(var(--app-surface-raised))] disabled:cursor-default disabled:opacity-70"
+          className="flex w-full min-w-0 items-center justify-between gap-2 rounded-md px-1 py-1.5 text-left transition hover:bg-[rgb(var(--app-surface-raised))] disabled:cursor-default disabled:opacity-70"
         >
-          <span className="flex items-center gap-2 text-sm">
-            <svg className="h-4 w-4 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <span className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+            <svg className="h-4 w-4 shrink-0 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M7 7h10M7 12h10M7 17h7M5 4h14v16H5z" />
             </svg>
-            Changes
+            <span className="min-w-0 truncate">Changes</span>
           </span>
-          <span className="font-mono text-xs">
+          <span className="shrink-0 whitespace-nowrap text-right font-mono text-xs">
             {busy && statusText ? (
               <span className="text-blue-500">running</span>
             ) : !gitKnown ? (
@@ -1526,7 +1898,7 @@ function WorkspacePanel({
             </svg>
           </button>
           {branchMenuOpen && (
-            <div className="absolute right-0 top-full z-30 mt-1 w-full rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl">
+            <div className="absolute right-0 top-full z-30 mt-1 w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl">
               <div className="mb-3 flex items-center gap-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-xs text-[rgb(var(--app-text-muted))]">
                 <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M21 21l-4.3-4.3m1.8-5.2a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -1566,7 +1938,7 @@ function WorkspacePanel({
                 <input
                   value={newBranchName}
                   onChange={(event) => setNewBranchName(event.target.value)}
-                  className="mb-2 w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-sm text-[rgb(var(--app-text))] outline-none placeholder:text-[rgb(var(--app-text-subtle))] focus:border-zinc-500"
+                  className="mb-2 w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-sm text-[rgb(var(--app-text))] outline-none placeholder:text-[rgb(var(--app-text-subtle))] focus:border-[rgb(var(--app-accent))]"
                   placeholder="new branch name"
                 />
                 <button
@@ -1588,24 +1960,24 @@ function WorkspacePanel({
             type="button"
             onClick={() => setCommitMenuOpen((value) => !value)}
             disabled={!hasRepoPath || busy}
-            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-sm transition hover:bg-[rgb(var(--app-surface-raised))]"
+            className="flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1.5 text-sm transition hover:bg-[rgb(var(--app-surface-raised))]"
           >
-            <svg className="h-4 w-4 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-4 w-4 shrink-0 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 12h7m2 0h7M8 8l-4 4 4 4m8-8l4 4-4 4" />
             </svg>
-            <span>Commit or push</span>
+            <span className="min-w-0 truncate">Commit or push</span>
           </button>
           {commitMenuOpen && (
-            <div className="absolute right-0 top-full z-30 mt-1 w-full rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl">
-              <div className="mb-2 flex items-center justify-between text-xs">
-                <span className="flex min-w-0 items-center gap-1.5 font-mono text-[rgb(var(--app-text-muted))]">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="absolute right-0 top-full z-30 mt-1 w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl">
+              <div className="mb-2 flex min-w-0 items-center justify-between gap-2 text-xs">
+                <span className="flex min-w-0 flex-1 items-center gap-1.5 font-mono text-[rgb(var(--app-text-muted))]">
+                  <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M6 3v6a3 3 0 003 3h6M6 21v-7" />
                   </svg>
-                  {branchLabel}
+                  <span className="min-w-0 truncate">{branchLabel}</span>
                 </span>
                 {hasChanges && (
-                  <span className="font-mono">
+                  <span className="shrink-0 whitespace-nowrap font-mono">
                     <span className="text-emerald-500">+{added}</span>
                     <span className="ml-1 text-red-500">-{removed}</span>
                   </span>
@@ -1615,7 +1987,7 @@ function WorkspacePanel({
                 value={commitMessage}
                 onChange={(event) => setCommitMessage(event.target.value)}
                 rows={2}
-                className="mb-3 w-full resize-none rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2.5 py-2 text-sm text-[rgb(var(--app-text))] outline-none placeholder:text-[rgb(var(--app-text-subtle))] focus:border-zinc-500"
+                className="mb-3 w-full resize-none rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2.5 py-2 text-sm text-[rgb(var(--app-text))] outline-none placeholder:text-[rgb(var(--app-text-subtle))] focus:border-[rgb(var(--app-accent))]"
                 placeholder="Commit message (leave blank to generate)..."
               />
               <label className="mb-2 flex items-center gap-2 text-sm text-[rgb(var(--app-text-muted))]">
@@ -1628,29 +2000,57 @@ function WorkspacePanel({
                 Include unstaged changes
               </label>
               <div className="space-y-1 border-t border-[rgb(var(--app-border))] pt-2">
-                <button type="button" onClick={() => commitPrompt("commit")} disabled={busy} className="flex w-full items-center gap-2 rounded-md bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-left text-sm transition hover:bg-[rgb(var(--app-accent-soft))] disabled:cursor-wait disabled:opacity-60">
-                  <svg className="h-4 w-4 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button type="button" aria-label="Prepare commit" onClick={() => commitPrompt("commit")} disabled={busy} className="flex w-full min-w-0 items-center gap-2 rounded-md bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-left text-sm transition hover:bg-[rgb(var(--app-accent-soft))] disabled:cursor-wait disabled:opacity-60">
+                  <svg className="h-4 w-4 shrink-0 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 12h16M8 8l-4 4 4 4" />
                   </svg>
-                  Commit
-                  <span className="ml-auto rounded bg-[rgb(var(--app-border))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">Ctrl+↵</span>
+                  <span className="min-w-0 flex-1 truncate">Commit</span>
+                  <span className="shrink-0 rounded bg-[rgb(var(--app-border))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">Ctrl+↵</span>
                 </button>
-                <button type="button" onClick={() => commitPrompt("commit-push")} disabled={busy} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60">
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button type="button" aria-label="Prepare commit and push" onClick={() => commitPrompt("commit-push")} disabled={busy} className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60">
+                  <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 16V4m0 0L8 8m4-4l4 4M5 20h14" />
                   </svg>
-                  Commit and push
+                  <span className="min-w-0 truncate">Commit and push</span>
                 </button>
-                <button type="button" onClick={() => commitPrompt("push")} disabled={busy} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60">
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button type="button" aria-label="Push branch" onClick={() => commitPrompt("push")} disabled={busy} className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60">
+                  <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 16V4m0 0L8 8m4-4l4 4M5 20h14" />
                   </svg>
-                  Push
+                  <span className="min-w-0 truncate">Push</span>
+                </button>
+                <button type="button" onClick={createPullRequest} disabled={busy || !hasRepoPath} className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60">
+                  <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M8 7h8m-8 5h5m-8 8h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="min-w-0 truncate">Create pull request</span>
                 </button>
               </div>
             </div>
           )}
         </div>
+
+        {gitRecovery && (
+          <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2">
+            <p className="mb-2 truncate text-xs text-amber-700 dark:text-amber-300">
+              {gitRecovery.label} needs attention
+            </p>
+            <div className={`grid gap-1 ${gitRecovery.actions.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+              {gitRecovery.actions.map((action) => (
+                <button
+                  key={action.type}
+                  type="button"
+                  onClick={() => runAction({ type: action.type })}
+                  disabled={busy}
+                  className="truncate whitespace-nowrap rounded-md border border-amber-500/30 px-1.5 py-1 text-[10px] text-amber-800 transition hover:bg-amber-500/15 disabled:cursor-wait disabled:opacity-50 dark:text-amber-200"
+                  title={action.title}
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mt-2 border-t border-[rgb(var(--app-border))] pt-2">
           {profiles.length > 0 ? (
@@ -1672,11 +2072,49 @@ function WorkspacePanel({
             {repoName || repoPath || "No local repository selected"}
           </p>
           {adoReady && (
-            <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-subtle))]">
-              {activeProfile?.adoProject} / {activeProfile?.adoRepoName}
-            </p>
+            <>
+              <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-subtle))]">
+                {activeProfile?.adoProject} / {activeProfile?.adoRepoName}
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-1">
+                <button
+                  type="button"
+                  onClick={() => runAction({ type: "inspect_pr_insight" })}
+                  disabled={busy}
+                  className="truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
+                  title="Inspect the latest active pull request insight"
+                >
+                  PR insight
+                </button>
+                <button
+                  type="button"
+                  onClick={() => runAction({ type: "check_pr_policy" })}
+                  disabled={busy}
+                  className="truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
+                  title="Check policy evaluations for the latest active pull request"
+                >
+                  Policy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => runAction({ type: "list_pr_work_items" })}
+                  disabled={busy}
+                  className="col-span-2 truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
+                  title="List linked work items for the latest active pull request"
+                >
+                  Work items
+                </button>
+              </div>
+            </>
           )}
         </div>
+
+        <ArtifactWorkspaceShell
+          artifact={selectedArtifact}
+          lookupState={selectedArtifactLookupState}
+          artifactCount={artifactCount}
+          onClear={onClearArtifact}
+        />
 
         <div className="mt-4 border-t border-[rgb(var(--app-border))] pt-4">
           <p className="mb-2 text-sm text-[rgb(var(--app-text-muted))]">Progress</p>
@@ -1694,6 +2132,13 @@ function WorkspacePanel({
                   <span className={step.done ? "text-[rgb(var(--app-text-subtle))] line-through" : ""}>{step.label}</span>
                 </div>
               ))}
+              {taskState.details && taskState.details.length > 0 && (
+                <div className="border-t border-[rgb(var(--app-border))] pt-2 text-xs leading-relaxed text-[rgb(var(--app-text-subtle))]">
+                  {taskState.details.map((detail, i) => (
+                    <p key={i} className="truncate" title={detail}>{detail}</p>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-sm leading-relaxed text-[rgb(var(--app-text-subtle))]">
@@ -1704,6 +2149,499 @@ function WorkspacePanel({
       </div>
     </div>
   );
+}
+
+function ArtifactWorkspaceShell({
+  artifact,
+  lookupState,
+  artifactCount,
+  onClear,
+}: {
+  artifact: ConversationArtifactPart | null;
+  lookupState: ArtifactLookupState | null;
+  artifactCount: number;
+  onClear: () => void;
+}) {
+  const selectedCountLabel = artifact
+    ? "1 selected"
+    : artifactCount > 0
+      ? `${artifactCount} available`
+      : "empty";
+
+  return (
+    <section className="mt-4 overflow-hidden rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]">
+      <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-[rgb(var(--app-text))]">Result workspace</p>
+          <p className="mt-0.5 text-[11px] text-[rgb(var(--app-text-subtle))]">{selectedCountLabel}</p>
+        </div>
+        {artifact && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="shrink-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1 text-[11px] font-medium text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-bg-muted))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:translate-y-px"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      {artifact ? (
+        <div className="p-3">
+          <div className="flex min-w-0 items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-[rgb(var(--app-text))]" title={artifact.title}>
+                {artifact.title}
+              </p>
+              <p className="mt-1 font-mono text-[11px] text-[rgb(var(--app-text-subtle))]">
+                {artifact.artifactId}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <span className="rounded border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[rgb(var(--app-text-subtle))]">
+                {artifactWorkspaceKindLabel(artifact.artifactType)}
+              </span>
+              <span className={artifactWorkspaceStatusClass(artifact.status)} aria-live="polite">
+                {artifactWorkspaceStatusLabel(artifact.status)}
+              </span>
+            </div>
+          </div>
+          <ArtifactWorkspaceContent artifact={artifact} lookupState={lookupState} />
+        </div>
+      ) : (
+        <div className="px-3 py-3">
+          <div className="rounded-md border border-dashed border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-3">
+            <p className="text-xs font-medium text-[rgb(var(--app-text-muted))]">
+              No artifact selected
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-[rgb(var(--app-text-subtle))]">
+            {artifactCount > 0
+              ? `${artifactCount} artifact${artifactCount === 1 ? "" : "s"} available in chat. Select one to inspect it here.`
+              : "Generated diagrams, PR insight reports, and long review summaries will appear here after an artifact is selected."}
+            </p>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ArtifactWorkspaceContent({
+  artifact,
+  lookupState,
+}: {
+  artifact: ConversationArtifactPart;
+  lookupState: ArtifactLookupState | null;
+}) {
+  const persistedContent = lookupState?.status === "loaded"
+    ? prInsightArtifactRecordToMarkdown(lookupState.record)
+    : "";
+  const content = artifact.content?.trim();
+  const renderContent = content || persistedContent.trim();
+  const [copied, setCopied] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
+  const downloadFileName = artifactDownloadFileName(artifact);
+  const copyContent = useCallback(() => {
+    if (!renderContent) return;
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(renderContent).then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1800);
+      });
+      return;
+    }
+    setCopied(true);
+    if (typeof window !== "undefined") window.setTimeout(() => setCopied(false), 1800);
+  }, [renderContent]);
+  const downloadContent = useCallback(() => {
+    if (!renderContent || typeof document === "undefined" || typeof URL === "undefined") return;
+    const url = URL.createObjectURL(new Blob([renderContent], { type: artifactDownloadMimeType(artifact.artifactType) }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = downloadFileName;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setDownloaded(true);
+    window.setTimeout(() => setDownloaded(false), 1800);
+  }, [artifact.artifactType, downloadFileName, renderContent]);
+
+  if (!artifact.content?.trim() && lookupState?.status === "loading") {
+    return (
+      <div className="mt-3 rounded-md border border-dashed border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2" aria-live="polite">
+        <p className="text-xs font-medium text-[rgb(var(--app-text-muted))]">
+          Loading saved PR insight artifact...
+        </p>
+        <div className="mt-2 space-y-1.5">
+          <div className="h-1.5 w-4/5 rounded-full bg-[rgb(var(--app-border))]" />
+          <div className="h-1.5 w-2/3 rounded-full bg-[rgb(var(--app-border))]" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!artifact.content?.trim() && lookupState?.status === "error") {
+    return (
+      <div className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2" aria-live="polite">
+        <p className="text-xs font-medium text-[rgb(var(--app-danger))]">Saved artifact unavailable</p>
+        <p className="mt-1 break-words text-[11px] leading-relaxed text-[rgb(var(--app-text-muted))]">
+          {lookupState.message}
+        </p>
+      </div>
+    );
+  }
+
+  if (!renderContent) {
+    return (
+      <div className="mt-3 rounded-md border border-dashed border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
+        <p className="text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
+          {artifactWorkspacePlaceholder(artifact.artifactType, artifact.status)}
+        </p>
+      </div>
+    );
+  }
+
+  if (artifact.artifactType === "markdown") {
+    return (
+      <div className="mt-3 overflow-hidden rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]">
+        <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
+          <span className="text-[11px] font-medium text-[rgb(var(--app-text-subtle))]">Markdown report</span>
+          <ArtifactActionStrip
+            copied={copied}
+            downloaded={downloaded}
+            onCopy={copyContent}
+            onDownload={downloadContent}
+          />
+        </div>
+        <div className="p-3">
+          <ConversationPartRenderer parts={[{ type: "markdown", markdown: renderContent }]} />
+        </div>
+      </div>
+    );
+  }
+
+  if (artifact.artifactType === "mermaid") {
+    return (
+      <div className="mt-3 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2">
+          <p className="text-[11px] text-[rgb(var(--app-text-muted))]">
+            Rendered Mermaid diagram. Source remains available below.
+          </p>
+          <ArtifactActionStrip
+            copied={copied}
+            downloaded={downloaded}
+            onCopy={copyContent}
+            onDownload={downloadContent}
+          />
+        </div>
+        <MermaidArtifactPreview source={renderContent} />
+        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-bg-muted))] px-3 py-2 text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
+          {renderContent}
+        </pre>
+      </div>
+    );
+  }
+
+  if (artifact.artifactType === "text") {
+    return (
+      <div className="mt-3 overflow-hidden rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]">
+        <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
+          <span className="text-[11px] font-medium text-[rgb(var(--app-text-subtle))]">Text artifact</span>
+          <ArtifactActionStrip
+            copied={copied}
+            downloaded={downloaded}
+            onCopy={copyContent}
+            onDownload={downloadContent}
+          />
+        </div>
+        <pre className="max-h-80 overflow-auto whitespace-pre-wrap px-3 py-2 text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
+          {renderContent}
+        </pre>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-md border border-dashed border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-[11px] font-medium text-[rgb(var(--app-text-subtle))]">Saved source</span>
+        <ArtifactActionStrip
+          copied={copied}
+          downloaded={downloaded}
+          onCopy={copyContent}
+          onDownload={downloadContent}
+        />
+      </div>
+      <p className="text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
+        Preview content is saved, but isolated HTML/React rendering is not enabled in this workspace yet.
+      </p>
+      <p className="mt-1 font-mono text-[11px] text-[rgb(var(--app-text-subtle))]">
+        {renderContent.length.toLocaleString()} characters available
+      </p>
+    </div>
+  );
+}
+
+function MermaidArtifactPreview({ source }: { source: string }) {
+  const reactId = useId();
+  const renderId = useMemo(
+    () => `artifact-mermaid-${reactId.replace(/[^a-zA-Z0-9_-]/g, "-")}`,
+    [reactId],
+  );
+  const [state, setState] = useState<
+    | { status: "loading" }
+    | { status: "ready"; svg: string }
+    | { status: "error"; message: string }
+  >({ status: "loading" });
+
+  useEffect(() => {
+    let cancelled = false;
+    setState({ status: "loading" });
+    void import("mermaid")
+      .then(({ default: mermaid }) => {
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "strict",
+          theme: "base",
+          themeVariables: {
+            background: "transparent",
+            primaryColor: "#eff6ff",
+            primaryBorderColor: "#93c5fd",
+            primaryTextColor: "#111827",
+            lineColor: "#64748b",
+            secondaryColor: "#f8fafc",
+            tertiaryColor: "#f1f5f9",
+          },
+        });
+        return mermaid.render(renderId, source);
+      })
+      .then((result) => {
+        if (!cancelled) setState({ status: "ready", svg: result.svg });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setState({
+            status: "error",
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [renderId, source]);
+
+  if (state.status === "loading") {
+    return (
+      <div className="rounded-md border border-dashed border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text-muted))]" aria-live="polite">
+        <p className="font-medium">Rendering Mermaid diagram...</p>
+        <div className="mt-2 h-24 rounded border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]" />
+      </div>
+    );
+  }
+
+  if (state.status === "error") {
+    return (
+      <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2" aria-live="polite">
+        <p className="text-xs font-medium text-[rgb(var(--app-danger))]">Mermaid render failed</p>
+        <p className="mt-1 break-words text-[11px] leading-relaxed text-[rgb(var(--app-text-muted))]">{state.message}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      data-testid="mermaid-artifact-svg"
+      className="overflow-auto rounded-md border border-[rgb(var(--app-border))] bg-white p-3 text-slate-900 shadow-inner [&_svg]:mx-auto [&_svg]:max-w-full"
+      dangerouslySetInnerHTML={{ __html: state.svg }}
+    />
+  );
+}
+
+function ArtifactActionStrip({
+  copied,
+  downloaded,
+  onCopy,
+  onDownload,
+}: {
+  copied: boolean;
+  downloaded: boolean;
+  onCopy: () => void;
+  onDownload: () => void;
+}) {
+  return (
+    <div className="flex shrink-0 flex-wrap justify-end gap-1">
+      <ArtifactActionButton onClick={onCopy} active={copied}>
+        {copied ? "Copied" : "Copy content"}
+      </ArtifactActionButton>
+      <ArtifactActionButton onClick={onDownload} active={downloaded}>
+        {downloaded ? "Download started" : "Download"}
+      </ArtifactActionButton>
+    </div>
+  );
+}
+
+function ArtifactActionButton({
+  children,
+  onClick,
+  active = false,
+}: {
+  children: string;
+  onClick: () => void;
+  active?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:translate-y-px ${
+        active
+          ? "border-emerald-500/40 bg-emerald-500/10 text-[rgb(var(--app-success))]"
+          : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text-muted))] hover:bg-[rgb(var(--app-bg-muted))] hover:text-[rgb(var(--app-text))]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function artifactDownloadFileName(artifact: ConversationArtifactPart): string {
+  const extension: Record<ConversationArtifactPart["artifactType"], string> = {
+    html: "html",
+    markdown: "md",
+    mermaid: "mmd",
+    react: "txt",
+    text: "txt",
+  };
+  const base = `${artifact.title || artifact.artifactId || "artifact"}`.trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "artifact";
+  return `${base}.${extension[artifact.artifactType]}`;
+}
+
+function artifactDownloadMimeType(type: ConversationArtifactPart["artifactType"]): string {
+  const mimeTypes: Record<ConversationArtifactPart["artifactType"], string> = {
+    html: "text/html;charset=utf-8",
+    markdown: "text/markdown;charset=utf-8",
+    mermaid: "text/plain;charset=utf-8",
+    react: "text/plain;charset=utf-8",
+    text: "text/plain;charset=utf-8",
+  };
+  return mimeTypes[type];
+}
+
+function artifactWorkspaceKindLabel(type: ConversationArtifactPart["artifactType"]): string {
+  const labels: Record<ConversationArtifactPart["artifactType"], string> = {
+    html: "Preview",
+    markdown: "Report",
+    mermaid: "Diagram",
+    react: "Preview",
+    text: "Text",
+  };
+  return labels[type];
+}
+
+function artifactWorkspaceStatusLabel(status: ConversationArtifactPart["status"]): string {
+  const labels: Record<ConversationArtifactPart["status"], string> = {
+    error: "Error",
+    ready: "Ready",
+    streaming: "Streaming",
+  };
+  return labels[status];
+}
+
+function artifactWorkspaceStatusClass(status: ConversationArtifactPart["status"]): string {
+  const classes: Record<ConversationArtifactPart["status"], string> = {
+    error: "rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 font-mono text-[10px] text-[rgb(var(--app-danger))]",
+    ready: "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] text-[rgb(var(--app-success))]",
+    streaming: "rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 font-mono text-[10px] text-blue-400",
+  };
+  return classes[status];
+}
+
+function artifactWorkspacePlaceholder(
+  type: ConversationArtifactPart["artifactType"],
+  status: ConversationArtifactPart["status"],
+): string {
+  if (status === "streaming") return "The artifact is still streaming. The workspace shell is ready, and full content rendering will attach when the result is complete.";
+  if (status === "error") return "The artifact failed before content rendering was available. Keep this selected while deciding whether to retry or inspect the failed run.";
+  const placeholders: Record<ConversationArtifactPart["artifactType"], string> = {
+    html: "Preview rendering will be added in the next artifact content batch.",
+    markdown: "Markdown report rendering will be added in the next artifact content batch.",
+    mermaid: "Mermaid diagram rendering will be added in the next artifact content batch.",
+    react: "Interactive preview rendering will be added in the next artifact content batch.",
+    text: "Text artifact rendering will be added in the next artifact content batch.",
+  };
+  return placeholders[type];
+}
+
+type GitRecoveryWorkspaceAction = Extract<
+  WorkspaceAction,
+  {
+    type:
+      | "continue_rebase"
+      | "abort_rebase"
+      | "skip_rebase"
+      | "continue_merge"
+      | "abort_merge"
+      | "continue_cherry_pick"
+      | "abort_cherry_pick"
+      | "skip_cherry_pick"
+      | "continue_revert"
+      | "abort_revert"
+      | "skip_revert";
+  }
+>;
+
+function gitRecoveryPanelState(workflowState: WorkflowEventState | null): {
+  label: string;
+  actions: Array<{ type: GitRecoveryWorkspaceAction["type"]; label: string; title: string }>;
+} | null {
+  if (workflowState?.workflowKind !== "git") return null;
+  const phase = workflowState.workflowPhase ?? "";
+  if (phase.includes("rebase")) {
+    return {
+      label: "Rebase",
+      actions: [
+        { type: "continue_rebase", label: "Continue", title: "Continue the in-progress rebase" },
+        { type: "abort_rebase", label: "Abort", title: "Abort the in-progress rebase" },
+        { type: "skip_rebase", label: "Skip", title: "Skip the current rebase patch" },
+      ],
+    };
+  }
+  if (phase.includes("merge")) {
+    return {
+      label: "Merge",
+      actions: [
+        { type: "continue_merge", label: "Continue", title: "Continue the in-progress merge" },
+        { type: "abort_merge", label: "Abort", title: "Abort the in-progress merge" },
+      ],
+    };
+  }
+  if (phase.includes("cherry_pick")) {
+    return {
+      label: "Cherry-pick",
+      actions: [
+        { type: "continue_cherry_pick", label: "Continue", title: "Continue the in-progress cherry-pick" },
+        { type: "abort_cherry_pick", label: "Abort", title: "Abort the in-progress cherry-pick" },
+        { type: "skip_cherry_pick", label: "Skip", title: "Skip the current cherry-pick patch" },
+      ],
+    };
+  }
+  if (phase.includes("revert")) {
+    return {
+      label: "Revert",
+      actions: [
+        { type: "continue_revert", label: "Continue", title: "Continue the in-progress revert" },
+        { type: "abort_revert", label: "Abort", title: "Abort the in-progress revert" },
+        { type: "skip_revert", label: "Skip", title: "Skip the current revert patch" },
+      ],
+    };
+  }
+  return null;
 }
 
 function toolLabel(name: string): string {
@@ -1720,6 +2658,8 @@ function toolLabel(name: string): string {
     git_checkout: "Switch branch",
     git_pull: "Pull branch",
     git_merge: "Merge branch",
+    git_cherry_pick: "Cherry-pick commit",
+    git_revert: "Revert commit",
     git_rebase: "Rebase branch",
     git_restore: "Restore files",
     git_add: "Stage files",
@@ -1728,7 +2668,15 @@ function toolLabel(name: string): string {
     git_stash: "Stash changes",
     git_create_branch: "Create branch",
     ado_create_pr: "Create pull request",
+    ado_get_pull_request_by_id: "Read pull request",
+    ado_list_pull_request_threads: "Read PR threads",
+    ado_get_pull_request_changes: "Read PR changes",
+    ado_list_pull_request_work_items: "Read linked work items",
+    ado_list_pull_request_policy_evaluations: "Read PR policies",
+    ado_pipelines_get_builds: "Read PR builds",
+    ado_link_work_item: "Link work item",
     ado_trigger_pipeline: "Run pipeline",
+    validation_command: "Run validation",
   };
   return labels[name] ?? name.replace(/_/g, " ");
 }
@@ -1738,6 +2686,15 @@ function taskStateFromWorkflow(
   fallbackGoal: string | null,
 ): TaskState | null {
   if (!workflowState) return null;
+  if (workflowState.workflowKind === "commit") {
+    return taskStateFromCommitWorkflow(workflowState, fallbackGoal);
+  }
+  if (workflowState.workflowKind === "pr") {
+    return taskStateFromPrWorkflow(workflowState, fallbackGoal);
+  }
+  if (workflowState.workflowKind === "ci") {
+    return taskStateFromCiWorkflow(workflowState, fallbackGoal);
+  }
   const completed = workflowState.completedTools ?? [];
   const steps: WorkflowStep[] = completed.map((tool) => ({
     label: toolLabel(tool),
@@ -1763,25 +2720,203 @@ function taskStateFromWorkflow(
     goal: fallbackGoal ?? "Current workflow",
     steps,
     currentStepLabel: currentLabel,
+    details: workflowDetailLines(workflowState),
     risk: workflowState.pendingApproval?.riskLevel,
   };
+}
+
+function taskStateFromPrWorkflow(
+  workflowState: WorkflowEventState,
+  fallbackGoal: string | null,
+): TaskState {
+  const completed = new Set(workflowState.completedTools ?? []);
+  const phase = workflowState.workflowPhase ?? "";
+  const pendingTool = workflowState.pendingApproval?.action.tool;
+  const steps: WorkflowStep[] = phase === "inspected" || phase === "policy_checked" || phase === "work_items_listed"
+    ? [
+        {
+          label: "Load pull request",
+          done: completed.has("ado_get_pull_request_by_id") || completed.has("ado_list_pull_request_policy_evaluations") || completed.has("ado_list_pull_request_work_items"),
+          active: workflowState.status === "planning",
+        },
+        {
+          label: phase === "policy_checked"
+            ? "Check policy"
+            : phase === "work_items_listed"
+              ? "List work items"
+              : "Analyze PR insight",
+          done: workflowState.status === "done",
+          active: workflowState.status === "running",
+        },
+      ]
+    : [
+        {
+          label: "Inspect branch",
+          done: completed.has("git_current_branch") || completed.has("git_status"),
+          active: workflowState.status === "planning",
+        },
+        {
+          label: pendingTool === "ado_link_work_item" ? "Link work item" : "Prepare pull request",
+          done: false,
+          active: phase === "waiting_for_create_pr_approval" || pendingTool === "ado_create_pr" || pendingTool === "ado_link_work_item",
+        },
+      ];
+  return {
+    goal: fallbackGoal ?? "Pull request workflow",
+    steps,
+    currentStepLabel: workflowState.pendingApproval?.action.description ?? workflowState.currentStep ?? workflowState.status,
+    details: workflowDetailLines(workflowState),
+    risk: workflowState.pendingApproval?.riskLevel,
+  };
+}
+
+function taskStateFromCommitWorkflow(
+  workflowState: WorkflowEventState,
+  fallbackGoal: string | null,
+): TaskState {
+  const completed = new Set(workflowState.completedTools ?? []);
+  const phase = workflowState.workflowPhase ?? "";
+  const workflow = workflowState.pendingApproval?.action.workflow;
+  const shouldPush = Boolean(workflow?.pushAfterCommit || phase === "waiting_for_push_approval" || completed.has("git_push"));
+  const steps: WorkflowStep[] = [
+    {
+      label: "Inspect changes",
+      done: completed.has("git_status") || completed.has("git_diff"),
+      active: phase === "preflight" || workflowState.status === "planning",
+    },
+    {
+      label: "Stage changes",
+      done: completed.has("git_add"),
+      active: phase === "waiting_for_stage_approval" || workflowState.currentStep === "git_add",
+    },
+    {
+      label: "Commit changes",
+      done: completed.has("git_commit"),
+      active: phase === "waiting_for_commit_approval" || workflowState.currentStep === "git_commit",
+    },
+  ];
+  if (shouldPush) {
+    steps.push({
+      label: "Push branch",
+      done: completed.has("git_push"),
+      active: phase === "waiting_for_push_approval" || workflowState.currentStep === "git_push",
+    });
+  }
+
+  const currentStepLabel =
+    workflowState.pendingApproval?.action.description
+      ?? workflowState.currentStep
+      ?? workflowState.status;
+
+  return {
+    goal: fallbackGoal ?? "Commit workflow",
+    steps,
+    currentStepLabel,
+    details: workflowDetailLines(workflowState),
+    risk: workflowState.pendingApproval?.riskLevel,
+  };
+}
+
+function taskStateFromCiWorkflow(
+  workflowState: WorkflowEventState,
+  fallbackGoal: string | null,
+): TaskState {
+  const phase = workflowState.workflowPhase ?? "";
+  const isBuild = phase.includes("build") || workflowState.currentStep.toLowerCase().includes("build");
+  const noun = isBuild ? "Build" : "Tests";
+  const passed = phase.endsWith("_passed") || (workflowState.status === "done" && !phase.endsWith("_failed"));
+  const failed = phase.endsWith("_failed") || workflowState.status === "failed";
+  const waiting = workflowState.status === "waiting_for_approval";
+  const running = workflowState.status === "running";
+  return {
+    goal: fallbackGoal ?? `${noun} validation`,
+    steps: [
+      { label: "Inspect workspace", done: true, active: false },
+      { label: `Approve ${noun.toLowerCase()}`, done: !waiting, active: waiting },
+      { label: `Run ${noun.toLowerCase()}`, done: passed || failed, active: running },
+      { label: passed ? `${noun} passed` : failed ? `${noun} failed` : "Review result", done: passed, active: failed },
+    ],
+    currentStepLabel: workflowState.pendingApproval?.action.description ?? workflowState.currentStep ?? workflowState.status,
+    details: workflowDetailLines(workflowState),
+    risk: workflowState.pendingApproval?.riskLevel,
+  };
+}
+
+function workflowDetailLines(workflowState: WorkflowEventState): string[] {
+  const action = workflowState.pendingApproval?.action;
+  const lines: string[] = [];
+  if (workflowState.authMessage) lines.push(truncateMiddle(workflowState.authMessage, 120));
+  if (workflowState.authStatus) {
+    const authLabel = workflowState.authMode === "pat" ? "PAT" : "OAuth";
+    const retryLabel = workflowState.retryable ? "retry after reconnecting" : "check configuration";
+    lines.push(`${authLabel}: ${workflowState.authStatus} (${retryLabel})`);
+  }
+  if (action?.preflight?.summary) lines.push(action.preflight.summary);
+  if (action?.readiness?.summary) lines.push(action.readiness.summary);
+  if (action?.workflow?.branch) lines.push(`Branch: ${action.workflow.branch}`);
+  if (action?.workflow?.message) lines.push(`Message: ${truncateMiddle(action.workflow.message, 90)}`);
+  return lines.slice(0, 4);
+}
+
+function truncateMiddle(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  const head = Math.max(1, Math.floor((maxLength - 3) * 0.65));
+  const tail = Math.max(1, maxLength - 3 - head);
+  return `${value.slice(0, head)}...${value.slice(-tail)}`;
 }
 
 function workspaceActionToolCandidates(action: WorkspaceAction): string[] {
   switch (action.type) {
     case "inspect_environment":
       return ["git_status", "git_diff", "git_current_branch", "git_branch_list", "git_remote"];
+    case "run_tests":
+    case "run_build":
+      return ["validation_command", "npm_test", "npm_build", "pytest_run", "dotnet_test", "dotnet_build"];
     case "inspect_changes":
       return ["git_status", "git_diff"];
     case "refresh_branch":
       return ["git_current_branch", "git_branch_list"];
     case "checkout_branch":
-      return ["git_checkout"];
+      return ["git_checkout", "git_switch"];
     case "create_branch":
       return ["git_create_branch", "git_checkout"];
-    case "commit_flow":
-      if (action.mode === "push") return ["git_push"];
-      if (action.mode === "commit-push") return ["git_add", "git_commit", "git_push"];
+    case "continue_rebase":
+    case "abort_rebase":
+    case "skip_rebase":
+      return ["git_rebase"];
+    case "continue_merge":
+    case "abort_merge":
+      return ["git_merge"];
+    case "continue_cherry_pick":
+    case "abort_cherry_pick":
+    case "skip_cherry_pick":
+      return ["git_cherry_pick"];
+    case "continue_revert":
+    case "abort_revert":
+    case "skip_revert":
+      return ["git_revert"];
+    case "create_pr":
+      return ["ado_create_pr"];
+    case "inspect_pr_insight":
+      return [
+        "ado_get_pull_request_by_id",
+        "ado_list_pull_request_threads",
+        "ado_get_pull_request_changes",
+        "ado_pipelines_get_builds",
+        "ado_list_pull_request_work_items",
+        "ado_list_pull_request_policy_evaluations",
+      ];
+    case "check_pr_policy":
+      return ["ado_list_pull_request_policy_evaluations"];
+    case "list_pr_work_items":
+      return ["ado_list_pull_request_work_items"];
+    case "link_work_item":
+      return ["ado_link_work_item"];
+    case "push_branch":
+      return ["git_push"];
+    case "commit_and_push":
+      return ["git_add", "git_commit", "git_push"];
+    case "prepare_commit":
       return ["git_add", "git_commit"];
   }
 }
@@ -1790,37 +2925,128 @@ function workspaceActionMatchesApproval(action: WorkspaceAction, approval: Appro
   return workspaceActionToolCandidates(action).includes(approval.action.tool);
 }
 
-function workspaceActionToDirectWorkflow(action: WorkspaceAction): ChatWorkflowAction | null {
-  if (action.type === "inspect_environment") return "inspect_environment";
-  if (action.type === "inspect_changes") return "inspect_changes";
-  if (action.type === "refresh_branch") return "refresh_branch";
+function workspaceActionToDirectWorkflow(action: WorkspaceAction): {
+  action: ChatWorkflowAction;
+  input?: {
+    branch?: string;
+    targetBranch?: string;
+    title?: string;
+    description?: string;
+    draft?: boolean;
+    pullRequestId?: number;
+    workItemId?: number;
+    message?: string;
+    includeUnstaged?: boolean;
+    commitMode?: "commit" | "commit-push";
+  };
+} {
+  switch (action.type) {
+    case "inspect_environment":
+      return { action: "inspect_environment" };
+    case "inspect_changes":
+      return { action: "inspect_changes" };
+    case "run_tests":
+      return { action: "run_tests" };
+    case "run_build":
+      return { action: "run_build" };
+    case "refresh_branch":
+      return { action: "refresh_branch" };
+    case "checkout_branch":
+      return { action: "checkout_branch", input: { branch: action.branch } };
+    case "create_branch":
+      return { action: "create_branch", input: { branch: action.branch } };
+    case "continue_rebase":
+      return { action: "continue_rebase" };
+    case "abort_rebase":
+      return { action: "abort_rebase" };
+    case "skip_rebase":
+      return { action: "skip_rebase" };
+    case "continue_merge":
+      return { action: "continue_merge" };
+    case "abort_merge":
+      return { action: "abort_merge" };
+    case "continue_cherry_pick":
+      return { action: "continue_cherry_pick" };
+    case "abort_cherry_pick":
+      return { action: "abort_cherry_pick" };
+    case "skip_cherry_pick":
+      return { action: "skip_cherry_pick" };
+    case "continue_revert":
+      return { action: "continue_revert" };
+    case "abort_revert":
+      return { action: "abort_revert" };
+    case "skip_revert":
+      return { action: "skip_revert" };
+    case "create_pr":
+      return {
+        action: "create_pr",
+        input: {
+          branch: action.branch,
+          targetBranch: action.targetBranch,
+          title: action.title,
+          description: action.description,
+          draft: action.draft,
+        },
+      };
+    case "inspect_pr_insight":
+      return { action: "inspect_pr_insight", input: { pullRequestId: action.pullRequestId } };
+    case "check_pr_policy":
+      return { action: "check_pr_policy", input: { pullRequestId: action.pullRequestId } };
+    case "list_pr_work_items":
+      return { action: "list_pr_work_items", input: { pullRequestId: action.pullRequestId } };
+    case "link_work_item":
+      return { action: "link_work_item", input: { pullRequestId: action.pullRequestId, workItemId: action.workItemId } };
+    case "push_branch":
+      return { action: "push_branch", input: { branch: action.branch } };
+    case "commit_and_push":
+      return {
+        action: "prepare_commit",
+        input: {
+          branch: action.branch,
+          message: action.message,
+          includeUnstaged: action.includeUnstaged,
+          commitMode: "commit-push",
+        },
+      };
+    case "prepare_commit":
+      return {
+        action: "prepare_commit",
+        input: {
+          branch: action.branch,
+          message: action.message,
+          includeUnstaged: action.includeUnstaged,
+          commitMode: "commit",
+        },
+      };
+  }
+}
+
+function workspaceActionFromSuggestion(suggestion: SuggestionReply): WorkspaceAction | null {
+  if (suggestion.action.kind !== "workspace_action") return null;
+  switch (suggestion.action.action) {
+    case "inspect_changes":
+      return { type: "inspect_changes" };
+    case "inspect_environment":
+      return { type: "inspect_environment" };
+    case "run_tests":
+      return { type: "run_tests" };
+    case "run_build":
+      return { type: "run_build" };
+    case "refresh_branch":
+      return { type: "refresh_branch" };
+    case "inspect_pr_insight":
+      return { type: "inspect_pr_insight" };
+    case "check_pr_policy":
+      return { type: "check_pr_policy" };
+    case "list_pr_work_items":
+      return { type: "list_pr_work_items" };
+  }
   return null;
 }
 
-function workspaceActionPrompt(action: WorkspaceAction): string {
-  switch (action.type) {
-    case "inspect_environment":
-      return "Show me the current project environment, git state, Azure DevOps mapping, and CI/CD readiness.";
-    case "inspect_changes":
-      return "Inspect current git status and diff. Summarize changed files and risk before any commit.";
-    case "refresh_branch":
-      return "Inspect the current branch and list local branches.";
-    case "checkout_branch":
-      return `Switch to branch ${action.branch} after checking whether the working tree is safe.`;
-    case "create_branch":
-      return `Create and checkout a new branch named ${action.branch} after checking whether the working tree is safe.`;
-    case "commit_flow": {
-      if (action.mode === "push") {
-        return `Push the current branch${action.branch ? ` (${action.branch})` : ""}.`;
-      }
-      const verb = action.mode === "commit-push" ? "Commit current changes and push" : "Commit current changes";
-      const messagePart = action.message
-        ? ` with commit message: ${action.message}`
-        : " and generate a concise commit message";
-      const unstagedPart = action.includeUnstaged ? " Include unstaged changes." : " Use staged changes only.";
-      return `${verb}${messagePart}.${unstagedPart}`;
-    }
-  }
+function workspaceActionFromWelcomeSuggestion(suggestion: string): WorkspaceAction | null {
+  if (/^run tests$/i.test(suggestion)) return { type: "run_tests" };
+  return null;
 }
 
 // ─── Panel toggle icons ───────────────────────────────────────────────────────
@@ -1956,11 +3182,41 @@ interface ChatDraftState {
   activeProfileId: string | null;
 }
 
+function isActiveWorkflowDraft(workflowState: WorkflowEventState | null): boolean {
+  return Boolean(workflowState && (
+    workflowState.status === "planning" ||
+    workflowState.status === "running" ||
+    workflowState.status === "waiting_for_approval"
+  ));
+}
+
+function restoreInterruptedStreamingBubble(bubble: Bubble): Bubble {
+  if (bubble.kind !== "assistant" || !bubble.streaming) {
+    return bubble;
+  }
+  const restoredText = bubble.text || conversationTextFromParts(bubble.parts);
+  return {
+    ...bubble,
+    text: restoredText,
+    streaming: false,
+  };
+}
+
+function sanitizeChatDraft(draft: ChatDraftState): ChatDraftState {
+  const hadInterruptedStream = draft.bubbles.some((bubble) => bubble.kind === "assistant" && bubble.streaming);
+  const activeWorkflow = isActiveWorkflowDraft(draft.workflowState);
+  return {
+    ...draft,
+    bubbles: draft.bubbles.map(restoreInterruptedStreamingBubble),
+    statusText: hadInterruptedStream && !activeWorkflow ? null : draft.statusText,
+  };
+}
+
 function loadChatDraft(): ChatDraftState | null {
   try {
     const raw = sessionStorage.getItem(CHAT_DRAFT_STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as ChatDraftState;
+    return sanitizeChatDraft(JSON.parse(raw) as ChatDraftState);
   } catch {
     return null;
   }
@@ -1990,11 +3246,16 @@ export default function Chat({ mini = false }: ChatProps) {
   const [bubbles, setBubbles] = useState<Bubble[]>(initialDraft?.bubbles ?? []);
   const [sessionId, setSessionId] = useState<string | null>(initialDraft?.sessionId ?? null);
   const [busy, setBusy] = useState(false);
+  const [queuedSuggestion, setQueuedSuggestion] = useState<SuggestionReply | null>(null);
   const [history, setHistory] = useState<ChatHistoryEntry[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
+  const [selectedExternalArtifact, setSelectedExternalArtifact] = useState<ConversationArtifactPart | null>(null);
+  const [artifactLookupState, setArtifactLookupState] = useState<Record<string, ArtifactLookupState>>({});
+  const [persistedPrInsightArtifactIds, setPersistedPrInsightArtifactIds] = useState<Set<string>>(() => new Set());
   const [historyWidth, setHistoryWidth] = useState(220);
-  const [rightWidth, setRightWidth] = useState(260);
+  const [rightWidth, setRightWidth] = useState(300);
   const historyDragRef = useRef<{ startX: number; startW: number } | null>(null);
   const rightDragRef   = useRef<{ startX: number; startW: number } | null>(null);
   // ref to the workspace div so drag handlers can read its live width
@@ -2002,6 +3263,7 @@ export default function Chat({ mini = false }: ChatProps) {
 
   /** Middle panel must never be squeezed below this px — guards drag handlers and auto-collapse */
   const MIDDLE_MIN = 420;
+  const RIGHT_MIN = 280;
   const HANDLE_GAP = 8; // px reserved for the two drag handle elements
 
   const startHistoryDrag = useCallback((startX: number) => {
@@ -2030,9 +3292,9 @@ export default function Chat({ mini = false }: ChatProps) {
       if (!rightDragRef.current) return;
       const workspaceW = workspaceRef.current?.clientWidth ?? 900;
       const otherPanel = historyOpen ? historyWidth : 0;
-      const maxRight = Math.max(180, workspaceW - otherPanel - MIDDLE_MIN - HANDLE_GAP);
+      const maxRight = Math.max(RIGHT_MIN, workspaceW - otherPanel - MIDDLE_MIN - HANDLE_GAP);
       const delta = e.clientX - rightDragRef.current.startX;
-      setRightWidth(Math.max(180, Math.min(Math.min(420, maxRight), rightDragRef.current.startW - delta)));
+      setRightWidth(Math.max(RIGHT_MIN, Math.min(Math.min(420, maxRight), rightDragRef.current.startW - delta)));
     };
     const onUp = () => {
       rightDragRef.current = null;
@@ -2058,6 +3320,7 @@ export default function Chat({ mini = false }: ChatProps) {
   // The underlying storage type is still WorkspaceProfile until the model is migrated.
   const { profiles: availableProfiles, createProfile: createProjectLink } = useAppData();
   const cancelRef = useRef<(() => void) | null>(null);
+  const artifactLookupRequestRef = useRef(0);
   const uiStreamAvailableRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -2085,11 +3348,93 @@ export default function Chat({ mini = false }: ChatProps) {
     () => availableProfiles.find((profile) => profile.id === activeProfileId) ?? null,
     [availableProfiles, activeProfileId],
   );
+  const artifactParts = useMemo(() => collectConversationArtifacts(bubbles), [bubbles]);
+  const selectedArtifact = useMemo(
+    () => (
+      artifactParts.find((artifact) => artifact.artifactId === selectedArtifactId)
+      ?? (selectedExternalArtifact?.artifactId === selectedArtifactId ? selectedExternalArtifact : null)
+    ),
+    [artifactParts, selectedArtifactId, selectedExternalArtifact],
+  );
+  const selectedArtifactLookupState = selectedArtifactId ? artifactLookupState[selectedArtifactId] ?? null : null;
+
+  useEffect(() => {
+    if (selectedArtifactId && !selectedArtifact) setSelectedArtifactId(null);
+  }, [selectedArtifact, selectedArtifactId]);
 
   useEffect(() => {
     if (availableProfiles.length === 0) return;
     setActiveProfileId((current) => resolveActiveProjectLinkId(availableProfiles, current) || null);
   }, [availableProfiles]);
+
+  const selectArtifact = useCallback((artifact: ConversationArtifactPart) => {
+    setSelectedExternalArtifact(null);
+    setSelectedArtifactId(artifact.artifactId);
+    setPersistedPrInsightArtifactIds((current) => {
+      if (!current.has(artifact.artifactId)) return current;
+      const next = new Set(current);
+      next.delete(artifact.artifactId);
+      return next;
+    });
+    if (!mini) setRightPanelOpen(true);
+  }, [mini]);
+
+  const openPrInsightSourceInWorkspace = useCallback((source: SavedPrInsightSource) => {
+    const artifact: ConversationArtifactPart = {
+      type: "artifact",
+      artifactId: source.artifactId,
+      title: prInsightArtifactTitle(source),
+      artifactType: "markdown",
+      status: "ready",
+    };
+    setSelectedExternalArtifact(artifact);
+    setSelectedArtifactId(source.artifactId);
+    setPersistedPrInsightArtifactIds((current) => new Set(current).add(source.artifactId));
+    if (!mini) setRightPanelOpen(true);
+  }, [mini]);
+
+  useEffect(() => {
+    if (!selectedArtifact || selectedArtifact.content?.trim() || !selectedArtifactId) return;
+    if (!persistedPrInsightArtifactIds.has(selectedArtifactId)) return;
+    const artifactId = selectedArtifact.artifactId;
+    const current = artifactLookupState[artifactId];
+    if (current?.status === "loading" || current?.status === "loaded") return;
+    if (!activeProfileId) {
+      const message = "Select a Project Link before loading saved PR insight artifacts.";
+      if (current?.status === "error" && current.message === message) return;
+      setArtifactLookupState((state) => ({
+        ...state,
+        [artifactId]: { status: "error", message },
+      }));
+      return;
+    }
+
+    const requestId = artifactLookupRequestRef.current + 1;
+    artifactLookupRequestRef.current = requestId;
+    setArtifactLookupState((state) => ({
+      ...state,
+      [artifactId]: { status: "loading" },
+    }));
+    void fetchProfilePrInsightArtifactById(activeProfileId, artifactId)
+      .then((record) => {
+        if (artifactLookupRequestRef.current !== requestId) return;
+        setArtifactLookupState((state) => ({
+          ...state,
+          [artifactId]: { status: "loaded", record },
+        }));
+      })
+      .catch((error: unknown) => {
+        if (artifactLookupRequestRef.current !== requestId) return;
+        const message = error instanceof Error ? error.message : String(error);
+        setArtifactLookupState((state) => ({
+          ...state,
+          [artifactId]: { status: "error", message },
+        }));
+      });
+    return () => {
+      if (artifactLookupRequestRef.current === requestId) artifactLookupRequestRef.current += 1;
+    };
+  }, [activeProfileId, persistedPrInsightArtifactIds, selectedArtifact, selectedArtifactId]);
 
   const refreshModelChoices = useCallback(() => {
     const next = readCustomConversationModel();
@@ -2228,6 +3573,17 @@ export default function Chat({ mini = false }: ChatProps) {
     }
   }, []);
 
+  const markIncomingContentScrollIntent = useCallback(() => {
+    const shouldFollow = shouldFollowIncomingChatContent(readChatScrollMetrics(scrollContainerRef.current));
+    atBottomRef.current = shouldFollow;
+    shouldScrollRef.current = shouldFollow;
+  }, []);
+
+  const forceNextScrollToBottom = useCallback(() => {
+    atBottomRef.current = true;
+    shouldScrollRef.current = true;
+  }, []);
+
   useEffect(() => {
     if (shouldScrollRef.current) {
       scrollToBottomIfNeeded();
@@ -2238,7 +3594,7 @@ export default function Chat({ mini = false }: ChatProps) {
   const handleContainerScroll = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
-    atBottomRef.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 80;
+    atBottomRef.current = isNearChatBottom(readChatScrollMetrics(el)!);
   }, []);
 
   useEffect(() => {
@@ -2300,30 +3656,80 @@ export default function Chat({ mini = false }: ChatProps) {
     return null;
   }, [bubbles]);
 
-  // Derived: group consecutive tool bubbles together for compact rendering
-  type RenderItem =
-    | { kind: "tool-group"; tools: Bubble[]; key: string }
-    | { kind: "bubble"; bubble: Bubble };
+  // Derived: group consecutive tool bubbles and attach a following approval.
+  const renderItems = useMemo((): ChatRenderItem<Bubble>[] => groupChatRenderItems(bubbles), [bubbles]);
 
-  const renderItems = useMemo((): RenderItem[] => {
-    const items: RenderItem[] = [];
-    let i = 0;
-    while (i < bubbles.length) {
-      const b = bubbles[i]!;
-      if (b.kind === "tool") {
-        const group: Bubble[] = [b];
-        while (i + 1 < bubbles.length && bubbles[i + 1]!.kind === "tool") {
-          i++;
-          group.push(bubbles[i]!);
-        }
-        items.push({ kind: "tool-group", tools: group, key: group[0]!.id });
-      } else {
-        items.push({ kind: "bubble", bubble: b });
-      }
-      i++;
-    }
-    return items;
-  }, [bubbles]);
+  const suggestionReplies = useMemo(() => {
+    const lastAssistant = [...bubbles].reverse().find((bubble) => bubble.kind === "assistant");
+    const lastUser = [...bubbles].reverse().find((bubble) => bubble.kind === "user");
+    const lastError = [...bubbles].reverse().find((bubble) => bubble.kind === "error");
+    const pendingTool =
+      workflowState?.pendingApproval?.action.tool ??
+      [...bubbles].reverse().find((bubble) => bubble.kind === "pending_confirm" && bubble.pendingStatus === "waiting")?.pendingTool;
+    const sourceTypes = Array.from(new Set((lastAssistant?.meta?.sources ?? []).map((source) => source.type)));
+    return deriveSuggestionReplies({
+      metadataSuggestions: lastAssistant?.meta?.suggestions,
+      metadataActions: lastAssistant?.meta?.actionsTaken,
+      sourceTypes,
+      lastAssistantText: lastAssistant?.text,
+      lastUserText: lastUser?.text,
+      workflowStatus: workflowState?.status,
+      workflowKind: workflowState?.workflowKind,
+      workflowPhase: workflowState?.workflowPhase,
+      pendingTool,
+      pendingApprovalTool: workflowState?.pendingApproval?.action.tool,
+      pendingApprovalDescription: workflowState?.pendingApproval?.action.description,
+      hasAuthError: Boolean(lastError?.text && /\b(auth|oauth|pat|token|credential|sign in|permission)\b/i.test(lastError.text)),
+      inputValue: input,
+      busy,
+    });
+  }, [bubbles, busy, input, workflowState]);
+
+  const composerPendingApproval = useMemo(
+    () => (
+      workflowState?.pendingApproval
+      ?? [...bubbles].reverse().find((bubble) => bubble.kind === "pending_confirm" && bubble.pendingStatus === "waiting")
+      ?? null
+    ),
+    [bubbles, workflowState?.pendingApproval],
+  );
+
+  const commandChips = useMemo(() => {
+    return deriveCommandChips({
+      hasRepoPath: Boolean(repoPath.trim()),
+      hasAdoLink: Boolean(activeProfile?.adoProject && activeProfile?.adoRepoName),
+      inputValue: input,
+      pendingApproval: Boolean(composerPendingApproval),
+    });
+  }, [activeProfile?.adoProject, activeProfile?.adoRepoName, composerPendingApproval, input, repoPath]);
+
+  const commandChipsDisabled = useMemo(
+    () => Boolean(composerPendingApproval),
+    [composerPendingApproval],
+  );
+
+  const composerStateNotice = useMemo(() => deriveComposerStateNotice({
+    busy,
+    workflowStatus: workflowState?.status,
+    pendingApproval: Boolean(composerPendingApproval),
+    pendingApprovalDescription:
+      composerPendingApproval && "action" in composerPendingApproval
+        ? composerPendingApproval.action.description
+        : composerPendingApproval?.pendingDescription,
+    queuedLabel: queuedSuggestion?.label,
+    statusText,
+  }), [busy, composerPendingApproval, queuedSuggestion?.label, statusText, workflowState?.status]);
+
+  const composerInputState = useMemo(() => deriveComposerInputState({
+    busy,
+    workflowStatus: workflowState?.status,
+    pendingApproval: Boolean(composerPendingApproval),
+    inputValue: input,
+  }), [busy, composerPendingApproval, input, workflowState?.status]);
+
+  useEffect(() => {
+    if (busy || commandChipsDisabled) setModelMenuOpen(false);
+  }, [busy, commandChipsDisabled]);
 
   // Derived: conversation title from first user message
   const conversationTitle = useMemo(() => {
@@ -2385,10 +3791,21 @@ export default function Chat({ mini = false }: ChatProps) {
     [workflowState, conversationTitle],
   );
 
-  const addBubble = useCallback((bubble: Bubble) => {
-    shouldScrollRef.current = true;
+  const addBubble = useCallback((bubble: Bubble, options?: { forceScroll?: boolean }) => {
+    if (options?.forceScroll) forceNextScrollToBottom();
+    else markIncomingContentScrollIntent();
     setBubbles((prev) => [...prev, bubble]);
-  }, []);
+  }, [forceNextScrollToBottom, markIncomingContentScrollIntent]);
+
+  const addErrorBubbleOnce = useCallback((message: string) => {
+    const text = message || "Unknown error";
+    markIncomingContentScrollIntent();
+    setBubbles((prev) => {
+      const last = prev[prev.length - 1];
+      if (last?.kind === "error" && last.text === text) return prev;
+      return [...prev, { id: uid(), kind: "error", text }];
+    });
+  }, [markIncomingContentScrollIntent]);
 
   /** Add the clean assistant response; approvals are rendered from structured events. */
   const finaliseWithResponse = useCallback((
@@ -2396,20 +3813,27 @@ export default function Chat({ mini = false }: ChatProps) {
     meta?: Bubble["meta"],
     streamedText?: string,
   ) => {
-    shouldScrollRef.current = true;
+    markIncomingContentScrollIntent();
     setBubbles((prev) => {
       return finaliseAssistantResponseBubbles(
         prev,
         cleanText,
         meta,
         streamedText,
-        (text, bubbleMeta) => ({ id: uid(), kind: "assistant", text, streaming: false, meta: bubbleMeta }),
+        (text, bubbleMeta) => ({
+          id: uid(),
+          kind: "assistant",
+          text,
+          parts: conversationPartsFromAssistantBubble({ text, meta: bubbleMeta }),
+          streaming: false,
+          meta: bubbleMeta,
+        }),
       );
     });
-  }, []);
+  }, [markIncomingContentScrollIntent]);
 
   const showApprovalRequest = useCallback((approval: ApprovalRequest) => {
-    shouldScrollRef.current = true;
+    markIncomingContentScrollIntent();
     setBubbles((prev) => {
       const alreadyWaiting = prev.some(
         (b) =>
@@ -2427,20 +3851,38 @@ export default function Chat({ mini = false }: ChatProps) {
           pendingArgs: approval.action.args,
           pendingDescription: approval.explanation || approval.action.description,
           pendingNextHint: approval.action.nextHint,
+          pendingWorkflow: approval.action.workflow,
+          pendingReadiness: approval.action.readiness,
+          pendingPreflight: approval.action.preflight,
           pendingStatus: "waiting",
+          parts: [
+            toolApprovalPartFromSnapshot({
+              approvalId: approval.id,
+              toolName: approval.action.tool,
+              description: approval.explanation || approval.action.description,
+              args: approval.action.args,
+              riskLevel: approval.riskLevel,
+            }),
+          ],
         },
       ];
     });
-  }, []);
+  }, [markIncomingContentScrollIntent]);
 
   const stopStreaming = useCallback(() => {
     setBubbles((prev) => {
-      const last = prev[prev.length - 1];
-      if (last?.kind === "assistant" && last.streaming) {
-        if (last.text?.trim()) {
-          return [...prev.slice(0, -1), { ...last, streaming: false }];
+      const reversedIdx = [...prev].reverse().findIndex((bubble) => bubble.kind === "assistant" && bubble.streaming);
+      if (reversedIdx !== -1) {
+        const realIdx = prev.length - 1 - reversedIdx;
+        const bubble = prev[realIdx];
+        if (!bubble || bubble.kind !== "assistant") return prev;
+        const streamedText = bubble.text?.trim() || conversationTextFromParts(bubble.parts).trim();
+        if (streamedText) {
+          return prev.map((item, index) =>
+            index === realIdx ? { ...bubble, text: bubble.text || streamedText, streaming: false } : item,
+          );
         }
-        return prev.slice(0, -1); // discard empty
+        return prev.filter((_, index) => index !== realIdx);
       }
       return prev;
     });
@@ -2448,33 +3890,155 @@ export default function Chat({ mini = false }: ChatProps) {
 
   const appendAssistantDelta = useCallback((delta: string) => {
     if (!delta) return;
-    shouldScrollRef.current = true;
+    markIncomingContentScrollIntent();
     setBubbles((prev) => {
-      const last = prev[prev.length - 1];
-      if (last?.kind === "assistant" && last.streaming) {
-        return [...prev.slice(0, -1), { ...last, text: `${last.text ?? ""}${delta}` }];
+      const reversedIdx = [...prev].reverse().findIndex((bubble) => bubble.kind === "assistant" && bubble.streaming);
+      if (reversedIdx !== -1) {
+        const realIdx = prev.length - 1 - reversedIdx;
+        return prev.map((bubble, index) => {
+          if (index !== realIdx || bubble.kind !== "assistant") return bubble;
+          return {
+            ...bubble,
+            text: `${bubble.text ?? ""}${delta}`,
+            parts: appendTextDeltaToConversationParts(bubble.parts, delta),
+          };
+        });
       }
-      return [...prev, { id: uid(), kind: "assistant", text: delta, streaming: true }];
+      return [
+        ...prev,
+        {
+          id: uid(),
+          kind: "assistant",
+          text: delta,
+          parts: appendTextDeltaToConversationParts(undefined, delta),
+          streaming: true,
+        },
+      ];
     });
-  }, []);
+  }, [markIncomingContentScrollIntent]);
 
-  const appendToolOutputDelta = useCallback((toolName: string | undefined, stream: "stdout" | "stderr" | undefined, delta: string | undefined) => {
+  const upsertToolBubble = useCallback((
+    snapshot: ToolCallPartSnapshot,
+    options: {
+      ok?: boolean;
+      result?: unknown;
+      open?: boolean;
+      liveOutput?: string;
+    } = {},
+  ) => {
+    if (!snapshot.toolName) return;
+    markIncomingContentScrollIntent();
+    setBubbles((prev) => {
+      const existingIndex = prev.findIndex(
+        (b) =>
+          b.kind === "tool" &&
+          (b.toolCallId === snapshot.toolCallId ||
+            (!b.toolCallId && b.toolName === snapshot.toolName && b.toolOk === undefined)),
+      );
+      const nextPart = toolCallPartFromSnapshot(snapshot);
+      if (existingIndex === -1) {
+        return [
+          ...prev,
+          {
+            id: uid(),
+            kind: "tool",
+            toolCallId: snapshot.toolCallId,
+            toolName: snapshot.toolName,
+            toolArgs: snapshot.input && typeof snapshot.input === "object"
+              ? (snapshot.input as Record<string, unknown>)
+              : undefined,
+            toolOk: options.ok,
+            toolSummary: snapshot.summary,
+            toolResult: options.result ?? snapshot.output,
+            toolOpen: options.open ?? false,
+            toolLiveOutput: options.liveOutput,
+            parts: [nextPart],
+          },
+        ];
+      }
+
+      return prev.map((b, i) => {
+        if (i !== existingIndex) return b;
+        return {
+          ...b,
+          toolCallId: snapshot.toolCallId,
+          toolName: snapshot.toolName,
+          toolArgs: snapshot.input && typeof snapshot.input === "object"
+            ? (snapshot.input as Record<string, unknown>)
+            : b.toolArgs,
+          toolOk: options.ok ?? b.toolOk,
+          toolSummary: snapshot.summary ?? b.toolSummary,
+          toolResult: options.result ?? snapshot.output ?? b.toolResult,
+          toolOpen: options.open ?? b.toolOpen,
+          toolLiveOutput: options.liveOutput ?? b.toolLiveOutput,
+          parts: upsertToolCallPart(b.parts, snapshot),
+        };
+      });
+    });
+  }, [markIncomingContentScrollIntent]);
+
+  const appendToolOutputDelta = useCallback((toolName: string | undefined, stream: "stdout" | "stderr" | undefined, delta: string | undefined, toolCallId?: string) => {
     if (!toolName || !delta) return;
-    shouldScrollRef.current = true;
+    markIncomingContentScrollIntent();
     const prefix = stream === "stderr" ? "[stderr] " : "";
     setBubbles((prev) => {
       const idx = [...prev].reverse().findIndex(
-        (b) => b.kind === "tool" && b.toolName === toolName && b.toolOk === undefined,
+        (b) =>
+          b.kind === "tool" &&
+          (toolCallId ? b.toolCallId === toolCallId : b.toolName === toolName) &&
+          b.toolOk === undefined,
       );
+      if (idx === -1 && toolCallId) {
+        return [
+          ...prev,
+          {
+            id: uid(),
+            kind: "tool",
+            toolCallId,
+            toolName,
+            toolOpen: true,
+            toolLiveOutput: `${prefix}${delta}`.slice(-12000),
+            parts: appendToolOutputDeltaToConversationParts(
+              undefined,
+              { toolCallId, toolName },
+              stream,
+              delta,
+            ),
+          },
+        ];
+      }
       if (idx === -1) return prev;
       const realIdx = prev.length - 1 - idx;
-      return prev.map((b, i) =>
-        i === realIdx
-          ? { ...b, toolLiveOutput: `${b.toolLiveOutput ?? ""}${prefix}${delta}`.slice(-12000), toolOpen: true }
-          : b,
-      );
+      return prev.map((b, i) => {
+        if (i !== realIdx) return b;
+        const resolvedToolCallId = b.toolCallId ?? toolCallId ?? makeToolCallId(toolName);
+        return {
+          ...b,
+          toolCallId: resolvedToolCallId,
+          toolLiveOutput: `${b.toolLiveOutput ?? ""}${prefix}${delta}`.slice(-12000),
+          toolOpen: true,
+          parts: appendToolOutputDeltaToConversationParts(
+            b.parts,
+            {
+              toolCallId: resolvedToolCallId,
+              toolName,
+              input: b.toolArgs,
+              summary: b.toolSummary,
+            },
+            stream,
+            delta,
+          ),
+        };
+      });
     });
-  }, []);
+  }, [markIncomingContentScrollIntent]);
+
+  const mergeAssistantMetadata = useCallback((metadata: unknown) => {
+    const meta = assistantBubbleMetaFromUnknown(metadata);
+    if (!meta) return;
+    markIncomingContentScrollIntent();
+    setBubbles((prev) => mergeAssistantMetadataIntoLatestBubble(prev, meta));
+  }, [markIncomingContentScrollIntent]);
 
   const handleUiChunk = useCallback((chunk?: ChatUiChunk) => {
     if (!chunk) return;
@@ -2503,28 +4067,80 @@ export default function Chat({ mini = false }: ChatProps) {
 
       case "finish":
         stopStreaming();
+        uiStreamAvailableRef.current = false;
+        setBusy(false);
+        setStatusText(null);
+        cancelRef.current = null;
         break;
 
       case "error":
         stopStreaming();
-        addBubble({ id: uid(), kind: "error", text: chunk.errorText || "Unknown error" });
+        uiStreamAvailableRef.current = false;
+        addErrorBubbleOnce(chunk.errorText || "Unknown error");
+        setBusy(false);
+        setStatusText(null);
+        cancelRef.current = null;
         break;
 
       case "tool-input-start":
+        upsertToolBubble({
+          toolCallId: chunk.toolCallId,
+          toolName: chunk.toolName,
+          state: "input-streaming",
+        });
+        break;
+
       case "tool-input-available":
+        upsertToolBubble({
+          toolCallId: chunk.toolCallId,
+          toolName: chunk.toolName,
+          state: "input-available",
+          input: chunk.input,
+        });
+        break;
+
       case "tool-output-available":
+        upsertToolBubble({
+          toolCallId: chunk.toolCallId,
+          toolName: chunk.toolName,
+          state: "result",
+          output: chunk.output,
+          summary: chunk.summary,
+        }, {
+          ok: true,
+          result: chunk.output,
+          open: false,
+        });
+        break;
+
       case "tool-output-error":
+        upsertToolBubble({
+          toolCallId: chunk.toolCallId,
+          toolName: chunk.toolName,
+          state: "error",
+          output: { error: chunk.errorText },
+          summary: chunk.summary,
+        }, {
+          ok: false,
+          result: { error: chunk.errorText },
+          open: true,
+        });
+        break;
+
       case "approval-required":
       case "approval-resolved":
-      case "metadata-available":
       case "workflow-updated":
         break;
 
+      case "metadata-available":
+        mergeAssistantMetadata(chunk.metadata);
+        break;
+
       case "tool-output-delta":
-        appendToolOutputDelta(chunk.toolName, chunk.stream, chunk.delta);
+        appendToolOutputDelta(chunk.toolName, chunk.stream, chunk.delta, chunk.toolCallId);
         break;
     }
-  }, [addBubble, appendAssistantDelta, appendToolOutputDelta, stopStreaming]);
+  }, [addErrorBubbleOnce, appendAssistantDelta, appendToolOutputDelta, mergeAssistantMetadata, stopStreaming, upsertToolBubble]);
 
   const toggleTool = useCallback((id: string) => {
     setBubbles((prev) =>
@@ -2554,7 +4170,7 @@ export default function Chat({ mini = false }: ChatProps) {
     setBusy(true);
     setStatusText("Planning");
     if (!options?.silent) {
-      addBubble({ id: uid(), kind: "user", text: msg });
+      addBubble({ id: uid(), kind: "user", text: msg }, { forceScroll: true });
     }
 
     const repo = repoPath || ".";
@@ -2598,13 +4214,22 @@ export default function Chat({ mini = false }: ChatProps) {
         case "tool_start":
           setStatusText(`Running ${ev.name}`);
           stopStreaming();
-          addBubble({ id: uid(), kind: "tool", toolName: ev.name, toolArgs: ev.args, toolOpen: false });
+          {
+            const toolName = ev.name ?? "unknown";
+            const toolCallId = ev.toolCallId ?? makeToolCallId(toolName, ev.args);
+            upsertToolBubble({
+              toolCallId,
+              toolName,
+              state: "input-available",
+              input: ev.args,
+            });
+          }
           break;
 
         case "tool_output_delta":
         case "tool.output.delta":
           if (!uiStreamAvailableRef.current) {
-            appendToolOutputDelta(ev.name, ev.stream, ev.delta);
+            appendToolOutputDelta(ev.name, ev.stream, ev.delta, ev.toolCallId);
           }
           break;
 
@@ -2615,11 +4240,27 @@ export default function Chat({ mini = false }: ChatProps) {
             );
             if (idx === -1) return prev;
             const realIdx = prev.length - 1 - idx;
-            return prev.map((b, i) =>
-              i === realIdx
-                ? { ...b, toolOk: ev.ok, toolSummary: ev.summary, toolResult: ev.toolResult, toolOpen: false }
-                : b,
-            );
+            return prev.map((b, i) => {
+              if (i !== realIdx) return b;
+              const toolName = b.toolName ?? ev.name ?? "unknown";
+              const toolCallId = ev.toolCallId ?? b.toolCallId ?? makeToolCallId(toolName, b.toolArgs);
+              return {
+                ...b,
+                toolCallId,
+                toolOk: ev.ok,
+                toolSummary: ev.summary,
+                toolResult: ev.toolResult,
+                toolOpen: false,
+                parts: upsertToolCallPart(b.parts, {
+                  toolCallId,
+                  toolName,
+                  state: toolPartStateFromResult(ev.ok),
+                  input: b.toolArgs,
+                  output: ev.toolResult,
+                  summary: ev.summary,
+                }),
+              };
+            });
           });
           setStatusText("Processing");
           break;
@@ -2695,6 +4336,8 @@ export default function Chat({ mini = false }: ChatProps) {
                 finalizationMode: ev.result.finalizationMode,
                 actionsTaken: ev.result.actionsTaken,
                 suggestions: ev.result.suggestions,
+                sources: ev.result.sources,
+                artifacts: ev.result.artifacts,
               }
             : undefined;
           const cleanText = ev.result?.response?.trim() ?? "";
@@ -2721,7 +4364,7 @@ export default function Chat({ mini = false }: ChatProps) {
         case "error":
           stopStreaming();
           uiStreamAvailableRef.current = false;
-          addBubble({ id: uid(), kind: "error", text: ev.message ?? "Unknown error" });
+          addErrorBubbleOnce(ev.message ?? "Unknown error");
           setBusy(false); setStatusText(null); cancelRef.current = null;
           break;
       }
@@ -2738,9 +4381,11 @@ export default function Chat({ mini = false }: ChatProps) {
     activeProfileId,
     activeModel,
     addBubble,
+    addErrorBubbleOnce,
     stopStreaming,
     appendAssistantDelta,
     appendToolOutputDelta,
+    upsertToolBubble,
     handleUiChunk,
     finaliseWithResponse,
     showApprovalRequest,
@@ -2749,14 +4394,14 @@ export default function Chat({ mini = false }: ChatProps) {
 
   const send = useCallback(() => {
     const msg = input.trim();
-    if (!msg || busy) return;
+    if (composerInputState.sendDisabled) return;
     setInput("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
 
     sendMessage(msg);
-  }, [input, busy, sendMessage]);
+  }, [composerInputState.sendDisabled, input, sendMessage]);
 
   // Pending-action card confirm / cancel
   const confirmPendingAction = useCallback((bubbleId: string) => {
@@ -2789,13 +4434,22 @@ export default function Chat({ mini = false }: ChatProps) {
         case "tool_start":
           setStatusText(`Running ${ev.name}`);
           stopStreaming();
-          addBubble({ id: uid(), kind: "tool", toolName: ev.name, toolArgs: ev.args, toolOpen: false });
+          {
+            const toolName = ev.name ?? "unknown";
+            const toolCallId = ev.toolCallId ?? makeToolCallId(toolName, ev.args);
+            upsertToolBubble({
+              toolCallId,
+              toolName,
+              state: "input-available",
+              input: ev.args,
+            });
+          }
           break;
 
         case "tool_output_delta":
         case "tool.output.delta":
           if (!uiStreamAvailableRef.current) {
-            appendToolOutputDelta(ev.name, ev.stream, ev.delta);
+            appendToolOutputDelta(ev.name, ev.stream, ev.delta, ev.toolCallId);
           }
           break;
 
@@ -2806,11 +4460,27 @@ export default function Chat({ mini = false }: ChatProps) {
             );
             if (idx === -1) return prev;
             const realIdx = prev.length - 1 - idx;
-            return prev.map((b, i) =>
-              i === realIdx
-                ? { ...b, toolOk: ev.ok, toolSummary: ev.summary, toolResult: ev.toolResult, toolOpen: false }
-                : b,
-            );
+            return prev.map((b, i) => {
+              if (i !== realIdx) return b;
+              const toolName = b.toolName ?? ev.name ?? "unknown";
+              const toolCallId = ev.toolCallId ?? b.toolCallId ?? makeToolCallId(toolName, b.toolArgs);
+              return {
+                ...b,
+                toolCallId,
+                toolOk: ev.ok,
+                toolSummary: ev.summary,
+                toolResult: ev.toolResult,
+                toolOpen: false,
+                parts: upsertToolCallPart(b.parts, {
+                  toolCallId,
+                  toolName,
+                  state: toolPartStateFromResult(ev.ok),
+                  input: b.toolArgs,
+                  output: ev.toolResult,
+                  summary: ev.summary,
+                }),
+              };
+            });
           });
           // Mark the confirmation card as done once the tool finishes
           setBubbles((prev) => prev.map((b) =>
@@ -2869,6 +4539,8 @@ export default function Chat({ mini = false }: ChatProps) {
                 finalizationMode: ev.result.finalizationMode,
                 actionsTaken: ev.result.actionsTaken,
                 suggestions: ev.result.suggestions,
+                sources: ev.result.sources,
+                artifacts: ev.result.artifacts,
               }
             : undefined;
           const cleanText = ev.result?.response?.trim() ?? "";
@@ -2905,13 +4577,13 @@ export default function Chat({ mini = false }: ChatProps) {
           setBubbles((prev) => prev.map((b) =>
             b.id === bubbleId ? { ...b, pendingStatus: "cancelled" } : b,
           ));
-          addBubble({ id: uid(), kind: "error", text: ev.message ?? "Unknown error" });
+          addErrorBubbleOnce(ev.message ?? "Unknown error");
           setBusy(false); setStatusText(null); cancelRef.current = null;
           break;
       }
     });
     cancelRef.current = cancel;
-  }, [sessionId, busy, addBubble, stopStreaming, appendAssistantDelta, appendToolOutputDelta, handleUiChunk, finaliseWithResponse, showApprovalRequest, mini]);
+  }, [sessionId, busy, addBubble, addErrorBubbleOnce, stopStreaming, appendAssistantDelta, appendToolOutputDelta, upsertToolBubble, handleUiChunk, finaliseWithResponse, showApprovalRequest, mini]);
 
   const cancelPendingAction = useCallback((bubbleId: string) => {
     setBubbles((prev) => prev.map((b) => b.id === bubbleId ? { ...b, pendingStatus: "cancelled" } : b));
@@ -2961,45 +4633,92 @@ export default function Chat({ mini = false }: ChatProps) {
     if (!repoPath.trim()) return;
 
     const directWorkflow = workspaceActionToDirectWorkflow(action);
-    if (directWorkflow) {
-      setBusy(true);
-      setStatusText("Inspecting workspace");
-      try {
-        const result = await runChatWorkflowAction(directWorkflow, repoPath, activeProfileId);
-        setWorkflowState(result.workflowState ?? null);
-        setBubbles((prev) => [
-          ...prev,
-          ...result.tools.map((tool) => ({
+    setBusy(true);
+    setStatusText("Inspecting workspace");
+    try {
+      const result = await runChatWorkflowAction(directWorkflow.action, repoPath, activeProfileId, {
+        sessionId,
+        ...directWorkflow.input,
+      });
+      if (result.sessionId) setSessionId(result.sessionId);
+      setWorkflowState(result.workflowState ?? null);
+      setBubbles((prev) => [
+        ...prev,
+        ...result.tools.map((tool) => {
+          const toolCallId = makeToolCallId(tool.name);
+          const toolArgs = { command: tool.command };
+          const toolResult = {
+            stdout: tool.stdout,
+            stderr: tool.stderr,
+            returncode: tool.returncode,
+          };
+          const toolSummary = tool.ok ? tool.stdout.trim().split(/\r?\n/)[0] || "ok" : tool.stderr || "failed";
+          return {
             id: uid(),
             kind: "tool" as const,
+            toolCallId,
             toolName: tool.name,
-            toolArgs: { command: tool.command },
+            toolArgs,
             toolOk: tool.ok,
-            toolSummary: tool.ok ? tool.stdout.trim().split(/\r?\n/)[0] || "ok" : tool.stderr || "failed",
-            toolResult: {
-              stdout: tool.stdout,
-              stderr: tool.stderr,
-              returncode: tool.returncode,
-            },
+            toolSummary,
+            toolResult,
             toolOpen: false,
-          })),
-          {
-            id: uid(),
-            kind: result.ok ? "system" as const : "error" as const,
-            text: result.summary,
-          },
-        ]);
-      } catch (err) {
-        addBubble({ id: uid(), kind: "error", text: err instanceof Error ? err.message : String(err) });
-      } finally {
-        setBusy(false);
-        setStatusText(null);
+            parts: [
+              toolCallPartFromSnapshot({
+                toolCallId,
+                toolName: tool.name,
+                state: toolPartStateFromResult(tool.ok),
+                input: toolArgs,
+                output: toolResult,
+                summary: toolSummary,
+              }),
+            ],
+          };
+        }),
+        {
+          id: uid(),
+          kind: result.ok ? "system" as const : "error" as const,
+          text: result.summary,
+        },
+      ]);
+      if (result.workflowState?.pendingApproval) {
+        showApprovalRequest(result.workflowState.pendingApproval);
       }
+    } catch (err) {
+      addBubble({ id: uid(), kind: "error", text: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setBusy(false);
+      setStatusText(null);
+    }
+  }, [activeProfileId, addBubble, bubbles, busy, confirmPendingAction, repoPath, sessionId, showApprovalRequest, statusText, workflowState]);
+
+  const handleSuggestionReply = useCallback((suggestion: SuggestionReply) => {
+    if (shouldQueueSuggestionReply({ busy, workflowStatus: workflowState?.status })) {
+      setQueuedSuggestion(suggestion);
+      setStatusText(`Queued follow-up: ${suggestion.label}`);
       return;
     }
+    const action = workspaceActionFromSuggestion(suggestion);
+    if (action) {
+      void runWorkspaceAction(action);
+      return;
+    }
+    queuePrompt(suggestion.message);
+  }, [busy, queuePrompt, runWorkspaceAction, workflowState?.status]);
 
-    sendMessage(workspaceActionPrompt(action), { silent: true });
-  }, [activeProfileId, bubbles, busy, confirmPendingAction, repoPath, sendMessage, statusText, workflowState]);
+  useEffect(() => {
+    if (!queuedSuggestion) return;
+    if (shouldQueueSuggestionReply({ busy, workflowStatus: workflowState?.status })) return;
+    const next = queuedSuggestion;
+    setQueuedSuggestion(null);
+    const action = workspaceActionFromSuggestion(next);
+    if (action) {
+      void runWorkspaceAction(action);
+      return;
+    }
+    queuePrompt(next.message);
+    setStatusText(null);
+  }, [busy, queuePrompt, queuedSuggestion, runWorkspaceAction, workflowState?.status]);
 
 
   const loadSession = useCallback(async (sid: string) => {
@@ -3018,12 +4737,13 @@ export default function Chat({ mini = false }: ChatProps) {
         finalizationMode?: "agent_final" | "control_marker" | "plain_json" | "none";
         actionsTaken?: string[];
         suggestions?: string[];
+        sources?: AssistantBubbleMeta["sources"];
+        artifacts?: AssistantBubbleMeta["artifacts"];
         }>>,
         fetchChatState(sid).catch(() => ({ workflowState: undefined })),
       ]);
       setSessionId(sid);
-      atBottomRef.current = true;
-      shouldScrollRef.current = true;
+      forceNextScrollToBottom();
       setBubbles(
         stored.map((m) => {
           const base = { id: uid(), timestamp: m.timestamp };
@@ -3031,15 +4751,28 @@ export default function Chat({ mini = false }: ChatProps) {
             return { ...base, kind: "user" as const, text: m.content };
           }
           if (m.role === "tool") {
+            const toolName = m.toolName ?? "unknown";
+            const toolCallId = makeToolCallId(toolName);
             return {
               ...base,
               kind: "tool" as const,
-              toolName: m.toolName,
+              toolCallId,
+              toolName,
               toolArgs: m.toolArgs,
               toolOk: m.toolOk,
               toolSummary: m.toolSummary,
               toolResult: m.toolResult,
               toolOpen: false,
+              parts: [
+                toolCallPartFromSnapshot({
+                  toolCallId,
+                  toolName,
+                  state: toolPartStateFromResult(m.toolOk),
+                  input: m.toolArgs,
+                  output: m.toolResult,
+                  summary: m.toolSummary,
+                }),
+              ],
             };
           }
           if (m.role === "system") {
@@ -3049,15 +4782,23 @@ export default function Chat({ mini = false }: ChatProps) {
             return { ...base, kind: "error" as const, text: m.content };
           }
           // assistant — content is the clean natural-language response
-          const meta: Bubble["meta"] = (m.riskLevel || m.finalizationMode || m.actionsTaken || m.suggestions)
+          const meta: Bubble["meta"] = (m.riskLevel || m.finalizationMode || m.actionsTaken || m.suggestions || m.sources || m.artifacts)
             ? {
                 riskLevel: m.riskLevel,
                 finalizationMode: m.finalizationMode,
                 actionsTaken: m.actionsTaken,
                 suggestions: m.suggestions,
+                sources: m.sources,
+                artifacts: m.artifacts,
               }
             : undefined;
-          return { ...base, kind: "assistant" as const, text: m.content, meta };
+          return {
+            ...base,
+            kind: "assistant" as const,
+            text: m.content,
+            parts: conversationPartsFromAssistantBubble({ text: m.content, meta }),
+            meta,
+          };
         }),
       );
       setWorkflowState(state.workflowState ?? null);
@@ -3069,7 +4810,7 @@ export default function Chat({ mini = false }: ChatProps) {
     } catch {
       /* ignore */
     }
-  }, [showApprovalRequest]);
+  }, [forceNextScrollToBottom, showApprovalRequest]);
 
   const newChat = useCallback(() => {
     try {
@@ -3192,6 +4933,7 @@ export default function Chat({ mini = false }: ChatProps) {
             {/* Message list */}
             <div
               ref={scrollContainerRef}
+              data-testid="chat-message-panel"
               onScroll={handleContainerScroll}
               className="message-panel px-4 py-4 flex flex-col"
             >
@@ -3266,7 +5008,11 @@ export default function Chat({ mini = false }: ChatProps) {
                       {welcomeSuggestions.map((suggestion) => (
                         <button
                           key={suggestion}
-                          onClick={() => queuePrompt(suggestion)}
+                          onClick={() => {
+                            const action = workspaceActionFromWelcomeSuggestion(suggestion);
+                            if (action) void runWorkspaceAction(action);
+                            else queuePrompt(suggestion);
+                          }}
                           className="rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs text-zinc-500 hover:border-zinc-700 hover:text-zinc-300 transition-colors"
                         >
                           {suggestion}
@@ -3283,8 +5029,14 @@ export default function Chat({ mini = false }: ChatProps) {
           {renderItems.map((item) => {
             if (item.kind === "tool-group") {
               return (
-                <div key={item.key} className="mb-1">
-                  <ExecutionLog tools={item.tools} onToggleTool={toggleTool} />
+                <div key={item.key} className="mb-3">
+                  <ExecutionLog
+                    tools={item.tools}
+                    approval={item.approval}
+                    onToggleTool={toggleTool}
+                    onConfirmApproval={confirmPendingAction}
+                    onCancelApproval={cancelPendingAction}
+                  />
                 </div>
               );
             }
@@ -3306,10 +5058,21 @@ export default function Chat({ mini = false }: ChatProps) {
                 <div key={b.id} className="mb-3 flex justify-start">
                   <div className="max-w-[85%]">
                     <div className="rounded-2xl rounded-tl-sm border border-[rgb(var(--app-border))]/70 bg-[rgb(var(--app-surface))] px-4 py-2.5 text-sm text-[rgb(var(--app-text))] shadow-sm">
-                      <span className="whitespace-pre-wrap">{b.text}</span>
-                      {b.streaming && <ThinkingDots />}
+                      <ConversationPartRenderer
+                        parts={conversationPartsFromAssistantBubble(b)}
+                        streaming={b.streaming}
+                        typingIndicator={<ThinkingDots />}
+                        selectedArtifactId={selectedArtifactId}
+                        onArtifactSelect={selectArtifact}
+                      />
                     </div>
-                    {b.meta && <MetaPanel meta={b.meta} onOpenPrInsightSource={openPrInsightSourceInActivity} />}
+                    {b.meta && (
+                      <MetaPanel
+                        meta={b.meta}
+                        onOpenPrInsightSource={openPrInsightSourceInActivity}
+                        onOpenPrInsightWorkspace={openPrInsightSourceInWorkspace}
+                      />
+                    )}
                   </div>
                 </div>
               );
@@ -3409,14 +5172,44 @@ export default function Chat({ mini = false }: ChatProps) {
                   </div>
                 </div>
               )}
-              <div className="rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2 shadow-sm transition focus-within:border-zinc-500">
+              {composerStateNotice && (
+                <div
+                  className={`mb-2 flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-xs ${composerNoticeClass(composerStateNotice.tone)}`}
+                  aria-live="polite"
+                  data-composer-notice={composerStateNotice.tone}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${composerNoticeDotClass(composerStateNotice.tone)}`} aria-hidden="true" />
+                    <span className="min-w-0 truncate">
+                      <span className="font-medium">{composerStateNotice.label}:</span>{" "}
+                      <span className="text-[rgb(var(--app-text))]">{composerStateNotice.detail}</span>
+                    </span>
+                  </span>
+                  {composerStateNotice.tone === "queued" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQueuedSuggestion(null);
+                        setStatusText(null);
+                      }}
+                      className="shrink-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-0.5 font-medium text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-bg-muted))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:translate-y-px"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              )}
+              <CommandChipBar commands={commandChips} onPick={handleSuggestionReply} disabled={commandChipsDisabled} />
+              <SuggestionReplyBar suggestions={suggestionReplies} onPick={handleSuggestionReply} />
+              <div className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2 shadow-sm transition focus-within:border-[rgb(var(--app-accent))]">
                 <textarea
                   ref={textareaRef}
-                  className="w-full resize-none bg-transparent text-sm text-[rgb(var(--app-text))] placeholder:text-[rgb(var(--app-text-subtle))] focus:outline-none"
-                  placeholder="Ask Dev Agent… (Shift+Enter for new line)"
+                  className="w-full resize-none bg-transparent text-sm text-[rgb(var(--app-text))] placeholder:text-[rgb(var(--app-text-subtle))] transition disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none"
+                  placeholder={composerInputState.placeholder}
+                  title={composerInputState.inputTitle}
                   rows={1}
                   value={input}
-                  disabled={busy}
+                  disabled={composerInputState.inputDisabled}
                   onChange={(e) => {
                     setInput(e.target.value);
                     e.target.style.height = "auto";
@@ -3432,8 +5225,9 @@ export default function Chat({ mini = false }: ChatProps) {
                 <div className="relative mt-2 flex items-center gap-2">
                   <button
                     type="button"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
-                    title="Attach context"
+                    disabled={composerInputState.controlsDisabled}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[rgb(var(--app-text-muted))]"
+                    title={composerInputState.controlsDisabled ? composerInputState.inputTitle : "Attach context"}
                   >
                     <span className="text-xl leading-none">+</span>
                   </button>
@@ -3441,8 +5235,9 @@ export default function Chat({ mini = false }: ChatProps) {
                     <button
                       type="button"
                       onClick={() => setModelMenuOpen((value) => !value)}
-                      className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
-                      title="Conversation model"
+                      disabled={composerInputState.controlsDisabled}
+                      className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[rgb(var(--app-text-muted))]"
+                      title={composerInputState.controlsDisabled ? composerInputState.inputTitle : "Conversation model"}
                     >
                       <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M13 3L6 13h5l-1 8 7-11h-5l1-7z" />
@@ -3455,7 +5250,7 @@ export default function Chat({ mini = false }: ChatProps) {
                       </svg>
                     </button>
                     {modelMenuOpen && (
-                      <div className="absolute bottom-9 left-0 z-40 w-64 rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2 shadow-2xl">
+                      <div className="absolute bottom-9 left-0 z-40 w-64 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2 shadow-2xl">
                         <p className="px-2 pb-1.5 text-xs text-[rgb(var(--app-text-muted))]">Model</p>
                         <button
                           type="button"
@@ -3489,20 +5284,27 @@ export default function Chat({ mini = false }: ChatProps) {
                     <button
                       onClick={() => {
                         cancelRef.current?.();
+                        cancelRef.current = null;
+                        stopStreaming();
+                        uiStreamAvailableRef.current = false;
                         setBusy(false);
                         setStatusText(null);
                       }}
-                      className="shrink-0 rounded-lg bg-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-zinc-600 active:scale-95"
+                      className="shrink-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-bg-muted))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:scale-95"
                     >
                       Stop
                     </button>
                   ) : (
                   <button
                     onClick={send}
-                    disabled={!input.trim()}
-                    className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40 transition active:scale-95"
+                    disabled={composerInputState.sendDisabled}
+                    title={composerInputState.sendTitle}
+                    aria-label="Send message"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Send
+                    <svg className="h-4 w-4 translate-x-px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h13m0 0-5-5m5 5-5 5" />
+                    </svg>
                   </button>
                   )}
                 </div>
@@ -3540,11 +5342,19 @@ export default function Chat({ mini = false }: ChatProps) {
                 gitStatus={gitStatus}
                 diffStats={diffStats}
                 taskState={taskState}
+                workflowState={workflowState}
                 busy={busy}
                 profiles={availableProfiles}
                 activeProfileId={activeProfileId}
                 setActiveProfileId={setActiveProfileId}
                 statusText={statusText}
+                selectedArtifact={selectedArtifact}
+                selectedArtifactLookupState={selectedArtifactLookupState}
+                artifactCount={artifactParts.length}
+                onClearArtifact={() => {
+                  setSelectedArtifactId(null);
+                  setSelectedExternalArtifact(null);
+                }}
                 onAction={runWorkspaceAction}
               />
             </aside>

@@ -21,13 +21,14 @@ const READ_ONLY_TOOLS = new Set([
   "git_current_branch",
   "git_show",
   "git_merge_base",
-  "git_intent_translator",
   "repo_refresh_index",
 ]);
 
 const HIGH_RISK_TOOLS = new Set([
   "git_push",
   "git_rebase",
+  "git_cherry_pick",
+  "git_revert",
   "ado_create_pr",
   "ado_trigger_pipeline",
 ]);

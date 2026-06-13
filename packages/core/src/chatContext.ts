@@ -6,6 +6,7 @@ import type { LLMClient } from "./llm.js";
 import { RepoIndexer } from "./indexer/repoIndexer.js";
 import { VectorIndex, type VectorIndexStats } from "./vectorIndex.js";
 import { runCommand } from "./tools/executor.js";
+import type { ChatPlannerSource } from "./chatPlanner.js";
 
 export interface ChatContextProfile {
   buildCommand?: string;
@@ -37,6 +38,12 @@ export interface ChatContextBundle {
   indexed: boolean;
   embedded: boolean;
   fallbackUsed: boolean;
+}
+
+interface DiffHunkSource {
+  path: string;
+  line: number;
+  snippet: string;
 }
 
 const IMPORTANT_FILES = [
@@ -284,6 +291,137 @@ export function describeChatContext(bundle: ChatContextBundle): string {
   return `Repository context: quick scan used; background indexing may improve future answers.`;
 }
 
+export function chatContextSources(bundle: ChatContextBundle, maxSources = 8): ChatPlannerSource[] {
+  const sources: ChatPlannerSource[] = [];
+  const seen = new Set<string>();
+  const perFileCounts = new Map<string, number>();
+  const add = (source: ChatPlannerSource): void => {
+    const key = source.type === "source_document"
+      ? `${source.file ?? source.title}:${source.line ?? ""}`
+      : source.url;
+    if (seen.has(key)) return;
+    if (source.type === "source_document" && source.file) {
+      const count = perFileCounts.get(source.file) ?? 0;
+      if (count >= 3) return;
+      perFileCounts.set(source.file, count + 1);
+    }
+    seen.add(key);
+    sources.push(source);
+  };
+
+  for (const hunk of diffHunkSources(bundle.changeDiffExcerpt ?? "")) {
+    if (sources.length >= maxSources) break;
+    add({
+      type: "source_document",
+      sourceId: sourceIdFor("hunk", `${hunk.path}:${hunk.line}`),
+      title: `${hunk.path}:${hunk.line}`,
+      file: hunk.path,
+      line: hunk.line,
+      snippet: hunk.snippet,
+    });
+  }
+
+  for (const file of bundle.changedFiles.slice(0, Math.min(4, maxSources))) {
+    if (sources.length >= maxSources) break;
+    add({
+      type: "source_document",
+      sourceId: sourceIdFor("changed", file.path),
+      title: file.path,
+      file: file.path,
+      snippet: [
+        `Changed file: ${file.status} (+${file.additions}/-${file.deletions}).`,
+        bundle.changeSummary,
+      ].filter(Boolean).join(" "),
+    });
+  }
+
+  for (const item of bundle.projectStructure) {
+    if (sources.length >= maxSources) break;
+    add({
+      type: "source_document",
+      sourceId: sourceIdFor("structure", `${item.kind}:${item.path}`),
+      title: `${item.path} (${item.kind})`,
+      file: item.path,
+      snippet: `Project structure signal: ${item.reason}.`,
+    });
+  }
+
+  for (const chunk of bundle.relevantChunks) {
+    if (sources.length >= maxSources) break;
+    add({
+      type: "source_document",
+      sourceId: sourceIdFor("context", `${chunk.path}:${chunk.startLine}-${chunk.endLine}`),
+      title: `${chunk.path}:${chunk.startLine}-${chunk.endLine}`,
+      file: chunk.path,
+      line: chunk.startLine,
+      snippet: snippetForSource(chunk.text),
+    });
+  }
+
+  return sources.slice(0, maxSources);
+}
+
+function diffHunkSources(diffText: string, maxHunks = 8): DiffHunkSource[] {
+  if (!diffText.trim()) return [];
+  const hunks: DiffHunkSource[] = [];
+  let currentPath = "";
+  let currentHunk: { path: string; line: number; lines: string[] } | null = null;
+
+  const flush = (): void => {
+    if (!currentHunk) return;
+    const snippet = currentHunk.lines
+      .filter((line) => line && !line.startsWith("\\ No newline"))
+      .slice(0, 18)
+      .join("\n")
+      .trim();
+    if (snippet) {
+      hunks.push({
+        path: currentHunk.path,
+        line: currentHunk.line,
+        snippet: snippetForSource(snippet, 700),
+      });
+    }
+    currentHunk = null;
+  };
+
+  for (const rawLine of diffText.split(/\r?\n/)) {
+    const header = rawLine.match(/^diff --git a\/(.+?) b\/(.+)$/);
+    if (header) {
+      flush();
+      currentPath = header[2] ?? header[1] ?? "";
+      continue;
+    }
+
+    const newFile = rawLine.match(/^\+\+\+ b\/(.+)$/);
+    if (newFile) {
+      currentPath = newFile[1] ?? currentPath;
+      continue;
+    }
+
+    const hunk = rawLine.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (hunk && currentPath) {
+      flush();
+      currentHunk = {
+        path: currentPath,
+        line: Number.parseInt(hunk[1] ?? "1", 10) || 1,
+        lines: [rawLine],
+      };
+      if (hunks.length >= maxHunks) break;
+      continue;
+    }
+
+    if (currentHunk) {
+      if (rawLine.startsWith("diff --git ")) {
+        flush();
+      } else {
+        currentHunk.lines.push(rawLine);
+      }
+    }
+  }
+  flush();
+  return hunks.slice(0, maxHunks);
+}
+
 async function listQuickRepoFiles(repoPath: string, ignoredGlobs: string[]): Promise<string[]> {
   return fastGlob("**/*", {
     cwd: repoPath,
@@ -501,4 +639,13 @@ function dedupeStructure(items: ChatContextBundle["projectStructure"]): ChatCont
     seen.add(item.path);
     return true;
   });
+}
+
+function sourceIdFor(prefix: string, value: string): string {
+  return `${prefix}-${Buffer.from(value).toString("base64url").slice(0, 24)}`;
+}
+
+function snippetForSource(text: string, maxChars = 500): string {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  return cleaned.length > maxChars ? `${cleaned.slice(0, maxChars).trim()}...` : cleaned;
 }

@@ -22,7 +22,7 @@ export interface ChatResult {
 }
 
 export interface ChatStreamEvent {
-  type: "delta" | "tool_call" | "done";
+  type: "delta" | "tool_call_delta" | "tool_call" | "done";
   delta?: string;
   toolCalls?: ChatToolCall[];
   finishReason?: string;
@@ -69,6 +69,10 @@ export class ToolCallAssembler {
         name: v.name,
         arguments: v.argsChunks.join(""),
       }));
+  }
+
+  snapshot(): ChatToolCall[] {
+    return this.finalize();
   }
 
   get size(): number {
@@ -213,6 +217,7 @@ export class LLMClient {
       }
       if (delta.tool_calls) {
         assembler.ingest(delta.tool_calls as unknown as StreamingToolCallDelta[]);
+        yield { type: "tool_call_delta", toolCalls: assembler.snapshot() };
       }
       if (choice.finish_reason) {
         finishReason = choice.finish_reason;

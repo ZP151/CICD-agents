@@ -3,8 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { getSettings, resetSettingsForTests, type TaskHandle } from "@cicd-agent/core";
-import { buildApp } from "../src/server.js";
+import { AzureAuthenticationRequiredError, getSettings, resetSettingsForTests, type TaskHandle } from "@cicd-agent/core";
+import { buildApp, workflowActionFailureResponse } from "../src/server.js";
 
 let app: Awaited<ReturnType<typeof buildApp>> | null = null;
 
@@ -88,6 +88,1511 @@ describe("daemon HTTP", () => {
     expect(state.statusCode).toBe(200);
     const body = state.json() as { workflowState?: unknown };
     expect(body.workflowState).toBeUndefined();
+  });
+
+  it("creates a stored approval proposal for structured push workflow actions", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-push-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "push_branch",
+        repoPath: repo,
+        branch: "main",
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      sessionId: string;
+      workflowState: {
+        status: string;
+        pendingApproval?: {
+          action: {
+            tool: string;
+            args: Record<string, unknown>;
+            description?: string;
+            readiness?: { status?: string; summary?: string };
+          };
+        };
+      };
+      tools: Array<{ name: string }>;
+    };
+    expect(body.sessionId).toMatch(/^chat_/);
+    expect(body.workflowState.status).toBe("waiting_for_approval");
+    expect(body.workflowState.pendingApproval?.action.tool).toBe("git_push");
+    expect(body.workflowState.pendingApproval?.action.args).toEqual({ branch: "main", setUpstream: true });
+    expect(body.workflowState.pendingApproval?.action.readiness?.status).toBe("no_upstream");
+    expect(body.workflowState.pendingApproval?.action.description).toContain("No upstream branch is configured");
+    expect(body.tools.map((tool) => tool.name)).not.toContain("git_push");
+
+    const state = await app.inject({ method: "GET", url: `/chat/${body.sessionId}/state` });
+    expect(state.statusCode).toBe(200);
+    const stateBody = state.json() as {
+      workflowState?: { pendingApproval?: { action: { tool: string } } };
+    };
+    expect(stateBody.workflowState?.pendingApproval?.action.tool).toBe("git_push");
+  });
+
+  it("includes ahead/behind readiness in structured push workflow approvals", async () => {
+    app = await buildApp();
+    const remote = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-remote-"));
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-push-ahead-"));
+    spawnSync("git", ["init", "--bare"], { cwd: remote, encoding: "utf8" });
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["checkout", "-b", "main"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "dev-agent@example.test"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.name", "Dev Agent"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "README.md"), "# demo\n", "utf8");
+    spawnSync("git", ["add", "README.md"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["commit", "-m", "docs: initial"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["remote", "add", "origin", remote], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["push", "-u", "origin", "main"], { cwd: repo, encoding: "utf8" });
+    fs.appendFileSync(path.join(repo, "README.md"), "more\n", "utf8");
+    spawnSync("git", ["add", "README.md"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["commit", "-m", "docs: update"], { cwd: repo, encoding: "utf8" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "push_branch",
+        repoPath: repo,
+        branch: "main",
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      workflowState: {
+        pendingApproval?: {
+          action: {
+            description?: string;
+            readiness?: {
+              status?: string;
+              upstream?: string;
+              ahead?: number;
+              behind?: number;
+            };
+          };
+        };
+      };
+    };
+    expect(body.workflowState.pendingApproval?.action.readiness).toMatchObject({
+      status: "ahead",
+      upstream: "origin/main",
+      ahead: 1,
+      behind: 0,
+    });
+    expect(body.workflowState.pendingApproval?.action.description).toContain("ahead of origin/main by 1 commit");
+  });
+
+  it("prepares commit workflow actions as a staged approval instead of a chat prompt", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-commit-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "README.md"), "# demo\n", "utf8");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "prepare_commit",
+        repoPath: repo,
+        includeUnstaged: true,
+        commitMode: "commit",
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      workflowState: {
+        status: string;
+        workflowKind?: string;
+        workflowPhase?: string;
+        pendingApproval?: { action: { tool: string; args: Record<string, unknown>; nextHint?: string } };
+      };
+    };
+    expect(body.workflowState.status).toBe("waiting_for_approval");
+    expect(body.workflowState.workflowKind).toBe("commit");
+    expect(body.workflowState.workflowPhase).toBe("waiting_for_stage_approval");
+    expect(body.workflowState.pendingApproval?.action.tool).toBe("git_add");
+    expect(body.workflowState.pendingApproval?.action.args).toEqual({ all: true });
+    expect(body.workflowState.pendingApproval?.action.nextHint).toContain("generate a concise commit message");
+  });
+
+  it("prepares test validation workflow actions as approval proposals", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-validation-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "src.test.ts"), "test('demo', () => expect(true).toBe(true));\n", "utf8");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "run_tests",
+        repoPath: repo,
+        profile: {
+          repoPath: repo,
+          defaultBranch: "main",
+          targetBranch: "main",
+          adoOrgUrl: "",
+          adoProject: "",
+          adoRepoName: "",
+          adoPat: "",
+          adoPipelineId: "",
+          adoPipelineName: "",
+          adoMcpEnabled: false,
+          adoMcpCommand: "",
+          adoMcpAuthentication: "",
+          adoMcpDomains: "repositories,pipelines,work-items",
+          buildCommand: ".\\scripts\\windows\\pnpm-project.ps1 --filter @cicd-agent/desktop build",
+          testCommand: ".\\scripts\\windows\\pnpm-project.ps1 --filter @cicd-agent/desktop test",
+        },
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      workflowState: {
+        status: string;
+        workflowKind?: string;
+        workflowPhase?: string;
+        pendingApproval?: { action: { tool: string; args: Record<string, unknown>; workflow?: unknown; preflight?: unknown } };
+      };
+    };
+    expect(body.workflowState.status).toBe("waiting_for_approval");
+    expect(body.workflowState.workflowKind).toBe("ci");
+    expect(body.workflowState.workflowPhase).toBe("waiting_for_test_approval");
+    expect(body.workflowState.pendingApproval?.action.tool).toBe("validation_command");
+    expect(body.workflowState.pendingApproval?.action.args).toEqual({
+      command: ".\\scripts\\windows\\pnpm-project.ps1 --filter @cicd-agent/desktop test",
+      kind: "test",
+    });
+    expect(body.workflowState.pendingApproval?.action.workflow).toMatchObject({
+      kind: "ci",
+      phase: "test",
+      message: ".\\scripts\\windows\\pnpm-project.ps1 --filter @cicd-agent/desktop test",
+    });
+    expect(body.workflowState.pendingApproval?.action.preflight).toMatchObject({
+      kind: "validation",
+      status: "ready",
+      validationKind: "test",
+      commandSource: "profile",
+      changedFiles: ["src.test.ts"],
+    });
+  });
+
+  it("derives focused validation commands from changed package ownership", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-validation-derived-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "dev-agent@example.test"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.name", "Dev Agent"], { cwd: repo, encoding: "utf8" });
+    fs.mkdirSync(path.join(repo, "packages", "core"), { recursive: true });
+    fs.writeFileSync(path.join(repo, "packages", "core", "package.json"), JSON.stringify({
+      name: "@demo/core",
+      scripts: {
+        test: "vitest run",
+      },
+    }), "utf8");
+    spawnSync("git", ["add", "packages/core/package.json"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["commit", "-m", "chore: add package"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "packages", "core", "src.test.ts"), "test('demo', () => expect(true).toBe(true));\n", "utf8");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "run_tests",
+        repoPath: repo,
+        profile: {
+          repoPath: repo,
+          defaultBranch: "main",
+          targetBranch: "main",
+          adoOrgUrl: "",
+          adoProject: "",
+          adoRepoName: "",
+          adoPat: "",
+          adoPipelineId: "",
+          adoPipelineName: "",
+          adoMcpEnabled: false,
+          adoMcpCommand: "",
+          adoMcpAuthentication: "",
+          adoMcpDomains: "repositories,pipelines,work-items",
+          buildCommand: "",
+          testCommand: "",
+        },
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      workflowState: {
+        pendingApproval?: { action: { args: Record<string, unknown>; preflight?: Record<string, unknown> } };
+      };
+    };
+    expect(body.workflowState.pendingApproval?.action.args).toEqual({
+      command: "npm --prefix packages/core run test",
+      kind: "test",
+    });
+    expect(body.workflowState.pendingApproval?.action.preflight).toMatchObject({
+      kind: "validation",
+      status: "ready",
+      validationKind: "test",
+      commandSource: "derived",
+      command: "npm --prefix packages/core run test",
+      changedFiles: ["packages/core/src.test.ts"],
+      changedFileCount: 1,
+      selectedScript: "test",
+      packageRoots: ["packages/core"],
+      selectionReason: "derived from packages/core/package.json script test",
+    });
+  });
+
+  it("derives multi-package pnpm validation commands from changed workspace packages", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-validation-derived-multi-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "dev-agent@example.test"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.name", "Dev Agent"], { cwd: repo, encoding: "utf8" });
+    fs.mkdirSync(path.join(repo, "packages", "core"), { recursive: true });
+    fs.mkdirSync(path.join(repo, "apps", "desktop"), { recursive: true });
+    fs.mkdirSync(path.join(repo, "scripts", "windows"), { recursive: true });
+    fs.writeFileSync(path.join(repo, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n  - apps/*\n", "utf8");
+    fs.writeFileSync(path.join(repo, "scripts", "windows", "pnpm-project.ps1"), "# test wrapper\n", "utf8");
+    fs.writeFileSync(path.join(repo, "packages", "core", "package.json"), JSON.stringify({
+      name: "@demo/core",
+      scripts: {
+        test: "vitest run",
+      },
+    }), "utf8");
+    fs.writeFileSync(path.join(repo, "apps", "desktop", "package.json"), JSON.stringify({
+      name: "@demo/desktop",
+      scripts: {
+        test: "vitest run",
+      },
+    }), "utf8");
+    spawnSync("git", ["add", "pnpm-workspace.yaml", "scripts/windows/pnpm-project.ps1", "packages/core/package.json", "apps/desktop/package.json"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["commit", "-m", "chore: add workspace packages"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "packages", "core", "src.test.ts"), "test('core', () => expect(true).toBe(true));\n", "utf8");
+    fs.writeFileSync(path.join(repo, "apps", "desktop", "ui.test.ts"), "test('desktop', () => expect(true).toBe(true));\n", "utf8");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "run_tests",
+        repoPath: repo,
+        profile: {
+          repoPath: repo,
+          defaultBranch: "main",
+          targetBranch: "main",
+          adoOrgUrl: "",
+          adoProject: "",
+          adoRepoName: "",
+          adoPat: "",
+          adoPipelineId: "",
+          adoPipelineName: "",
+          adoMcpEnabled: false,
+          adoMcpCommand: "",
+          adoMcpAuthentication: "",
+          adoMcpDomains: "repositories,pipelines,work-items",
+          buildCommand: "",
+          testCommand: "",
+        },
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      workflowState: {
+        pendingApproval?: { action: { args: Record<string, unknown>; preflight?: Record<string, unknown> } };
+      };
+    };
+    expect(body.workflowState.pendingApproval?.action.args).toEqual({
+      command: ".\\scripts\\windows\\pnpm-project.ps1 --filter @demo/desktop --filter @demo/core test",
+      kind: "test",
+    });
+    expect(body.workflowState.pendingApproval?.action.preflight).toMatchObject({
+      kind: "validation",
+      status: "ready",
+      validationKind: "test",
+      commandSource: "derived",
+      command: ".\\scripts\\windows\\pnpm-project.ps1 --filter @demo/desktop --filter @demo/core test",
+      changedFileCount: 2,
+      selectedScript: "test",
+      packageFilters: ["@demo/desktop", "@demo/core"],
+      packageRoots: ["apps/desktop", "packages/core"],
+      selectionReason: "derived from 2 changed packages using script test",
+    });
+    expect(body.workflowState.pendingApproval?.action.preflight?.changedFiles).toEqual(expect.arrayContaining([
+      "apps/desktop/ui.test.ts",
+      "packages/core/src.test.ts",
+    ]));
+  });
+
+  it("blocks normal commit workflow actions while a merge conflict is unresolved", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-merge-conflict-"));
+    const git = (args: string[], expectedStatus = 0) => {
+      const result = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+      expect(result.status, `${args.join(" ")}\n${result.stdout}\n${result.stderr}`).toBe(expectedStatus);
+    };
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    git(["config", "user.email", "dev-agent@example.test"]);
+    git(["config", "user.name", "Dev Agent"]);
+    git(["checkout", "-b", "main"]);
+    fs.writeFileSync(path.join(repo, "app.config"), "base\n", "utf8");
+    git(["add", "app.config"]);
+    git(["commit", "-m", "chore: base"]);
+    git(["checkout", "-b", "feature/conflict"]);
+    fs.writeFileSync(path.join(repo, "app.config"), "feature\n", "utf8");
+    git(["commit", "-am", "feat: feature change"]);
+    git(["checkout", "main"]);
+    fs.writeFileSync(path.join(repo, "app.config"), "main\n", "utf8");
+    git(["commit", "-am", "feat: main change"]);
+    git(["merge", "feature/conflict"], 1);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "prepare_commit",
+        repoPath: repo,
+        includeUnstaged: true,
+        commitMode: "commit",
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      summary: string;
+      workflowState: {
+        status: string;
+        workflowKind?: string;
+        workflowPhase?: string;
+        currentStep?: string;
+        pendingApproval?: unknown;
+      };
+      tools: Array<{ name: string }>;
+    };
+    expect(body.ok).toBe(false);
+    expect(body.workflowState.status).toBe("blocked");
+    expect(body.workflowState.workflowKind).toBe("git");
+    expect(body.workflowState.workflowPhase).toBe("merge_conflict");
+    expect(body.workflowState.currentStep).toContain("unresolved conflicts");
+    expect(body.summary).toContain("app.config");
+    expect(body.workflowState.pendingApproval).toBeUndefined();
+    expect(body.tools.map((tool) => tool.name)).not.toContain("git_add");
+  });
+
+  it("creates and completes a structured rebase abort recovery approval", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-rebase-abort-"));
+    const git = (args: string[], expectedStatus = 0) => {
+      const result = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+      expect(result.status, `${args.join(" ")}\n${result.stdout}\n${result.stderr}`).toBe(expectedStatus);
+    };
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    git(["config", "user.email", "dev-agent@example.test"]);
+    git(["config", "user.name", "Dev Agent"]);
+    git(["checkout", "-b", "main"]);
+    fs.writeFileSync(path.join(repo, "app.config"), "base\n", "utf8");
+    git(["add", "app.config"]);
+    git(["commit", "-m", "chore: base"]);
+    git(["checkout", "-b", "feature/rebase-conflict"]);
+    fs.writeFileSync(path.join(repo, "app.config"), "feature\n", "utf8");
+    git(["commit", "-am", "feat: feature change"]);
+    git(["checkout", "main"]);
+    fs.writeFileSync(path.join(repo, "app.config"), "main\n", "utf8");
+    git(["commit", "-am", "feat: main change"]);
+    git(["checkout", "feature/rebase-conflict"]);
+    git(["rebase", "main"], 1);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "abort_rebase",
+        repoPath: repo,
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      sessionId: string;
+      workflowState: {
+        status: string;
+        workflowKind?: string;
+        workflowPhase?: string;
+        pendingApproval?: { action: { tool: string; args: Record<string, unknown>; workflow?: unknown } };
+      };
+    };
+    expect(body.workflowState.status).toBe("waiting_for_approval");
+    expect(body.workflowState.workflowKind).toBe("git");
+    expect(body.workflowState.workflowPhase).toBe("waiting_for_abort_rebase_approval");
+    expect(body.workflowState.pendingApproval?.action.tool).toBe("git_rebase");
+    expect(body.workflowState.pendingApproval?.action.args).toEqual({ action: "abort" });
+    expect(body.workflowState.pendingApproval?.action.workflow).toMatchObject({
+      kind: "git",
+      phase: "abort_rebase",
+    });
+
+    const confirmed = await app.inject({
+      method: "POST",
+      url: `/chat/${body.sessionId}/confirm-action`,
+    });
+    expect(confirmed.statusCode, confirmed.body).toBe(200);
+    const events = parseSse(confirmed.body);
+    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
+      | { state?: { status?: string; workflowKind?: string; workflowPhase?: string } }
+      | undefined;
+    const done = events.find((entry) => entry.event === "done")?.data as
+      | { result?: { usedLlm?: boolean; response?: string } }
+      | undefined;
+    expect(workflowEvent?.state?.workflowKind).toBe("git");
+    expect(workflowEvent?.state?.workflowPhase).toBe("rebase_aborted");
+    expect(done?.result?.usedLlm).toBe(false);
+    expect(done?.result?.response).toContain("rebase was aborted");
+  });
+
+  it("creates and completes a structured merge abort recovery approval", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-merge-abort-"));
+    const git = (args: string[], expectedStatus = 0) => {
+      const result = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+      expect(result.status, `${args.join(" ")}\n${result.stdout}\n${result.stderr}`).toBe(expectedStatus);
+    };
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    git(["config", "user.email", "dev-agent@example.test"]);
+    git(["config", "user.name", "Dev Agent"]);
+    git(["checkout", "-b", "main"]);
+    fs.writeFileSync(path.join(repo, "app.config"), "base\n", "utf8");
+    git(["add", "app.config"]);
+    git(["commit", "-m", "chore: base"]);
+    git(["checkout", "-b", "feature/merge-conflict"]);
+    fs.writeFileSync(path.join(repo, "app.config"), "feature\n", "utf8");
+    git(["commit", "-am", "feat: feature change"]);
+    git(["checkout", "main"]);
+    fs.writeFileSync(path.join(repo, "app.config"), "main\n", "utf8");
+    git(["commit", "-am", "feat: main change"]);
+    git(["checkout", "feature/merge-conflict"]);
+    git(["merge", "main"], 1);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "abort_merge",
+        repoPath: repo,
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      sessionId: string;
+      workflowState: {
+        status: string;
+        workflowKind?: string;
+        workflowPhase?: string;
+        pendingApproval?: { action: { tool: string; args: Record<string, unknown>; workflow?: unknown } };
+      };
+    };
+    expect(body.workflowState.status).toBe("waiting_for_approval");
+    expect(body.workflowState.workflowKind).toBe("git");
+    expect(body.workflowState.workflowPhase).toBe("waiting_for_abort_merge_approval");
+    expect(body.workflowState.pendingApproval?.action.tool).toBe("git_merge");
+    expect(body.workflowState.pendingApproval?.action.args).toEqual({ action: "abort" });
+    expect(body.workflowState.pendingApproval?.action.workflow).toMatchObject({
+      kind: "git",
+      phase: "abort_merge",
+    });
+
+    const confirmed = await app.inject({
+      method: "POST",
+      url: `/chat/${body.sessionId}/confirm-action`,
+    });
+    expect(confirmed.statusCode, confirmed.body).toBe(200);
+    const events = parseSse(confirmed.body);
+    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
+      | { state?: { status?: string; workflowKind?: string; workflowPhase?: string } }
+      | undefined;
+    const done = events.find((entry) => entry.event === "done")?.data as
+      | { result?: { usedLlm?: boolean; response?: string } }
+      | undefined;
+    expect(workflowEvent?.state?.workflowKind).toBe("git");
+    expect(workflowEvent?.state?.workflowPhase).toBe("merge_aborted");
+    expect(done?.result?.usedLlm).toBe(false);
+    expect(done?.result?.response).toContain("merge was aborted");
+  });
+
+  it("creates and completes a selected conflict-file staging approval", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-conflict-stage-"));
+    const git = (args: string[], expectedStatus = 0) => {
+      const result = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+      expect(result.status, `${args.join(" ")}\n${result.stdout}\n${result.stderr}`).toBe(expectedStatus);
+      return result;
+    };
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    git(["config", "user.email", "dev-agent@example.test"]);
+    git(["config", "user.name", "Dev Agent"]);
+    git(["checkout", "-b", "main"]);
+    fs.writeFileSync(path.join(repo, "app.config"), "base\n", "utf8");
+    fs.writeFileSync(path.join(repo, "unrelated.txt"), "keep\n", "utf8");
+    git(["add", "app.config", "unrelated.txt"]);
+    git(["commit", "-m", "chore: base"]);
+    git(["checkout", "-b", "feature/stage-conflict"]);
+    fs.writeFileSync(path.join(repo, "app.config"), "feature\n", "utf8");
+    git(["commit", "-am", "feat: feature change"]);
+    git(["checkout", "main"]);
+    fs.writeFileSync(path.join(repo, "app.config"), "main\n", "utf8");
+    fs.writeFileSync(path.join(repo, "unrelated.txt"), "unrelated local edit\n", "utf8");
+    git(["commit", "-am", "feat: main change"]);
+    git(["checkout", "feature/stage-conflict"]);
+    git(["merge", "main"], 1);
+    fs.writeFileSync(path.join(repo, "app.config"), "resolved\n", "utf8");
+
+    const missingPaths = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "stage_resolved_conflicts",
+        repoPath: repo,
+      },
+    });
+    expect(missingPaths.statusCode, missingPaths.body).toBe(500);
+    expect(missingPaths.body).toContain("At least one conflict file path is required");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "stage_resolved_conflicts",
+        repoPath: repo,
+        paths: ["app.config"],
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      sessionId: string;
+      workflowState: {
+        status: string;
+        workflowKind?: string;
+        workflowPhase?: string;
+        pendingApproval?: { action: { tool: string; args: Record<string, unknown>; workflow?: unknown } };
+      };
+    };
+    expect(body.workflowState.status).toBe("waiting_for_approval");
+    expect(body.workflowState.workflowKind).toBe("git");
+    expect(body.workflowState.workflowPhase).toBe("waiting_for_stage_conflicts_approval");
+    expect(body.workflowState.pendingApproval?.action.tool).toBe("git_add");
+    expect(body.workflowState.pendingApproval?.action.args).toEqual({ paths: ["app.config"] });
+    expect(body.workflowState.pendingApproval?.action.workflow).toMatchObject({
+      kind: "git",
+      phase: "stage_conflicts",
+      message: "merge",
+    });
+
+    const confirmed = await app.inject({
+      method: "POST",
+      url: `/chat/${body.sessionId}/confirm-action`,
+    });
+    expect(confirmed.statusCode, confirmed.body).toBe(200);
+    const events = parseSse(confirmed.body);
+    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
+      | { state?: { status?: string; workflowKind?: string; workflowPhase?: string } }
+      | undefined;
+    const done = events.find((entry) => entry.event === "done")?.data as
+      | { result?: { usedLlm?: boolean; response?: string } }
+      | undefined;
+    expect(workflowEvent?.state?.workflowKind).toBe("git");
+    expect(workflowEvent?.state?.workflowPhase).toBe("merge_conflicts_staged");
+    expect(done?.result?.usedLlm).toBe(false);
+    expect(done?.result?.response).toContain("conflict file");
+    expect(git(["status", "--porcelain=v1"]).stdout).toContain("M  app.config");
+  });
+
+  it("continues structured commit workflow from stage approval to commit approval", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-commit-next-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["checkout", "-b", "feature/demo"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "README.md"), "# demo\n", "utf8");
+
+    const prepare = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "prepare_commit",
+        repoPath: repo,
+        includeUnstaged: true,
+        commitMode: "commit",
+        message: "docs: update readme",
+      },
+    });
+    expect(prepare.statusCode, prepare.body).toBe(200);
+    const prepared = prepare.json() as {
+      sessionId: string;
+      workflowState: { workflowKind?: string; workflowPhase?: string; pendingApproval?: { action: { tool: string; workflow?: unknown } } };
+    };
+    expect(prepared.workflowState.workflowKind).toBe("commit");
+    expect(prepared.workflowState.workflowPhase).toBe("waiting_for_stage_approval");
+    expect(prepared.workflowState.pendingApproval?.action.tool).toBe("git_add");
+    expect(prepared.workflowState.pendingApproval?.action.workflow).toMatchObject({
+      kind: "commit",
+      phase: "stage",
+      branch: "feature/demo",
+      message: "docs: update readme",
+    });
+
+    const confirmed = await app.inject({
+      method: "POST",
+      url: `/chat/${prepared.sessionId}/confirm-action`,
+    });
+    expect(confirmed.statusCode, confirmed.body).toBe(200);
+    const events = parseSse(confirmed.body);
+    const approval = events.find((entry) => entry.event === "approval_required")?.data as
+      | { approval?: { action?: { tool?: string; args?: Record<string, unknown>; workflow?: unknown } } }
+      | undefined;
+    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
+      | { state?: { workflowKind?: string; workflowPhase?: string } }
+      | undefined;
+    expect(workflowEvent?.state?.workflowKind).toBe("commit");
+    expect(workflowEvent?.state?.workflowPhase).toBe("waiting_for_commit_approval");
+    expect(approval?.approval?.action?.tool).toBe("git_commit");
+    expect(approval?.approval?.action?.args).toEqual({ message: "docs: update readme" });
+    expect(approval?.approval?.action?.workflow).toMatchObject({
+      kind: "commit",
+      phase: "commit",
+      branch: "feature/demo",
+      message: "docs: update readme",
+      pushAfterCommit: false,
+    });
+  });
+
+  it("generates a structured commit approval after staging when the commit message is blank", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-commit-generate-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["checkout", "-b", "feature/generated-message"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "README.md"), "# generated\n", "utf8");
+
+    const prepare = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "prepare_commit",
+        repoPath: repo,
+        includeUnstaged: true,
+        commitMode: "commit",
+      },
+    });
+    expect(prepare.statusCode, prepare.body).toBe(200);
+    const prepared = prepare.json() as {
+      sessionId: string;
+      workflowState: { workflowPhase?: string; pendingApproval?: { action: { tool: string; nextHint?: string } } };
+    };
+    expect(prepared.workflowState.workflowPhase).toBe("waiting_for_stage_approval");
+    expect(prepared.workflowState.pendingApproval?.action.tool).toBe("git_add");
+    expect(prepared.workflowState.pendingApproval?.action.nextHint).toContain("generate a concise commit message");
+
+    const confirmed = await app.inject({
+      method: "POST",
+      url: `/chat/${prepared.sessionId}/confirm-action`,
+    });
+    expect(confirmed.statusCode, confirmed.body).toBe(200);
+    const events = parseSse(confirmed.body);
+    const approval = events.find((entry) => entry.event === "approval_required")?.data as
+      | { approval?: { action?: { tool?: string; args?: Record<string, unknown>; description?: string; workflow?: unknown } } }
+      | undefined;
+    expect(approval?.approval?.action?.tool).toBe("git_commit");
+    expect(approval?.approval?.action?.args).toEqual({ message: "docs: add readme" });
+    expect(approval?.approval?.action?.description).toContain("generated message");
+    expect(approval?.approval?.action?.workflow).toMatchObject({
+      kind: "commit",
+      phase: "commit",
+      branch: "feature/generated-message",
+      message: "docs: add readme",
+      pushAfterCommit: false,
+    });
+  });
+
+  it("continues structured commit-and-push workflow from commit approval to push approval", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-push-next-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["checkout", "-b", "feature/publish"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "dev-agent@example.test"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.name", "Dev Agent"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "README.md"), "# publish\n", "utf8");
+    spawnSync("git", ["add", "README.md"], { cwd: repo, encoding: "utf8" });
+
+    const prepare = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "prepare_commit",
+        repoPath: repo,
+        includeUnstaged: false,
+        commitMode: "commit-push",
+        message: "docs: publish readme",
+      },
+    });
+    expect(prepare.statusCode, prepare.body).toBe(200);
+    const prepared = prepare.json() as {
+      sessionId: string;
+      workflowState: { workflowKind?: string; workflowPhase?: string; pendingApproval?: { action: { tool: string; args?: Record<string, unknown> } } };
+    };
+    expect(prepared.workflowState.workflowKind).toBe("commit");
+    expect(prepared.workflowState.workflowPhase).toBe("waiting_for_commit_approval");
+    expect(prepared.workflowState.pendingApproval?.action.tool).toBe("git_commit");
+
+    const confirmed = await app.inject({
+      method: "POST",
+      url: `/chat/${prepared.sessionId}/confirm-action`,
+    });
+    expect(confirmed.statusCode, confirmed.body).toBe(200);
+    const events = parseSse(confirmed.body);
+    const approval = events.find((entry) => entry.event === "approval_required")?.data as
+      | { approval?: { action?: { tool?: string; args?: Record<string, unknown>; readiness?: { status?: string; summary?: string }; description?: string } } }
+      | undefined;
+    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
+      | { state?: { workflowKind?: string; workflowPhase?: string } }
+      | undefined;
+    expect(workflowEvent?.state?.workflowKind).toBe("commit");
+    expect(workflowEvent?.state?.workflowPhase).toBe("waiting_for_push_approval");
+    expect(approval?.approval?.action?.tool).toBe("git_push");
+    expect(approval?.approval?.action?.args).toEqual({ branch: "feature/publish", setUpstream: true });
+    expect(approval?.approval?.action?.readiness?.status).toBe("no_upstream");
+    expect(approval?.approval?.action?.description).toContain("No upstream branch is configured");
+  });
+
+  it("warns before structured branch checkout when the working tree is dirty", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-checkout-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["checkout", "-b", "main"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "dev-agent@example.test"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.name", "Dev Agent"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "README.md"), "# clean\n", "utf8");
+    spawnSync("git", ["add", "README.md"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["commit", "-m", "docs: initial"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["branch", "feature/demo"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "README.md"), "# dirty\n", "utf8");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "checkout_branch",
+        repoPath: repo,
+        branch: "feature/demo",
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      workflowState: {
+        pendingApproval?: {
+          riskLevel: string;
+          action: { tool: string; description: string };
+        };
+      };
+      tools: Array<{ name: string }>;
+    };
+    expect(body.workflowState.pendingApproval?.action.tool).toBe("git_checkout");
+    expect(body.workflowState.pendingApproval?.riskLevel).toBe("high");
+    expect(body.workflowState.pendingApproval?.action.description).toContain("Working tree has 1 pending change");
+    expect(body.tools.map((tool) => tool.name)).not.toContain("git_checkout");
+  });
+
+  it("does not request approval when structured branch checkout targets the current branch", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-checkout-current-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["checkout", "-b", "feature/current"], { cwd: repo, encoding: "utf8" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "checkout_branch",
+        repoPath: repo,
+        branch: "feature/current",
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      workflowState: { status: string; pendingApproval?: unknown };
+      tools: Array<{ name: string }>;
+    };
+    expect(body.workflowState.status).toBe("done");
+    expect(body.workflowState.pendingApproval).toBeUndefined();
+    expect(body.tools.map((tool) => tool.name)).not.toContain("git_checkout");
+    expect(body.tools.map((tool) => tool.name)).not.toContain("git_switch");
+  });
+
+  it("creates a tracking branch proposal when structured checkout targets a remote-only branch", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-checkout-remote-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["checkout", "-b", "main"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "dev-agent@example.test"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.name", "Dev Agent"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "README.md"), "# branch\n", "utf8");
+    spawnSync("git", ["add", "README.md"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["commit", "-m", "docs: initial"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["update-ref", "refs/remotes/origin/feature/remote-only", "HEAD"], { cwd: repo, encoding: "utf8" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "checkout_branch",
+        repoPath: repo,
+        branch: "feature/remote-only",
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      workflowState: {
+        pendingApproval?: {
+          action: { tool: string; args: Record<string, unknown>; preflight?: { status?: string; remoteBranch?: string; summary?: string } };
+        };
+      };
+      tools: Array<{ name: string }>;
+    };
+    expect(body.workflowState.pendingApproval?.action.tool).toBe("git_switch");
+    expect(body.workflowState.pendingApproval?.action.args).toEqual({
+      branch: "feature/remote-only",
+      create: true,
+      startPoint: "origin/feature/remote-only",
+      track: true,
+    });
+    expect(body.workflowState.pendingApproval?.action.preflight).toMatchObject({
+      status: "remote_only",
+      remoteBranch: "origin/feature/remote-only",
+    });
+    expect(body.workflowState.pendingApproval?.action.preflight?.summary).toContain("tracking origin/feature/remote-only");
+    expect(body.tools.map((tool) => tool.name)).not.toContain("git_switch");
+  });
+
+  it("does not request approval when structured branch creation targets an existing branch", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-create-existing-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["checkout", "-b", "feature/existing"], { cwd: repo, encoding: "utf8" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "create_branch",
+        repoPath: repo,
+        branch: "feature/existing",
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      workflowState: { status: string; pendingApproval?: unknown };
+      tools: Array<{ name: string }>;
+    };
+    expect(body.workflowState.status).toBe("done");
+    expect(body.workflowState.pendingApproval).toBeUndefined();
+    expect(body.tools.map((tool) => tool.name)).not.toContain("git_create_branch");
+  });
+
+  it("creates a stored approval proposal for structured pull request workflow actions", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-pr-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["checkout", "-b", "feature/pr-flow"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "dev-agent@example.test"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.name", "Dev Agent"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "README.md"), "# pr\n", "utf8");
+    spawnSync("git", ["add", "README.md"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["commit", "-m", "docs: prepare pr"], { cwd: repo, encoding: "utf8" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "create_pr",
+        repoPath: repo,
+        branch: "feature/pr-flow",
+        targetBranch: "main",
+        title: "docs: prepare pr",
+        profile: {
+          repoPath: repo,
+          defaultBranch: "main",
+          targetBranch: "main",
+          adoOrgUrl: "https://dev.azure.com/demo-org",
+          adoProject: "Agents",
+          adoRepoName: "cicd-agent",
+        },
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      workflowState: {
+        status: string;
+        workflowKind?: string;
+        workflowPhase?: string;
+        pendingApproval?: {
+          riskLevel: string;
+          action: {
+            tool: string;
+            args: Record<string, unknown>;
+            preflight?: { kind?: string; status?: string; sourceBranch?: string; targetBranch?: string; summary?: string };
+            workflow?: unknown;
+          };
+        };
+      };
+      tools: Array<{ name: string }>;
+    };
+    expect(body.workflowState.status).toBe("waiting_for_approval");
+    expect(body.workflowState.workflowKind).toBe("pr");
+    expect(body.workflowState.workflowPhase).toBe("waiting_for_create_pr_approval");
+    expect(body.workflowState.pendingApproval?.riskLevel).toBe("high");
+    expect(body.workflowState.pendingApproval?.action.tool).toBe("ado_create_pr");
+    expect(body.workflowState.pendingApproval?.action.args).toMatchObject({
+      organization: "https://dev.azure.com/demo-org",
+      project: "Agents",
+      repository: "cicd-agent",
+      source_branch: "feature/pr-flow",
+      target_branch: "main",
+      title: "docs: prepare pr",
+      draft: false,
+    });
+    expect(body.workflowState.pendingApproval?.action.preflight).toMatchObject({
+      kind: "pr",
+      status: "ready",
+      sourceBranch: "feature/pr-flow",
+      targetBranch: "main",
+    });
+    expect(body.workflowState.pendingApproval?.action.workflow).toMatchObject({
+      kind: "pr",
+      phase: "create",
+      branch: "feature/pr-flow",
+      message: "docs: prepare pr",
+    });
+    expect(body.workflowState.pendingApproval?.action.preflight?.summary).toContain("Ready to create PR");
+    expect(body.tools.map((tool) => tool.name)).not.toContain("ado_create_pr");
+  });
+
+  it("warns before structured pull request creation when the working tree is dirty", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-pr-dirty-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["checkout", "-b", "feature/pr-dirty"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "dev-agent@example.test"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.name", "Dev Agent"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "README.md"), "# pr\n", "utf8");
+    spawnSync("git", ["add", "README.md"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["commit", "-m", "docs: prepare pr"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "README.md"), "# dirty pr\n", "utf8");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "create_pr",
+        repoPath: repo,
+        profile: {
+          repoPath: repo,
+          defaultBranch: "main",
+          targetBranch: "main",
+          adoOrgUrl: "https://dev.azure.com/demo-org",
+          adoProject: "Agents",
+          adoRepoName: "cicd-agent",
+        },
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      workflowState: {
+        pendingApproval?: {
+          riskLevel: string;
+          action: { tool: string; preflight?: { status?: string; summary?: string } };
+        };
+      };
+    };
+    expect(body.workflowState.pendingApproval?.riskLevel).toBe("high");
+    expect(body.workflowState.pendingApproval?.action.tool).toBe("ado_create_pr");
+    expect(body.workflowState.pendingApproval?.action.preflight?.status).toBe("dirty_worktree");
+    expect(body.workflowState.pendingApproval?.action.preflight?.summary).toContain("Uncommitted changes will not be included");
+  });
+
+  it("finishes structured pull request workflow after confirmed ADO create PR succeeds", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-pr-confirm-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["checkout", "-b", "feature/pr-confirm"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "dev-agent@example.test"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.name", "Dev Agent"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "README.md"), "# pr confirm\n", "utf8");
+    spawnSync("git", ["add", "README.md"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["commit", "-m", "docs: confirm pr"], { cwd: repo, encoding: "utf8" });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string"
+        ? input
+        : typeof (input as { url?: unknown }).url === "string"
+          ? String((input as { url: string }).url)
+          : String(input);
+      if (url.includes("/_apis/git/repositories/cicd-agent/pullrequests?")) {
+        return new Response(JSON.stringify({
+          pullRequestId: 42,
+          status: "active",
+          createdBy: { displayName: "Ada" },
+        }), { status: 201, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ message: `unexpected URL ${url}` }), { status: 404 });
+    });
+
+    const prepare = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "create_pr",
+        repoPath: repo,
+        branch: "feature/pr-confirm",
+        targetBranch: "main",
+        title: "docs: confirm pr",
+        profile: {
+          repoPath: repo,
+          defaultBranch: "main",
+          targetBranch: "main",
+          adoOrgUrl: "https://dev.azure.com/demo-org",
+          adoProject: "Agents",
+          adoRepoName: "cicd-agent",
+          adoPat: "test-pat",
+        },
+      },
+    });
+    expect(prepare.statusCode, prepare.body).toBe(200);
+    const prepared = prepare.json() as { sessionId: string };
+
+    const confirmed = await app.inject({
+      method: "POST",
+      url: `/chat/${prepared.sessionId}/confirm-action`,
+    });
+
+    expect(confirmed.statusCode, confirmed.body).toBe(200);
+    const events = parseSse(confirmed.body);
+    const toolEnd = events.find((entry) => entry.event === "tool_end")?.data as
+      | { name?: string; ok?: boolean; result?: { pull_request_id?: number; url?: string } }
+      | undefined;
+    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
+      | { state?: { status?: string; workflowKind?: string; workflowPhase?: string; currentStep?: string; pendingApproval?: unknown } }
+      | undefined;
+    const done = events.find((entry) => entry.event === "done")?.data as
+      | { result?: { response?: string; usedLlm?: boolean; suggestions?: string[] } }
+      | undefined;
+    expect(toolEnd).toMatchObject({
+      name: "ado_create_pr",
+      ok: true,
+      result: {
+        pull_request_id: 42,
+        url: "https://dev.azure.com/demo-org/Agents/_git/cicd-agent/pullrequest/42",
+      },
+    });
+    expect(workflowEvent?.state).toMatchObject({
+      status: "done",
+      workflowKind: "pr",
+      workflowPhase: "created",
+      currentStep: "Pull request #42 created",
+    });
+    expect(workflowEvent?.state?.pendingApproval).toBeUndefined();
+    expect(done?.result?.usedLlm).toBe(false);
+    expect(done?.result?.response).toContain("Pull request #42 is created");
+    expect(done?.result?.suggestions).toEqual(expect.arrayContaining(["Inspect PR insight", "Check policy status"]));
+    expect(events.some((entry) => entry.event === "approval_required")).toBe(false);
+  });
+
+  it("inspects PR insight through structured workflow actions using the latest active PR by default", async () => {
+    app = await buildApp();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      if (url.includes("/_apis/git/repositories/cicd-agent/pullrequests?")) {
+        return new Response(JSON.stringify({
+          value: [{
+            pullRequestId: 42,
+            title: "Improve agent",
+            status: "active",
+            sourceRefName: "refs/heads/feature/agent",
+            targetRefName: "refs/heads/main",
+            repository: { name: "cicd-agent" },
+            reviewers: [],
+          }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/pullrequests/42?")) {
+        return new Response(JSON.stringify({
+          pullRequestId: 42,
+          codeReviewId: 420,
+          title: "Improve agent",
+          description: "",
+          status: "active",
+          sourceRefName: "refs/heads/feature/agent",
+          targetRefName: "refs/heads/main",
+          repository: { name: "cicd-agent", project: { id: "project-guid", name: "Agents" } },
+          reviewers: [],
+          workItemRefs: [],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/pullrequests/42/threads?")) {
+        return new Response(JSON.stringify({
+          value: [{ id: 5, status: 1, comments: [{ id: 6, content: "Needs tests" }] }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/pullrequests/42/iterations?")) {
+        return new Response(JSON.stringify({
+          value: [{ id: 3, sourceRefCommit: { commitId: "source-commit" } }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/pullrequests/42/iterations/3/changes?")) {
+        return new Response(JSON.stringify({
+          changeEntries: [{
+            changeId: 10,
+            changeType: "edit",
+            item: { path: "/src/app.ts", gitObjectType: "blob", commitId: "source-commit" },
+          }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/pullrequests/42/workitems?")) {
+        return new Response(JSON.stringify({ value: [] }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/_apis/policy/evaluations?")) {
+        return new Response(JSON.stringify({
+          value: [{
+            evaluationId: "policy-1",
+            status: "approved",
+            configuration: {
+              id: 9,
+              isBlocking: true,
+              settings: { displayName: "Minimum reviewers" },
+              type: { displayName: "Reviewer policy" },
+            },
+          }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/_apis/build/builds?")) {
+        return new Response(JSON.stringify({
+          value: [{ id: 77, buildNumber: "20260610.1", status: "completed", result: "failed" }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ message: `unexpected URL ${url}` }), { status: 404 });
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "inspect_pr_insight",
+        repoPath: process.cwd(),
+        profile: {
+          repoPath: process.cwd(),
+          defaultBranch: "main",
+          targetBranch: "main",
+          adoOrgUrl: "https://dev.azure.com/demo-org",
+          adoProject: "Agents",
+          adoRepoName: "cicd-agent",
+          adoPat: "test-pat",
+          adoPipelineId: "12",
+        },
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      summary: string;
+      workflowState: { status: string; workflowKind?: string; workflowPhase?: string; completedTools: string[] };
+      tools: Array<{ name: string; stdout: string }>;
+    };
+    expect(body.workflowState).toMatchObject({
+      status: "done",
+      workflowKind: "pr",
+      workflowPhase: "inspected",
+    });
+    expect(body.workflowState.completedTools).toEqual(expect.arrayContaining([
+      "ado_get_pull_request_by_id",
+      "ado_list_pull_request_threads",
+      "ado_get_pull_request_changes",
+      "ado_list_pull_request_policy_evaluations",
+    ]));
+    expect(body.summary).toContain("PR #42");
+    expect(body.summary).toContain("failed/canceled build");
+    expect(body.tools.find((tool) => tool.name === "ado_get_pull_request_changes")?.stdout).toContain("/src/app.ts");
+  });
+
+  it("checks PR policy and linked work items through latest active PR fallback", async () => {
+    app = await buildApp();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      if (url.includes("/_apis/git/repositories/cicd-agent/pullrequests?")) {
+        return new Response(JSON.stringify({
+          value: [{
+            pullRequestId: 42,
+            title: "Improve agent",
+            status: "active",
+            sourceRefName: "refs/heads/feature/agent",
+            targetRefName: "refs/heads/main",
+            repository: { name: "cicd-agent" },
+            reviewers: [],
+          }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/pullrequests/42?")) {
+        return new Response(JSON.stringify({
+          pullRequestId: 42,
+          codeReviewId: 420,
+          title: "Improve agent",
+          sourceRefName: "refs/heads/feature/agent",
+          targetRefName: "refs/heads/main",
+          repository: { name: "cicd-agent", project: { id: "project-guid", name: "Agents" } },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/_apis/policy/evaluations?")) {
+        return new Response(JSON.stringify({
+          value: [{
+            evaluationId: "policy-1",
+            status: "queued",
+            configuration: {
+              id: 9,
+              isBlocking: true,
+              settings: { displayName: "Minimum reviewers" },
+              type: { displayName: "Reviewer policy" },
+            },
+          }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/pullrequests/42/workitems?")) {
+        return new Response(JSON.stringify({
+          value: [{ id: "123", url: "https://ado/workItems/123" }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/_apis/wit/workitems?")) {
+        return new Response(JSON.stringify({
+          value: [{
+            id: 123,
+            url: "https://ado/workItems/123",
+            fields: {
+              "System.WorkItemType": "User Story",
+              "System.Title": "Improve agent insight",
+              "System.State": "Active",
+            },
+          }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ message: `unexpected URL ${url}` }), { status: 404 });
+    });
+    const profile = {
+      repoPath: process.cwd(),
+      defaultBranch: "main",
+      targetBranch: "main",
+      adoOrgUrl: "https://dev.azure.com/demo-org",
+      adoProject: "Agents",
+      adoRepoName: "cicd-agent",
+      adoPat: "test-pat",
+    };
+
+    const policy = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "check_pr_policy",
+        repoPath: process.cwd(),
+        profile,
+      },
+    });
+    expect(policy.statusCode, policy.body).toBe(200);
+    expect(policy.json()).toMatchObject({
+      workflowState: { status: "done", workflowKind: "pr", workflowPhase: "policy_checked" },
+    });
+    expect(policy.json().summary).toContain("1 blocking");
+
+    const workItems = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "list_pr_work_items",
+        repoPath: process.cwd(),
+        profile,
+      },
+    });
+    expect(workItems.statusCode, workItems.body).toBe(200);
+    expect(workItems.json()).toMatchObject({
+      workflowState: { status: "done", workflowKind: "pr", workflowPhase: "work_items_listed" },
+    });
+    expect(workItems.json().summary).toContain("#123 User Story [Active]: Improve agent insight");
+  });
+
+  it("returns a clear failed workflow state when PR follow-up actions lack ADO mapping", async () => {
+    app = await buildApp();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "inspect_pr_insight",
+        repoPath: process.cwd(),
+        profile: {
+          repoPath: process.cwd(),
+          defaultBranch: "main",
+          targetBranch: "main",
+          adoOrgUrl: "",
+          adoProject: "",
+          adoRepoName: "",
+          adoPat: "",
+        },
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(500);
+    expect(response.json()).toMatchObject({
+      ok: false,
+      action: "inspect_pr_insight",
+      workflowState: {
+        status: "failed",
+        currentStep: "Workflow action failed",
+      },
+    });
+    expect(response.json().summary).toContain("Project Link is missing Azure DevOps organization URL, ADO project, ADO repository");
+    expect(response.json().summary).toContain("before PR workflow actions can run");
+  });
+
+  it("returns structured OAuth diagnostics for PR workflow action auth failures", () => {
+    const failure = workflowActionFailureResponse({
+      action: "inspect_pr_insight",
+      repoPath: process.cwd(),
+      draft: false,
+      paths: [],
+      includeUnstaged: true,
+      profile: {
+        repoPath: process.cwd(),
+        defaultBranch: "main",
+        targetBranch: "main",
+        adoOrgUrl: "https://dev.azure.com/demo-org",
+        adoProject: "Agents",
+        adoRepoName: "cicd-agent",
+        adoPat: "",
+        adoPipelineId: "",
+        adoPipelineName: "",
+        adoMcpEnabled: false,
+        adoMcpCommand: "",
+        adoMcpAuthentication: "",
+        adoMcpDomains: "repositories,pipelines,work-items",
+        buildCommand: "",
+        testCommand: "",
+      },
+    }, new AzureAuthenticationRequiredError(
+      "Azure DevOps OAuth token is unavailable for the signed-in account. Sign in again with the account that has Azure DevOps access, then retry Azure DevOps consent.",
+    ));
+
+    expect(failure.httpStatus).toBe(401);
+    expect(failure.body).toMatchObject({
+      ok: false,
+      action: "inspect_pr_insight",
+      authMode: "oauth",
+      authStatus: "oauth_unavailable",
+      retryable: true,
+      workflowState: {
+        status: "failed",
+        workflowKind: "pr",
+        workflowPhase: "auth_required",
+        currentStep: "Azure DevOps OAuth unavailable",
+        authMode: "oauth",
+        authStatus: "oauth_unavailable",
+        retryable: true,
+      },
+    });
+    expect(failure.body.authMessage).toContain("Sign in again with the account that has Azure DevOps access");
+    expect(failure.body.authMessage).not.toContain("PAT fallback");
+  });
+
+  it("creates a stored approval proposal before linking a work item to a pull request", async () => {
+    app = await buildApp();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      if (url.includes("/_apis/wit/workitems/123?") && init?.method === "PATCH") {
+        return new Response(JSON.stringify({ id: 123 }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ message: `unexpected URL ${url}` }), { status: 404 });
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "link_work_item",
+        repoPath: process.cwd(),
+        pullRequestId: 42,
+        workItemId: 123,
+        profile: {
+          repoPath: process.cwd(),
+          defaultBranch: "main",
+          targetBranch: "main",
+          adoOrgUrl: "https://dev.azure.com/demo-org",
+          adoProject: "Agents",
+          adoRepoName: "cicd-agent",
+          adoPat: "test-pat",
+        },
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      workflowState: {
+        status: string;
+        pendingApproval?: {
+          riskLevel: string;
+          action: { tool: string; args: Record<string, unknown> };
+        };
+      };
+    };
+    expect(body.workflowState.status).toBe("waiting_for_approval");
+    expect(body.workflowState.pendingApproval?.riskLevel).toBe("high");
+    expect(body.workflowState.pendingApproval?.action.tool).toBe("ado_link_work_item");
+    expect(body.workflowState.pendingApproval?.action.args).toMatchObject({
+      pull_request_id: 42,
+      work_item_id: 123,
+      repository: "cicd-agent",
+    });
+
+    const prepared = response.json() as { sessionId: string };
+    const confirmed = await app.inject({
+      method: "POST",
+      url: `/chat/${prepared.sessionId}/confirm-action`,
+    });
+    expect(confirmed.statusCode, confirmed.body).toBe(200);
+    const events = parseSse(confirmed.body);
+    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
+      | { state?: { status?: string; workflowKind?: string; workflowPhase?: string; currentStep?: string; pendingApproval?: unknown } }
+      | undefined;
+    const done = events.find((entry) => entry.event === "done")?.data as
+      | { result?: { response?: string; usedLlm?: boolean; suggestions?: string[] } }
+      | undefined;
+    expect(workflowEvent?.state).toMatchObject({
+      status: "done",
+      workflowKind: "pr",
+      workflowPhase: "work_item_linked",
+    });
+    expect(workflowEvent?.state?.pendingApproval).toBeUndefined();
+    expect(done?.result?.usedLlm).toBe(false);
+    expect(done?.result?.response).toContain("Work item 123 is linked to pull request #42");
+    expect(done?.result?.suggestions).toEqual(expect.arrayContaining(["List linked work items", "Check policy status"]));
   });
 
   it("streams OpenHarness-style UI chunks alongside legacy chat SSE events", async () => {

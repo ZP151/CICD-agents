@@ -91,12 +91,14 @@ import {
   loginWithBrowser,
   loginWithCachedAccount,
   isAzureAuthenticationRequiredError,
+  type AdoAuthDiagnostic,
   resetUserCache,
   runCommand,
   previewGitCheckpoint,
   planGitCheckpointRollback,
   LLMClient,
   ChatUiChunkAdapter,
+  type PendingToolAction,
   type BrowserLoginChoice,
   type Settings,
 } from "@cicd-agent/core";
@@ -180,8 +182,51 @@ const ChatStartSchema = z.object({
   profile:   InlineProfileSchema,    // inline profile data from localStorage Profiles
 });
 const ChatWorkflowActionSchema = z.object({
-  action: z.enum(["inspect_environment", "inspect_changes", "refresh_branch"]),
+  action: z.enum([
+    "inspect_environment",
+    "inspect_changes",
+    "refresh_branch",
+    "checkout_branch",
+    "create_branch",
+    "push_branch",
+    "prepare_commit",
+    "run_tests",
+    "run_build",
+    "stage_resolved_conflicts",
+    "continue_rebase",
+    "abort_rebase",
+    "skip_rebase",
+    "continue_merge",
+    "abort_merge",
+    "continue_cherry_pick",
+    "abort_cherry_pick",
+    "skip_cherry_pick",
+    "continue_revert",
+    "abort_revert",
+    "skip_revert",
+    "create_pr",
+    "inspect_pr_insight",
+    "check_pr_policy",
+    "list_pr_work_items",
+    "link_work_item",
+  ]),
   repoPath: z.string().min(1),
+  sessionId: z.string().optional(),
+  profileId: z.string().optional(),
+  pullRequestId: z.coerce.number().int().positive().optional(),
+  workItemId: z.coerce.number().int().positive().optional(),
+  branch: z.string().optional(),
+  targetBranch: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  draft: z.coerce.boolean().default(false),
+  message: z.string().optional(),
+  paths: z.array(z.string()).default([]),
+  includeUnstaged: z.coerce.boolean().default(true),
+  commitMode: z.enum(["commit", "commit-push"]).optional(),
+  validationTool: z.enum(["npm_test", "npm_build", "pytest_run", "dotnet_test", "dotnet_build"]).optional(),
+  validationScript: z.string().optional(),
+  validationArgs: z.array(z.string()).default([]),
   profile: InlineProfileSchema,
 });
 const ChatIndexSchema = z.object({
@@ -207,6 +252,9 @@ const ProfilePullRequestParam = z.object({
   id: z.string().min(1),
   pullRequestId: z.coerce.number().int().positive(),
 });
+
+type BranchPreflight = Extract<NonNullable<PendingToolAction["preflight"]>, { kind: "branch" }>;
+type PrPreflight = Extract<NonNullable<PendingToolAction["preflight"]>, { kind: "pr" }>;
 
 function buildInlineLlmSettings(override?: InlineLlmConfig): Settings {
   const base = getSettings();
@@ -398,6 +446,86 @@ function sendAdoDiagnostic(reply: FastifyReply, err: unknown, authMode?: "oauth"
   });
 }
 
+function workflowActionAuthMode(payload: z.infer<typeof ChatWorkflowActionSchema>): "oauth" | "pat" | undefined {
+  if (!isAdoPullRequestWorkflowAction(payload.action) && payload.action !== "create_pr") return undefined;
+  return payload.profile?.adoPat ? "pat" : "oauth";
+}
+
+export function workflowActionFailureResponse(
+  payload: z.infer<typeof ChatWorkflowActionSchema>,
+  err: unknown,
+): {
+  httpStatus: number;
+  body: {
+    ok: false;
+    action: z.infer<typeof ChatWorkflowActionSchema>["action"];
+    repoPath: string;
+    sessionId?: string;
+    summary: string;
+    authStatus?: AdoAuthDiagnostic["status"];
+    authMode?: AdoAuthDiagnostic["authMode"];
+    authMessage?: string;
+    retryable?: boolean;
+    workflowState: {
+      status: "failed";
+      currentStep: string;
+      completedTools: string[];
+      workflowKind?: "pr";
+      workflowPhase?: string;
+      authStatus?: AdoAuthDiagnostic["status"];
+      authMode?: AdoAuthDiagnostic["authMode"];
+      authMessage?: string;
+      retryable?: boolean;
+    };
+    tools: [];
+  };
+} {
+  const summary = err instanceof Error ? err.message : String(err);
+  const authMode = workflowActionAuthMode(payload);
+  const diagnostic = authMode ? adoAuthDiagnosticFromError(err, authMode) : undefined;
+  const isAuthFailure = Boolean(diagnostic && diagnostic.status !== "unknown_error");
+  const authCurrentStep = diagnostic?.status === "oauth_unavailable"
+    ? "Azure DevOps OAuth unavailable"
+    : diagnostic?.status === "oauth_no_org_access"
+      ? "Azure DevOps OAuth access rejected"
+      : diagnostic?.status === "pat_invalid_or_missing_scope"
+        ? "Azure DevOps PAT rejected"
+        : undefined;
+  const workflowState = {
+    status: "failed" as const,
+    currentStep: isAuthFailure ? authCurrentStep ?? "Azure DevOps authentication failed" : "Workflow action failed",
+    completedTools: [],
+    ...(isAdoPullRequestWorkflowAction(payload.action) || payload.action === "create_pr" ? { workflowKind: "pr" as const } : {}),
+    ...(isAuthFailure ? {
+      workflowPhase: "auth_required",
+      authStatus: diagnostic?.status,
+      authMode: diagnostic?.authMode,
+      authMessage: diagnostic?.message,
+      retryable: diagnostic?.retryable,
+    } : {}),
+  };
+  return {
+    httpStatus: isAuthFailure
+      ? diagnostic?.status === "oauth_unavailable" ? 401 : 400
+      : 500,
+    body: {
+      ok: false,
+      action: payload.action,
+      repoPath: payload.repoPath,
+      sessionId: payload.sessionId,
+      summary: isAuthFailure ? diagnostic?.message ?? summary : summary,
+      ...(isAuthFailure ? {
+        authStatus: diagnostic?.status,
+        authMode: diagnostic?.authMode,
+        authMessage: diagnostic?.message,
+        retryable: diagnostic?.retryable,
+      } : {}),
+      workflowState,
+      tools: [],
+    },
+  };
+}
+
 interface AzureDevOpsRemoteSuggestion {
   remoteName: string;
   remoteUrl: string;
@@ -475,7 +603,15 @@ async function runGitProbe(repoPath: string, args: string[], timeoutSec = 10) {
   };
 }
 
-async function runWorkspaceWorkflowAction(action: z.infer<typeof ChatWorkflowActionSchema>["action"], repoPath: string) {
+async function runWorkspaceWorkflowAction(
+  chatSessions: ChatSessionManager,
+  payload: z.infer<typeof ChatWorkflowActionSchema>,
+) {
+  const { action, repoPath } = payload;
+  if (isAdoPullRequestWorkflowAction(action)) {
+    return runAdoPullRequestWorkflowAction(chatSessions, payload);
+  }
+
   const tools: Array<Awaited<ReturnType<typeof runGitProbe>> & { name: string }> = [];
   const add = async (name: string, args: string[], timeoutSec?: number) => {
     tools.push({ name, ...await runGitProbe(repoPath, args, timeoutSec) });
@@ -485,31 +621,132 @@ async function runWorkspaceWorkflowAction(action: z.infer<typeof ChatWorkflowAct
     await add("git_current_branch", ["branch", "--show-current"]);
     await add("git_branch_list", ["branch", "-a"]);
     await add("git_status", ["status", "--porcelain=v1", "-b"]);
+    await add("git_dir", ["rev-parse", "--git-dir"]);
     await add("git_remote", ["remote", "-v"]);
     await add("git_diff", ["diff", "--stat"], 20);
   } else if (action === "inspect_changes") {
     await add("git_status", ["status", "--porcelain=v1", "-b"]);
+    await add("git_dir", ["rev-parse", "--git-dir"]);
     await add("git_diff", ["diff", "--stat"], 20);
     await add("git_diff_name_only", ["diff", "--name-only"], 20);
   } else if (action === "refresh_branch") {
     await add("git_current_branch", ["branch", "--show-current"]);
     await add("git_branch_list", ["branch", "-a"]);
+  } else if (action === "checkout_branch" || action === "create_branch") {
+    await add("git_current_branch", ["branch", "--show-current"]);
+    await add("git_status", ["status", "--porcelain=v1", "-b"]);
+    await add("git_dir", ["rev-parse", "--git-dir"]);
+    await add("git_branch_list", ["branch", "-a"]);
+  } else if (action === "push_branch") {
+    await add("git_current_branch", ["branch", "--show-current"]);
+    await add("git_status", ["status", "--porcelain=v1", "-b"]);
+    await add("git_dir", ["rev-parse", "--git-dir"]);
+    await add("git_remote", ["remote", "-v"]);
+    await add("git_upstream", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
+    const upstream = tools.find((tool) => tool.name === "git_upstream" && tool.ok)?.stdout.trim();
+    if (upstream) await add("git_divergence", ["rev-list", "--left-right", "--count", `${upstream}...HEAD`]);
+  } else if (action === "prepare_commit") {
+    await add("git_current_branch", ["branch", "--show-current"]);
+    await add("git_status", ["status", "--porcelain=v1", "-b"]);
+    await add("git_dir", ["rev-parse", "--git-dir"]);
+    await add("git_diff", ["diff", "--stat"], 20);
+    await add("git_diff_staged", ["diff", "--cached", "--stat"], 20);
+    await add("git_log", ["log", "-5", "--oneline"], 20);
+  } else if (action === "run_tests" || action === "run_build") {
+    await add("git_current_branch", ["branch", "--show-current"]);
+    await add("git_status", ["status", "--porcelain=v1", "-b"]);
+    await add("git_diff", ["diff", "--stat"], 20);
+    await add("git_diff_name_only", ["diff", "--name-only"], 20);
+  } else if (action === "stage_resolved_conflicts") {
+    await add("git_current_branch", ["branch", "--show-current"]);
+    await add("git_status", ["status", "--porcelain=v1", "-b"]);
+    await add("git_dir", ["rev-parse", "--git-dir"]);
+  } else if (isGitRecoveryWorkflowAction(action)) {
+    await add("git_current_branch", ["branch", "--show-current"]);
+    await add("git_status", ["status", "--porcelain=v1", "-b"]);
+    await add("git_dir", ["rev-parse", "--git-dir"]);
+  } else if (action === "create_pr") {
+    await add("git_current_branch", ["branch", "--show-current"]);
+    await add("git_status", ["status", "--porcelain=v1", "-b"]);
+    await add("git_dir", ["rev-parse", "--git-dir"]);
+    await add("git_log_subject", ["log", "-1", "--pretty=%s"], 20);
+    await add("git_remote", ["remote", "-v"]);
   }
 
-  const failed = tools.find((tool) => !tool.ok);
+  const nonBlockingFailures = new Set(
+    action === "prepare_commit"
+      ? ["git_log", "git_diff_staged"]
+      : action === "push_branch"
+        ? ["git_upstream", "git_divergence"]
+        : [],
+  );
+  const failed = tools.find((tool) => !tool.ok && !nonBlockingFailures.has(tool.name));
   const currentBranch = tools.find((tool) => tool.name === "git_current_branch")?.stdout.trim() || "";
   const statusText = tools.find((tool) => tool.name === "git_status")?.stdout.trim() || "";
   const diffStat = tools.find((tool) => tool.name === "git_diff")?.stdout.trim() || "";
-  const changedFiles = (tools.find((tool) => tool.name === "git_diff_name_only")?.stdout ?? "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const changedFiles = changedFilesFromGitOutputs(
+    tools.find((tool) => tool.name === "git_diff_name_only")?.stdout ?? "",
+    statusText,
+  );
+  const operationState = gitOperationStateFromTools(repoPath, statusText, tools);
+  const operationBlock = gitOperationBlockForAction(action, operationState);
+
+  if (!failed && operationBlock) {
+    return {
+      ok: false,
+      action,
+      repoPath,
+      sessionId: payload.sessionId,
+      summary: summarizeWorkspaceWorkflow(action, { currentBranch, statusText, diffStat, changedFiles, operationState }),
+      workflowState: {
+        status: "blocked",
+        workflowKind: "git",
+        workflowPhase: operationBlock.workflowPhase,
+        currentStep: operationBlock.summary,
+        completedTools: tools.filter((tool) => tool.ok).map((tool) => tool.name),
+      },
+      tools,
+    };
+  }
+
+  const proposal = failed ? undefined : buildWorkspaceWorkflowProposal(
+    action,
+    payload,
+    currentBranch,
+    statusText,
+    pushReadinessFromTools(tools),
+    preflightFromTools(action, payload, tools, statusText),
+    operationState,
+  );
+  if (proposal) {
+    const { sessionId, workflowState } = await chatSessions.createApprovalProposal({
+      sessionId: payload.sessionId,
+      repoPath,
+      profileId: payload.profileId,
+      inlineProfile: payload.profile,
+      proposal,
+      currentStep: proposal.description,
+      riskLevel: workflowRiskForAction(action, statusText, proposal.preflight),
+      explanation: proposal.description,
+      completedTools: tools.filter((tool) => tool.ok).map((tool) => tool.name),
+    });
+    return {
+      ok: true,
+      action,
+      sessionId,
+      repoPath,
+      summary: summarizeWorkspaceWorkflow(action, { currentBranch, statusText, diffStat, changedFiles, operationState }),
+      workflowState,
+      tools,
+    };
+  }
 
   return {
     ok: !failed,
     action,
     repoPath,
-    summary: summarizeWorkspaceWorkflow(action, { currentBranch, statusText, diffStat, changedFiles }),
+    sessionId: payload.sessionId,
+    summary: summarizeWorkspaceWorkflow(action, { currentBranch, statusText, diffStat, changedFiles, operationState }),
     workflowState: {
       status: failed ? "failed" : "done",
       currentStep: failed ? `${failed.name} failed` : `${action} complete`,
@@ -519,14 +756,1140 @@ async function runWorkspaceWorkflowAction(action: z.infer<typeof ChatWorkflowAct
   };
 }
 
+function isAdoPullRequestWorkflowAction(action: string): boolean {
+  return [
+    "inspect_pr_insight",
+    "check_pr_policy",
+    "list_pr_work_items",
+    "link_work_item",
+  ].includes(action);
+}
+
+type GitRecoveryWorkflowAction =
+  | "continue_rebase"
+  | "abort_rebase"
+  | "skip_rebase"
+  | "continue_merge"
+  | "abort_merge"
+  | "continue_cherry_pick"
+  | "abort_cherry_pick"
+  | "skip_cherry_pick"
+  | "continue_revert"
+  | "abort_revert"
+  | "skip_revert";
+
+interface GitRecoverySpec {
+  phase: Exclude<GitOperationPhase, "normal">;
+  tool: "git_rebase" | "git_merge" | "git_cherry_pick" | "git_revert";
+  gitAction: "continue" | "abort" | "skip";
+  label: string;
+}
+
+const GIT_RECOVERY_ACTIONS: Record<GitRecoveryWorkflowAction, GitRecoverySpec> = {
+  continue_rebase: { phase: "rebase", tool: "git_rebase", gitAction: "continue", label: "Continue rebase" },
+  abort_rebase: { phase: "rebase", tool: "git_rebase", gitAction: "abort", label: "Abort rebase" },
+  skip_rebase: { phase: "rebase", tool: "git_rebase", gitAction: "skip", label: "Skip rebase patch" },
+  continue_merge: { phase: "merge", tool: "git_merge", gitAction: "continue", label: "Continue merge" },
+  abort_merge: { phase: "merge", tool: "git_merge", gitAction: "abort", label: "Abort merge" },
+  continue_cherry_pick: { phase: "cherry_pick", tool: "git_cherry_pick", gitAction: "continue", label: "Continue cherry-pick" },
+  abort_cherry_pick: { phase: "cherry_pick", tool: "git_cherry_pick", gitAction: "abort", label: "Abort cherry-pick" },
+  skip_cherry_pick: { phase: "cherry_pick", tool: "git_cherry_pick", gitAction: "skip", label: "Skip cherry-pick patch" },
+  continue_revert: { phase: "revert", tool: "git_revert", gitAction: "continue", label: "Continue revert" },
+  abort_revert: { phase: "revert", tool: "git_revert", gitAction: "abort", label: "Abort revert" },
+  skip_revert: { phase: "revert", tool: "git_revert", gitAction: "skip", label: "Skip revert patch" },
+};
+
+function isGitRecoveryWorkflowAction(action: string): action is GitRecoveryWorkflowAction {
+  return Object.hasOwn(GIT_RECOVERY_ACTIONS, action);
+}
+
+type ValidationPreflight = Extract<NonNullable<PendingToolAction["preflight"]>, { kind: "validation" }>;
+
+async function runAdoPullRequestWorkflowAction(
+  chatSessions: ChatSessionManager,
+  payload: z.infer<typeof ChatWorkflowActionSchema>,
+) {
+  const { action, repoPath } = payload;
+  const profile = adoProfileFromWorkflowPayload(payload);
+  const auth = await getAzureDevOpsAuth(profile.adoPat);
+  const pullRequestId = await resolveWorkflowPullRequestId(profile, auth, payload.pullRequestId);
+  const baseArgs = {
+    organization: profile.adoOrgUrl,
+    project: profile.adoProject,
+    repository: profile.adoRepoName,
+    pullRequestId,
+    auth,
+  };
+
+  if (action === "link_work_item") {
+    const workItemId = Number(payload.workItemId ?? 0);
+    if (!workItemId) throw new Error("Work item ID is required before linking it to a pull request.");
+    const proposal: PendingToolAction = {
+      tool: "ado_link_work_item",
+      args: {
+        organization: profile.adoOrgUrl,
+        project: profile.adoProject,
+        repository: profile.adoRepoName,
+        pull_request_id: pullRequestId,
+        work_item_id: workItemId,
+      },
+      description: `Link work item ${workItemId} to pull request #${pullRequestId}.`,
+      nextHint: "list linked work items",
+      workflow: {
+        kind: "pr",
+        phase: "link_work_item",
+        message: `Work item ${workItemId} -> PR #${pullRequestId}`,
+      },
+    };
+    const { sessionId, workflowState } = await chatSessions.createApprovalProposal({
+      sessionId: payload.sessionId,
+      repoPath,
+      profileId: payload.profileId,
+      inlineProfile: payload.profile,
+      proposal,
+      currentStep: proposal.description,
+      riskLevel: "high",
+      explanation: proposal.description,
+      completedTools: [],
+    });
+    return {
+      ok: true,
+      action,
+      sessionId,
+      repoPath,
+      summary: proposal.description,
+      workflowState,
+      tools: [],
+    };
+  }
+
+  if (action === "check_pr_policy") {
+    const policies = await listAzurePullRequestPolicyEvaluations(baseArgs);
+    const blocking = policies.filter((policy) => policy.isBlocking);
+    return adoWorkflowDoneResult({
+      action,
+      repoPath,
+      sessionId: payload.sessionId,
+      phase: "policy_checked",
+      currentStep: `Policy status checked for PR #${pullRequestId}`,
+      summary: summarizePolicies(pullRequestId, policies),
+      tools: [
+        adoWorkflowTool("ado_list_pull_request_policy_evaluations", { policies, count: policies.length, blocking }),
+      ],
+    });
+  }
+
+  if (action === "list_pr_work_items") {
+    const workItems = await listAzurePullRequestWorkItems(baseArgs);
+    return adoWorkflowDoneResult({
+      action,
+      repoPath,
+      sessionId: payload.sessionId,
+      phase: "work_items_listed",
+      currentStep: `Linked work items listed for PR #${pullRequestId}`,
+      summary: summarizeWorkItems(pullRequestId, workItems),
+      tools: [
+        adoWorkflowTool("ado_list_pull_request_work_items", { workItems, count: workItems.length }),
+      ],
+    });
+  }
+
+  const pullRequest = await getAzurePullRequestById({
+    organization: profile.adoOrgUrl,
+    project: profile.adoProject,
+    repository: profile.adoRepoName,
+    pullRequestId,
+    auth,
+    includeWorkItemRefs: true,
+  });
+  const [threads, changes, builds, workItems, policies] = await Promise.all([
+    listAzurePullRequestThreads({
+      organization: profile.adoOrgUrl,
+      project: profile.adoProject,
+      repository: profile.adoRepoName,
+      pullRequestId,
+      auth,
+      top: 100,
+    }),
+    listAzurePullRequestChanges({
+      organization: profile.adoOrgUrl,
+      project: profile.adoProject,
+      repository: profile.adoRepoName,
+      pullRequestId,
+      auth,
+      top: 100,
+    }),
+    profile.adoPipelineId
+      ? listAzureBuilds({
+        organization: profile.adoOrgUrl,
+        project: profile.adoProject,
+        auth,
+        definitions: [profile.adoPipelineId],
+        branchName: pullRequest.sourceBranch,
+        top: 20,
+      }).catch(() => [])
+      : Promise.resolve([]),
+    listAzurePullRequestWorkItems({
+      organization: profile.adoOrgUrl,
+      project: profile.adoProject,
+      repository: profile.adoRepoName,
+      pullRequestId,
+      auth,
+    }).catch(() => []),
+    listAzurePullRequestPolicyEvaluations({
+      organization: profile.adoOrgUrl,
+      project: profile.adoProject,
+      repository: profile.adoRepoName,
+      pullRequestId,
+      auth,
+    }).catch(() => []),
+  ]);
+  const insight = buildWorkflowPrInsight({ pullRequest, threads, changes, builds, workItems, policies });
+  return adoWorkflowDoneResult({
+    action,
+    repoPath,
+    sessionId: payload.sessionId,
+    phase: "inspected",
+    currentStep: `PR #${pullRequestId} insight inspected`,
+    summary: insight.summary,
+    tools: [
+      adoWorkflowTool("ado_get_pull_request_by_id", pullRequest),
+      adoWorkflowTool("ado_list_pull_request_threads", { threads, count: threads.length }),
+      adoWorkflowTool("ado_get_pull_request_changes", changes),
+      adoWorkflowTool("ado_pipelines_get_builds", { builds, count: builds.length }),
+      adoWorkflowTool("ado_list_pull_request_work_items", { workItems, count: workItems.length }),
+      adoWorkflowTool("ado_list_pull_request_policy_evaluations", { policies, count: policies.length }),
+    ],
+  });
+}
+
+function adoProfileFromWorkflowPayload(payload: z.infer<typeof ChatWorkflowActionSchema>): NonNullable<z.infer<typeof InlineProfileSchema>> {
+  const profile = payload.profile;
+  const missing = [
+    !profile?.adoOrgUrl ? "Azure DevOps organization URL" : "",
+    !profile?.adoProject ? "ADO project" : "",
+    !profile?.adoRepoName ? "ADO repository" : "",
+  ].filter(Boolean);
+  if (missing.length > 0 || !profile) {
+    throw new Error(`Project Link is missing ${missing.join(", ") || "Azure DevOps details"} before PR workflow actions can run.`);
+  }
+  return profile;
+}
+
+async function resolveWorkflowPullRequestId(
+  profile: NonNullable<z.infer<typeof InlineProfileSchema>>,
+  auth: Awaited<ReturnType<typeof getAzureDevOpsAuth>>,
+  explicitPullRequestId?: number,
+): Promise<number> {
+  if (explicitPullRequestId) return explicitPullRequestId;
+  const pullRequests = await listAzurePullRequests({
+    organization: profile.adoOrgUrl,
+    project: profile.adoProject,
+    repository: profile.adoRepoName,
+    auth,
+    status: "active",
+    top: 1,
+  });
+  const latest = pullRequests[0]?.id ?? 0;
+  if (!latest) throw new Error("No active pull request was found for this Project Link. Select or provide a pull request ID.");
+  return latest;
+}
+
+function adoWorkflowTool(name: string, result: unknown) {
+  return {
+    name,
+    command: `internal ${name}`,
+    ok: true,
+    stdout: JSON.stringify(result),
+    stderr: "",
+    returncode: 0,
+  };
+}
+
+function adoWorkflowDoneResult(args: {
+  action: z.infer<typeof ChatWorkflowActionSchema>["action"];
+  repoPath: string;
+  sessionId?: string;
+  phase: string;
+  currentStep: string;
+  summary: string;
+  tools: Array<ReturnType<typeof adoWorkflowTool>>;
+}) {
+  return {
+    ok: true,
+    action: args.action,
+    repoPath: args.repoPath,
+    sessionId: args.sessionId,
+    summary: args.summary,
+    workflowState: {
+      status: "done" as const,
+      currentStep: args.currentStep,
+      completedTools: args.tools.map((tool) => tool.name),
+      workflowKind: "pr" as const,
+      workflowPhase: args.phase,
+    },
+    tools: args.tools,
+  };
+}
+
+function summarizePolicies(pullRequestId: number, policies: Awaited<ReturnType<typeof listAzurePullRequestPolicyEvaluations>>): string {
+  if (policies.length === 0) return `PR #${pullRequestId} has no policy evaluations returned by Azure DevOps.`;
+  const blocking = policies.filter((policy) => policy.isBlocking);
+  const failed = policies.filter((policy) => /failed|rejected|error/i.test(policy.status));
+  const pending = policies.filter((policy) => /queued|running|pending|notstarted/i.test(policy.status));
+  return [
+    `PR #${pullRequestId} policy status: ${policies.length} evaluation(s).`,
+    `${blocking.length} blocking, ${failed.length} failed/error, ${pending.length} pending/running.`,
+    ...policies.slice(0, 8).map((policy) =>
+      `- ${policy.displayName || policy.typeName || policy.configurationId}: ${policy.status}${policy.isBlocking ? " (blocking)" : ""}`,
+    ),
+  ].join("\n");
+}
+
+function summarizeWorkItems(pullRequestId: number, workItems: Awaited<ReturnType<typeof listAzurePullRequestWorkItems>>): string {
+  if (workItems.length === 0) return `PR #${pullRequestId} has no linked work items.`;
+  return [
+    `PR #${pullRequestId} has ${workItems.length} linked work item(s).`,
+    ...workItems.slice(0, 10).map((item) =>
+      `- #${item.id} ${item.type}${item.state ? ` [${item.state}]` : ""}: ${item.title}`,
+    ),
+  ].join("\n");
+}
+
+function buildWorkflowPrInsight(args: {
+  pullRequest: Awaited<ReturnType<typeof getAzurePullRequestById>>;
+  threads: Awaited<ReturnType<typeof listAzurePullRequestThreads>>;
+  changes: Awaited<ReturnType<typeof listAzurePullRequestChanges>>;
+  builds: Awaited<ReturnType<typeof listAzureBuilds>>;
+  workItems: Awaited<ReturnType<typeof listAzurePullRequestWorkItems>>;
+  policies: Awaited<ReturnType<typeof listAzurePullRequestPolicyEvaluations>>;
+}) {
+  const failedBuilds = args.builds.filter((build) => /failed|canceled/i.test(build.result));
+  const activeThreads = args.threads.filter((thread) => thread.comments.length > 0 && String(thread.status) !== "2");
+  const failedPolicies = args.policies.filter((policy) => /failed|rejected|error/i.test(policy.status));
+  const pendingPolicies = args.policies.filter((policy) => /queued|running|pending|notstarted/i.test(policy.status));
+  const changedPaths = args.changes.changes
+    .map((change) => change.path || change.originalPath)
+    .filter(Boolean);
+  const readiness =
+    failedBuilds.length > 0 || failedPolicies.some((policy) => policy.isBlocking)
+      ? "blocked"
+      : activeThreads.length > 0 || pendingPolicies.length > 0
+        ? "needs attention"
+        : "ready";
+  const lines = [
+    `PR #${args.pullRequest.id}: ${args.pullRequest.title}`,
+    `Readiness: ${readiness}. ${args.changes.fileCount} changed file(s), ${activeThreads.length} active thread(s), ${failedBuilds.length} failed/canceled build(s), ${failedPolicies.length} failed/error policy evaluation(s), ${args.workItems.length} linked work item(s).`,
+  ];
+  if (changedPaths.length > 0) {
+    lines.push(`Touched areas: ${changedPaths.slice(0, 10).join(", ")}${changedPaths.length > 10 ? ", ..." : ""}.`);
+  }
+  if (!args.pullRequest.description.trim()) lines.push("Risk signal: PR description is empty.");
+  if (args.workItems.length === 0) lines.push("Info: no linked work items were found.");
+  if (pendingPolicies.length > 0) lines.push(`Waiting: ${pendingPolicies.length} policy evaluation(s) are pending/running.`);
+  return { readiness, summary: lines.join("\n") };
+}
+
+function buildWorkspaceWorkflowProposal(
+  action: z.infer<typeof ChatWorkflowActionSchema>["action"],
+  payload: z.infer<typeof ChatWorkflowActionSchema>,
+  currentBranch: string,
+  statusText: string,
+  pushReadiness?: PendingToolAction["readiness"],
+  preflight?: PendingToolAction["preflight"],
+  operationState?: GitOperationState,
+): PendingToolAction | undefined {
+  const branch = String(payload.branch ?? currentBranch ?? "").trim();
+  const dirtySummary = dirtyWorkingTreeSummary(statusText);
+  const dirtySuffix = dirtySummary ? ` ${dirtySummary}` : "";
+  if (isGitRecoveryWorkflowAction(action)) {
+    const recovery = GIT_RECOVERY_ACTIONS[action];
+    if (operationState?.phase !== recovery.phase) {
+      throw new Error(`No in-progress ${gitOperationPhaseLabel(recovery.phase)} was detected for this repository.`);
+    }
+    const conflictSuffix = operationState.status === "conflicted"
+      ? ` ${operationState.summary}`
+      : "";
+    return {
+      tool: recovery.tool,
+      args: { action: recovery.gitAction },
+      description: `${recovery.label}.${conflictSuffix}`,
+      nextHint: recovery.gitAction === "continue" ? "inspect branch status" : "inspect workspace state",
+      workflow: {
+        kind: "git",
+        phase: action,
+        branch: branch || undefined,
+      },
+    };
+  }
+  if (action === "stage_resolved_conflicts") {
+    if (!operationState || operationState.status !== "conflicted" || operationState.conflictFiles.length === 0) {
+      throw new Error("No unresolved conflict files were detected for this repository.");
+    }
+    const paths = (payload.paths ?? []).map((item) => String(item).trim()).filter(Boolean);
+    const conflictFiles = new Set(operationState.conflictFiles);
+    if (paths.length === 0) throw new Error("At least one conflict file path is required.");
+    const outOfScope = paths.filter((item) => !conflictFiles.has(item));
+    if (outOfScope.length > 0) {
+      throw new Error(`Only current conflict files can be staged in this recovery action: ${outOfScope.join(", ")}`);
+    }
+    const phaseLabel = gitOperationPhaseLabel(operationState.phase);
+    return {
+      tool: "git_add",
+      args: { paths },
+      description: `Stage ${paths.length} resolved conflict file${paths.length === 1 ? "" : "s"} for the in-progress ${phaseLabel}.`,
+      nextHint: `continue or abort the in-progress ${phaseLabel}`,
+      workflow: {
+        kind: "git",
+        phase: "stage_conflicts",
+        branch: branch || undefined,
+        message: operationState.phase,
+      },
+    };
+  }
+  if (action === "checkout_branch") {
+    if (!branch) throw new Error("Branch is required to switch branches.");
+    const branchPreflight = preflight?.kind === "branch" ? preflight : undefined;
+    if (branchPreflight?.status === "current" || branchPreflight?.status === "missing" || branchPreflight?.status === "invalid") {
+      return undefined;
+    }
+    if (branchPreflight?.status === "remote_only" && branchPreflight.remoteBranch) {
+      return {
+        tool: "git_switch",
+        args: { branch: branchPreflight.branch, create: true, startPoint: branchPreflight.remoteBranch, track: true },
+        description: `${branchPreflight.summary}${dirtySuffix ? ` ${dirtySuffix}` : ""}`,
+        nextHint: "inspect branch status",
+        preflight: branchPreflight,
+      };
+    }
+    return {
+      tool: "git_checkout",
+      args: { ref: branch },
+      description: `${branchPreflight?.summary ?? `Switch to branch ${branch}.`}${dirtySuffix ? ` ${dirtySuffix}` : ""}`,
+      nextHint: "inspect branch status",
+      preflight: branchPreflight,
+    };
+  }
+  if (action === "create_branch") {
+    if (!branch) throw new Error("Branch name is required to create a branch.");
+    const branchPreflight = preflight?.kind === "branch" ? preflight : undefined;
+    if (branchPreflight?.status === "already_exists" || branchPreflight?.status === "invalid") {
+      return undefined;
+    }
+    return {
+      tool: "git_create_branch",
+      args: { name: branch },
+      description: `${branchPreflight?.summary ?? `Create and switch to branch ${branch}.`}${dirtySuffix ? ` ${dirtySuffix}` : ""}`,
+      nextHint: "inspect branch status",
+      preflight: branchPreflight,
+    };
+  }
+  if (action === "push_branch") {
+    if (!branch) throw new Error("Current branch is required before pushing.");
+    const readinessSummary = pushReadiness?.summary ? ` ${pushReadiness.summary}` : "";
+    return {
+      tool: "git_push",
+      args: { branch, setUpstream: true },
+      description: `Push branch ${branch} to origin.${readinessSummary}`,
+      nextHint: "report push result",
+      readiness: pushReadiness,
+    };
+  }
+  if (action === "create_pr") {
+    const prPreflight = preflight?.kind === "pr" ? preflight : prPreflightFromPayload(payload, currentBranch, statusText, "");
+    if (prPreflight.status !== "ready" && prPreflight.status !== "dirty_worktree") {
+      throw new Error(prPreflight.summary);
+    }
+    const sourceBranch = prPreflight.sourceBranch;
+    const targetBranch = prPreflight.targetBranch ?? "main";
+    const title = prPreflight.title || `Update from ${sourceBranch}`;
+    if (!sourceBranch) throw new Error("Current branch is required before creating a pull request.");
+    const dirtyPrSuffix = prPreflight.status === "dirty_worktree" ? ` ${prPreflight.summary}` : "";
+    return {
+      tool: "ado_create_pr",
+      args: {
+        organization: prPreflight.organization,
+        project: prPreflight.project,
+        repository: prPreflight.repository,
+        source_branch: sourceBranch,
+        target_branch: targetBranch,
+        title,
+        description: String(payload.description ?? "").trim(),
+        draft: Boolean(payload.draft),
+      },
+      description: `Create pull request ${sourceBranch} -> ${targetBranch}: ${title}.${dirtyPrSuffix}`,
+      nextHint: "inspect PR insight after creation",
+      preflight: prPreflight,
+      workflow: {
+        kind: "pr",
+        phase: "create",
+        branch: sourceBranch,
+        message: title,
+      },
+    };
+  }
+  if (action === "run_tests" || action === "run_build") {
+    const kind = action === "run_build" ? "build" : "test";
+    const validationPreflight: ValidationPreflight = preflight?.kind === "validation"
+      ? preflight
+      : validationPreflightFromPayload(payload, kind, []);
+    return {
+      tool: "validation_command",
+      args: { command: validationPreflight.command, kind },
+      description: `Run ${kind} validation: ${validationPreflight.command}`,
+      nextHint: kind === "build" ? "report build result" : "report test result",
+      preflight: validationPreflight,
+      workflow: {
+        kind: "ci",
+        phase: kind,
+        branch: branch || undefined,
+        message: validationPreflight.command,
+      },
+    };
+  }
+  if (action === "prepare_commit") {
+    const message = String(payload.message ?? "").trim();
+    const shouldPush = payload.commitMode === "commit-push";
+    if (payload.includeUnstaged) {
+      return {
+        tool: "git_add",
+        args: { all: true },
+        description: "Stage all current changes for commit.",
+        nextHint: message
+          ? `commit staged changes with message: ${message}${shouldPush ? ", then push the branch" : ""}`
+          : `generate a concise commit message and commit staged changes${shouldPush ? ", then push the branch" : ""}`,
+        workflow: {
+          kind: "commit",
+          phase: "stage",
+          branch: branch || undefined,
+          message: message || undefined,
+          pushAfterCommit: shouldPush,
+        },
+      };
+    }
+    if (!message) {
+      throw new Error("A commit message is required when committing staged changes only.");
+    }
+    return {
+      tool: "git_commit",
+      args: { message },
+      description: `Commit staged changes with message: ${message}`,
+      nextHint: shouldPush ? "push the branch" : "done",
+      workflow: {
+        kind: "commit",
+        phase: "commit",
+        branch: branch || undefined,
+        message,
+        pushAfterCommit: shouldPush,
+      },
+    };
+  }
+  return undefined;
+}
+
+function preflightFromTools(
+  action: z.infer<typeof ChatWorkflowActionSchema>["action"],
+  payload: z.infer<typeof ChatWorkflowActionSchema>,
+  tools: Array<Awaited<ReturnType<typeof runGitProbe>> & { name: string }>,
+  statusText: string,
+): PendingToolAction["preflight"] | undefined {
+  if (action === "checkout_branch" || action === "create_branch") return branchPreflightFromTools(action, payload, tools);
+  if (action === "create_pr") {
+    const currentBranch = tools.find((tool) => tool.name === "git_current_branch")?.stdout.trim() ?? "";
+    const latestSubject = tools.find((tool) => tool.name === "git_log_subject" && tool.ok)?.stdout.trim() ?? "";
+    return prPreflightFromPayload(payload, currentBranch, statusText, latestSubject);
+  }
+  if (action === "run_tests" || action === "run_build") {
+    const statusText = tools.find((tool) => tool.name === "git_status")?.stdout.trim() || "";
+    const changedFiles = changedFilesFromGitOutputs(
+      tools.find((tool) => tool.name === "git_diff_name_only")?.stdout ?? "",
+      statusText,
+    );
+    return validationPreflightFromPayload(payload, action === "run_build" ? "build" : "test", changedFiles);
+  }
+  return undefined;
+}
+
+function changedFilesFromGitOutputs(diffNameOnly: string, statusText: string): string[] {
+  const files = new Set<string>();
+  for (const line of diffNameOnly.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed) files.add(trimmed);
+  }
+  for (const line of statusText.split(/\r?\n/)) {
+    const trimmed = line.trimEnd();
+    if (!trimmed || trimmed.startsWith("## ")) continue;
+    const rawPath = trimmed.slice(3).trim();
+    if (!rawPath) continue;
+    const path = rawPath.includes(" -> ") ? rawPath.split(" -> ").pop() ?? rawPath : rawPath;
+    files.add(path.replace(/^"|"$/g, ""));
+  }
+  return Array.from(files);
+}
+
+interface DerivedValidationCommand {
+  command: string;
+  sourceSummary: string;
+  selectedScript: string;
+  packageFilters: string[];
+  packageRoots: string[];
+}
+
+interface ValidationPackageCandidate {
+  packageRoot: string;
+  relativePackageRoot: string;
+  packageName: string;
+  script: string;
+}
+
+function deriveValidationCommand(repoPath: string, kind: "test" | "build", changedFiles: string[]): DerivedValidationCommand | undefined {
+  const packageRoots = Array.from(new Set(
+    changedFiles
+      .map((file) => nearestPackageRoot(repoPath, file))
+      .filter((root): root is string => Boolean(root)),
+  ));
+  if (packageRoots.length === 0) return undefined;
+
+  const rootHasPnpm = nodeFs.existsSync(nodePath.join(repoPath, "pnpm-workspace.yaml")) ||
+    nodeFs.existsSync(nodePath.join(repoPath, "pnpm-lock.yaml"));
+  const hasPnpmWrapper = nodeFs.existsSync(nodePath.join(repoPath, "scripts", "windows", "pnpm-project.ps1"));
+  const candidates = packageRoots
+    .map((packageRoot) => validationPackageCandidate(repoPath, kind, packageRoot))
+    .filter((candidate): candidate is ValidationPackageCandidate => Boolean(candidate));
+  if (candidates.length !== packageRoots.length) return undefined;
+  if (candidates.length > 1) {
+    const script = commonScriptName(candidates);
+    const packageNames = candidates.map((candidate) => candidate.packageName).filter(Boolean);
+    if (!script || packageNames.length !== candidates.length || !rootHasPnpm || !hasPnpmWrapper) return undefined;
+    const filters = packageNames.flatMap((packageName) => ["--filter", packageName]);
+    return {
+      command: `.\\scripts\\windows\\pnpm-project.ps1 ${filters.join(" ")} ${script === "test" || script === "build" ? script : `run ${script}`}`,
+      sourceSummary: `derived from ${candidates.length} changed packages using script ${script}`,
+      selectedScript: script,
+      packageFilters: packageNames,
+      packageRoots: candidates.map((candidate) => candidate.relativePackageRoot),
+    };
+  }
+
+  const candidate = candidates[0]!;
+  const { packageRoot, relativePackageRoot, packageName, script } = candidate;
+
+  if (packageRoot === repoPath) {
+    if (hasPnpmWrapper) {
+      return {
+        command: `.\\scripts\\windows\\pnpm-project.ps1 ${script === "test" || script === "build" ? script : `run ${script}`}`,
+        sourceSummary: `derived from root package.json script ${script}`,
+        selectedScript: script,
+        packageFilters: [],
+        packageRoots: ["."],
+      };
+    }
+    return {
+      command: `npm run ${script}`,
+      sourceSummary: `derived from root package.json script ${script}`,
+      selectedScript: script,
+      packageFilters: [],
+      packageRoots: ["."],
+    };
+  }
+
+  if (rootHasPnpm && packageName && hasPnpmWrapper) {
+    return {
+      command: `.\\scripts\\windows\\pnpm-project.ps1 --filter ${packageName} ${script === "test" || script === "build" ? script : `run ${script}`}`,
+      sourceSummary: `derived from ${relativePackageRoot}/package.json script ${script}`,
+      selectedScript: script,
+      packageFilters: [packageName],
+      packageRoots: [relativePackageRoot],
+    };
+  }
+
+  return {
+    command: `npm --prefix ${relativePackageRoot} run ${script}`,
+    sourceSummary: `derived from ${relativePackageRoot}/package.json script ${script}`,
+    selectedScript: script,
+    packageFilters: [],
+    packageRoots: [relativePackageRoot],
+  };
+}
+
+function validationPackageCandidate(
+  repoPath: string,
+  kind: "test" | "build",
+  packageRoot: string,
+): ValidationPackageCandidate | undefined {
+  const packageJson = readPackageJson(packageRoot);
+  const scripts = packageJson?.scripts && typeof packageJson.scripts === "object"
+    ? packageJson.scripts as Record<string, unknown>
+    : {};
+  const script = selectValidationScriptName(kind, scripts);
+  if (!script) return undefined;
+  const packageName = typeof packageJson?.name === "string" && packageJson.name.trim()
+    ? packageJson.name.trim()
+    : "";
+  return {
+    packageRoot,
+    relativePackageRoot: normalizeRelativePath(nodePath.relative(repoPath, packageRoot)),
+    packageName,
+    script,
+  };
+}
+
+function commonScriptName(candidates: ValidationPackageCandidate[]): string {
+  const [first] = candidates;
+  if (!first) return "";
+  return candidates.every((candidate) => candidate.script === first.script) ? first.script : "";
+}
+
+function nearestPackageRoot(repoPath: string, changedFile: string): string | undefined {
+  const absoluteFile = nodePath.resolve(repoPath, changedFile);
+  let current = nodeFs.existsSync(absoluteFile) && nodeFs.statSync(absoluteFile).isDirectory()
+    ? absoluteFile
+    : nodePath.dirname(absoluteFile);
+  const root = nodePath.resolve(repoPath);
+  while (current.startsWith(root)) {
+    if (nodeFs.existsSync(nodePath.join(current, "package.json"))) return current;
+    if (current === root) break;
+    current = nodePath.dirname(current);
+  }
+  return undefined;
+}
+
+function readPackageJson(packageRoot: string): Record<string, unknown> | undefined {
+  try {
+    const raw = nodeFs.readFileSync(nodePath.join(packageRoot, "package.json"), "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function selectValidationScriptName(kind: "test" | "build", scripts: Record<string, unknown>): string {
+  const candidates = kind === "build"
+    ? ["build"]
+    : ["test", "test:unit", "vitest"];
+  return candidates.find((name) => typeof scripts[name] === "string" && String(scripts[name]).trim()) ?? "";
+}
+
+function normalizeRelativePath(value: string): string {
+  return value.replace(/\\/g, "/");
+}
+
+function validationPreflightFromPayload(
+  payload: z.infer<typeof ChatWorkflowActionSchema>,
+  kind: "test" | "build",
+  changedFiles: string[],
+): ValidationPreflight {
+  const override = String(payload.validationScript ?? "").trim();
+  const configured = String(kind === "build" ? payload.profile?.buildCommand ?? "" : payload.profile?.testCommand ?? "").trim();
+  const derived = !override && !configured
+    ? deriveValidationCommand(payload.repoPath, kind, changedFiles)
+    : undefined;
+  const fallback = kind === "build" ? "npm run build" : "npm test";
+  const command = override || configured || derived?.command || fallback;
+  const commandSource = override ? "override" : configured ? "profile" : derived ? "derived" : "default";
+  const status = commandSource === "default" ? "default_command" : "ready";
+  const fileSummary = changedFiles.length > 0
+    ? ` Changed files considered: ${changedFiles.slice(0, 8).join(", ")}${changedFiles.length > 8 ? ", ..." : ""}.`
+    : " No unstaged working-tree file list was detected; using command-level validation.";
+  const sourceSummary = derived?.sourceSummary ? ` ${derived.sourceSummary}.` : "";
+  const selectionReason = derived?.sourceSummary
+    ?? (override ? "selected from the explicit validation override"
+      : configured ? "selected from the Project Link validation command"
+        : "selected from the default validation command");
+  return {
+    kind: "validation",
+    status,
+    validationKind: kind,
+    command,
+    commandSource,
+    changedFiles: changedFiles.slice(0, 20),
+    changedFileCount: changedFiles.length,
+    selectedScript: derived?.selectedScript,
+    packageFilters: derived?.packageFilters,
+    packageRoots: derived?.packageRoots,
+    selectionReason,
+    summary: `Validation command selected from ${commandSource}: ${command}.${sourceSummary}${fileSummary}`,
+  };
+}
+
+function branchPreflightFromTools(
+  action: "checkout_branch" | "create_branch",
+  payload: z.infer<typeof ChatWorkflowActionSchema>,
+  tools: Array<Awaited<ReturnType<typeof runGitProbe>> & { name: string }>,
+): BranchPreflight | undefined {
+  const rawBranch = String(payload.branch ?? "").trim();
+  const branch = normalizeBranchName(rawBranch);
+  const currentBranch = normalizeBranchName(tools.find((tool) => tool.name === "git_current_branch")?.stdout.trim() ?? "");
+  if (!branch || branch.includes("..") || branch.startsWith("-")) {
+    return {
+      kind: "branch",
+      action: action === "checkout_branch" ? "checkout" : "create",
+      status: "invalid",
+      branch: rawBranch,
+      currentBranch: currentBranch || undefined,
+      summary: rawBranch ? `Branch name ${rawBranch} is not safe to use.` : "Branch name is required.",
+    };
+  }
+
+  const inventory = parseBranchInventory(tools.find((tool) => tool.name === "git_branch_list" && tool.ok)?.stdout ?? "");
+  const localBranch = inventory.local.get(branch);
+  const remoteBranch = inventory.remote.get(branch);
+  if (action === "checkout_branch") {
+    if (currentBranch && branch === currentBranch) {
+      return {
+        kind: "branch",
+        action: "checkout",
+        status: "current",
+        branch,
+        currentBranch,
+        localBranch,
+        summary: `Already on branch ${branch}.`,
+      };
+    }
+    if (localBranch) {
+      return {
+        kind: "branch",
+        action: "checkout",
+        status: "local_exists",
+        branch,
+        currentBranch: currentBranch || undefined,
+        localBranch,
+        summary: `Switch to local branch ${branch}.`,
+      };
+    }
+    if (remoteBranch) {
+      return {
+        kind: "branch",
+        action: "checkout",
+        status: "remote_only",
+        branch,
+        currentBranch: currentBranch || undefined,
+        remoteBranch,
+        summary: `Create local branch ${branch} tracking ${remoteBranch}.`,
+      };
+    }
+    return {
+      kind: "branch",
+      action: "checkout",
+      status: "missing",
+      branch,
+      currentBranch: currentBranch || undefined,
+      summary: `Branch ${branch} was not found locally or in remotes.`,
+    };
+  }
+
+  if (branch === currentBranch || localBranch || remoteBranch) {
+    return {
+      kind: "branch",
+      action: "create",
+      status: "already_exists",
+      branch,
+      currentBranch: currentBranch || undefined,
+      localBranch: localBranch || (branch === currentBranch ? branch : undefined),
+      remoteBranch,
+      summary: branch === currentBranch
+        ? `Already on branch ${branch}; no new branch is needed.`
+        : localBranch
+        ? `Local branch ${branch} already exists.`
+        : `Remote branch ${remoteBranch} already exists; switch to it instead of creating a duplicate branch.`,
+    };
+  }
+  return {
+    kind: "branch",
+    action: "create",
+    status: "would_create",
+    branch,
+    currentBranch: currentBranch || undefined,
+    summary: `Create and switch to new branch ${branch}.`,
+  };
+}
+
+function prPreflightFromPayload(
+  payload: z.infer<typeof ChatWorkflowActionSchema>,
+  currentBranch: string,
+  statusText: string,
+  latestSubject: string,
+): PrPreflight {
+  const profile = payload.profile;
+  const organization = String(profile?.adoOrgUrl ?? "").trim();
+  const project = String(profile?.adoProject ?? "").trim();
+  const repository = String(profile?.adoRepoName ?? "").trim();
+  const sourceBranch = normalizeBranchName(String(payload.branch ?? currentBranch ?? "").trim());
+  const targetBranch = normalizeBranchName(String(payload.targetBranch ?? profile?.targetBranch ?? profile?.defaultBranch ?? "main").trim()) || "main";
+  const explicitTitle = String(payload.title ?? payload.message ?? "").trim();
+  const title = explicitTitle || latestSubject || `Update from ${sourceBranch || "current branch"}`;
+  const missing = [
+    !organization ? "Azure DevOps organization URL" : "",
+    !project ? "ADO project" : "",
+    !repository ? "ADO repository" : "",
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    return {
+      kind: "pr",
+      status: "missing_ado_mapping",
+      sourceBranch: sourceBranch || undefined,
+      targetBranch,
+      repository: repository || undefined,
+      project: project || undefined,
+      organization: organization || undefined,
+      title,
+      summary: `Project Link is missing ${missing.join(", ")} before a pull request can be created.`,
+    };
+  }
+  if (!sourceBranch) {
+    return {
+      kind: "pr",
+      status: "missing_source_branch",
+      targetBranch,
+      repository,
+      project,
+      organization,
+      title,
+      summary: "Current source branch could not be detected before creating a pull request.",
+    };
+  }
+  const dirtySummary = dirtyWorkingTreeSummary(statusText);
+  if (dirtySummary) {
+    return {
+      kind: "pr",
+      status: "dirty_worktree",
+      sourceBranch,
+      targetBranch,
+      repository,
+      project,
+      organization,
+      title,
+      summary: `${dirtySummary} Uncommitted changes will not be included in the pull request until committed and pushed.`,
+    };
+  }
+  return {
+    kind: "pr",
+    status: "ready",
+    sourceBranch,
+    targetBranch,
+    repository,
+    project,
+    organization,
+    title,
+    summary: `Ready to create PR ${sourceBranch} -> ${targetBranch} in ${project}/${repository}.`,
+  };
+}
+
+function parseBranchInventory(output: string): { local: Map<string, string>; remote: Map<string, string> } {
+  const local = new Map<string, string>();
+  const remote = new Map<string, string>();
+  for (const rawLine of output.split(/\r?\n/)) {
+    const line = rawLine.replace(/^\*\s*/, "").trim();
+    if (!line || line.includes(" -> ")) continue;
+    if (line.startsWith("remotes/")) {
+      const ref = line.slice("remotes/".length);
+      const branch = normalizeBranchName(ref.replace(/^[^/]+\//, ""));
+      if (branch) remote.set(branch, ref);
+    } else {
+      const branch = normalizeBranchName(line);
+      if (branch) local.set(branch, branch);
+    }
+  }
+  return { local, remote };
+}
+
+function normalizeBranchName(branch: string): string {
+  return branch
+    .trim()
+    .replace(/^refs\/heads\//, "")
+    .replace(/^refs\/remotes\//, "")
+    .replace(/^remotes\//, "")
+    .replace(/^origin\//, "");
+}
+
+function pushReadinessFromTools(
+  tools: Array<Awaited<ReturnType<typeof runGitProbe>> & { name: string }>,
+): PendingToolAction["readiness"] | undefined {
+  const upstreamProbe = tools.find((tool) => tool.name === "git_upstream");
+  if (!upstreamProbe) return undefined;
+  const upstream = upstreamProbe.ok ? upstreamProbe.stdout.trim() : "";
+  if (!upstream) {
+    return {
+      kind: "push",
+      status: "no_upstream",
+      summary: "No upstream branch is configured; this push will set upstream on origin.",
+    };
+  }
+
+  const divergenceProbe = tools.find((tool) => tool.name === "git_divergence");
+  if (!divergenceProbe?.ok) {
+    return {
+      kind: "push",
+      status: "unknown",
+      upstream,
+      summary: `Upstream is ${upstream}, but ahead/behind status could not be determined.`,
+    };
+  }
+  const [behindRaw, aheadRaw] = divergenceProbe.stdout.trim().split(/\s+/);
+  const behind = Number.parseInt(behindRaw ?? "0", 10) || 0;
+  const ahead = Number.parseInt(aheadRaw ?? "0", 10) || 0;
+  const status =
+    behind > 0 && ahead > 0 ? "diverged"
+      : behind > 0 ? "behind"
+        : ahead > 0 ? "ahead"
+          : "up_to_date";
+  const summary =
+    status === "diverged"
+      ? `Branch has diverged from ${upstream}: ahead ${ahead}, behind ${behind}. Consider pull/rebase before pushing.`
+      : status === "behind"
+        ? `Branch is behind ${upstream} by ${behind} commit${behind === 1 ? "" : "s"}. Push may fail until you pull or rebase.`
+        : status === "ahead"
+          ? `Branch is ahead of ${upstream} by ${ahead} commit${ahead === 1 ? "" : "s"}.`
+          : `Branch is up to date with ${upstream}.`;
+  return {
+    kind: "push",
+    status,
+    upstream,
+    ahead,
+    behind,
+    summary,
+  };
+}
+
+type GitOperationPhase = "normal" | "rebase" | "merge" | "cherry_pick" | "revert";
+
+interface GitOperationState {
+  status: "normal" | "in_progress" | "conflicted";
+  phase: GitOperationPhase;
+  conflictFiles: string[];
+  summary: string;
+}
+
+function gitOperationStateFromTools(
+  repoPath: string,
+  statusText: string,
+  tools: Array<Awaited<ReturnType<typeof runGitProbe>> & { name: string }>,
+): GitOperationState {
+  const conflictFiles = conflictFilesFromStatus(statusText);
+  const gitDirProbe = tools.find((tool) => tool.name === "git_dir" && tool.ok);
+  const gitDir = resolveGitDir(repoPath, gitDirProbe?.stdout ?? "");
+  const phase = gitDir ? gitOperationPhaseFromGitDir(gitDir) : "normal";
+  const phaseLabel = gitOperationPhaseLabel(phase);
+
+  if (conflictFiles.length > 0) {
+    const prefix = phase === "normal"
+      ? "Git has unresolved index conflicts"
+      : `Git is in ${phaseLabel} with unresolved conflicts`;
+    return {
+      status: "conflicted",
+      phase,
+      conflictFiles,
+      summary: `${prefix}: ${conflictFiles.slice(0, 8).join(", ")}${conflictFiles.length > 8 ? ", ..." : ""}.`,
+    };
+  }
+
+  if (phase !== "normal") {
+    return {
+      status: "in_progress",
+      phase,
+      conflictFiles: [],
+      summary: `Git has an in-progress ${phaseLabel}. Continue, abort, or skip that operation before starting a different Git workflow.`,
+    };
+  }
+
+  return {
+    status: "normal",
+    phase: "normal",
+    conflictFiles: [],
+    summary: "No merge, rebase, cherry-pick, or revert operation is in progress.",
+  };
+}
+
+function resolveGitDir(repoPath: string, rawGitDir: string): string {
+  const gitDir = rawGitDir.trim();
+  if (!gitDir) return "";
+  return nodePath.isAbsolute(gitDir) ? gitDir : nodePath.resolve(repoPath, gitDir);
+}
+
+function gitOperationPhaseFromGitDir(gitDir: string): GitOperationPhase {
+  if (nodeFs.existsSync(nodePath.join(gitDir, "rebase-merge")) || nodeFs.existsSync(nodePath.join(gitDir, "rebase-apply"))) return "rebase";
+  if (nodeFs.existsSync(nodePath.join(gitDir, "MERGE_HEAD"))) return "merge";
+  if (nodeFs.existsSync(nodePath.join(gitDir, "CHERRY_PICK_HEAD"))) return "cherry_pick";
+  if (nodeFs.existsSync(nodePath.join(gitDir, "REVERT_HEAD"))) return "revert";
+  return "normal";
+}
+
+function conflictFilesFromStatus(statusText: string): string[] {
+  const unmergedCodes = new Set(["DD", "AU", "UD", "UA", "DU", "AA", "UU"]);
+  return statusText
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line) => line && !line.startsWith("## "))
+    .filter((line) => unmergedCodes.has(line.slice(0, 2)))
+    .map((line) => line.slice(3).trim())
+    .filter(Boolean);
+}
+
+function gitOperationPhaseLabel(phase: GitOperationPhase): string {
+  if (phase === "cherry_pick") return "cherry-pick";
+  return phase;
+}
+
+function gitOperationBlockForAction(
+  action: z.infer<typeof ChatWorkflowActionSchema>["action"],
+  state: GitOperationState,
+): { workflowPhase: string; summary: string } | undefined {
+  if (state.status === "normal") return undefined;
+  if (action === "inspect_environment" || action === "inspect_changes" || action === "refresh_branch") return undefined;
+  if (!["checkout_branch", "create_branch", "push_branch", "prepare_commit", "create_pr"].includes(action)) return undefined;
+
+  const phase = state.phase === "normal" ? "git" : gitOperationPhaseLabel(state.phase);
+  const workflowPhase = state.status === "conflicted"
+    ? `${state.phase === "normal" ? "git" : state.phase}_conflict`
+    : `${state.phase}_in_progress`;
+  const recovery =
+    state.phase === "rebase"
+      ? "Resolve conflicts, stage only the resolved conflict files, then continue/abort/skip the rebase."
+      : state.phase === "merge"
+        ? "Resolve conflicts, stage only the resolved conflict files, then finish or abort the merge."
+        : `Finish or abort the ${phase} operation before starting another Git workflow.`;
+  return {
+    workflowPhase,
+    summary: `${state.summary} ${recovery}`,
+  };
+}
+
+function dirtyWorkingTreeSummary(statusText: string): string {
+  const changes = statusText
+    .split(/\r?\n/)
+    .filter((line) => line.trim() && !line.startsWith("## "));
+  if (changes.length === 0) return "";
+  return `Working tree has ${changes.length} pending change${changes.length === 1 ? "" : "s"}; Git may block the operation or carry changes into the target branch.`;
+}
+
+function workflowRiskForAction(
+  action: z.infer<typeof ChatWorkflowActionSchema>["action"],
+  statusText: string,
+  preflight?: PendingToolAction["preflight"],
+): string {
+  if (action === "push_branch") return "high";
+  if (action === "create_pr") return "high";
+  if (isGitRecoveryWorkflowAction(action)) return "high";
+  if (action === "stage_resolved_conflicts") return "high";
+  if (action === "run_tests" || action === "run_build") return "medium";
+  if ((action === "checkout_branch" || action === "create_branch") && dirtyWorkingTreeSummary(statusText)) return "high";
+  if (preflight?.status === "remote_only") return "medium";
+  return "medium";
+}
+
 function summarizeWorkspaceWorkflow(action: string, args: {
   currentBranch: string;
   statusText: string;
   diffStat: string;
   changedFiles: string[];
+  operationState?: GitOperationState;
 }): string {
   const lines: string[] = [];
   if (args.currentBranch) lines.push(`Branch: ${args.currentBranch}`);
+  if (args.operationState && args.operationState.status !== "normal") lines.push(args.operationState.summary);
   if (args.statusText) {
     const statusLines = args.statusText.split(/\r?\n/).filter(Boolean);
     lines.push(`Git status: ${statusLines.length} line(s)`);
@@ -535,6 +1898,8 @@ function summarizeWorkspaceWorkflow(action: string, args: {
   }
   if (args.changedFiles.length > 0) lines.push(`Changed files: ${args.changedFiles.slice(0, 12).join(", ")}${args.changedFiles.length > 12 ? ", ..." : ""}`);
   if (args.diffStat) lines.push(args.diffStat);
+  if (action === "run_tests") lines.push("Validation: waiting to run tests after approval.");
+  if (action === "run_build") lines.push("Validation: waiting to run build after approval.");
   return lines.join("\n") || "Workspace state refreshed.";
 }
 
@@ -2529,20 +3894,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     const parsed = ChatWorkflowActionSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
     try {
-      return await runWorkspaceWorkflowAction(parsed.data.action, parsed.data.repoPath);
+      return await runWorkspaceWorkflowAction(chatSessions, parsed.data);
     } catch (err) {
-      return reply.code(500).send({
-        ok: false,
-        action: parsed.data.action,
-        repoPath: parsed.data.repoPath,
-        summary: err instanceof Error ? err.message : String(err),
-        workflowState: {
-          status: "failed",
-          currentStep: "Workflow action failed",
-          completedTools: [],
-        },
-        tools: [],
-      });
+      const failure = workflowActionFailureResponse(parsed.data, err);
+      return reply.code(failure.httpStatus).send(failure.body);
     }
   });
 

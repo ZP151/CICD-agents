@@ -344,6 +344,54 @@ function IconSettings() {
   );
 }
 
+function configuredAppName(): string {
+  const envName = (import.meta.env.VITE_APP_DISPLAY_NAME ?? import.meta.env.VITE_APP_NAME) as string | undefined;
+  if (envName?.trim()) return envName.trim();
+  try {
+    const stored = localStorage.getItem("cicd_agent_app_name");
+    if (stored?.trim()) return stored.trim();
+  } catch { /* ignore */ }
+  return "CI/CD Agent";
+}
+
+function initialsFromText(value: string | undefined, fallback = "?"): string {
+  const source = value?.trim() || fallback;
+  const parts = source.split(/[^A-Za-z0-9]+/).filter(Boolean);
+  return (parts.length > 1 ? parts.map((part) => part[0]).join("") : source.slice(0, 2)).slice(0, 2).toUpperCase();
+}
+
+function InitialsAvatar({
+  label,
+  className,
+}: {
+  label?: string;
+  className: string;
+}) {
+  return (
+    <span className={`flex shrink-0 items-center justify-center rounded-full bg-blue-600/80 font-semibold text-white ${className}`}>
+      {initialsFromText(label)}
+    </span>
+  );
+}
+
+function SafeAvatar({
+  src,
+  label,
+  imageClassName,
+  fallbackClassName,
+}: {
+  src?: string;
+  label?: string;
+  imageClassName: string;
+  fallbackClassName: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (src && !failed) {
+    return <img src={src} alt="" className={imageClassName} onError={() => setFailed(true)} />;
+  }
+  return <InitialsAvatar label={label} className={fallbackClassName} />;
+}
+
 // ─── useAuth hook ─────────────────────────────────────────────────────────────
 
 const AUTH_CACHE_KEY = "cicd_agent_auth_user";
@@ -554,20 +602,14 @@ function browserLabel(browser: AuthBrowserChoice): string {
   return "your default browser";
 }
 
-function accountInitials(account: AuthCachedAccount): string {
-  const source = account.name ?? account.username ?? "?";
-  const parts = source.split(/[.\s@_-]+/).filter(Boolean);
-  return parts.map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "?";
-}
-
 function AccountAvatar({ account }: { account: AuthCachedAccount }) {
-  if (account.avatarDataUrl) {
-    return <img src={account.avatarDataUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />;
-  }
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--app-accent))] text-xs font-semibold text-white">
-      {accountInitials(account)}
-    </span>
+    <SafeAvatar
+      src={account.avatarDataUrl}
+      label={account.name ?? account.username}
+      imageClassName="h-8 w-8 shrink-0 rounded-full object-cover"
+      fallbackClassName="h-8 w-8 text-xs"
+    />
   );
 }
 
@@ -656,9 +698,7 @@ function UserFooter() {
     save({ authenticated: false });
   };
 
-  const initials = user.name
-    ? user.name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase()
-    : user.upn?.[0]?.toUpperCase() ?? "?";
+  const displayName = user.name ?? user.upn ?? "Azure User";
 
   return (
     <>
@@ -685,16 +725,15 @@ function UserFooter() {
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-zinc-800/60"
             onClick={() => setMenuOpen((v) => !v)}
           >
-            {user.avatarDataUrl ? (
-              <img src={user.avatarDataUrl} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
-            ) : (
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600/80 text-xs font-semibold text-white">
-                {initials}
-              </div>
-            )}
+            <SafeAvatar
+              src={user.avatarDataUrl}
+              label={displayName}
+              imageClassName="h-7 w-7 shrink-0 rounded-full object-cover"
+              fallbackClassName="h-7 w-7 text-xs"
+            />
             <div className="min-w-0 flex-1">
               <p className="truncate text-[12px] font-medium text-zinc-300">
-                {user.name ?? user.upn ?? "Azure User"}
+                {displayName}
               </p>
               <p className="truncate text-[10px] text-zinc-600">{user.upn ?? user.oid}</p>
             </div>
@@ -786,6 +825,7 @@ function PageShell({
 function FullLayout({ info }: { info: DaemonInfo }) {
   const location = useLocation();
   const anyCloud = info.cloudProfileStore || info.cloudSecrets || info.cloudSessions;
+  const appName = configuredAppName();
   return (
     <div className="flex h-screen w-screen bg-zinc-950 text-zinc-100">
       {/* Sidebar */}
@@ -793,9 +833,9 @@ function FullLayout({ info }: { info: DaemonInfo }) {
         {/* Logo / app name */}
         <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-zinc-800/60">
           <div className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-600 text-[11px] font-bold text-white shrink-0">
-            D
+            {initialsFromText(appName, "A")}
           </div>
-          <span className="text-sm font-semibold tracking-tight text-zinc-200">Dev Agent</span>
+          <span className="min-w-0 truncate text-sm font-semibold tracking-tight text-zinc-200">{appName}</span>
           {anyCloud && (
             <div title="Azure cloud persistence active" className="ml-auto flex items-center gap-0.5 shrink-0">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />

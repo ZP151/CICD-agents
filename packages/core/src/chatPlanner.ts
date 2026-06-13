@@ -1,10 +1,10 @@
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { LLMUnavailableError, type LLMClient } from "./llm.js";
-import { translateIntent } from "./tools/gitIntent.js";
 import { logger } from "./logger.js";
 import { getSettings } from "./settings.js";
 import type { ToolExecutor } from "./tools/executor.js";
 import { toolCapabilities, toolCapabilityPrompt } from "./tools/capabilities.js";
+import { chatAgentUseCasePrompt } from "./chatUseCases.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,6 +20,76 @@ export interface PendingToolAction {
   args: Record<string, unknown>;      // tool arguments
   description: string;               // human-readable, e.g. "Stage all modified files"
   nextHint?: string;                  // what comes after, e.g. "generate commit message"
+  readiness?: {
+    kind: "push";
+    status: "no_upstream" | "up_to_date" | "ahead" | "behind" | "diverged" | "unknown";
+    upstream?: string;
+    ahead?: number;
+    behind?: number;
+    summary: string;
+  };
+  preflight?:
+    | {
+        kind: "branch";
+        action: "checkout" | "create";
+        status: "current" | "local_exists" | "remote_only" | "missing" | "would_create" | "already_exists" | "invalid" | "unknown";
+        branch: string;
+        currentBranch?: string;
+        localBranch?: string;
+        remoteBranch?: string;
+        summary: string;
+      }
+    | {
+        kind: "pr";
+        status: "ready" | "missing_ado_mapping" | "missing_source_branch" | "dirty_worktree" | "unknown";
+        sourceBranch?: string;
+        targetBranch?: string;
+        repository?: string;
+        project?: string;
+        organization?: string;
+        title?: string;
+        summary: string;
+      }
+    | {
+        kind: "validation";
+        status: "ready" | "default_command" | "missing_command" | "unknown";
+        validationKind: "test" | "build";
+        command: string;
+        commandSource: "override" | "profile" | "derived" | "default";
+        changedFiles?: string[];
+        changedFileCount?: number;
+        selectedScript?: string;
+        packageFilters?: string[];
+        packageRoots?: string[];
+        selectionReason?: string;
+        summary: string;
+      };
+  workflow?: {
+    kind: "commit" | "pr" | "git" | "ci";
+    phase:
+      | "stage"
+      | "commit"
+      | "push"
+      | "test"
+      | "build"
+      | "create"
+      | "link_work_item"
+      | "stage_conflicts"
+      | "continue_rebase"
+      | "abort_rebase"
+      | "skip_rebase"
+      | "continue_merge"
+      | "abort_merge"
+      | "continue_cherry_pick"
+      | "abort_cherry_pick"
+      | "skip_cherry_pick"
+      | "continue_revert"
+      | "abort_revert"
+      | "skip_revert";
+    branch?: string;
+    message?: string;
+    pushAfterCommit?: boolean;
+  };
 }
 
 export interface ChatPlannerResult {
@@ -29,10 +99,39 @@ export interface ChatPlannerResult {
   riskLevel: string;
   actionsTaken: string[];
   suggestions: string[];
+  sources?: ChatPlannerSource[];
+  artifacts?: ChatPlannerArtifact[];
   toolCallsMade: Array<{ name: string; args: Record<string, unknown>; ok: boolean }>;
   usedLlm: boolean;
   approvalProposal?: PendingToolAction; // internal structured approval proposal for write actions
 }
+
+export interface ChatPlannerArtifact {
+  type: "artifact";
+  artifactId: string;
+  title: string;
+  artifactType: "react" | "html" | "markdown" | "mermaid" | "text";
+  status: "streaming" | "ready" | "error";
+  content?: string;
+}
+
+export type ChatPlannerSource =
+  | {
+      type: "source_document";
+      sourceId?: string;
+      title: string;
+      file?: string;
+      line?: number;
+      snippet?: string;
+    }
+  | {
+      type: "source_url";
+      sourceId?: string;
+      title: string;
+      url: string;
+      domain?: string;
+      snippet?: string;
+    };
 
 export interface ChatApprovalRequest {
   id: string;
@@ -45,6 +144,12 @@ export interface ChatWorkflowState {
   status: "planning" | "running" | "waiting_for_approval" | "blocked" | "done" | "failed";
   currentStep: string;
   completedTools: string[];
+  workflowKind?: "commit" | "git" | "ado" | "ci" | "pr";
+  workflowPhase?: string;
+  authStatus?: "ok" | "oauth_unavailable" | "oauth_no_org_access" | "pat_invalid_or_missing_scope" | "unknown_error";
+  authMode?: "oauth" | "pat";
+  authMessage?: string;
+  retryable?: boolean;
   pendingApproval?: ChatApprovalRequest;
 }
 
@@ -75,9 +180,9 @@ export function isDenialMessage(msg: string): boolean {
 export type ChatEvent =
   | { type: "assistant_delta"; delta: string }
   | { type: "progress"; message: string }
-  | { type: "tool_start"; name: string; args: Record<string, unknown> }
-  | { type: "tool_output_delta"; name: string; stream: "stdout" | "stderr"; delta: string }
-  | { type: "tool_end"; name: string; ok: boolean; summary: string; result: unknown }
+  | { type: "tool_start"; name: string; args: Record<string, unknown>; toolCallId?: string }
+  | { type: "tool_output_delta"; name: string; stream: "stdout" | "stderr"; delta: string; toolCallId?: string }
+  | { type: "tool_end"; name: string; ok: boolean; summary: string; result: unknown; toolCallId?: string }
   | { type: "confirm_required"; riskLevel: string; plan: string }
   | { type: "workflow_state"; state: ChatWorkflowState }
   | { type: "approval_required"; approval: ChatApprovalRequest }
@@ -116,6 +221,7 @@ The user message may include a "Repository context" section assembled from a qui
 - Call Git tools when the user asks about current changes, branch state, commit/PR workflow, or when repository context says changed files are relevant.
 - If repository context is insufficient, use safe read-only tools to gather missing facts.
 - If repo_refresh_index returns repositoryContextPrompt, rely on it as fresh repository context for the current turn.
+- When finalizing a response with project-specific claims, include source_document entries for relevant files or repository context. When finalizing a response based on external documentation or web search, include source_url entries.
 
 ## Autonomy table
 | Operation | Autonomy |
@@ -133,6 +239,9 @@ The user message may include a "Repository context" section assembled from a qui
 - Fill required arguments exactly as the tool schema requires.
 - For git_add, pass paths whenever the changed file list is known. Use an empty args object only after explaining why every changed path should be staged.
 - Use structured Git tool arguments for common flags instead of asking the user to run raw commands. Examples: git_status {"short":true}, git_diff {"staged":true}, git_diff {"name_only":true}, git_add {"paths":["src/file.ts"]}, git_commit {"message":"...","noVerify":true}, git_switch {"branch":"feature/x","create":true}.
+
+## Core Chat Agent Use Cases
+${chatAgentUseCasePrompt()}
 
 ## Risk Classification
 - low    — read-only inspection.
@@ -265,6 +374,16 @@ export class ChatPlanner {
               emittedVisibleResponse = visibleResponse;
               yield { type: "assistant_delta", delta };
             }
+          } else if (ev.type === "tool_call_delta" && ev.toolCalls) {
+            const finalizationCall = ev.toolCalls.find((tc) => tc.name === CHAT_FINAL_TOOL_NAME);
+            if (finalizationCall?.arguments) {
+              const visibleResponse = extractVisibleStreamingResponse(finalizationCall.arguments);
+              if (visibleResponse && visibleResponse.length > emittedVisibleResponse.length) {
+                const delta = visibleResponse.slice(emittedVisibleResponse.length);
+                emittedVisibleResponse = visibleResponse;
+                yield { type: "assistant_delta", delta };
+              }
+            }
           } else if (ev.type === "tool_call" && ev.toolCalls) {
             toolFromStream = ev.toolCalls;
           }
@@ -374,7 +493,7 @@ export class ChatPlanner {
             return;
           }
 
-          yield { type: "tool_start", name: tc.name, args };
+          yield { type: "tool_start", name: tc.name, args, toolCallId: tc.id };
           let toolResult: unknown;
           let ok = true;
           try {
@@ -385,6 +504,7 @@ export class ChatPlanner {
                   name: tc.name,
                   stream: streamEvent.stream,
                   delta: streamEvent.text,
+                  toolCallId: tc.id,
                 };
               } else {
                 toolResult = streamEvent.result;
@@ -397,7 +517,7 @@ export class ChatPlanner {
           const summary = ok
             ? truncate(JSON.stringify(toolResult), 200)
             : `error: ${JSON.stringify(toolResult)}`;
-          yield { type: "tool_end", name: tc.name, ok, summary, result: toolResult };
+          yield { type: "tool_end", name: tc.name, ok, summary, result: toolResult, toolCallId: tc.id };
           toolCallsMade.push({ name: tc.name, args, ok });
 
           // Detect consecutive failures of the same tool → abort the loop early
@@ -520,12 +640,12 @@ export class ChatPlanner {
   }
 
   private async *_offlineFallback(message: string): AsyncGenerator<ChatEvent> {
-    const plan = translateIntent(message);
-    const stepList = plan.steps.map((s, i) => `${i + 1}. ${s.tool} — ${s.note}`).join("\n");
+    const requested = summarizeOfflineRequest(message);
     const response =
-      `Selected model is temporarily unavailable — showing deterministic intent analysis only.\n\n` +
-      `Intent: ${plan.intent}\n${plan.notes}\n\n` +
-      (stepList ? `Suggested steps:\n${stepList}` : "");
+      `Selected model is temporarily unavailable, so I did not infer or execute a Git/PR workflow.\n\n` +
+      `Request: ${requested}\n\n` +
+      `Use a structured Conversation action such as Review changes, Branch status, PR insight, ` +
+      `or restore the model connection so I can inspect current repository state and choose exact tool arguments.`;
     yield { type: "message", text: response };
     yield {
       type: "done",
@@ -535,7 +655,11 @@ export class ChatPlanner {
         finalizationMode: "none",
         riskLevel: "low",
         actionsTaken: [],
-        suggestions: plan.steps.map((s) => `${s.tool}: ${s.note}`),
+        suggestions: [
+          "Review changes",
+          "Check branch status",
+          "Restore model connection",
+        ],
         toolCallsMade: [],
         usedLlm: false,
       },
@@ -544,6 +668,12 @@ export class ChatPlanner {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function summarizeOfflineRequest(message: string): string {
+  const trimmed = message.trim().replace(/\s+/g, " ");
+  if (!trimmed) return "No user request was available.";
+  return trimmed.length > 160 ? `${trimmed.slice(0, 157)}...` : trimmed;
+}
 
 function finalizationToolSchema() {
   return {
@@ -572,6 +702,29 @@ function finalizationToolSchema() {
           suggestions: {
             type: "array",
             items: { type: "string" },
+          },
+          sources: {
+            type: "array",
+            description:
+              "Optional source references used by the final answer. Use source_document for repository files or indexed documents, and source_url for external web or documentation references.",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["type", "title"],
+              properties: {
+                type: {
+                  type: "string",
+                  enum: ["source_document", "source_url"],
+                },
+                sourceId: { type: "string" },
+                title: { type: "string" },
+                file: { type: "string" },
+                line: { type: "number" },
+                snippet: { type: "string" },
+                url: { type: "string" },
+                domain: { type: "string" },
+              },
+            },
           },
           approval_proposal: {
             type: "object",
@@ -686,6 +839,8 @@ function plannerResultFromControl(
     riskLevel: String(control["risk_level"] ?? control["riskLevel"] ?? "low"),
     actionsTaken: arrayOfStrings(control["actions_taken"] ?? control["actionsTaken"]),
     suggestions: arrayOfStrings(control["suggestions"]),
+    sources: normalizeSources(control["sources"]),
+    artifacts: normalizeArtifacts(control["artifacts"]),
     toolCallsMade: opts.toolCallsMade,
     usedLlm: opts.usedLlm,
     approvalProposal: approvalProposal?.tool ? approvalProposal : undefined,
@@ -701,11 +856,84 @@ function pendingActionFromControl(raw: unknown): PendingToolAction | undefined {
     args: (obj["args"] as Record<string, unknown>) ?? {},
     description: String(obj["description"] ?? ""),
     nextHint: obj["nextHint"] === undefined ? undefined : String(obj["nextHint"]),
+    readiness: obj["readiness"] as PendingToolAction["readiness"],
+    preflight: obj["preflight"] as PendingToolAction["preflight"],
+    workflow: obj["workflow"] as PendingToolAction["workflow"],
   };
 }
 
 function arrayOfStrings(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.map(String) : [];
+}
+
+function normalizeSources(raw: unknown): ChatPlannerSource[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const sources = raw
+    .map((item, index): ChatPlannerSource | null => {
+      if (!item || typeof item !== "object") return null;
+      const source = item as Record<string, unknown>;
+      const title = stringValue(source["title"]) || stringValue(source["file"]) || stringValue(source["url"]);
+      if (!title) return null;
+
+      if (source["type"] === "source_url") {
+        const url = stringValue(source["url"]);
+        if (!url) return null;
+        return {
+          type: "source_url",
+          sourceId: stringValue(source["sourceId"]) || `url-${index}`,
+          title,
+          url,
+          domain: stringValue(source["domain"]),
+          snippet: stringValue(source["snippet"]),
+        };
+      }
+
+      if (source["type"] !== "source_document") return null;
+      const line = typeof source["line"] === "number" && Number.isFinite(source["line"])
+        ? source["line"]
+        : undefined;
+      return {
+        type: "source_document",
+        sourceId: stringValue(source["sourceId"]) || `document-${index}`,
+        title,
+        file: stringValue(source["file"]),
+        line,
+        snippet: stringValue(source["snippet"]),
+      };
+    })
+    .filter((source): source is ChatPlannerSource => Boolean(source));
+  return sources.length ? sources : undefined;
+}
+
+function normalizeArtifacts(raw: unknown): ChatPlannerArtifact[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const artifacts = raw
+    .map((item): ChatPlannerArtifact | null => {
+      if (!item || typeof item !== "object") return null;
+      const artifact = item as Record<string, unknown>;
+      const artifactId = String(artifact["artifactId"] ?? artifact["artifact_id"] ?? "").trim();
+      const title = String(artifact["title"] ?? "").trim();
+      const artifactType = artifact["artifactType"] ?? artifact["artifact_type"];
+      const status = artifact["status"];
+      if (!artifactId || !title) return null;
+      if (!["react", "html", "markdown", "mermaid", "text"].includes(String(artifactType))) return null;
+      if (!["streaming", "ready", "error"].includes(String(status))) return null;
+      const content = typeof artifact["content"] === "string" ? artifact["content"] : undefined;
+      return {
+        type: "artifact",
+        artifactId,
+        title,
+        artifactType: artifactType as ChatPlannerArtifact["artifactType"],
+        status: status as ChatPlannerArtifact["status"],
+        content,
+      };
+    })
+    .filter((artifact): artifact is ChatPlannerArtifact => Boolean(artifact));
+  return artifacts.length ? artifacts : undefined;
+}
+
+function stringValue(raw: unknown): string | undefined {
+  return typeof raw === "string" && raw.trim() ? raw.trim() : undefined;
 }
 
 function parseFinalJson(text: string): Record<string, unknown> | null {

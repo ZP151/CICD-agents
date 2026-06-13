@@ -134,6 +134,220 @@ Create PR
 
 This does not match non-PR workflows and reinforces the impression that the agent only knows one path.
 
+## 2026-06-12 Implementation Audit
+
+Recent git history shows the project has moved materially beyond the original narrow scripted flow:
+
+- `3ee3890 feat: add structured agent streaming finalization` removed raw planner JSON from the normal conversation path and added structured finalization metadata.
+- `0246315 feat: strengthen chat workspace workflows` added stronger Git workflow behavior and chat-side workflow recovery.
+- `d5f808a chore: bump version to 0.5.4` marks the current released baseline.
+
+Current implemented strengths:
+
+- Chat has structured tool streaming, clean assistant bubbles, tool bubbles, approval cards, and workflow-state events.
+- The core Git tool surface now covers status, diff, log, show, fetch, merge-base, branch listing, switch/checkout, pull, merge, rebase, restore, add, commit, push, stash, checkpoints, and checkpoint apply.
+- The planner prompt now explicitly requires structured Git arguments and path-aware `git_add` calls.
+- Azure DevOps PR insight has internalized PR details, threads, file changes, builds, work items, and policy evaluations.
+- Project Link setup can infer Azure DevOps mapping from git remotes and can discover ADO projects, repositories, and pipelines.
+- Right-panel Git controls for inspect, branch, push, and commit preparation now enter structured workflow actions instead of inserting hidden natural-language chat prompts.
+- Structured push approvals now include upstream and ahead/behind readiness metadata before the user confirms `git_push`.
+- Blank commit-message flows now remain structured: after approved staging, the daemon generates a commit message from staged diff metadata and presents a `git_commit` approval.
+- Branch checkout/create controls now run branch-state preflight and suppress no-op or duplicate approvals before proposing Git writes.
+- The right-side Progress panel now renders compact metadata details for branch preflight, push readiness, and commit workflow branch/message state.
+- PR creation now has a first-class structured workflow action that creates an `ado_create_pr` approval proposal with Project Link and dirty-worktree preflight.
+- Confirmed PR creation now completes as structured `pr/created` workflow state and returns deterministic next-step suggestions instead of asking the planner to infer continuation.
+- PR follow-up now has first-class structured workflow actions for insight, policy status, linked work items, and work-item linking approval.
+- PR follow-up workflow failures now preserve missing Project Link mapping and Azure DevOps auth diagnostics as structured Conversation workflow state instead of collapsing to generic 500-style errors.
+- Test/build validation now has a first structured Conversation workflow path: command chips and welcome suggestions can create a `validation_command` approval backed by the Project Link validation command, with CI workflow state instead of sending a hidden chat prompt.
+- Validation approval proposals now carry command-source metadata and changed-file preflight context, and failed validation runs return a concise failure excerpt for deterministic Conversation follow-up.
+- When no explicit Project Link validation command is configured, validation preflight can derive focused package commands from changed files' nearest `package.json` files, including multi-package pnpm workspace filters when all touched packages share the same validation script.
+- Validation approval cards now render structured scope evidence: command source, selected script, package filters, package roots, changed-file count, and the selection reason.
+- Failed validation confirmations now also generate selectable markdown Conversation artifacts with command, package scope, key output, stdout/stderr excerpts, and an error status for the Result workspace.
+- Workspace workflow actions now detect unresolved merge/rebase-style Git operation states and block normal commit, push, branch switch, and PR creation approvals while conflicts are unresolved.
+- Rebase recovery now has first-class structured workflow actions for continue, abort, and skip. These create exact `git_rebase` approval proposals only when a rebase is actually in progress and complete with deterministic `git` workflow state after confirmation.
+- Merge, cherry-pick, and revert recovery now use the same structured approval model through `git_merge`, `git_cherry_pick`, and `git_revert` recovery actions.
+- Conflict-file staging is now a guarded structured action: it only works during an active Git conflict recovery state, only stages paths that Git currently reports as conflicted, and returns deterministic workflow state instead of falling back to normal commit automation.
+
+Remaining shortfalls:
+
+- Chat still relies too much on planner inference for multi-step workflows beyond the first structured branch, commit, push, generated-message, and create-PR paths.
+- The right panel exposes useful branch/commit/PR follow-up controls and compact workflow metadata, but branch readiness and richer PR artifact rendering are not yet dedicated workspaces.
+- PR creation and first PR follow-ups have durable structured actions and clearer failure states, but richer PR insight artifact rendering still needs a dedicated Conversation workspace.
+- There is no single source of truth for all Chat agent responsibilities unless the use-case catalog is kept in sync with tests and docs.
+- Test/build execution now has an initial dedicated validation workflow state, command-source preflight, changed-file context, single-package and compatible multi-package command derivation, UI-visible selection evidence, failure excerpts, and selectable failure artifacts, but still needs richer framework-specific test selection.
+- PR insight and CI/CD actions are powerful but not yet presented as a unified “analyze this PR / validate this branch / prepare release” conversation workflow.
+- Conflict recovery still needs a dedicated desktop conflict-file picker and deeper conflicted-repository coverage for cherry-pick and revert operations.
+
+## Chat Agent Use-Case Matrix
+
+The following matrix is now represented in code by `packages/core/src/chatUseCases.ts` and injected into the planner prompt. It is intentionally modeled after common behavior in mature coding agents such as Codex-style repository agents, Aider-style Git assistants, OpenHands-style task agents, Goose-style tool agents, and Continue-style repo-context assistants.
+
+| Use case | User signals | Read tools | Write tools | Approval |
+| --- | --- | --- | --- | --- |
+| Project understanding | explain project, architecture, where is, how does this work | repo context, index refresh, git log | none | none |
+| Change review | review changes, inspect diff, what changed | git status, git diff, repo context | none | none |
+| Test selection and validation | run tests, verify, build, what tests | git diff, git status, repo context | npm/pytest/dotnet test tools | required |
+| Branch management | branch, checkout, switch, fetch, pull, rebase, merge | branch list, current branch, status, fetch, diff, merge-base | switch, checkout, pull, merge, rebase, create branch | required |
+| Commit workflow | stage, commit, amend, split commit | status, diff, repo context | add, restore, commit | required |
+| Remote sync | push, publish, pull latest, non-fast-forward | status, current branch, remotes, fetch | push, pull, rebase | required |
+| PR insight | analyze PR, PR risk, review queue | ADO PR details, threads, changes, builds, work items, policies | none | none |
+| PR creation | create PR, open pull request, link work item | status, current branch, log, remotes | push, create PR, link work item | required |
+| Shelve and restore | stash, restore, discard, rollback, checkpoint | status, diff, checkpoint show | stash, restore, checkpoint apply | required |
+| CI/CD operations | pipeline, CI, build status, trigger pipeline | pipeline definitions, builds, runs | trigger pipeline | required |
+
+Expected behavior across all use cases:
+
+- Read-only inspection can run immediately when it helps the user.
+- Write operations must produce exact tool arguments and wait for approval.
+- The agent must not invent PR creation after a push unless the user asked for a PR.
+- The agent must inspect working-tree state before branch-changing operations.
+- The agent should use repository context for project understanding and risk analysis, not only Git status.
+- The agent should explain uncertainty and missing context instead of filling gaps with made-up project facts.
+
+## Real Chat Failure Case: Commit-Only Request Escalated Into Push/Rebase
+
+Observed user flow:
+
+```text
+User: What's on this branch?
+Agent: inspected status/diff and correctly reported branch state.
+User: stage the changes, commit
+Agent: staged and committed, then proposed git_push even though push was not requested.
+Agent: push failed because the branch was behind remote.
+Agent: proposed pull --rebase recovery.
+git_pull --rebase hit conflicts.
+Agent continued offering git_add/git_commit/git_push style actions and attempted another git_rebase start instead of git rebase --continue/--abort/--skip.
+```
+
+Problems exposed:
+
+- Scope leak: a commit-only request was escalated into a push workflow.
+- Recovery leak: a push failure introduced pull/rebase recovery even though push was already outside the user's requested scope.
+- Rebase-state blindness: once a rebase was in progress, the available `git_rebase` tool could only start a new rebase and could not represent `--continue`, `--abort`, or `--skip`.
+- Conflict safety gap: after rebase conflicts, the agent treated `git_add` and `git_commit` as normal continuation candidates instead of requiring an explicit rebase resolution path.
+- UI wording issue: approval text surfaced long generic tool descriptions instead of concise, task-specific proposals.
+
+Corrections added:
+
+- `git_push`, `git_pull`, and `git_rebase` workflow proposals now check the user's original scope before being converted into approval actions.
+- Pull/rebase recovery is allowed only after an in-scope failed push.
+- When an explicit but out-of-scope write action is detected, the workflow derivation stops instead of falling back to the older PR workflow sequence.
+- `git_rebase` now supports `action: "continue" | "abort" | "skip"` in addition to starting a rebase with `onto`.
+- `/chat/workflow-action` now reads Git operation state from porcelain status and `.git` state files, then blocks normal commit/push/branch/PR workflow approvals during unresolved conflicts or in-progress operations.
+- Legacy chat write-action derivation now strips normal commit/push approvals after unresolved rebase/merge conflict history unless the proposed action is an explicit rebase recovery step.
+- Structured workspace actions now support `continue_rebase`, `abort_rebase`, and `skip_rebase` as high-risk approvals with exact `git_rebase` recovery arguments.
+- Confirmed rebase recovery actions now finish with deterministic workflow state such as `rebase_aborted` instead of returning to the planner for guesswork.
+- Structured workspace actions now also support merge, cherry-pick, and revert recovery with exact approval-backed tool arguments.
+- Selected conflict-file staging now has a dedicated `stage_resolved_conflicts` workspace action that refuses non-conflict paths and does not advance into commit/push automatically.
+- Regression tests cover:
+  - commit-only requests stop after commit
+  - push recovery is allowed only for push-scoped user goals
+  - out-of-scope push recovery does not fall back to staging
+  - rebase conflict recovery derives `git_rebase { action: "continue" }`
+  - merge-conflict workspace actions become blocked workflow state instead of creating `git_add`
+  - unresolved rebase conflicts strip ordinary `git_commit` proposals
+  - structured rebase abort creates and completes a stored approval proposal
+  - structured merge abort creates and completes a stored approval proposal
+  - selected conflict-file staging creates and completes a path-scoped `git_add` approval
+  - merge/cherry-pick/revert recovery tool actions do not require a start ref
+
+Remaining needed UX corrections:
+
+- Approval cards should display concise action labels, for example `Stage selected files`, `Commit staged changes`, `Continue rebase`, instead of raw tool descriptions.
+- The workflow panel receives explicit conflict/in-progress phases and now exposes recovery controls for rebase, merge, cherry-pick, and revert, but still needs a file picker before selected conflict-file staging should be shown as a direct UI control.
+- Chat should show branch divergence (`ahead/behind`) as a readiness warning before allowing commit/push flows.
+
+## Popular Agent Source Alignment Audit
+
+This section records the architectural lesson from current popular open-source coding agents and IDE agents. The important distinction is that mature agents do not usually hard-code one invisible Git script such as `add -> commit -> push -> PR`. They expose a tool catalog, context pipeline, permission model, and execution loop. The model then generates the concrete tool calls and arguments for the current user request.
+
+Reviewed references:
+
+| Project | Source / doc signal | Relevant pattern |
+| --- | --- | --- |
+| Aider | [`Aider-AI/aider` Git integration and `aider/repo.py`](https://github.com/Aider-AI/aider/blob/main/aider/repo.py) | Git-first repo assistant with tracked-file, diff, and commit-message logic. Useful for repo context and commit discipline, but it is intentionally opinionated about commits. |
+| OpenHands | [SDK docs define agents, tools, workspaces, and conversations](https://docs.openhands.dev/sdk/getting-started) | Agent is a reasoning/execution loop over enabled tools in a workspace, not a fixed Git workflow. |
+| Cline | [CLI runtime tool policies](https://github.com/cline/cline/blob/main/apps/cli/src/runtime/tool-policies.ts) and [interactive approvals](https://github.com/cline/cline/blob/main/apps/cli/src/runtime/interactive/approvals.ts) | Uses per-tool policy and human-in-the-loop approval; safe/read tools can be auto-approved while write/terminal actions are gated. |
+| OpenCode | [Permission service](https://github.com/opencode-ai/opencode/blob/main/internal/permission/permission.go) and [bash tool](https://github.com/opencode-ai/opencode/blob/main/internal/llm/tools/bash.go) | Uses a generic bash tool with permission requests, read-only command heuristics, banned commands, and explicit Git/PR prompt discipline. Its commit guidance explicitly says not to push unless requested. |
+| Continue | [`runTerminalCommand` tool definition](https://github.com/continuedev/continue/blob/main/core/tools/definitions/runTerminalCommand.ts) and [tool dispatcher](https://github.com/continuedev/continue/blob/main/core/tools/callTool.ts) | Treats terminal execution as a parameterized tool call with security evaluation, and separates built-in tool dispatch from MCP/remote tools. |
+| Goose | [Tool confirmation router](https://github.com/block/goose/blob/main/crates/goose/src/agents/tool_confirmation_router.rs) and [tool execution pipeline](https://github.com/block/goose/blob/main/crates/goose/src/agents/tool_execution.rs) | Routes tool calls through permission confirmations and returns a clear declined response telling the agent not to repeat denied calls. |
+| VS Code Copilot Agent | [Chat tools docs](https://code.visualstudio.com/docs/chat/chat-tools) | Lets users enable/disable tools per request, review and edit tool parameters before execution, and groups tools into tool sets. Terminal commands are displayed as tool calls with command output. |
+
+Common architecture:
+
+```text
+user request
+  -> classify intent and constraints
+  -> gather repo / Git / CI / PR context
+  -> expose only relevant tools
+  -> model proposes exact tool call arguments
+  -> policy engine checks scope, risk, and workspace boundary
+  -> user approves write/destructive/network actions
+  -> executor runs the exact approved command/tool
+  -> result updates conversation and workflow state
+  -> agent decides whether another step is still in scope
+```
+
+Reference observations from current open-source agents:
+
+- [Aider](https://aider.chat/docs/git.html) is intentionally Git-centric, but its Git automation is scoped around file edits, undoability, dirty-file isolation, and commit-message generation from diffs/history. It also exposes explicit in-chat Git commands such as `/diff`, `/undo`, `/commit`, and `/git` instead of assuming every request should become a full push/PR chain.
+- [Cline](https://github.com/cline/cline) presents broad tools for file edits, terminal commands, browser use, and MCP, with Plan/Act mode and human-in-the-loop approval for file edits and terminal commands. Its useful pattern for this project is not a fixed Git sequence, but a policy layer around arbitrary tool use plus checkpoints.
+- [Cline tools documentation](https://docs.cline.bot/tools-reference/all-cline-tools) describes approval and policy controls that can require approval for risky tools, auto-approve low-risk reads, and disable tools. This maps directly to our capability registry and `approvalProposal` gate.
+- [OpenHands](https://github.com/OpenHands/openhands) exposes a composable agent SDK, CLI, local GUI, REST API, and React app. Its pattern is an agent runtime that can plan, execute, and integrate with external systems while keeping action execution inspectable, not a UI button that injects a hidden prompt.
+- [OpenHands GitHub Action documentation](https://docs.openhands.dev/openhands/usage/run-openhands/github-action) shows a product workflow that can auto-resolve issues and open pull requests, but it is triggered by explicit issue labels/comments. That is closer to a named workflow objective than implicit continuation from any commit/push.
+
+Implications for this project:
+
+- Git operations should be capability tools, not a hidden pre-scripted flow.
+- High-level workflows are still valuable, but they should compile into explicit workflow state and exact approval proposals.
+- UI shortcuts such as `Changes`, `Branch`, `Commit`, `Push`, and `Create PR` should start a structured workflow intent. They should not insert a natural-language prompt that the daemon later regex-parses.
+- Write operations must preserve the user's request boundary. `commit` does not imply `push`; `push` does not imply `create PR`; failed `push` recovery can suggest `pull --rebase`, but only when the original user goal included push/publish/sync.
+- A denied or failed risky tool call should not be retried through another inferred path. The agent should either propose a different in-scope action or stop with a clear explanation.
+- Git conflict states must become first-class workflow states, for example `rebase_in_progress`, `merge_conflict`, `conflict_blocked`, and `needs_user_resolution`.
+
+### Preset Workflow vs Agent-Generated Git Operations
+
+The desired model is not "no presets at all". The desired model is:
+
+- Preset knowledge: allowed. Examples: commit quality checklist, PR readiness checklist, conflict recovery options, branch divergence checks.
+- Preset execution chain: not allowed as the default. Examples: automatically continuing from commit to push, or from push to PR creation, without the user asking.
+- Parameterized tool calls: required. Examples: `git_add { paths: [...] }`, `git_restore { paths: [...], staged: false }`, `git_rebase { action: "continue" }`, `git_push { branch, setUpstream }`.
+- Scope validation: required before every write proposal.
+
+This aligns with the real failure case above: the agent should have stopped after the commit because the user asked to stage and commit. A later push, pull, rebase, or PR would need a new user request or an explicit approved workflow objective.
+
+### Legacy Workflow Retirement Decision
+
+| Current component | Current risk | Decision | Replacement |
+| --- | --- | --- | --- |
+| `inferNextPrWorkflowTool` in `packages/daemon/src/chatSession.ts` | Fixed PR-flow continuation can turn one write action into a broader workflow. | Retired from the production chat path. | Workflow state machine plus planner-generated approval proposals. |
+| `inferPendingAction` in `packages/daemon/src/chatSession.ts` | Resumes old sessions by parsing assistant prose. Useful compatibility, weak source of truth. | Deprecate. Keep read-only legacy fallback with tests. | Persisted `approvalProposal` / `approval_required` events only. |
+| `ACTION_DERIVERS` in `packages/daemon/src/chatSession.ts` | Regex-style response interpretation can produce actions from wording instead of the model's structured tool call. | Narrow and eventually remove for write actions. | Tool-call-native approval proposals with policy validation. |
+| `workspaceActionPrompt` in `apps/desktop/src/pages/Chat.tsx` | UI actions become hidden natural-language prompts. This makes clicks look like chat messages and can trigger wrong workflows. | Replace. | Structured workflow action API: `inspect_changes`, `switch_branch`, `prepare_commit`, `push_branch`, `create_pr`. |
+| `commit_flow` right-panel action in `apps/desktop/src/pages/Chat.tsx` | Can feel like a canned stage/commit/push bundle. | Split in the frontend action model; backend still receives explicit `prepare_commit` or `push_branch` workflow actions. | `prepare_commit`, `commit_and_push`, and `push_branch` are separate UI actions, with `commitMode` only on commit preparation. |
+| `git_intent_translator` in `packages/core/src/tools/gitIntent.ts` | Useful offline planning reference, but can become another canned workflow source. | Removed from production chat tool exposure and production offline fallback. Keep only as offline/test reference while replacing it with direct tool schemas plus policy validation. | Direct tool schemas plus policy validator. |
+
+### Target Git Agent Boundary Rules
+
+The Chat agent may do these without approval:
+
+- Inspect status, diff, log, branch, remotes, and PR/ADO read models.
+- Build a repository context summary.
+- Explain likely next steps.
+- Suggest exact write actions.
+
+The Chat agent needs approval for:
+
+- Any staging, restore, checkout/switch, branch creation, commit, pull, merge, rebase, push, stash apply/pop, tag creation, worktree mutation, pipeline trigger, PR creation/update, work item mutation, or policy-changing operation.
+
+The Chat agent must stop or ask for a new approval when:
+
+- The next step is outside the user's original stated goal.
+- Git reports merge/rebase conflicts.
+- A push/pull/rebase fails.
+- The required command would be destructive or broad, such as `git reset --hard`, `git clean`, `git add .`, or deleting branches/tags.
+- The model wants to retry the same denied or failed risky action.
+
 ## Target Design
 
 The target architecture should separate four concepts:
@@ -698,6 +912,24 @@ Completed:
 - Migrated session persistence to store new approval proposals under `approvalProposal`, with read-only fallback for legacy `pendingAction` session records.
 - Updated the LLM JSON protocol to request `approval_proposal`, while retaining parser fallback for legacy `pending_action` output.
 - Added planner tests that verify both `approval_proposal` parsing and legacy `pending_action` parser fallback.
+- Started replacing right-panel Git prompt injection with structured workflow actions for branch checkout, branch creation, push, and commit preparation; these actions now create stored approval proposals instead of sending hidden chat prompts.
+- Structured branch checkout/create approvals now include dirty-working-tree warnings and higher risk when pending changes exist.
+- Structured commit workflows now carry workflow metadata and can advance from approved staging to commit approval, then from approved commit to push approval for commit-and-push flows, without returning to hidden prompt injection.
+- Workflow state now exposes `workflowKind` and `workflowPhase`, and the desktop right-side panel renders commit workflows as business phases rather than raw Git probe history.
+- Structured push approvals now probe upstream and ahead/behind divergence, then surface no-upstream, ahead, behind, diverged, up-to-date, or unknown readiness before approval.
+- Empty-message commit preparation now generates a deterministic commit message from staged diff paths after `git_add`, then creates a normal `git_commit` approval instead of falling back to planner continuation.
+- Structured branch checkout/create now probes current branch and branch inventory before approval, handles current-branch no-ops, creates tracking local branches for remote-only branches via `git_switch`, and blocks duplicate create-branch approvals.
+- The desktop right-side Progress panel now shows compact structured details for branch preflight summaries, push readiness summaries, branch names, and proposed commit messages.
+- Structured PR creation now probes source branch, working-tree status, latest commit subject, and Project Link ADO mapping before producing a high-risk `ado_create_pr` approval.
+- After confirmed `ado_create_pr`, the daemon now clears approval state, marks the workflow as `pr/created`, and emits a deterministic final result with next suggestions for PR insight, policy status, and work-item linking.
+- Structured PR follow-up actions now cover latest-active-PR fallback, deterministic PR insight summary, policy evaluation checks, linked work-item listing, high-risk approval before linking a work item, and deterministic post-link completion.
+- Structured Git workspace actions now detect unresolved merge/rebase/cherry-pick/revert state and return blocked `git` workflow phases instead of producing unsafe normal write approvals.
+- Structured rebase recovery actions now route through approval-backed `git_rebase` operations and right-panel controls instead of hidden prompt injection.
+- Structured merge, cherry-pick, and revert recovery actions now route through approval-backed Git tools and the same right-panel recovery controls.
+- Selected conflict-file staging now routes through a guarded `stage_resolved_conflicts` workflow action, producing path-scoped `git_add` approvals only for the active conflict set.
+- Production chat fallback no longer uses `git_intent_translator` to emit deterministic Git/PR step lists when the model is unavailable. It now reports that no Git/PR workflow was inferred or executed, and points the user to structured Conversation actions or model recovery.
+- The desktop right-panel commit menu no longer routes through a generic `commit_flow` frontend action. Commit, commit-and-push, and push now emit explicit `prepare_commit` / `push_branch` workflow requests, with Playwright coverage for the exact payloads.
+- Conversation PR insight, policy, and linked-work-item actions now have coverage proving the UI sends structured workflow actions without a manually typed PR ID, while the daemon resolves the latest active PR from Azure DevOps for read-only PR follow-ups.
 
 ## Suggested Implementation Order
 

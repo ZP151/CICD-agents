@@ -15,6 +15,7 @@
     "tui": "tsx packages/cli/src/bin.ts tui",
     "dev:daemon": "pnpm --filter @cicd-agent/daemon run dev",
     "dev:cli": "pnpm --filter @cicd-agent/cli run dev",
+    "e2e:chat": "playwright test tests/e2e/chat-layout.spec.ts",
     "format": "prettier --write \"packages/**/*.{ts,tsx,js,json,md}\"",
     "format:check": "prettier --check \"packages/**/*.{ts,tsx,js,json,md}\""
   },
@@ -24,13 +25,15 @@
     }
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/node": "^22.0.0",
-    "eslint": "^9.0.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "playwright": "^1.60.0",
     "prettier": "^3.3.0",
-    "typescript": "^5.5.0",
     "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
     "vitest": "^2.0.0"
   }
 }
