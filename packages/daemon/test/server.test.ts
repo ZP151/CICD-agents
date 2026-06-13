@@ -436,6 +436,166 @@ describe("daemon HTTP", () => {
     ]));
   });
 
+  it("uses focused rerun candidates from the latest matching validation artifact", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-validation-artifact-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "src.test.ts"), "test('demo', () => expect(true).toBe(false));\n", "utf8");
+    const sessionId = "session-focused-validation-rerun";
+    const storePath = path.join(getSettings().dataDir, "chat-history.json");
+    const store = fs.existsSync(storePath) ? JSON.parse(fs.readFileSync(storePath, "utf8")) as Record<string, unknown> : {};
+    store[sessionId] = {
+      id: sessionId,
+      createdAt: Date.now(),
+      repoPath: repo,
+      messages: [],
+      bubbles: [{
+        role: "assistant",
+        content: "Test validation failed.",
+        timestamp: Date.now(),
+        artifacts: [{
+          type: "artifact",
+          artifactId: "validation-test-failed-focused",
+          title: "Test failure report",
+          artifactType: "markdown",
+          status: "error",
+          content: [
+            "# Test Failure Report",
+            "",
+            "## Recovery Signals",
+            "- Framework: vitest",
+            "- Failing files: `src.test.ts`",
+            "- Candidate rerun: `npm test -- src.test.ts`",
+          ].join("\n"),
+        }],
+      }],
+    };
+    fs.mkdirSync(path.dirname(storePath), { recursive: true });
+    fs.writeFileSync(storePath, JSON.stringify(store, null, 2), "utf8");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "run_tests",
+        sessionId,
+        repoPath: repo,
+        profile: {
+          repoPath: repo,
+          defaultBranch: "main",
+          targetBranch: "main",
+          adoOrgUrl: "",
+          adoProject: "",
+          adoRepoName: "",
+          adoPat: "",
+          adoPipelineId: "",
+          adoPipelineName: "",
+          adoMcpEnabled: false,
+          adoMcpCommand: "",
+          adoMcpAuthentication: "",
+          adoMcpDomains: "repositories,pipelines,work-items",
+          buildCommand: "npm run build",
+          testCommand: "npm test",
+        },
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      workflowState: {
+        pendingApproval?: { action: { args: Record<string, unknown>; preflight?: Record<string, unknown> } };
+      };
+    };
+    expect(body.workflowState.pendingApproval?.action.args).toEqual({
+      command: "npm test -- src.test.ts",
+      kind: "test",
+    });
+    expect(body.workflowState.pendingApproval?.action.preflight).toMatchObject({
+      kind: "validation",
+      status: "ready",
+      validationKind: "test",
+      commandSource: "artifact",
+      command: "npm test -- src.test.ts",
+      selectionReason: "selected from the latest test failure artifact candidate rerun",
+      changedFiles: ["src.test.ts"],
+    });
+  });
+
+  it("ignores validation artifacts that do not match the requested validation kind", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-validation-artifact-kind-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "src.test.ts"), "test('demo', () => expect(true).toBe(false));\n", "utf8");
+    const sessionId = "session-validation-kind-mismatch";
+    const storePath = path.join(getSettings().dataDir, "chat-history.json");
+    const store = fs.existsSync(storePath) ? JSON.parse(fs.readFileSync(storePath, "utf8")) as Record<string, unknown> : {};
+    store[sessionId] = {
+      id: sessionId,
+      createdAt: Date.now(),
+      repoPath: repo,
+      messages: [],
+      bubbles: [{
+        role: "assistant",
+        content: "Test validation failed.",
+        timestamp: Date.now(),
+        artifacts: [{
+          type: "artifact",
+          artifactId: "validation-test-failed-focused",
+          title: "Test failure report",
+          artifactType: "markdown",
+          status: "error",
+          content: "- Candidate rerun: `npm test -- src.test.ts`",
+        }],
+      }],
+    };
+    fs.mkdirSync(path.dirname(storePath), { recursive: true });
+    fs.writeFileSync(storePath, JSON.stringify(store, null, 2), "utf8");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "run_build",
+        sessionId,
+        repoPath: repo,
+        profile: {
+          repoPath: repo,
+          defaultBranch: "main",
+          targetBranch: "main",
+          adoOrgUrl: "",
+          adoProject: "",
+          adoRepoName: "",
+          adoPat: "",
+          adoPipelineId: "",
+          adoPipelineName: "",
+          adoMcpEnabled: false,
+          adoMcpCommand: "",
+          adoMcpAuthentication: "",
+          adoMcpDomains: "repositories,pipelines,work-items",
+          buildCommand: "npm run build",
+          testCommand: "npm test",
+        },
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      workflowState: {
+        pendingApproval?: { action: { args: Record<string, unknown>; preflight?: Record<string, unknown> } };
+      };
+    };
+    expect(body.workflowState.pendingApproval?.action.args).toEqual({
+      command: "npm run build",
+      kind: "build",
+    });
+    expect(body.workflowState.pendingApproval?.action.preflight).toMatchObject({
+      kind: "validation",
+      validationKind: "build",
+      commandSource: "profile",
+      command: "npm run build",
+    });
+  });
+
   it("blocks normal commit workflow actions while a merge conflict is unresolved", async () => {
     app = await buildApp();
     const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-merge-conflict-"));

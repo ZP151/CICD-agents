@@ -10505,6 +10505,298 @@ Result:
 
 Next recommended task:
 
-- Feed the extracted recovery signals into the planner prompt with stronger
-  instruction priority so the agent can propose the smallest useful follow-up
-  action after a failed validation run.
+- Extend the same recovery guidance into frontend affordances and future
+  validation action derivation so failed validation can present focused rerun
+  options without relying on broad preset workflows.
+
+### 2026-06-13 Session Update 150
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Extracted validation recovery signals are now promoted into planner-priority
+  context for the next Conversation turn, instead of only being embedded in the
+  human-readable failure artifact.
+
+Completed:
+
+- Added a dedicated Validation Recovery Guidance block to validation follow-up
+  context.
+- The planner is now instructed to:
+  - inspect failing files, failing tests, and diagnostics first for analyze/fix
+    requests
+  - prefer candidate focused rerun commands for retry/rerun requests
+  - avoid repeating the exact failed command with the same arguments unless the
+    user explicitly asks for a full rerun or no focused candidate exists
+  - keep source edits and repository writes behind normal approval proposals
+- Added regression coverage so validation follow-up context must include the
+  planner-priority guidance and focused-rerun instruction.
+
+Files changed:
+
+- `packages/daemon/src/chatSession.ts`
+- `packages/daemon/test/chatSessionWorkflow.test.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+```
+
+Result:
+
+- Daemon chat session workflow tests passed: 25 tests.
+- Daemon typecheck passed.
+
+Next recommended task:
+
+- Extend focused validation recovery into the UI details and agent summaries so
+  users can see why a rerun command was selected from a previous failure.
+
+### 2026-06-13 Session Update 151
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Structured validation rerun actions now consume focused rerun candidates from
+  the latest matching validation failure artifact, instead of always falling
+  back to profile, derived, or default validation commands.
+
+Completed:
+
+- Added `artifact` as a validation command source in shared chat planner and
+  desktop approval evidence types.
+- Updated workspace workflow preflight so `run_tests` and `run_build`:
+  - inspect the current session for the latest matching failed validation
+    artifact
+  - extract the first `Candidate rerun` command from its Recovery Signals
+  - use that focused command as the approval proposal command
+  - fall back to the existing profile, derived, or default command path when no
+    matching artifact candidate exists
+- Added route-level daemon tests proving:
+  - `run_tests` uses a matching test failure artifact candidate rerun
+  - `run_build` ignores test failure artifacts and keeps the build command
+    source from the profile
+- Repaired local pnpm dependency links with a force install after Fastify's
+  `fast-json-stringify` dependency chain was missing AJV junctions.
+
+Files changed:
+
+- `packages/core/src/chatPlanner.ts`
+- `packages/daemon/src/server.ts`
+- `packages/daemon/test/server.test.ts`
+- `apps/desktop/src/components/conversation/ApprovalEvidence.tsx`
+- `apps/desktop/src/pages/Chat.tsx`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\.tools\pnpm.exe install --frozen-lockfile --force
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
+```
+
+Result:
+
+- Daemon server tests passed: 52 tests.
+- Daemon chat session workflow tests passed: 25 tests.
+- Core, daemon, and desktop typecheck passed.
+
+Next recommended task:
+
+- Continue toward PR/CI insight workflows that combine validation artifacts,
+  PR policy, work-item context, and review history in one Conversation path.
+
+### 2026-06-13 Session Update 152
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Artifact-sourced validation rerun approvals are now clearer in the UI, so
+  users can see that a rerun command came from the previous failure report
+  rather than from a generic profile/default command.
+
+Completed:
+
+- Updated validation approval evidence display so `commandSource: artifact`
+  renders as `failure artifact`.
+- Added frontend regression coverage for artifact-sourced validation approval
+  evidence.
+- Re-ran desktop typecheck after tightening the validation preflight union type.
+
+Files changed:
+
+- `apps/desktop/src/components/conversation/ApprovalEvidence.tsx`
+- `apps/desktop/src/components/conversation/ApprovalEvidence.test.tsx`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ApprovalEvidence.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+```
+
+Result:
+
+- Desktop ApprovalEvidence tests passed: 5 tests.
+- Desktop typecheck passed.
+
+Next recommended task:
+
+- Extend PR/CI readiness answers so saved PR AI insight artifacts, policy/work
+  item workflow results, and validation failure artifacts are summarized as one
+  readiness model instead of separate context sections.
+
+### 2026-06-13 Session Update 153
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- PR/CI readiness turns now receive recent validation failure context even when
+  the user asks in PR language rather than explicit test/build language.
+
+Completed:
+
+- Extended validation artifact context detection to include PR readiness,
+  approval, blocker, merge, CI, pipeline, policy, review queue, and linked work
+  item questions when they also mention a PR or pull request.
+- Added planner guidance for PR/CI readiness turns:
+  - combine validation failure artifacts with saved PR AI insight
+  - consider policy status, linked work items, builds, and review history before
+    recommending approval or merge readiness
+- Added regression coverage proving PR readiness questions inject the latest
+  validation failure artifact and preserve the combined readiness guidance.
+
+Files changed:
+
+- `packages/daemon/src/chatSession.ts`
+- `packages/daemon/test/chatSessionWorkflow.test.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+```
+
+Result:
+
+- Daemon chat session workflow tests passed: 26 tests.
+- Daemon typecheck passed.
+
+Next recommended task:
+
+- Carry the compact readiness context into visible Conversation metadata and
+  right-panel PR/CI progress so users can see which signals drove the answer.
+
+### 2026-06-13 Session Update 154
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Saved PR insight artifacts now provide a compact planner-facing readiness
+  summary before their detailed artifact history.
+
+Completed:
+
+- Added a `PR Readiness Context` section to saved PR insight context.
+- The compact section summarizes:
+  - readiness state
+  - decision queue, risk, and context confidence
+  - changed-file, thread, failed-build, and work-item signal counts
+  - blocking categories and top risks
+- Expanded saved PR insight context triggering to include readiness, policy,
+  work item, CI, and pipeline wording, not only direct "PR insight" phrasing.
+- Added regression coverage for:
+  - readiness summary formatting
+  - policy/readiness phrasing loading saved PR insight context
+
+Files changed:
+
+- `packages/daemon/src/chatSession.ts`
+- `packages/daemon/test/chatSessionCheckpoint.test.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+```
+
+Result:
+
+- Daemon chat session checkpoint tests passed: 11 tests.
+- Daemon typecheck passed.
+
+Next recommended task:
+
+- Continue right-panel PR/CI progress improvements so the Environment panel can
+  show readiness blockers and direct actions without relying only on chat chips.
+
+### 2026-06-13 Session Update 155
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Conversation follow-up suggestions now reflect PR/CI readiness blockers by
+  prioritizing validation recovery, policy checks, and linked work items.
+
+Completed:
+
+- Updated PR workflow suggestion derivation:
+  - normal PR context still suggests PR risks, policy status, and work items
+  - PR readiness/CI blocker context now suggests validation recovery first
+  - policy and work-item actions stay visible in the three-chip limit
+- Added frontend regression coverage for blocked PR readiness suggestions.
+
+Files changed:
+
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.tsx`
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+```
+
+Result:
+
+- Desktop SuggestionReplyBar tests passed: 32 tests.
+- Desktop typecheck passed.
+
+Next recommended task:
+
+- Surface the same PR/CI readiness blockers in the right-side workflow panel,
+  using the existing workflow state metadata instead of adding a separate
+  visualization surface.

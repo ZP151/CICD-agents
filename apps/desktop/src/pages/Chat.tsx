@@ -963,13 +963,13 @@ function MetaPanel({
 
 // ─── Workspace & Task Panel ───────────────────────────────────────────────────
 
-interface WorkflowStep {
+export interface WorkflowStep {
   label: string;
   done: boolean;
   active: boolean;
 }
 
-interface TaskState {
+export interface TaskState {
   goal: string;
   steps: WorkflowStep[];
   currentStepLabel: string;
@@ -1021,7 +1021,7 @@ interface ApprovalRequest {
           status: "ready" | "default_command" | "missing_command" | "unknown";
           validationKind: "test" | "build";
           command: string;
-          commandSource: "override" | "profile" | "derived" | "default";
+          commandSource: "override" | "profile" | "derived" | "default" | "artifact";
           changedFiles?: string[];
           changedFileCount?: number;
           selectedScript?: string;
@@ -1061,12 +1061,13 @@ interface ApprovalRequest {
   explanation: string;
 }
 
-interface WorkflowEventState {
+export interface WorkflowEventState {
   status: WorkflowStatus;
   currentStep: string;
   completedTools: string[];
   workflowKind?: "commit" | "git" | "ado" | "ci" | "pr";
   workflowPhase?: string;
+  workflowSummary?: string;
   authStatus?: "ok" | "oauth_unavailable" | "oauth_no_org_access" | "pat_invalid_or_missing_scope" | "unknown_error";
   authMode?: "oauth" | "pat";
   authMessage?: string;
@@ -2681,7 +2682,16 @@ function toolLabel(name: string): string {
   return labels[name] ?? name.replace(/_/g, " ");
 }
 
-function taskStateFromWorkflow(
+export function workflowStateWithActionSummary(
+  workflowState: WorkflowEventState | null | undefined,
+  summary?: string,
+): WorkflowEventState | null {
+  if (!workflowState) return null;
+  const clean = summary?.trim();
+  return clean ? { ...workflowState, workflowSummary: clean } : workflowState;
+}
+
+export function taskStateFromWorkflow(
   workflowState: WorkflowEventState | null,
   fallbackGoal: string | null,
 ): TaskState | null {
@@ -2732,6 +2742,7 @@ function taskStateFromPrWorkflow(
   const completed = new Set(workflowState.completedTools ?? []);
   const phase = workflowState.workflowPhase ?? "";
   const pendingTool = workflowState.pendingApproval?.action.tool;
+  const readinessSteps = prReadinessFollowUpSteps(workflowState, completed);
   const steps: WorkflowStep[] = phase === "inspected" || phase === "policy_checked" || phase === "work_items_listed"
     ? [
         {
@@ -2748,6 +2759,7 @@ function taskStateFromPrWorkflow(
           done: workflowState.status === "done",
           active: workflowState.status === "running",
         },
+        ...readinessSteps,
       ]
     : [
         {
@@ -2768,6 +2780,44 @@ function taskStateFromPrWorkflow(
     details: workflowDetailLines(workflowState),
     risk: workflowState.pendingApproval?.riskLevel,
   };
+}
+
+function prReadinessFollowUpSteps(workflowState: WorkflowEventState, completed: Set<string>): WorkflowStep[] {
+  const summary = `${workflowState.workflowSummary ?? ""}\n${workflowState.currentStep ?? ""}`;
+  const failedBuilds = numericSignal(summary, /(\d+)\s+failed\/canceled build/i);
+  const failedPolicies = numericSignal(summary, /(\d+)\s+failed\/error policy/i);
+  const linkedWorkItems = numericSignal(summary, /(\d+)\s+linked work item/i);
+  const lower = summary.toLowerCase();
+  const steps: WorkflowStep[] = [];
+  if ((failedBuilds ?? 0) > 0 || /\b(ci|build|test|validation).{0,40}\b(failed|blocked|failure)\b/.test(lower)) {
+    steps.push({
+      label: "Review CI blockers",
+      done: false,
+      active: true,
+    });
+  }
+  if ((failedPolicies ?? 0) > 0 || /\b(policy|policies).{0,40}\b(failed|blocked|blocking|error)\b/.test(lower)) {
+    steps.push({
+      label: "Check policy blockers",
+      done: completed.has("ado_list_pull_request_policy_evaluations"),
+      active: !completed.has("ado_list_pull_request_policy_evaluations"),
+    });
+  }
+  if (linkedWorkItems === 0 || /\bno linked work items?\b/.test(lower)) {
+    steps.push({
+      label: "Review work items",
+      done: completed.has("ado_list_pull_request_work_items"),
+      active: !completed.has("ado_list_pull_request_work_items"),
+    });
+  }
+  return steps.slice(0, 3);
+}
+
+function numericSignal(text: string, pattern: RegExp): number | undefined {
+  const match = text.match(pattern);
+  if (!match?.[1]) return undefined;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : undefined;
 }
 
 function taskStateFromCommitWorkflow(
@@ -2853,6 +2903,9 @@ function workflowDetailLines(workflowState: WorkflowEventState): string[] {
   }
   if (action?.preflight?.summary) lines.push(action.preflight.summary);
   if (action?.readiness?.summary) lines.push(action.readiness.summary);
+  if (workflowState.workflowKind === "pr" && workflowState.workflowSummary) {
+    lines.push(truncateMiddle(workflowState.workflowSummary, 160));
+  }
   if (action?.workflow?.branch) lines.push(`Branch: ${action.workflow.branch}`);
   if (action?.workflow?.message) lines.push(`Message: ${truncateMiddle(action.workflow.message, 90)}`);
   return lines.slice(0, 4);
@@ -4641,7 +4694,7 @@ export default function Chat({ mini = false }: ChatProps) {
         ...directWorkflow.input,
       });
       if (result.sessionId) setSessionId(result.sessionId);
-      setWorkflowState(result.workflowState ?? null);
+      setWorkflowState(workflowStateWithActionSummary(result.workflowState ?? null, result.summary));
       setBubbles((prev) => [
         ...prev,
         ...result.tools.map((tool) => {

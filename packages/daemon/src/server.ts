@@ -709,13 +709,14 @@ async function runWorkspaceWorkflowAction(
     };
   }
 
+  const preflight = failed ? undefined : await preflightFromTools(chatSessions, action, payload, tools, statusText);
   const proposal = failed ? undefined : buildWorkspaceWorkflowProposal(
     action,
     payload,
     currentBranch,
     statusText,
     pushReadinessFromTools(tools),
-    preflightFromTools(action, payload, tools, statusText),
+    preflight,
     operationState,
   );
   if (proposal) {
@@ -1287,12 +1288,13 @@ function buildWorkspaceWorkflowProposal(
   return undefined;
 }
 
-function preflightFromTools(
+async function preflightFromTools(
+  chatSessions: ChatSessionManager,
   action: z.infer<typeof ChatWorkflowActionSchema>["action"],
   payload: z.infer<typeof ChatWorkflowActionSchema>,
   tools: Array<Awaited<ReturnType<typeof runGitProbe>> & { name: string }>,
   statusText: string,
-): PendingToolAction["preflight"] | undefined {
+): Promise<PendingToolAction["preflight"] | undefined> {
   if (action === "checkout_branch" || action === "create_branch") return branchPreflightFromTools(action, payload, tools);
   if (action === "create_pr") {
     const currentBranch = tools.find((tool) => tool.name === "git_current_branch")?.stdout.trim() ?? "";
@@ -1305,7 +1307,9 @@ function preflightFromTools(
       tools.find((tool) => tool.name === "git_diff_name_only")?.stdout ?? "",
       statusText,
     );
-    return validationPreflightFromPayload(payload, action === "run_build" ? "build" : "test", changedFiles);
+    const kind = action === "run_build" ? "build" : "test";
+    return await focusedValidationPreflightFromSession(chatSessions, payload, kind, changedFiles)
+      ?? validationPreflightFromPayload(payload, kind, changedFiles);
   }
   return undefined;
 }
@@ -1475,6 +1479,50 @@ function selectValidationScriptName(kind: "test" | "build", scripts: Record<stri
 
 function normalizeRelativePath(value: string): string {
   return value.replace(/\\/g, "/");
+}
+
+async function focusedValidationPreflightFromSession(
+  chatSessions: ChatSessionManager,
+  payload: z.infer<typeof ChatWorkflowActionSchema>,
+  kind: "test" | "build",
+  changedFiles: string[],
+): Promise<ValidationPreflight | undefined> {
+  if (!payload.sessionId) return undefined;
+  const bubbles = await chatSessions.getBubbles(payload.sessionId).catch(() => []);
+  const artifact = [...bubbles]
+    .reverse()
+    .flatMap((bubble) => bubble.role === "assistant" ? bubble.artifacts ?? [] : [])
+    .find((item) =>
+      item.status === "error" &&
+      item.artifactType === "markdown" &&
+      item.artifactId.startsWith(`validation-${kind}-failed-`)
+    );
+  const command = extractValidationCandidateRerunCommand(artifact?.content ?? "");
+  if (!command) return undefined;
+  const changedSummary = changedFiles.length > 0
+    ? ` Changed files considered: ${changedFiles.slice(0, 8).join(", ")}${changedFiles.length > 8 ? ", ..." : ""}.`
+    : " No unstaged working-tree file list was detected.";
+  return {
+    kind: "validation",
+    status: "ready",
+    validationKind: kind,
+    command,
+    commandSource: "artifact",
+    changedFiles: changedFiles.slice(0, 20),
+    changedFileCount: changedFiles.length,
+    selectionReason: `selected from the latest ${kind} failure artifact candidate rerun`,
+    summary: `Validation command selected from latest ${kind} failure artifact: ${command}. Focused rerun candidate from previous validation failure.${changedSummary}`,
+  };
+}
+
+function extractValidationCandidateRerunCommand(content: string): string {
+  const line = content
+    .split(/\r?\n/)
+    .find((entry) => /^-\s*Candidate rerun:/i.test(entry.trim()));
+  if (!line) return "";
+  const code = line.match(/`([^`]+)`/);
+  if (code?.[1]?.trim()) return code[1].trim();
+  return line.replace(/^-\s*Candidate rerun:\s*/i, "").split(",")[0]?.trim() ?? "";
 }
 
 function validationPreflightFromPayload(

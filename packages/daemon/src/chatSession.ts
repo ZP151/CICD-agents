@@ -1361,12 +1361,16 @@ export function extractPrInsightArtifactIdFromMessage(message: string): string |
 }
 
 function wantsPrInsightContext(message: string): boolean {
-  return /\b(pr|pull request|review|insight|finding|risk|approval|approve|blocked|artifact)\b/i.test(message);
+  return /\b(pr|pull request|review|insight|finding|risk|approval|approve|blocked|artifact|readiness|ready|policy|policies|work item|workitem|ci|pipeline)\b/i.test(message);
 }
 
 export function formatPrInsightArtifactsForChat(artifacts: PrInsightArtifactRecord[]): string | undefined {
   if (artifacts.length === 0) return undefined;
   const lines = [
+    "\n## PR Readiness Context",
+    "Use this compact readiness context together with validation artifacts, policy/work item workflow results, and live ADO tools when the user asks if a PR is ready.",
+    ...prReadinessContextLines(artifacts),
+    "",
     "\n## Saved PR AI Insights",
     "Use these saved AI conclusions as context. Do not rerun analysis unless the user asks for a fresh result.",
   ];
@@ -1400,6 +1404,30 @@ export function formatPrInsightArtifactsForChat(artifacts: PrInsightArtifactReco
   return lines.join("\n");
 }
 
+function prReadinessContextLines(artifacts: PrInsightArtifactRecord[]): string[] {
+  return artifacts.slice(0, 3).map((artifact) => {
+    const signals = artifact.signals
+      ? `files=${artifact.signals.fileCount}, threads=${artifact.signals.threadCount}, failedBuilds=${artifact.signals.failedBuildCount}, workItems=${artifact.signals.workItemCount}`
+      : "signals=not saved";
+    const decision = [
+      artifact.decisionQueue ? `queue=${artifact.decisionQueue}` : "",
+      artifact.decisionRiskLevel ? `risk=${artifact.decisionRiskLevel}` : "",
+      artifact.contextConfidence ? `confidence=${artifact.contextConfidence}` : "",
+    ].filter(Boolean).join(", ");
+    const blockers = [
+      ...(artifact.categories?.blocking ?? []),
+      ...artifact.risks.slice(0, 3),
+    ].slice(0, 4);
+    return [
+      `- PR #${artifact.pullRequestId}: readiness=${artifact.readiness ?? "unknown"}`,
+      decision ? `; ${decision}` : "",
+      `; ${signals}`,
+      blockers.length ? `; blockers/risks=${blockers.join(" | ")}` : "",
+      `.`,
+    ].join("");
+  });
+}
+
 export function formatValidationArtifactsForChat(
   bubbles: Array<{ role: string; artifacts?: ChatPlannerResult["artifacts"] }>,
   message: string,
@@ -1416,6 +1444,14 @@ export function formatValidationArtifactsForChat(
   if (!latest) return undefined;
 
   const lines = [
+    "\n## Validation Recovery Guidance",
+    "Planner priority: use the Recovery Signals from the latest failed validation before choosing any follow-up action.",
+    "- For analyze/fix requests: inspect the listed failing files, failing tests, and diagnostics first with read-only tools before proposing changes.",
+    "- For retry/rerun requests: prefer the listed Candidate rerun command or an equivalent focused validation action over a broad full-suite rerun.",
+    "- For PR/CI readiness requests: combine this validation failure with saved PR AI insights, policy status, linked work items, builds, and review history before recommending approval or merge readiness.",
+    "- Do not repeat the exact failed command with the same arguments unless no focused candidate exists or the user explicitly asks for the full command.",
+    "- Keep source edits, staging, commits, pushes, pipeline triggers, and other write actions behind the normal approval_proposal flow.",
+    "",
     "\n## Latest Validation Failure Artifact",
     "Use this saved validation artifact as context before suggesting fixes or reruns. Do not rerun validation unless the user explicitly asks for a rerun or chooses a rerun action.",
     `- Artifact id: ${latest.artifactId}`,
@@ -1428,7 +1464,15 @@ export function formatValidationArtifactsForChat(
 }
 
 function wantsValidationArtifactContext(message: string): boolean {
-  return /\b(validation|test|tests|build|failure|failed|failing|error|rerun|re-run|retry|fix|analyze|analyse)\b/i.test(message);
+  const validationIntent = /\b(validation|test|tests|build|failure|failed|failing|error|rerun|re-run|retry|fix|analyze|analyse)\b/i;
+  if (validationIntent.test(message)) return true;
+  return wantsPrCiReadinessContext(message);
+}
+
+function wantsPrCiReadinessContext(message: string): boolean {
+  const readinessSignal = /\b(readiness|ready|approval|approve|blocked|blocker|merge|policy|policies|ci|pipeline|work item|workitem|review queue)\b/i;
+  const prSignal = /\b(pr|pull request)\b/i;
+  return prSignal.test(message) && readinessSignal.test(message);
 }
 
 export interface PrInsightContextBundle {

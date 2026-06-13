@@ -128,6 +128,23 @@ describe("deriveSuggestionReplies", () => {
     ]);
   });
 
+  it("prioritizes validation, policy, and work items for PR CI readiness blockers", () => {
+    const suggestions = deriveSuggestionReplies({
+      workflowKind: "pr",
+      workflowPhase: "inspected",
+      lastAssistantText: "PR readiness is blocked by failed CI validation and a required policy.",
+    });
+
+    expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
+      "Validation recovery",
+      "Policy status",
+      "Work items",
+    ]);
+    expect(suggestions[0]?.action).toEqual({ kind: "fill_composer" });
+    expect(suggestions[1]?.action).toEqual({ kind: "workspace_action", action: "check_pr_policy" });
+    expect(suggestions[2]?.action).toEqual({ kind: "workspace_action", action: "list_pr_work_items" });
+  });
+
   it("suggests validation recovery actions after a failed test workflow", () => {
     const suggestions = deriveSuggestionReplies({
       workflowKind: "ci",

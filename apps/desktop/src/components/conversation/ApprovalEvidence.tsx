@@ -61,7 +61,7 @@ export type ApprovalPreflightEvidence =
       status: "ready" | "default_command" | "missing_command" | "unknown";
       validationKind: "test" | "build";
       command: string;
-      commandSource: "override" | "profile" | "derived" | "default";
+      commandSource: "override" | "profile" | "derived" | "default" | "artifact";
       changedFiles?: string[];
       changedFileCount?: number;
       selectedScript?: string;
@@ -153,7 +153,7 @@ export function ApprovalEvidence({
 function approvalPreflightRows(preflight?: ApprovalPreflightEvidence): Array<{ label: string; value: string }> {
   if (!preflight || preflight.kind !== "validation") return [];
   const rows: Array<{ label: string; value: string }> = [
-    { label: "Source", value: preflight.commandSource },
+    { label: "Source", value: validationCommandSourceLabel(preflight.commandSource) },
   ];
   if (preflight.selectedScript) rows.push({ label: "Script", value: preflight.selectedScript });
   if (preflight.packageFilters?.length) rows.push({ label: "Filters", value: preflight.packageFilters.join(", ") });
@@ -161,6 +161,11 @@ function approvalPreflightRows(preflight?: ApprovalPreflightEvidence): Array<{ l
   if (typeof preflight.changedFileCount === "number") rows.push({ label: "Changed", value: `${preflight.changedFileCount} file${preflight.changedFileCount === 1 ? "" : "s"}` });
   if (preflight.selectionReason) rows.push({ label: "Reason", value: preflight.selectionReason });
   return rows;
+}
+
+function validationCommandSourceLabel(source: Extract<ApprovalPreflightEvidence, { kind: "validation" }>["commandSource"]): string {
+  if (source === "artifact") return "failure artifact";
+  return source;
 }
 
 function EvidenceNote({ label, text }: { label: string; text: string }) {

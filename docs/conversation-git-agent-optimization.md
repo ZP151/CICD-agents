@@ -148,6 +148,7 @@ Current implemented strengths:
 - The core Git tool surface now covers status, diff, log, show, fetch, merge-base, branch listing, switch/checkout, pull, merge, rebase, restore, add, commit, push, stash, checkpoints, and checkpoint apply.
 - The planner prompt now explicitly requires structured Git arguments and path-aware `git_add` calls.
 - Azure DevOps PR insight has internalized PR details, threads, file changes, builds, work items, and policy evaluations.
+- Saved PR insight artifacts now expose a compact `PR Readiness Context` for planner prompts, including readiness, decision queue, risk, context confidence, file/thread/build/work-item counts, blocking categories, and top risks.
 - Project Link setup can infer Azure DevOps mapping from git remotes and can discover ADO projects, repositories, and pipelines.
 - Right-panel Git controls for inspect, branch, push, and commit preparation now enter structured workflow actions instead of inserting hidden natural-language chat prompts.
 - Structured push approvals now include upstream and ahead/behind readiness metadata before the user confirms `git_push`.
@@ -157,13 +158,14 @@ Current implemented strengths:
 - PR creation now has a first-class structured workflow action that creates an `ado_create_pr` approval proposal with Project Link and dirty-worktree preflight.
 - Confirmed PR creation now completes as structured `pr/created` workflow state and returns deterministic next-step suggestions instead of asking the planner to infer continuation.
 - PR follow-up now has first-class structured workflow actions for insight, policy status, linked work items, and work-item linking approval.
+- PR/CI readiness follow-up suggestions now prioritize validation recovery, policy status, and linked work items when saved insight or assistant output indicates CI/readiness blockers.
 - PR follow-up workflow failures now preserve missing Project Link mapping and Azure DevOps auth diagnostics as structured Conversation workflow state instead of collapsing to generic 500-style errors.
 - Test/build validation now has a first structured Conversation workflow path: command chips and welcome suggestions can create a `validation_command` approval backed by the Project Link validation command, with CI workflow state instead of sending a hidden chat prompt.
 - Validation approval proposals now carry command-source metadata and changed-file preflight context, and failed validation runs return a concise failure excerpt for deterministic Conversation follow-up.
 - When no explicit Project Link validation command is configured, validation preflight can derive focused package commands from changed files' nearest `package.json` files, including multi-package pnpm workspace filters when all touched packages share the same validation script.
 - Validation approval cards now render structured scope evidence: command source, selected script, package filters, package roots, changed-file count, and the selection reason.
 - Failed validation confirmations now also generate selectable markdown Conversation artifacts with command, package scope, key output, stdout/stderr excerpts, and an error status for the Result workspace.
-- Validation failure artifacts now feed the next recovery turn when the user asks to analyze, fix, retry, or rerun validation, CI failure suggestion chips offer analyze failure, rerun tests/build, and review changes actions, and failed validation artifacts include initial Vitest/Jest, pytest, and dotnet recovery signals.
+- Validation failure artifacts now feed the next recovery turn when the user asks to analyze, fix, retry, rerun validation, or reason about PR/CI readiness, CI failure suggestion chips offer analyze failure, rerun tests/build, and review changes actions, failed validation artifacts include initial Vitest/Jest, pytest, and dotnet recovery signals, the planner receives priority guidance to use those signals before broad reruns, and structured validation rerun actions consume matching artifact `Candidate rerun` commands when available.
 - Workspace workflow actions now detect unresolved merge/rebase-style Git operation states and block normal commit, push, branch switch, and PR creation approvals while conflicts are unresolved.
 - Rebase recovery now has first-class structured workflow actions for continue, abort, and skip. These create exact `git_rebase` approval proposals only when a rebase is actually in progress and complete with deterministic `git` workflow state after confirmation.
 - Merge, cherry-pick, and revert recovery now use the same structured approval model through `git_merge`, `git_cherry_pick`, and `git_revert` recovery actions.
@@ -175,8 +177,8 @@ Remaining shortfalls:
 - The right panel exposes useful branch/commit/PR follow-up controls and compact workflow metadata, but branch readiness and richer PR artifact rendering are not yet dedicated workspaces.
 - PR creation and first PR follow-ups have durable structured actions and clearer failure states, but richer PR insight artifact rendering still needs a dedicated Conversation workspace.
 - There is no single source of truth for all Chat agent responsibilities unless the use-case catalog is kept in sync with tests and docs.
-- Test/build execution now has an initial dedicated validation workflow state, command-source preflight, changed-file context, single-package and compatible multi-package command derivation, UI-visible selection evidence, failure excerpts, selectable failure artifacts, recovery-turn artifact context, CI failure follow-up suggestions, and initial framework-specific recovery signals, but still needs planner-level use of those signals to pick the smallest safe next action.
-- PR insight and CI/CD actions are powerful but not yet presented as a unified “analyze this PR / validate this branch / prepare release” conversation workflow.
+- Test/build execution now has an initial dedicated validation workflow state, command-source preflight, changed-file context, single-package and compatible multi-package command derivation, UI-visible selection evidence, failure excerpts, selectable failure artifacts, recovery-turn artifact context, CI failure follow-up suggestions, initial framework-specific recovery signals, planner-priority recovery guidance, focused artifact rerun command selection, and visible `failure artifact` source labels for artifact-sourced reruns.
+- PR insight and CI/CD actions now share readiness context through saved PR insight compact summaries, validation artifacts, and readiness-aware follow-up suggestions, but right-panel progress still needs to expose which readiness signals drove the answer.
 - Conflict recovery still needs a dedicated desktop conflict-file picker and deeper conflicted-repository coverage for cherry-pick and revert operations.
 
 ## Chat Agent Use-Case Matrix

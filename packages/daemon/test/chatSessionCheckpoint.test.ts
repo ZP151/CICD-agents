@@ -80,6 +80,17 @@ describe("chat session Git checkpoints", () => {
       decisionRiskLevel: "medium",
       contextConfidence: "high",
       risks: ["Missing tests"],
+      categories: {
+        blocking: ["Required policy failed"],
+        warnings: [],
+        info: [],
+      },
+      signals: {
+        fileCount: 4,
+        threadCount: 1,
+        failedBuildCount: 1,
+        workItemCount: 0,
+      },
       findingCount: 2,
       discardedFindingCount: 1,
       tokensIn: 1000,
@@ -87,6 +98,11 @@ describe("chat session Git checkpoints", () => {
     }]);
 
     expect(prompt).toContain("## Saved PR AI Insights");
+    expect(prompt).toContain("## PR Readiness Context");
+    expect(prompt).toContain("readiness=needs_attention");
+    expect(prompt).toContain("failedBuilds=1");
+    expect(prompt).toContain("workItems=0");
+    expect(prompt).toContain("Required policy failed");
     expect(prompt).toContain("Do not rerun analysis unless the user asks for a fresh result");
     expect(prompt).toContain("Artifact id: profile-1/demo/42/review_run");
     expect(prompt).toContain("PR #42");
@@ -145,6 +161,45 @@ describe("chat session Git checkpoints", () => {
       repository: "demo",
       message: "Hello there",
     })).toBeUndefined();
+  });
+
+  it("builds PR readiness context from readiness and policy wording", () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-pr-readiness-data-"));
+    upsertLocalPrInsightArtifact(dataDir, {
+      profileId: "profile-1",
+      repository: "demo",
+      pullRequestId: 42,
+      title: "Improve pipeline",
+      kind: "review_run",
+      at: "2026-06-11T00:10:00.000Z",
+      summary: "Saved readiness summary.",
+      readiness: "blocked",
+      decisionQueue: "blocked",
+      decisionRiskLevel: "high",
+      contextConfidence: "high",
+      risks: ["Failed CI"],
+      signals: {
+        fileCount: 2,
+        threadCount: 0,
+        failedBuildCount: 1,
+        workItemCount: 1,
+      },
+      tokensIn: 1000,
+      tokensOut: 300,
+    });
+
+    const prompt = buildPrInsightContextPrompt({
+      dataDir,
+      profileId: "profile-1",
+      repository: "demo",
+      message: "Is this ready for approval or blocked by policy?",
+    });
+
+    expect(prompt).toContain("## PR Readiness Context");
+    expect(prompt).toContain("readiness=blocked");
+    expect(prompt).toContain("queue=blocked");
+    expect(prompt).toContain("failedBuilds=1");
+    expect(prompt).toContain("Failed CI");
   });
 
   it("returns precise saved PR insight artifact notes for chat metadata", () => {

@@ -386,18 +386,35 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
   }
 
   if (context.workflowKind === "pr") {
-    add("pr-risks", "PR risks", "Summarize the main PR risks and what evidence supports them.", {
-      kind: "workspace_action",
-      action: "inspect_pr_insight",
-    });
-    add("pr-policy", "Policy status", "Check pull request policy status.", {
-      kind: "workspace_action",
-      action: "check_pr_policy",
-    });
-    add("pr-work-items", "Work items", "List linked work items for this pull request.", {
-      kind: "workspace_action",
-      action: "list_pr_work_items",
-    });
+    const hasCiReadinessBlocker = /\b(ci|build|test|validation|failed|failure|blocked|blocker|readiness|ready|policy)\b/.test(text);
+    if (hasCiReadinessBlocker) {
+      add(
+        "pr-validation-recovery",
+        "Validation recovery",
+        "Analyze validation failure context together with PR readiness, policy, and linked work items.",
+      );
+      add("pr-policy", "Policy status", "Check pull request policy status.", {
+        kind: "workspace_action",
+        action: "check_pr_policy",
+      });
+      add("pr-work-items", "Work items", "List linked work items for this pull request.", {
+        kind: "workspace_action",
+        action: "list_pr_work_items",
+      });
+    } else {
+      add("pr-risks", "PR risks", "Summarize the main PR risks and what evidence supports them.", {
+        kind: "workspace_action",
+        action: "inspect_pr_insight",
+      });
+      add("pr-policy", "Policy status", "Check pull request policy status.", {
+        kind: "workspace_action",
+        action: "check_pr_policy",
+      });
+      add("pr-work-items", "Work items", "List linked work items for this pull request.", {
+        kind: "workspace_action",
+        action: "list_pr_work_items",
+      });
+    }
   }
 
   if (

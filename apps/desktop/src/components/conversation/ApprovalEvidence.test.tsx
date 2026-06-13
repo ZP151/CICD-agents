@@ -124,4 +124,32 @@ describe("ApprovalEvidence", () => {
     expect(html).toContain("derived from 2 changed packages using script test");
     expect(html).toContain("configured test validation command");
   });
+
+  it("labels artifact-sourced validation commands as failure artifacts", () => {
+    const html = renderToStaticMarkup(
+      <ApprovalEvidence
+        toolName="validation_command"
+        args={{
+          command: "npm test -- src.test.ts",
+          kind: "test",
+        }}
+        workflow={{ kind: "ci", phase: "test" }}
+        preflight={{
+          kind: "validation",
+          status: "ready",
+          validationKind: "test",
+          command: "npm test -- src.test.ts",
+          commandSource: "artifact",
+          changedFileCount: 1,
+          changedFiles: ["src.test.ts"],
+          selectionReason: "selected from the latest test failure artifact candidate rerun",
+          summary: "Validation command selected from latest test failure artifact.",
+        }}
+      />,
+    );
+
+    expect(html).toContain("Source");
+    expect(html).toContain("failure artifact");
+    expect(html).toContain("selected from the latest test failure artifact candidate rerun");
+  });
 });

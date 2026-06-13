@@ -55,7 +55,7 @@ export interface PendingToolAction {
         status: "ready" | "default_command" | "missing_command" | "unknown";
         validationKind: "test" | "build";
         command: string;
-        commandSource: "override" | "profile" | "derived" | "default";
+        commandSource: "override" | "profile" | "derived" | "default" | "artifact";
         changedFiles?: string[];
         changedFileCount?: number;
         selectedScript?: string;

@@ -275,9 +275,34 @@ describe("chat session workflow action derivation", () => {
     );
 
     expect(prompt).toContain("Latest Validation Failure Artifact");
+    expect(prompt).toContain("Validation Recovery Guidance");
+    expect(prompt).toContain("Planner priority: use the Recovery Signals");
+    expect(prompt).toContain("prefer the listed Candidate rerun command");
     expect(prompt).toContain("validation-test-failed-new");
     expect(prompt).toContain("FAIL src/app.test.ts");
     expect(prompt).not.toContain("old output");
+  });
+
+  it("injects validation artifacts for PR CI readiness turns", () => {
+    const prompt = formatValidationArtifactsForChat(
+      [{
+        role: "assistant",
+        artifacts: [{
+          type: "artifact",
+          artifactId: "validation-test-failed-ci",
+          title: "Test failure report",
+          artifactType: "markdown",
+          status: "error",
+          content: "# Test Failure Report\n- Candidate rerun: `npm test -- src.test.ts`",
+        }],
+      }],
+      "Is PR #42 ready for approval, or is it blocked by CI policy and work items?",
+    );
+
+    expect(prompt).toContain("Latest Validation Failure Artifact");
+    expect(prompt).toContain("PR/CI readiness requests");
+    expect(prompt).toContain("policy status, linked work items");
+    expect(prompt).toContain("npm test -- src.test.ts");
   });
 
   it("does not inject validation failure artifacts into unrelated turns", () => {
