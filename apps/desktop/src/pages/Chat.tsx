@@ -967,6 +967,7 @@ export interface WorkflowStep {
   label: string;
   done: boolean;
   active: boolean;
+  action?: WorkspaceAction;
 }
 
 export interface TaskState {
@@ -2130,7 +2131,21 @@ function WorkspacePanel({
                         ? busy ? "border-blue-500 bg-blue-500/20" : "border-amber-500 bg-amber-500/20"
                         : "border-[rgb(var(--app-border))]"
                   }`} />
-                  <span className={step.done ? "text-[rgb(var(--app-text-subtle))] line-through" : ""}>{step.label}</span>
+                  {step.action ? (
+                    <button
+                      type="button"
+                      onClick={() => runAction(step.action!)}
+                      disabled={busy}
+                      className={`min-w-0 text-left transition hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50 ${
+                        step.done ? "text-[rgb(var(--app-text-subtle))] line-through" : "underline decoration-dotted underline-offset-2"
+                      }`}
+                      title={`Run ${step.label.toLowerCase()}`}
+                    >
+                      {step.label}
+                    </button>
+                  ) : (
+                    <span className={step.done ? "text-[rgb(var(--app-text-subtle))] line-through" : ""}>{step.label}</span>
+                  )}
                 </div>
               ))}
               {taskState.details && taskState.details.length > 0 && (
@@ -2794,6 +2809,7 @@ function prReadinessFollowUpSteps(workflowState: WorkflowEventState, completed: 
       label: "Review CI blockers",
       done: false,
       active: true,
+      action: { type: "run_tests" },
     });
   }
   if ((failedPolicies ?? 0) > 0 || /\b(policy|policies).{0,40}\b(failed|blocked|blocking|error)\b/.test(lower)) {
@@ -2801,6 +2817,7 @@ function prReadinessFollowUpSteps(workflowState: WorkflowEventState, completed: 
       label: "Check policy blockers",
       done: completed.has("ado_list_pull_request_policy_evaluations"),
       active: !completed.has("ado_list_pull_request_policy_evaluations"),
+      action: { type: "check_pr_policy" },
     });
   }
   if (linkedWorkItems === 0 || /\bno linked work items?\b/.test(lower)) {
@@ -2808,6 +2825,7 @@ function prReadinessFollowUpSteps(workflowState: WorkflowEventState, completed: 
       label: "Review work items",
       done: completed.has("ado_list_pull_request_work_items"),
       active: !completed.has("ado_list_pull_request_work_items"),
+      action: { type: "list_pr_work_items" },
     });
   }
   return steps.slice(0, 3);

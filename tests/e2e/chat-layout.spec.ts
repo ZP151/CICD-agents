@@ -635,13 +635,15 @@ test.describe("Chat layout", () => {
           ok: true,
           action: payload.action,
           repoPath: payload.repoPath,
-          summary: `${payload.action} complete for latest active PR`,
+          summary: payload.action === "inspect_pr_insight"
+            ? "Readiness: blocked. 4 changed file(s), 1 active thread(s), 1 failed/canceled build(s), 2 failed/error policy evaluation(s), 0 linked work item(s). Info: no linked work items were found."
+            : `${payload.action} complete for latest active PR`,
           workflowState: {
             status: "done",
             workflowKind: "pr",
             workflowPhase: payload.action === "check_pr_policy" ? "policy_checked" : payload.action === "list_pr_work_items" ? "work_items_listed" : "inspected",
             currentStep: `${payload.action} complete`,
-            completedTools: [],
+            completedTools: payload.action === "inspect_pr_insight" ? ["ado_get_pull_request_by_id"] : [],
           },
           tools: [],
         }),
@@ -656,16 +658,23 @@ test.describe("Chat layout", () => {
     expect(workflowPayloads[0]).toMatchObject({ action: "inspect_pr_insight" });
     expect(workflowPayloads[0]).not.toHaveProperty("pullRequestId");
 
-    await page.getByTitle("Check Azure DevOps pull request policy status.").click();
-    await expect.poll(() => workflowPayloads.length).toBe(2);
-    expect(workflowPayloads[1]).toMatchObject({ action: "check_pr_policy" });
-    expect(workflowPayloads[1]).not.toHaveProperty("pullRequestId");
-
     await page.getByTitle("Expand context panel").click();
-    await page.getByTitle("List linked work items for the latest active pull request").click();
+    await expect(page.getByRole("button", { name: "Review CI blockers" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Check policy blockers" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Review work items" })).toBeVisible();
+    await page.getByRole("button", { name: "Review CI blockers" }).click();
+    await expect.poll(() => workflowPayloads.length).toBe(2);
+    expect(workflowPayloads[1]).toMatchObject({ action: "run_tests" });
+
+    await page.getByTitle("Check Azure DevOps pull request policy status.").click();
     await expect.poll(() => workflowPayloads.length).toBe(3);
-    expect(workflowPayloads[2]).toMatchObject({ action: "list_pr_work_items" });
+    expect(workflowPayloads[2]).toMatchObject({ action: "check_pr_policy" });
     expect(workflowPayloads[2]).not.toHaveProperty("pullRequestId");
+
+    await page.getByTitle("List linked work items for the latest active pull request").click();
+    await expect.poll(() => workflowPayloads.length).toBe(4);
+    expect(workflowPayloads[3]).toMatchObject({ action: "list_pr_work_items" });
+    expect(workflowPayloads[3]).not.toHaveProperty("pullRequestId");
     await expectNoVisibleHorizontalOverflow(page);
   });
 

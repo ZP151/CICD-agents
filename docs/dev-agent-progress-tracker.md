@@ -10797,6 +10797,144 @@ Result:
 
 Next recommended task:
 
-- Surface the same PR/CI readiness blockers in the right-side workflow panel,
-  using the existing workflow state metadata instead of adding a separate
-  visualization surface.
+- Continue tightening Conversation UI around PR/CI readiness by connecting
+  right-panel blocker steps to direct actions where possible.
+
+### 2026-06-13 Session Update 156
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- The right-side workflow panel can now surface PR/CI readiness blockers from
+  direct workflow action summaries.
+
+Completed:
+
+- Added a local `workflowSummary` field for frontend workflow state derived from
+  direct workflow action responses.
+- Added PR workflow panel logic that detects:
+  - failed/canceled builds or validation failure wording
+  - failed/error policy evaluations
+  - missing linked work items
+- The PR workflow panel now adds focused progress steps such as:
+  - `Review CI blockers`
+  - `Check policy blockers`
+  - `Review work items`
+- Added focused frontend tests for PR readiness blocker panel steps and the
+  normal PR policy flow.
+
+Files changed:
+
+- `apps/desktop/src/pages/Chat.tsx`
+- `apps/desktop/src/pages/ChatWorkflowState.test.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/pages/ChatWorkflowState.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+```
+
+Result:
+
+- Desktop ChatWorkflowState tests passed: 2 tests.
+- Desktop typecheck passed.
+
+Next recommended task:
+
+- Continue hardening right-panel PR/CI action wiring with visual verification
+  against the running desktop UI.
+
+### 2026-06-13 Session Update 157
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Right-panel PR readiness blocker steps now carry direct workspace actions.
+
+Completed:
+
+- Added optional actions to right-panel workflow steps.
+- Wired PR readiness blocker steps to existing workspace actions:
+  - `Review CI blockers` -> `run_tests`
+  - `Check policy blockers` -> `check_pr_policy`
+  - `Review work items` -> `list_pr_work_items`
+- Rendered actionable progress steps as clickable text buttons, disabled while
+  a workflow is busy.
+- Extended Chat workflow state tests to prove blocker steps expose the expected
+  actions.
+
+Files changed:
+
+- `apps/desktop/src/pages/Chat.tsx`
+- `apps/desktop/src/pages/ChatWorkflowState.test.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/pages/ChatWorkflowState.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+```
+
+Result:
+
+- Desktop ChatWorkflowState tests passed: 2 tests.
+- Desktop typecheck passed.
+
+Next recommended task:
+
+- Continue PR/CI readiness hardening by adding richer metadata from live policy,
+  work-item, and validation results into saved/readable artifacts.
+
+### 2026-06-13 Session Update 158
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Right-panel PR readiness blocker actions have browser-level coverage.
+
+Completed:
+
+- Extended the existing Chat layout Playwright spec so a blocked PR insight
+  response displays right-panel blocker steps.
+- Verified the blocker steps route to structured workspace actions:
+  - `Review CI blockers` sends `run_tests`
+  - existing PR policy and work-item controls still send `check_pr_policy` and
+    `list_pr_work_items` without requiring a typed PR id
+- Re-ran related frontend unit tests and layout overflow checks.
+
+Files changed:
+
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "routes PR insight controls" --project=chromium
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/pages/ChatWorkflowState.test.ts src/components/conversation/SuggestionReplyBar.test.tsx
+git diff --check
+```
+
+Result:
+
+- Playwright PR insight/right-panel smoke passed: 1 test.
+- Desktop focused tests passed: 34 tests.
+- `git diff --check` passed with CRLF warnings only.
+
+Next recommended task:
+
+- Add richer PR readiness metadata to artifacts or workflow summaries so future
+  Conversation turns can cite exact policy/work-item/validation blockers more
+  precisely.

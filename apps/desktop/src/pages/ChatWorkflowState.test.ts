@@ -34,7 +34,10 @@ describe("Chat workflow task state", () => {
     expect(task?.steps.find((step) => step.label === "Review CI blockers")).toMatchObject({
       done: false,
       active: true,
+      action: { type: "run_tests" },
     });
+    expect(task?.steps.find((step) => step.label === "Check policy blockers")?.action).toEqual({ type: "check_pr_policy" });
+    expect(task?.steps.find((step) => step.label === "Review work items")?.action).toEqual({ type: "list_pr_work_items" });
     expect(task?.details?.[0]).toContain("Readiness: blocked");
   });
 

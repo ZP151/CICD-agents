@@ -178,7 +178,7 @@ Remaining shortfalls:
 - PR creation and first PR follow-ups have durable structured actions and clearer failure states, but richer PR insight artifact rendering still needs a dedicated Conversation workspace.
 - There is no single source of truth for all Chat agent responsibilities unless the use-case catalog is kept in sync with tests and docs.
 - Test/build execution now has an initial dedicated validation workflow state, command-source preflight, changed-file context, single-package and compatible multi-package command derivation, UI-visible selection evidence, failure excerpts, selectable failure artifacts, recovery-turn artifact context, CI failure follow-up suggestions, initial framework-specific recovery signals, planner-priority recovery guidance, focused artifact rerun command selection, and visible `failure artifact` source labels for artifact-sourced reruns.
-- PR insight and CI/CD actions now share readiness context through saved PR insight compact summaries, validation artifacts, and readiness-aware follow-up suggestions, but right-panel progress still needs to expose which readiness signals drove the answer.
+- PR insight and CI/CD actions now share readiness context through saved PR insight compact summaries, validation artifacts, readiness-aware follow-up suggestions, and visually verified right-panel PR blocker steps with direct action wiring, but future artifact metadata should cite exact policy/work-item/validation blockers more precisely.
 - Conflict recovery still needs a dedicated desktop conflict-file picker and deeper conflicted-repository coverage for cherry-pick and revert operations.
 
 ## Chat Agent Use-Case Matrix
