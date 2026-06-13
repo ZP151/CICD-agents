@@ -160,6 +160,8 @@ Current implemented strengths:
 - PR follow-up now has first-class structured workflow actions for insight, policy status, linked work items, and work-item linking approval.
 - PR/CI readiness follow-up suggestions now prioritize validation recovery, policy status, and linked work items when saved insight or assistant output indicates CI/readiness blockers.
 - Saved PR insight blocker metadata now has focused Chat e2e coverage proving the artifact workspace renders exact build/policy/thread details and that blocker-derived suggestions dispatch structured workflow actions.
+- Conversation suggestion buttons now render explicit idle/running/queued/blocked state from workflow context, so blocker-derived PR and validation actions show queueability or blocked state instead of appearing as inert prompt chips.
+- The right-side Progress panel now renders runnable workflow steps with explicit running, waiting, done, and blocked states, including state badges, blocker-aware titles, sequential PR readiness blockers, and Playwright coverage for active PR readiness state.
 - PR follow-up workflow failures now preserve missing Project Link mapping and Azure DevOps auth diagnostics as structured Conversation workflow state instead of collapsing to generic 500-style errors.
 - Test/build validation now has a first structured Conversation workflow path: command chips and welcome suggestions can create a `validation_command` approval backed by the Project Link validation command, with CI workflow state instead of sending a hidden chat prompt.
 - Validation approval proposals now carry command-source metadata and changed-file preflight context, and failed validation runs return a concise failure excerpt for deterministic Conversation follow-up.
@@ -167,6 +169,7 @@ Current implemented strengths:
 - Validation approval cards now render structured scope evidence: command source, selected script, package filters, package roots, changed-file count, and the selection reason.
 - Failed validation confirmations now also generate selectable markdown Conversation artifacts with command, package scope, key output, stdout/stderr excerpts, and an error status for the Result workspace.
 - Validation failure artifacts now feed the next recovery turn when the user asks to analyze, fix, retry, rerun validation, or reason about PR/CI readiness, CI failure suggestion chips offer analyze failure, rerun tests/build, and review changes actions, failed validation artifacts include initial Vitest/Jest, pytest, and dotnet recovery signals, the planner receives priority guidance to use those signals before broad reruns, and structured validation rerun actions consume matching artifact `Candidate rerun` commands when available.
+- Chat now has first-class Azure DevOps pipeline workflow actions: `inspect_pipeline` reads recent pipeline runs as deterministic `ci/pipeline_inspected` state, failed/canceled remote runs become selectable markdown Conversation artifacts backed by Azure Build Timeline task/issue details and failed-task log excerpts when available, those artifacts persist into daemon Chat history and feed follow-up CI recovery turns, pipeline failure suggestions route to analyze/rerun/local-validation recovery, and `trigger_pipeline` creates a high-risk `ado_trigger_pipeline` approval instead of directly triggering CI.
 - Workspace workflow actions now detect unresolved merge/rebase-style Git operation states and block normal commit, push, branch switch, and PR creation approvals while conflicts are unresolved.
 - Rebase recovery now has first-class structured workflow actions for continue, abort, and skip. These create exact `git_rebase` approval proposals only when a rebase is actually in progress and complete with deterministic `git` workflow state after confirmation.
 - Merge, cherry-pick, and revert recovery now use the same structured approval model through `git_merge`, `git_cherry_pick`, and `git_revert` recovery actions.
@@ -178,7 +181,7 @@ Remaining shortfalls:
 - The right panel exposes useful branch/commit/PR follow-up controls and compact workflow metadata, but branch readiness and richer PR artifact rendering are not yet dedicated workspaces.
 - PR creation and first PR follow-ups have durable structured actions and clearer failure states, but richer PR insight artifact rendering still needs a dedicated Conversation workspace.
 - There is no single source of truth for all Chat agent responsibilities unless the use-case catalog is kept in sync with tests and docs.
-- Test/build execution now has an initial dedicated validation workflow state, command-source preflight, changed-file context, single-package and compatible multi-package command derivation, UI-visible selection evidence, failure excerpts, selectable failure artifacts, recovery-turn artifact context, CI failure follow-up suggestions, initial framework-specific recovery signals, planner-priority recovery guidance, focused artifact rerun command selection, and visible `failure artifact` source labels for artifact-sourced reruns.
+- Test/build execution now has an initial dedicated validation workflow state, command-source preflight, changed-file context, single-package and compatible multi-package command derivation, UI-visible selection evidence, failure excerpts, selectable failure artifacts, recovery-turn artifact context, CI failure follow-up suggestions, initial framework-specific recovery signals, planner-priority recovery guidance, focused artifact rerun command selection, visible `failure artifact` source labels for artifact-sourced reruns, and first-class Azure DevOps pipeline inspect/trigger approval actions with persisted timeline-and-log-backed remote pipeline failure artifacts.
 - PR insight and CI/CD actions now share readiness context through saved PR insight compact summaries, validation artifacts, readiness-aware follow-up suggestions, visually verified right-panel PR blocker steps with direct action wiring, exact build/policy/thread/work-item details in workflow PR insight summaries, structured PR insight artifact metadata for those blocker details, Conversation context prompts that cite the structured blocker details directly, Activity detail views that display the same saved blocker metadata, Chat saved-insight workspaces that include the exact blocker details, and direct PR follow-up suggestions derived from structured blocker metadata.
 - Conflict recovery still needs a dedicated desktop conflict-file picker and deeper conflicted-repository coverage for cherry-pick and revert operations.
 
@@ -291,6 +294,46 @@ user request
   -> result updates conversation and workflow state
   -> agent decides whether another step is still in scope
 ```
+
+Current architectural gap:
+
+- The product is still mixed-mode. Some actions are structured workflow actions,
+  while some still rely on planner tool calls, legacy prose-to-action inference,
+  or UI shortcuts that are closer to preset workflows than agent-selected typed
+  tools.
+- The target is not "more buttons". The target is a typed agent tool
+  architecture:
+
+```text
+user intent
+  -> agent selects typed tool
+  -> agent fills exact arguments
+  -> policy/preflight validates scope, risk, project mapping, and repo state
+  -> approval proposal is shown for every write/risky action
+  -> executor runs exactly the approved tool call
+  -> artifact/result is persisted into Chat context
+  -> next-step suggestions are derived from the result and original scope
+```
+
+Near-term priority order after this audit:
+
+1. Convert Git operations from preset workflow shortcuts into typed proposals:
+   stage paths, restore paths, discard, stash, amend, split commit, fetch, pull,
+   update branch by rebase/merge, cherry-pick, revert, tag, and conflict
+   recovery should all carry exact parameters and approval policy.
+2. Reduce Project Link friction: infer ADO project/repository from the current
+   repo remote, discover missing ADO fields automatically, and ask only the
+   smallest missing question in Chat instead of forcing navigation to Settings.
+3. Extend PR insight and PR maintenance with typed ADO tools: title,
+   description, reviewers, labels/tags, thread comment/resolve, work item
+   search/create/link, policy status, and policy rerun/status.
+4. Add conflict-file UI: a dedicated conflict file picker for merge, rebase,
+   cherry-pick, and revert states before selected conflict staging is offered.
+5. Keep ADO OAuth real-environment regression as a release gate because the
+   product is expected to move away from PAT fallback.
+6. Pause new pipeline workflow expansion unless needed for PR readiness; the
+   pipeline failure loop already has inspect, timeline, log excerpt, artifact,
+   and rerun approval foundations.
 
 Reference observations from current open-source agents:
 
@@ -935,6 +978,9 @@ Completed:
 - The desktop right-panel commit menu no longer routes through a generic `commit_flow` frontend action. Commit, commit-and-push, and push now emit explicit `prepare_commit` / `push_branch` workflow requests, with Playwright coverage for the exact payloads.
 - Conversation PR insight, policy, and linked-work-item actions now have coverage proving the UI sends structured workflow actions without a manually typed PR ID, while the daemon resolves the latest active PR from Azure DevOps for read-only PR follow-ups.
 - Saved PR insight artifact source coverage now verifies exact readiness blocker rendering and direct blocker-derived workflow actions from persisted metadata.
+- Suggestion reply chips now consume workflow state for visible running, queued, and blocked states, preserving queued follow-up behavior while making action status legible.
+- Right-panel Progress step actions now consume the same workflow status signal and show state-specific badges instead of plain disabled links during active or blocked workflows; PR readiness blockers now advance one actionable blocker at a time.
+- Pipeline command chips and right-panel controls now route through structured `inspect_pipeline` and `trigger_pipeline` workflow actions with daemon, desktop, and Playwright coverage.
 
 ## Suggested Implementation Order
 

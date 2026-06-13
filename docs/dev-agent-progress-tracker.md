@@ -11291,3 +11291,400 @@ Next recommended task:
 
 - Continue hardening Conversation workflow actions so each visible suggestion
   maps to a state-aware operation with clear idle/running/success/failure UI.
+
+### 2026-06-13 Session Update 166
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Conversation suggestion actions now expose visible state instead of looking
+  like static prompt chips during active workflows.
+
+Completed:
+
+- Added a state model for suggestion reply buttons: `idle`, `running`,
+  `queued`, and `blocked`.
+- Running workflows now mark visible suggestion actions as queueable with a
+  pulsing state dot and `Queue` badge while keeping them clickable for the
+  existing queued-follow-up behavior.
+- Queued suggestions now show a `Queued` badge and disable duplicate clicks.
+- Blocked workflows now show `Blocked` state and surface the workflow blocker
+  reason in the button title.
+- Wired Chat's current `busy`, workflow status, queued suggestion, and blocked
+  reason into the suggestion bar.
+- Added focused component coverage for state derivation and rendered
+  running/queued/blocked button states.
+
+Files changed:
+
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.tsx`
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
+- `apps/desktop/src/pages/Chat.tsx`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "loads a saved PR insight artifact source" --project=chromium
+```
+
+Result:
+
+- SuggestionReplyBar tests passed: 36 tests.
+- Desktop typecheck passed.
+- Focused Chat Playwright e2e passed.
+
+Next recommended task:
+
+- Extend the same state-aware treatment to right-panel workflow step actions
+  so branch, PR, validation, and recovery controls expose running/queued/blocked
+  state consistently.
+
+### 2026-06-13 Session Update 167
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Right-panel Progress step actions now expose workflow-aware state instead of
+  relying only on disabled text links.
+
+Completed:
+
+- Added a reusable right-panel step action state model:
+  `idle`, `running`, `waiting`, `done`, and `blocked`.
+- Active steps in a running workflow now show a `Running` badge and blue state
+  marker.
+- Other runnable steps now show `Wait` while a workflow is busy, avoiding
+  unclear disabled buttons.
+- Completed runnable steps show `Done` while staying reusable when the workflow
+  is idle.
+- Blocked workflows now mark step actions as `Blocked` and surface the current
+  blocker reason in the action title.
+- PR readiness follow-up steps are now sequential: only the first unresolved
+  blocker is active while later blockers wait their turn.
+- Added focused coverage for Progress step state derivation.
+- Added focused Playwright coverage proving the right-panel Progress UI shows
+  `Running` and `Wait` badges during an active PR readiness workflow.
+
+Files changed:
+
+- `apps/desktop/src/pages/Chat.tsx`
+- `apps/desktop/src/pages/ChatWorkflowState.test.ts`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/pages/ChatWorkflowState.test.ts src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "shows right-panel PR readiness step states" --project=chromium
+```
+
+Result:
+
+- Focused desktop tests passed: 39 tests.
+- Desktop typecheck passed.
+- Focused Chat Playwright e2e passed for right-panel PR readiness step states.
+
+Next recommended task:
+
+- Start first-class Chat CI/CD pipeline workflow coverage: inspect pipeline
+  readiness, prepare trigger approval, and render pipeline workflow state
+  without relying on generic PR insight or local validation actions.
+
+### 2026-06-13 Session Update 168
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / First-Class CI/CD Workflow
+
+Status change:
+
+- Chat now has a first first-class Azure DevOps pipeline workflow path instead
+  of treating pipeline state only as PR insight metadata or local validation.
+
+Completed:
+
+- Added structured Chat workflow actions for `inspect_pipeline` and
+  `trigger_pipeline`.
+- `inspect_pipeline` reads recent Azure Pipeline runs through the internal ADO
+  REST client and returns deterministic `ci/pipeline_inspected` workflow state.
+- `trigger_pipeline` creates a high-risk `ado_trigger_pipeline` approval
+  proposal instead of directly triggering a remote pipeline.
+- Added pipeline ID support to the Chat workflow action API payload.
+- Added pipeline readiness and run-trigger controls to the Conversation
+  command chips and right-side Project Link action area.
+- Updated right-panel CI task rendering so pipeline workflows show
+  `Inspect pipeline`, `Review latest runs`, `Trigger pipeline`, and
+  `Review run status` steps.
+- Added pipeline trigger approval boundary copy so users can see that the
+  approval only triggers the configured Azure DevOps pipeline.
+- Added daemon, desktop workflow-state, and Playwright coverage for the new
+  pipeline path.
+
+Files changed:
+
+- `packages/daemon/src/server.ts`
+- `packages/daemon/test/server.test.ts`
+- `packages/core/src/chatPlanner.ts`
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `apps/desktop/src/pages/ChatWorkflowState.test.ts`
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.tsx`
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
+- `apps/desktop/src/components/conversation/ApprovalEvidence.tsx`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/pages/ChatWorkflowState.test.ts src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "routes pipeline controls" --project=chromium
+```
+
+Result:
+
+- Core build passed.
+- Daemon server tests passed: 53 tests.
+- Daemon typecheck passed after rebuilding core types.
+- Focused desktop tests passed: 40 tests.
+- Desktop typecheck passed.
+- Focused Chat Playwright e2e passed for pipeline controls.
+
+Next recommended task:
+
+- Add pipeline run result artifacts and recovery suggestions so failed Azure
+  Pipeline runs can feed the next Chat turn the same way local validation
+  failure artifacts do.
+
+### 2026-06-13 Session Update 169
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / First-Class CI/CD Workflow
+
+Status change:
+
+- Failed Azure Pipeline inspection now produces Conversation evidence instead
+  of only a plain status summary.
+
+Completed:
+
+- Extended `/chat/workflow-action` responses with optional Conversation
+  artifacts so deterministic workflow actions can share the same evidence
+  surface as streamed planner responses.
+- Updated the Chat page to render workflow-action artifacts as assistant
+  artifact parts, making failed remote CI evidence selectable in the Result
+  workspace.
+- Added a markdown failure artifact for `inspect_pipeline` when recent Azure
+  Pipeline runs include failed or canceled runs.
+- Added the internal `ado_get_build_timeline` Azure DevOps tool and use-case
+  catalog entry so the agent can inspect failed task and issue details without
+  relying on an external MCP bridge.
+- `inspect_pipeline` now attempts to read the failed run's Azure Build
+  Timeline and includes failed task records plus error issue messages in the
+  artifact when Azure DevOps returns them.
+- The artifact records the pipeline ID, run ID, branch, status, timestamps,
+  URL, recent failed/canceled runs, failed timeline records, error issues, and
+  recovery guidance.
+- Workflow-action pipeline artifacts are now persisted as assistant bubbles in
+  the daemon Chat session so follow-up turns can use the same evidence that was
+  rendered in the Conversation UI.
+- Follow-up CI, pipeline, build, rerun, retry, and PR readiness turns now inject
+  the latest saved pipeline failure artifact into planner context with guidance
+  to treat it as remote CI/CD evidence rather than a local validation failure.
+- Updated CI follow-up suggestions so `ci/pipeline_inspected` failure evidence
+  suggests `Analyze pipeline`, `Rerun pipeline`, and `Local validation` instead
+  of treating the remote pipeline failure as a generic local test/build failure.
+- `Rerun pipeline` now routes to the structured `trigger_pipeline` workflow
+  action, preserving the high-risk approval boundary before remote CI is
+  triggered.
+
+Files changed:
+
+- `packages/daemon/src/server.ts`
+- `packages/daemon/src/chatSession.ts`
+- `packages/daemon/test/server.test.ts`
+- `packages/daemon/test/chatSessionWorkflow.test.ts`
+- `packages/core/src/tools/azureDevOps.ts`
+- `packages/core/test/azureDevOpsInternal.test.ts`
+- `packages/core/src/chatUseCases.ts`
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.tsx`
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/dev-agent-progress-tracker.md`
+- `docs/conversation-git-agent-optimization.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "routes pipeline controls" --project=chromium
+git diff --check
+```
+
+Result:
+
+- Focused suggestion tests passed: 37 tests.
+- Chat workflow tests passed: 27 tests.
+- Core build passed after adding the internal build-timeline ADO tool.
+- Daemon server tests passed: 53 tests.
+- Desktop typecheck passed.
+- Daemon typecheck passed.
+- Focused Chat Playwright e2e passed for pipeline controls and artifact
+  rendering.
+- `git diff --check` passed.
+
+Next recommended task:
+
+- Add Azure Pipeline run log extraction for failed timeline records so pipeline
+  failure artifacts can include concise task log excerpts in addition to failed
+  task names and issue messages.
+
+### 2026-06-13 Session Update 170
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / First-Class CI/CD Workflow
+
+Status change:
+
+- Failed Azure Pipeline inspection now includes concise failed-task log
+  excerpts when Azure DevOps exposes log IDs from the build timeline.
+
+Completed:
+
+- Added the internal `ado_get_build_log_excerpt` Azure DevOps tool to the
+  built-in ADO tool manifest and Chat CI/CD use-case catalog.
+- Implemented build log excerpt retrieval through the Azure DevOps Build Logs
+  REST API, using the failed timeline record `logId` instead of requiring the
+  user to paste log URLs.
+- Added diagnostic excerpt selection that prefers nearby error/failure lines
+  and falls back to the tail of the task log.
+- `inspect_pipeline` now attempts to fetch log excerpts for up to three failed
+  timeline records after reading the Azure Build Timeline.
+- Pipeline failure artifacts now include a `Log excerpts` section with fenced
+  text snippets, so follow-up CI recovery turns can reason from task-level
+  output instead of only run/task names.
+- The pipeline workflow state now records `ado_get_build_log_excerpt` as a
+  completed internal tool when log excerpts are returned.
+
+Files changed:
+
+- `packages/core/src/tools/azureDevOps.ts`
+- `packages/core/src/chatUseCases.ts`
+- `packages/daemon/src/server.ts`
+- `packages/daemon/test/server.test.ts`
+- `apps/desktop/src/pages/Chat.tsx`
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/dev-agent-progress-tracker.md`
+- `docs/conversation-git-agent-optimization.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/azureDevOpsInternal.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "routes pipeline controls" --project=chromium
+git diff --check
+```
+
+Result:
+
+- Core build passed.
+- Core Azure DevOps internal tests passed: 12 tests.
+- Daemon typecheck passed.
+- Desktop typecheck passed.
+- Daemon server tests passed: 53 tests.
+- Focused Chat Playwright e2e passed for pipeline controls.
+- `git diff --check` passed.
+
+Next recommended task:
+
+- Expand pipeline follow-up behavior so a successful rerun request can inspect
+  the newly queued run instead of stopping at the trigger approval.
+
+### 2026-06-13 Session Update 171
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Typed Agent Tool Architecture
+
+Status change:
+
+- The optimization plan has been re-centered on a full typed agent tool
+  architecture instead of adding isolated structured workflow actions.
+
+Completed:
+
+- Documented the target execution chain as:
+  `user intent -> typed tool selection -> exact args -> policy/preflight ->
+  approval -> execute -> artifact/result -> next-step suggestions`.
+- Re-prioritized near-term work away from new pipeline expansion and toward:
+  typed Git proposals, lower-friction Project Link completion, PR maintenance
+  tools, conflict-file UI, and ADO OAuth real-environment regression.
+- Added internal typed Azure DevOps PR maintenance tools:
+  `ado_update_pull_request`, `ado_add_pull_request_reviewer`,
+  `ado_remove_pull_request_reviewer`, `ado_add_pull_request_label`, and
+  `ado_remove_pull_request_label`.
+- Added typed REST helpers for PR title/description/status updates, reviewer
+  add/remove, and label/tag add/remove.
+- Updated the Chat use-case catalog so PR creation/maintenance exposes these
+  operations as approval-required write tools rather than implicit prose-driven
+  actions.
+- Added focused tests for PR title/description patching, reviewer add/remove,
+  and label/tag add/remove.
+
+Files changed:
+
+- `packages/core/src/tools/azureDevOps.ts`
+- `packages/core/src/chatUseCases.ts`
+- `packages/core/test/azureDevOpsInternal.test.ts`
+- `docs/dev-agent-progress-tracker.md`
+- `docs/conversation-git-agent-optimization.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/azureDevOpsInternal.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+```
+
+Result:
+
+- Core build passed.
+- Core Azure DevOps internal tests passed: 15 tests.
+- Daemon typecheck passed.
+- Desktop typecheck passed.
+
+Next recommended task:
+
+- Build the typed proposal/policy bridge for Git and PR maintenance so Chat can
+  generate `PendingToolAction` proposals from selected typed tools instead of
+  relying on preset workflow branches or prose inference.
