@@ -23,10 +23,12 @@ import Repos from "./pages/Repos.js";
 import TaskViewer from "./pages/TaskViewer.js";
 import ReviewFindings from "./pages/ReviewFindings.js";
 import PullRequests from "./pages/PullRequests.js";
+import Pipelines from "./pages/Pipelines.js";
 import Settings from "./pages/Settings.js";
 import Chat from "./pages/Chat.js";
 import Profiles from "./pages/Profiles.js";
 import { withProjectLinkDefaults, withProjectLinkInputDefaults } from "./projectLinks.js";
+import appIconUrl from "./assets/mergepilot-icon.png";
 
 // ─── Global app data (profiles, etc.) ────────────────────────────────────────
 // Loaded once after daemon is ready. All pages read from here — no per-page fetching.
@@ -344,6 +346,14 @@ function IconSettings() {
   );
 }
 
+function IconPipeline() {
+  return (
+    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 7h6m4 0h6M7 7v10m0 0h4m-4 0H4m13-10v4m0 6v-6m0 0h3m-3 0h-3" />
+    </svg>
+  );
+}
+
 function configuredAppName(): string {
   const envName = (import.meta.env.VITE_APP_DISPLAY_NAME ?? import.meta.env.VITE_APP_NAME) as string | undefined;
   if (envName?.trim()) return envName.trim();
@@ -351,7 +361,7 @@ function configuredAppName(): string {
     const stored = localStorage.getItem("cicd_agent_app_name");
     if (stored?.trim()) return stored.trim();
   } catch { /* ignore */ }
-  return "CI/CD Agent";
+  return "MergePilot";
 }
 
 function initialsFromText(value: string | undefined, fallback = "?"): string {
@@ -559,7 +569,7 @@ function LoginModal({ onDone, onCancel }: { onDone: (u: AuthUser) => void; onCan
                 onClick={() => startLogin()}
                 className="min-w-0 flex-1 rounded-l-md px-3 py-2 text-sm font-semibold text-[rgb(var(--app-text))] transition hover:bg-[rgb(var(--app-bg-muted))]"
               >
-                Use another account
+                {accounts.length > 0 ? "Use another account" : "Sign in with Microsoft"}
               </button>
               <div className="relative border-l border-[rgb(var(--app-border))]">
                 <select
@@ -778,6 +788,7 @@ const NAV_GROUPS = [
     label: "Quality",
     items: [
       { to: "/findings", label: "Review Queue", Icon: IconReview },
+      { to: "/pipelines", label: "Pipelines", Icon: IconPipeline },
     ],
   },
   {
@@ -832,9 +843,7 @@ function FullLayout({ info }: { info: DaemonInfo }) {
       <aside className="flex w-48 shrink-0 flex-col border-r border-zinc-800/80 overflow-hidden">
         {/* Logo / app name */}
         <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-zinc-800/60">
-          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-600 text-[11px] font-bold text-white shrink-0">
-            {initialsFromText(appName, "A")}
-          </div>
+          <img src={appIconUrl} alt="" className="h-7 w-7 shrink-0 rounded-lg object-cover" />
           <span className="min-w-0 truncate text-sm font-semibold tracking-tight text-zinc-200">{appName}</span>
           {anyCloud && (
             <div title="Azure cloud persistence active" className="ml-auto flex items-center gap-0.5 shrink-0">
@@ -887,7 +896,7 @@ function FullLayout({ info }: { info: DaemonInfo }) {
           <Route path="/activity" element={<PageShell scroll={false}><TaskViewer /></PageShell>} />
           <Route path="/pulls" element={<PageShell><PullRequests /></PageShell>} />
           <Route path="/findings" element={<PageShell><ReviewFindings /></PageShell>} />
-          <Route path="/pipelines" element={<Navigate to="/pulls" replace />} />
+          <Route path="/pipelines" element={<PageShell><Pipelines /></PageShell>} />
           <Route path="/profiles" element={<PageShell><Profiles /></PageShell>} />
           <Route path="/settings" element={<PageShell><Settings /></PageShell>} />
         </Routes>

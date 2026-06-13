@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAppData } from "../App.js";
+import { PaginationControls, paginateItems } from "../components/PaginationControls.js";
 import {
   configureDaemon,
   fetchDaemonConfig,
@@ -276,6 +277,8 @@ export default function ReviewFindings(): JSX.Element {
   const [staleAgeSaving, setStaleAgeSaving] = useState(false);
   const [queueFilter, setQueueFilter] = useState<ReviewQueueItem["decisionQueue"] | "all">("all");
   const [sortMode, setSortMode] = useState<"attention" | "recent">("attention");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [writeBackRetrying, setWriteBackRetrying] = useState<Record<string, boolean>>({});
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [batchRerunning, setBatchRerunning] = useState(false);
@@ -368,6 +371,19 @@ export default function ReviewFindings(): JSX.Element {
     () => staleReviewQueueItems(displayedItems, Date.now(), staleAgeHours),
     [displayedItems, staleAgeHours],
   );
+
+  const paginatedItems = useMemo(
+    () => paginateItems(displayedItems, page, pageSize),
+    [displayedItems, page, pageSize],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [profileId, queueFilter, sortMode]);
+
+  useEffect(() => {
+    if (page > paginatedItems.pageCount) setPage(paginatedItems.pageCount);
+  }, [page, paginatedItems.pageCount]);
 
   function openFindings(item: ReviewQueueItem): void {
     const findings = loadFindingsLocal(item.repository, item.pullRequestId);
@@ -628,7 +644,7 @@ export default function ReviewFindings(): JSX.Element {
   }
 
   async function rerunVisibleReviews(): Promise<void> {
-    await rerunReviewItems(displayedItems, "visible");
+    await rerunReviewItems(paginatedItems.pageItems, "visible");
   }
 
   async function rerunStaleReviews(): Promise<void> {
@@ -829,13 +845,13 @@ export default function ReviewFindings(): JSX.Element {
             </label>
             <button
               type="button"
-              disabled={batchRerunning || displayedItems.length === 0}
+              disabled={batchRerunning || paginatedItems.pageItems.length === 0}
               onClick={() => void rerunVisibleReviews()}
               className="rounded-md border border-blue-900/50 px-2.5 py-1 text-xs text-blue-400/80 transition hover:border-blue-700 hover:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {batchRerunning && batchProgress && batchMode === "visible"
                 ? `Rerun visible ${batchProgress.done}/${batchProgress.total}`
-                : "Rerun visible"}
+                : "Rerun page"}
             </button>
             <button
               type="button"
@@ -852,9 +868,12 @@ export default function ReviewFindings(): JSX.Element {
                 </span>
               )}
             </button>
+            <span className="ml-auto text-xs text-zinc-600">
+              {displayedItems.length} visible from {items.length} decisions
+            </span>
           </div>
 
-          {displayedItems.map((item) => {
+          {paginatedItems.pageItems.map((item) => {
             const storedFindings = loadFindingsLocal(item.repository, item.pullRequestId);
             const hasFindings = item.findingCount > 0 || storedFindings.length > 0;
             const attentionReasons = reviewQueuePriorityReasons(item);
@@ -1022,6 +1041,19 @@ export default function ReviewFindings(): JSX.Element {
               <p className="text-sm text-zinc-500">No review decisions match this queue filter.</p>
             </div>
           )}
+          <PaginationControls
+            page={page}
+            pageCount={paginatedItems.pageCount}
+            pageSize={pageSize}
+            totalItems={displayedItems.length}
+            visibleItems={paginatedItems.pageItems.length}
+            itemLabel="review decisions"
+            onPageChange={setPage}
+            onPageSizeChange={(nextPageSize) => {
+              setPageSize(nextPageSize);
+              setPage(1);
+            }}
+          />
         </section>
       )}
     </div>

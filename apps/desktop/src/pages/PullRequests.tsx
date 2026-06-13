@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppData } from "../App.js";
+import { PaginationControls, paginateItems } from "../components/PaginationControls.js";
 import {
   CHAT_HANDOFF_KEY,
   PULL_REQUESTS_HANDOFF_KEY,
@@ -45,15 +46,6 @@ function readiness(pr: PullRequestSummary): { label: string; tone: string } {
   if (pr.voteSummary.rejected > 0) return { label: "Changes requested", tone: "text-red-400 bg-red-950/30 ring-red-900/60" };
   if (pr.voteSummary.approved > 0) return { label: "Reviewed", tone: "text-emerald-400 bg-emerald-950/30 ring-emerald-900/60" };
   return { label: "Needs review", tone: "text-yellow-400 bg-yellow-950/30 ring-yellow-900/60" };
-}
-
-function pipelineReadiness(pr: PullRequestSummary): { label: string; tone: string } {
-  const run = pr.pipelineRun;
-  if (!run) return { label: "No run", tone: "text-zinc-500" };
-  if (run.state && run.state !== "completed") return { label: run.state, tone: "text-blue-400" };
-  if (run.result === "succeeded") return { label: "Succeeded", tone: "text-emerald-400" };
-  if (run.result === "failed" || run.result === "canceled") return { label: run.result, tone: "text-red-400" };
-  return { label: run.result || run.state || "Unknown", tone: "text-zinc-400" };
 }
 
 function insightReadinessTone(value: PullRequestInsightPreview["readiness"]): { label: string; tone: string } {
@@ -112,6 +104,15 @@ type DisplayPullRequest = PullRequestSummary & {
   sourceProfileName?: string;
 };
 
+type PullRequestCategory = "all" | "attention" | "draft" | "reviewed";
+
+const prCategories: Array<{ key: PullRequestCategory; label: string }> = [
+  { key: "all", label: "All" },
+  { key: "attention", label: "Needs attention" },
+  { key: "draft", label: "Draft" },
+  { key: "reviewed", label: "Reviewed" },
+];
+
 function dedupePullRequests(items: DisplayPullRequest[]): DisplayPullRequest[] {
   const byKey = new Map<string, DisplayPullRequest>();
   for (const item of items) {
@@ -119,6 +120,13 @@ function dedupePullRequests(items: DisplayPullRequest[]): DisplayPullRequest[] {
     if (!byKey.has(key)) byKey.set(key, item);
   }
   return [...byKey.values()];
+}
+
+function prMatchesCategory(pr: DisplayPullRequest, category: PullRequestCategory): boolean {
+  if (category === "all") return true;
+  if (category === "draft") return pr.isDraft;
+  if (category === "reviewed") return pr.voteSummary.approved > 0 && pr.voteSummary.rejected === 0;
+  return pr.isDraft || pr.voteSummary.rejected > 0 || pr.voteSummary.approved === 0;
 }
 
 type ContextState =
@@ -275,6 +283,9 @@ export default function PullRequests(): JSX.Element {
   const { profiles, profilesLoading } = useAppData();
   const [profileId, setProfileId] = useState(() => loadStoredActiveProjectLinkId());
   const [status, setStatus] = useState("active");
+  const [category, setCategory] = useState<PullRequestCategory>("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [prs, setPrs] = useState<DisplayPullRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -307,6 +318,36 @@ export default function PullRequests(): JSX.Element {
   const profileForPullRequest = useCallback((pr: DisplayPullRequest) => {
     return pr.sourceProfileId || profileId;
   }, [profileId]);
+
+  const categoryCounts = useMemo(() => {
+    return prCategories.reduce<Record<PullRequestCategory, number>>((acc, item) => {
+      acc[item.key] = prs.filter((pr) => prMatchesCategory(pr, item.key)).length;
+      return acc;
+    }, {
+      all: 0,
+      attention: 0,
+      draft: 0,
+      reviewed: 0,
+    });
+  }, [prs]);
+
+  const filteredPrs = useMemo(
+    () => prs.filter((pr) => prMatchesCategory(pr, category)),
+    [category, prs],
+  );
+
+  const paginatedPrs = useMemo(
+    () => paginateItems(filteredPrs, page, pageSize),
+    [filteredPrs, page, pageSize],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [category, profileId, status]);
+
+  useEffect(() => {
+    if (page > paginatedPrs.pageCount) setPage(paginatedPrs.pageCount);
+  }, [page, paginatedPrs.pageCount]);
 
   const handleQueueForReview = useCallback(async (pr: DisplayPullRequest) => {
     const actionProfileId = profileForPullRequest(pr);
@@ -524,7 +565,8 @@ export default function PullRequests(): JSX.Element {
     }
     if (profileId !== draft.profileId) setProfileId(draft.profileId);
     if (status !== "all") setStatus("all");
-  }, [profileId, status]);
+    if (category !== "all") setCategory("all");
+  }, [category, profileId, status]);
 
   useEffect(() => {
     if (!profileId) {
@@ -614,6 +656,13 @@ export default function PullRequests(): JSX.Element {
 
     setExpandedPrId(target.id);
     setHighlightedPrId(target.id);
+    const targetIndex = filteredPrs.findIndex((pr) => (
+      pr.id === target.id &&
+      (!draft.repository || pr.repository === draft.repository)
+    ));
+    if (targetIndex >= 0) {
+      setPage(Math.floor(targetIndex / pageSize) + 1);
+    }
     const currentContext = contexts[target.id];
     if (!currentContext || currentContext.phase === "idle") {
       setContexts((prev) => ({ ...prev, [target.id]: { phase: "loading" } }));
@@ -625,7 +674,7 @@ export default function PullRequests(): JSX.Element {
         })));
     }
     sessionStorage.removeItem(PULL_REQUESTS_HANDOFF_KEY);
-  }, [contexts, profileId, prs]);
+  }, [contexts, filteredPrs, pageSize, profileId, prs]);
 
   useEffect(() => {
     if (!highlightedPrId) return;
@@ -641,8 +690,8 @@ export default function PullRequests(): JSX.Element {
         <div>
           <h2 className="text-2xl font-semibold text-zinc-100">Pull Requests</h2>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500">
-            Developer workspace for active PRs. This view starts with Azure DevOps PR state;
-            pipeline readiness is matched from the selected Project Link when a pipeline is configured.
+            Developer workspace for active PRs, review state, and AI insight. CI/CD execution
+            now lives in the dedicated Pipelines workspace.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -681,7 +730,6 @@ export default function PullRequests(): JSX.Element {
         <div className="flex flex-wrap gap-2 text-xs text-zinc-600">
           <span className="rounded-full border border-zinc-800 px-2 py-1">{selectedProfile.adoProject || "No project"}</span>
           <span className="rounded-full border border-zinc-800 px-2 py-1">{selectedProfile.adoRepoName || "No repo"}</span>
-          <span className="rounded-full border border-zinc-800 px-2 py-1">pipeline: {selectedProfile.adoPipelineName || selectedProfile.adoPipelineId || "not configured"}</span>
           {branchScope && branchScope !== "main" && (
             <span className="rounded-full border border-zinc-800 px-2 py-1">branch: {selectedProfile.defaultBranch}</span>
           )}
@@ -713,9 +761,37 @@ export default function PullRequests(): JSX.Element {
 
       {prs.length > 0 && (
         <div className="grid gap-3">
-          {prs.map((pr) => {
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800/70 bg-zinc-900/20 p-3">
+            <div className="flex flex-wrap gap-1.5">
+              {prCategories.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setCategory(item.key)}
+                  className={`rounded-md px-2.5 py-1 text-xs transition ${
+                    category === item.key
+                      ? "bg-blue-950/40 text-blue-300 ring-1 ring-blue-900/60"
+                      : "border border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
+                  }`}
+                >
+                  {item.label}
+                  <span className="ml-1.5 text-[10px] opacity-70">{categoryCounts[item.key]}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-zinc-600">
+              {filteredPrs.length} of {prs.length} PRs in view
+            </p>
+          </div>
+
+          {filteredPrs.length === 0 && (
+            <div className="rounded-lg border border-zinc-800/70 bg-zinc-900/20 p-6 text-center">
+              <p className="text-sm text-zinc-500">No pull requests match this category.</p>
+            </div>
+          )}
+
+          {paginatedPrs.pageItems.map((pr) => {
             const state = readiness(pr);
-            const pipeline = pipelineReadiness(pr);
             const qState = queueing[pr.id] ?? { phase: "idle" };
             const previewState = previews[pr.id] ?? { phase: "idle" };
             const insightTone = previewState.phase === "done"
@@ -851,7 +927,7 @@ export default function PullRequests(): JSX.Element {
                   </div>
                 </div>
 
-                <div className="mt-4 grid gap-2 text-xs text-zinc-500 sm:grid-cols-4">
+                <div className="mt-4 grid gap-2 text-xs text-zinc-500 sm:grid-cols-3">
                   <div>
                     <p className="text-zinc-700">Author</p>
                     <p className="mt-1 truncate text-zinc-400">{pr.createdBy || "Unknown"}</p>
@@ -865,21 +941,6 @@ export default function PullRequests(): JSX.Element {
                     <p className="mt-1 text-zinc-400">
                       {pr.voteSummary.approved} approved / {pr.reviewerCount} total
                     </p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-700">Pipeline</p>
-                    {pr.pipelineRun?.url ? (
-                      <a
-                        href={pr.pipelineRun.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={`mt-1 block truncate transition hover:text-zinc-200 ${pipeline.tone}`}
-                      >
-                        {pipeline.label} {pr.pipelineRun.name ? `(${pr.pipelineRun.name})` : ""}
-                      </a>
-                    ) : (
-                      <p className={`mt-1 truncate ${pipeline.tone}`}>{pipeline.label}</p>
-                    )}
                   </div>
                 </div>
                 {storedInsight && previewState.phase !== "done" && !isDone && (
@@ -1181,6 +1242,19 @@ export default function PullRequests(): JSX.Element {
               </article>
             );
           })}
+          <PaginationControls
+            page={page}
+            pageCount={paginatedPrs.pageCount}
+            pageSize={pageSize}
+            totalItems={filteredPrs.length}
+            visibleItems={paginatedPrs.pageItems.length}
+            itemLabel="pull requests"
+            onPageChange={setPage}
+            onPageSizeChange={(nextPageSize) => {
+              setPageSize(nextPageSize);
+              setPage(1);
+            }}
+          />
         </div>
       )}
     </div>

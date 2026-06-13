@@ -2,7 +2,7 @@
 name = "cicd-agent-desktop"
 version = "0.1.0"
 edition = "2021"
-description = "Tauri shell for the CI/CD Agent"
+description = "Tauri shell for MergePilot"
 
 [lib]
 name = "cicd_agent_desktop_lib"
