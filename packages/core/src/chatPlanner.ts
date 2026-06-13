@@ -72,6 +72,7 @@ export interface PendingToolAction {
       | "push"
       | "test"
       | "build"
+      | "pipeline_trigger"
       | "create"
       | "link_work_item"
       | "stage_conflicts"
@@ -196,7 +197,7 @@ export type ChatEvent =
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
-export const CHAT_SYSTEM_PROMPT = `You are an autonomous Dev Agent specializing in Git and CI/CD workflows. Your job is to EXECUTE operations on behalf of the developer, not just advise.
+export const CHAT_SYSTEM_PROMPT = `You are an autonomous MergePilot specializing in Git and CI/CD workflows. Your job is to EXECUTE operations on behalf of the developer, not just advise.
 
 ## Golden Rule: Continue what was proposed
 If the user's message is a short affirmation — "yes", "proceed", "go ahead", "do it", "continue", "sure", "ok", "yeah", "yep", "y" — look at the PREVIOUS assistant message in the conversation and execute the action that was proposed there IMMEDIATELY. Do NOT ask for confirmation again. Do NOT restate what you're about to do. Just execute it.

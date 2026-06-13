@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  addAzurePullRequestLabel,
+  addAzurePullRequestReviewer,
   getAzurePipelineRun,
+  getAzureBuildLogExcerpt,
   getAzurePullRequestById,
   checkAzureDevOpsTools,
   listAzurePullRequestChanges,
@@ -9,6 +12,9 @@ import {
   listAzurePullRequestPolicyEvaluations,
   listAzurePullRequestThreads,
   listAzurePullRequestWorkItems,
+  removeAzurePullRequestLabel,
+  removeAzurePullRequestReviewer,
+  updateAzurePullRequest,
 } from "../src/tools/azureDevOps.js";
 
 afterEach(() => {
@@ -237,6 +243,160 @@ describe("internal Azure DevOps MCP-style ports", () => {
       sourceBranch: "main",
       url: "https://ado/run/88",
     });
+  });
+
+  it("gets a diagnostic build log excerpt around failure lines", async () => {
+    const lines = Array.from({ length: 120 }, (_, index) => `noise line ${index + 1}`);
+    lines[70] = "##[error]AssertionError: expected true to be false";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(lines.join("\n"), {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+
+    const excerpt = await getAzureBuildLogExcerpt({
+      organization: "demo-org",
+      project: "Agents",
+      buildId: 77,
+      logId: 9,
+      pat: "pat",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://dev.azure.com/demo-org/Agents/_apis/build/builds/77/logs/9?api-version=7.1-preview.7",
+      expect.objectContaining({
+        redirect: "manual",
+        headers: expect.objectContaining({ Accept: "text/plain" }),
+      }),
+    );
+    expect(excerpt).toMatchObject({
+      buildId: 77,
+      logId: 9,
+      lineCount: 120,
+      truncated: true,
+    });
+    expect(excerpt.startLine).toBeGreaterThan(1);
+    expect(excerpt.excerpt).toContain("AssertionError: expected true to be false");
+    expect(excerpt.excerpt.split("\n")).not.toContain("noise line 1");
+  });
+
+  it("updates pull request title and description through a typed patch", async () => {
+    const fetchMock = mockJson({
+      pullRequestId: 42,
+      title: "New title",
+      description: "New description",
+      status: "active",
+    });
+
+    const updated = await updateAzurePullRequest({
+      organization: "demo-org",
+      project: "Agents",
+      repository: "cicd-agent",
+      pullRequestId: 42,
+      title: "New title",
+      description: "New description",
+      pat: "pat",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://dev.azure.com/demo-org/Agents/_apis/git/repositories/cicd-agent/pullrequests/42?api-version=7.1-preview.1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ title: "New title", description: "New description" }),
+      }),
+    );
+    expect(updated).toMatchObject({
+      id: 42,
+      title: "New title",
+      description: "New description",
+      status: "active",
+    });
+  });
+
+  it("adds and removes pull request reviewers through typed reviewer endpoints", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: "reviewer-1",
+        displayName: "Ada Lovelace",
+        uniqueName: "ada@example.com",
+        vote: 0,
+        isRequired: false,
+      }), { status: 200, headers: { "content-type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const added = await addAzurePullRequestReviewer({
+      organization: "demo-org",
+      project: "Agents",
+      repository: "cicd-agent",
+      pullRequestId: 42,
+      reviewerId: "ada@example.com",
+      pat: "pat",
+    });
+    const removed = await removeAzurePullRequestReviewer({
+      organization: "demo-org",
+      project: "Agents",
+      repository: "cicd-agent",
+      pullRequestId: 42,
+      reviewerId: "ada@example.com",
+      pat: "pat",
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://dev.azure.com/demo-org/Agents/_apis/git/repositories/cicd-agent/pullRequests/42/reviewers/ada%40example.com?api-version=7.1-preview.1",
+      expect.objectContaining({ method: "PUT" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://dev.azure.com/demo-org/Agents/_apis/git/repositories/cicd-agent/pullRequests/42/reviewers/ada%40example.com?api-version=7.1-preview.1",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+    expect(added).toMatchObject({ reviewerId: "reviewer-1", displayName: "Ada Lovelace", action: "added" });
+    expect(removed).toMatchObject({ reviewerId: "ada@example.com", action: "removed" });
+  });
+
+  it("adds and removes pull request labels through typed label endpoints", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: "label-1",
+        name: "ready-for-review",
+        active: true,
+      }), { status: 200, headers: { "content-type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const added = await addAzurePullRequestLabel({
+      organization: "demo-org",
+      project: "Agents",
+      repository: "cicd-agent",
+      pullRequestId: 42,
+      label: "ready-for-review",
+      pat: "pat",
+    });
+    const removed = await removeAzurePullRequestLabel({
+      organization: "demo-org",
+      project: "Agents",
+      repository: "cicd-agent",
+      pullRequestId: 42,
+      label: "ready-for-review",
+      pat: "pat",
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://dev.azure.com/demo-org/Agents/_apis/git/repositories/cicd-agent/pullRequests/42/labels?api-version=7.1-preview.1",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ name: "ready-for-review" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://dev.azure.com/demo-org/Agents/_apis/git/repositories/cicd-agent/pullRequests/42/labels/ready-for-review?api-version=7.1-preview.1",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+    expect(added).toMatchObject({ id: "label-1", name: "ready-for-review", action: "added" });
+    expect(removed).toMatchObject({ name: "ready-for-review", active: false, action: "removed" });
   });
 
   it("reports auth mode from internal ADO tool health checks", async () => {

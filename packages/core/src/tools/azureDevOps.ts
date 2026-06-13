@@ -188,6 +188,44 @@ export interface AzurePipelineRunSummary {
   url: string;
 }
 
+export interface AzureBuildTimelineIssue {
+  type: string;
+  category: string;
+  message: string;
+}
+
+export interface AzureBuildTimelineRecord {
+  id: string;
+  parentId: string;
+  type: string;
+  name: string;
+  state: string;
+  result: string;
+  startTime: string;
+  finishTime: string;
+  logId: number;
+  logUrl: string;
+  issues: AzureBuildTimelineIssue[];
+}
+
+export interface AzureBuildLogExcerpt {
+  buildId: number;
+  logId: number;
+  lineCount: number;
+  startLine: number;
+  endLine: number;
+  excerpt: string;
+  truncated: boolean;
+  url: string;
+}
+
+export interface AzureBuildTimelineSummary {
+  buildId: number;
+  failedRecords: AzureBuildTimelineRecord[];
+  errorIssues: AzureBuildTimelineIssue[];
+  warningIssues: AzureBuildTimelineIssue[];
+}
+
 export interface AzurePullRequestDetail extends AzurePullRequestSummary {
   codeReviewId: number;
   projectId: string;
@@ -195,6 +233,33 @@ export interface AzurePullRequestDetail extends AzurePullRequestSummary {
   description: string;
   closedDate: string;
   workItemRefs: Array<{ id: string; url: string }>;
+}
+
+export interface AzurePullRequestUpdateResult {
+  id: number;
+  title: string;
+  description: string;
+  status: string;
+  url: string;
+}
+
+export interface AzurePullRequestReviewerUpdateResult {
+  pullRequestId: number;
+  reviewerId: string;
+  displayName: string;
+  uniqueName: string;
+  vote: number;
+  isRequired: boolean;
+  action: "added" | "removed";
+}
+
+export interface AzurePullRequestLabelUpdateResult {
+  pullRequestId: number;
+  label: string;
+  id: string;
+  name: string;
+  active: boolean;
+  action: "added" | "removed";
 }
 
 export interface AzurePullRequestThread {
@@ -304,7 +369,14 @@ export const INTERNAL_AZURE_DEVOPS_TOOL_MANIFEST: Array<{ name: string; descript
   { name: "ado_pipelines_get_builds", description: "List Azure DevOps builds." },
   { name: "ado_pipelines_get_run", description: "Get an Azure Pipeline run." },
   { name: "ado_list_pipeline_runs", description: "List Azure Pipeline runs." },
+  { name: "ado_get_build_timeline", description: "Get failed task and issue details from an Azure DevOps build timeline." },
+  { name: "ado_get_build_log_excerpt", description: "Get a concise diagnostic excerpt from an Azure DevOps build log." },
   { name: "ado_create_pr", description: "Create an Azure DevOps pull request." },
+  { name: "ado_update_pull_request", description: "Update an Azure DevOps pull request title, description, or status." },
+  { name: "ado_add_pull_request_reviewer", description: "Add a reviewer to an Azure DevOps pull request or set the caller's reviewer vote." },
+  { name: "ado_remove_pull_request_reviewer", description: "Remove a reviewer from an Azure DevOps pull request." },
+  { name: "ado_add_pull_request_label", description: "Add a label/tag to an Azure DevOps pull request." },
+  { name: "ado_remove_pull_request_label", description: "Remove a label/tag from an Azure DevOps pull request." },
   { name: "ado_link_work_item", description: "Attach a work item to a pull request." },
   { name: "ado_trigger_pipeline", description: "Queue a run of an Azure DevOps pipeline." },
 ];
@@ -621,6 +693,217 @@ export async function listAzurePullRequestWorkItems(args: {
         .filter(Boolean),
     };
   });
+}
+
+export async function updateAzurePullRequest(args: {
+  organization: string;
+  project: string;
+  repository: string;
+  pullRequestId: string | number;
+  title?: string;
+  description?: string;
+  status?: "active" | "abandoned" | "completed";
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzurePullRequestUpdateResult> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const repository = args.repository.trim();
+  const pullRequestId = Number(args.pullRequestId ?? 0);
+  if (!org || !project || !repository || !pullRequestId) {
+    throw new ToolError("ADO organization, project, repository, and pull request ID are required to update a pull request.");
+  }
+  const body: Record<string, unknown> = {};
+  if (args.title !== undefined) body["title"] = args.title;
+  if (args.description !== undefined) body["description"] = args.description;
+  if (args.status !== undefined) body["status"] = args.status;
+  if (Object.keys(body).length === 0) {
+    throw new ToolError("At least one pull request update field is required: title, description, or status.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories/` +
+    `${encodeURIComponent(repository)}/pullrequests/${pullRequestId}?api-version=${API_VERSION_GIT}`;
+  const resp = await patchJson(url, body, auth, "application/json");
+  if (!resp.ok) {
+    throw new ToolError(`ADO update_pull_request failed: HTTP ${resp.status}: ${(await resp.text()).slice(0, 400)}`);
+  }
+  const pr = await resp.json() as {
+    pullRequestId?: number;
+    title?: string;
+    description?: string;
+    status?: string;
+  };
+  const id = Number(pr.pullRequestId ?? pullRequestId);
+  return {
+    id,
+    title: pr.title ?? args.title ?? "",
+    description: pr.description ?? args.description ?? "",
+    status: pr.status ?? args.status ?? "",
+    url: `${adoBase(org)}/${project}/_git/${repository}/pullrequest/${id}`,
+  };
+}
+
+export async function addAzurePullRequestReviewer(args: {
+  organization: string;
+  project: string;
+  repository: string;
+  pullRequestId: string | number;
+  reviewerId: string;
+  vote?: number;
+  isRequired?: boolean;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzurePullRequestReviewerUpdateResult> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const repository = args.repository.trim();
+  const pullRequestId = Number(args.pullRequestId ?? 0);
+  const reviewerId = args.reviewerId.trim();
+  if (!org || !project || !repository || !pullRequestId || !reviewerId) {
+    throw new ToolError("ADO organization, project, repository, pull request ID, and reviewer ID are required to add a reviewer.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories/` +
+    `${encodeURIComponent(repository)}/pullRequests/${pullRequestId}/reviewers/${encodeURIComponent(reviewerId)}` +
+    `?api-version=${API_VERSION_GIT}`;
+  const body: Record<string, unknown> = {};
+  if (args.vote !== undefined) body["vote"] = args.vote;
+  if (args.isRequired !== undefined) body["isRequired"] = args.isRequired;
+  const resp = await adoFetch(url, auth, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    throw new ToolError(`ADO add_pull_request_reviewer failed: HTTP ${resp.status}: ${(await resp.text()).slice(0, 400)}`);
+  }
+  const reviewer = await resp.json() as {
+    id?: string;
+    displayName?: string;
+    uniqueName?: string;
+    vote?: number;
+    isRequired?: boolean;
+  };
+  return {
+    pullRequestId,
+    reviewerId: reviewer.id ?? reviewerId,
+    displayName: reviewer.displayName ?? "",
+    uniqueName: reviewer.uniqueName ?? "",
+    vote: Number(reviewer.vote ?? args.vote ?? 0),
+    isRequired: Boolean(reviewer.isRequired ?? args.isRequired ?? false),
+    action: "added",
+  };
+}
+
+export async function removeAzurePullRequestReviewer(args: {
+  organization: string;
+  project: string;
+  repository: string;
+  pullRequestId: string | number;
+  reviewerId: string;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzurePullRequestReviewerUpdateResult> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const repository = args.repository.trim();
+  const pullRequestId = Number(args.pullRequestId ?? 0);
+  const reviewerId = args.reviewerId.trim();
+  if (!org || !project || !repository || !pullRequestId || !reviewerId) {
+    throw new ToolError("ADO organization, project, repository, pull request ID, and reviewer ID are required to remove a reviewer.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories/` +
+    `${encodeURIComponent(repository)}/pullRequests/${pullRequestId}/reviewers/${encodeURIComponent(reviewerId)}` +
+    `?api-version=${API_VERSION_GIT}`;
+  const resp = await adoFetch(url, auth, { method: "DELETE" });
+  if (!resp.ok && resp.status !== 204) {
+    throw new ToolError(`ADO remove_pull_request_reviewer failed: HTTP ${resp.status}: ${(await resp.text()).slice(0, 400)}`);
+  }
+  return {
+    pullRequestId,
+    reviewerId,
+    displayName: "",
+    uniqueName: "",
+    vote: 0,
+    isRequired: false,
+    action: "removed",
+  };
+}
+
+export async function addAzurePullRequestLabel(args: {
+  organization: string;
+  project: string;
+  repository: string;
+  pullRequestId: string | number;
+  label: string;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzurePullRequestLabelUpdateResult> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const repository = args.repository.trim();
+  const pullRequestId = Number(args.pullRequestId ?? 0);
+  const label = args.label.trim();
+  if (!org || !project || !repository || !pullRequestId || !label) {
+    throw new ToolError("ADO organization, project, repository, pull request ID, and label are required to add a pull request label.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories/` +
+    `${encodeURIComponent(repository)}/pullRequests/${pullRequestId}/labels?api-version=${API_VERSION_GIT}`;
+  const resp = await postJson(url, { name: label }, auth);
+  if (!resp.ok) {
+    throw new ToolError(`ADO add_pull_request_label failed: HTTP ${resp.status}: ${(await resp.text()).slice(0, 400)}`);
+  }
+  const tag = await resp.json() as { id?: string; name?: string; active?: boolean };
+  return {
+    pullRequestId,
+    label,
+    id: tag.id ?? "",
+    name: tag.name ?? label,
+    active: Boolean(tag.active ?? true),
+    action: "added",
+  };
+}
+
+export async function removeAzurePullRequestLabel(args: {
+  organization: string;
+  project: string;
+  repository: string;
+  pullRequestId: string | number;
+  label: string;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzurePullRequestLabelUpdateResult> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const repository = args.repository.trim();
+  const pullRequestId = Number(args.pullRequestId ?? 0);
+  const label = args.label.trim();
+  if (!org || !project || !repository || !pullRequestId || !label) {
+    throw new ToolError("ADO organization, project, repository, pull request ID, and label are required to remove a pull request label.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories/` +
+    `${encodeURIComponent(repository)}/pullRequests/${pullRequestId}/labels/${encodeURIComponent(label)}` +
+    `?api-version=${API_VERSION_GIT}`;
+  const resp = await adoFetch(url, auth, { method: "DELETE" });
+  if (!resp.ok && resp.status !== 204) {
+    throw new ToolError(`ADO remove_pull_request_label failed: HTTP ${resp.status}: ${(await resp.text()).slice(0, 400)}`);
+  }
+  return {
+    pullRequestId,
+    label,
+    id: "",
+    name: label,
+    active: false,
+    action: "removed",
+  };
 }
 
 export async function listAzurePullRequestPolicyEvaluations(args: {
@@ -1063,6 +1346,129 @@ export async function getAzurePipelineRun(args: {
   };
 }
 
+export async function getAzureBuildTimeline(args: {
+  organization: string;
+  project: string;
+  buildId: string | number;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzureBuildTimelineSummary> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const buildId = Number(args.buildId ?? 0);
+  if (!org || !project || !buildId) {
+    throw new ToolError("ADO organization, project, and build ID are required to read the build timeline.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const params = new URLSearchParams({ "api-version": API_VERSION_BUILD });
+  const url = `${adoBase(org)}/${encodeURIComponent(project)}/_apis/build/builds/${buildId}/timeline?${params.toString()}`;
+  const resp = await adoFetch(url, auth);
+  const data = await parseAdoJson(resp, "get build timeline") as {
+    records?: Array<{
+      id?: string;
+      parentId?: string;
+      type?: string;
+      name?: string;
+      state?: string;
+      result?: string;
+      startTime?: string;
+      finishTime?: string;
+      log?: { id?: number; url?: string };
+      issues?: Array<{ type?: string; category?: string; message?: string }>;
+    }>;
+  };
+  const records: AzureBuildTimelineRecord[] = (data.records ?? []).map((record) => ({
+    id: record.id ?? "",
+    parentId: record.parentId ?? "",
+    type: record.type ?? "",
+    name: record.name ?? "",
+    state: record.state ?? "",
+    result: record.result ?? "",
+    startTime: record.startTime ?? "",
+    finishTime: record.finishTime ?? "",
+    logId: Number(record.log?.id ?? 0),
+    logUrl: record.log?.url ?? "",
+    issues: (record.issues ?? []).map((issue) => ({
+      type: issue.type ?? "",
+      category: issue.category ?? "",
+      message: issue.message ?? "",
+    })).filter((issue) => issue.type || issue.category || issue.message),
+  }));
+  const issues = records.flatMap((record) => record.issues);
+  return {
+    buildId,
+    failedRecords: records.filter((record) =>
+      /failed|canceled|cancelled|error/i.test(`${record.result} ${record.state}`) || record.issues.some((issue) => /error/i.test(issue.type)),
+    ),
+    errorIssues: issues.filter((issue) => /error/i.test(issue.type)),
+    warningIssues: issues.filter((issue) => /warning/i.test(issue.type)),
+  };
+}
+
+export async function getAzureBuildLogExcerpt(args: {
+  organization: string;
+  project: string;
+  buildId: string | number;
+  logId: string | number;
+  pat?: string;
+  auth?: AdoAuth;
+  maxChars?: number;
+}): Promise<AzureBuildLogExcerpt> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const buildId = Number(args.buildId ?? 0);
+  const logId = Number(args.logId ?? 0);
+  if (!org || !project || !buildId || !logId) {
+    throw new ToolError("ADO organization, project, build ID, and log ID are required to read a build log.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const params = new URLSearchParams({ "api-version": API_VERSION_BUILD });
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/build/builds/${buildId}/logs/${logId}` +
+    `?${params.toString()}`;
+  const resp = await adoFetch(url, auth, { headers: { Accept: "text/plain" } });
+  if (!resp.ok) {
+    throw new ToolError(`ADO get build log failed: HTTP ${resp.status}: ${(await resp.text()).slice(0, 400)}`);
+  }
+  const text = await resp.text();
+  const excerpt = selectBuildLogExcerpt(text, args.maxChars ?? 6000);
+  return {
+    buildId,
+    logId,
+    url,
+    ...excerpt,
+  };
+}
+
+function selectBuildLogExcerpt(text: string, maxChars: number): Omit<AzureBuildLogExcerpt, "buildId" | "logId" | "url"> {
+  const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  const diagnostics = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) =>
+      /##\[error\]|\b(error|failed|failure|exception|assertionerror|traceback)\b|npm ERR!|\bFAIL\b/i.test(line),
+    );
+  const anchor = diagnostics.at(-1)?.index ?? lines.length - 1;
+  const targetLineCount = 80;
+  const before = diagnostics.length > 0 ? 24 : targetLineCount;
+  const after = diagnostics.length > 0 ? 56 : 0;
+  let start = Math.max(0, anchor - before);
+  let end = Math.min(lines.length, anchor + after + 1);
+  if (end - start > targetLineCount) start = Math.max(0, end - targetLineCount);
+  let excerpt = lines.slice(start, end).join("\n").trim();
+  let charTruncated = false;
+  if (excerpt.length > maxChars) {
+    excerpt = excerpt.slice(Math.max(0, excerpt.length - maxChars)).trimStart();
+    charTruncated = true;
+  }
+  return {
+    lineCount: lines.length,
+    startLine: start + 1,
+    endLine: end,
+    excerpt,
+    truncated: start > 0 || end < lines.length || charTruncated,
+  };
+}
+
 export async function checkAzureDevOpsTools(args: {
   organization: string;
   pat?: string;
@@ -1274,6 +1680,190 @@ export function azureDevOpsTools(): Tool[] {
       },
     },
     {
+      name: "ado_update_pull_request",
+      description: "Update an Azure DevOps pull request title, description, or status.",
+      parameters: {
+        type: "object",
+        required: ["pull_request_id"],
+        properties: {
+          organization: { type: "string" },
+          project: { type: "string" },
+          repository: { type: "string" },
+          pull_request_id: { type: "integer" },
+          title: { type: "string" },
+          description: { type: "string" },
+          status: { type: "string", enum: ["active", "abandoned", "completed"] },
+        },
+      },
+      handler: async (ctx, payload) => {
+        const { org, project } = resolveOrgProject(ctx, payload);
+        const repository =
+          String(payload["repository"] ?? "") || String(ctx.extra["ado_repository"] ?? "");
+        const pullRequestId = Number(payload["pull_request_id"] ?? 0);
+        if (!repository || !pullRequestId) {
+          throw new ToolError("update_pull_request requires 'repository' and 'pull_request_id'.");
+        }
+        const auth = await resolveAdoAuth(ctx);
+        const result = await updateAzurePullRequest({
+          organization: org,
+          project,
+          repository,
+          pullRequestId,
+          title: payload["title"] === undefined ? undefined : String(payload["title"]),
+          description: payload["description"] === undefined ? undefined : String(payload["description"]),
+          status: payload["status"] === undefined
+            ? undefined
+            : String(payload["status"]) as "active" | "abandoned" | "completed",
+          auth,
+        });
+        return { ...result };
+      },
+    },
+    {
+      name: "ado_add_pull_request_reviewer",
+      description: "Add a reviewer to an Azure DevOps pull request or set the caller's reviewer vote.",
+      parameters: {
+        type: "object",
+        required: ["pull_request_id", "reviewer_id"],
+        properties: {
+          organization: { type: "string" },
+          project: { type: "string" },
+          repository: { type: "string" },
+          pull_request_id: { type: "integer" },
+          reviewer_id: { type: "string" },
+          vote: { type: "integer" },
+          is_required: { type: "boolean" },
+        },
+      },
+      handler: async (ctx, payload) => {
+        const { org, project } = resolveOrgProject(ctx, payload);
+        const repository =
+          String(payload["repository"] ?? "") || String(ctx.extra["ado_repository"] ?? "");
+        const pullRequestId = Number(payload["pull_request_id"] ?? 0);
+        const reviewerId = String(payload["reviewer_id"] ?? "");
+        if (!repository || !pullRequestId || !reviewerId) {
+          throw new ToolError("add_pull_request_reviewer requires 'repository', 'pull_request_id', and 'reviewer_id'.");
+        }
+        const auth = await resolveAdoAuth(ctx);
+        const result = await addAzurePullRequestReviewer({
+          organization: org,
+          project,
+          repository,
+          pullRequestId,
+          reviewerId,
+          vote: payload["vote"] === undefined ? undefined : Number(payload["vote"]),
+          isRequired: payload["is_required"] === undefined ? undefined : Boolean(payload["is_required"]),
+          auth,
+        });
+        return { ...result };
+      },
+    },
+    {
+      name: "ado_remove_pull_request_reviewer",
+      description: "Remove a reviewer from an Azure DevOps pull request.",
+      parameters: {
+        type: "object",
+        required: ["pull_request_id", "reviewer_id"],
+        properties: {
+          organization: { type: "string" },
+          project: { type: "string" },
+          repository: { type: "string" },
+          pull_request_id: { type: "integer" },
+          reviewer_id: { type: "string" },
+        },
+      },
+      handler: async (ctx, payload) => {
+        const { org, project } = resolveOrgProject(ctx, payload);
+        const repository =
+          String(payload["repository"] ?? "") || String(ctx.extra["ado_repository"] ?? "");
+        const pullRequestId = Number(payload["pull_request_id"] ?? 0);
+        const reviewerId = String(payload["reviewer_id"] ?? "");
+        if (!repository || !pullRequestId || !reviewerId) {
+          throw new ToolError("remove_pull_request_reviewer requires 'repository', 'pull_request_id', and 'reviewer_id'.");
+        }
+        const auth = await resolveAdoAuth(ctx);
+        const result = await removeAzurePullRequestReviewer({
+          organization: org,
+          project,
+          repository,
+          pullRequestId,
+          reviewerId,
+          auth,
+        });
+        return { ...result };
+      },
+    },
+    {
+      name: "ado_add_pull_request_label",
+      description: "Add a label/tag to an Azure DevOps pull request.",
+      parameters: {
+        type: "object",
+        required: ["pull_request_id", "label"],
+        properties: {
+          organization: { type: "string" },
+          project: { type: "string" },
+          repository: { type: "string" },
+          pull_request_id: { type: "integer" },
+          label: { type: "string" },
+        },
+      },
+      handler: async (ctx, payload) => {
+        const { org, project } = resolveOrgProject(ctx, payload);
+        const repository =
+          String(payload["repository"] ?? "") || String(ctx.extra["ado_repository"] ?? "");
+        const pullRequestId = Number(payload["pull_request_id"] ?? 0);
+        const label = String(payload["label"] ?? "");
+        if (!repository || !pullRequestId || !label) {
+          throw new ToolError("add_pull_request_label requires 'repository', 'pull_request_id', and 'label'.");
+        }
+        const auth = await resolveAdoAuth(ctx);
+        const result = await addAzurePullRequestLabel({
+          organization: org,
+          project,
+          repository,
+          pullRequestId,
+          label,
+          auth,
+        });
+        return { ...result };
+      },
+    },
+    {
+      name: "ado_remove_pull_request_label",
+      description: "Remove a label/tag from an Azure DevOps pull request.",
+      parameters: {
+        type: "object",
+        required: ["pull_request_id", "label"],
+        properties: {
+          organization: { type: "string" },
+          project: { type: "string" },
+          repository: { type: "string" },
+          pull_request_id: { type: "integer" },
+          label: { type: "string" },
+        },
+      },
+      handler: async (ctx, payload) => {
+        const { org, project } = resolveOrgProject(ctx, payload);
+        const repository =
+          String(payload["repository"] ?? "") || String(ctx.extra["ado_repository"] ?? "");
+        const pullRequestId = Number(payload["pull_request_id"] ?? 0);
+        const label = String(payload["label"] ?? "");
+        if (!repository || !pullRequestId || !label) {
+          throw new ToolError("remove_pull_request_label requires 'repository', 'pull_request_id', and 'label'.");
+        }
+        const auth = await resolveAdoAuth(ctx);
+        const result = await removeAzurePullRequestLabel({
+          organization: org,
+          project,
+          repository,
+          pullRequestId,
+          label,
+          auth,
+        });
+        return { ...result };
+      },
+    },
+    {
       name: "ado_link_work_item",
       description: "Attach a work item to a pull request via ArtifactLink.",
       parameters: {
@@ -1313,6 +1903,68 @@ export function azureDevOpsTools(): Tool[] {
           return { ok: false, status_code: resp.status, error: (await resp.text()).slice(0, 400) };
         }
         return { ok: true, work_item_id: workItemId, pull_request_id: prId };
+      },
+    },
+    {
+      name: "ado_get_build_timeline",
+      description: "Get failed task and issue details from an Azure DevOps build timeline.",
+      parameters: {
+        type: "object",
+        required: ["build_id"],
+        properties: {
+          organization: { type: "string" },
+          project: { type: "string" },
+          build_id: { type: "integer" },
+        },
+      },
+      handler: async (ctx, payload) => {
+        const { org, project } = resolveOrgProject(ctx, payload);
+        const buildId = Number(payload["build_id"] ?? 0);
+        if (!buildId) throw new ToolError("get_build_timeline requires 'build_id'.");
+        const auth = await resolveAdoAuth(ctx);
+        const timeline = await getAzureBuildTimeline({
+          organization: org,
+          project,
+          buildId,
+          auth,
+        });
+        return {
+          buildId: timeline.buildId,
+          failedRecords: timeline.failedRecords,
+          errorIssues: timeline.errorIssues,
+          warningIssues: timeline.warningIssues,
+        };
+      },
+    },
+    {
+      name: "ado_get_build_log_excerpt",
+      description: "Get a concise diagnostic excerpt from an Azure DevOps build log.",
+      parameters: {
+        type: "object",
+        required: ["build_id", "log_id"],
+        properties: {
+          organization: { type: "string" },
+          project: { type: "string" },
+          build_id: { type: "integer" },
+          log_id: { type: "integer" },
+          max_chars: { type: "integer" },
+        },
+      },
+      handler: async (ctx, payload) => {
+        const { org, project } = resolveOrgProject(ctx, payload);
+        const buildId = Number(payload["build_id"] ?? 0);
+        const logId = Number(payload["log_id"] ?? 0);
+        if (!buildId || !logId) throw new ToolError("get_build_log_excerpt requires 'build_id' and 'log_id'.");
+        const auth = await resolveAdoAuth(ctx);
+        const excerpt = await getAzureBuildLogExcerpt({
+          organization: org,
+          project,
+          buildId,
+          logId,
+          maxChars: Number(payload["max_chars"] ?? 6000),
+          auth,
+        });
+        return { ...excerpt };
       },
     },
     {

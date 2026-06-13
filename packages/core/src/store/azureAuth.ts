@@ -78,6 +78,66 @@ const AZURE_DEVOPS_SCOPES = [
 const TOKEN_CACHE_NAME = "cicd-agent";
 const REDIRECT_URI = "http://localhost";
 const MSAL_CACHE_SERVICE = "Microsoft.Developer.IdentityService";
+const DESKTOP_APP_NAME = process.env.MERGEPILOT_APP_NAME?.trim() || process.env.CICD_AGENT_APP_NAME?.trim() || "MergePilot";
+const DESKTOP_APP_RETURN_URI = process.env.CICD_AGENT_RETURN_URI?.trim() || "";
+
+function browserCompletionTemplate(opts: {
+  title: string;
+  message: string;
+  tone?: "success" | "error";
+}): string {
+  const appName = DESKTOP_APP_NAME;
+  const returnUri = DESKTOP_APP_RETURN_URI;
+  const isSuccess = opts.tone !== "error";
+  const iconColor = isSuccess ? "#107c41" : "#b42318";
+  const iconPath = isSuccess ? "M7.5 12.2 10.7 15.4 17.5 8.6" : "M9 9l6 6m0-6-6 6";
+  const autoReturnScript = returnUri
+    ? `setTimeout(function(){ window.location.href = ${JSON.stringify(returnUri)}; }, 900);`
+    : "";
+  const buttonAction = returnUri
+    ? `window.location.href = ${JSON.stringify(returnUri)}`
+    : "window.close()";
+  const helper = returnUri
+    ? `If your browser asks for permission, choose Open to return to ${appName}.`
+    : `You can close this tab and return to ${appName}.`;
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${opts.title}</title>
+  <style>
+    :root { color-scheme: light; font-family: "Segoe UI", Arial, sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f6f8fb; color: #111827; }
+    .card { width: min(520px, calc(100vw - 40px)); border: 1px solid #d8dee8; border-radius: 16px; background: white; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.10); padding: 42px 44px; text-align: center; }
+    .mark { width: 72px; height: 72px; margin: 0 auto 24px; border-radius: 999px; background: ${isSuccess ? "#eaf7ef" : "#fff0f0"}; display: grid; place-items: center; }
+    svg { width: 38px; height: 38px; }
+    h1 { margin: 0; font-size: 25px; line-height: 1.25; font-weight: 700; letter-spacing: 0; }
+    p { margin: 14px auto 0; max-width: 380px; color: #5b6472; font-size: 14px; line-height: 1.65; }
+    button { margin-top: 28px; border: 1px solid #cfd6e3; border-radius: 999px; background: #111827; color: white; font: inherit; font-size: 14px; font-weight: 600; padding: 11px 18px; cursor: pointer; }
+    button:hover { background: #1f2937; }
+    .helper { margin-top: 18px; font-size: 12px; color: #7a8494; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="${iconPath}" />
+      </svg>
+    </div>
+    <h1>${opts.title}</h1>
+    <p>${opts.message}</p>
+    <button onclick="${buttonAction}">Return to ${appName}</button>
+    <div class="helper">${helper}</div>
+  </main>
+  <script>
+    ${autoReturnScript}
+  </script>
+</body>
+</html>`;
+}
 const MSAL_CACHE_ACCOUNT = "MSALCache";
 const DEFAULT_DESKTOP_TENANT_ID = "1f432b2e-9e7a-4aa0-ace2-53af62d309f6";
 const DEFAULT_DESKTOP_CLIENT_ID = "03da33ef-7161-4b27-ae80-3079313f131d";
@@ -147,8 +207,15 @@ export function getAzureCredential(opts: {
       redirectUri: REDIRECT_URI,
       disableAutomaticAuthentication: !opts.interactive,
       browserCustomizationOptions: {
-        successMessage: "You are signed in. You can close this browser tab and return to CICD Agent.",
-        errorMessage: "Microsoft sign-in did not complete. Return to CICD Agent and try again.",
+        successMessage: browserCompletionTemplate({
+          title: "You're signed in",
+          message: "Microsoft sign-in is complete. Return to the app to continue your work.",
+        }),
+        errorMessage: browserCompletionTemplate({
+          title: "Sign-in did not complete",
+          message: "Return to the app and start Microsoft sign-in again.",
+          tone: "error",
+        }),
       },
       tokenCachePersistenceOptions: {
         enabled: true,
@@ -330,8 +397,15 @@ export async function getAzureDevOpsToken(opts: {
             account: account ?? undefined,
             loginHint: opts.loginHint ?? account?.username,
             openBrowser: (url) => openBrowser(url, opts.browser ?? "default"),
-            successTemplate: "Azure DevOps access is enabled. You can close this browser tab and return to CICD Agent.",
-            errorTemplate: "Azure DevOps sign-in did not complete. Return to CICD Agent and try again.",
+            successTemplate: browserCompletionTemplate({
+              title: "Azure DevOps access is enabled",
+              message: "Your account is connected for Azure DevOps. Return to the app to continue.",
+            }),
+            errorTemplate: browserCompletionTemplate({
+              title: "Azure DevOps sign-in did not complete",
+              message: "Return to the app and retry Azure DevOps consent.",
+              tone: "error",
+            }),
           });
           if (result?.accessToken) return result.accessToken;
         } catch {
@@ -379,8 +453,15 @@ export async function loginWithBrowser(
     openBrowser: (url) => openBrowser(url, browser),
     loginHint: opts.loginHint,
     prompt: "select_account",
-    successTemplate: "You are signed in. You can close this browser tab and return to CICD Agent.",
-    errorTemplate: "Microsoft sign-in did not complete. Return to CICD Agent and try again.",
+    successTemplate: browserCompletionTemplate({
+      title: "You're signed in",
+      message: "Microsoft sign-in is complete. Return to the app to continue your work.",
+    }),
+    errorTemplate: browserCompletionTemplate({
+      title: "Sign-in did not complete",
+      message: "Return to the app and start Microsoft sign-in again.",
+      tone: "error",
+    }),
   });
 
   if (!result?.accessToken) return { oid: "anonymous" };
