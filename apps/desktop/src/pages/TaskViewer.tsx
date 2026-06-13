@@ -135,6 +135,71 @@ function reviewOperationStatusClass(ok: boolean): string {
     : "bg-yellow-500/10 text-yellow-400 ring-yellow-500/20";
 }
 
+function prInsightBlockerDetails(item: PrInsightArtifactRecord): Array<{ label: string; values: string[] }> {
+  const signals = item.signals;
+  if (!signals) return [];
+  const details: Array<{ label: string; values: string[] }> = [];
+  if (signals.buildBlockers?.length) {
+    details.push({
+      label: "Build blockers",
+      values: signals.buildBlockers.slice(0, 5).map((build) => {
+        const id = build.id ? `#${build.id}` : "build";
+        const number = build.buildNumber && build.buildNumber !== String(build.id) ? ` ${build.buildNumber}` : "";
+        const definition = build.definitionName ? ` ${build.definitionName}` : "";
+        const result = build.result || build.status || "unknown";
+        return `${id}${number}${definition}: ${result}`;
+      }),
+    });
+  }
+  if (signals.policyBlockers?.length) {
+    details.push({
+      label: "Policy blockers",
+      values: signals.policyBlockers.slice(0, 5).map((policy) =>
+        `${policy.name || policy.typeName || policy.id || "policy"}: ${policy.status}${policy.isBlocking ? " (blocking)" : ""}`
+      ),
+    });
+  }
+  if (signals.activeThreads?.length) {
+    details.push({
+      label: "Active threads",
+      values: signals.activeThreads.slice(0, 5).map((thread) =>
+        `#${thread.id}${thread.author ? ` ${thread.author}` : ""}: ${thread.firstComment || "active discussion"}`
+      ),
+    });
+  }
+  if (signals.linkedWorkItems?.length) {
+    details.push({
+      label: "Linked work items",
+      values: signals.linkedWorkItems.slice(0, 5).map((workItem) =>
+        `#${workItem.id} ${workItem.type}${workItem.state ? ` [${workItem.state}]` : ""}: ${workItem.title || "untitled"}`
+      ),
+    });
+  }
+  return details;
+}
+
+export function PrInsightReadinessBlockers({ item }: { item: PrInsightArtifactRecord }): JSX.Element | null {
+  const groups = prInsightBlockerDetails(item);
+  if (groups.length === 0) return null;
+  return (
+    <section className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-600">Readiness blockers</h3>
+      <div className="grid gap-3 text-sm sm:grid-cols-2">
+        {groups.map((group) => (
+          <div key={group.label} className="space-y-1">
+            <p className="text-xs text-zinc-600">{group.label}</p>
+            <ul className="space-y-1">
+              {group.values.map((value) => (
+                <li key={value} className="break-words font-mono text-xs text-zinc-300">{value}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function checkpointActivityKindLabel(event: ChatCheckpointActivity): string {
   return event.targetCheckpointId ? "checkpoint apply" : "checkpoint";
 }
@@ -1254,7 +1319,7 @@ export default function TaskViewer(): JSX.Element {
             )}
 
             {(selectedPrInsight.signals || typeof selectedPrInsight.findingCount === "number") && (
-              <section className="grid gap-3 text-sm sm:grid-cols-4">
+              <section className="grid gap-3 text-sm sm:grid-cols-4 lg:grid-cols-6">
                 {selectedPrInsight.signals && (
                   <>
                     <div className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
@@ -1269,6 +1334,14 @@ export default function TaskViewer(): JSX.Element {
                       <p className="text-xs text-zinc-600">Failed builds</p>
                       <p className="mt-1 font-mono text-zinc-300">{selectedPrInsight.signals.failedBuildCount}</p>
                     </div>
+                    <div className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
+                      <p className="text-xs text-zinc-600">Failed policies</p>
+                      <p className="mt-1 font-mono text-zinc-300">{selectedPrInsight.signals.failedPolicyCount ?? 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
+                      <p className="text-xs text-zinc-600">Work items</p>
+                      <p className="mt-1 font-mono text-zinc-300">{selectedPrInsight.signals.workItemCount}</p>
+                    </div>
                   </>
                 )}
                 {typeof selectedPrInsight.findingCount === "number" && (
@@ -1279,6 +1352,8 @@ export default function TaskViewer(): JSX.Element {
                 )}
               </section>
             )}
+
+            <PrInsightReadinessBlockers item={selectedPrInsight} />
 
             {selectedPrInsight.risks.length > 0 && (
               <section className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">

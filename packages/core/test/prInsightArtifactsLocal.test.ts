@@ -34,6 +34,14 @@ describe("prInsightArtifactsLocal", () => {
         threadCount: 2,
         failedBuildCount: 1,
         workItemCount: 1,
+        failedPolicyCount: 1,
+        policyBlockers: [{
+          id: "policy-1",
+          name: "Minimum reviewers",
+          typeName: "Reviewer policy",
+          status: "failed",
+          isBlocking: true,
+        }],
       },
       tokensIn: 100,
       tokensOut: 20,
@@ -62,6 +70,13 @@ describe("prInsightArtifactsLocal", () => {
     const artifacts = listLocalPrInsightArtifacts({ dataDir, profileId: "profile-1" });
     expect(artifacts.map((artifact) => artifact.kind)).toEqual(["review_run", "insight_preview"]);
     expect(artifacts[0]).toMatchObject({ iterationId: 5, sourceCommit: "abc123" });
+    expect(artifacts[1].signals).toMatchObject({
+      failedPolicyCount: 1,
+      policyBlockers: [{
+        name: "Minimum reviewers",
+        status: "failed",
+      }],
+    });
   });
 
   it("preserves refreshed artifacts for the same profile, PR, and kind", () => {

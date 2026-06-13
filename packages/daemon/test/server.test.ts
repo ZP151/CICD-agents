@@ -1439,7 +1439,39 @@ describe("daemon HTTP", () => {
         return new Response(JSON.stringify({
           value: [{
             evaluationId: "policy-1",
-            status: "approved",
+            status: "failed",
+            configuration: {
+              id: 9,
+              isBlocking: true,
+              settings: { displayName: "Minimum reviewers" },
+              type: { displayName: "Reviewer policy" },
+            },
+          }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/pullrequests/42/workitems?")) {
+        return new Response(JSON.stringify({
+          value: [{ id: "123", url: "https://ado/workItems/123" }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/_apis/wit/workitems?")) {
+        return new Response(JSON.stringify({
+          value: [{
+            id: 123,
+            url: "https://ado/workItems/123",
+            fields: {
+              "System.WorkItemType": "User Story",
+              "System.Title": "Improve agent insight",
+              "System.State": "Active",
+            },
+          }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/_apis/policy/evaluations?")) {
+        return new Response(JSON.stringify({
+          value: [{
+            evaluationId: "policy-1",
+            status: "failed",
             configuration: {
               id: 9,
               isBlocking: true,
@@ -1451,7 +1483,14 @@ describe("daemon HTTP", () => {
       }
       if (url.includes("/_apis/build/builds?")) {
         return new Response(JSON.stringify({
-          value: [{ id: 77, buildNumber: "20260610.1", status: "completed", result: "failed" }],
+          value: [{
+            id: 77,
+            buildNumber: "20260610.1",
+            definition: { name: "CI" },
+            status: "completed",
+            result: "failed",
+            url: "https://ado/build/77",
+          }],
         }), { status: 200, headers: { "content-type": "application/json" } });
       }
       return new Response(JSON.stringify({ message: `unexpected URL ${url}` }), { status: 404 });
@@ -1495,6 +1534,10 @@ describe("daemon HTTP", () => {
     ]));
     expect(body.summary).toContain("PR #42");
     expect(body.summary).toContain("failed/canceled build");
+    expect(body.summary).toContain("Blocking builds: #77 20260610.1 CI: failed");
+    expect(body.summary).toContain("Policy blockers: Minimum reviewers: failed (blocking)");
+    expect(body.summary).toContain("Active threads: #5: Needs tests");
+    expect(body.summary).toContain("Info: no linked work items were found.");
     expect(body.tools.find((tool) => tool.name === "ado_get_pull_request_changes")?.stdout).toContain("/src/app.ts");
   });
 
@@ -2194,6 +2237,41 @@ describe("daemon HTTP", () => {
           warnings: ["Missing tests"],
           info: ["Small PR"],
         },
+        signals: {
+          fileCount: 4,
+          threadCount: 1,
+          failedBuildCount: 1,
+          workItemCount: 1,
+          failedPolicyCount: 1,
+          buildBlockers: [{
+            id: 77,
+            buildNumber: "20260610.1",
+            definitionName: "CI",
+            status: "completed",
+            result: "failed",
+            url: "https://ado/build/77",
+          }],
+          policyBlockers: [{
+            id: "policy-1",
+            name: "Minimum reviewers",
+            typeName: "Reviewer policy",
+            status: "failed",
+            isBlocking: true,
+          }],
+          activeThreads: [{
+            id: 5,
+            status: 1,
+            author: "Ada",
+            firstComment: "Needs tests",
+          }],
+          linkedWorkItems: [{
+            id: 123,
+            type: "User Story",
+            title: "Improve agent insight",
+            state: "Active",
+            url: "https://ado/workItems/123",
+          }],
+        },
         findingCount: 2,
         discardedFindingCount: 1,
         tokensIn: 1000,
@@ -2212,6 +2290,18 @@ describe("daemon HTTP", () => {
         summary: "Full review summary.",
         iterationId: 5,
         sourceCommit: "abc123",
+        signals: {
+          failedPolicyCount: 1,
+          policyBlockers: [{
+            name: "Minimum reviewers",
+            status: "failed",
+            isBlocking: true,
+          }],
+          linkedWorkItems: [{
+            id: 123,
+            title: "Improve agent insight",
+          }],
+        },
       },
     });
 
@@ -2227,6 +2317,14 @@ describe("daemon HTTP", () => {
         decisionQueue: "needs_human_review",
         iterationId: 5,
         sourceCommit: "abc123",
+        signals: {
+          failedBuildCount: 1,
+          failedPolicyCount: 1,
+          activeThreads: [{
+            id: 5,
+            firstComment: "Needs tests",
+          }],
+        },
       }],
       history: [{
         index: 0,
@@ -2249,6 +2347,16 @@ describe("daemon HTTP", () => {
         repository: "cicd-agent-insights",
         pullRequestId: 88,
         summary: "Full review summary.",
+        signals: {
+          buildBlockers: [{
+            id: 77,
+            result: "failed",
+          }],
+          policyBlockers: [{
+            name: "Minimum reviewers",
+            status: "failed",
+          }],
+        },
       },
     });
   });
@@ -2851,9 +2959,48 @@ describe("daemon HTTP", () => {
           }],
         }), { status: 200, headers: { "content-type": "application/json" } });
       }
+      if (url.includes("/pullrequests/42/workitems?")) {
+        return new Response(JSON.stringify({
+          value: [{ id: "123", url: "https://ado/workItems/123" }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/_apis/wit/workitems?")) {
+        return new Response(JSON.stringify({
+          value: [{
+            id: 123,
+            url: "https://ado/workItems/123",
+            fields: {
+              "System.WorkItemType": "User Story",
+              "System.Title": "Improve agent insight",
+              "System.State": "Active",
+            },
+          }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/_apis/policy/evaluations?")) {
+        return new Response(JSON.stringify({
+          value: [{
+            evaluationId: "policy-1",
+            status: "failed",
+            configuration: {
+              id: 9,
+              isBlocking: true,
+              settings: { displayName: "Minimum reviewers" },
+              type: { displayName: "Reviewer policy" },
+            },
+          }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
       if (url.includes("/_apis/build/builds?")) {
         return new Response(JSON.stringify({
-          value: [{ id: 77, buildNumber: "20260610.1", status: "completed", result: "failed" }],
+          value: [{
+            id: 77,
+            buildNumber: "20260610.1",
+            definition: { name: "CI" },
+            status: "completed",
+            result: "failed",
+            url: "https://ado/build/77",
+          }],
         }), { status: 200, headers: { "content-type": "application/json" } });
       }
       return new Response(JSON.stringify({ message: `unexpected URL ${url}` }), { status: 404 });
@@ -2869,16 +3016,40 @@ describe("daemon HTTP", () => {
     expect(preview.json()).toMatchObject({
       source: "heuristic",
       readiness: "blocked",
-      risks: ["1 failed/canceled build(s)", "1 active thread(s)"],
+      risks: ["1 failed/canceled build(s)", "1 active thread(s)", "1 failed/error policy evaluation(s)"],
       categories: {
-        blocking: ["1 failed/canceled build(s)"],
+        blocking: ["1 failed/canceled build(s)", "1 failed/error policy evaluation(s)"],
         warnings: ["1 active thread(s)"],
       },
       signals: {
         fileCount: 1,
         threadCount: 1,
         failedBuildCount: 1,
+        failedPolicyCount: 1,
         workItemCount: 1,
+        buildBlockers: [{
+          id: 77,
+          buildNumber: "20260610.1",
+          definitionName: "CI",
+          result: "failed",
+        }],
+        policyBlockers: [{
+          id: "policy-1",
+          name: "Minimum reviewers",
+          status: "failed",
+          isBlocking: true,
+        }],
+        activeThreads: [{
+          id: 5,
+          author: "Ada",
+          firstComment: "Needs test coverage",
+        }],
+        linkedWorkItems: [{
+          id: 123,
+          type: "User Story",
+          title: "Improve agent insight",
+          state: "Active",
+        }],
       },
       tokensIn: 0,
       tokensOut: 0,

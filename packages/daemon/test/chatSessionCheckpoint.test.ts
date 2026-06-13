@@ -90,6 +90,28 @@ describe("chat session Git checkpoints", () => {
         threadCount: 1,
         failedBuildCount: 1,
         workItemCount: 0,
+        failedPolicyCount: 1,
+        buildBlockers: [{
+          id: 77,
+          buildNumber: "20260610.1",
+          definitionName: "CI",
+          status: "completed",
+          result: "failed",
+          url: "https://ado/build/77",
+        }],
+        policyBlockers: [{
+          id: "policy-1",
+          name: "Minimum reviewers",
+          typeName: "Reviewer policy",
+          status: "failed",
+          isBlocking: true,
+        }],
+        activeThreads: [{
+          id: 5,
+          status: 1,
+          author: "Ada",
+          firstComment: "Needs tests",
+        }],
       },
       findingCount: 2,
       discardedFindingCount: 1,
@@ -101,7 +123,11 @@ describe("chat session Git checkpoints", () => {
     expect(prompt).toContain("## PR Readiness Context");
     expect(prompt).toContain("readiness=needs_attention");
     expect(prompt).toContain("failedBuilds=1");
+    expect(prompt).toContain("failedPolicies=1");
     expect(prompt).toContain("workItems=0");
+    expect(prompt).toContain("Build blockers: #77 20260610.1 CI: failed");
+    expect(prompt).toContain("Policy blockers: Minimum reviewers: failed (blocking)");
+    expect(prompt).toContain("Active threads: #5 Ada: Needs tests");
     expect(prompt).toContain("Required policy failed");
     expect(prompt).toContain("Do not rerun analysis unless the user asks for a fresh result");
     expect(prompt).toContain("Artifact id: profile-1/demo/42/review_run");
@@ -183,6 +209,14 @@ describe("chat session Git checkpoints", () => {
         threadCount: 0,
         failedBuildCount: 1,
         workItemCount: 1,
+        failedPolicyCount: 1,
+        policyBlockers: [{
+          id: "policy-1",
+          name: "Minimum reviewers",
+          typeName: "Reviewer policy",
+          status: "failed",
+          isBlocking: true,
+        }],
       },
       tokensIn: 1000,
       tokensOut: 300,
@@ -199,6 +233,8 @@ describe("chat session Git checkpoints", () => {
     expect(prompt).toContain("readiness=blocked");
     expect(prompt).toContain("queue=blocked");
     expect(prompt).toContain("failedBuilds=1");
+    expect(prompt).toContain("failedPolicies=1");
+    expect(prompt).toContain("Minimum reviewers: failed (blocking)");
     expect(prompt).toContain("Failed CI");
   });
 

@@ -10938,3 +10938,356 @@ Next recommended task:
 - Add richer PR readiness metadata to artifacts or workflow summaries so future
   Conversation turns can cite exact policy/work-item/validation blockers more
   precisely.
+
+### 2026-06-13 Session Update 159
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Workflow PR insight summaries now include exact readiness blocker details,
+  not only counts.
+
+Completed:
+
+- Added compact formatter helpers for PR readiness signals from:
+  - failed or canceled builds
+  - failed policy evaluations
+  - active review threads
+  - linked work items
+- Extended `inspect_pr_insight` summaries with lines such as:
+  - `Blocking builds: ...`
+  - `Policy blockers: ...`
+  - `Active threads: ...`
+  - `Linked work items: ...`
+- Preserved the existing readiness count line so frontend follow-up detection
+  and right-panel PR blocker steps continue to work.
+- Added daemon regression coverage proving a PR insight workflow response can
+  cite the exact failed build, blocking policy, active thread, and missing
+  linked work-item signal.
+
+Files changed:
+
+- `packages/daemon/src/server.ts`
+- `packages/daemon/test/server.test.ts`
+- `docs/conversation-git-agent-optimization.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+```
+
+Result:
+
+- Daemon server tests passed: 52 tests.
+- Daemon typecheck passed.
+
+Next recommended task:
+
+- Persist the exact PR readiness blocker details as structured PR insight
+  artifact metadata so later Conversation turns can retrieve and reason over
+  them without reparsing prose summaries.
+
+### 2026-06-13 Session Update 160
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- PR insight artifacts can now preserve exact readiness blocker metadata as
+  structured signals.
+
+Completed:
+
+- Extended PR insight `signals` metadata with optional structured arrays for:
+  - `buildBlockers`
+  - `policyBlockers`
+  - `activeThreads`
+  - `linkedWorkItems`
+  - `failedPolicyCount`
+- Updated the daemon PR insight preview endpoint to fetch policy evaluations
+  and linked work-item details alongside threads, changes, and builds.
+- The preview endpoint now returns exact blocker metadata while retaining the
+  existing count fields used by older UI code.
+- Updated the PR insight artifact persistence schema so saved artifacts keep
+  the richer signal details.
+- Updated desktop and core artifact types/tests so local artifact storage
+  preserves those metadata fields.
+
+Files changed:
+
+- `apps/desktop/src/api.ts`
+- `apps/desktop/src/prInsightArtifacts.test.ts`
+- `packages/core/src/prInsightArtifactsLocal.ts`
+- `packages/core/test/prInsightArtifactsLocal.test.ts`
+- `packages/daemon/src/server.ts`
+- `packages/daemon/test/server.test.ts`
+- `docs/conversation-git-agent-optimization.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/prInsightArtifactsLocal.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/prInsightArtifacts.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+```
+
+Result:
+
+- Daemon server tests passed: 52 tests.
+- Daemon typecheck passed.
+- Core PR insight artifact tests passed: 6 tests.
+- Core build passed.
+- Desktop PR insight artifact tests passed: 6 tests.
+- Desktop typecheck passed.
+
+Next recommended task:
+
+- Feed the structured PR insight artifact metadata into Conversation context
+  retrieval so follow-up turns can cite exact build, policy, thread, and
+  work-item blockers without reparsing summary text.
+
+### 2026-06-13 Session Update 161
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Conversation PR insight context now consumes structured artifact blocker
+  metadata directly.
+
+Completed:
+
+- Updated `formatPrInsightArtifactsForChat` so saved PR insight context
+  includes `failedPolicies` alongside the existing file/thread/build/work-item
+  counts.
+- Added exact blocker evidence lines to Conversation context prompts:
+  - `Build blockers: ...`
+  - `Policy blockers: ...`
+  - `Active threads: ...`
+  - `Linked work items: ...`
+- Added compact exact-blocker snippets to the top `PR Readiness Context` line
+  so the planner sees concrete blockers before the longer saved insight body.
+- Added daemon regression coverage proving saved PR insight artifacts inject
+  exact build, policy, and thread blocker details into chat context.
+
+Files changed:
+
+- `packages/daemon/src/chatSession.ts`
+- `packages/daemon/test/chatSessionCheckpoint.test.ts`
+- `docs/conversation-git-agent-optimization.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+```
+
+Result:
+
+- Daemon chat session checkpoint tests passed: 11 tests.
+- Daemon typecheck passed.
+
+Next recommended task:
+
+- Surface the same structured PR readiness blocker metadata in Activity/PR
+  insight detail views, while keeping Conversation as the primary workflow
+  surface.
+
+### 2026-06-13 Session Update 162
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Activity PR insight details now display structured readiness blocker
+  metadata for saved artifacts.
+
+Completed:
+
+- Added Activity detail formatting for saved PR insight blocker metadata:
+  - build blockers
+  - policy blockers
+  - active threads
+  - linked work items
+- Extended the PR insight signal cards with failed policy and work-item counts.
+- Kept Activity as a historical detail surface while preserving Conversation as
+  the primary workflow and follow-up action surface.
+
+Files changed:
+
+- `apps/desktop/src/pages/TaskViewer.tsx`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+```
+
+Result:
+
+- Desktop typecheck passed.
+
+Next recommended task:
+
+- Add focused rendering coverage for the Activity PR insight detail panel, then
+  continue Conversation workflow hardening around PR insight follow-up actions.
+
+### 2026-06-13 Session Update 163
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Saved PR insight blocker metadata now has focused frontend rendering coverage
+  in both Activity and Chat artifact workspace paths.
+
+Completed:
+
+- Extracted the Activity PR insight readiness blocker section into a focused
+  `PrInsightReadinessBlockers` component.
+- Added a rendering test proving Activity detail views show structured build,
+  policy, thread, and work-item blocker metadata.
+- Extended saved PR insight workspace markdown in Chat so opening a saved
+  artifact includes:
+  - failed policy count
+  - build blockers
+  - policy blockers
+  - active threads
+  - linked work items
+- Added a focused Chat markdown regression test for the saved PR insight
+  artifact workspace path.
+
+Files changed:
+
+- `apps/desktop/src/pages/TaskViewer.tsx`
+- `apps/desktop/src/pages/TaskViewer.test.tsx`
+- `apps/desktop/src/pages/Chat.tsx`
+- `apps/desktop/src/pages/ChatPrInsightArtifact.test.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/pages/ChatPrInsightArtifact.test.ts src/pages/TaskViewer.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+```
+
+Result:
+
+- Focused desktop rendering tests passed: 3 tests.
+- Desktop typecheck passed.
+
+Next recommended task:
+
+- Continue Conversation workflow hardening by making PR readiness follow-up
+  suggestions prefer structured saved artifact metadata when available.
+
+### 2026-06-13 Session Update 164
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Conversation PR readiness suggestions now prefer direct follow-up actions
+  when structured saved artifact metadata exposes exact blockers.
+
+Completed:
+
+- Updated PR workflow suggestion derivation so structured saved metadata such
+  as `Build blockers: ...`, `Policy blockers: ...`, and `workItems=0` maps to
+  direct workspace actions.
+- Exact build blockers now suggest `Rerun validation` with the `run_tests`
+  workspace action.
+- Exact policy blockers now suggest `Policy status` with the
+  `check_pr_policy` workspace action.
+- Missing or linked work-item signals now suggest `Work items` with the
+  `list_pr_work_items` workspace action.
+- Kept the existing generic PR CI readiness flow unchanged when the context is
+  prose-only and does not include structured blocker metadata.
+
+Files changed:
+
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.tsx`
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+```
+
+Result:
+
+- SuggestionReplyBar tests passed: 33 tests.
+- Desktop typecheck passed.
+
+Next recommended task:
+
+- Add an end-to-end Chat smoke that proves saved PR insight blocker metadata
+  flows from artifact context into direct PR readiness follow-up suggestions.
+
+### 2026-06-13 Session Update 165
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Added an end-to-end Chat regression path for saved PR insight blocker
+  metadata and direct workflow actions.
+
+Completed:
+
+- Extended the saved PR insight e2e fixture with structured blocker metadata:
+  failed build count, failed policy count, build blockers, policy blockers,
+  active review threads, and missing work-item signal.
+- Verified that loading a saved PR insight source shows direct follow-up
+  actions derived from blocker metadata instead of generic prose-only prompts:
+  `Rerun validation`, `Policy status`, and `Work items`.
+- Verified that the saved artifact workspace renders exact blocker details
+  from persisted metadata.
+- Verified that the direct `Rerun validation` suggestion dispatches a
+  structured workflow action instead of only inserting prompt text.
+
+Files changed:
+
+- `tests/e2e/chat-layout.spec.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "loads a saved PR insight artifact source" --project=chromium
+git diff --check
+```
+
+Next recommended task:
+
+- Continue hardening Conversation workflow actions so each visible suggestion
+  maps to a state-aware operation with clear idle/running/success/failure UI.

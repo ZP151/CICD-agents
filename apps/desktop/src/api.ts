@@ -894,6 +894,35 @@ export interface PullRequestInsightPreview {
     threadCount: number;
     failedBuildCount: number;
     workItemCount: number;
+    failedPolicyCount?: number;
+    buildBlockers?: Array<{
+      id: number;
+      buildNumber: string;
+      definitionName: string;
+      status: string;
+      result: string;
+      url: string;
+    }>;
+    policyBlockers?: Array<{
+      id: string;
+      name: string;
+      typeName: string;
+      status: string;
+      isBlocking: boolean;
+    }>;
+    activeThreads?: Array<{
+      id: number;
+      status: string | number;
+      author: string;
+      firstComment: string;
+    }>;
+    linkedWorkItems?: Array<{
+      id: number;
+      type: string;
+      title: string;
+      state: string;
+      url: string;
+    }>;
   };
   tokensIn: number;
   tokensOut: number;

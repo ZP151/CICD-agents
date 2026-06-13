@@ -43,6 +43,21 @@ function preview(overrides: Partial<PullRequestInsightPreview> = {}): PullReques
       threadCount: 2,
       failedBuildCount: 1,
       workItemCount: 1,
+      failedPolicyCount: 1,
+      policyBlockers: [{
+        id: "policy-1",
+        name: "Minimum reviewers",
+        typeName: "Reviewer policy",
+        status: "failed",
+        isBlocking: true,
+      }],
+      linkedWorkItems: [{
+        id: 123,
+        type: "User Story",
+        title: "Improve agent insight",
+        state: "Active",
+        url: "https://ado/workItems/123",
+      }],
     },
     tokensIn: 100,
     tokensOut: 20,
@@ -116,6 +131,11 @@ describe("PR insight artifacts", () => {
       signals: {
         fileCount: 3,
         failedBuildCount: 1,
+        failedPolicyCount: 1,
+        policyBlockers: [{
+          name: "Minimum reviewers",
+          status: "failed",
+        }],
       },
     });
   });

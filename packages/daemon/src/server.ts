@@ -373,6 +373,35 @@ const PrInsightArtifactSchema = z.object({
     threadCount: z.coerce.number().int().nonnegative().default(0),
     failedBuildCount: z.coerce.number().int().nonnegative().default(0),
     workItemCount: z.coerce.number().int().nonnegative().default(0),
+    failedPolicyCount: z.coerce.number().int().nonnegative().optional(),
+    buildBlockers: z.array(z.object({
+      id: z.coerce.number().int().nonnegative().default(0),
+      buildNumber: z.string().default(""),
+      definitionName: z.string().default(""),
+      status: z.string().default(""),
+      result: z.string().default(""),
+      url: z.string().default(""),
+    })).optional(),
+    policyBlockers: z.array(z.object({
+      id: z.string().default(""),
+      name: z.string().default(""),
+      typeName: z.string().default(""),
+      status: z.string().default(""),
+      isBlocking: z.boolean().default(false),
+    })).optional(),
+    activeThreads: z.array(z.object({
+      id: z.coerce.number().int().nonnegative().default(0),
+      status: z.union([z.string(), z.number()]).default(""),
+      author: z.string().default(""),
+      firstComment: z.string().default(""),
+    })).optional(),
+    linkedWorkItems: z.array(z.object({
+      id: z.coerce.number().int().nonnegative().default(0),
+      type: z.string().default(""),
+      title: z.string().default(""),
+      state: z.string().default(""),
+      url: z.string().default(""),
+    })).optional(),
   }).optional(),
   iterationId: z.coerce.number().int().nonnegative().optional(),
   sourceCommit: z.string().optional(),
@@ -1057,6 +1086,88 @@ function summarizeWorkItems(pullRequestId: number, workItems: Awaited<ReturnType
   ].join("\n");
 }
 
+function compactInlineText(value: string, maxLength = 96): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (compact.length <= maxLength) return compact;
+  return `${compact.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
+function formatBuildReadinessSignal(build: Awaited<ReturnType<typeof listAzureBuilds>>[number]): string {
+  const id = build.id ? `#${build.id}` : "build";
+  const buildNumber = build.buildNumber && build.buildNumber !== String(build.id) ? ` ${build.buildNumber}` : "";
+  const definition = build.definitionName ? ` ${compactInlineText(build.definitionName, 48)}` : "";
+  const result = build.result || build.status || "unknown";
+  return `${id}${buildNumber}${definition}: ${result}`;
+}
+
+function formatPolicyReadinessSignal(policy: Awaited<ReturnType<typeof listAzurePullRequestPolicyEvaluations>>[number]): string {
+  const name = policy.displayName || policy.typeName || `policy ${policy.configurationId}`;
+  return `${compactInlineText(name, 72)}: ${policy.status}${policy.isBlocking ? " (blocking)" : ""}`;
+}
+
+function formatThreadReadinessSignal(thread: Awaited<ReturnType<typeof listAzurePullRequestThreads>>[number]): string {
+  const firstComment = thread.comments[0]?.content ? compactInlineText(thread.comments[0].content, 80) : "active discussion";
+  return `#${thread.id}: ${firstComment}`;
+}
+
+function formatWorkItemReadinessSignal(item: Awaited<ReturnType<typeof listAzurePullRequestWorkItems>>[number]): string {
+  return `#${item.id} ${item.type}${item.state ? ` [${item.state}]` : ""}: ${compactInlineText(item.title, 80)}`;
+}
+
+function buildPrReadinessSignalMetadata(args: {
+  builds: Awaited<ReturnType<typeof listAzureBuilds>>;
+  policies: Awaited<ReturnType<typeof listAzurePullRequestPolicyEvaluations>>;
+  threads: Awaited<ReturnType<typeof listAzurePullRequestThreads>>;
+  workItems: Awaited<ReturnType<typeof listAzurePullRequestWorkItems>>;
+}) {
+  const buildBlockers = args.builds
+    .filter((build) => /failed|canceled/i.test(build.result))
+    .slice(0, 10)
+    .map((build) => ({
+      id: build.id,
+      buildNumber: build.buildNumber,
+      definitionName: build.definitionName,
+      status: build.status,
+      result: build.result,
+      url: build.url,
+    }));
+  const policyBlockers = args.policies
+    .filter((policy) => /failed|rejected|error/i.test(policy.status))
+    .slice(0, 10)
+    .map((policy) => ({
+      id: policy.id,
+      name: policy.displayName || policy.typeName || `policy ${policy.configurationId}`,
+      typeName: policy.typeName,
+      status: policy.status,
+      isBlocking: policy.isBlocking,
+    }));
+  const activeThreads = args.threads
+    .filter((thread) => thread.comments.length > 0 && String(thread.status) !== "2")
+    .slice(0, 10)
+    .map((thread) => ({
+      id: thread.id,
+      status: thread.status,
+      author: thread.comments[0]?.author?.displayName ?? "",
+      firstComment: compactInlineText(thread.comments[0]?.content ?? "", 160),
+    }));
+  const linkedWorkItems = args.workItems
+    .slice(0, 20)
+    .map((item) => ({
+      id: item.id,
+      type: item.type,
+      title: item.title,
+      state: item.state,
+      url: item.url,
+    }));
+  return {
+    failedPolicyCount: policyBlockers.length,
+    buildBlockers,
+    policyBlockers,
+    activeThreads,
+    linkedWorkItems,
+  };
+}
+
 function buildWorkflowPrInsight(args: {
   pullRequest: Awaited<ReturnType<typeof getAzurePullRequestById>>;
   threads: Awaited<ReturnType<typeof listAzurePullRequestThreads>>;
@@ -1084,6 +1195,18 @@ function buildWorkflowPrInsight(args: {
   ];
   if (changedPaths.length > 0) {
     lines.push(`Touched areas: ${changedPaths.slice(0, 10).join(", ")}${changedPaths.length > 10 ? ", ..." : ""}.`);
+  }
+  if (failedBuilds.length > 0) {
+    lines.push(`Blocking builds: ${failedBuilds.slice(0, 5).map(formatBuildReadinessSignal).join("; ")}.`);
+  }
+  if (failedPolicies.length > 0) {
+    lines.push(`Policy blockers: ${failedPolicies.slice(0, 5).map(formatPolicyReadinessSignal).join("; ")}.`);
+  }
+  if (activeThreads.length > 0) {
+    lines.push(`Active threads: ${activeThreads.slice(0, 5).map(formatThreadReadinessSignal).join("; ")}.`);
+  }
+  if (args.workItems.length > 0) {
+    lines.push(`Linked work items: ${args.workItems.slice(0, 5).map(formatWorkItemReadinessSignal).join("; ")}.`);
   }
   if (!args.pullRequest.description.trim()) lines.push("Risk signal: PR description is empty.");
   if (args.workItems.length === 0) lines.push("Info: no linked work items were found.");
@@ -3027,6 +3150,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     let threads: Awaited<ReturnType<typeof listAzurePullRequestThreads>>;
     let changes: Awaited<ReturnType<typeof listAzurePullRequestChanges>>;
     let builds: Awaited<ReturnType<typeof listAzureBuilds>>;
+    let workItems: Awaited<ReturnType<typeof listAzurePullRequestWorkItems>>;
+    let policies: Awaited<ReturnType<typeof listAzurePullRequestPolicyEvaluations>>;
     try {
       pullRequest = await getAzurePullRequestById({
         organization: profile.adoOrgUrl,
@@ -3036,7 +3161,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         auth: adoAuth,
         includeWorkItemRefs: true,
       });
-      [threads, changes, builds] = await Promise.all([
+      [threads, changes, builds, workItems, policies] = await Promise.all([
         listAzurePullRequestThreads({
           organization: profile.adoOrgUrl,
           project: profile.adoProject,
@@ -3063,6 +3188,20 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
             top: 20,
           })
           : Promise.resolve([]),
+        listAzurePullRequestWorkItems({
+          organization: profile.adoOrgUrl,
+          project: profile.adoProject,
+          repository: profile.adoRepoName,
+          pullRequestId: parsed.data.pullRequestId,
+          auth: adoAuth,
+        }).catch(() => []),
+        listAzurePullRequestPolicyEvaluations({
+          organization: profile.adoOrgUrl,
+          project: profile.adoProject,
+          repository: profile.adoRepoName,
+          pullRequestId: parsed.data.pullRequestId,
+          auth: adoAuth,
+        }).catch(() => []),
       ]);
     } catch (err) {
       return sendAdoDiagnostic(reply, err, adoAuth.mode);
@@ -3071,7 +3210,15 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     const failedBuildCount = builds.filter((build) => build.result === "failed" || build.result === "canceled").length;
     const threadCount = threads.filter((thread) => thread.comments.length > 0).length;
     const unresolvedThreadCount = threads.filter((thread) => thread.comments.length > 0 && String(thread.status) !== "2").length;
+    const failedPolicyCount = policies.filter((policy) => /failed|rejected|error/i.test(policy.status)).length;
+    const workItemCount = workItems.length || pullRequest.workItemRefs.length;
     const changedPaths = changes.changes.map((change) => change.path || change.originalPath).filter(Boolean);
+    const readinessSignals = buildPrReadinessSignalMetadata({
+      builds,
+      policies,
+      threads,
+      workItems,
+    });
     const fallbackSummary = heuristicPrInsight({
       title: pullRequest.title,
       description: pullRequest.description,
@@ -3087,12 +3234,24 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       threadCount,
       unresolvedThreadCount,
       failedBuildCount,
-      workItemCount: pullRequest.workItemRefs.length,
+      workItemCount,
       changedPaths,
     });
+    if (failedPolicyCount > 0) {
+      insightSignals.categories.blocking.push(`${failedPolicyCount} failed/error policy evaluation(s)`);
+      insightSignals.risks.push(`${failedPolicyCount} failed/error policy evaluation(s)`);
+      insightSignals.readiness = "blocked";
+    }
 
     const effectiveSettings = buildReviewLlmSettings(parsedBody.data.llmConfig);
     const llm = new LLMClient(effectiveSettings);
+    const signals = {
+      fileCount: changes.fileCount,
+      threadCount,
+      failedBuildCount,
+      workItemCount,
+      ...readinessSignals,
+    };
     if (!llm.configured) {
       return {
         source: "heuristic" as const,
@@ -3100,12 +3259,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         readiness: insightSignals.readiness,
         risks: insightSignals.risks,
         categories: insightSignals.categories,
-        signals: {
-          fileCount: changes.fileCount,
-          threadCount,
-          failedBuildCount,
-          workItemCount: pullRequest.workItemRefs.length,
-        },
+        signals,
         tokensIn: 0,
         tokensOut: 0,
       };
@@ -3118,7 +3272,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       `Files (${changes.fileCount}): ${changedPaths.slice(0, 30).join(", ") || "(none)"}`,
       `Threads: ${threadCount}, likely active: ${unresolvedThreadCount}`,
       `Builds: ${builds.length}, failed/canceled: ${failedBuildCount}`,
-      `Work items: ${pullRequest.workItemRefs.map((item) => item.id).join(", ") || "(none)"}`,
+      `Policies: ${policies.length}, failed/error: ${failedPolicyCount}`,
+      `Work items: ${workItems.map((item) => `#${item.id} ${item.title}`.trim()).join(", ") || pullRequest.workItemRefs.map((item) => item.id).join(", ") || "(none)"}`,
       "",
       "Write a concise PR insight summary for a developer. Include risk signals, readiness, and next checks. Do not invent code details.",
     ].join("\n");
@@ -3137,12 +3292,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       readiness: insightSignals.readiness,
       risks: insightSignals.risks,
       categories: insightSignals.categories,
-      signals: {
-        fileCount: changes.fileCount,
-        threadCount,
-        failedBuildCount,
-        workItemCount: pullRequest.workItemRefs.length,
-      },
+      signals,
       tokensIn: llm.usage.promptTokens,
       tokensOut: llm.usage.completionTokens,
     };

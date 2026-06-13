@@ -145,6 +145,29 @@ describe("deriveSuggestionReplies", () => {
     expect(suggestions[2]?.action).toEqual({ kind: "workspace_action", action: "list_pr_work_items" });
   });
 
+  it("prefers direct PR follow-up actions when saved artifact metadata has exact blockers", () => {
+    const suggestions = deriveSuggestionReplies({
+      workflowKind: "pr",
+      workflowPhase: "inspected",
+      metadataSuggestions: [
+        "Build blockers: #77 20260610.1 CI: failed",
+        "Policy blockers: Minimum reviewers: failed (blocking)",
+        "workItems=0",
+      ],
+    });
+
+    expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
+      "Rerun validation",
+      "Policy status",
+      "Work items",
+    ]);
+    expect(suggestions.map((suggestion) => suggestion.action)).toEqual([
+      { kind: "workspace_action", action: "run_tests" },
+      { kind: "workspace_action", action: "check_pr_policy" },
+      { kind: "workspace_action", action: "list_pr_work_items" },
+    ]);
+  });
+
   it("suggests validation recovery actions after a failed test workflow", () => {
     const suggestions = deriveSuggestionReplies({
       workflowKind: "ci",

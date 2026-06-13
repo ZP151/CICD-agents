@@ -92,8 +92,31 @@ async function mockRuntime(page: Page): Promise<void> {
           signals: {
             fileCount: 3,
             threadCount: 1,
-            failedBuildCount: 0,
-            workItemCount: 2,
+            failedBuildCount: 1,
+            failedPolicyCount: 1,
+            workItemCount: 0,
+            buildBlockers: [{
+              id: 77,
+              buildNumber: "20260610.1",
+              definitionName: "CI",
+              status: "completed",
+              result: "failed",
+              url: "https://ado/build/77",
+            }],
+            policyBlockers: [{
+              id: "policy-1",
+              name: "Minimum reviewers",
+              typeName: "Reviewer policy",
+              status: "failed",
+              isBlocking: true,
+            }],
+            activeThreads: [{
+              id: 5,
+              status: 1,
+              author: "Ada",
+              firstComment: "Needs tests",
+            }],
+            linkedWorkItems: [],
           },
           findingCount: 1,
           discardedFindingCount: 0,
@@ -357,13 +380,22 @@ async function seedSavedPrInsightSourceDraft(page: Page): Promise<void> {
           meta: {
             suggestions: [
               "Used saved PR AI insight artifact pw-profile/CICD-agents/42/review_run/2026-06-13T07%3A30%3A00.000Z for PR #42 (review_run, 2026-06-13T07:30:00.000Z).",
+              "Build blockers: #77 20260610.1 CI: failed",
+              "Policy blockers: Minimum reviewers: failed (blocking)",
+              "workItems=0",
             ],
           },
         },
       ],
       sessionId: "saved-source-session",
       statusText: null,
-      workflowState: null,
+      workflowState: {
+        status: "done",
+        workflowKind: "pr",
+        workflowPhase: "inspected",
+        currentStep: "Saved PR insight loaded",
+        completedTools: ["ado_get_pull_request_by_id"],
+      },
       customTitle: "Saved PR source",
       activeProfileId: seedProfile.id,
     }));
@@ -1259,11 +1291,37 @@ test.describe("Chat layout", () => {
   });
 
   test("loads a saved PR insight artifact source into the result workspace", async ({ page }) => {
+    const workflowPayloads: unknown[] = [];
+    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
+      workflowPayloads.push(await route.request().postDataJSON());
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          action: "run_tests",
+          repoPath: profile.repoPath,
+          summary: "Validation rerun requested from saved PR blocker metadata.",
+          workflowState: {
+            status: "done",
+            workflowKind: "ci",
+            workflowPhase: "test_passed",
+            currentStep: "Validation complete",
+            completedTools: ["test_command"],
+          },
+          tools: [],
+        }),
+      });
+    });
     await seedSavedPrInsightSourceDraft(page);
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat");
 
     await expect(page.getByText("Saved PR insight source")).toBeVisible();
+    const readinessActions = page.locator("button[data-action-kind='workspace_action']");
+    await expect(readinessActions.filter({ hasText: "Rerun validation" })).toBeVisible();
+    await expect(readinessActions.filter({ hasText: "Policy status" })).toBeVisible();
+    await expect(readinessActions.filter({ hasText: "Work items" })).toBeVisible();
     await page.getByRole("button", { name: "Open workspace" }).click();
 
     await expect(page.getByText("Result workspace", { exact: true })).toBeVisible();
@@ -1271,6 +1329,16 @@ test.describe("Chat layout", () => {
     await expect(page.getByRole("heading", { name: "Saved PR insight review" })).toBeVisible();
     await expect(page.getByText("Persisted review says the PR needs one human check before merge.")).toBeVisible();
     await expect(page.getByText("Policy status should be checked before merge.")).toBeVisible();
+    await expect(page.getByText("Failed policies: 1")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Build blockers" })).toBeVisible();
+    await expect(page.getByText("#77 20260610.1 CI: failed (https://ado/build/77)")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Policy blockers" })).toBeVisible();
+    await expect(page.getByText("Minimum reviewers: failed (blocking)", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Active threads" })).toBeVisible();
+    await expect(page.getByText("#5 Ada: Needs tests")).toBeVisible();
+    await readinessActions.filter({ hasText: "Rerun validation" }).click();
+    await expect.poll(() => workflowPayloads.length).toBe(1);
+    expect(workflowPayloads[0]).toMatchObject({ action: "run_tests" });
     await expectNoVisibleHorizontalOverflow(page);
   });
 

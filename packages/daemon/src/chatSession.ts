@@ -1394,7 +1394,8 @@ export function formatPrInsightArtifactsForChat(artifacts: PrInsightArtifactReco
       lines.push(`  - Findings: ${artifact.findingCount}; discarded=${artifact.discardedFindingCount ?? 0}`);
     }
     if (artifact.signals) {
-      lines.push(`  - Signals: files=${artifact.signals.fileCount}; threads=${artifact.signals.threadCount}; failedBuilds=${artifact.signals.failedBuildCount}; workItems=${artifact.signals.workItemCount}`);
+      lines.push(`  - Signals: files=${artifact.signals.fileCount}; threads=${artifact.signals.threadCount}; failedBuilds=${artifact.signals.failedBuildCount}; failedPolicies=${artifact.signals.failedPolicyCount ?? 0}; workItems=${artifact.signals.workItemCount}`);
+      lines.push(...prArtifactStructuredSignalLines(artifact).map((line) => `  - ${line}`));
     }
     if (artifact.risks.length > 0) {
       lines.push(`  - Risks: ${artifact.risks.slice(0, 8).join("; ")}`);
@@ -1407,7 +1408,7 @@ export function formatPrInsightArtifactsForChat(artifacts: PrInsightArtifactReco
 function prReadinessContextLines(artifacts: PrInsightArtifactRecord[]): string[] {
   return artifacts.slice(0, 3).map((artifact) => {
     const signals = artifact.signals
-      ? `files=${artifact.signals.fileCount}, threads=${artifact.signals.threadCount}, failedBuilds=${artifact.signals.failedBuildCount}, workItems=${artifact.signals.workItemCount}`
+      ? `files=${artifact.signals.fileCount}, threads=${artifact.signals.threadCount}, failedBuilds=${artifact.signals.failedBuildCount}, failedPolicies=${artifact.signals.failedPolicyCount ?? 0}, workItems=${artifact.signals.workItemCount}`
       : "signals=not saved";
     const decision = [
       artifact.decisionQueue ? `queue=${artifact.decisionQueue}` : "",
@@ -1418,14 +1419,49 @@ function prReadinessContextLines(artifacts: PrInsightArtifactRecord[]): string[]
       ...(artifact.categories?.blocking ?? []),
       ...artifact.risks.slice(0, 3),
     ].slice(0, 4);
+    const exactBlockers = prArtifactStructuredSignalLines(artifact)
+      .map((line) => line.replace(/^[^:]+:\s*/, ""))
+      .slice(0, 4);
     return [
       `- PR #${artifact.pullRequestId}: readiness=${artifact.readiness ?? "unknown"}`,
       decision ? `; ${decision}` : "",
       `; ${signals}`,
       blockers.length ? `; blockers/risks=${blockers.join(" | ")}` : "",
+      exactBlockers.length ? `; exact=${exactBlockers.join(" | ")}` : "",
       `.`,
     ].join("");
   });
+}
+
+function prArtifactStructuredSignalLines(artifact: PrInsightArtifactRecord): string[] {
+  const signals = artifact.signals;
+  if (!signals) return [];
+  const lines: string[] = [];
+  if (signals.buildBlockers?.length) {
+    lines.push(`Build blockers: ${signals.buildBlockers.slice(0, 5).map((build) => {
+      const id = build.id ? `#${build.id}` : "build";
+      const number = build.buildNumber && build.buildNumber !== String(build.id) ? ` ${build.buildNumber}` : "";
+      const definition = build.definitionName ? ` ${truncateStr(build.definitionName, 48)}` : "";
+      const result = build.result || build.status || "unknown";
+      return `${id}${number}${definition}: ${result}`;
+    }).join("; ")}`);
+  }
+  if (signals.policyBlockers?.length) {
+    lines.push(`Policy blockers: ${signals.policyBlockers.slice(0, 5).map((policy) =>
+      `${truncateStr(policy.name || policy.typeName || policy.id || "policy", 72)}: ${policy.status}${policy.isBlocking ? " (blocking)" : ""}`
+    ).join("; ")}`);
+  }
+  if (signals.activeThreads?.length) {
+    lines.push(`Active threads: ${signals.activeThreads.slice(0, 5).map((thread) =>
+      `#${thread.id}${thread.author ? ` ${thread.author}` : ""}: ${truncateStr(thread.firstComment || "active discussion", 96)}`
+    ).join("; ")}`);
+  }
+  if (signals.linkedWorkItems?.length) {
+    lines.push(`Linked work items: ${signals.linkedWorkItems.slice(0, 5).map((item) =>
+      `#${item.id} ${item.type}${item.state ? ` [${item.state}]` : ""}: ${truncateStr(item.title || "untitled", 96)}`
+    ).join("; ")}`);
+  }
+  return lines;
 }
 
 export function formatValidationArtifactsForChat(
