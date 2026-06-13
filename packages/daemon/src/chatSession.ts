@@ -1290,13 +1290,16 @@ export class ChatSessionManager {
       }
 
       if (sessionId) {
-        const validationPrompt = formatValidationArtifactsForChat(
-          await this.getBubbles(sessionId),
-          message,
-        );
+        const sessionBubbles = await this.getBubbles(sessionId);
+        const validationPrompt = formatValidationArtifactsForChat(sessionBubbles, message);
         if (validationPrompt) {
           prompt = prompt ? `${prompt}\n${validationPrompt}` : validationPrompt;
           notes.push("Used latest validation failure artifact from this conversation.");
+        }
+        const pipelinePrompt = formatPipelineFailureArtifactsForChat(sessionBubbles, message);
+        if (pipelinePrompt) {
+          prompt = prompt ? `${prompt}\n${pipelinePrompt}` : pipelinePrompt;
+          notes.push("Used latest Azure Pipeline failure artifact from this conversation.");
         }
       }
 
@@ -1495,6 +1498,34 @@ export function formatValidationArtifactsForChat(
     `- Status: ${latest.status}`,
     "",
     truncateStr(latest.content ?? "No validation artifact content was captured.", 6000),
+  ];
+  return lines.join("\n");
+}
+
+export function formatPipelineFailureArtifactsForChat(
+  bubbles: Array<{ role: string; artifacts?: ChatPlannerResult["artifacts"] }>,
+  message: string,
+): string | undefined {
+  const pipelineIntent = /\b(pipeline|ci|build|failure|failed|failing|rerun|re-run|retry|logs?|task|timeline)\b/i;
+  if (!pipelineIntent.test(message) && !wantsPrCiReadinessContext(message)) return undefined;
+  const latest = [...bubbles]
+    .reverse()
+    .flatMap((bubble) => bubble.role === "assistant" ? bubble.artifacts ?? [] : [])
+    .find((artifact) =>
+      artifact.status === "error" &&
+      artifact.artifactType === "markdown" &&
+      artifact.artifactId.startsWith("pipeline-")
+    );
+  if (!latest) return undefined;
+
+  const lines = [
+    "\n## Azure Pipeline Failure Artifact",
+    "Use this saved remote CI/CD artifact before suggesting fixes, local validation, or pipeline reruns. Do not treat it as a local test failure unless the failed task or issue clearly maps to a local command.",
+    `- Artifact id: ${latest.artifactId}`,
+    `- Title: ${latest.title}`,
+    `- Status: ${latest.status}`,
+    "",
+    truncateStr(latest.content ?? "No pipeline failure artifact content was captured.", 6000),
   ];
   return lines.join("\n");
 }

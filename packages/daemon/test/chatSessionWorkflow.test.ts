@@ -7,6 +7,7 @@ import {
   createChatToolExecutors,
   deriveWorkflowPendingAction,
   extractValidationFailureSignals,
+  formatPipelineFailureArtifactsForChat,
   formatValidationArtifactsForChat,
   inferPendingAction,
   structuredDoneAfterConfirmedAction,
@@ -322,6 +323,35 @@ describe("chat session workflow action derivation", () => {
     );
 
     expect(prompt).toBeUndefined();
+  });
+
+  it("formats the latest pipeline failure artifact for CI recovery turns", () => {
+    const prompt = formatPipelineFailureArtifactsForChat(
+      [{
+        role: "assistant",
+        content: "Pipeline failed.",
+        artifacts: [{
+          type: "artifact",
+          artifactId: "pipeline-12-run-77-failed",
+          title: "Pipeline #12 run #77 failure",
+          artifactType: "markdown",
+          status: "error",
+          content: [
+            "# Pipeline #12 failure",
+            "",
+            "## Failed timeline records",
+            "",
+            "- npm test (Task): completed/failed - Test suite failed",
+          ].join("\n"),
+        }],
+      }],
+      "Analyze the pipeline failure and tell me whether to rerun it.",
+    );
+
+    expect(prompt).toContain("Azure Pipeline Failure Artifact");
+    expect(prompt).toContain("pipeline-12-run-77-failed");
+    expect(prompt).toContain("npm test");
+    expect(prompt).toContain("Do not treat it as a local test failure");
   });
 
   it("stops after commit when the user only asked to stage and commit", () => {

@@ -354,7 +354,9 @@ export type ChatWorkflowAction =
   | "inspect_pr_insight"
   | "check_pr_policy"
   | "list_pr_work_items"
-  | "link_work_item";
+  | "link_work_item"
+  | "inspect_pipeline"
+  | "trigger_pipeline";
 
 export interface ChatWorkflowActionInput {
   sessionId?: string | null;
@@ -371,6 +373,7 @@ export interface ChatWorkflowActionInput {
   commitMode?: "commit" | "commit-push";
   validationScript?: string;
   validationArgs?: string[];
+  pipelineId?: number;
 }
 
 export interface ChatWorkflowToolResult {
@@ -390,6 +393,7 @@ export interface ChatWorkflowActionResult {
   summary: string;
   workflowState: ChatWorkflowState;
   tools: ChatWorkflowToolResult[];
+  artifacts?: ChatArtifact[];
 }
 
 export interface ChatIndexStatus {

@@ -8,6 +8,7 @@ import {
   deriveComposerStateNotice,
   deriveSuggestionReplies,
   shouldQueueSuggestionReply,
+  suggestionReplyButtonState,
 } from "./SuggestionReplyBar.js";
 
 describe("deriveSuggestionReplies", () => {
@@ -203,6 +204,24 @@ describe("deriveSuggestionReplies", () => {
     expect(suggestions[1]?.action).toEqual({ kind: "workspace_action", action: "run_build" });
   });
 
+  it("suggests remote pipeline recovery after a failed pipeline inspection", () => {
+    const suggestions = deriveSuggestionReplies({
+      workflowKind: "ci",
+      workflowPhase: "pipeline_inspected",
+      workflowStatus: "done",
+      lastAssistantText: "Pipeline #12 latest run #77 20260613.1: completed/failed. Failed or canceled: 1.",
+      metadataSuggestions: ["Pipeline #12 run #77 failure"],
+    });
+
+    expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
+      "Analyze pipeline",
+      "Rerun pipeline",
+      "Local validation",
+    ]);
+    expect(suggestions[1]?.action).toEqual({ kind: "workspace_action", action: "trigger_pipeline" });
+    expect(suggestions[2]?.action).toEqual({ kind: "workspace_action", action: "run_tests" });
+  });
+
   it("uses repository index actions and source metadata", () => {
     const suggestions = deriveSuggestionReplies({
       metadataActions: ["repo_refresh_index"],
@@ -265,10 +284,10 @@ describe("deriveCommandChips", () => {
       "Explain architecture",
       "Run tests",
       "PR insight",
-      "ADO policy",
+      "Pipeline",
     ]);
     expect(commands[3]?.action).toEqual({ kind: "workspace_action", action: "inspect_pr_insight" });
-    expect(commands[4]?.action).toEqual({ kind: "workspace_action", action: "check_pr_policy" });
+    expect(commands[4]?.action).toEqual({ kind: "workspace_action", action: "inspect_pipeline" });
   });
 
   it("hides command chips while the user is typing", () => {
@@ -356,8 +375,8 @@ describe("deriveComposerInputState", () => {
       inputDisabled: true,
       sendDisabled: true,
       controlsDisabled: true,
-      placeholder: "Dev Agent is working...",
-      inputTitle: "Dev Agent is working.",
+      placeholder: "MergePilot is working...",
+      inputTitle: "MergePilot is working.",
       sendTitle: "Stop or wait for the current response before sending another request.",
     });
   });
@@ -370,8 +389,8 @@ describe("deriveComposerInputState", () => {
       inputDisabled: true,
       sendDisabled: true,
       controlsDisabled: true,
-      placeholder: "Dev Agent is working...",
-      inputTitle: "Dev Agent is working.",
+      placeholder: "MergePilot is working...",
+      inputTitle: "MergePilot is working.",
       sendTitle: "Stop or wait for the current response before sending another request.",
     });
   });
@@ -393,6 +412,13 @@ describe("deriveComposerInputState", () => {
 });
 
 describe("SuggestionReplyBar", () => {
+  const workspaceSuggestion = {
+    id: "pr-rerun-validation",
+    label: "Rerun validation",
+    message: "Rerun relevant validation.",
+    action: { kind: "workspace_action" as const, action: "run_tests" as const },
+  };
+
   it("renders suggestion buttons", () => {
     const html = renderToStaticMarkup(
       <SuggestionReplyBar
@@ -433,6 +459,53 @@ describe("SuggestionReplyBar", () => {
 
     expect(html).toContain('data-action-kind="workspace_action"');
     expect(html).toContain('data-action-kind="requires_approval"');
+  });
+
+  it("derives visible suggestion button state from workflow context", () => {
+    expect(suggestionReplyButtonState(workspaceSuggestion, undefined)).toBe("idle");
+    expect(suggestionReplyButtonState(workspaceSuggestion, { workflowStatus: "running" })).toBe("running");
+    expect(suggestionReplyButtonState(workspaceSuggestion, { queuedSuggestionId: workspaceSuggestion.id })).toBe("queued");
+    expect(suggestionReplyButtonState(workspaceSuggestion, { blocked: true })).toBe("blocked");
+  });
+
+  it("marks running suggestions as queueable without disabling them", () => {
+    const html = renderToStaticMarkup(
+      <SuggestionReplyBar
+        suggestions={[workspaceSuggestion]}
+        onPick={() => undefined}
+        state={{ workflowStatus: "running" }}
+      />,
+    );
+
+    expect(html).toContain('data-suggestion-state="running"');
+    expect(html).toContain("Queue");
+    expect(html).toContain("Queue after current workflow");
+    expect(html).not.toContain('disabled=""');
+  });
+
+  it("marks queued and blocked suggestions as disabled stateful actions", () => {
+    const queuedHtml = renderToStaticMarkup(
+      <SuggestionReplyBar
+        suggestions={[workspaceSuggestion]}
+        onPick={() => undefined}
+        state={{ queuedSuggestionId: workspaceSuggestion.id }}
+      />,
+    );
+    const blockedHtml = renderToStaticMarkup(
+      <SuggestionReplyBar
+        suggestions={[workspaceSuggestion]}
+        onPick={() => undefined}
+        state={{ blocked: true, blockedReason: "Resolve git conflicts first." }}
+      />,
+    );
+
+    expect(queuedHtml).toContain('data-suggestion-state="queued"');
+    expect(queuedHtml).toContain("Queued");
+    expect(queuedHtml).toContain("disabled");
+    expect(blockedHtml).toContain('data-suggestion-state="blocked"');
+    expect(blockedHtml).toContain("Blocked");
+    expect(blockedHtml).toContain("Resolve git conflicts first.");
+    expect(blockedHtml).toContain("disabled");
   });
 });
 

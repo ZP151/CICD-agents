@@ -1726,6 +1726,132 @@ describe("daemon HTTP", () => {
     expect(failure.body.authMessage).not.toContain("PAT fallback");
   });
 
+  it("inspects pipeline runs and prepares trigger approval as structured CI workflow actions", async () => {
+    app = await buildApp();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      if (url.includes("/_apis/pipelines/12/runs?")) {
+        return new Response(JSON.stringify({
+          value: [{
+            id: 77,
+            name: "20260613.1",
+            state: "completed",
+            result: "failed",
+            createdDate: "2026-06-13T08:00:00Z",
+            finishedDate: "2026-06-13T08:08:00Z",
+            _links: { web: { href: "https://ado/run/77" } },
+            resources: { repositories: { self: { refName: "refs/heads/main" } } },
+          }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/_apis/build/builds/77/timeline?")) {
+        return new Response(JSON.stringify({
+          records: [{
+            id: "task-1",
+            type: "Task",
+            name: "npm test",
+            state: "completed",
+            result: "failed",
+            startTime: "2026-06-13T08:02:00Z",
+            finishTime: "2026-06-13T08:07:00Z",
+            log: { id: 9, url: "https://ado/log/9" },
+            issues: [{
+              type: "error",
+              category: "General",
+              message: "Test suite failed in apps/desktop/src/App.test.tsx",
+            }],
+          }],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/_apis/build/builds/77/logs/9?")) {
+        return new Response([
+          "Starting npm test",
+          "Running apps/desktop/src/App.test.tsx",
+          "FAIL apps/desktop/src/App.test.tsx > App > renders",
+          "AssertionError: expected true to be false",
+          "##[error]Test suite failed",
+          "npm ERR! Test failed. See above for more details.",
+        ].join("\n"), { status: 200, headers: { "content-type": "text/plain" } });
+      }
+      return new Response(JSON.stringify({ message: `unexpected URL ${url}` }), { status: 404 });
+    });
+    const profile = {
+      repoPath: process.cwd(),
+      defaultBranch: "main",
+      targetBranch: "main",
+      adoOrgUrl: "https://dev.azure.com/demo-org",
+      adoProject: "Agents",
+      adoRepoName: "cicd-agent",
+      adoPipelineId: "12",
+      adoPipelineName: "CI",
+      adoPat: "test-pat",
+    };
+
+    const inspect = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "inspect_pipeline",
+        repoPath: process.cwd(),
+        profile,
+      },
+    });
+    expect(inspect.statusCode, inspect.body).toBe(200);
+    expect(inspect.json()).toMatchObject({
+      workflowState: {
+        status: "done",
+        workflowKind: "ci",
+        workflowPhase: "pipeline_inspected",
+        completedTools: ["ado_list_pipeline_runs", "ado_get_build_timeline", "ado_get_build_log_excerpt"],
+      },
+    });
+    expect(inspect.json().summary).toContain("Pipeline #12 latest run #77");
+    expect(inspect.json().summary).toContain("Failed or canceled: 1");
+    expect(inspect.json().artifacts).toEqual([
+      expect.objectContaining({
+        type: "artifact",
+        artifactId: "pipeline-12-run-77-failed",
+        title: "Pipeline #12 run #77 failure",
+        artifactType: "markdown",
+        status: "error",
+        content: expect.stringContaining("Candidate next actions:"),
+      }),
+    ]);
+    expect(inspect.json().artifacts[0].content).toContain("npm test");
+    expect(inspect.json().artifacts[0].content).toContain("Test suite failed");
+    expect(inspect.json().artifacts[0].content).toContain("## Log excerpts");
+    expect(inspect.json().artifacts[0].content).toContain("AssertionError: expected true to be false");
+
+    const trigger = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "trigger_pipeline",
+        repoPath: process.cwd(),
+        branch: "main",
+        profile,
+      },
+    });
+    expect(trigger.statusCode, trigger.body).toBe(200);
+    const body = trigger.json() as {
+      workflowState: {
+        status: string;
+        workflowKind?: string;
+        workflowPhase?: string;
+        pendingApproval?: { riskLevel?: string; action: { tool: string; args: Record<string, unknown> } };
+      };
+    };
+    expect(body.workflowState.status).toBe("waiting_for_approval");
+    expect(body.workflowState.workflowKind).toBe("ci");
+    expect(body.workflowState.workflowPhase).toBe("waiting_for_pipeline_trigger_approval");
+    expect(body.workflowState.pendingApproval?.riskLevel).toBe("high");
+    expect(body.workflowState.pendingApproval?.action.tool).toBe("ado_trigger_pipeline");
+    expect(body.workflowState.pendingApproval?.action.args).toMatchObject({
+      pipeline_id: 12,
+      branch: "main",
+    });
+  });
+
   it("creates a stored approval proposal before linking a work item to a pull request", async () => {
     app = await buildApp();
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {

@@ -18,6 +18,7 @@ import {
   type ChatEventPayload,
   type ChatHistoryEntry,
   type ChatIndexStatus,
+  type ChatArtifact,
   type ChatUiChunk,
   type PrInsightArtifactRecord,
   type ChatWorkflowAction,
@@ -223,6 +224,17 @@ function collectConversationArtifacts(bubbles: Bubble[]): ConversationArtifactPa
     }
   }
   return [...artifacts.values()];
+}
+
+function workflowActionArtifactsFromResult(artifacts: ChatArtifact[] | undefined): ConversationArtifactPart[] {
+  return (artifacts ?? []).map((artifact) => ({
+    type: "artifact",
+    artifactId: artifact.artifactId,
+    title: artifact.title,
+    artifactType: artifact.artifactType,
+    status: artifact.status,
+    content: artifact.content,
+  }));
 }
 
 function prInsightArtifactTitle(source: SavedPrInsightSource): string {
@@ -1033,6 +1045,29 @@ export interface TaskState {
 
 type WorkflowStatus = "planning" | "running" | "waiting_for_approval" | "blocked" | "done" | "failed";
 
+export type WorkflowStepActionState = "idle" | "running" | "waiting" | "done" | "blocked";
+
+export interface WorkflowStepActionStateContext {
+  busy?: boolean;
+  workflowStatus?: WorkflowStatus | string;
+}
+
+export function workflowStepActionState(
+  step: WorkflowStep,
+  context: WorkflowStepActionStateContext,
+): WorkflowStepActionState {
+  if (context.workflowStatus === "blocked") return "blocked";
+  const workflowBusy = Boolean(
+    context.busy
+      || context.workflowStatus === "planning"
+      || context.workflowStatus === "running",
+  );
+  if (workflowBusy && step.active) return "running";
+  if (workflowBusy) return "waiting";
+  if (step.done) return "done";
+  return "idle";
+}
+
 interface ApprovalRequest {
   id: string;
   action: {
@@ -1090,9 +1125,10 @@ interface ApprovalRequest {
         | "stage"
         | "commit"
         | "push"
-        | "test"
-        | "build"
-        | "create"
+          | "test"
+          | "build"
+          | "pipeline_trigger"
+          | "create"
         | "link_work_item"
         | "stage_conflicts"
         | "continue_rebase"
@@ -1151,6 +1187,8 @@ type WorkspaceAction =
   | { type: "check_pr_policy"; pullRequestId?: number }
   | { type: "list_pr_work_items"; pullRequestId?: number }
   | { type: "link_work_item"; pullRequestId?: number; workItemId: number }
+  | { type: "inspect_pipeline"; pipelineId?: number }
+  | { type: "trigger_pipeline"; pipelineId?: number; branch?: string }
   | { type: "prepare_commit"; branch?: string; message?: string; includeUnstaged: boolean }
   | { type: "commit_and_push"; branch?: string; message?: string; includeUnstaged: boolean }
   | { type: "push_branch"; branch?: string }
@@ -2154,10 +2192,28 @@ function WorkspacePanel({
                   type="button"
                   onClick={() => runAction({ type: "list_pr_work_items" })}
                   disabled={busy}
-                  className="col-span-2 truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
+                  className="truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
                   title="List linked work items for the latest active pull request"
                 >
                   Work items
+                </button>
+                <button
+                  type="button"
+                  onClick={() => runAction({ type: "inspect_pipeline" })}
+                  disabled={busy}
+                  className="truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
+                  title="Inspect Azure DevOps pipeline readiness for this project link"
+                >
+                  Pipeline
+                </button>
+                <button
+                  type="button"
+                  onClick={() => runAction({ type: "trigger_pipeline", branch: branchName || undefined })}
+                  disabled={busy}
+                  className="col-span-2 truncate whitespace-nowrap rounded-md border border-amber-500/30 px-1.5 py-1 text-[10px] text-amber-700 transition hover:bg-amber-500/10 disabled:cursor-wait disabled:opacity-50 dark:text-amber-300"
+                  title="Prepare approval before triggering the configured Azure DevOps pipeline"
+                >
+                  Run pipeline
                 </button>
               </div>
             </>
@@ -2175,32 +2231,36 @@ function WorkspacePanel({
           <p className="mb-2 text-sm text-[rgb(var(--app-text-muted))]">Progress</p>
           {taskState ? (
             <div className="space-y-2">
-              {taskState.steps.map((step, i) => (
-                <div key={i} className="flex items-start gap-2 text-sm text-[rgb(var(--app-text-muted))]">
-                  <span className={`mt-1 h-3.5 w-3.5 shrink-0 rounded-full border ${
-                    step.done
-                      ? "border-emerald-500 bg-emerald-500"
-                      : step.active
-                        ? busy ? "border-blue-500 bg-blue-500/20" : "border-amber-500 bg-amber-500/20"
-                        : "border-[rgb(var(--app-border))]"
-                  }`} />
-                  {step.action ? (
-                    <button
-                      type="button"
-                      onClick={() => runAction(step.action!)}
-                      disabled={busy}
-                      className={`min-w-0 text-left transition hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50 ${
-                        step.done ? "text-[rgb(var(--app-text-subtle))] line-through" : "underline decoration-dotted underline-offset-2"
-                      }`}
-                      title={`Run ${step.label.toLowerCase()}`}
-                    >
-                      {step.label}
-                    </button>
-                  ) : (
-                    <span className={step.done ? "text-[rgb(var(--app-text-subtle))] line-through" : ""}>{step.label}</span>
-                  )}
-                </div>
-              ))}
+              {taskState.steps.map((step, i) => {
+                const actionState = workflowStepActionState(step, {
+                  busy,
+                  workflowStatus: workflowState?.status,
+                });
+                return (
+                  <div key={i} className="flex items-start gap-2 text-sm text-[rgb(var(--app-text-muted))]">
+                    <span className={workflowStepDotClass(step, actionState)} />
+                    {step.action ? (
+                      <button
+                        type="button"
+                        onClick={() => runAction(step.action!)}
+                        disabled={workflowStepActionDisabled(actionState)}
+                        className={workflowStepActionClass(step, actionState)}
+                        data-workflow-step-state={actionState}
+                        title={workflowStepActionTitle(step, actionState, workflowState)}
+                      >
+                        <span className="min-w-0 truncate">{step.label}</span>
+                        {actionState !== "idle" && (
+                          <span className={workflowStepActionBadgeClass(actionState)}>
+                            {workflowStepActionBadgeLabel(actionState)}
+                          </span>
+                        )}
+                      </button>
+                    ) : (
+                      <span className={step.done ? "text-[rgb(var(--app-text-subtle))] line-through" : ""}>{step.label}</span>
+                    )}
+                  </div>
+                );
+              })}
               {taskState.details && taskState.details.length > 0 && (
                 <div className="border-t border-[rgb(var(--app-border))] pt-2 text-xs leading-relaxed text-[rgb(var(--app-text-subtle))]">
                   {taskState.details.map((detail, i) => (
@@ -2211,13 +2271,64 @@ function WorkspacePanel({
             </div>
           ) : (
             <p className="text-sm leading-relaxed text-[rgb(var(--app-text-subtle))]">
-              Ask Dev Agent to inspect changes, run CI/CD checks, analyze PR insight, or prepare a commit.
+              Ask MergePilot to inspect changes, run CI/CD checks, analyze PR insight, or prepare a commit.
             </p>
           )}
         </div>
       </div>
     </div>
   );
+}
+
+function workflowStepDotClass(step: WorkflowStep, actionState: WorkflowStepActionState): string {
+  const base = "mt-1 h-3.5 w-3.5 shrink-0 rounded-full border";
+  if (actionState === "blocked") return `${base} border-red-500 bg-red-500/15`;
+  if (actionState === "running") return `${base} border-blue-500 bg-blue-500/25`;
+  if (actionState === "waiting") return `${base} border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]`;
+  if (actionState === "done" || step.done) return `${base} border-emerald-500 bg-emerald-500`;
+  if (step.active) return `${base} border-amber-500 bg-amber-500/20`;
+  return `${base} border-[rgb(var(--app-border))]`;
+}
+
+function workflowStepActionDisabled(actionState: WorkflowStepActionState): boolean {
+  return actionState === "running" || actionState === "waiting" || actionState === "blocked";
+}
+
+function workflowStepActionClass(step: WorkflowStep, actionState: WorkflowStepActionState): string {
+  const base = "inline-flex min-w-0 max-w-full items-center gap-1.5 text-left transition hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-65";
+  if (actionState === "blocked") return `${base} text-[rgb(var(--app-danger))]`;
+  if (actionState === "running") return `${base} text-blue-600 dark:text-blue-300`;
+  if (actionState === "waiting") return `${base} text-[rgb(var(--app-text-subtle))]`;
+  if (actionState === "done" || step.done) return `${base} text-[rgb(var(--app-text-subtle))]`;
+  return `${base} underline decoration-dotted underline-offset-2`;
+}
+
+function workflowStepActionBadgeClass(actionState: WorkflowStepActionState): string {
+  const base = "shrink-0 rounded border px-1 py-px text-[10px] font-medium";
+  if (actionState === "blocked") return `${base} border-red-500/30 bg-red-500/10 text-[rgb(var(--app-danger))]`;
+  if (actionState === "running") return `${base} border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-300`;
+  if (actionState === "waiting") return `${base} border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-subtle))]`;
+  return `${base} border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300`;
+}
+
+function workflowStepActionBadgeLabel(actionState: WorkflowStepActionState): string {
+  if (actionState === "running") return "Running";
+  if (actionState === "waiting") return "Wait";
+  if (actionState === "blocked") return "Blocked";
+  if (actionState === "done") return "Done";
+  return "";
+}
+
+function workflowStepActionTitle(
+  step: WorkflowStep,
+  actionState: WorkflowStepActionState,
+  workflowState: WorkflowEventState | null,
+): string {
+  if (actionState === "running") return `${step.label} is running.`;
+  if (actionState === "waiting") return "Wait for the current workflow action to finish.";
+  if (actionState === "blocked") return workflowState?.currentStep ?? "Resolve the blocked workflow before running another action.";
+  if (actionState === "done") return `Run ${step.label.toLowerCase()} again.`;
+  return `Run ${step.label.toLowerCase()}`;
 }
 
 function ArtifactWorkspaceShell({
@@ -2857,27 +2968,36 @@ function prReadinessFollowUpSteps(workflowState: WorkflowEventState, completed: 
   const linkedWorkItems = numericSignal(summary, /(\d+)\s+linked work item/i);
   const lower = summary.toLowerCase();
   const steps: WorkflowStep[] = [];
+  let activatedNextAction = false;
+  const nextActionActive = (done: boolean): boolean => {
+    if (done || activatedNextAction) return false;
+    activatedNextAction = true;
+    return true;
+  };
   if ((failedBuilds ?? 0) > 0 || /\b(ci|build|test|validation).{0,40}\b(failed|blocked|failure)\b/.test(lower)) {
+    const done = completed.has("validation_command");
     steps.push({
       label: "Review CI blockers",
-      done: false,
-      active: true,
+      done,
+      active: nextActionActive(done),
       action: { type: "run_tests" },
     });
   }
   if ((failedPolicies ?? 0) > 0 || /\b(policy|policies).{0,40}\b(failed|blocked|blocking|error)\b/.test(lower)) {
+    const done = completed.has("ado_list_pull_request_policy_evaluations");
     steps.push({
       label: "Check policy blockers",
-      done: completed.has("ado_list_pull_request_policy_evaluations"),
-      active: !completed.has("ado_list_pull_request_policy_evaluations"),
+      done,
+      active: nextActionActive(done),
       action: { type: "check_pr_policy" },
     });
   }
   if (linkedWorkItems === 0 || /\bno linked work items?\b/.test(lower)) {
+    const done = completed.has("ado_list_pull_request_work_items");
     steps.push({
       label: "Review work items",
-      done: completed.has("ado_list_pull_request_work_items"),
-      active: !completed.has("ado_list_pull_request_work_items"),
+      done,
+      active: nextActionActive(done),
       action: { type: "list_pr_work_items" },
     });
   }
@@ -2943,6 +3063,24 @@ function taskStateFromCiWorkflow(
   fallbackGoal: string | null,
 ): TaskState {
   const phase = workflowState.workflowPhase ?? "";
+  if (phase.includes("pipeline") || workflowState.pendingApproval?.action.tool === "ado_trigger_pipeline") {
+    const waiting = workflowState.status === "waiting_for_approval";
+    const running = workflowState.status === "running";
+    const inspected = workflowState.completedTools?.includes("ado_list_pipeline_runs") || phase === "pipeline_inspected";
+    const triggered = workflowState.completedTools?.includes("ado_trigger_pipeline") || phase === "pipeline_triggered";
+    return {
+      goal: fallbackGoal ?? "Pipeline workflow",
+      steps: [
+        { label: "Inspect pipeline", done: inspected, active: running && !inspected, action: { type: "inspect_pipeline" } },
+        { label: "Review latest runs", done: inspected, active: phase === "pipeline_inspected" && workflowState.status === "done" },
+        { label: "Trigger pipeline", done: triggered, active: waiting || (!triggered && inspected), action: { type: "trigger_pipeline" } },
+        { label: triggered ? "Pipeline triggered" : "Review run status", done: triggered, active: running && inspected },
+      ],
+      currentStepLabel: workflowState.pendingApproval?.action.description ?? workflowState.currentStep ?? workflowState.status,
+      details: workflowDetailLines(workflowState),
+      risk: workflowState.pendingApproval?.riskLevel,
+    };
+  }
   const isBuild = phase.includes("build") || workflowState.currentStep.toLowerCase().includes("build");
   const noun = isBuild ? "Build" : "Tests";
   const passed = phase.endsWith("_passed") || (workflowState.status === "done" && !phase.endsWith("_failed"));
@@ -2974,7 +3112,7 @@ function workflowDetailLines(workflowState: WorkflowEventState): string[] {
   }
   if (action?.preflight?.summary) lines.push(action.preflight.summary);
   if (action?.readiness?.summary) lines.push(action.readiness.summary);
-  if (workflowState.workflowKind === "pr" && workflowState.workflowSummary) {
+  if ((workflowState.workflowKind === "pr" || workflowState.workflowKind === "ci") && workflowState.workflowSummary) {
     lines.push(truncateMiddle(workflowState.workflowSummary, 160));
   }
   if (action?.workflow?.branch) lines.push(`Branch: ${action.workflow.branch}`);
@@ -3036,6 +3174,10 @@ function workspaceActionToolCandidates(action: WorkspaceAction): string[] {
       return ["ado_list_pull_request_work_items"];
     case "link_work_item":
       return ["ado_link_work_item"];
+    case "inspect_pipeline":
+      return ["ado_list_pipeline_runs", "ado_get_build_timeline", "ado_get_build_log_excerpt"];
+    case "trigger_pipeline":
+      return ["ado_trigger_pipeline"];
     case "push_branch":
       return ["git_push"];
     case "commit_and_push":
@@ -3059,6 +3201,7 @@ function workspaceActionToDirectWorkflow(action: WorkspaceAction): {
     draft?: boolean;
     pullRequestId?: number;
     workItemId?: number;
+    pipelineId?: number;
     message?: string;
     includeUnstaged?: boolean;
     commitMode?: "commit" | "commit-push";
@@ -3120,6 +3263,10 @@ function workspaceActionToDirectWorkflow(action: WorkspaceAction): {
       return { action: "list_pr_work_items", input: { pullRequestId: action.pullRequestId } };
     case "link_work_item":
       return { action: "link_work_item", input: { pullRequestId: action.pullRequestId, workItemId: action.workItemId } };
+    case "inspect_pipeline":
+      return { action: "inspect_pipeline", input: { pipelineId: action.pipelineId } };
+    case "trigger_pipeline":
+      return { action: "trigger_pipeline", input: { pipelineId: action.pipelineId, branch: action.branch } };
     case "push_branch":
       return { action: "push_branch", input: { branch: action.branch } };
     case "commit_and_push":
@@ -3164,6 +3311,10 @@ function workspaceActionFromSuggestion(suggestion: SuggestionReply): WorkspaceAc
       return { type: "check_pr_policy" };
     case "list_pr_work_items":
       return { type: "list_pr_work_items" };
+    case "inspect_pipeline":
+      return { type: "inspect_pipeline" };
+    case "trigger_pipeline":
+      return { type: "trigger_pipeline" };
   }
   return null;
 }
@@ -4766,6 +4917,23 @@ export default function Chat({ mini = false }: ChatProps) {
       });
       if (result.sessionId) setSessionId(result.sessionId);
       setWorkflowState(workflowStateWithActionSummary(result.workflowState ?? null, result.summary));
+      const workflowArtifacts = workflowActionArtifactsFromResult(result.artifacts);
+      const resultBubbleMeta: AssistantBubbleMeta | undefined = workflowArtifacts.length
+        ? { artifacts: workflowArtifacts }
+        : undefined;
+      const resultBubble: Bubble = workflowArtifacts.length
+        ? {
+            id: uid(),
+            kind: result.ok ? "assistant" as const : "error" as const,
+            text: result.summary,
+            meta: resultBubbleMeta,
+            parts: conversationPartsFromAssistantBubble({ text: result.summary, meta: resultBubbleMeta }),
+          }
+        : {
+            id: uid(),
+            kind: result.ok ? "system" as const : "error" as const,
+            text: result.summary,
+          };
       setBubbles((prev) => [
         ...prev,
         ...result.tools.map((tool) => {
@@ -4799,11 +4967,7 @@ export default function Chat({ mini = false }: ChatProps) {
             ],
           };
         }),
-        {
-          id: uid(),
-          kind: result.ok ? "system" as const : "error" as const,
-          text: result.summary,
-        },
+        resultBubble,
       ]);
       if (result.workflowState?.pendingApproval) {
         showApprovalRequest(result.workflowState.pendingApproval);
@@ -5122,7 +5286,7 @@ export default function Chat({ mini = false }: ChatProps) {
                       </svg>
                     </div>
                     <div className="text-center">
-                      <p className="text-base font-medium text-zinc-400">Ask Dev Agent anything</p>
+                      <p className="text-base font-medium text-zinc-400">Ask MergePilot anything</p>
                       <p className="mt-2 text-xs text-zinc-600 leading-relaxed">
                         "help me review changes and go all the way to PR"<br />
                         "what's changed since main?" &nbsp;·&nbsp; "run tests" &nbsp;·&nbsp; "create PR"
@@ -5324,7 +5488,17 @@ export default function Chat({ mini = false }: ChatProps) {
                 </div>
               )}
               <CommandChipBar commands={commandChips} onPick={handleSuggestionReply} disabled={commandChipsDisabled} />
-              <SuggestionReplyBar suggestions={suggestionReplies} onPick={handleSuggestionReply} />
+              <SuggestionReplyBar
+                suggestions={suggestionReplies}
+                onPick={handleSuggestionReply}
+                state={{
+                  busy,
+                  workflowStatus: workflowState?.status,
+                  queuedSuggestionId: queuedSuggestion?.id,
+                  blocked: workflowState?.status === "blocked",
+                  blockedReason: workflowState?.currentStep,
+                }}
+              />
               <div className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2 shadow-sm transition focus-within:border-[rgb(var(--app-accent))]">
                 <textarea
                   ref={textareaRef}

@@ -6,6 +6,7 @@ export interface ApprovalWorkflowEvidence {
     | "push"
     | "test"
     | "build"
+    | "pipeline_trigger"
     | "create"
     | "link_work_item"
     | "stage_conflicts"
@@ -280,6 +281,9 @@ function workflowBoundaryText(workflow: ApprovalWorkflowEvidence, nextHint?: str
     if (workflow.phase === "skip_revert") return "This approval only skips the current patch in the in-progress revert.";
   }
   if (workflow.kind === "ci") {
+    if (workflow.phase === "pipeline_trigger") {
+      return "This approval only triggers the configured Azure DevOps pipeline. Git writes and PR changes remain out of scope.";
+    }
     return workflow.phase === "build"
       ? "This approval only runs the configured build validation command. Git writes, PR creation, and pipeline triggers remain out of scope."
       : "This approval only runs the configured test validation command. Git writes, PR creation, and pipeline triggers remain out of scope.";

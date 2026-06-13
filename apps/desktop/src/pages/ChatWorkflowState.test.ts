@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   taskStateFromWorkflow,
+  workflowStepActionState,
   workflowStateWithActionSummary,
   type WorkflowEventState,
 } from "./Chat.js";
@@ -36,8 +37,14 @@ describe("Chat workflow task state", () => {
       active: true,
       action: { type: "run_tests" },
     });
-    expect(task?.steps.find((step) => step.label === "Check policy blockers")?.action).toEqual({ type: "check_pr_policy" });
-    expect(task?.steps.find((step) => step.label === "Review work items")?.action).toEqual({ type: "list_pr_work_items" });
+    expect(task?.steps.find((step) => step.label === "Check policy blockers")).toMatchObject({
+      active: false,
+      action: { type: "check_pr_policy" },
+    });
+    expect(task?.steps.find((step) => step.label === "Review work items")).toMatchObject({
+      active: false,
+      action: { type: "list_pr_work_items" },
+    });
     expect(task?.details?.[0]).toContain("Readiness: blocked");
   });
 
@@ -54,5 +61,61 @@ describe("Chat workflow task state", () => {
       "Load pull request",
       "Check policy",
     ]);
+  });
+
+  it("derives visible action states for right-panel workflow steps", () => {
+    const activeStep = {
+      label: "Review CI blockers",
+      done: false,
+      active: true,
+      action: { type: "run_tests" as const },
+    };
+    const idleStep = {
+      label: "Check policy blockers",
+      done: false,
+      active: false,
+      action: { type: "check_pr_policy" as const },
+    };
+    const doneStep = {
+      label: "Review work items",
+      done: true,
+      active: false,
+      action: { type: "list_pr_work_items" as const },
+    };
+
+    expect(workflowStepActionState(activeStep, { workflowStatus: "running" })).toBe("running");
+    expect(workflowStepActionState(idleStep, { workflowStatus: "running" })).toBe("waiting");
+    expect(workflowStepActionState(doneStep, { workflowStatus: "done" })).toBe("done");
+    expect(workflowStepActionState(idleStep, { workflowStatus: "blocked" })).toBe("blocked");
+    expect(workflowStepActionState(idleStep, { workflowStatus: "done" })).toBe("idle");
+  });
+
+  it("surfaces pipeline workflow steps after inspecting Azure Pipelines", () => {
+    const task = taskStateFromWorkflow({
+      status: "done",
+      currentStep: "Pipeline #12 readiness inspected",
+      completedTools: ["ado_list_pipeline_runs"],
+      workflowKind: "ci",
+      workflowPhase: "pipeline_inspected",
+      workflowSummary: "Pipeline #12 latest run #77 20260613.1: completed/failed.",
+    }, null);
+
+    expect(task?.goal).toBe("Pipeline workflow");
+    expect(task?.steps.map((step) => step.label)).toEqual([
+      "Inspect pipeline",
+      "Review latest runs",
+      "Trigger pipeline",
+      "Review run status",
+    ]);
+    expect(task?.steps.find((step) => step.label === "Inspect pipeline")).toMatchObject({
+      done: true,
+      action: { type: "inspect_pipeline" },
+    });
+    expect(task?.steps.find((step) => step.label === "Trigger pipeline")).toMatchObject({
+      done: false,
+      active: true,
+      action: { type: "trigger_pipeline" },
+    });
+    expect(task?.details?.[0]).toContain("Pipeline #12 latest run");
   });
 });

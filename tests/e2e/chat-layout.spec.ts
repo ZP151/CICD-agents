@@ -11,8 +11,8 @@ const profile = {
   adoProject: "Agents",
   adoRepoName: "CICD-agents",
   adoPat: "",
-  adoPipelineId: "",
-  adoPipelineName: "",
+  adoPipelineId: "12",
+  adoPipelineName: "CI",
   adoMcpEnabled: false,
   adoMcpCommand: "",
   adoMcpAuthentication: "",
@@ -259,6 +259,39 @@ async function seedRunningWorkflowDraft(page: Page): Promise<void> {
         completedTools: ["git_status"],
       },
       customTitle: null,
+      activeProfileId: seedProfile.id,
+    }));
+  }, profile);
+}
+
+async function seedRunningPrReadinessWorkflowDraft(page: Page): Promise<void> {
+  await page.addInitScript((seedProfile) => {
+    sessionStorage.setItem("dev_agent_chat_draft_v1", JSON.stringify({
+      repoPath: seedProfile.repoPath,
+      input: "",
+      bubbles: [
+        {
+          id: "user-pr",
+          kind: "user",
+          text: "Analyze PR readiness",
+        },
+        {
+          id: "assistant-pr",
+          kind: "assistant",
+          text: "Readiness: blocked. 4 changed file(s), 1 active thread(s), 1 failed/canceled build(s), 2 failed/error policy evaluation(s), 0 linked work item(s).",
+        },
+      ],
+      sessionId: "running-pr-readiness-session",
+      statusText: "Inspecting PR readiness blockers",
+      workflowState: {
+        status: "running",
+        currentStep: "Inspecting PR readiness blockers",
+        workflowKind: "pr",
+        workflowPhase: "inspected",
+        workflowSummary: "Readiness: blocked. 4 changed file(s), 1 active thread(s), 1 failed/canceled build(s), 2 failed/error policy evaluation(s), 0 linked work item(s).",
+        completedTools: ["ado_get_pull_request_by_id"],
+      },
+      customTitle: "PR readiness",
       activeProfileId: seedProfile.id,
     }));
   }, profile);
@@ -585,7 +618,7 @@ test.describe("Chat layout", () => {
     await expect(page.getByRole("button", { name: "Explain architecture" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Run tests" })).toBeVisible();
     await expect(page.getByTitle("Inspect pull request insight for the active Azure DevOps context.")).toBeVisible();
-    await expect(page.getByTitle("Check Azure DevOps pull request policy status.")).toBeVisible();
+    await expect(page.getByTitle("Inspect Azure DevOps pipeline readiness for this project link.")).toBeVisible();
     await expectNoVisibleHorizontalOverflow(page);
 
     await page.getByRole("button", { name: "Run tests" }).click();
@@ -710,6 +743,84 @@ test.describe("Chat layout", () => {
     await expectNoVisibleHorizontalOverflow(page);
   });
 
+  test("routes pipeline controls as explicit structured CI workflow actions", async ({ page }) => {
+    const workflowPayloads: Array<Record<string, unknown>> = [];
+    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      workflowPayloads.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          action: payload.action,
+          repoPath: payload.repoPath,
+          summary: payload.action === "inspect_pipeline"
+            ? "Pipeline #12 latest run #77 20260613.1: completed/failed.\nRecent runs: 1. Failed or canceled: 1."
+            : "Trigger Azure Pipeline #12 on main.",
+          workflowState: payload.action === "inspect_pipeline"
+            ? {
+                status: "done",
+                workflowKind: "ci",
+                workflowPhase: "pipeline_inspected",
+                currentStep: "Pipeline #12 readiness inspected",
+                workflowSummary: "Pipeline #12 latest run #77 20260613.1: completed/failed.",
+                completedTools: ["ado_list_pipeline_runs", "ado_get_build_timeline", "ado_get_build_log_excerpt"],
+              }
+            : {
+                status: "waiting_for_approval",
+                workflowKind: "ci",
+                workflowPhase: "waiting_for_pipeline_trigger_approval",
+                currentStep: "Trigger Azure Pipeline #12 on main.",
+                completedTools: [],
+                pendingApproval: {
+                  id: "approval_pipeline",
+                  riskLevel: "high",
+                  explanation: "Trigger Azure Pipeline #12 on main.",
+                  action: {
+                    tool: "ado_trigger_pipeline",
+                    args: { pipeline_id: 12, branch: "main" },
+                    description: "Trigger Azure Pipeline #12 on main.",
+                    workflow: { kind: "ci", phase: "pipeline_trigger", branch: "main", message: "Pipeline #12" },
+                  },
+                },
+              },
+          tools: [],
+          artifacts: payload.action === "inspect_pipeline"
+            ? [{
+                type: "artifact",
+                artifactId: "pipeline-12-run-77-failed",
+                title: "Pipeline #12 run #77 failure",
+                artifactType: "markdown",
+                status: "error",
+                content: "# Pipeline #12 failure\n\n## Log excerpts\n\n```text\nAssertionError: expected true to be false\n```\n\nCandidate next actions:\n\n- Analyze pipeline failure\n- Trigger pipeline rerun",
+              }]
+            : [],
+        }),
+      });
+    });
+
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("/chat?new=1");
+
+    await page.locator('button[data-action-kind="workspace_action"][title="Inspect Azure DevOps pipeline readiness for this project link."]').click();
+    await expect.poll(() => workflowPayloads.length).toBe(1);
+    expect(workflowPayloads[0]).toMatchObject({ action: "inspect_pipeline" });
+    expect(workflowPayloads[0]).not.toHaveProperty("pullRequestId");
+    await expect(page.getByText("Pipeline #12 run #77 failure").first()).toBeVisible();
+
+    await page.getByTitle("Expand context panel").click();
+    await expect(page.getByRole("button", { name: "Trigger pipeline" })).toBeVisible();
+    await page.getByTitle("Prepare approval before triggering the configured Azure DevOps pipeline").click();
+    await expect.poll(() => workflowPayloads.length).toBe(2);
+    expect(workflowPayloads[1]).toMatchObject({
+      action: "trigger_pipeline",
+      branch: "main",
+    });
+    await expect(page.getByText("Trigger Azure Pipeline #12 on main.").first()).toBeVisible();
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
   test("shows approval composer notice and disables composer controls", async ({ page }) => {
     await seedPendingApprovalDraft(page);
     await page.setViewportSize({ width: 1100, height: 780 });
@@ -742,6 +853,28 @@ test.describe("Chat layout", () => {
     await expect(page.getByText("Commit message").first()).toBeVisible();
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(page.getByText("Queued follow-up:")).toBeHidden();
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("shows right-panel PR readiness step states during an active workflow", async ({ page }) => {
+    await seedRunningPrReadinessWorkflowDraft(page);
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("/chat");
+    await page.getByTitle("Expand context panel").click();
+
+    const runningStep = page.locator('button[data-workflow-step-state="running"]').filter({ hasText: "Review CI blockers" });
+    const waitingPolicyStep = page.locator('button[data-workflow-step-state="waiting"]').filter({ hasText: "Check policy blockers" });
+    const waitingWorkItemStep = page.locator('button[data-workflow-step-state="waiting"]').filter({ hasText: "Review work items" });
+
+    await expect(runningStep).toBeVisible();
+    await expect(runningStep).toContainText("Running");
+    await expect(runningStep).toBeDisabled();
+    await expect(waitingPolicyStep).toBeVisible();
+    await expect(waitingPolicyStep).toContainText("Wait");
+    await expect(waitingPolicyStep).toBeDisabled();
+    await expect(waitingWorkItemStep).toBeVisible();
+    await expect(waitingWorkItemStep).toContainText("Wait");
+    await expect(waitingWorkItemStep).toBeDisabled();
     await expectNoVisibleHorizontalOverflow(page);
   });
 
