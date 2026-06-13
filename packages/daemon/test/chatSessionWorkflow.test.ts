@@ -6,6 +6,8 @@ import { LLMClient, resetSettingsForTests } from "@cicd-agent/core";
 import {
   createChatToolExecutors,
   deriveWorkflowPendingAction,
+  extractValidationFailureSignals,
+  formatValidationArtifactsForChat,
   inferPendingAction,
   structuredDoneAfterConfirmedAction,
 } from "../src/chatSession.js";
@@ -190,7 +192,111 @@ describe("chat session workflow action derivation", () => {
     ]);
     expect(done?.result.artifacts?.[0]?.content).toContain("# Test Failure Report");
     expect(done?.result.artifacts?.[0]?.content).toContain("Package filters: `@demo/app`");
+    expect(done?.result.artifacts?.[0]?.content).toContain("## Recovery Signals");
+    expect(done?.result.artifacts?.[0]?.content).toContain("Framework: vitest");
+    expect(done?.result.artifacts?.[0]?.content).toContain("Candidate rerun");
     expect(done?.result.artifacts?.[0]?.content).toContain("Expected true to be false");
+  });
+
+  it("extracts Vitest failure files and focused rerun commands", () => {
+    const signals = extractValidationFailureSignals(
+      [
+        "FAIL src/components/Widget.test.tsx > Widget > renders status",
+        "AssertionError: expected true to be false",
+      ].join("\n"),
+      ".\\scripts\\windows\\pnpm-project.ps1 --filter @demo/app test",
+    );
+
+    expect(signals.framework).toBe("vitest");
+    expect(signals.files).toContain("src/components/Widget.test.tsx");
+    expect(signals.suggestedCommands).toContain(".\\scripts\\windows\\pnpm-project.ps1 --filter @demo/app test src/components/Widget.test.tsx");
+    expect(signals.diagnostics.some((line) => line.includes("expected true"))).toBe(true);
+  });
+
+  it("extracts pytest node ids and focused rerun commands", () => {
+    const signals = extractValidationFailureSignals(
+      [
+        "FAILED tests/test_api.py::test_creates_pull_request - AssertionError: expected 201",
+        "Traceback (most recent call last):",
+      ].join("\n"),
+      "pytest",
+    );
+
+    expect(signals.framework).toBe("pytest");
+    expect(signals.files).toContain("tests/test_api.py");
+    expect(signals.tests).toContain("tests/test_api.py::test_creates_pull_request");
+    expect(signals.suggestedCommands).toContain("pytest tests/test_api.py::test_creates_pull_request");
+  });
+
+  it("extracts dotnet build diagnostics and filter hints", () => {
+    const signals = extractValidationFailureSignals(
+      [
+        "ClaimBot.Tests.csproj",
+        "ClaimControllerTests.CreateClaim Failed",
+        "Controllers\\ClaimController.cs(42,13): error CS0103: The name 'claim' does not exist in the current context",
+      ].join("\n"),
+      "dotnet test ClaimBot.Tests.csproj",
+    );
+
+    expect(signals.framework).toBe("dotnet");
+    expect(signals.files).toEqual(expect.arrayContaining(["ClaimBot.Tests.csproj", "Controllers/ClaimController.cs"]));
+    expect(signals.tests).toContain("ClaimControllerTests.CreateClaim");
+    expect(signals.suggestedCommands).toContain("dotnet test ClaimBot.Tests.csproj --filter FullyQualifiedName~ClaimControllerTests.CreateClaim");
+    expect(signals.diagnostics.some((line) => line.includes("CS0103"))).toBe(true);
+  });
+
+  it("formats the latest validation failure artifact for recovery turns", () => {
+    const prompt = formatValidationArtifactsForChat(
+      [
+        {
+          role: "assistant",
+          artifacts: [{
+            type: "artifact",
+            artifactId: "validation-test-failed-old",
+            title: "Old test failure report",
+            artifactType: "markdown",
+            status: "error",
+            content: "# Old Failure\nold output",
+          }],
+        },
+        {
+          role: "assistant",
+          artifacts: [{
+            type: "artifact",
+            artifactId: "validation-test-failed-new",
+            title: "Test failure report",
+            artifactType: "markdown",
+            status: "error",
+            content: "# Test Failure Report\nFAIL src/app.test.ts",
+          }],
+        },
+      ],
+      "Analyze the latest test failure and suggest a fix.",
+    );
+
+    expect(prompt).toContain("Latest Validation Failure Artifact");
+    expect(prompt).toContain("validation-test-failed-new");
+    expect(prompt).toContain("FAIL src/app.test.ts");
+    expect(prompt).not.toContain("old output");
+  });
+
+  it("does not inject validation failure artifacts into unrelated turns", () => {
+    const prompt = formatValidationArtifactsForChat(
+      [{
+        role: "assistant",
+        artifacts: [{
+          type: "artifact",
+          artifactId: "validation-build-failed-abc",
+          title: "Build failure report",
+          artifactType: "markdown",
+          status: "error",
+          content: "# Build Failure Report",
+        }],
+      }],
+      "Explain the project architecture.",
+    );
+
+    expect(prompt).toBeUndefined();
   });
 
   it("stops after commit when the user only asked to stage and commit", () => {

@@ -325,6 +325,37 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
     add("auth-pat", "PAT fallback", "Help me configure the optional Azure DevOps PAT fallback for this project link.");
   }
 
+  if (context.workflowKind === "ci") {
+    const failed = phase.includes("failed") || /\b(test|build|validation).{0,32}\bfailed\b/.test(text);
+    const isBuild = phase.includes("build") || /\bbuild failed\b/.test(text);
+    if (failed) {
+      add(
+        "ci-analyze-failure",
+        "Analyze failure",
+        "Analyze the latest validation failure report and suggest the smallest safe fix or rerun.",
+      );
+      add(
+        "ci-rerun",
+        isBuild ? "Rerun build" : "Rerun tests",
+        isBuild
+          ? "Rerun the relevant build command after reviewing the validation failure."
+          : "Rerun the relevant tests after reviewing the validation failure.",
+        { kind: "workspace_action", action: isBuild ? "run_build" : "run_tests" },
+      );
+      add("ci-review-changes", "Review changes", "Review changed files against the validation failure context.", {
+        kind: "workspace_action",
+        action: "inspect_changes",
+      });
+    } else if (phase.includes("passed")) {
+      add("ci-review", "Review changes", "Review the validated changes before preparing a commit.", {
+        kind: "workspace_action",
+        action: "inspect_changes",
+      });
+      add("ci-commit", "Prepare commit", "Prepare a scoped commit for the validated changes.");
+      add("ci-pr", "PR readiness", "Check whether these validated changes are ready for pull request insight.");
+    }
+  }
+
   if (context.workflowKind === "commit") {
     if (phase.includes("stage") || phase.includes("preflight")) {
       add("commit-diff", "Detailed diff", "Show a detailed diff-aware review before staging.");

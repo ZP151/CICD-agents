@@ -17,6 +17,7 @@ venv/
 .runtime/
 .coverage
 htmlcov/
+output/
 
 # Node / pnpm
 node_modules/

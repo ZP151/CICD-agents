@@ -128,6 +128,41 @@ describe("deriveSuggestionReplies", () => {
     ]);
   });
 
+  it("suggests validation recovery actions after a failed test workflow", () => {
+    const suggestions = deriveSuggestionReplies({
+      workflowKind: "ci",
+      workflowPhase: "test_failed",
+      workflowStatus: "done",
+      lastAssistantText: "Tests failed. Key output: FAIL src/app.test.ts",
+      metadataSuggestions: ["Inspect failing output", "Review changed files", "Rerun validation"],
+    });
+
+    expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
+      "Analyze failure",
+      "Rerun tests",
+      "Review changes",
+    ]);
+    expect(suggestions[0]?.action).toEqual({ kind: "fill_composer" });
+    expect(suggestions[1]?.action).toEqual({ kind: "workspace_action", action: "run_tests" });
+    expect(suggestions[2]?.action).toEqual({ kind: "workspace_action", action: "inspect_changes" });
+  });
+
+  it("suggests build rerun after a failed build workflow", () => {
+    const suggestions = deriveSuggestionReplies({
+      workflowKind: "ci",
+      workflowPhase: "build_failed",
+      workflowStatus: "done",
+      lastAssistantText: "Build failed.",
+    });
+
+    expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
+      "Analyze failure",
+      "Rerun build",
+      "Review changes",
+    ]);
+    expect(suggestions[1]?.action).toEqual({ kind: "workspace_action", action: "run_build" });
+  });
+
   it("uses repository index actions and source metadata", () => {
     const suggestions = deriveSuggestionReplies({
       metadataActions: ["repo_refresh_index"],

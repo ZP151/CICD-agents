@@ -10385,3 +10385,126 @@ Next recommended task:
 - Use the validation failure artifact as input for the next recovery turn:
   suggest targeted reruns, likely failing files, and safe follow-up actions
   based on the artifact content and changed-file context.
+
+### 2026-06-13 Session Update 148
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Validation failure artifacts now drive the next recovery interaction instead
+  of only sitting in the Result workspace.
+
+Completed:
+
+- Added CI-specific suggestion replies after failed validation workflows:
+  - analyze failure
+  - rerun tests or rerun build
+  - review changed files against the failure
+- Mapped rerun suggestions to structured workspace actions:
+  - `run_tests`
+  - `run_build`
+  - `inspect_changes`
+- Added daemon-side validation artifact context injection:
+  - detects user follow-up messages about validation, tests, builds, failure,
+    retry, rerun, fix, or analysis
+  - finds the latest validation markdown artifact in the current chat session
+  - injects a capped artifact summary into the next planner prompt
+  - explicitly tells the agent not to rerun validation unless the user asks
+- Added focused regression coverage for CI suggestion replies and validation
+  artifact context formatting.
+- Added `output/` to `.gitignore` so Playwright screenshots and local reports
+  stay out of future commits.
+
+Files changed:
+
+- `.gitignore`
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.tsx`
+- `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
+- `packages/daemon/src/chatSession.ts`
+- `packages/daemon/test/chatSessionWorkflow.test.ts`
+- `docs/conversation-git-agent-optimization.md`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
+.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+```
+
+Result:
+
+- Desktop SuggestionReplyBar tests passed: 31 tests.
+- Daemon chat session workflow tests passed: 25 tests.
+- Desktop typecheck passed.
+- Daemon typecheck passed.
+
+Note:
+
+- Local Vite/daemon Node processes were holding native modules open, which
+  prevented pnpm from repairing workspace links. Those repo-local processes
+  were stopped, then `.\.tools\pnpm.exe install --frozen-lockfile` restored
+  pnpm links and test shims.
+
+Next recommended task:
+
+- Use the recovery signals in the next agent decision step so failed validation
+  follow-ups can choose between source investigation, focused rerun, or broader
+  validation based on the captured failure type.
+
+### 2026-06-13 Session Update 149
+
+Phase:
+
+Phase 8: Product Hardening And Distribution / Conversation Workflow Breadth
+
+Status change:
+
+- Validation failure artifacts now include initial framework-specific recovery
+  signals, moving failed test/build recovery closer to agent-style diagnosis
+  instead of generic rerun prompts.
+
+Completed:
+
+- Added validation failure signal extraction for common failure output shapes:
+  - Vitest/Jest test files such as `.test.tsx` and `.spec.ts`
+  - pytest node ids such as `tests/test_api.py::test_case`
+  - dotnet project files, compiler diagnostics, and failed test names
+- Added recovery signal sections to failed validation artifacts:
+  - likely framework
+  - failing files
+  - failing tests
+  - candidate focused rerun commands
+  - compact diagnostics
+- Added focused tests for Vitest, pytest, and dotnet extraction behavior.
+- Fixed dotnet failed-test extraction so project filenames are not mistaken for
+  test names when the failure output spans multiple lines.
+
+Files changed:
+
+- `packages/daemon/src/chatSession.ts`
+- `packages/daemon/test/chatSessionWorkflow.test.ts`
+- `docs/dev-agent-progress-tracker.md`
+
+Tests run:
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+```
+
+Result:
+
+- Daemon chat session workflow tests passed: 25 tests.
+- Desktop SuggestionReplyBar tests passed: 31 tests.
+
+Next recommended task:
+
+- Feed the extracted recovery signals into the planner prompt with stronger
+  instruction priority so the agent can propose the smallest useful follow-up
+  action after a failed validation run.

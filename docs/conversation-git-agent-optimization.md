@@ -163,6 +163,7 @@ Current implemented strengths:
 - When no explicit Project Link validation command is configured, validation preflight can derive focused package commands from changed files' nearest `package.json` files, including multi-package pnpm workspace filters when all touched packages share the same validation script.
 - Validation approval cards now render structured scope evidence: command source, selected script, package filters, package roots, changed-file count, and the selection reason.
 - Failed validation confirmations now also generate selectable markdown Conversation artifacts with command, package scope, key output, stdout/stderr excerpts, and an error status for the Result workspace.
+- Validation failure artifacts now feed the next recovery turn when the user asks to analyze, fix, retry, or rerun validation, CI failure suggestion chips offer analyze failure, rerun tests/build, and review changes actions, and failed validation artifacts include initial Vitest/Jest, pytest, and dotnet recovery signals.
 - Workspace workflow actions now detect unresolved merge/rebase-style Git operation states and block normal commit, push, branch switch, and PR creation approvals while conflicts are unresolved.
 - Rebase recovery now has first-class structured workflow actions for continue, abort, and skip. These create exact `git_rebase` approval proposals only when a rebase is actually in progress and complete with deterministic `git` workflow state after confirmation.
 - Merge, cherry-pick, and revert recovery now use the same structured approval model through `git_merge`, `git_cherry_pick`, and `git_revert` recovery actions.
@@ -174,7 +175,7 @@ Remaining shortfalls:
 - The right panel exposes useful branch/commit/PR follow-up controls and compact workflow metadata, but branch readiness and richer PR artifact rendering are not yet dedicated workspaces.
 - PR creation and first PR follow-ups have durable structured actions and clearer failure states, but richer PR insight artifact rendering still needs a dedicated Conversation workspace.
 - There is no single source of truth for all Chat agent responsibilities unless the use-case catalog is kept in sync with tests and docs.
-- Test/build execution now has an initial dedicated validation workflow state, command-source preflight, changed-file context, single-package and compatible multi-package command derivation, UI-visible selection evidence, failure excerpts, and selectable failure artifacts, but still needs richer framework-specific test selection.
+- Test/build execution now has an initial dedicated validation workflow state, command-source preflight, changed-file context, single-package and compatible multi-package command derivation, UI-visible selection evidence, failure excerpts, selectable failure artifacts, recovery-turn artifact context, CI failure follow-up suggestions, and initial framework-specific recovery signals, but still needs planner-level use of those signals to pick the smallest safe next action.
 - PR insight and CI/CD actions are powerful but not yet presented as a unified “analyze this PR / validate this branch / prepare release” conversation workflow.
 - Conflict recovery still needs a dedicated desktop conflict-file picker and deeper conflicted-repository coverage for cherry-pick and revert operations.
 
