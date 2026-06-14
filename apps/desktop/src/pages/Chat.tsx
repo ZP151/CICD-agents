@@ -6,6 +6,7 @@ import {
   confirmAction as apiConfirmAction,
   confirmPlan,
   cancelPlan,
+  deleteChatSession,
   discoverAdoProjectLinkOptions,
   fetchChatIndexStatus,
   fetchChatHistory,
@@ -13,6 +14,7 @@ import {
   fetchChatState,
   fetchProfilePrInsightArtifactById,
   runChatWorkflowAction,
+  updateChatSessionMetadata,
   type AdoDiscoveryKind,
   type AdoDiscoveryOption,
   type ChatEventPayload,
@@ -179,6 +181,9 @@ function readCustomConversationModel(): CustomConversationModel {
     const raw = localStorage.getItem("dev_agent_settings");
     if (!raw) return { available: false, label: "Additional model", provider: "azure" };
     const settings = JSON.parse(raw) as Record<string, unknown>;
+    if (settings["additionalModelsEnabled"] !== true) {
+      return { available: false, label: "Additional model", provider: "azure" };
+    }
     const provider = settings["llmProvider"] === "openai" ? "openai" : "azure";
     if (provider === "openai") {
       const model = String(settings["openaiModel"] ?? "").trim();
@@ -213,6 +218,22 @@ function riskColor(level = "low") {
   if (level === "high") return "text-red-400 bg-red-900/30";
   if (level === "medium") return "text-yellow-400 bg-yellow-900/30";
   return "text-green-400 bg-green-900/30";
+}
+
+function sortChatHistory(history: ChatHistoryEntry[]): ChatHistoryEntry[] {
+  return [...history].sort((a, b) => {
+    if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
+    return (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt);
+  });
+}
+
+function chatHistoryTitle(entry: ChatHistoryEntry): string {
+  return entry.title?.trim() || entry.preview?.trim() || "(empty)";
+}
+
+function chatHistoryPreview(entry: ChatHistoryEntry): string {
+  const preview = entry.preview?.trim() ?? "";
+  return preview && preview !== chatHistoryTitle(entry) ? preview : "";
 }
 
 function collectConversationArtifacts(bubbles: Bubble[]): ConversationArtifactPart[] {
@@ -557,6 +578,8 @@ function GitDiffRenderer({ result }: { result: Record<string, unknown> }) {
         <div key={f.path} className="rounded border border-zinc-700/40 overflow-hidden">
           <button
             onClick={() => setExpanded((prev) => prev === f.path ? null : f.path)}
+            title={`${expanded === f.path ? "Collapse" : "Expand"} diff for ${f.path}`}
+            aria-label={`${expanded === f.path ? "Collapse" : "Expand"} diff for ${f.path}`}
             className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-zinc-700/20"
           >
             <span className="font-mono text-zinc-300 flex-1 truncate">{f.path}</span>
@@ -955,11 +978,7 @@ function MetaPanel({
   const sourceMessages = new Set(insightSources.map((source) => source.raw));
   const contextMessages = new Set(contextSources);
   const otherSuggestions = suggestions.filter((source) => !sourceMessages.has(source) && !contextMessages.has(source));
-  const runtimeSignals = [
-    meta.finalizationMode ? `Finalization: ${meta.finalizationMode.replace(/_/g, " ")}` : "",
-    meta.riskLevel ? `Risk: ${meta.riskLevel}` : "",
-    meta.actionsTaken?.length ? `Actions: ${meta.actionsTaken.join(", ")}` : "",
-  ].filter(Boolean);
+  const runtimeSignals: string[] = [];
   if (suggestions.length === 0 && runtimeSignals.length === 0) return null;
   return (
     <div className="mt-1.5 ml-1 space-y-1.5 text-xs text-zinc-500">
@@ -3346,6 +3365,42 @@ function ToggleRightPanelIcon({ active }: { active: boolean }) {
   );
 }
 
+function PinIcon({ filled = false }: { filled?: boolean }) {
+  return (
+    <svg className="h-3.5 w-3.5" fill={filled ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M14.5 4.5l5 5-3.2 1.1-3.4 3.4.7 4.2-1.4 1.4-3.5-3.5-4.2 4.2-1-1 4.2-4.2-3.5-3.5 1.4-1.4 4.2.7 3.4-3.4 1.3-3.4z" />
+    </svg>
+  );
+}
+
+function UnpinIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M14.5 4.5l5 5-3.2 1.1-3.4 3.4.7 4.2-1.4 1.4-3.5-3.5-4.2 4.2-1-1 4.2-4.2-3.5-3.5 1.4-1.4 4.2.7 3.4-3.4 1.3-3.4z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M4 4l16 16" />
+    </svg>
+  );
+}
+
+function MoreIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 12h.01M12 12h.01M18 12h.01" />
+    </svg>
+  );
+}
+
+function InlineTooltip({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <span className="group/tooltip relative inline-flex">
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1 text-[11px] text-[rgb(var(--app-text-muted))] shadow-xl group-hover/tooltip:block group-focus-within/tooltip:block">
+        {label}
+      </span>
+    </span>
+  );
+}
+
 // ─── ConversationTopBar ────────────────────────────────────────────────────────
 // Spans the full workspace width. Three zones mirror the three panel columns:
 //   [history-width zone] [flex-1 title] [right-width zone]
@@ -3445,6 +3500,8 @@ interface ChatProps {
 }
 
 const CHAT_DRAFT_STORAGE_KEY = "dev_agent_chat_draft_v1";
+const HISTORY_COLLAPSED_LIMIT = 12;
+const HISTORY_PAGE_SIZE = 12;
 
 interface ChatDraftState {
   repoPath: string;
@@ -3524,6 +3581,12 @@ export default function Chat({ mini = false }: ChatProps) {
   const [queuedSuggestion, setQueuedSuggestion] = useState<SuggestionReply | null>(null);
   const [history, setHistory] = useState<ChatHistoryEntry[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyMenu, setHistoryMenu] = useState<{ sessionId: string; x: number; y: number } | null>(null);
+  const [renamingHistoryId, setRenamingHistoryId] = useState<string | null>(null);
+  const [renamingHistoryValue, setRenamingHistoryValue] = useState("");
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   const [selectedExternalArtifact, setSelectedExternalArtifact] = useState<ConversationArtifactPart | null>(null);
@@ -3872,13 +3935,33 @@ export default function Chat({ mini = false }: ChatProps) {
     atBottomRef.current = isNearChatBottom(readChatScrollMetrics(el)!);
   }, []);
 
+  const refreshHistory = useCallback(async () => {
+    const items = await fetchChatHistory();
+    setHistory(sortChatHistory(items));
+  }, []);
+
   useEffect(() => {
-    if (!mini) {
-      fetchChatHistory()
-        .then(setHistory)
-        .catch(() => undefined);
-    }
-  }, [mini]);
+    if (!mini) void refreshHistory().catch(() => undefined);
+  }, [mini, refreshHistory]);
+
+  useEffect(() => {
+    const pageCount = Math.max(1, Math.ceil(history.length / HISTORY_PAGE_SIZE));
+    setHistoryPage((page) => Math.min(Math.max(1, page), pageCount));
+  }, [history.length]);
+
+  useEffect(() => {
+    if (!historyMenu) return;
+    const close = () => setHistoryMenu(null);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [historyMenu]);
 
   // Project Links are managed globally by AppDataContext — no per-mount fetch needed here.
 
@@ -5010,6 +5093,7 @@ export default function Chat({ mini = false }: ChatProps) {
 
 
   const loadSession = useCallback(async (sid: string) => {
+    const historyEntry = history.find((item) => item.sessionId === sid);
     try {
       const [stored, state] = await Promise.all([
         fetchChatMessages(sid) as Promise<Array<{
@@ -5031,6 +5115,8 @@ export default function Chat({ mini = false }: ChatProps) {
         fetchChatState(sid).catch(() => ({ workflowState: undefined })),
       ]);
       setSessionId(sid);
+      setCustomTitle(historyEntry?.title ?? null);
+      setTitleEditing(false);
       forceNextScrollToBottom();
       setBubbles(
         stored.map((m) => {
@@ -5098,7 +5184,7 @@ export default function Chat({ mini = false }: ChatProps) {
     } catch {
       /* ignore */
     }
-  }, [forceNextScrollToBottom, showApprovalRequest]);
+  }, [forceNextScrollToBottom, history, showApprovalRequest]);
 
   const newChat = useCallback(() => {
     try {
@@ -5115,6 +5201,68 @@ export default function Chat({ mini = false }: ChatProps) {
     setCustomTitle(null);
     setTitleEditing(false);
   }, []);
+
+  const updateHistoryEntry = useCallback((entry: ChatHistoryEntry) => {
+    setHistory((items) => sortChatHistory(items.map((item) => (
+      item.sessionId === entry.sessionId ? entry : item
+    ))));
+  }, []);
+
+  const toggleHistoryPin = useCallback(async (entry: ChatHistoryEntry) => {
+    setHistoryError(null);
+    try {
+      const updated = await updateChatSessionMetadata(entry.sessionId, { pinned: !entry.pinned });
+      updateHistoryEntry(updated);
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : "Failed to update pinned state.");
+    }
+  }, [updateHistoryEntry]);
+
+  const beginRenameHistory = useCallback((entry: ChatHistoryEntry) => {
+    setHistoryMenu(null);
+    setRenamingHistoryId(entry.sessionId);
+    setRenamingHistoryValue(entry.title ?? entry.preview ?? "");
+  }, []);
+
+  const commitHistoryRename = useCallback(async (entry: ChatHistoryEntry, value: string) => {
+    const title = value.trim();
+    setRenamingHistoryId(null);
+    setRenamingHistoryValue("");
+    setHistoryError(null);
+    try {
+      const updated = await updateChatSessionMetadata(entry.sessionId, { title: title || null });
+      updateHistoryEntry(updated);
+      if (entry.sessionId === sessionId) setCustomTitle(updated.title ?? null);
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : "Failed to rename chat.");
+    }
+  }, [sessionId, updateHistoryEntry]);
+
+  const deleteHistoryEntry = useCallback(async (entry: ChatHistoryEntry) => {
+    setHistoryMenu(null);
+    if (!window.confirm("Delete this chat?")) return;
+    setHistoryError(null);
+    try {
+      await deleteChatSession(entry.sessionId);
+      setHistory((items) => items.filter((item) => item.sessionId !== entry.sessionId));
+      if (entry.sessionId === sessionId) newChat();
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : "Failed to delete chat.");
+    }
+  }, [newChat, sessionId]);
+
+  const renameCurrentSession = useCallback(async (value: string) => {
+    const title = value.trim();
+    setCustomTitle(title || null);
+    setTitleEditing(false);
+    if (!sessionId) return;
+    try {
+      const updated = await updateChatSessionMetadata(sessionId, { title: title || null });
+      updateHistoryEntry(updated);
+    } catch {
+      void refreshHistory().catch(() => undefined);
+    }
+  }, [refreshHistory, sessionId, updateHistoryEntry]);
 
   useEffect(() => {
     if (mini) return;
@@ -5139,6 +5287,17 @@ export default function Chat({ mini = false }: ChatProps) {
   }, [location.search, mini, navigate, newChat]);
 
   // ─── Render ─────────────────────────────────────────────────────────────────
+  const historyMenuEntry = historyMenu ? history.find((item) => item.sessionId === historyMenu.sessionId) ?? null : null;
+  const historyPageCount = Math.max(1, Math.ceil(history.length / HISTORY_PAGE_SIZE));
+  const normalizedHistoryPage = Math.min(Math.max(1, historyPage), historyPageCount);
+  const historyPageStart = (normalizedHistoryPage - 1) * HISTORY_PAGE_SIZE;
+  const visibleHistory = historyExpanded
+    ? history.slice(historyPageStart, historyPageStart + HISTORY_PAGE_SIZE)
+    : history.slice(0, HISTORY_COLLAPSED_LIMIT);
+  const historyShowingStart = history.length === 0 ? 0 : historyExpanded ? historyPageStart + 1 : 1;
+  const historyShowingEnd = historyExpanded
+    ? Math.min(historyPageStart + visibleHistory.length, history.length)
+    : Math.min(visibleHistory.length, history.length);
 
   return (
     <div className={`flex flex-col overflow-hidden bg-zinc-950 text-zinc-100 ${mini ? "h-full rounded-xl" : "flex-1 min-w-0 h-full"}`}>
@@ -5157,7 +5316,7 @@ export default function Chat({ mini = false }: ChatProps) {
           conversationTitle={conversationTitle}
           titleInputRef={titleInputRef}
           onStartTitleEdit={() => { setTitleEditing(true); setTimeout(() => titleInputRef.current?.select(), 0); }}
-          onConfirmTitle={(v) => { setCustomTitle(v.trim() || null); setTitleEditing(false); }}
+          onConfirmTitle={(v) => { void renameCurrentSession(v); }}
           onCancelTitle={() => setTitleEditing(false)}
         />
       ) : (
@@ -5189,18 +5348,203 @@ export default function Chat({ mini = false }: ChatProps) {
               {history.length === 0 && (
                 <p className="px-3 py-2 text-xs text-zinc-700">No sessions yet.</p>
               )}
-              {history.map((h) => (
-                <button
+              {historyError && (
+                <p className="mx-3 mb-2 rounded-md border border-red-900/50 bg-red-950/30 px-2 py-1.5 text-[11px] text-red-300">
+                  {historyError}
+                </p>
+              )}
+              {visibleHistory.map((h) => {
+                const title = chatHistoryTitle(h);
+                const preview = chatHistoryPreview(h);
+                return (
+                <div
                   key={h.sessionId}
-                  onClick={() => void loadSession(h.sessionId)}
-                  className="px-3 py-2 text-left text-xs text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200 transition-colors"
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setHistoryMenu({ sessionId: h.sessionId, x: event.clientX, y: event.clientY });
+                  }}
+                  className={`group/history relative flex items-start gap-1 px-2 py-1.5 transition-colors ${sessionId === h.sessionId ? "bg-zinc-900 text-zinc-200" : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"}`}
                 >
-                  <p className="truncate">{h.preview || "(empty)"}</p>
-                  <p className="text-zinc-600 text-[10px]">
-                    {new Date(h.createdAt * 1000).toLocaleString()}
-                  </p>
-                </button>
-              ))}
+                  <button
+                    type="button"
+                    onClick={() => void loadSession(h.sessionId)}
+                    onMouseEnter={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      const left = Math.min(rect.right + 10, window.innerWidth - 320);
+                      const top = Math.min(Math.max(rect.top, 48), window.innerHeight - 170);
+                      event.currentTarget.style.setProperty("--history-card-left", `${Math.max(12, left)}px`);
+                      event.currentTarget.style.setProperty("--history-card-top", `${top}px`);
+                    }}
+                    onFocus={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      const left = Math.min(rect.right + 10, window.innerWidth - 320);
+                      const top = Math.min(Math.max(rect.top, 48), window.innerHeight - 170);
+                      event.currentTarget.style.setProperty("--history-card-left", `${Math.max(12, left)}px`);
+                      event.currentTarget.style.setProperty("--history-card-top", `${top}px`);
+                    }}
+                    className="history-item-hover-card min-w-0 flex-1 rounded px-1 py-0.5 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35"
+                    aria-label={`Open chat ${title}`}
+                  >
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      {h.pinned && <span className="shrink-0 text-blue-400"><PinIcon filled /></span>}
+                      <span className="truncate">{title}</span>
+                    </span>
+                    <span className="block text-zinc-600 text-[10px]">
+                      {new Date(h.createdAt * 1000).toLocaleString()}
+                    </span>
+                    <span className="history-hover-card">
+                      <span className="block text-[11px] font-medium leading-snug text-zinc-200">{title}</span>
+                      {preview && <span className="mt-1.5 block text-[11px] leading-relaxed text-zinc-400">{preview}</span>}
+                      <span className="mt-2 block text-[10px] text-zinc-600">{new Date(h.createdAt * 1000).toLocaleString()}</span>
+                    </span>
+                  </button>
+                  {renamingHistoryId === h.sessionId ? (
+                    <input
+                      className="absolute inset-x-2 top-1.5 z-20 rounded-md border border-[rgb(var(--app-accent))]/60 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 shadow-xl focus:outline-none"
+                      value={renamingHistoryValue}
+                      onChange={(event) => setRenamingHistoryValue(event.target.value)}
+                      onClick={(event) => event.stopPropagation()}
+                      onBlur={() => {
+                        if (renamingHistoryId === h.sessionId) void commitHistoryRename(h, renamingHistoryValue);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") event.currentTarget.blur();
+                        if (event.key === "Escape") {
+                          setRenamingHistoryId(null);
+                          setRenamingHistoryValue("");
+                        }
+                      }}
+                      autoFocus
+                    />
+                  ) : null}
+                  <div className="flex shrink-0 items-center gap-0.5 pt-0.5 opacity-0 transition-opacity group-hover/history:opacity-100 group-focus-within/history:opacity-100">
+                    <InlineTooltip label={h.pinned ? "Unpin chat" : "Pin chat"}>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void toggleHistoryPin(h);
+                        }}
+                        className={`rounded p-1 transition ${h.pinned ? "text-blue-400 hover:bg-blue-500/10" : "text-zinc-600 hover:bg-zinc-700 hover:text-zinc-300"}`}
+                        aria-label={h.pinned ? "Unpin chat" : "Pin chat"}
+                      >
+                        {h.pinned ? <UnpinIcon /> : <PinIcon />}
+                      </button>
+                    </InlineTooltip>
+                    <InlineTooltip label="Chat actions">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          const rect = event.currentTarget.getBoundingClientRect();
+                          setHistoryMenu({ sessionId: h.sessionId, x: rect.right - 8, y: rect.bottom + 4 });
+                        }}
+                        className="rounded p-1 text-zinc-600 transition hover:bg-zinc-700 hover:text-zinc-300"
+                        aria-label="Open chat actions"
+                      >
+                        <MoreIcon />
+                      </button>
+                    </InlineTooltip>
+                  </div>
+                </div>
+                );
+              })}
+              {history.length > HISTORY_COLLAPSED_LIMIT && (
+                <div className="mt-auto border-t border-zinc-800/80 px-3 py-2">
+                  {historyExpanded ? (
+                    <div className="flex flex-col gap-2">
+                      <p className="text-[10px] text-zinc-600">
+                        Showing {historyShowingStart}-{historyShowingEnd} of {history.length}
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
+                          disabled={normalizedHistoryPage <= 1}
+                          title="Previous page"
+                          aria-label="Previous history page"
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-800 text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 6l-6 6 6 6" />
+                          </svg>
+                        </button>
+                        <span className="min-w-10 text-center text-[11px] text-zinc-600">
+                          {normalizedHistoryPage}/{historyPageCount}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setHistoryPage((page) => Math.min(historyPageCount, page + 1))}
+                          disabled={normalizedHistoryPage >= historyPageCount}
+                          title="Next page"
+                          aria-label="Next history page"
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-800 text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 6l6 6-6 6" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHistoryExpanded(false);
+                            setHistoryPage(1);
+                          }}
+                          className="ml-auto rounded-md px-2 py-1 text-[11px] text-zinc-500 transition hover:bg-zinc-800 hover:text-zinc-300"
+                        >
+                          Show less
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHistoryExpanded(true);
+                        setHistoryPage(1);
+                      }}
+                      className="w-full rounded-md border border-zinc-800 px-2 py-1.5 text-left text-[11px] text-zinc-500 transition hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-300"
+                    >
+                      Show more ({history.length - HISTORY_COLLAPSED_LIMIT} more)
+                    </button>
+                  )}
+                </div>
+              )}
+              {historyMenu && historyMenuEntry && (
+                <div
+                  className="fixed z-50 w-40 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-1 text-sm text-[rgb(var(--app-text))] shadow-2xl"
+                  style={{ left: Math.min(historyMenu.x, window.innerWidth - 180), top: Math.min(historyMenu.y, window.innerHeight - 140) }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHistoryMenu(null);
+                      void toggleHistoryPin(historyMenuEntry);
+                    }}
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition hover:bg-[rgb(var(--app-surface-raised))]"
+                  >
+                    {historyMenuEntry.pinned ? <UnpinIcon /> : <PinIcon />}
+                    {historyMenuEntry.pinned ? "Unpin" : "Pin"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => beginRenameHistory(historyMenuEntry)}
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition hover:bg-[rgb(var(--app-surface-raised))]"
+                  >
+                    <span className="w-3.5 text-center text-[11px]">T</span>
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { void deleteHistoryEntry(historyMenuEntry); }}
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-red-300 transition hover:bg-red-950/40"
+                  >
+                    <span className="w-3.5 text-center text-[11px]">×</span>
+                    Delete
+                  </button>
+                </div>
+              )}
             </aside>
 
             {/* Drag handle — history/middle boundary */}
@@ -5598,10 +5942,10 @@ export default function Chat({ mini = false }: ChatProps) {
                     disabled={composerInputState.sendDisabled}
                     title={composerInputState.sendTitle}
                     aria-label="Send message"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    <svg className="h-4 w-4 translate-x-px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h13m0 0-5-5m5 5-5 5" />
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 19V5m0 0-6 6m6-6 6 6" />
                     </svg>
                   </button>
                   )}

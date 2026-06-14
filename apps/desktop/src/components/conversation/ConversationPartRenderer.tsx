@@ -199,25 +199,67 @@ function groupReferenceParts(parts: ConversationPart[]): RenderItem[] {
 }
 
 function ReferenceGroup({ sources }: { sources: ReferencePart[] }) {
+  const [expanded, setExpanded] = useState(false);
   const documentCount = sources.filter((source) => source.type === "source_document").length;
   const webCount = sources.length - documentCount;
   const summary = [
     documentCount ? `${documentCount} file${documentCount === 1 ? "" : "s"}` : "",
     webCount ? `${webCount} link${webCount === 1 ? "" : "s"}` : "",
   ].filter(Boolean).join(" · ");
+  const primarySources = sources.slice(0, 4);
+  const remainingCount = Math.max(0, sources.length - primarySources.length);
 
   return (
-    <div className="overflow-hidden rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-xs">
-      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
-        <span className="font-medium text-[rgb(var(--app-text))]">References</span>
-        <span className="rounded-full border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-subtle))]">{summary}</span>
-      </div>
-      <div className="divide-y divide-[rgb(var(--app-border))]">
-        {sources.map((source, index) => (
-          <ReferenceRow key={referenceKey(source, index)} source={source} />
+    <div className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-2 text-xs">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="inline-flex items-center gap-1.5 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-1 text-[11px] font-medium text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35"
+          aria-expanded={expanded}
+        >
+          <span className="text-[rgb(var(--app-text-subtle))]">{expanded ? "Hide" : "Sources"}</span>
+          <span>{summary || `${sources.length} reference${sources.length === 1 ? "" : "s"}`}</span>
+        </button>
+        {primarySources.map((source, index) => (
+          <ReferenceChip key={referenceKey(source, index)} source={source} />
         ))}
+        {remainingCount > 0 && (
+          <span className="rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] text-[rgb(var(--app-text-subtle))]">
+            +{remainingCount}
+          </span>
+        )}
       </div>
+      {expanded && (
+        <div className="mt-2 overflow-hidden rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]">
+          <div className="divide-y divide-[rgb(var(--app-border))]">
+            {sources.map((source, index) => (
+              <ReferenceRow key={referenceKey(source, index)} source={source} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function ReferenceChip({ source }: { source: ReferencePart }) {
+  const title = source.title || (source.type === "source_document" ? source.file : source.domain) || "Source";
+  const label = truncateMiddle(title, 34);
+  const className = "inline-flex max-w-[13rem] items-center gap-1 rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] text-[rgb(var(--app-text-subtle))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text-muted))]";
+  if (source.type === "source_url") {
+    return (
+      <a href={source.url} target="_blank" rel="noreferrer" className={className} title={source.url}>
+        <span className="shrink-0">{source.domain ? "web" : "url"}</span>
+        <span className="min-w-0 truncate">{label}</span>
+      </a>
+    );
+  }
+  return (
+    <span className={className} title={[source.file, source.line ? `line ${source.line}` : ""].filter(Boolean).join(":") || source.title}>
+      <span className="shrink-0">file</span>
+      <span className="min-w-0 truncate">{label}</span>
+    </span>
   );
 }
 
@@ -390,7 +432,7 @@ function MarkdownContent({ markdown }: { markdown: string }) {
         </h3>
       ),
       p: ({ children }) => (
-        <p className="my-2 whitespace-pre-wrap leading-relaxed first:mt-0 last:mb-0">
+        <p className="my-2 max-w-[72ch] whitespace-pre-wrap leading-relaxed first:mt-0 last:mb-0">
           {children}
         </p>
       ),
@@ -405,12 +447,12 @@ function MarkdownContent({ markdown }: { markdown: string }) {
         </a>
       ),
       ul: ({ children }) => (
-        <ul className="my-2 ml-5 list-disc space-y-1 marker:text-[rgb(var(--app-text-subtle))] first:mt-0 last:mb-0">
+        <ul className="my-2 ml-5 list-disc space-y-1.5 marker:text-[rgb(var(--app-accent))] first:mt-0 last:mb-0">
           {children}
         </ul>
       ),
       ol: ({ children }) => (
-        <ol className="my-2 ml-5 list-decimal space-y-1 marker:text-[rgb(var(--app-text-subtle))] first:mt-0 last:mb-0">
+        <ol className="my-2 ml-5 list-decimal space-y-1.5 marker:font-semibold marker:text-[rgb(var(--app-accent))] first:mt-0 last:mb-0">
           {children}
         </ol>
       ),
@@ -442,7 +484,7 @@ function MarkdownContent({ markdown }: { markdown: string }) {
           return <CodeBlock code={code.replace(/\n$/, "")} language={language} />;
         }
         return (
-          <code className="rounded bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5 font-mono text-[0.86em] text-[rgb(var(--app-text))]">
+          <code className="rounded border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5 font-mono text-[0.86em] text-[rgb(var(--app-text))]">
             {children}
           </code>
         );
@@ -478,8 +520,17 @@ function CodeBlock({
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(!shouldCollapse);
   const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null);
+  const [theme, setTheme] = useState(() => currentAppTheme());
   const visibleCode = expanded ? code : collapseCode(code);
   const normalizedLanguage = normalizeCodeLanguage(language);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const target = document.documentElement;
+    const observer = new MutationObserver(() => setTheme(currentAppTheme()));
+    observer.observe(target, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -489,7 +540,7 @@ function CodeBlock({
       .then(({ codeToHtml }) =>
         codeToHtml(visibleCode, {
           lang: normalizedLanguage,
-          theme: "github-dark",
+          theme: theme === "light" ? "github-light" : "github-dark",
         }),
       )
       .then((html) => {
@@ -501,7 +552,7 @@ function CodeBlock({
     return () => {
       cancelled = true;
     };
-  }, [normalizedLanguage, visibleCode]);
+  }, [normalizedLanguage, theme, visibleCode]);
 
   const copyCode = useCallback(() => {
     if (!code || typeof navigator === "undefined" || !navigator.clipboard) return;
@@ -512,11 +563,11 @@ function CodeBlock({
   }, [code]);
 
   return (
-    <div className="overflow-hidden rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-bg-muted))]">
+    <div className="overflow-hidden rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-bg-muted))] shadow-sm">
       <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-1.5 text-[11px] text-[rgb(var(--app-text-subtle))]">
         <span className="min-w-0 truncate">{title ?? "Code"}</span>
         <div className="flex shrink-0 items-center gap-2">
-          {language && <span className="font-mono uppercase tracking-wide">{language.toUpperCase()}</span>}
+          {language && <span className="rounded border border-[rgb(var(--app-border))] px-1.5 py-0.5 font-mono uppercase tracking-wide">{language.toUpperCase()}</span>}
           {shouldCollapse && (
             <button
               type="button"
@@ -537,7 +588,7 @@ function CodeBlock({
       </div>
       {highlightedHtml ? (
         <div
-          className="conversation-code-highlight max-h-80 overflow-auto text-xs leading-relaxed [&_pre]:!m-0 [&_pre]:!bg-transparent [&_pre]:!px-3 [&_pre]:!py-2 [&_pre]:!font-mono [&_pre]:!leading-relaxed"
+          className="conversation-code-highlight max-h-80 overflow-auto text-xs leading-relaxed [&_code]:!font-mono [&_pre]:!m-0 [&_pre]:!bg-transparent [&_pre]:!px-3 [&_pre]:!py-2 [&_pre]:!font-mono [&_pre]:!leading-relaxed"
           // Shiki escapes source code and emits trusted span markup for highlighting.
           dangerouslySetInnerHTML={{ __html: highlightedHtml }}
         />
@@ -593,6 +644,18 @@ function normalizeCodeLanguage(language?: string): string {
     yml: "yaml",
   };
   return aliases[normalized] ?? normalized;
+}
+
+function currentAppTheme(): "dark" | "light" {
+  if (typeof document === "undefined") return "dark";
+  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+}
+
+function truncateMiddle(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  const head = Math.max(8, Math.floor((maxLength - 1) * 0.58));
+  const tail = Math.max(6, maxLength - head - 1);
+  return `${value.slice(0, head)}…${value.slice(-tail)}`;
 }
 
 function stabilizeStreamingMarkdown(markdown: string): string {

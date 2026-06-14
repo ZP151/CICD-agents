@@ -281,7 +281,7 @@ export default function Pipelines(): JSX.Element {
       )}
 
       {rows.length > 0 && (
-        <div className="grid gap-3">
+        <div className="flex flex-1 flex-col gap-3">
           {paginatedRows.pageItems.map((row) => {
             const tone = runTone(row.latestRun);
             const state = inspectState[row.profileId] ?? { phase: "idle" };

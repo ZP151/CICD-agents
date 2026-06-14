@@ -760,7 +760,7 @@ export default function PullRequests(): JSX.Element {
       )}
 
       {prs.length > 0 && (
-        <div className="grid gap-3">
+        <div className="flex flex-1 flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800/70 bg-zinc-900/20 p-3">
             <div className="flex flex-wrap gap-1.5">
               {prCategories.map((item) => (

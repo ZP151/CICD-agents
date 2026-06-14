@@ -1,6 +1,6 @@
 {
   "name": "cicd-agent-monorepo",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "private": true,
   "packageManager": "pnpm@9.0.0",
   "engines": {

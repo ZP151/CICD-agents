@@ -652,7 +652,7 @@ export default function ReviewFindings(): JSX.Element {
   }
 
   return (
-    <div className="w-full space-y-6">
+    <div className="flex min-h-full w-full flex-col gap-6">
       {selectedItem && (
         <FindingsPanel
           item={selectedItem}
@@ -799,7 +799,7 @@ export default function ReviewFindings(): JSX.Element {
       )}
 
       {items.length > 0 && (
-        <section className="grid gap-3">
+        <section className="flex flex-1 flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800/70 bg-zinc-900/20 p-3">
             <div className="flex flex-wrap gap-1.5">
               {(["all", "blocked", "needs_human_review", "watching", "auto_approved"] as const).map((key) => (

@@ -250,6 +250,9 @@ export interface ChatHistoryEntry {
   sessionId: string;
   preview: string;
   createdAt: number;
+  updatedAt?: number;
+  title?: string;
+  pinned?: boolean;
 }
 
 export interface ChatCheckpointActivity {
@@ -432,6 +435,7 @@ function readLlmConfig(conversationModelChoice: ConversationModelChoice = "built
     const raw = localStorage.getItem("dev_agent_settings");
     if (!raw) return undefined;
     const s = JSON.parse(raw) as Record<string, unknown>;
+    if (s["additionalModelsEnabled"] !== true) return undefined;
     // Settings stores optional user-provided API candidates. Conversation uses
     // the built-in model by default and must explicitly choose the custom model
     // before we send these fields to the daemon.
@@ -666,6 +670,24 @@ export async function fetchChatHistory(): Promise<ChatHistoryEntry[]> {
   const r = await fetch(`${RUNTIME_URL}/chat/history`);
   if (!r.ok) throw new Error(`/chat/history HTTP ${r.status}`);
   return (await r.json()) as ChatHistoryEntry[];
+}
+
+export async function updateChatSessionMetadata(
+  sessionId: string,
+  patch: { title?: string | null; pinned?: boolean },
+): Promise<ChatHistoryEntry> {
+  const r = await fetch(`${RUNTIME_URL}/chat/${encodeURIComponent(sessionId)}/metadata`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!r.ok) throw new Error(`/chat/${sessionId}/metadata HTTP ${r.status}: ${await r.text()}`);
+  return (await r.json()) as ChatHistoryEntry;
+}
+
+export async function deleteChatSession(sessionId: string): Promise<void> {
+  const r = await fetch(`${RUNTIME_URL}/chat/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`/chat/${sessionId} HTTP ${r.status}: ${await r.text()}`);
 }
 
 export async function fetchChatCheckpointActivity(): Promise<ChatCheckpointActivity[]> {

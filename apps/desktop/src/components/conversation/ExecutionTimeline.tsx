@@ -68,6 +68,8 @@ export function ExecutionTimeline({ items, onToggleItem, renderOutput, renderApp
               <button
                 type="button"
                 onClick={hasDetails ? () => onToggleItem(item.id) : undefined}
+                title={hasDetails ? `${item.open ? "Collapse" : "Expand"} ${toolName} details` : `${toolName} has no details`}
+                aria-label={hasDetails ? `${item.open ? "Collapse" : "Expand"} ${toolName} details` : `${toolName} has no details`}
                 className={`flex w-full items-start gap-2.5 px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--app-accent))]/35 ${
                   hasDetails ? "cursor-pointer hover:bg-[rgb(var(--app-surface-raised))] active:bg-[rgb(var(--app-bg-muted))]" : "cursor-default"
                 }`}

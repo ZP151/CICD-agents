@@ -90,6 +90,97 @@ describe("daemon HTTP", () => {
     expect(body.workflowState).toBeUndefined();
   });
 
+  it("lists pinned chat history before regular sessions", async () => {
+    app = await buildApp();
+    const storePath = path.join(getSettings().dataDir, "chat-history.json");
+    const now = Math.floor(Date.now() / 1000);
+    fs.mkdirSync(path.dirname(storePath), { recursive: true });
+    fs.writeFileSync(storePath, JSON.stringify({
+      regular: {
+        id: "regular",
+        createdAt: now + 10,
+        updatedAt: now + 10,
+        repoPath: process.cwd(),
+        messages: [{ role: "user", content: "regular chat", timestamp: now + 10 }],
+        bubbles: [],
+      },
+      pinned: {
+        id: "pinned",
+        createdAt: now,
+        updatedAt: now,
+        title: "Pinned planning chat",
+        pinned: true,
+        repoPath: process.cwd(),
+        messages: [{ role: "user", content: "pinned chat", timestamp: now }],
+        bubbles: [],
+      },
+    }, null, 2), "utf8");
+
+    const response = await app.inject({ method: "GET", url: "/chat/history" });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as Array<{ sessionId: string; title?: string; pinned?: boolean }>;
+    expect(body.slice(0, 2)).toMatchObject([
+      { sessionId: "pinned", title: "Pinned planning chat", pinned: true },
+      { sessionId: "regular", pinned: false },
+    ]);
+  });
+
+  it("updates chat session metadata", async () => {
+    app = await buildApp();
+    const storePath = path.join(getSettings().dataDir, "chat-history.json");
+    const now = Math.floor(Date.now() / 1000);
+    fs.mkdirSync(path.dirname(storePath), { recursive: true });
+    fs.writeFileSync(storePath, JSON.stringify({
+      "chat-meta": {
+        id: "chat-meta",
+        createdAt: now,
+        updatedAt: now,
+        repoPath: process.cwd(),
+        messages: [{ role: "user", content: "rename me", timestamp: now }],
+        bubbles: [],
+      },
+    }, null, 2), "utf8");
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/chat/chat-meta/metadata",
+      payload: { title: "Release checklist", pinned: true },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toMatchObject({
+      sessionId: "chat-meta",
+      title: "Release checklist",
+      pinned: true,
+    });
+  });
+
+  it("deletes a chat session", async () => {
+    app = await buildApp();
+    const storePath = path.join(getSettings().dataDir, "chat-history.json");
+    const now = Math.floor(Date.now() / 1000);
+    fs.mkdirSync(path.dirname(storePath), { recursive: true });
+    fs.writeFileSync(storePath, JSON.stringify({
+      "chat-delete": {
+        id: "chat-delete",
+        createdAt: now,
+        updatedAt: now,
+        repoPath: process.cwd(),
+        messages: [{ role: "user", content: "delete me", timestamp: now }],
+        bubbles: [],
+      },
+    }, null, 2), "utf8");
+
+    const response = await app.inject({ method: "DELETE", url: "/chat/chat-delete" });
+    const history = await app.inject({ method: "GET", url: "/chat/history" });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(history.json() as Array<{ sessionId: string }>).not.toContainEqual(
+      expect.objectContaining({ sessionId: "chat-delete" }),
+    );
+  });
+
   it("creates a stored approval proposal for structured push workflow actions", async () => {
     app = await buildApp();
     const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-push-"));

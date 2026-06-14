@@ -162,7 +162,7 @@ export function deriveComposerInputState(context: ComposerInputStateContext): Co
     inputDisabled: false,
     sendDisabled: !hasInput,
     controlsDisabled: false,
-    placeholder: "Ask MergePilot... (Shift+Enter for new line)",
+    placeholder: "Ask MergePilot...",
     sendTitle: hasInput ? "Send message" : "Type a message first.",
   };
 }

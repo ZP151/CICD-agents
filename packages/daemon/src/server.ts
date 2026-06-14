@@ -248,6 +248,12 @@ const AuthAzureDevOpsEnableSchema = z.object({
   accountHomeId: z.string().optional(),
 }).default({});
 const SessionIdParam = z.object({ sessionId: z.string().min(1) });
+const ChatSessionMetadataSchema = z.object({
+  title: z.string().max(140).nullable().optional(),
+  pinned: z.boolean().optional(),
+}).refine((value) => "title" in value || "pinned" in value, {
+  message: "At least one metadata field is required",
+});
 const CheckpointIdParam = z.object({ checkpointId: z.string().min(1) });
 const CheckpointPreviewQuery = z.object({
   maxDiffChars: z.coerce.number().int().min(0).max(100_000).optional(),
@@ -4542,6 +4548,24 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   app.get("/chat/history", async () => {
     return chatSessions.listRecent(30);
+  });
+
+  app.patch("/chat/:sessionId/metadata", async (req, reply) => {
+    const parsedParam = SessionIdParam.safeParse(req.params);
+    if (!parsedParam.success) return reply.code(400).send({ error: "invalid sessionId" });
+    const parsedBody = ChatSessionMetadataSchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) return reply.code(400).send({ error: parsedBody.error.flatten() });
+    const updated = await chatSessions.updateMetadata(parsedParam.data.sessionId, parsedBody.data);
+    if (!updated) return reply.code(404).send({ error: "session not found" });
+    return updated;
+  });
+
+  app.delete("/chat/:sessionId", async (req, reply) => {
+    const parsed = SessionIdParam.safeParse(req.params);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid sessionId" });
+    const deleted = await chatSessions.deleteSession(parsed.data.sessionId);
+    if (!deleted) return reply.code(404).send({ error: "session not found" });
+    return { ok: true };
   });
 
   app.get("/chat/checkpoints", async () => {

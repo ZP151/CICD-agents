@@ -1,6 +1,6 @@
 {
   "name": "@cicd-agent/daemon",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -28,7 +28,8 @@
       "node_modules/@azure/msal-node-runtime/dist/**/*.node",
       "node_modules/@azure/msal-node-runtime/dist/**/*.dll",
       "node_modules/@azure/msal-node-runtime/dist/**/*.so",
-      "node_modules/@azure/msal-node-runtime/dist/**/*.dylib"
+      "node_modules/@azure/msal-node-runtime/dist/**/*.dylib",
+      "dist/schema.sql"
     ]
   },
   "dependencies": {

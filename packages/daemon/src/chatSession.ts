@@ -127,6 +127,9 @@ interface StoredBubble {
 interface StoredSession {
   id: string;
   createdAt: number;
+  updatedAt?: number;
+  title?: string;
+  pinned?: boolean;
   repoPath: string;
   profileId?: string;             // optional workspace profile binding
   messages: ChatMessage[];        // for LLM context
@@ -140,6 +143,15 @@ interface StoredSession {
 }
 
 type HistoryStore = Record<string, StoredSession>;
+
+export interface ChatHistoryEntry {
+  sessionId: string;
+  preview: string;
+  createdAt: number;
+  updatedAt: number;
+  title?: string;
+  pinned?: boolean;
+}
 
 type ChatExecutorMode = "planner" | "confirmed-action";
 
@@ -450,6 +462,7 @@ async function loadSession(sessionId: string): Promise<StoredSession | null> {
 }
 
 async function saveSession(session: StoredSession): Promise<void> {
+  session.updatedAt = now();
   const cosmos = getCosmosStore();
   if (cosmos) {
     try {
@@ -465,11 +478,31 @@ async function saveSession(session: StoredSession): Promise<void> {
   saveStoreSync(store);
 }
 
+function chatHistoryEntryFromSession(session: StoredSession): ChatHistoryEntry {
+  const last = session.messages[session.messages.length - 1];
+  return {
+    sessionId: session.id,
+    preview: last ? last.content.slice(0, 100) : "",
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt ?? session.createdAt,
+    title: session.title,
+    pinned: Boolean(session.pinned),
+  };
+}
+
+function sortChatHistoryEntries(a: ChatHistoryEntry, b: ChatHistoryEntry): number {
+  if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+  return b.updatedAt - a.updatedAt;
+}
+
 /** Map Cosmos document back to local StoredSession shape. */
 function cosmosToStored(doc: CosmosStoredSession): StoredSession {
   return {
     id:            doc.id,
     createdAt:     doc.createdAt,
+    updatedAt:     doc.updatedAt,
+    title:         doc.title,
+    pinned:        doc.pinned,
     repoPath:      doc.repoPath,
     profileId:     doc.profileId,
     messages:      doc.messages as ChatMessage[],
@@ -487,6 +520,8 @@ function storedToCosmos(s: StoredSession): Omit<CosmosStoredSession, "userId" | 
   return {
     id:            s.id,
     createdAt:     s.createdAt,
+    title:         s.title,
+    pinned:        s.pinned,
     repoPath:      s.repoPath,
     profileId:     s.profileId,
     messages:      s.messages,
@@ -555,7 +590,8 @@ export class ChatSessionManager {
 
   createSession(repoPath: string, profileId?: string): string {
     const id = `chat_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
-    const session: StoredSession = { id, createdAt: now(), repoPath, profileId, messages: [], bubbles: [] };
+    const createdAt = now();
+    const session: StoredSession = { id, createdAt, updatedAt: createdAt, repoPath, profileId, messages: [], bubbles: [] };
     // Fire-and-forget async save; local sync fallback happens inside saveSession
     saveSession(session).catch(() => {
       const store = loadStoreSync();
@@ -657,7 +693,7 @@ export class ChatSessionManager {
     }
   }
 
-  async listRecent(limit = 30): Promise<Array<{ sessionId: string; preview: string; createdAt: number }>> {
+  async listRecent(limit = 30): Promise<ChatHistoryEntry[]> {
     const cosmos = getCosmosStore();
     if (cosmos) {
       try {
@@ -668,16 +704,45 @@ export class ChatSessionManager {
     }
     const store = loadStoreSync();
     return Object.values(store)
-      .sort((a, b) => b.createdAt - a.createdAt)
+      .map(chatHistoryEntryFromSession)
+      .sort(sortChatHistoryEntries)
       .slice(0, limit)
-      .map((s) => {
-        const last = s.messages[s.messages.length - 1];
-        return {
-          sessionId: s.id,
-          preview: last ? last.content.slice(0, 100) : "",
-          createdAt: s.createdAt,
-        };
-      });
+  }
+
+  async updateMetadata(
+    sessionId: string,
+    patch: { title?: string | null; pinned?: boolean },
+  ): Promise<ChatHistoryEntry | null> {
+    const session = await loadSession(sessionId);
+    if (!session) return null;
+    if ("title" in patch) {
+      const title = patch.title?.trim() ?? "";
+      session.title = title || undefined;
+    }
+    if (typeof patch.pinned === "boolean") {
+      session.pinned = patch.pinned;
+    }
+    await saveSession(session);
+    return chatHistoryEntryFromSession(session);
+  }
+
+  async deleteSession(sessionId: string): Promise<boolean> {
+    const existed = Boolean(await loadSession(sessionId));
+    this.cancel(sessionId);
+    const cosmos = getCosmosStore();
+    if (cosmos) {
+      try {
+        await cosmos.delete(sessionId);
+        return existed;
+      } catch {
+        // fall through to local
+      }
+    }
+    const store = loadStoreSync();
+    if (!store[sessionId]) return existed;
+    delete store[sessionId];
+    saveStoreSync(store);
+    return true;
   }
 
   async listCheckpointActivity(limit = 50): Promise<ChatCheckpointActivity[]> {

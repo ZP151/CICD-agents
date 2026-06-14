@@ -17,6 +17,7 @@ const desktopRoot = resolve(__dirname, "..");
 const repoRoot = resolve(desktopRoot, "../..");
 const daemonRoot = resolve(repoRoot, "packages/daemon");
 const binariesDir = resolve(desktopRoot, "src-tauri/binaries");
+const coreSchemaPath = resolve(repoRoot, "packages/core/src/db/schema.sql");
 
 // --------------------------------------------------------------------------
 // Resolve the current platform's Rust target triple (same one Tauri uses)
@@ -83,6 +84,8 @@ function stageNativeModules() {
   const searchRoots = [daemonRoot, repoRoot, join(repoRoot, "packages/core")];
   const packages = [
     "better-sqlite3",
+    "bindings",
+    "file-uri-to-path",
     "sqlite-vec",
     "keytar",
     "@azure/msal-node-extensions",
@@ -204,27 +207,33 @@ console.log(`Output: ${outputPath}\n`);
 
 mkdirSync(binariesDir, { recursive: true });
 
-// 1. Build TypeScript → dist/
-console.log("--- 1/3  tsc build ---");
+// 1. Build core first so daemon sees fresh workspace type declarations.
+console.log("--- 1/4  core build ---");
+run("pnpm --filter @cicd-agent/core build", { cwd: repoRoot });
+
+// 2. Build TypeScript → dist/
+console.log("--- 2/4  daemon tsc build ---");
 run("pnpm build", { cwd: daemonRoot });
 
-// 2. esbuild: bundle all TS/JS into dist/bundle.cjs (native modules stay external)
-console.log("\n--- 2/3  esbuild bundle ---");
+// 3. esbuild: bundle all TS/JS into dist/bundle.cjs (native modules stay external)
+console.log("\n--- 3/4  esbuild bundle ---");
 run("pnpm bundle", { cwd: daemonRoot });
+copyFileSync(coreSchemaPath, resolve(daemonRoot, "dist/schema.sql"));
 
-// 2b. Stage native .node files where pkg asset globs can find them.
+// 3b. Stage native .node files where pkg asset globs can find them.
 //     pnpm's virtual store means they aren't at the conventional path.
-console.log("\n--- 2b/3  staging native modules for pkg ---");
+console.log("\n--- 3b/4  staging native modules for pkg ---");
 const stagedDirs = stageNativeModules();
 
-// 3. pkg: wrap dist/bundle.cjs + native assets into a standalone binary
-console.log("\n--- 3/3  pkg package ---");
+// 4. pkg: wrap dist/bundle.cjs + native assets into a standalone binary
+console.log("\n--- 4/4  pkg package ---");
 const pkgBin = resolve(daemonRoot, "node_modules/.bin/pkg");
 const pkgBinCmd = existsSync(pkgBin + ".cmd") ? `"${pkgBin}.cmd"` : `"${pkgBin}"`;
 
 try {
   run(
     `${pkgBinCmd} dist/bundle.cjs` +
+      ` --config package.json` +
       ` --target ${pkgTarget}` +
       ` --output "${outputPath}"` +
       ` --compress GZip`,

@@ -224,6 +224,12 @@ The user message may include a "Repository context" section assembled from a qui
 - If repo_refresh_index returns repositoryContextPrompt, rely on it as fresh repository context for the current turn.
 - When finalizing a response with project-specific claims, include source_document entries for relevant files or repository context. When finalizing a response based on external documentation or web search, include source_url entries.
 
+## Answer Scope And Brevity
+- Answer only the user's current request. Do not add adjacent workflow sections, PR advice, CI/CD plans, or development-process commentary unless the user explicitly asks for them.
+- For "explain architecture", focus on purpose, major layers/modules, important integrations, and data flow. Do not include "Development Workflow", "Next steps", or Git/PR/CI/CD sections unless requested.
+- Default to a concise answer: 3-6 short bullets or 2-4 short paragraphs. Use longer structure only when the user asks for a detailed review, plan, or exhaustive analysis.
+- If the answer is based on repository context, cite sources through final metadata instead of expanding long excerpts in the prose.
+
 ## Autonomy table
 | Operation | Autonomy |
 |-----------|----------|
@@ -515,9 +521,7 @@ export class ChatPlanner {
             ok = false;
             toolResult = { error: err instanceof Error ? err.message : String(err) };
           }
-          const summary = ok
-            ? truncate(JSON.stringify(toolResult), 200)
-            : `error: ${JSON.stringify(toolResult)}`;
+          const summary = summarizeToolResult(toolResult, ok);
           yield { type: "tool_end", name: tc.name, ok, summary, result: toolResult, toolCallId: tc.id };
           toolCallsMade.push({ name: tc.name, args, ok });
 
@@ -1052,6 +1056,26 @@ function extractStreamingJsonStringField(text: string, field: string): string {
 
 function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 3)}...`;
+}
+
+function summarizeToolResult(result: unknown, ok: boolean): string {
+  const text = typeof result === "string"
+    ? result
+    : result && typeof result === "object" && "error" in result
+      ? String((result as { error?: unknown }).error ?? "")
+      : JSON.stringify(result);
+  const readable = summarizeKnownRuntimeError(text);
+  return ok ? truncate(readable, 200) : `error: ${truncate(readable, 220)}`;
+}
+
+function summarizeKnownRuntimeError(text: string): string {
+  if (/Could not locate the bindings file/i.test(text) || /better_sqlite3\.node/i.test(text)) {
+    return "Repository index storage is unavailable because the installed daemon could not load its native SQLite binding.";
+  }
+  if (/schema\.sql/i.test(text) && /ENOENT|no such file|cannot find/i.test(text)) {
+    return "Repository index storage is unavailable because the installed daemon could not find its database schema.";
+  }
+  return text.replace(/\s*[-=]{2,}\s*$/g, "").trim();
 }
 
 function approvalDescription(description: string, fallbackName: string): string {

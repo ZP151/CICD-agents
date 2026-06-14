@@ -21,6 +21,8 @@ export interface CosmosStoredSession {
   userId: string;       // AAD OID — partition key
   createdAt: number;
   updatedAt: number;
+  title?: string;
+  pinned?: boolean;
   repoPath: string;
   profileId?: string;
   messages: unknown[];
@@ -124,27 +126,35 @@ export class CosmosSessionStore {
     }
   }
 
-  async listRecent(limit = 30): Promise<Array<{ sessionId: string; preview: string; createdAt: number }>> {
+  async listRecent(limit = 30): Promise<Array<{ sessionId: string; preview: string; createdAt: number; updatedAt: number; title?: string; pinned?: boolean }>> {
     const user = await requireCurrentUser();
     await this.init();
     const query = {
-      query: `SELECT c.id, c.createdAt, ARRAY_SLICE(c.messages, -1) AS lastMsg
+      query: `SELECT c.id, c.createdAt, c.updatedAt, c.title, c.pinned, ARRAY_SLICE(c.messages, -1) AS lastMsg
               FROM c
               WHERE c.userId = @uid
               ORDER BY c.updatedAt DESC
               OFFSET 0 LIMIT @lim`,
       parameters: [
         { name: "@uid", value: user.oid },
-        { name: "@lim", value: limit },
+        { name: "@lim", value: Math.max(limit * 4, limit) },
       ],
     };
-    type Row = { id: string; createdAt: number; lastMsg: Array<{ content?: string }> };
+    type Row = { id: string; createdAt: number; updatedAt?: number; title?: string; pinned?: boolean; lastMsg: Array<{ content?: string }> };
     const { resources } = await this.container().items.query<Row>(query).fetchAll();
     return resources.map((r) => ({
       sessionId: r.id,
       createdAt: r.createdAt,
+      updatedAt: r.updatedAt ?? r.createdAt,
+      title:     r.title,
+      pinned:    Boolean(r.pinned),
       preview:   (r.lastMsg?.[0]?.content ?? "").slice(0, 100),
-    }));
+    }))
+      .sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        return b.updatedAt - a.updatedAt;
+      })
+      .slice(0, limit);
   }
 }
 

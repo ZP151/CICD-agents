@@ -47,29 +47,44 @@ export function PaginationControls({
   if (totalItems === 0) return null;
 
   const currentPage = clampPage(page, pageCount);
+  const normalizedOptions = Array.from(new Set(
+    [
+      ...pageSizeOptions.filter((option) => option > 0 && option < totalItems),
+      totalItems,
+    ].filter((option) => option > 0),
+  )).sort((a, b) => a - b);
+  const displayedPageSize = normalizedOptions.includes(pageSize) ? pageSize : totalItems;
+  const showPageSize = normalizedOptions.length > 1;
+  const showPageStepper = pageCount > 1;
+  if (!showPageSize && !showPageStepper) return null;
+
   const start = (currentPage - 1) * pageSize + 1;
   const end = Math.min(start + visibleItems - 1, totalItems);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800/70 bg-zinc-900/20 px-3 py-2">
+    <div className="mt-auto flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800/70 bg-zinc-900/20 px-3 py-2">
       <p className="text-xs text-zinc-500">
         Showing <span className="text-zinc-300">{start}-{end}</span> of{" "}
         <span className="text-zinc-300">{totalItems}</span> {itemLabel}
       </p>
+      {(showPageSize || showPageStepper) && (
       <div className="flex flex-wrap items-center gap-2">
+        {showPageSize && (
         <label className="inline-flex items-center gap-1.5 text-xs text-zinc-600">
           Page size
           <select
-            value={pageSize}
+            value={displayedPageSize}
             onChange={(event) => onPageSizeChange(Number(event.target.value))}
             className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs text-zinc-400 outline-none transition focus:border-zinc-600"
             aria-label={`${itemLabel} page size`}
           >
-            {pageSizeOptions.map((option) => (
-              <option key={option} value={option}>{option}</option>
+            {normalizedOptions.map((option) => (
+              <option key={option} value={option}>{option === totalItems ? "All" : option}</option>
             ))}
           </select>
         </label>
+        )}
+        {showPageStepper && (
         <div className="inline-flex items-center gap-1">
           <button
             type="button"
@@ -91,7 +106,9 @@ export function PaginationControls({
             Next
           </button>
         </div>
+        )}
       </div>
+      )}
     </div>
   );
 }

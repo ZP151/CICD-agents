@@ -28,7 +28,6 @@ import Settings from "./pages/Settings.js";
 import Chat from "./pages/Chat.js";
 import Profiles from "./pages/Profiles.js";
 import { withProjectLinkDefaults, withProjectLinkInputDefaults } from "./projectLinks.js";
-import appIconUrl from "./assets/mergepilot-icon.png";
 
 // ─── Global app data (profiles, etc.) ────────────────────────────────────────
 // Loaded once after daemon is ready. All pages read from here — no per-page fetching.
@@ -352,16 +351,6 @@ function IconPipeline() {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 7h6m4 0h6M7 7v10m0 0h4m-4 0H4m13-10v4m0 6v-6m0 0h3m-3 0h-3" />
     </svg>
   );
-}
-
-function configuredAppName(): string {
-  const envName = (import.meta.env.VITE_APP_DISPLAY_NAME ?? import.meta.env.VITE_APP_NAME) as string | undefined;
-  if (envName?.trim()) return envName.trim();
-  try {
-    const stored = localStorage.getItem("cicd_agent_app_name");
-    if (stored?.trim()) return stored.trim();
-  } catch { /* ignore */ }
-  return "MergePilot";
 }
 
 function initialsFromText(value: string | undefined, fallback = "?"): string {
@@ -833,27 +822,12 @@ function PageShell({
   );
 }
 
-function FullLayout({ info }: { info: DaemonInfo }) {
+function FullLayout() {
   const location = useLocation();
-  const anyCloud = info.cloudProfileStore || info.cloudSecrets || info.cloudSessions;
-  const appName = configuredAppName();
   return (
     <div className="flex h-screen w-screen bg-zinc-950 text-zinc-100">
       {/* Sidebar */}
       <aside className="flex w-48 shrink-0 flex-col border-r border-zinc-800/80 overflow-hidden">
-        {/* Logo / app name */}
-        <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-zinc-800/60">
-          <img src={appIconUrl} alt="" className="h-7 w-7 shrink-0 rounded-lg object-cover" />
-          <span className="min-w-0 truncate text-sm font-semibold tracking-tight text-zinc-200">{appName}</span>
-          {anyCloud && (
-            <div title="Azure cloud persistence active" className="ml-auto flex items-center gap-0.5 shrink-0">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 opacity-60" />
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 opacity-30" />
-            </div>
-          )}
-        </div>
-
         {/* Navigation groups */}
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
           {NAV_GROUPS.map((group) => (
@@ -915,7 +889,7 @@ export default function App(): JSX.Element {
         <AuthProvider>
           <ProductionAuthGate info={info}>
             <AppDataProvider daemonReady={info.state === "ready"}>
-              <FullLayout info={info} />
+              <FullLayout />
             </AppDataProvider>
           </ProductionAuthGate>
         </AuthProvider>

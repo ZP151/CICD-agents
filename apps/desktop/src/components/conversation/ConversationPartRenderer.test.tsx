@@ -63,7 +63,8 @@ describe("ConversationPartRenderer", () => {
     const html = renderToStaticMarkup(<ConversationPartRenderer parts={parts} />);
 
     expect(html).toContain("Chat.tsx");
-    expect(html).toContain("line 451");
+    expect(html).toContain("Sources");
+    expect(html).toContain("1 file");
     expect(html).toContain("assistant-ui ToolGroup");
     expect(html).toContain("Architecture diagram");
     expect(html).toContain("Result artifact");
@@ -158,7 +159,7 @@ describe("ConversationPartRenderer", () => {
     expect(html).toContain('data-artifact-id="artifact-selected"');
   });
 
-  it("groups consecutive source parts into one references section", () => {
+  it("groups consecutive source parts into one compact references section", () => {
     const parts: ConversationPart[] = [
       { type: "markdown", markdown: "The review used these files." },
       {
@@ -187,13 +188,12 @@ describe("ConversationPartRenderer", () => {
 
     const html = renderToStaticMarkup(<ConversationPartRenderer parts={parts} />);
 
-    expect(html).toContain("References");
+    expect(html).toContain("Sources");
     expect(html).toContain("2 files");
     expect(html).toContain("1 link");
     expect(html).toContain("ClaimController.cs:42");
-    expect(html).toContain("line 42");
     expect(html).toContain("AI SDK sources");
-    expect(html.match(/References/g)).toHaveLength(1);
+    expect(html).not.toContain("@@ -40,5 +42,8 @@");
   });
 
   it("renders GFM markdown with headings, lists, tables, links, inline code, and code fences", () => {

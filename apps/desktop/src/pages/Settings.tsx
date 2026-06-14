@@ -22,6 +22,7 @@ interface AppSettings {
   defaultWorkspacePermissions: boolean;
   autoReviewPermissions: boolean;
   fullAccessPreference: boolean;
+  additionalModelsEnabled: boolean;
   llmProvider: "azure" | "openai";
   azureEndpoint: string;
   azureApiKey: string;
@@ -44,11 +45,12 @@ const DEFAULTS: AppSettings = {
   defaultWorkspacePermissions: true,
   autoReviewPermissions: true,
   fullAccessPreference: false,
+  additionalModelsEnabled: false,
   llmProvider: "azure",
   azureEndpoint: "",
   azureApiKey: "",
   azureDeployment: "",
-  azureApiVersion: "2024-02-01",
+  azureApiVersion: "",
   openaiApiKey: "",
   openaiModel: "",
   azureTenantId: "",
@@ -60,7 +62,19 @@ type DaemonStatus = "unknown" | "checking" | "configured" | "unconfigured" | "un
 function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<AppSettings>) };
+    if (raw) {
+      const stored = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<AppSettings>) };
+      return {
+        ...stored,
+        azureEndpoint: "",
+        azureApiKey: "",
+        azureDeployment: "",
+        azureApiVersion: "",
+        openaiApiKey: "",
+        openaiModel: "",
+        additionalModelsEnabled: false,
+      };
+    }
   } catch {
     /* ignore */
   }
@@ -236,6 +250,7 @@ export default function Settings(): JSX.Element {
   const [daemonStatus, setDaemonStatus] = useState<DaemonStatus>("unknown");
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [authUser, setAuthUser] = useState<AuthUser>({ authenticated: false });
+  const [customModelsOpen, setCustomModelsOpen] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didHydrateDaemonRef = useRef(false);
@@ -346,6 +361,37 @@ export default function Settings(): JSX.Element {
 
       <SettingsSection title="Additional Models">
         <SettingsRow
+          title="Custom model providers"
+          description="Optional. Built-in model routing stays active unless you explicitly configure another provider."
+        >
+          <button
+            type="button"
+            onClick={() => {
+              const next = !customModelsOpen;
+              setCustomModelsOpen(next);
+              setSettings((current) => ({
+                ...current,
+                additionalModelsEnabled: next,
+                ...(!next ? {
+                  azureEndpoint: "",
+                  azureApiKey: "",
+                  azureDeployment: "",
+                  azureApiVersion: "",
+                  openaiApiKey: "",
+                  openaiModel: "",
+                } : {}),
+              }));
+            }}
+            className="settings-text-button"
+            aria-expanded={customModelsOpen}
+          >
+            {customModelsOpen ? "Hide" : "Configure"}
+          </button>
+        </SettingsRow>
+
+        {customModelsOpen && (
+        <>
+        <SettingsRow
           title="Model provider"
           description="Optional. Conversation keeps using the built-in model by default; saved providers appear there as additional model choices."
         >
@@ -416,10 +462,15 @@ export default function Settings(): JSX.Element {
             </SettingsRow>
           </>
         )}
+        </>
+        )}
 
         {daemonStatus === "unreachable" && (
           <p className="settings-message settings-message-warning">Daemon is not reachable. Local preferences will still be saved.</p>
         )}
+      </SettingsSection>
+
+      <SettingsSection title="Model Runtime">
         {health && (
           <>
             <SettingsRow title="Daemon env source" description="The .env file the daemon used at startup.">

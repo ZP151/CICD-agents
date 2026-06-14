@@ -154,6 +154,26 @@ describe("chatEventsToUiChunks", () => {
     expect(chunks[3]).toMatchObject({ type: "tool-output-error", errorText: "missing credentials" });
   });
 
+  it("summarizes installed-daemon native binding failures for UI chunks", async () => {
+    const chunks = await collect([
+      {
+        type: "tool_end",
+        name: "repo_refresh_index",
+        ok: false,
+        summary: "error",
+        result: {
+          error:
+            "Could not locate the bindings file. Tried:\n -> C:\\snapshot\\CICD-agents\\node_modules\\better-sqlite3\\build\\Release\\better_sqlite3.node",
+        },
+      },
+    ]);
+
+    expect(chunks.find((chunk) => chunk.type === "tool-output-error")).toMatchObject({
+      type: "tool-output-error",
+      errorText: "Repository index storage is unavailable because the installed daemon could not load its native SQLite binding.",
+    });
+  });
+
   it("preserves explicit tool call ids across repeated same-name tools", async () => {
     const chunks = await collect([
       { type: "tool_start", name: "git_status", args: { short: true }, toolCallId: "call_1" },
