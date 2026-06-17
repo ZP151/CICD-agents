@@ -32,14 +32,56 @@ describe("ExecutionTimeline", () => {
 
     expect(html).toContain("Execution");
     expect(html).toContain("running");
+    expect(html).toContain("Prepare workspace");
+    expect(html).toContain("Update local Git history");
+    expect(html).toContain("The result is sufficient to move into update local git history.");
     expect(html).toContain("git_add");
-    expect(html).toContain("paths=BotToSharePoint/Common/CommonFunctions.cs");
-    expect(html).toContain("flags=--verbose");
+    expect(html).toContain("Shell");
+    expect(html).toContain("Ran git add --dry-run -- BotToSharePoint/Common/CommonFunctions.cs");
     expect(html).toContain("git add --dry-run -- BotToSharePoint/Common/CommonFunctions.cs");
+    expect(html).toContain("staged 2 files");
     expect(html).toContain("staged selected files");
+    expect(html).not.toContain("{&quot;paths&quot;");
     expect(html).toContain("git_commit");
-    expect(html).toContain("message=Review claim workflow changes");
+    expect(html).toContain("Ran git commit -m &quot;Review claim workflow changes&quot;");
     expect(html).toContain("streaming output");
+  });
+
+  it("renders only a compact summary after all steps complete", () => {
+    const items: ExecutionTimelineItem[] = [
+      {
+        id: "tool-1",
+        toolName: "git_remote",
+        state: "result",
+        ok: true,
+        input: { command: "git remote -v" },
+        output: { stdout: "origin https://github.com/example/repo.git", returncode: 0 },
+        summary: "origin remote found",
+      },
+      {
+        id: "tool-2",
+        toolName: "git_push",
+        state: "result",
+        ok: true,
+        input: { command: "git push ado main" },
+        output: { stdout: "main -> main", returncode: 0 },
+        summary: "pushed main",
+      },
+    ];
+
+    const html = renderToStaticMarkup(<ExecutionTimeline items={items} onToggleItem={() => undefined} />);
+
+    expect(html).toContain("origin remote found");
+    expect(html).toContain("pushed main");
+    expect(html).toContain("Summary");
+    expect(html).toContain("2 steps · 2 commands");
+    expect(html).not.toContain("Next:");
+    expect(html).not.toContain("Inspect repository state");
+    expect(html).not.toContain("Sync remote repository");
+    expect(html).not.toContain("▲");
+    expect(html).not.toContain("▼");
+    expect(html).not.toContain("git remote -v");
+    expect(html).not.toContain("git push ado main");
   });
 
   it("marks failed tool output as an error timeline", () => {
@@ -71,6 +113,12 @@ describe("ExecutionTimeline", () => {
         input: { command: "git status --short -b" },
         output: { stdout: "## feature/x\n M src/app.ts", returncode: 0 },
         open: true,
+      },
+      {
+        id: "tool-2",
+        toolName: "git_diff",
+        state: "running",
+        input: { command: "git diff --stat" },
       },
     ];
 

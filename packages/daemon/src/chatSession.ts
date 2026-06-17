@@ -8,10 +8,7 @@ import {
   getSettings,
   ToolExecutor,
   toolRequiresApproval,
-  StdioMcpClient,
-  createMcpToolsFromClient,
   runCommand,
-  splitCommand,
   isConfirmationMessage,
   isDenialMessage,
   getWorkspaceProfile,
@@ -262,16 +259,13 @@ interface BuiltContextPrompt {
 }
 
 export async function createChatToolExecutors(ctx: ToolContext, llm = new LLMClient()): Promise<ChatToolExecutors> {
-  const clients: StdioMcpClient[] = [];
-  const tools = [...chatTools(), ...chatContextTools(llm), ...await optionalAzureDevOpsMcpTools(ctx, clients)];
+  const tools = [...chatTools(), ...chatContextTools(llm)];
   const plannerExecutor = createChatToolExecutor(ctx, "planner", tools);
   const actionExecutor = createChatToolExecutor(ctx, "confirmed-action", tools);
   return {
     plannerExecutor,
     actionExecutor,
-    close: async () => {
-      await Promise.allSettled(clients.map((client) => client.close()));
-    },
+    close: async () => {},
   };
 }
 
@@ -334,56 +328,6 @@ function checkpointApplyMetadataFromToolResult(
   };
 }
 
-async function optionalAzureDevOpsMcpTools(ctx: ToolContext, clients: StdioMcpClient[]): Promise<Tool[]> {
-  const profileEnabled = asBoolean(ctx.extra["ado_mcp_enabled"]);
-  if (!profileEnabled && !isEnabled(process.env.CICD_AGENT_ADO_MCP_ENABLED)) return [];
-  const org = azureDevOpsOrgSlug(String(ctx.extra["ado_org"] ?? getSettings().azureDevOpsOrg ?? ""));
-  if (!org) return [];
-  const pat = String(ctx.extra["ado_pat"] ?? "").trim();
-  const env: Record<string, string> = {};
-  if (pat) env.PERSONAL_ACCESS_TOKEN = Buffer.from(`:${pat}`).toString("base64");
-  const commandSpec = nonEmptyString(ctx.extra["ado_mcp_command"]) || process.env.CICD_AGENT_ADO_MCP_COMMAND || "mcp-server-azuredevops";
-  const [command, ...commandArgs] = splitCommand(commandSpec);
-  if (!command) return [];
-  const authentication =
-    nonEmptyString(ctx.extra["ado_mcp_authentication"]) ||
-    (pat ? "pat" : (process.env.CICD_AGENT_ADO_MCP_AUTHENTICATION || "azcli"));
-  const domains =
-    nonEmptyString(ctx.extra["ado_mcp_domains"]) ||
-    process.env.CICD_AGENT_ADO_MCP_DOMAINS ||
-    "repositories,pipelines,work-items";
-  const client = new StdioMcpClient({
-    name: "ado",
-    command,
-    args: [
-      ...commandArgs,
-      org,
-      "--authentication",
-      authentication,
-      "--domains",
-      domains,
-    ],
-    env,
-    timeoutMs: Number(process.env.CICD_AGENT_ADO_MCP_TIMEOUT_MS ?? 15_000),
-  });
-  try {
-    const tools = await createMcpToolsFromClient("ado", client);
-    clients.push(client);
-    return tools;
-  } catch {
-    await client.close();
-    return [];
-  }
-}
-
-function isEnabled(value: string | undefined): boolean {
-  return value === "1" || value?.toLowerCase() === "true" || value?.toLowerCase() === "yes";
-}
-
-function asBoolean(value: unknown): boolean {
-  return value === true || value === "1" || String(value).toLowerCase() === "true" || String(value).toLowerCase() === "yes";
-}
-
 function nonEmptyString(value: unknown): string {
   return typeof value === "string" && value.trim() ? value.trim() : "";
 }
@@ -399,30 +343,8 @@ function inlineProfileToToolExtra(profile: InlineProfile): Record<string, unknow
     ado_project: profile.adoProject,
     ado_repository: profile.adoRepoName,
     ado_target_branch: profile.targetBranch,
-    ado_pat: profile.adoPat,
     ...(profile.adoPipelineId ? { ado_pipeline_id: profile.adoPipelineId } : {}),
-    ado_mcp_enabled: profile.adoMcpEnabled,
-    ado_mcp_command: profile.adoMcpCommand,
-    ado_mcp_authentication: profile.adoMcpAuthentication,
-    ado_mcp_domains: profile.adoMcpDomains,
   };
-}
-
-function azureDevOpsOrgSlug(value: string): string {
-  const raw = value.trim().replace(/\/$/, "");
-  if (!raw) return "";
-  try {
-    const url = new URL(raw);
-    if (url.hostname === "dev.azure.com") {
-      return url.pathname.split("/").filter(Boolean)[0] ?? "";
-    }
-    if (url.hostname.endsWith(".visualstudio.com")) {
-      return url.hostname.split(".")[0] ?? "";
-    }
-    return raw;
-  } catch {
-    return raw;
-  }
 }
 
 function historyPath(): string {

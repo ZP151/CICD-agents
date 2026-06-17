@@ -645,7 +645,13 @@ function sourceIdFor(prefix: string, value: string): string {
   return `${prefix}-${Buffer.from(value).toString("base64url").slice(0, 24)}`;
 }
 
-function snippetForSource(text: string, maxChars = 500): string {
-  const cleaned = text.replace(/\s+/g, " ").trim();
-  return cleaned.length > maxChars ? `${cleaned.slice(0, maxChars).trim()}...` : cleaned;
+function snippetForSource(text: string, maxChars = 1800): string {
+  const cleaned = text
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return cleaned.length > maxChars ? `${cleaned.slice(0, maxChars).trimEnd()}\n...` : cleaned;
 }

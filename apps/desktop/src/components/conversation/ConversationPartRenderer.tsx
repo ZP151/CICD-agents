@@ -1,8 +1,7 @@
 import { Children, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import ReactMarkdown, { type Components } from "react-markdown";
-import rehypeSanitize from "rehype-sanitize";
-import remarkGfm from "remark-gfm";
-import type { ConversationArtifactPart, ConversationPart } from "../../chatBubbles.js";
+import { code as streamdownCodePlugin } from "@streamdown/code";
+import { Streamdown, type Components as StreamdownComponents } from "streamdown";
+import type { ConversationArtifactPart, ConversationPart, ConversationSourcePart } from "../../chatBubbles.js";
 
 interface ConversationPartRendererProps {
   parts: ConversationPart[];
@@ -10,6 +9,7 @@ interface ConversationPartRendererProps {
   typingIndicator?: ReactNode;
   selectedArtifactId?: string | null;
   onArtifactSelect?: (artifact: ConversationArtifactPart) => void;
+  onSourceSelect?: (source: ConversationSourcePart) => void;
 }
 
 export function ConversationPartRenderer({
@@ -18,6 +18,7 @@ export function ConversationPartRenderer({
   typingIndicator,
   selectedArtifactId,
   onArtifactSelect,
+  onSourceSelect,
 }: ConversationPartRendererProps) {
   const visibleParts = parts.filter((part) => part.type !== "metadata");
   if (visibleParts.length === 0 && !streaming) return null;
@@ -27,13 +28,16 @@ export function ConversationPartRenderer({
     <div className="space-y-2">
       {renderItems.map((item, index) => (
         item.type === "references"
-          ? <ReferenceGroup key={`references-${index}`} sources={item.sources} />
+          ? <ReferenceGroup key={`references-${index}`} sources={item.sources} onSourceSelect={onSourceSelect} />
           : (
               <ConversationPartView
                 key={partKey(item.part, index)}
                 part={item.part}
+                streaming={streaming}
+                inlineSources={item.inlineSources}
                 selectedArtifactId={selectedArtifactId}
                 onArtifactSelect={onArtifactSelect}
+                onSourceSelect={onSourceSelect}
               />
             )
       ))}
@@ -44,19 +48,39 @@ export function ConversationPartRenderer({
 
 function ConversationPartView({
   part,
+  streaming,
+  inlineSources,
   selectedArtifactId,
   onArtifactSelect,
+  onSourceSelect,
 }: {
   part: ConversationPart;
+  streaming?: boolean;
+  inlineSources?: ReferencePart[];
   selectedArtifactId?: string | null;
   onArtifactSelect?: (artifact: ConversationArtifactPart) => void;
+  onSourceSelect?: (source: ConversationSourcePart) => void;
 }) {
   switch (part.type) {
     case "text":
-      return <MarkdownContent markdown={part.text} />;
+      return (
+        <MarkdownContent
+          markdown={part.text}
+          streaming={streaming}
+          inlineSources={inlineSources}
+          onSourceSelect={onSourceSelect}
+        />
+      );
 
     case "markdown":
-      return <MarkdownContent markdown={part.markdown} />;
+      return (
+        <MarkdownContent
+          markdown={part.markdown}
+          streaming={streaming}
+          inlineSources={inlineSources}
+          onSourceSelect={onSourceSelect}
+        />
+      );
 
     case "code":
       return (
@@ -165,7 +189,7 @@ function ConversationPartView({
   }
 }
 
-type ReferencePart = Extract<ConversationPart, { type: "source_document" | "source_url" }>;
+type ReferencePart = ConversationSourcePart;
 
 const conversationPartCardClass =
   "rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs";
@@ -174,15 +198,29 @@ const conversationActionButtonClass =
   "rounded-md border border-[rgb(var(--app-border))] px-1.5 py-0.5 text-[10px] font-medium text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:translate-y-px";
 
 type RenderItem =
-  | { type: "part"; part: ConversationPart }
+  | { type: "part"; part: ConversationPart; inlineSources?: ReferencePart[] }
   | { type: "references"; sources: ReferencePart[] };
 
 function groupReferenceParts(parts: ConversationPart[]): RenderItem[] {
   const items: RenderItem[] = [];
   let pendingSources: ReferencePart[] = [];
+
+  const attachSources = (sources: ReferencePart[]): void => {
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      const item = items[index];
+      if (item?.type !== "part" || !partAcceptsInlineSources(item.part)) continue;
+      items[index] = {
+        ...item,
+        inlineSources: [...(item.inlineSources ?? []), ...sources],
+      };
+      return;
+    }
+    items.push({ type: "references", sources });
+  };
+
   const flush = (): void => {
     if (!pendingSources.length) return;
-    items.push({ type: "references", sources: pendingSources });
+    attachSources(pendingSources);
     pendingSources = [];
   };
 
@@ -198,8 +236,19 @@ function groupReferenceParts(parts: ConversationPart[]): RenderItem[] {
   return items;
 }
 
-function ReferenceGroup({ sources }: { sources: ReferencePart[] }) {
-  const [expanded, setExpanded] = useState(false);
+function partAcceptsInlineSources(part: ConversationPart): boolean {
+  return part.type === "text" || part.type === "markdown";
+}
+
+function ReferenceGroup({
+  sources,
+  onSourceSelect,
+  inline = false,
+}: {
+  sources: ReferencePart[];
+  onSourceSelect?: (source: ConversationSourcePart) => void;
+  inline?: boolean;
+}) {
   const documentCount = sources.filter((source) => source.type === "source_document").length;
   const webCount = sources.length - documentCount;
   const summary = [
@@ -209,20 +258,19 @@ function ReferenceGroup({ sources }: { sources: ReferencePart[] }) {
   const primarySources = sources.slice(0, 4);
   const remainingCount = Math.max(0, sources.length - primarySources.length);
 
+  const wrapperClass = inline
+    ? "my-1.5 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-xs"
+    : "rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-2 text-xs";
+
   return (
-    <div className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-2 text-xs">
+    <div className={wrapperClass}>
       <div className="flex flex-wrap items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => setExpanded((value) => !value)}
-          className="inline-flex items-center gap-1.5 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-1 text-[11px] font-medium text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35"
-          aria-expanded={expanded}
-        >
-          <span className="text-[rgb(var(--app-text-subtle))]">{expanded ? "Hide" : "Sources"}</span>
+        <span className="inline-flex items-center gap-1.5 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-1 text-[11px] font-medium text-[rgb(var(--app-text-muted))]">
+          <span className="text-[rgb(var(--app-text-subtle))]">{inline ? "Refs" : "Sources"}</span>
           <span>{summary || `${sources.length} reference${sources.length === 1 ? "" : "s"}`}</span>
-        </button>
+        </span>
         {primarySources.map((source, index) => (
-          <ReferenceChip key={referenceKey(source, index)} source={source} />
+          <ReferenceChip key={referenceKey(source, index)} source={source} onSourceSelect={onSourceSelect} />
         ))}
         {remainingCount > 0 && (
           <span className="rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] text-[rgb(var(--app-text-subtle))]">
@@ -230,62 +278,31 @@ function ReferenceGroup({ sources }: { sources: ReferencePart[] }) {
           </span>
         )}
       </div>
-      {expanded && (
-        <div className="mt-2 overflow-hidden rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]">
-          <div className="divide-y divide-[rgb(var(--app-border))]">
-            {sources.map((source, index) => (
-              <ReferenceRow key={referenceKey(source, index)} source={source} />
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-function ReferenceChip({ source }: { source: ReferencePart }) {
+function ReferenceChip({
+  source,
+  onSourceSelect,
+}: {
+  source: ReferencePart;
+  onSourceSelect?: (source: ConversationSourcePart) => void;
+}) {
   const title = source.title || (source.type === "source_document" ? source.file : source.domain) || "Source";
   const label = truncateMiddle(title, 34);
   const className = "inline-flex max-w-[13rem] items-center gap-1 rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] text-[rgb(var(--app-text-subtle))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text-muted))]";
-  if (source.type === "source_url") {
-    return (
-      <a href={source.url} target="_blank" rel="noreferrer" className={className} title={source.url}>
-        <span className="shrink-0">{source.domain ? "web" : "url"}</span>
-        <span className="min-w-0 truncate">{label}</span>
-      </a>
-    );
-  }
   return (
-    <span className={className} title={[source.file, source.line ? `line ${source.line}` : ""].filter(Boolean).join(":") || source.title}>
-      <span className="shrink-0">file</span>
+    <button
+      type="button"
+      className={className}
+      title={source.type === "source_url" ? source.url : [source.file, source.line ? `line ${source.line}` : ""].filter(Boolean).join(":") || source.title}
+      onClick={() => onSourceSelect?.(source)}
+    >
+      <span className="shrink-0">{source.type === "source_url" ? (source.domain ? "web" : "url") : "file"}</span>
       <span className="min-w-0 truncate">{label}</span>
-    </span>
+    </button>
   );
-}
-
-function ReferenceRow({ source }: { source: ReferencePart }) {
-  const label = source.type === "source_document" ? "File" : source.domain ?? "Web";
-  const detail = source.type === "source_document"
-    ? [source.file, source.line ? `line ${source.line}` : ""].filter(Boolean).join(":")
-    : source.url;
-  const content = (
-    <div className="px-3 py-2.5">
-      <p className="text-[11px] font-medium text-[rgb(var(--app-text-subtle))]">{label}</p>
-      <p className="mt-0.5 font-medium leading-snug text-[rgb(var(--app-text))]">{source.title}</p>
-      {detail && <p className="mt-0.5 break-all font-mono text-[11px] text-[rgb(var(--app-text-subtle))]">{detail}</p>}
-      {source.snippet && (
-        <p className="mt-1 whitespace-pre-wrap leading-relaxed text-[rgb(var(--app-text-muted))]">{source.snippet}</p>
-      )}
-    </div>
-  );
-  if (source.type === "source_url") {
-    return (
-      <a href={source.url} target="_blank" rel="noreferrer" className="block transition hover:bg-[rgb(var(--app-surface-raised))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35">
-        {content}
-      </a>
-    );
-  }
-  return content;
 }
 
 function ArtifactCard({
@@ -412,9 +429,36 @@ function artifactStatusDotClass(status: ConversationArtifactPart["status"]): str
   return `h-1.5 w-1.5 rounded-full ${color}${motion}`;
 }
 
-function MarkdownContent({ markdown }: { markdown: string }) {
-  const renderableMarkdown = useMemo(() => stabilizeStreamingMarkdown(markdown), [markdown]);
-  const components = useMemo<Components>(
+function MarkdownContent({
+  markdown,
+  streaming = false,
+  inlineSources = [],
+  onSourceSelect,
+}: {
+  markdown: string;
+  streaming?: boolean;
+  inlineSources?: ReferencePart[];
+  onSourceSelect?: (source: ConversationSourcePart) => void;
+}) {
+  const sourceById = useMemo(
+    () => new Map(inlineSources.map((source) => [source.sourceId, source])),
+    [inlineSources],
+  );
+  const renderableMarkdown = useMemo(
+    () => injectSourceLinksIntoMarkdown(markdown, inlineSources),
+    [markdown, inlineSources],
+  );
+  const [theme, setTheme] = useState(() => currentAppTheme());
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const target = document.documentElement;
+    const observer = new MutationObserver(() => setTheme(currentAppTheme()));
+    observer.observe(target, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
+
+  const components = useMemo<StreamdownComponents>(
     () => ({
       h1: ({ children }) => (
         <h1 className="mb-2 mt-3 text-lg font-semibold leading-tight text-[rgb(var(--app-text))] first:mt-0">
@@ -436,16 +480,32 @@ function MarkdownContent({ markdown }: { markdown: string }) {
           {children}
         </p>
       ),
-      a: ({ children, href }) => (
-        <a
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          className="text-blue-400 underline decoration-blue-400/40 underline-offset-2 transition hover:text-blue-300"
-        >
-          {children}
-        </a>
-      ),
+      a: ({ children, href }) => {
+        const source = sourceFromReferenceHref(href, sourceById);
+        if (source) {
+          return (
+            <button
+              type="button"
+              className="inline rounded-sm font-semibold text-[rgb(var(--app-accent))] underline decoration-[rgb(var(--app-accent))]/35 decoration-1 underline-offset-2 transition hover:text-blue-400 hover:decoration-blue-400/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35"
+              data-source-reference-id={source.sourceId}
+              title={sourceReferenceTitle(source)}
+              onClick={() => onSourceSelect?.(source)}
+            >
+              {children}
+            </button>
+          );
+        }
+        return (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-400 underline decoration-blue-400/40 underline-offset-2 transition hover:text-blue-300"
+          >
+            {children}
+          </a>
+        );
+      },
       ul: ({ children }) => (
         <ul className="my-2 ml-5 list-disc space-y-1.5 marker:text-[rgb(var(--app-accent))] first:mt-0 last:mb-0">
           {children}
@@ -491,20 +551,174 @@ function MarkdownContent({ markdown }: { markdown: string }) {
       },
       pre: ({ children }) => <>{children}</>,
     }),
-    [],
+    [onSourceSelect, sourceById],
   );
 
   return (
-    <div className="conversation-markdown text-sm leading-relaxed text-[rgb(var(--app-text))]">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeSanitize]}
+    <div className="conversation-markdown text-sm leading-relaxed text-[rgb(var(--app-text))]" data-streaming={streaming ? "true" : undefined}>
+      <Streamdown
+        mode={streaming ? "streaming" : "static"}
+        isAnimating={streaming}
+        caret={streaming ? "block" : undefined}
+        animated={false}
+        parseIncompleteMarkdown={streaming}
+        normalizeHtmlIndentation
+        controls={{ code: { copy: true, download: false }, table: { copy: true, download: false }, mermaid: false }}
+        lineNumbers={false}
+        plugins={{ code: streamdownCodePlugin }}
+        shikiTheme={theme === "light" ? ["github-light", "github-light"] : ["github-dark", "github-dark"]}
         components={components}
+        className="conversation-streamdown max-w-[72ch]"
+        linkSafety={{ enabled: false }}
       >
-        {renderableMarkdown}
-      </ReactMarkdown>
+        {stabilizeStreamingMarkdown(renderableMarkdown)}
+      </Streamdown>
     </div>
   );
+}
+
+interface SourceLinkTerm {
+  source: ReferencePart;
+  term: string;
+  caseSensitive: boolean;
+}
+
+function injectSourceLinksIntoMarkdown(markdown: string, sources: ReferencePart[]): string {
+  const terms = sourceLinkTerms(sources);
+  if (!terms.length) return markdown;
+
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  let fenced = false;
+  return lines.map((line) => {
+    const trimmed = line.trim();
+    if (/^(```|~~~)/.test(trimmed)) {
+      fenced = !fenced;
+      return line;
+    }
+    if (fenced) return line;
+    return linkInlineSourceMentions(line, terms);
+  }).join("\n");
+}
+
+function sourceFromReferenceHref(
+  href: string | undefined,
+  sourceById: Map<string, ReferencePart>,
+): ReferencePart | null {
+  if (!href?.startsWith("#source-")) return null;
+  const sourceId = decodeURIComponent(href.slice("#source-".length));
+  return sourceById.get(sourceId) ?? null;
+}
+
+function sourceReferenceTitle(source: ReferencePart): string {
+  if (source.type === "source_url") return source.url;
+  return [source.file, source.line ? `line ${source.line}` : ""].filter(Boolean).join(":") || source.title;
+}
+
+function sourceLinkTerms(sources: ReferencePart[]): SourceLinkTerm[] {
+  const seen = new Set<string>();
+  const terms: SourceLinkTerm[] = [];
+
+  for (const source of sources) {
+    for (const candidate of sourceTermCandidates(source)) {
+      const term = candidate.trim();
+      if (!isUsableSourceTerm(term)) continue;
+      const key = `${source.sourceId}:${term}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      terms.push({
+        source,
+        term,
+        caseSensitive: !term.includes("."),
+      });
+    }
+  }
+
+  return terms.sort((left, right) => right.term.length - left.term.length);
+}
+
+function sourceTermCandidates(source: ReferencePart): string[] {
+  if (source.type === "source_url") {
+    const domain = source.domain ?? safeUrlDomain(source.url);
+    return [source.title, domain].filter((term): term is string => Boolean(term));
+  }
+
+  const fileName = basenameFromPath(source.file) || source.title;
+  const titleBase = source.title.split(":")[0] ?? source.title;
+  const noExtension = fileName.replace(/\.[^.]+$/, "");
+  const titleNoExtension = titleBase.replace(/\.[^.]+$/, "");
+  return [fileName, titleBase, noExtension, titleNoExtension, source.file].filter((term): term is string => Boolean(term));
+}
+
+function safeUrlDomain(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+
+function isUsableSourceTerm(term: string): boolean {
+  if (term.length < 4 || term.length > 80) return false;
+  if (/^[\d:.-]+$/.test(term)) return false;
+  return !term.includes("\\") && !term.includes("/");
+}
+
+function linkInlineSourceMentions(line: string, terms: SourceLinkTerm[]): string {
+  const segments = line.split(/(`[^`]*`)/g);
+  return segments.map((segment) => {
+    if (segment.startsWith("`") && segment.endsWith("`")) return segment;
+    return linkPlainTextSourceMentions(segment, terms);
+  }).join("");
+}
+
+function linkPlainTextSourceMentions(text: string, terms: SourceLinkTerm[]): string {
+  let output = "";
+  let index = 0;
+
+  while (index < text.length) {
+    const existingLinkEnd = existingMarkdownLinkEnd(text, index);
+    if (existingLinkEnd > index) {
+      output += text.slice(index, existingLinkEnd);
+      index = existingLinkEnd;
+      continue;
+    }
+
+    const match = terms.find((term) => sourceTermMatchesAt(text, index, term));
+    if (match) {
+      const label = text.slice(index, index + match.term.length);
+      output += `[${label}](#source-${encodeURIComponent(match.source.sourceId)})`;
+      index += match.term.length;
+      continue;
+    }
+
+    output += text[index];
+    index += 1;
+  }
+
+  return output;
+}
+
+function existingMarkdownLinkEnd(text: string, index: number): number {
+  if (text[index] !== "[") return index;
+  const labelEnd = text.indexOf("](", index);
+  if (labelEnd < 0) return index;
+  const hrefEnd = text.indexOf(")", labelEnd + 2);
+  return hrefEnd < 0 ? index : hrefEnd + 1;
+}
+
+function sourceTermMatchesAt(text: string, index: number, term: SourceLinkTerm): boolean {
+  const slice = text.slice(index, index + term.term.length);
+  const matches = term.caseSensitive ? slice === term.term : slice.toLowerCase() === term.term.toLowerCase();
+  if (!matches) return false;
+  return isSourceBoundary(text[index - 1]) && isSourceBoundary(text[index + term.term.length]);
+}
+
+function isSourceBoundary(char: string | undefined): boolean {
+  return !char || /[\s()[\]{}<>,:;'"`*_]/.test(char);
+}
+
+function basenameFromPath(path: string | undefined): string {
+  return path?.split(/[\\/]/).filter(Boolean).pop() ?? "";
 }
 
 function CodeBlock({
@@ -631,8 +845,8 @@ function normalizeCodeLanguage(language?: string): string {
   const normalized = language?.toLowerCase().trim();
   if (!normalized) return "text";
   const aliases: Record<string, string> = {
-    csharp: "c#",
-    cs: "c#",
+    csharp: "csharp",
+    cs: "csharp",
     js: "javascript",
     jsx: "jsx",
     ts: "typescript",

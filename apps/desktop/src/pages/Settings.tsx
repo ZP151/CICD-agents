@@ -4,8 +4,10 @@ import {
   fetchAuthStatus,
   fetchDaemonConfig,
   fetchHealth,
+  testLlmConfig,
   type AuthUser,
   type HealthStatus,
+  type LlmProviderConfig,
 } from "../api";
 import { useTheme, type AppTheme } from "../theme.js";
 
@@ -19,19 +21,27 @@ interface AppSettings {
   inferenceSpeed: "fast" | "balanced" | "deep";
   codeReviewMode: "inline" | "detached";
   suggestedPrompts: boolean;
-  defaultWorkspacePermissions: boolean;
-  autoReviewPermissions: boolean;
-  fullAccessPreference: boolean;
-  additionalModelsEnabled: boolean;
-  llmProvider: "azure" | "openai";
+  additionalModels: AdditionalModelConfig[];
+  azureTenantId: string;
+  azureClientId: string;
+}
+
+type AdditionalModelProvider = "azure" | "openai";
+
+interface AdditionalModelConfig {
+  id: string;
+  provider: AdditionalModelProvider;
+  label: string;
+  enabled: boolean;
+  available: boolean;
+  testedAt: string;
+  testError: string;
   azureEndpoint: string;
   azureApiKey: string;
   azureDeployment: string;
   azureApiVersion: string;
   openaiApiKey: string;
   openaiModel: string;
-  azureTenantId: string;
-  azureClientId: string;
 }
 
 const DEFAULTS: AppSettings = {
@@ -42,37 +52,116 @@ const DEFAULTS: AppSettings = {
   inferenceSpeed: "fast",
   codeReviewMode: "inline",
   suggestedPrompts: true,
-  defaultWorkspacePermissions: true,
-  autoReviewPermissions: true,
-  fullAccessPreference: false,
-  additionalModelsEnabled: false,
-  llmProvider: "azure",
-  azureEndpoint: "",
-  azureApiKey: "",
-  azureDeployment: "",
-  azureApiVersion: "",
-  openaiApiKey: "",
-  openaiModel: "",
+  additionalModels: [],
   azureTenantId: "",
   azureClientId: "",
 };
 
 type DaemonStatus = "unknown" | "checking" | "configured" | "unconfigured" | "unreachable";
 
+function makeModelId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `model-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createEmptyAdditionalModel(): AdditionalModelConfig {
+  return {
+    id: makeModelId(),
+    provider: "azure",
+    label: "",
+    enabled: false,
+    available: false,
+    testedAt: "",
+    testError: "",
+    azureEndpoint: "",
+    azureApiKey: "",
+    azureDeployment: "",
+    azureApiVersion: "",
+    openaiApiKey: "",
+    openaiModel: "",
+  };
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function normalizeAdditionalModels(value: unknown): AdditionalModelConfig[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => {
+    const raw = item as Record<string, unknown>;
+    return {
+      id: cleanString(raw.id) || makeModelId(),
+      provider: raw.provider === "openai" ? "openai" : "azure",
+      label: cleanString(raw.label),
+      enabled: raw.enabled === true,
+      available: raw.available === true,
+      testedAt: cleanString(raw.testedAt),
+      testError: cleanString(raw.testError),
+      azureEndpoint: cleanString(raw.azureEndpoint),
+      azureApiKey: cleanString(raw.azureApiKey),
+      azureDeployment: cleanString(raw.azureDeployment),
+      azureApiVersion: cleanString(raw.azureApiVersion),
+      openaiApiKey: cleanString(raw.openaiApiKey),
+      openaiModel: cleanString(raw.openaiModel),
+    };
+  });
+}
+
+function additionalModelName(model: AdditionalModelConfig): string {
+  const fallback = model.provider === "openai" ? model.openaiModel : model.azureDeployment;
+  return model.label.trim() || fallback.trim() || "Untitled model";
+}
+
+function additionalModelDescription(model: AdditionalModelConfig): string {
+  const provider = model.provider === "openai" ? "OpenAI" : "Azure OpenAI";
+  const configured = model.provider === "openai"
+    ? Boolean(model.openaiApiKey.trim() && model.openaiModel.trim())
+    : Boolean(model.azureEndpoint.trim() && model.azureApiKey.trim() && model.azureDeployment.trim());
+  if (!configured) return `${provider} · missing required fields`;
+  if (model.available) return `${provider} · available`;
+  if (model.testError) return `${provider} · test failed`;
+  return `${provider} · not tested`;
+}
+
+function additionalModelIsConfigured(model: AdditionalModelConfig): boolean {
+  return model.provider === "openai"
+    ? Boolean(model.openaiApiKey.trim() && model.openaiModel.trim())
+    : Boolean(model.azureEndpoint.trim() && model.azureApiKey.trim() && model.azureDeployment.trim());
+}
+
+function llmConfigFromModel(model: AdditionalModelConfig): LlmProviderConfig {
+  return model.provider === "openai"
+    ? {
+        llmProvider: "openai",
+        openaiApiKey: model.openaiApiKey.trim(),
+        openaiModel: model.openaiModel.trim(),
+      }
+    : {
+        llmProvider: "azure",
+        azureEndpoint: model.azureEndpoint.trim(),
+        azureApiKey: model.azureApiKey.trim(),
+        azureDeployment: model.azureDeployment.trim(),
+        azureApiVersion: model.azureApiVersion.trim(),
+      };
+}
+
 function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const stored = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<AppSettings>) };
+      const parsed = JSON.parse(raw) as Partial<AppSettings> & Record<string, unknown>;
+      const stored = { ...DEFAULTS, ...parsed };
       return {
-        ...stored,
-        azureEndpoint: "",
-        azureApiKey: "",
-        azureDeployment: "",
-        azureApiVersion: "",
-        openaiApiKey: "",
-        openaiModel: "",
-        additionalModelsEnabled: false,
+        workMode: stored.workMode,
+        defaultOpenDestination: stored.defaultOpenDestination,
+        terminalShell: stored.terminalShell,
+        language: stored.language,
+        inferenceSpeed: stored.inferenceSpeed,
+        codeReviewMode: stored.codeReviewMode,
+        suggestedPrompts: stored.suggestedPrompts,
+        additionalModels: normalizeAdditionalModels(parsed.additionalModels),
+        azureTenantId: cleanString(parsed.azureTenantId),
+        azureClientId: cleanString(parsed.azureClientId),
       };
     }
   } catch {
@@ -211,9 +300,11 @@ function SelectControl<T extends string>({
 
 function ToggleSwitch({
   checked,
+  disabled = false,
   onChange,
 }: {
   checked: boolean;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   return (
@@ -222,6 +313,7 @@ function ToggleSwitch({
       className={`settings-toggle ${checked ? "is-on" : ""}`}
       onClick={() => onChange(!checked)}
       aria-pressed={checked}
+      disabled={disabled}
     >
       <span />
     </button>
@@ -250,7 +342,9 @@ export default function Settings(): JSX.Element {
   const [daemonStatus, setDaemonStatus] = useState<DaemonStatus>("unknown");
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [authUser, setAuthUser] = useState<AuthUser>({ authenticated: false });
-  const [customModelsOpen, setCustomModelsOpen] = useState(false);
+  const [editingModelId, setEditingModelId] = useState<string | null>(null);
+  const [modelDraft, setModelDraft] = useState<AdditionalModelConfig>(createEmptyAdditionalModel);
+  const [testingModelId, setTestingModelId] = useState<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didHydrateDaemonRef = useRef(false);
@@ -309,14 +403,121 @@ export default function Settings(): JSX.Element {
     setSettings((current) => ({ ...current, [key]: value }));
   }
 
-  const statusBadge: Record<DaemonStatus, { label: string; tone: "neutral" | "success" | "warning" | "danger"; cls: string }> = {
-    unknown: { label: "Model routing", tone: "neutral", cls: "text-zinc-500" },
-    checking: { label: "Checking daemon...", tone: "warning", cls: "text-zinc-400" },
-    configured: { label: "Built-in default", tone: "success", cls: "text-emerald-500" },
-    unconfigured: { label: "Built-in default", tone: "success", cls: "text-emerald-500" },
-    unreachable: { label: "Daemon offline", tone: "danger", cls: "text-red-400" },
-  };
-  const badge = statusBadge[daemonStatus];
+  function startAddingModel() {
+    setEditingModelId("new");
+    setModelDraft(createEmptyAdditionalModel());
+  }
+
+  function startEditingModel(model: AdditionalModelConfig) {
+    setEditingModelId(model.id);
+    setModelDraft({ ...model });
+  }
+
+  function cancelModelEdit() {
+    setEditingModelId(null);
+    setModelDraft(createEmptyAdditionalModel());
+  }
+
+  function saveModelDraft() {
+    setSettings((current) => {
+      const saved = {
+        ...modelDraft,
+        label: modelDraft.label.trim(),
+        azureEndpoint: modelDraft.azureEndpoint.trim(),
+        azureDeployment: modelDraft.azureDeployment.trim(),
+        azureApiVersion: modelDraft.azureApiVersion.trim(),
+        openaiModel: modelDraft.openaiModel.trim(),
+      };
+      const exists = current.additionalModels.some((model) => model.id === saved.id);
+      return {
+        ...current,
+        additionalModels: exists
+          ? current.additionalModels.map((model) => (model.id === saved.id ? saved : model))
+          : [...current.additionalModels, saved],
+      };
+    });
+    cancelModelEdit();
+  }
+
+  function updateModelDraft<K extends keyof AdditionalModelConfig>(key: K, value: AdditionalModelConfig[K]) {
+    setModelDraft((current) => {
+      const next = { ...current, [key]: value };
+      if (
+        key === "provider"
+        || key === "azureEndpoint"
+        || key === "azureApiKey"
+        || key === "azureDeployment"
+        || key === "azureApiVersion"
+        || key === "openaiApiKey"
+        || key === "openaiModel"
+      ) {
+        return { ...next, enabled: false, available: false, testedAt: "", testError: "" };
+      }
+      return next;
+    });
+  }
+
+  async function testModel(model: AdditionalModelConfig, source: "draft" | "saved" = "saved"): Promise<boolean> {
+    if (!additionalModelIsConfigured(model)) {
+      const failed = { ...model, enabled: false, available: false, testError: "Required fields are missing." };
+      if (source === "draft") setModelDraft(failed);
+      else {
+        setSettings((current) => ({
+          ...current,
+          additionalModels: current.additionalModels.map((item) => (item.id === model.id ? failed : item)),
+        }));
+      }
+      return false;
+    }
+    setTestingModelId(model.id);
+    try {
+      await testLlmConfig(llmConfigFromModel(model));
+      const passed = {
+        ...model,
+        enabled: true,
+        available: true,
+        testedAt: new Date().toISOString(),
+        testError: "",
+      };
+      if (source === "draft") setModelDraft(passed);
+      else {
+        setSettings((current) => ({
+          ...current,
+          additionalModels: current.additionalModels.map((item) => (item.id === model.id ? passed : item)),
+        }));
+      }
+      return true;
+    } catch (err) {
+      const failed = {
+        ...model,
+        enabled: false,
+        available: false,
+        testedAt: "",
+        testError: err instanceof Error ? err.message : String(err),
+      };
+      if (source === "draft") setModelDraft(failed);
+      else {
+        setSettings((current) => ({
+          ...current,
+          additionalModels: current.additionalModels.map((item) => (item.id === model.id ? failed : item)),
+        }));
+      }
+      return false;
+    } finally {
+      setTestingModelId((current) => (current === model.id ? null : current));
+    }
+  }
+
+  function disableModel(model: AdditionalModelConfig) {
+    setSettings((current) => ({
+      ...current,
+      additionalModels: current.additionalModels.map((item) => (
+        item.id === model.id ? { ...item, enabled: false, available: false } : item
+      )),
+    }));
+  }
+
+  const availableAdditionalModels = settings.additionalModels.filter((model) => model.enabled && model.available);
 
   return (
     <div className="settings-page">
@@ -324,12 +525,11 @@ export default function Settings(): JSX.Element {
         <div>
           <h2 className="settings-title">Settings</h2>
           <p className="settings-subtitle">
-            Tune the local workspace, permissions, identity context, and optional custom model providers.
+            Tune the local workspace, identity context, and optional custom model providers.
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           {saved && <span className="text-xs text-emerald-500">Saved</span>}
-          <span className={`text-xs font-medium ${badge.cls}`}>{badge.label}</span>
         </div>
       </div>
 
@@ -347,149 +547,197 @@ export default function Settings(): JSX.Element {
         </SettingsRow>
       </SettingsSection>
 
-      <SettingsSection title="Permissions">
-        <SettingsRow title="Default permissions" description="Allow the agent to read and edit files in its workspace by default.">
-          <ToggleSwitch checked={settings.defaultWorkspacePermissions} onChange={(value) => set("defaultWorkspacePermissions", value)} />
-        </SettingsRow>
-        <SettingsRow title="Auto-review" description="Let the app review permission requests and surface risky actions before execution.">
-          <ToggleSwitch checked={settings.autoReviewPermissions} onChange={(value) => set("autoReviewPermissions", value)} />
-        </SettingsRow>
-        <SettingsRow title="Full access preference" description="Preference only. Actual filesystem and network access still follow the current runtime policy.">
-          <ToggleSwitch checked={settings.fullAccessPreference} onChange={(value) => set("fullAccessPreference", value)} />
-        </SettingsRow>
-      </SettingsSection>
-
       <SettingsSection title="Additional Models">
         <SettingsRow
-          title="Custom model providers"
-          description="Optional. Built-in model routing stays active unless you explicitly configure another provider."
+          title="Available in Chat"
+          description={availableAdditionalModels.length > 0
+            ? availableAdditionalModels.map(additionalModelName).join(", ")
+            : "No custom models are available yet."}
+        />
+        <SettingsRow
+          title="Models"
+          description="Optional model choices for Chat."
         >
           <button
             type="button"
-            onClick={() => {
-              const next = !customModelsOpen;
-              setCustomModelsOpen(next);
-              setSettings((current) => ({
-                ...current,
-                additionalModelsEnabled: next,
-                ...(!next ? {
-                  azureEndpoint: "",
-                  azureApiKey: "",
-                  azureDeployment: "",
-                  azureApiVersion: "",
-                  openaiApiKey: "",
-                  openaiModel: "",
-                } : {}),
-              }));
-            }}
+            onClick={startAddingModel}
             className="settings-text-button"
-            aria-expanded={customModelsOpen}
+            disabled={editingModelId !== null}
           >
-            {customModelsOpen ? "Hide" : "Configure"}
+            Add model
           </button>
         </SettingsRow>
 
-        {customModelsOpen && (
-        <>
-        <SettingsRow
-          title="Model provider"
-          description="Optional. Conversation keeps using the built-in model by default; saved providers appear there as additional model choices."
-        >
-          <SegmentedChoice
-            value={settings.llmProvider}
-            onChange={(value) => set("llmProvider", value)}
-            options={[
-              { label: "Azure OpenAI", value: "azure" },
-              { label: "OpenAI", value: "openai" },
-            ]}
-          />
-        </SettingsRow>
-
-        {settings.llmProvider === "azure" ? (
-          <>
-            <SettingsRow title="Endpoint" description="For an additional user-owned Azure OpenAI resource.">
-              <TextInput
-                label="Endpoint"
-                placeholder="https://your-resource.openai.azure.com"
-                value={settings.azureEndpoint}
-                onChange={(value) => set("azureEndpoint", value)}
-              />
-            </SettingsRow>
-            <SettingsRow title="API key" description="Stored locally for this additional model provider.">
-              <TextInput
-                label="API key"
-                type="password"
-                placeholder="Optional custom key"
-                value={settings.azureApiKey}
-                onChange={(value) => set("azureApiKey", value)}
-              />
-            </SettingsRow>
-            <SettingsRow title="Deployment" description="The deployment name that will appear as a Conversation model choice.">
-              <TextInput
-                label="Deployment"
-                placeholder="my-chat-deployment"
-                value={settings.azureDeployment}
-                onChange={(value) => set("azureDeployment", value)}
-              />
-            </SettingsRow>
-            <SettingsRow title="API version">
-              <TextInput
-                label="API version"
-                placeholder="2024-02-01"
-                value={settings.azureApiVersion}
-                onChange={(value) => set("azureApiVersion", value)}
-              />
-            </SettingsRow>
-          </>
-        ) : (
-          <>
-            <SettingsRow title="API key" description="Stored locally for this additional model provider.">
-              <TextInput
-                label="API key"
-                type="password"
-                placeholder="Optional custom key"
-                value={settings.openaiApiKey}
-                onChange={(value) => set("openaiApiKey", value)}
-              />
-            </SettingsRow>
-            <SettingsRow title="Model" description="The model name that will appear as a Conversation model choice.">
-              <TextInput
-                label="Model"
-                placeholder="Optional custom model"
-                value={settings.openaiModel}
-                onChange={(value) => set("openaiModel", value)}
-              />
-            </SettingsRow>
-          </>
+        {settings.additionalModels.length === 0 && editingModelId === null && (
+          <p className="settings-message">No additional models configured.</p>
         )}
-        </>
+
+        {settings.additionalModels.map((model) => (
+          <SettingsRow
+            key={model.id}
+            title={additionalModelName(model)}
+            description={additionalModelDescription(model)}
+          >
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <ToggleSwitch
+                  checked={model.enabled && model.available}
+                  disabled={testingModelId === model.id}
+                  onChange={(value) => {
+                    if (!value) {
+                      disableModel(model);
+                      return;
+                    }
+                    void testModel(model);
+                  }}
+                />
+                <button
+                  type="button"
+                  className="settings-text-button"
+                  onClick={() => void testModel(model)}
+                  disabled={testingModelId === model.id}
+                >
+                  {testingModelId === model.id ? "Testing..." : "Test"}
+                </button>
+                <button type="button" className="settings-text-button" onClick={() => startEditingModel(model)}>
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="settings-text-button"
+                  onClick={() => {
+                    setSettings((current) => ({
+                      ...current,
+                      additionalModels: current.additionalModels.filter((item) => item.id !== model.id),
+                    }));
+                    if (editingModelId === model.id) cancelModelEdit();
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+              {model.testError && <p className="max-w-[360px] text-right text-[11px] text-red-500">{model.testError}</p>}
+            </div>
+          </SettingsRow>
+        ))}
+
+        {editingModelId !== null && (
+          <div className="settings-list rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]/45">
+            <SettingsRow title={editingModelId === "new" ? "Add model" : "Edit model"}>
+              <SegmentedChoice<AdditionalModelProvider>
+                value={modelDraft.provider}
+                onChange={(value) => updateModelDraft("provider", value)}
+                options={[
+                  { label: "Azure OpenAI", value: "azure" },
+                  { label: "OpenAI", value: "openai" },
+                ]}
+              />
+            </SettingsRow>
+            <SettingsRow title="Display name" description="Optional. Used in the Chat model menu.">
+              <TextInput
+                label="Display name"
+                placeholder="Team review model"
+                value={modelDraft.label}
+                onChange={(value) => updateModelDraft("label", value)}
+              />
+            </SettingsRow>
+            {modelDraft.provider === "azure" ? (
+              <>
+                <SettingsRow title="Endpoint">
+                  <TextInput
+                    label="Endpoint"
+                    placeholder="https://your-resource.openai.azure.com"
+                    value={modelDraft.azureEndpoint}
+                    onChange={(value) => updateModelDraft("azureEndpoint", value)}
+                  />
+                </SettingsRow>
+                <SettingsRow title="API key">
+                  <TextInput
+                    label="API key"
+                    type="password"
+                    placeholder="Azure OpenAI key"
+                    value={modelDraft.azureApiKey}
+                    onChange={(value) => updateModelDraft("azureApiKey", value)}
+                  />
+                </SettingsRow>
+                <SettingsRow title="Deployment">
+                  <TextInput
+                    label="Deployment"
+                    placeholder="my-chat-deployment"
+                    value={modelDraft.azureDeployment}
+                    onChange={(value) => updateModelDraft("azureDeployment", value)}
+                  />
+                </SettingsRow>
+                <SettingsRow title="API version">
+                  <TextInput
+                    label="API version"
+                    placeholder="2024-02-01"
+                    value={modelDraft.azureApiVersion}
+                    onChange={(value) => updateModelDraft("azureApiVersion", value)}
+                  />
+                </SettingsRow>
+              </>
+            ) : (
+              <>
+                <SettingsRow title="API key">
+                  <TextInput
+                    label="API key"
+                    type="password"
+                    placeholder="OpenAI API key"
+                    value={modelDraft.openaiApiKey}
+                    onChange={(value) => updateModelDraft("openaiApiKey", value)}
+                  />
+                </SettingsRow>
+                <SettingsRow title="Model">
+                  <TextInput
+                    label="Model"
+                    placeholder="model name"
+                    value={modelDraft.openaiModel}
+                    onChange={(value) => updateModelDraft("openaiModel", value)}
+                  />
+                </SettingsRow>
+              </>
+            )}
+            <SettingsRow title="Enabled" description="Controls whether this model appears in Chat.">
+              <ToggleSwitch
+                checked={modelDraft.enabled && modelDraft.available}
+                disabled={testingModelId === modelDraft.id}
+                onChange={(value) => {
+                  if (!value) {
+                    setModelDraft((current) => ({ ...current, enabled: false, available: false }));
+                    return;
+                  }
+                  void testModel(modelDraft, "draft");
+                }}
+              />
+            </SettingsRow>
+            <SettingsRow title="Actions">
+              <div className="flex flex-col items-end gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    className="settings-text-button"
+                    onClick={() => void testModel(modelDraft, "draft")}
+                    disabled={testingModelId === modelDraft.id}
+                  >
+                    {testingModelId === modelDraft.id ? "Testing..." : "Test connection"}
+                  </button>
+                  <button type="button" className="settings-text-button" onClick={saveModelDraft}>
+                    Save
+                  </button>
+                  <button type="button" className="settings-text-button" onClick={cancelModelEdit}>
+                    Cancel
+                  </button>
+                </div>
+                {modelDraft.available && <p className="text-[11px] text-emerald-500">Connection verified.</p>}
+                {modelDraft.testError && <p className="max-w-[360px] text-right text-[11px] text-red-500">{modelDraft.testError}</p>}
+              </div>
+            </SettingsRow>
+          </div>
         )}
 
         {daemonStatus === "unreachable" && (
           <p className="settings-message settings-message-warning">Daemon is not reachable. Local preferences will still be saved.</p>
-        )}
-      </SettingsSection>
-
-      <SettingsSection title="Model Runtime">
-        {health && (
-          <>
-            <SettingsRow title="Daemon env source" description="The .env file the daemon used at startup.">
-              <p className="max-w-[420px] truncate text-xs text-zinc-400" title={health.envSource ?? ""}>
-                {health.envSource ?? "process environment"}
-              </p>
-            </SettingsRow>
-            <SettingsRow title="Active chat deployment" description="The deployment currently used by the daemon's built-in Azure OpenAI client.">
-              <div className="flex min-w-0 items-center gap-2">
-                <p className="truncate text-xs text-zinc-300">{health.azureDeployment || "Not configured"}</p>
-                <StatusPill tone={health.azureDeploymentAvailable ? "success" : "warning"}>
-                  {health.azureDeploymentAvailable ? "Available" : "Needs check"}
-                </StatusPill>
-              </div>
-            </SettingsRow>
-            {health.azureDeploymentError && (
-              <p className="settings-message settings-message-warning">{health.azureDeploymentError}</p>
-            )}
-          </>
         )}
       </SettingsSection>
 
@@ -535,14 +783,9 @@ export default function Settings(): JSX.Element {
             </StatusPill>
           </div>
         </SettingsRow>
-        <SettingsRow title="Profile store" description="Project Link records can use managed cloud storage when configured.">
+        <SettingsRow title="Project Link storage" description="Project Link records can use managed cloud storage when configured.">
           <StatusPill tone={health?.cloudProfileStore ? "success" : "neutral"}>
             {health?.cloudProfileStore ? "Cloud enabled" : "Local fallback"}
-          </StatusPill>
-        </SettingsRow>
-        <SettingsRow title="Secret storage" description="Custom secrets and service credentials should use managed storage when configured.">
-          <StatusPill tone={health?.cloudSecrets ? "success" : "neutral"}>
-            {health?.cloudSecrets ? "Cloud enabled" : "Local fallback"}
           </StatusPill>
         </SettingsRow>
         <SettingsRow title="Session storage" description="Conversation and checkpoint metadata can use managed cloud storage when configured.">

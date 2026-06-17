@@ -383,11 +383,17 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
   const actions = new Set((context.metadataActions ?? []).map((action) => action.toLowerCase()));
   const sourceTypes = new Set(context.sourceTypes ?? []);
   const phase = (context.workflowPhase ?? "").toLowerCase();
+  const architectureContext = /\b(architecture|entry point|request flow|project structure|controller|daemon|api|data model|integration)\b/.test(text);
+
+  if (architectureContext) {
+    add("arch-flow", "Trace request flow", "Trace the main request flow through this project.");
+    add("arch-entry", "List entry points", "List the main entry points and startup path.");
+    add("arch-data-model", "Explain data model", "Explain the key data models and how they connect.");
+  }
 
   if (context.hasAuthError || /\b(auth|oauth|pat|token|credential|sign in|permission)\b/.test(text)) {
-    add("auth-retry", "Retry auth", "Retry the Azure DevOps operation after checking authentication.");
-    add("auth-explain", "Explain auth", "Explain the current Azure DevOps authentication state and what is missing.");
-    add("auth-pat", "PAT fallback", "Help me configure the optional Azure DevOps PAT fallback for this project link.");
+      add("auth-retry", "Retry auth", "Retry the Azure DevOps operation after checking authentication.");
+      add("auth-explain", "Explain auth", "Explain the current Azure DevOps authentication state and what is missing.");
   }
 
   if (context.workflowKind === "ci") {
@@ -406,7 +412,7 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
         kind: "workspace_action",
         action: "trigger_pipeline",
       });
-      add("ci-local-validation", "Local validation", "Run focused local validation before changing code for this pipeline failure.", {
+      add("ci-local-validation", "Run local validation", "Run focused local validation before changing code for this pipeline failure.", {
         kind: "workspace_action",
         action: "run_tests",
       });
@@ -434,22 +440,22 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
         action: "inspect_changes",
       });
       add("ci-commit", "Prepare commit", "Prepare a scoped commit for the validated changes.");
-      add("ci-pr", "PR readiness", "Check whether these validated changes are ready for pull request insight.");
+      add("ci-pr", "Check PR readiness", "Check whether these validated changes are ready for pull request insight.");
     }
   }
 
   if (context.workflowKind === "commit") {
     if (phase.includes("stage") || phase.includes("preflight")) {
-      add("commit-diff", "Detailed diff", "Show a detailed diff-aware review before staging.");
-      add("commit-message", "Commit message", "Generate a commit message from the reviewed diff.");
-      add("commit-scope", "Change scope", "Explain which files should be staged and why.");
+      add("commit-diff", "Check detailed diff", "Show a detailed diff-aware review before staging.");
+      add("commit-message", "Draft commit message", "Generate a commit message from the reviewed diff.");
+      add("commit-scope", "Explain change scope", "Explain which files should be staged and why.");
     } else if (phase.includes("commit")) {
-      add("commit-staged", "Staged diff", "Show the staged diff and summarize commit risk.");
-      add("commit-message", "Commit message", "Generate a commit message from the staged changes.");
-      add("commit-scope", "Change scope", "Explain what is included in this commit.");
+      add("commit-staged", "Check staged diff", "Show the staged diff and summarize commit risk.");
+      add("commit-message", "Draft commit message", "Generate a commit message from the staged changes.");
+      add("commit-scope", "Explain change scope", "Explain what is included in this commit.");
     } else if (phase.includes("pushed") || context.workflowStatus === "done") {
-      add("commit-summary", "Push summary", "Summarize the commit and push that just completed.");
-      add("commit-branch", "Branch status", "Check the branch status after the push.", {
+      add("commit-summary", "Summarize push", "Summarize the commit and push that just completed.");
+      add("commit-branch", "Check branch", "Check the branch status after the push.", {
         kind: "workspace_action",
         action: "refresh_branch",
       });
@@ -459,8 +465,8 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
         kind: "requires_approval",
         reason: "Pushing writes to the remote repository.",
       });
-      add("commit-remote", "Remote target", "Show the remote branch target and push command.");
-      add("commit-status", "Branch status", "Check local branch status before pushing.", {
+      add("commit-remote", "Show remote target", "Show the remote branch target and push command.");
+      add("commit-status", "Check branch status", "Check local branch status before pushing.", {
         kind: "workspace_action",
         action: "refresh_branch",
       });
@@ -480,18 +486,18 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
         });
       }
       if (hasStructuredPolicyBlocker) {
-        add("pr-policy", "Policy status", "Check pull request policy status.", {
+        add("pr-policy", "Check policy", "Check pull request policy status.", {
           kind: "workspace_action",
           action: "check_pr_policy",
         });
       }
       if (hasStructuredWorkItemSignal) {
-        add("pr-work-items", "Work items", "List linked work items for this pull request.", {
+        add("pr-work-items", "List work items", "List linked work items for this pull request.", {
           kind: "workspace_action",
           action: "list_pr_work_items",
         });
       }
-      add("pr-risks", "PR risks", "Summarize the main PR risks and what evidence supports them.", {
+      add("pr-risks", "Check PR risks", "Summarize the main PR risks and what evidence supports them.", {
         kind: "workspace_action",
         action: "inspect_pr_insight",
       });
@@ -501,24 +507,24 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
         "Validation recovery",
         "Analyze validation failure context together with PR readiness, policy, and linked work items.",
       );
-      add("pr-policy", "Policy status", "Check pull request policy status.", {
+      add("pr-policy", "Check policy", "Check pull request policy status.", {
         kind: "workspace_action",
         action: "check_pr_policy",
       });
-      add("pr-work-items", "Work items", "List linked work items for this pull request.", {
+      add("pr-work-items", "List work items", "List linked work items for this pull request.", {
         kind: "workspace_action",
         action: "list_pr_work_items",
       });
     } else {
-      add("pr-risks", "PR risks", "Summarize the main PR risks and what evidence supports them.", {
+      add("pr-risks", "Check PR risks", "Summarize the main PR risks and what evidence supports them.", {
         kind: "workspace_action",
         action: "inspect_pr_insight",
       });
-      add("pr-policy", "Policy status", "Check pull request policy status.", {
+      add("pr-policy", "Check policy", "Check pull request policy status.", {
         kind: "workspace_action",
         action: "check_pr_policy",
       });
-      add("pr-work-items", "Work items", "List linked work items for this pull request.", {
+      add("pr-work-items", "List work items", "List linked work items for this pull request.", {
         kind: "workspace_action",
         action: "list_pr_work_items",
       });
@@ -530,22 +536,22 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
     || actions.has("refresh repository index")
     || /\b(index|indexed|repo_refresh_index|repository context)\b/.test(text)
   ) {
-    add("index-architecture", "Explain architecture", "Explain this project architecture using the refreshed repository context.");
-    add("index-files", "Show indexed files", "Show the key indexed files and why they matter.");
-    add("index-refresh", "Refresh index", "Refresh the repository index again and summarize what changed.");
+    add("index-architecture-follow-up", "Check architecture gaps", "Identify unclear parts of the architecture that need deeper inspection.");
+    add("index-request-flow", "Trace request flow", "Explain the main request flow using the repository context.");
+    add("index-test-surface", "Find test surface", "Find the main test/build surface for this architecture.");
   }
 
   if (sourceTypes.has("source_document")) {
-    add("source-key-files", "Key files", "Show the referenced project files and what each one proves.");
-    add("source-request-flow", "Request flow", "Explain the request flow using the referenced files.");
+    add("source-key-files", "List key files", "Show the referenced project files and what each one proves.");
+    add("source-request-flow", "Trace source flow", "Explain the request flow using the referenced files.");
   }
 
   if (sourceTypes.has("source_url")) {
-    add("source-web-summary", "Source summary", "Summarize the external sources used in this answer.");
+    add("source-web-summary", "Summarize sources", "Summarize the external sources used in this answer.");
   }
 
   if (context.workflowKind !== "commit" && /\b(review my changes|what changed|diff|modified|unstaged|staged|git_status|git_diff)\b/.test(text)) {
-    add("review-diff", "Detailed diff", "Show a detailed diff-aware review of the current changes.", {
+    add("review-diff", "Check detailed diff", "Show a detailed diff-aware review of the current changes.", {
       kind: "workspace_action",
       action: "inspect_changes",
     });
@@ -553,25 +559,19 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
       kind: "requires_approval",
       reason: "Staging changes writes to the local Git index.",
     });
-    add("review-message", "Commit message", "Generate a commit message from the reviewed diff.");
-  }
-
-  if (/\b(architecture|entry point|request flow|project structure|controller|daemon|api)\b/.test(text)) {
-    add("arch-files", "Key files", "Show the key files for this project and what each one does.");
-    add("arch-flow", "Request flow", "Explain the main request flow through this project.");
-    add("arch-entry", "Entry points", "Find the main entry points and startup path.");
+    add("review-message", "Draft commit message", "Generate a commit message from the reviewed diff.");
   }
 
   if (context.workflowKind !== "commit" && /\b(pr|pull request|policy|work item|pipeline|build|review queue|insight)\b/.test(text)) {
-    add("pr-risks", "PR risks", "Summarize the main PR risks and what evidence supports them.", {
+    add("pr-risks", "Check PR risks", "Summarize the main PR risks and what evidence supports them.", {
       kind: "workspace_action",
       action: "inspect_pr_insight",
     });
-    add("pr-policy", "Policy status", "Check pull request policy status.", {
+    add("pr-policy", "Check policy", "Check pull request policy status.", {
       kind: "workspace_action",
       action: "check_pr_policy",
     });
-    add("pr-work-items", "Work items", "List linked work items for this pull request.", {
+    add("pr-work-items", "List work items", "List linked work items for this pull request.", {
       kind: "workspace_action",
       action: "list_pr_work_items",
     });

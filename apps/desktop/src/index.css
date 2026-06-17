@@ -463,6 +463,11 @@ body {
   background: rgb(var(--app-accent));
 }
 
+.settings-toggle:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 .settings-inline-status,
 .settings-account {
   display: inline-flex;
@@ -537,6 +542,20 @@ body {
   transform: scale(0.98);
 }
 
+.settings-action-button:disabled,
+.settings-text-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.settings-text-button:disabled:hover {
+  background: transparent;
+}
+
+.settings-action-button:disabled:hover {
+  background: rgb(var(--app-accent) / 0.14);
+}
+
 .settings-action-button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
@@ -598,6 +617,7 @@ body {
 */
 .chat-workspace {
   display: flex;
+  position: relative;
   flex: 1 1 0;     /* fills remaining height after the top bar */
   width: 100%;
   min-height: 0;
@@ -708,4 +728,60 @@ body {
 .panel-resize-handle:hover,
 .panel-resize-handle:active {
   background: rgba(99, 102, 241, 0.45);
+}
+
+/* ── Conversation streaming markdown ─────────────────────────────────────── */
+.conversation-streamdown {
+  color: rgb(var(--app-text));
+  text-wrap: pretty;
+}
+
+.conversation-streamdown > * {
+  max-width: 72ch;
+}
+
+.conversation-markdown[data-streaming="true"] .conversation-streamdown > *:last-child {
+  animation: conversation-stream-line-in 180ms ease-out both;
+}
+
+.conversation-streamdown :where(p, ul, ol, blockquote, table, pre) {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.conversation-streamdown :where(h1, h2, h3, h4, h5, h6) {
+  text-wrap: balance;
+}
+
+.conversation-streamdown [data-streamdown="code-block"] {
+  border-radius: 0.5rem;
+  border-color: rgb(var(--app-border));
+  background: rgb(var(--app-bg-muted));
+}
+
+.conversation-streamdown [data-streamdown="code-block-body"] {
+  border-color: rgb(var(--app-border));
+  background: rgb(var(--app-bg));
+}
+
+.conversation-streamdown [data-streamdown="code-block-actions"] {
+  border-color: rgb(var(--app-border));
+  background: rgb(var(--app-surface) / 0.92);
+}
+
+@keyframes conversation-stream-line-in {
+  from {
+    opacity: 0.48;
+    filter: saturate(0.82);
+  }
+  to {
+    opacity: 1;
+    filter: saturate(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-markdown[data-streaming="true"] .conversation-streamdown > *:last-child {
+    animation: none;
+  }
 }

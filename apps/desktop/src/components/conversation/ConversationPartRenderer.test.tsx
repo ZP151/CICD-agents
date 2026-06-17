@@ -66,6 +66,7 @@ describe("ConversationPartRenderer", () => {
     expect(html).toContain("Sources");
     expect(html).toContain("1 file");
     expect(html).toContain("assistant-ui ToolGroup");
+    expect(html).toContain("<button");
     expect(html).toContain("Architecture diagram");
     expect(html).toContain("Result artifact");
     expect(html).toContain("Diagram");
@@ -159,9 +160,9 @@ describe("ConversationPartRenderer", () => {
     expect(html).toContain('data-artifact-id="artifact-selected"');
   });
 
-  it("groups consecutive source parts into one compact references section", () => {
+  it("renders source mentions as inline clickable references", () => {
     const parts: ConversationPart[] = [
-      { type: "markdown", markdown: "The review used these files." },
+      { type: "markdown", markdown: "- **ClaimController:** handles claims.\n- CommonFunctions supports helpers.\n- AI SDK sources document streaming." },
       {
         type: "source_document",
         sourceId: "source-1",
@@ -188,11 +189,15 @@ describe("ConversationPartRenderer", () => {
 
     const html = renderToStaticMarkup(<ConversationPartRenderer parts={parts} />);
 
-    expect(html).toContain("Sources");
-    expect(html).toContain("2 files");
-    expect(html).toContain("1 link");
-    expect(html).toContain("ClaimController.cs:42");
+    expect(html).toContain('data-source-reference-id="source-1"');
+    expect(html).toContain('data-source-reference-id="source-2"');
+    expect(html).toContain('data-source-reference-id="source-3"');
+    expect(html).toContain("ClaimController");
+    expect(html).toContain("CommonFunctions");
     expect(html).toContain("AI SDK sources");
+    expect(html).not.toContain("Refs");
+    expect(html).not.toContain("2 files");
+    expect(html).not.toContain("1 link");
     expect(html).not.toContain("@@ -40,5 +42,8 @@");
   });
 
@@ -223,6 +228,31 @@ describe("ConversationPartRenderer", () => {
     expect(html).toContain("Chat.tsx");
     expect(html).toContain("const ok = true;");
     expect(html).toContain("Copy");
+  });
+
+  it("renders streaming assistant text as markdown before text-end", () => {
+    const markdown = [
+      "## Architecture",
+      "",
+      "1. API layer uses `Controllers`.",
+      "2. Service layer handles SharePoint integration.",
+      "",
+      "```ts",
+      "const streaming = true;",
+    ].join("\n");
+
+    const html = renderToStaticMarkup(
+      <ConversationPartRenderer parts={[{ type: "markdown", markdown }]} streaming />,
+    );
+
+    expect(html).toContain('data-streaming="true"');
+    expect(html).toContain("<h2");
+    expect(html).toContain("Architecture");
+    expect(html).toContain("<ol");
+    expect(html).toContain("Controllers");
+    expect(html).toContain("const streaming = true;");
+    expect(html).toContain("Copy");
+    expect(html).not.toContain("conversation-streaming-text");
   });
 
   it("sanitizes unsafe markdown html", () => {

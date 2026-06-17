@@ -31,7 +31,7 @@ describe("Chat agent use-case coverage", () => {
   it("injects the use-case catalog into the planner prompt", () => {
     const prompt = chatAgentUseCasePrompt();
 
-    expect(prompt).toContain("Create and prepare pull requests");
+    expect(prompt).toContain("Create and update pull requests");
     expect(prompt).toContain("Approval: required");
     expect(CHAT_SYSTEM_PROMPT).toContain("Core Chat Agent Use Cases");
     expect(CHAT_SYSTEM_PROMPT).toContain("commit-workflow");

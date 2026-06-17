@@ -19,9 +19,9 @@ describe("deriveSuggestionReplies", () => {
     });
 
     expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
-      "Detailed diff",
+      "Check detailed diff",
       "Stage selected",
-      "Commit message",
+      "Draft commit message",
     ]);
     expect(suggestions[0]?.action).toEqual({ kind: "workspace_action", action: "inspect_changes" });
     expect(suggestions[1]?.action.kind).toBe("requires_approval");
@@ -34,8 +34,11 @@ describe("deriveSuggestionReplies", () => {
       lastAssistantText: "The daemon API and controller entry points handle the request flow.",
     });
 
-    expect(suggestions.map((suggestion) => suggestion.label)).toContain("Key files");
-    expect(suggestions.map((suggestion) => suggestion.label)).toContain("Request flow");
+    expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
+      "Trace request flow",
+      "List entry points",
+      "Explain data model",
+    ]);
   });
 
   it("suggests auth recovery without showing generic actions", () => {
@@ -47,7 +50,6 @@ describe("deriveSuggestionReplies", () => {
     expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
       "Retry auth",
       "Explain auth",
-      "PAT fallback",
     ]);
   });
 
@@ -60,9 +62,9 @@ describe("deriveSuggestionReplies", () => {
     const suggestions = deriveSuggestionReplies({ lastUserText: "review my changes", busy: true });
 
     expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
-      "Detailed diff",
+      "Check detailed diff",
       "Stage selected",
-      "Commit message",
+      "Draft commit message",
     ]);
   });
 
@@ -74,9 +76,9 @@ describe("deriveSuggestionReplies", () => {
     });
 
     expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
-      "Staged diff",
-      "Commit message",
-      "Change scope",
+      "Check staged diff",
+      "Draft commit message",
+      "Explain change scope",
     ]);
   });
 
@@ -90,8 +92,8 @@ describe("deriveSuggestionReplies", () => {
     });
 
     expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
-      "Push summary",
-      "Branch status",
+      "Summarize push",
+      "Check branch",
       "Review commit",
     ]);
     expect(suggestions[1]?.action).toEqual({ kind: "workspace_action", action: "refresh_branch" });
@@ -106,8 +108,8 @@ describe("deriveSuggestionReplies", () => {
 
     expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
       "Push branch",
-      "Remote target",
-      "Branch status",
+      "Show remote target",
+      "Check branch status",
     ]);
     expect(suggestions[0]?.action).toEqual({
       kind: "requires_approval",
@@ -138,8 +140,8 @@ describe("deriveSuggestionReplies", () => {
 
     expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
       "Validation recovery",
-      "Policy status",
-      "Work items",
+      "Check policy",
+      "List work items",
     ]);
     expect(suggestions[0]?.action).toEqual({ kind: "fill_composer" });
     expect(suggestions[1]?.action).toEqual({ kind: "workspace_action", action: "check_pr_policy" });
@@ -159,8 +161,8 @@ describe("deriveSuggestionReplies", () => {
 
     expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
       "Rerun validation",
-      "Policy status",
-      "Work items",
+      "Check policy",
+      "List work items",
     ]);
     expect(suggestions.map((suggestion) => suggestion.action)).toEqual([
       { kind: "workspace_action", action: "run_tests" },
@@ -216,22 +218,36 @@ describe("deriveSuggestionReplies", () => {
     expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
       "Analyze pipeline",
       "Rerun pipeline",
-      "Local validation",
+      "Run local validation",
     ]);
     expect(suggestions[1]?.action).toEqual({ kind: "workspace_action", action: "trigger_pipeline" });
     expect(suggestions[2]?.action).toEqual({ kind: "workspace_action", action: "run_tests" });
   });
 
-  it("uses repository index actions and source metadata", () => {
+  it("uses repository index context for follow-up question prediction", () => {
     const suggestions = deriveSuggestionReplies({
       metadataActions: ["repo_refresh_index"],
       sourceTypes: ["source_document"],
     });
 
     expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
-      "Explain architecture",
-      "Show indexed files",
-      "Refresh index",
+      "Check architecture gaps",
+      "Trace request flow",
+      "Find test surface",
+    ]);
+  });
+
+  it("predicts natural architecture follow-ups after an architecture answer", () => {
+    const suggestions = deriveSuggestionReplies({
+      lastUserText: "Explain this project architecture",
+      lastAssistantText: "The project has controllers, models, and SharePoint integration.",
+      sourceTypes: ["source_document"],
+    });
+
+    expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
+      "Trace request flow",
+      "List entry points",
+      "Explain data model",
     ]);
   });
 
@@ -241,9 +257,9 @@ describe("deriveSuggestionReplies", () => {
     });
 
     expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
-      "Key files",
-      "Request flow",
-      "Source summary",
+      "List key files",
+      "Trace source flow",
+      "Summarize sources",
     ]);
   });
 });

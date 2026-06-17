@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  checkAdoProjectLinkTools,
   discoverAdoProjectLinkOptions,
   type AdoDiscoveryKind,
   type AdoDiscoveryOption,
@@ -13,8 +12,7 @@ import {
   fetchAzureDevOpsRemoteSuggestion,
   fetchGitBranches,
   pickRecommendedPipeline,
-  type PatStatus,
-  verifyPat,
+  withoutProjectLinkFallbacks,
 } from "../projectLinks";
 
 // ─── Local-storage fallback ───────────────────────────────────────────────────
@@ -181,9 +179,6 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [form.repoPath, loadBranches]);
 
-  // ── PAT state ───────────────────────────────────────────────────────────────
-  const [patStatus, setPatStatus] = useState<PatStatus>(initial.adoPat ? "verified" : "none");
-  const [verifying, setVerifying] = useState(false);
   const [discovering, setDiscovering] = useState<AdoDiscoveryKind | null>(null);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const [pipelineHint, setPipelineHint] = useState<string | null>(null);
@@ -193,25 +188,6 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
     pipelines: [],
   });
   const discoveryAutoRef = useRef<Partial<Record<AdoDiscoveryKind, string>>>({});
-  const [mcpChecking, setMcpChecking] = useState(false);
-  const [mcpStatus, setMcpStatus] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (patStatus === "verified" || patStatus === "invalid") setPatStatus("none");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.adoPat]);
-
-  const handleVerifyPat = async () => {
-    setVerifying(true);
-    setPatStatus(await verifyPat(form.adoOrgUrl, form.adoPat) ? "verified" : "invalid");
-    setVerifying(false);
-  };
-
-  const handleRequestPat = () => {
-    const org = form.adoOrgUrl.replace(/\/$/, "");
-    window.open(org ? `${org}/_usersSettings/tokens` : "https://dev.azure.com", "_blank");
-    if (patStatus === "none") setPatStatus("pending");
-  };
 
   const applyDiscovery = (kind: AdoDiscoveryKind, option: AdoDiscoveryOption) => {
     setDiscoveryError(null);
@@ -245,7 +221,6 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
       org: form.adoOrgUrl.trim(),
       project: form.adoProject.trim(),
       repo: form.adoRepoName.trim(),
-      pat: form.adoPat ? "pat" : "",
     });
     if (mode === "auto" && discoveryAutoRef.current[kind] === signature) return;
     if (mode === "auto") discoveryAutoRef.current[kind] = signature;
@@ -253,7 +228,7 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
     setDiscoveryError(null);
     try {
       const result = await discoverAdoProjectLinkOptions(kind, {
-        ...form,
+        ...withoutProjectLinkFallbacks(form),
       });
       setDiscovered((current) => ({ ...current, [kind]: result.items }));
       if (result.items.length === 1) applyDiscovery(kind, result.items[0]!);
@@ -282,7 +257,7 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
     }, 650);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.adoOrgUrl, form.adoPat]);
+  }, [form.adoOrgUrl]);
 
   useEffect(() => {
     if (!form.adoOrgUrl.trim() || !form.adoProject.trim()) return;
@@ -291,25 +266,7 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
     }, 650);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.adoOrgUrl, form.adoProject, form.adoPat]);
-
-  const handleCheckMcp = async () => {
-    setMcpChecking(true);
-    setMcpStatus(null);
-    try {
-      const result = await checkAdoProjectLinkTools({
-        ...form,
-      });
-      const authLabel = result.authMode === "pat" ? "PAT fallback" : "OAuth";
-      setMcpStatus(result.ok
-        ? `ADO tools ready via ${authLabel} · ${result.toolCount} internal tools`
-        : `${authLabel} issue · ${result.authMessage ?? result.authStatus ?? "ADO tools unavailable"}`);
-    } catch (err) {
-      setMcpStatus(err instanceof Error ? err.message : String(err));
-    } finally {
-      setMcpChecking(false);
-    }
-  };
+  }, [form.adoOrgUrl, form.adoProject]);
 
   // ── Branch select helper ────────────────────────────────────────────────────
   function BranchSelect({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
@@ -368,7 +325,7 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
         <h2 className="text-xl font-semibold text-zinc-100">{isNew ? "New Project Link" : "Edit Project Link"}</h2>
       </div>
 
-      <form onSubmit={(e) => { e.preventDefault(); void onSave(form); }} className="space-y-5">
+      <form onSubmit={(e) => { e.preventDefault(); void onSave(withoutProjectLinkFallbacks(form)); }} className="space-y-5">
         {/* ── Workspace ── */}
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
           <div>
@@ -503,13 +460,13 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
                 <svg className="h-3.5 w-3.5 shrink-0 transition group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
-                <span className="font-medium">Optional fallbacks</span>
+                <span className="font-medium">Pipeline</span>
               </span>
-              {(form.adoPipelineName || form.adoPipelineId || form.adoPat || form.adoMcpEnabled) && (
+              {(form.adoPipelineName || form.adoPipelineId) && (
                 <span className="shrink-0 rounded-full border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-500">configured</span>
               )}
             </summary>
-            <div className="space-y-4 border-t border-zinc-800 px-3 py-3">
+            <div className="space-y-3 border-t border-zinc-800 px-3 py-3">
               <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
@@ -551,76 +508,10 @@ function ProfileForm({ initial, onSave, onBack, saving, isNew }: ProfileFormProp
                     {pipelineHint}
                   </p>
                 )}
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-zinc-400">PAT fallback</span>
-                  <div className="flex items-center gap-2">
-                    {patStatus === "pending" && (
-                      <span className="rounded-full bg-amber-900/30 px-2 py-0.5 text-[10px] font-medium text-amber-400 border border-amber-800/40">Pending</span>
-                    )}
-                    {patStatus === "verified" && (
-                      <span className="rounded-full bg-emerald-900/30 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-800/40">Verified</span>
-                    )}
-                    {patStatus === "invalid" && (
-                      <span className="rounded-full bg-red-900/30 px-2 py-0.5 text-[10px] font-medium text-red-400 border border-red-800/40">Invalid</span>
-                    )}
-                    <button type="button" onClick={handleRequestPat} className="text-[11px] text-zinc-500 hover:text-zinc-300 transition underline underline-offset-2">
-                      Request PAT
-                    </button>
-                    {form.adoPat && form.adoOrgUrl && (
-                      <button type="button" onClick={() => void handleVerifyPat()} disabled={verifying}
-                        className="text-[11px] text-zinc-500 hover:text-zinc-300 transition underline underline-offset-2 disabled:opacity-50">
-                        {verifying ? "Verifying…" : "Verify"}
-                      </button>
-                    )}
-                  </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Pipeline ID" value={form.adoPipelineId} onChange={set("adoPipelineId")} placeholder="123" />
+                  <Field label="Pipeline name" value={form.adoPipelineName} onChange={set("adoPipelineName")} placeholder="CI" />
                 </div>
-                <Field type="password" label="" value={form.adoPat} onChange={set("adoPat")} />
-                {patStatus === "pending" && (
-                  <p className="rounded-lg bg-amber-950/20 border border-amber-900/30 px-3 py-2 text-[11px] text-amber-400/80 leading-relaxed">
-                    For fallback mode, create a PAT with <span className="font-mono">Code (Read &amp; Write), Build (Read &amp; Execute), Pull Request Threads (Read &amp; Write)</span>, paste it above, then click Verify.
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={form.adoMcpEnabled}
-                    onChange={(event) => set("adoMcpEnabled")(event.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-zinc-700 bg-zinc-900"
-                  />
-                  <span className="min-w-0">
-                    <span className="block text-xs font-medium text-zinc-300">Enable external Azure DevOps MCP bridge fallback</span>
-                  </span>
-                </label>
-                {form.adoMcpEnabled && (
-                  <div className="space-y-3">
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <Field label="MCP command" value={form.adoMcpCommand} onChange={set("adoMcpCommand")} placeholder="mcp-server-azuredevops" />
-                      <Field label="Authentication" value={form.adoMcpAuthentication} onChange={set("adoMcpAuthentication")} placeholder="pat or azcli" />
-                      <Field label="Domains" value={form.adoMcpDomains} onChange={set("adoMcpDomains")} placeholder="repositories,pipelines,work-items" />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void handleCheckMcp()}
-                        disabled={!form.adoOrgUrl || mcpChecking}
-                        className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-200 disabled:opacity-40"
-                      >
-                        {mcpChecking ? "Checking..." : "Check ADO auth/tools"}
-                      </button>
-                      {mcpStatus && (
-                        <span className={`text-[11px] ${mcpStatus.startsWith("ADO tools ready") ? "text-emerald-400" : "text-amber-400"}`}>
-                          {mcpStatus}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </details>

@@ -222,11 +222,6 @@ export function profileToToolExtra(profile: WorkspaceProfile): Record<string, un
     ado_project: profile.adoProject,
     ado_repository: profile.adoRepoName,
     ado_target_branch: profile.targetBranch,
-    ado_pat: profile.adoPat,
     ...(profile.adoPipelineId ? { ado_pipeline_id: profile.adoPipelineId } : {}),
-    ado_mcp_enabled: profile.adoMcpEnabled,
-    ado_mcp_command: profile.adoMcpCommand,
-    ado_mcp_authentication: profile.adoMcpAuthentication,
-    ado_mcp_domains: profile.adoMcpDomains,
   };
 }

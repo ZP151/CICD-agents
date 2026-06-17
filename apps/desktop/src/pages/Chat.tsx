@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  checkAdoProjectLinkTools,
   chatStream,
   confirmAction as apiConfirmAction,
   confirmPlan,
@@ -40,14 +39,12 @@ import {
   DEFAULT_ADO_ORG_URL,
   loadStoredActiveProjectLinkId,
   pickRecommendedPipeline,
-  type PatStatus,
   projectLinkNameFromRepo,
   resolveActiveProjectLinkId,
   saveStoredActiveProjectLinkId,
-  verifyPat,
+  withoutProjectLinkFallbacks,
 } from "../projectLinks.js";
 import {
-  appendTextDeltaToConversationParts,
   appendToolOutputDeltaToConversationParts,
   assistantBubbleMetaFromUnknown,
   conversationPartsFromAssistantBubble,
@@ -61,6 +58,7 @@ import {
   type AssistantBubbleMeta,
   type ConversationArtifactPart,
   type ConversationPart,
+  type ConversationSourcePart,
   type ConversationToolCallPart,
   type ToolCallPartSnapshot,
 } from "../chatBubbles.js";
@@ -82,10 +80,8 @@ import {
   type ExecutionTimelineItem,
 } from "../components/conversation/ExecutionTimeline.js";
 import {
-  CommandChipBar,
   SuggestionReplyBar,
   deriveComposerInputState,
-  deriveCommandChips,
   deriveComposerStateNotice,
   deriveSuggestionReplies,
   shouldQueueSuggestionReply,
@@ -168,50 +164,50 @@ function toolPartStateFromResult(toolOk?: boolean): "result" | "error" | "runnin
   return "running";
 }
 
-type ConversationModelChoice = "built_in" | "custom";
+type ConversationModelChoice = "built_in" | string;
+const DEFAULT_CONVERSATION_MODEL_LABEL = "GPT-4o";
 
 interface CustomConversationModel {
-  available: boolean;
+  id: string;
   label: string;
   provider: "azure" | "openai";
 }
 
-function readCustomConversationModel(): CustomConversationModel {
+function readCustomConversationModels(): CustomConversationModel[] {
   try {
     const raw = localStorage.getItem("dev_agent_settings");
-    if (!raw) return { available: false, label: "Additional model", provider: "azure" };
+    if (!raw) return [];
     const settings = JSON.parse(raw) as Record<string, unknown>;
-    if (settings["additionalModelsEnabled"] !== true) {
-      return { available: false, label: "Additional model", provider: "azure" };
-    }
-    const provider = settings["llmProvider"] === "openai" ? "openai" : "azure";
-    if (provider === "openai") {
-      const model = String(settings["openaiModel"] ?? "").trim();
-      const key = String(settings["openaiApiKey"] ?? "").trim();
-      return {
-        available: Boolean(key && model),
-        label: model ? `OpenAI · ${model}` : "OpenAI custom model",
-        provider,
-      };
-    }
-    const deployment = String(settings["azureDeployment"] ?? "").trim();
-    const endpoint = String(settings["azureEndpoint"] ?? "").trim();
-    const key = String(settings["azureApiKey"] ?? "").trim();
-    return {
-      available: Boolean(endpoint && key && deployment),
-      label: deployment ? `Azure OpenAI · ${deployment}` : "Azure OpenAI custom deployment",
-      provider,
-    };
+    const models = Array.isArray(settings["additionalModels"]) ? settings["additionalModels"] : [];
+    return models.flatMap((item): CustomConversationModel[] => {
+      const model = item as Record<string, unknown>;
+      if (model["enabled"] !== true) return [];
+      if (model["available"] !== true) return [];
+      const id = String(model["id"] ?? "").trim();
+      if (!id) return [];
+      const provider = model["provider"] === "openai" ? "openai" : "azure";
+      const label = String(model["label"] ?? "").trim();
+      if (provider === "openai") {
+        const openaiModel = String(model["openaiModel"] ?? "").trim();
+        const key = String(model["openaiApiKey"] ?? "").trim();
+        if (!key || !openaiModel) return [];
+        return [{ id, label: label || `OpenAI · ${openaiModel}`, provider }];
+      }
+      const deployment = String(model["azureDeployment"] ?? "").trim();
+      const endpoint = String(model["azureEndpoint"] ?? "").trim();
+      const key = String(model["azureApiKey"] ?? "").trim();
+      if (!endpoint || !key || !deployment) return [];
+      return [{ id, label: label || `Azure OpenAI · ${deployment}`, provider }];
+    });
   } catch {
-    return { available: false, label: "Additional model", provider: "azure" };
+    return [];
   }
 }
 
 function readInitialConversationModelChoice(): ConversationModelChoice {
-  const customModel = readCustomConversationModel();
-  return localStorage.getItem("dev_agent_active_model") === "custom" && customModel.available
-    ? "custom"
-    : "built_in";
+  const stored = localStorage.getItem("dev_agent_active_model");
+  if (!stored || stored === "built_in") return "built_in";
+  return readCustomConversationModels().some((model) => model.id === stored) ? stored : "built_in";
 }
 
 function riskColor(level = "low") {
@@ -245,6 +241,40 @@ function collectConversationArtifacts(bubbles: Bubble[]): ConversationArtifactPa
     }
   }
   return [...artifacts.values()];
+}
+
+function collectConversationSources(bubbles: Bubble[]): ConversationSourcePart[] {
+  const sources = new Map<string, ConversationSourcePart>();
+  for (const bubble of bubbles) {
+    if (bubble.kind !== "assistant") continue;
+    for (const part of conversationPartsFromAssistantBubble(bubble)) {
+      if (part.type === "source_document" || part.type === "source_url") {
+        sources.set(sourceReferenceKey(part), part);
+      }
+    }
+  }
+  return [...sources.values()].slice(-16);
+}
+
+function sourceReferenceKey(source: ConversationSourcePart): string {
+  if (source.type === "source_document") {
+    return [source.sourceId, source.file, source.line ?? "", source.title ?? ""].filter(Boolean).join(":");
+  }
+  return [source.sourceId, source.url, source.title ?? ""].filter(Boolean).join(":");
+}
+
+function latestRepositoryContextSources(bubbles: Bubble[]): string[] {
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const bubble = bubbles[i]!;
+    if (bubble.kind !== "assistant") continue;
+    const suggestions = bubble.meta?.suggestions ?? [];
+    const contextSources = suggestions
+      .filter((source) => source.startsWith("Repository context: "))
+      .map((source) => source.replace(/^Repository context:\s*/, "").trim())
+      .filter(Boolean);
+    if (contextSources.length) return Array.from(new Set(contextSources));
+  }
+  return [];
 }
 
 function workflowActionArtifactsFromResult(artifacts: ChatArtifact[] | undefined): ConversationArtifactPart[] {
@@ -974,9 +1004,8 @@ function MetaPanel({
         : null;
     })
     .filter((source): source is SavedPrInsightSource & { raw: string } => Boolean(source));
-  const contextSources = suggestions.filter((source) => source.startsWith("Repository context: "));
   const sourceMessages = new Set(insightSources.map((source) => source.raw));
-  const contextMessages = new Set(contextSources);
+  const contextMessages = new Set(suggestions.filter((source) => source.startsWith("Repository context: ")));
   const otherSuggestions = suggestions.filter((source) => !sourceMessages.has(source) && !contextMessages.has(source));
   const runtimeSignals: string[] = [];
   if (suggestions.length === 0 && runtimeSignals.length === 0) return null;
@@ -988,16 +1017,6 @@ function MetaPanel({
             <span key={signal} className="rounded-md border border-zinc-800/60 bg-zinc-900/20 px-2 py-0.5 text-[11px] text-zinc-500">
               {signal}
             </span>
-          ))}
-        </div>
-      )}
-      {contextSources.length > 0 && (
-        <div className="space-y-1 rounded-md border border-zinc-800/60 bg-zinc-900/20 px-2 py-1.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">Context source</p>
-          {contextSources.map((source) => (
-            <p key={source} className="leading-relaxed text-zinc-500">
-              {source.replace(/^Repository context:\s*/, "")}
-            </p>
           ))}
         </div>
       )}
@@ -1230,6 +1249,8 @@ interface WorkspacePanelProps {
   statusText: string | null;
   selectedArtifact: ConversationArtifactPart | null;
   selectedArtifactLookupState: ArtifactLookupState | null;
+  selectedSource: ConversationSourcePart | null;
+  contextSources: string[];
   artifactCount: number;
   onClearArtifact: () => void;
   onAction: (action: WorkspaceAction) => void;
@@ -1276,8 +1297,6 @@ function ProjectLinkSetupCard({
   const [branchLoading, setBranchLoading] = useState(false);
   const [branchError, setBranchError] = useState(false);
   const branchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [patStatus, setPatStatus] = useState<PatStatus>("none");
-  const [verifyingPat, setVerifyingPat] = useState(false);
   const [discovering, setDiscovering] = useState<AdoDiscoveryKind | null>(null);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const [pipelineHint, setPipelineHint] = useState<string | null>(null);
@@ -1287,8 +1306,6 @@ function ProjectLinkSetupCard({
     pipelines: [],
   });
   const discoveryAutoRef = useRef<Partial<Record<AdoDiscoveryKind, string>>>({});
-  const [mcpChecking, setMcpChecking] = useState(false);
-  const [mcpStatus, setMcpStatus] = useState<string | null>(null);
 
   useEffect(() => {
     setForm((current) => ({
@@ -1364,24 +1381,7 @@ function ProjectLinkSetupCard({
     };
   }, [form.repoPath, loadBranches]);
 
-  useEffect(() => {
-    if (patStatus === "verified" || patStatus === "invalid") setPatStatus("none");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.adoPat]);
-
   const canSave = form.name.trim().length > 0 && form.repoPath.trim().length > 0;
-
-  async function handleVerifyPat() {
-    setVerifyingPat(true);
-    setPatStatus(await verifyPat(form.adoOrgUrl, form.adoPat) ? "verified" : "invalid");
-    setVerifyingPat(false);
-  }
-
-  function handleRequestPat() {
-    const org = form.adoOrgUrl.replace(/\/$/, "");
-    window.open(org ? `${org}/_usersSettings/tokens` : "https://dev.azure.com", "_blank");
-    if (patStatus === "none") setPatStatus("pending");
-  }
 
   function applyDiscovery(kind: AdoDiscoveryKind, option: AdoDiscoveryOption) {
     setDiscoveryError(null);
@@ -1415,7 +1415,6 @@ function ProjectLinkSetupCard({
       org: form.adoOrgUrl.trim(),
       project: form.adoProject.trim(),
       repo: form.adoRepoName.trim(),
-      pat: form.adoPat ? "pat" : "",
     });
     if (mode === "auto" && discoveryAutoRef.current[kind] === signature) return;
     if (mode === "auto") discoveryAutoRef.current[kind] = signature;
@@ -1423,7 +1422,7 @@ function ProjectLinkSetupCard({
     setDiscoveryError(null);
     try {
       const result = await discoverAdoProjectLinkOptions(kind, {
-        ...form,
+        ...withoutProjectLinkFallbacks(form),
       });
       setDiscovered((current) => ({ ...current, [kind]: result.items }));
       if (result.items.length === 1) applyDiscovery(kind, result.items[0]!);
@@ -1452,7 +1451,7 @@ function ProjectLinkSetupCard({
     }, 650);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [advanced, form.adoOrgUrl, form.adoPat]);
+  }, [advanced, form.adoOrgUrl]);
 
   useEffect(() => {
     if (!advanced || !form.adoOrgUrl.trim() || !form.adoProject.trim()) return;
@@ -1461,25 +1460,7 @@ function ProjectLinkSetupCard({
     }, 650);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [advanced, form.adoOrgUrl, form.adoProject, form.adoPat]);
-
-  async function handleCheckMcp() {
-    setMcpChecking(true);
-    setMcpStatus(null);
-    try {
-      const result = await checkAdoProjectLinkTools({
-        ...form,
-      });
-      const authLabel = result.authMode === "pat" ? "PAT fallback" : "OAuth";
-      setMcpStatus(result.ok
-        ? `ADO tools ready via ${authLabel} · ${result.toolCount} internal tools`
-        : `${authLabel} issue · ${result.authMessage ?? result.authStatus ?? "ADO tools unavailable"}`);
-    } catch (err) {
-      setMcpStatus(err instanceof Error ? err.message : String(err));
-    } finally {
-      setMcpChecking(false);
-    }
-  }
+  }, [advanced, form.adoOrgUrl, form.adoProject]);
 
   function BranchSelect({
     label,
@@ -1540,20 +1521,20 @@ function ProjectLinkSetupCard({
         ? "border-amber-700/60 bg-[rgb(var(--app-surface-raised))] focus:border-amber-600"
         : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] focus:border-zinc-500"
   }`;
-  const hasOptionalFallbacks = Boolean(form.adoPipelineName || form.adoPipelineId || form.adoPat || form.adoMcpEnabled);
+  const hasPipelineConfigured = Boolean(form.adoPipelineName || form.adoPipelineId);
 
   async function save() {
     if (!canSave || saving) return;
     setSaving(true);
     setError(null);
     try {
-      const created = await createProjectLink({
+      const created = await createProjectLink(withoutProjectLinkFallbacks({
         ...form,
         name: form.name.trim(),
         repoPath: form.repoPath.trim(),
         defaultBranch: form.defaultBranch.trim() || "main",
         targetBranch: form.targetBranch.trim() || form.defaultBranch.trim() || "main",
-      });
+      }));
       onCreated(created);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -1714,9 +1695,9 @@ function ProjectLinkSetupCard({
                   <svg className="h-3.5 w-3.5 transition group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
-                  <span className="font-medium">Optional fallbacks</span>
+                  <span className="font-medium">Pipeline</span>
                 </span>
-                {hasOptionalFallbacks && (
+                {hasPipelineConfigured && (
                   <span className="shrink-0 rounded-full border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-subtle))]">configured</span>
                 )}
               </summary>
@@ -1766,74 +1747,6 @@ function ProjectLinkSetupCard({
                   </div>
                 </div>
 
-                <div className="grid gap-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-medium text-[rgb(var(--app-text-muted))]">PAT fallback</span>
-                    <div className="flex items-center gap-2">
-                      {patStatus === "pending" && <span className="rounded-full border border-amber-800/40 bg-amber-900/30 px-2 py-0.5 text-[10px] font-medium text-amber-400">Pending</span>}
-                      {patStatus === "verified" && <span className="rounded-full border border-emerald-800/40 bg-emerald-900/30 px-2 py-0.5 text-[10px] font-medium text-emerald-400">Verified</span>}
-                      {patStatus === "invalid" && <span className="rounded-full border border-red-800/40 bg-red-900/30 px-2 py-0.5 text-[10px] font-medium text-red-400">Invalid</span>}
-                      <button type="button" onClick={handleRequestPat} className="text-[10px] text-[rgb(var(--app-text-muted))] underline underline-offset-2 transition hover:text-[rgb(var(--app-text))]">
-                        Request PAT
-                      </button>
-                      {form.adoPat && form.adoOrgUrl && (
-                        <button
-                          type="button"
-                          onClick={() => void handleVerifyPat()}
-                          disabled={verifyingPat}
-                          className="text-[10px] text-[rgb(var(--app-text-muted))] underline underline-offset-2 transition hover:text-[rgb(var(--app-text))] disabled:opacity-50"
-                        >
-                          {verifyingPat ? "Verifying..." : "Verify"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <input
-                    className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
-                    type="password"
-                    value={form.adoPat}
-                    onChange={(e) => set("adoPat")(e.target.value)}
-                    placeholder="PAT"
-                  />
-                </div>
-
-                <div className="grid gap-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-2.5">
-                  <label className="flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      checked={form.adoMcpEnabled}
-                      onChange={(event) => set("adoMcpEnabled")(event.target.checked)}
-                      className="mt-0.5 h-3.5 w-3.5 rounded border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]"
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-[11px] font-medium text-[rgb(var(--app-text))]">Enable external Azure DevOps MCP bridge fallback</span>
-                    </span>
-                  </label>
-                  {form.adoMcpEnabled && (
-                    <div className="grid gap-2">
-                      <input className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoMcpCommand} onChange={(e) => set("adoMcpCommand")(e.target.value)} placeholder="mcp-server-azuredevops" />
-                      <div className="grid grid-cols-2 gap-2">
-                        <input className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoMcpAuthentication} onChange={(e) => set("adoMcpAuthentication")(e.target.value)} placeholder="pat or azcli" />
-                        <input className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500" value={form.adoMcpDomains} onChange={(e) => set("adoMcpDomains")(e.target.value)} placeholder="repositories,pipelines,work-items" />
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void handleCheckMcp()}
-                          disabled={!form.adoOrgUrl || mcpChecking}
-                          className="rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] text-[rgb(var(--app-text-muted))] transition hover:border-zinc-500 hover:text-[rgb(var(--app-text))] disabled:opacity-40"
-                        >
-                          {mcpChecking ? "Checking..." : "Check ADO auth/tools"}
-                        </button>
-                        {mcpStatus && (
-                          <span className={`text-[10px] ${mcpStatus.startsWith("ADO tools ready") ? "text-emerald-400" : "text-amber-400"}`}>
-                            {mcpStatus}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
             </details>
           </div>
@@ -1872,6 +1785,8 @@ function WorkspacePanel({
   statusText,
   selectedArtifact,
   selectedArtifactLookupState,
+  selectedSource,
+  contextSources,
   artifactCount,
   onClearArtifact,
   onAction,
@@ -2294,9 +2209,498 @@ function WorkspacePanel({
             </p>
           )}
         </div>
+
+        <ContextSourcePanel sources={contextSources} />
       </div>
     </div>
   );
+}
+
+interface PinnedSummaryPanelProps {
+  repoPath: string;
+  setRepoPath: (v: string) => void;
+  currentBranch: string | null;
+  branchList: string[];
+  gitStatus: GitStatusData | null;
+  diffStats: DiffStats | null;
+  taskState: TaskState | null;
+  workflowState: WorkflowEventState | null;
+  busy: boolean;
+  profiles: WorkspaceProfile[];
+  activeProfileId: string | null;
+  setActiveProfileId: (id: string | null) => void;
+  statusText: string | null;
+  codePanelOpen: boolean;
+  codePanelWidth: number;
+  onAction: (action: WorkspaceAction) => void;
+}
+
+function PinnedSummaryPanel({
+  repoPath,
+  setRepoPath,
+  currentBranch,
+  branchList,
+  gitStatus,
+  diffStats,
+  taskState,
+  workflowState,
+  busy,
+  profiles,
+  activeProfileId,
+  setActiveProfileId,
+  statusText,
+  codePanelOpen,
+  codePanelWidth,
+  onAction,
+}: PinnedSummaryPanelProps) {
+  const repoName = repoPath ? repoPath.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? "" : "";
+  const activeProfile = profiles.find((profile) => profile.id === activeProfileId) ?? null;
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const [commitMenuOpen, setCommitMenuOpen] = useState(false);
+  const [progressOpen, setProgressOpen] = useState(false);
+  const [commitMessage, setCommitMessage] = useState("");
+  const [includeUnstaged, setIncludeUnstaged] = useState(true);
+  const branchName = currentBranch ?? activeProfile?.defaultBranch ?? "";
+  const branchLabel = branchName || "not checked";
+  const branchOptions = Array.from(new Set([branchName, ...branchList].filter(Boolean)));
+  const changedFiles = gitStatus
+    ? gitStatus.staged.length + gitStatus.modified.length + gitStatus.untracked.length + gitStatus.deleted.length
+    : 0;
+  const hasRepoPath = Boolean(repoPath.trim());
+  const gitKnown = Boolean(gitStatus || diffStats);
+  const hasChanges = Boolean(diffStats ? diffStats.files > 0 : changedFiles > 0);
+  const added = diffStats?.added ?? 0;
+  const removed = diffStats?.removed ?? 0;
+
+  const runAction = (action: WorkspaceAction) => {
+    if (busy) return;
+    setBranchMenuOpen(false);
+    setCommitMenuOpen(false);
+    onAction(action);
+  };
+
+  const handleProfileSelect = (id: string) => {
+    setActiveProfileId(id || null);
+    const profile = profiles.find((item) => item.id === id);
+    if (profile?.repoPath) setRepoPath(profile.repoPath);
+  };
+
+  const commitPrompt = (mode: "commit" | "commit-push" | "push") => {
+    const message = commitMessage.trim();
+    if (mode === "push") {
+      runAction({ type: "push_branch", branch: branchName || undefined });
+      return;
+    }
+    runAction({
+      type: mode === "commit-push" ? "commit_and_push" : "prepare_commit",
+      branch: branchName || undefined,
+      message: message || undefined,
+      includeUnstaged,
+    });
+  };
+
+  return (
+    <div
+      className="pointer-events-none absolute top-12 z-20 hidden w-[300px] max-w-[calc(100%-24px)] lg:block"
+      style={{ right: codePanelOpen ? codePanelWidth + 20 : 20 }}
+    >
+      <div className="pointer-events-auto rounded-2xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4 text-[rgb(var(--app-text))] shadow-lg">
+        <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-sm text-[rgb(var(--app-text-muted))]">Environment</p>
+          <button
+            type="button"
+            onClick={() => runAction({ type: "inspect_environment" })}
+            disabled={!hasRepoPath || busy}
+            className="shrink-0 rounded-md p-1 text-[rgb(var(--app-text-subtle))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-default disabled:opacity-45"
+            title="Inspect environment"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M10.3 4.3l.7-1.3h2l.7 1.3 1.5.6 1.4-.4 1.4 1.4-.4 1.4.6 1.5 1.3.7v2l-1.3.7-.6 1.5.4 1.4-1.4 1.4-1.4-.4-1.5.6-.7 1.3h-2l-.7-1.3-1.5-.6-1.4.4-1.4-1.4.4-1.4-.6-1.5-1.3-.7v-2l1.3-.7.6-1.5-.4-1.4 1.4-1.4 1.4.4 1.5-.6z" />
+              <circle cx="12" cy="11" r="2.6" strokeWidth={1.7} />
+            </svg>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => runAction({ type: "inspect_changes" })}
+          disabled={!hasRepoPath || busy}
+          className="flex w-full min-w-0 items-center justify-between gap-2 rounded-md px-1 py-1.5 text-left transition hover:bg-[rgb(var(--app-surface-raised))] disabled:cursor-default disabled:opacity-70"
+        >
+          <span className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+            <svg className="h-4 w-4 shrink-0 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M7 7h10M7 12h10M7 17h7M5 4h14v16H5z" />
+            </svg>
+            <span className="min-w-0 truncate">Changes</span>
+          </span>
+          <span className="shrink-0 whitespace-nowrap text-right font-mono text-xs">
+            {busy && statusText ? (
+              <span className="text-blue-500">running</span>
+            ) : !gitKnown ? (
+              <span className="text-[rgb(var(--app-text-subtle))]">not checked</span>
+            ) : hasChanges ? (
+              <>
+                <span className="text-emerald-500">+{added}</span>
+                <span className="ml-1 text-red-500">-{removed}</span>
+              </>
+            ) : (
+              <span className="text-[rgb(var(--app-text-subtle))]">clean</span>
+            )}
+          </span>
+        </button>
+
+        <div className="mt-1 flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1.5 text-sm text-[rgb(var(--app-text-muted))]">
+          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 19h16M7 16V7h10v9M9 16V9h6v7" />
+          </svg>
+          <span className="min-w-0 truncate" title={repoPath}>{repoName || "Local"}</span>
+        </div>
+
+        <div className="relative mt-1">
+          <button
+            type="button"
+            onClick={() => setBranchMenuOpen((value) => !value)}
+            disabled={!hasRepoPath || busy}
+            className="flex w-full items-center gap-2 rounded-md bg-[rgb(var(--app-surface-raised))] px-1.5 py-1.5 text-sm transition hover:bg-[rgb(var(--app-accent-soft))] disabled:cursor-default disabled:opacity-60"
+          >
+            <svg className="h-4 w-4 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M6 3v6a3 3 0 003 3h6m0 0l-2-2m2 2l-2 2M6 21v-7m0 0a3 3 0 100-6 3 3 0 000 6zm12 7v-7m0 0a3 3 0 100-6 3 3 0 000 6z" />
+            </svg>
+            <span className="min-w-0 flex-1 truncate text-left font-mono">{branchLabel}</span>
+            <svg className="h-3.5 w-3.5 text-[rgb(var(--app-text-subtle))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+          {branchMenuOpen && (
+            <div className="absolute right-full top-0 z-30 mr-2 w-72 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl">
+              <button
+                type="button"
+                onClick={() => runAction({ type: "refresh_branch" })}
+                disabled={busy}
+                className="mb-2 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60"
+              >
+                <span className="text-base leading-none">↻</span>
+                Refresh branch state
+              </button>
+              <p className="mb-2 text-xs text-[rgb(var(--app-text-muted))]">Branches</p>
+              <div className="max-h-52 space-y-1 overflow-y-auto">
+                {branchOptions.map((branch) => (
+                  <button
+                    key={branch}
+                    type="button"
+                    onClick={() => runAction({ type: "checkout_branch", branch })}
+                    disabled={busy}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition hover:bg-[rgb(var(--app-surface-raised))]"
+                  >
+                    <span className="text-[rgb(var(--app-text-muted))]">⑂</span>
+                    <span className="min-w-0 flex-1 truncate font-mono">{branch}</span>
+                    {branch === branchName && <span className="text-[rgb(var(--app-text-muted))]">✓</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="relative mt-1">
+          <button
+            type="button"
+            onClick={() => setCommitMenuOpen((value) => !value)}
+            disabled={!hasRepoPath || busy}
+            className="flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1.5 text-sm transition hover:bg-[rgb(var(--app-surface-raised))] disabled:cursor-default disabled:opacity-60"
+          >
+            <svg className="h-4 w-4 shrink-0 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 12h7m2 0h7M8 8l-4 4 4 4m8-8l4 4-4 4" />
+            </svg>
+            <span className="min-w-0 truncate">Commit or push</span>
+          </button>
+          {commitMenuOpen && (
+            <div className="absolute right-full top-0 z-30 mr-2 w-80 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl">
+              <div className="mb-2 flex min-w-0 items-center justify-between gap-2 text-xs">
+                <span className="min-w-0 truncate font-mono text-[rgb(var(--app-text-muted))]">{branchLabel}</span>
+                {hasChanges && (
+                  <span className="shrink-0 whitespace-nowrap font-mono">
+                    <span className="text-emerald-500">+{added}</span>
+                    <span className="ml-1 text-red-500">-{removed}</span>
+                  </span>
+                )}
+              </div>
+              <textarea
+                value={commitMessage}
+                onChange={(event) => setCommitMessage(event.target.value)}
+                rows={2}
+                className="mb-3 w-full resize-none rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2.5 py-2 text-sm text-[rgb(var(--app-text))] outline-none placeholder:text-[rgb(var(--app-text-subtle))] focus:border-[rgb(var(--app-accent))]"
+                placeholder="Commit message (leave blank to generate)..."
+              />
+              <label className="mb-2 flex items-center gap-2 text-sm text-[rgb(var(--app-text-muted))]">
+                <input
+                  type="checkbox"
+                  checked={includeUnstaged}
+                  onChange={(event) => setIncludeUnstaged(event.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-[rgb(var(--app-border))]"
+                />
+                Include unstaged changes
+              </label>
+              <div className="space-y-1 border-t border-[rgb(var(--app-border))] pt-2">
+                <button type="button" onClick={() => commitPrompt("commit")} disabled={busy} className="flex w-full min-w-0 items-center gap-2 rounded-md bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-left text-sm transition hover:bg-[rgb(var(--app-accent-soft))] disabled:cursor-wait disabled:opacity-60">
+                  <span>←</span>
+                  <span className="min-w-0 flex-1 truncate">Commit</span>
+                  <span className="shrink-0 rounded bg-[rgb(var(--app-border))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">Ctrl+↵</span>
+                </button>
+                <button type="button" onClick={() => commitPrompt("commit-push")} disabled={busy} className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60">
+                  <span>↑</span>
+                  <span className="min-w-0 truncate">Commit and push</span>
+                </button>
+                <button type="button" onClick={() => commitPrompt("push")} disabled={busy} className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60">
+                  <span>↑</span>
+                  <span className="min-w-0 truncate">Push</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 border-t border-[rgb(var(--app-border))] pt-2">
+          {profiles.length > 0 ? (
+            <select
+              className="w-full bg-transparent text-xs text-[rgb(var(--app-text-muted))] outline-none"
+              value={activeProfileId ?? ""}
+              onChange={(event) => handleProfileSelect(event.target.value)}
+              title="Project Link"
+            >
+              <option value="">No Project Link</option>
+              {profiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>{profile.name}</option>
+              ))}
+            </select>
+          ) : (
+            <p className="text-xs text-[rgb(var(--app-text-subtle))]">No Project Link</p>
+          )}
+          {activeProfile && (
+            <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-subtle))]">
+              {[activeProfile.adoProject, activeProfile.adoRepoName].filter(Boolean).join(" / ")}
+            </p>
+          )}
+        </div>
+
+        <div className="mt-3 border-t border-[rgb(var(--app-border))] pt-2">
+          <button
+            type="button"
+            onClick={() => setProgressOpen((value) => !value)}
+            className="flex w-full items-center justify-between rounded-md py-1 text-sm text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))]"
+          >
+            <span>Progress</span>
+            <span className="text-[rgb(var(--app-text-subtle))]">{progressOpen ? "⌄" : "›"}</span>
+          </button>
+          {progressOpen && (
+            <div className="mt-2 space-y-2">
+              {taskState ? (
+                taskState.steps.map((step, index) => (
+                  <div key={index} className="flex items-start gap-2 text-xs text-[rgb(var(--app-text-muted))]">
+                    <span className={workflowStepDotClass(step, workflowStepActionState(step, { busy, workflowStatus: workflowState?.status }))} />
+                    <span className={step.done ? "min-w-0 line-through opacity-70" : "min-w-0"}>{step.label}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs leading-relaxed text-[rgb(var(--app-text-subtle))]">
+                  Ask MergePilot to inspect changes, review PR insight, or prepare a commit.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+function sourceSummaryLabel(source: ConversationSourcePart): string {
+  if (source.type === "source_document") {
+    return [source.title, source.file, source.line ? `line ${source.line}` : ""].filter(Boolean).join(" · ") || "Source file";
+  }
+  return [source.title, source.domain, source.url].filter(Boolean).join(" · ") || "Source link";
+}
+
+function ContextSourcePanel({ sources }: { sources: string[] }) {
+  if (sources.length === 0) return null;
+  return (
+    <section className="mt-4 border-t border-[rgb(var(--app-border))] pt-4">
+      <p className="mb-2 text-sm text-[rgb(var(--app-text-muted))]">Context source</p>
+      <div className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2 text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
+        {sources.map((source) => (
+          <p key={source}>{source}</p>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SourceCodeViewport({ source }: { source: ConversationSourcePart }) {
+  const language = source.type === "source_document" ? languageFromSourcePath(source.file ?? source.title) : "markdown";
+
+  if (!source.snippet) {
+    return (
+      <div className="flex h-full min-h-48 items-center justify-center border border-dashed border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-4 text-center text-xs text-[rgb(var(--app-text-subtle))]">
+        No code snippet is attached to this reference yet.
+      </div>
+    );
+  }
+
+  return (
+    <ConversationPartRenderer
+      parts={[{
+        type: "code",
+        code: source.snippet,
+        language,
+        title: "Snippet",
+      }]}
+    />
+  );
+}
+
+function CodeSidePanel({
+  source,
+  sources,
+  artifact,
+  artifactLookupState,
+  artifactCount,
+  onSourceSelect,
+  onClearArtifact,
+}: {
+  source: ConversationSourcePart | null;
+  sources: ConversationSourcePart[];
+  artifact: ConversationArtifactPart | null;
+  artifactLookupState: ArtifactLookupState | null;
+  artifactCount: number;
+  onSourceSelect: (source: ConversationSourcePart) => void;
+  onClearArtifact: () => void;
+}) {
+  const sourceTabs = mergeSourceTabs(source, sources);
+  const activeSource = source;
+  const activeTitle = activeSource ? sourceFileName(activeSource) : "";
+  const detail = activeSource ? sourcePathDetail(activeSource) : "";
+
+  return (
+    <div className="flex h-full w-full min-w-0 flex-col bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text))]">
+      {sourceTabs.length > 0 && (
+        <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-[rgb(var(--app-border))] px-2 py-2">
+          {sourceTabs.map((tab) => {
+            const selected = activeSource ? sourceReferenceKey(tab) === sourceReferenceKey(activeSource) : false;
+            return (
+              <button
+                key={sourceReferenceKey(tab)}
+                type="button"
+                aria-pressed={selected}
+                title={sourcePathDetail(tab) || sourceSummaryLabel(tab)}
+                onClick={() => onSourceSelect(tab)}
+                className={[
+                  "inline-flex max-w-[13rem] shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35",
+                  selected
+                    ? "border-[rgb(var(--app-accent))]/45 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent))]"
+                    : "border-transparent text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]",
+                ].join(" ")}
+              >
+                <span className="text-[10px]">{tab.type === "source_url" ? "◎" : "▣"}</span>
+                <span className="min-w-0 truncate">{sourceFileName(tab)}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {activeSource && (
+        <div className="shrink-0 border-b border-[rgb(var(--app-border))] px-3 py-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold text-[rgb(var(--app-text))]" title={sourceSummaryLabel(activeSource)}>
+                {activeTitle}
+              </p>
+              {detail && <p className="mt-0.5 truncate font-mono text-[11px] text-[rgb(var(--app-text-subtle))]">{detail}</p>}
+            </div>
+            {activeSource.type === "source_url" && (
+              <a
+                href={activeSource.url}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] font-medium text-[rgb(var(--app-accent))] transition hover:bg-[rgb(var(--app-surface-raised))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35"
+              >
+                Open
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="min-h-0 flex-1 overflow-auto bg-[rgb(var(--app-bg-muted))] p-2">
+        {activeSource ? (
+          <SourceCodeViewport source={activeSource} />
+          ) : artifact ? (
+            <div className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
+            <ArtifactWorkspaceShell
+              artifact={artifact}
+              lookupState={artifactLookupState}
+              artifactCount={artifactCount}
+              onClear={onClearArtifact}
+            />
+            </div>
+          ) : (
+            <div className="flex h-full min-h-48 items-center justify-center border border-dashed border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-4 text-center text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
+              Click a blue file or symbol reference in the conversation to inspect its code here.
+            </div>
+          )}
+      </div>
+    </div>
+  );
+}
+
+function mergeSourceTabs(
+  selectedSource: ConversationSourcePart | null,
+  sources: ConversationSourcePart[],
+): ConversationSourcePart[] {
+  const merged: ConversationSourcePart[] = [];
+  const seen = new Set<string>();
+  for (const source of [selectedSource, ...sources]) {
+    if (!source) continue;
+    const key = sourceReferenceKey(source);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(source);
+  }
+  return merged;
+}
+
+function sourceFileName(source: ConversationSourcePart): string {
+  if (source.type === "source_url") return source.domain || source.title || "Web source";
+  const name = source.file?.split(/[\\/]/).filter(Boolean).pop() || source.title || "Source file";
+  return name;
+}
+
+function sourcePathDetail(source: ConversationSourcePart): string {
+  if (source.type === "source_url") return source.url;
+  const path = source.file || source.title;
+  return [path, source.line ? `line ${source.line}` : ""].filter(Boolean).join(" · ");
+}
+
+function languageFromSourcePath(path?: string): string {
+  const ext = path?.split(/[./\\]/).pop()?.toLowerCase();
+  const languages: Record<string, string> = {
+    cs: "csharp",
+    cshtml: "html",
+    css: "css",
+    js: "javascript",
+    jsx: "jsx",
+    json: "json",
+    md: "markdown",
+    ps1: "powershell",
+    py: "python",
+    ts: "typescript",
+    tsx: "tsx",
+    xml: "xml",
+    yml: "yaml",
+    yaml: "yaml",
+  };
+  return ext ? languages[ext] ?? "text" : "text";
 }
 
 function workflowStepDotClass(step: WorkflowStep, actionState: WorkflowStepActionState): string {
@@ -3413,6 +3817,8 @@ interface ConversationTopBarProps {
   rightPanelOpen: boolean;
   rightWidth: number;
   onToggleRight: () => void;
+  summaryPinnedOpen: boolean;
+  onToggleSummaryPinned: () => void;
   titleEditing: boolean;
   customTitle: string | null;
   conversationTitle: string | null;
@@ -3425,6 +3831,7 @@ interface ConversationTopBarProps {
 function ConversationTopBar({
   historyOpen, historyWidth, onToggleHistory,
   rightPanelOpen, rightWidth, onToggleRight,
+  summaryPinnedOpen, onToggleSummaryPinned,
   titleEditing, customTitle, conversationTitle,
   titleInputRef, onStartTitleEdit, onConfirmTitle, onCancelTitle,
 }: ConversationTopBarProps) {
@@ -3478,12 +3885,25 @@ function ConversationTopBar({
       {/* Right zone — width mirrors right panel, collapses to 40px */}
       <div
         className="flex shrink-0 items-center justify-end overflow-hidden"
-        style={{ width: rightPanelOpen ? rightWidth : 40, transition: "width 180ms ease" }}
+        style={{ width: rightPanelOpen ? rightWidth : 76, transition: "width 180ms ease" }}
       >
         <button
+          type="button"
+          onClick={onToggleSummaryPinned}
+          className={`mr-1 rounded p-1.5 transition-colors ${summaryPinnedOpen ? "bg-zinc-800 text-zinc-300" : "text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"}`}
+          title={summaryPinnedOpen ? "Hide pinned summary" : "Show pinned summary"}
+          aria-pressed={summaryPinnedOpen}
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 5h12M6 12h8M6 19h10" />
+          </svg>
+        </button>
+        <button
+          type="button"
           onClick={onToggleRight}
           className={`mr-1.5 rounded p-1.5 transition-colors ${rightPanelOpen ? "bg-zinc-800 text-zinc-300" : "text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"}`}
-          title={rightPanelOpen ? "Collapse context panel" : "Expand context panel"}
+          title={rightPanelOpen ? "Collapse code panel" : "Expand code panel"}
+          aria-pressed={rightPanelOpen}
         >
           <ToggleRightPanelIcon active={rightPanelOpen} />
         </button>
@@ -3588,20 +4008,23 @@ export default function Chat({ mini = false }: ChatProps) {
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [summaryPinnedOpen, setSummaryPinnedOpen] = useState(true);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   const [selectedExternalArtifact, setSelectedExternalArtifact] = useState<ConversationArtifactPart | null>(null);
+  const [selectedSource, setSelectedSource] = useState<ConversationSourcePart | null>(null);
   const [artifactLookupState, setArtifactLookupState] = useState<Record<string, ArtifactLookupState>>({});
   const [persistedPrInsightArtifactIds, setPersistedPrInsightArtifactIds] = useState<Set<string>>(() => new Set());
   const [historyWidth, setHistoryWidth] = useState(220);
-  const [rightWidth, setRightWidth] = useState(300);
+  const [rightWidth, setRightWidth] = useState(420);
   const historyDragRef = useRef<{ startX: number; startW: number } | null>(null);
   const rightDragRef   = useRef<{ startX: number; startW: number } | null>(null);
   // ref to the workspace div so drag handlers can read its live width
   const workspaceRef   = useRef<HTMLDivElement>(null);
 
   /** Middle panel must never be squeezed below this px — guards drag handlers and auto-collapse */
-  const MIDDLE_MIN = 420;
+  const MIDDLE_MIN = 320;
   const RIGHT_MIN = 280;
+  const RIGHT_MAX = 780;
   const HANDLE_GAP = 8; // px reserved for the two drag handle elements
 
   const startHistoryDrag = useCallback((startX: number) => {
@@ -3632,7 +4055,7 @@ export default function Chat({ mini = false }: ChatProps) {
       const otherPanel = historyOpen ? historyWidth : 0;
       const maxRight = Math.max(RIGHT_MIN, workspaceW - otherPanel - MIDDLE_MIN - HANDLE_GAP);
       const delta = e.clientX - rightDragRef.current.startX;
-      setRightWidth(Math.max(RIGHT_MIN, Math.min(Math.min(420, maxRight), rightDragRef.current.startW - delta)));
+      setRightWidth(Math.max(RIGHT_MIN, Math.min(Math.min(RIGHT_MAX, maxRight), rightDragRef.current.startW - delta)));
     };
     const onUp = () => {
       rightDragRef.current = null;
@@ -3650,7 +4073,7 @@ export default function Chat({ mini = false }: ChatProps) {
   const [activeProfileId, setActiveProfileId] = useState<string | null>(
     () => initialDraft?.activeProfileId ?? (loadStoredActiveProjectLinkId() || null),
   );
-  const [customModel, setCustomModel] = useState<CustomConversationModel>(readCustomConversationModel);
+  const [customModels, setCustomModels] = useState<CustomConversationModel[]>(readCustomConversationModels);
   const [activeModel, setActiveModel] = useState<ConversationModelChoice>(readInitialConversationModelChoice);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [indexStatus, setIndexStatus] = useState<ChatIndexStatus | null>(null);
@@ -3660,9 +4083,13 @@ export default function Chat({ mini = false }: ChatProps) {
   const cancelRef = useRef<(() => void) | null>(null);
   const artifactLookupRequestRef = useRef(0);
   const uiStreamAvailableRef = useRef(false);
+  const assistantDeltaBufferRef = useRef<{ textPartId: string | null; text: string }>({ textPartId: null, text: "" });
+  const assistantDeltaFrameRef = useRef<number | null>(null);
+  const assistantDeltaTimerRef = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
 
   const openPrInsightSourceInActivity = useCallback((source: { artifactId: string }) => {
     sessionStorage.setItem(ACTIVITY_HANDOFF_KEY, JSON.stringify(buildActivityPrInsightHandoffDraft({
@@ -3686,7 +4113,13 @@ export default function Chat({ mini = false }: ChatProps) {
     () => availableProfiles.find((profile) => profile.id === activeProfileId) ?? null,
     [availableProfiles, activeProfileId],
   );
+  const activeCustomModel = useMemo(
+    () => customModels.find((model) => model.id === activeModel) ?? null,
+    [activeModel, customModels],
+  );
   const artifactParts = useMemo(() => collectConversationArtifacts(bubbles), [bubbles]);
+  const sourceParts = useMemo(() => collectConversationSources(bubbles), [bubbles]);
+  const latestContextSources = useMemo(() => latestRepositoryContextSources(bubbles), [bubbles]);
   const selectedArtifact = useMemo(
     () => (
       artifactParts.find((artifact) => artifact.artifactId === selectedArtifactId)
@@ -3706,6 +4139,7 @@ export default function Chat({ mini = false }: ChatProps) {
   }, [availableProfiles]);
 
   const selectArtifact = useCallback((artifact: ConversationArtifactPart) => {
+    setSelectedSource(null);
     setSelectedExternalArtifact(null);
     setSelectedArtifactId(artifact.artifactId);
     setPersistedPrInsightArtifactIds((current) => {
@@ -3717,7 +4151,13 @@ export default function Chat({ mini = false }: ChatProps) {
     if (!mini) setRightPanelOpen(true);
   }, [mini]);
 
+  const selectSource = useCallback((source: ConversationSourcePart) => {
+    setSelectedSource(source);
+    if (!mini) setRightPanelOpen(true);
+  }, [mini]);
+
   const openPrInsightSourceInWorkspace = useCallback((source: SavedPrInsightSource) => {
+    setSelectedSource(null);
     const artifact: ConversationArtifactPart = {
       type: "artifact",
       artifactId: source.artifactId,
@@ -3775,9 +4215,11 @@ export default function Chat({ mini = false }: ChatProps) {
   }, [activeProfileId, persistedPrInsightArtifactIds, selectedArtifact, selectedArtifactId]);
 
   const refreshModelChoices = useCallback(() => {
-    const next = readCustomConversationModel();
-    setCustomModel(next);
-    setActiveModel((current) => (current === "custom" && !next.available ? "built_in" : current));
+    const next = readCustomConversationModels();
+    setCustomModels(next);
+    setActiveModel((current) => (
+      current !== "built_in" && !next.some((model) => model.id === current) ? "built_in" : current
+    ));
   }, []);
 
   useEffect(() => {
@@ -3795,8 +4237,42 @@ export default function Chat({ mini = false }: ChatProps) {
   }, [refreshModelChoices]);
 
   useEffect(() => {
-    localStorage.setItem("dev_agent_active_model", activeModel === "custom" ? "custom" : "built_in");
+    localStorage.setItem("dev_agent_active_model", activeModel);
   }, [activeModel]);
+
+  useEffect(() => {
+    if (!modelMenuOpen) return;
+    const shouldKeepOpen = (target: EventTarget | null) => (
+      target instanceof Node && Boolean(modelMenuRef.current?.contains(target))
+    );
+    const onOutsideInteraction = (event: Event) => {
+      if (shouldKeepOpen(event.target)) return;
+      setModelMenuOpen(false);
+    };
+    const onClick = (event: MouseEvent) => {
+      if (shouldKeepOpen(event.target)) return;
+      setModelMenuOpen(false);
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      if (shouldKeepOpen(event.target)) return;
+      setModelMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setModelMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onOutsideInteraction, true);
+    document.addEventListener("mousedown", onOutsideInteraction, true);
+    document.addEventListener("click", onClick, true);
+    document.addEventListener("focusin", onFocusIn, true);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onOutsideInteraction, true);
+      document.removeEventListener("mousedown", onOutsideInteraction, true);
+      document.removeEventListener("click", onClick, true);
+      document.removeEventListener("focusin", onFocusIn, true);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [modelMenuOpen]);
 
   const loadIndexStatus = useCallback(async () => {
     const repo = repoPath.trim();
@@ -4052,20 +4528,6 @@ export default function Chat({ mini = false }: ChatProps) {
     [bubbles, workflowState?.pendingApproval],
   );
 
-  const commandChips = useMemo(() => {
-    return deriveCommandChips({
-      hasRepoPath: Boolean(repoPath.trim()),
-      hasAdoLink: Boolean(activeProfile?.adoProject && activeProfile?.adoRepoName),
-      inputValue: input,
-      pendingApproval: Boolean(composerPendingApproval),
-    });
-  }, [activeProfile?.adoProject, activeProfile?.adoRepoName, composerPendingApproval, input, repoPath]);
-
-  const commandChipsDisabled = useMemo(
-    () => Boolean(composerPendingApproval),
-    [composerPendingApproval],
-  );
-
   const composerStateNotice = useMemo(() => deriveComposerStateNotice({
     busy,
     workflowStatus: workflowState?.status,
@@ -4086,8 +4548,8 @@ export default function Chat({ mini = false }: ChatProps) {
   }), [busy, composerPendingApproval, input, workflowState?.status]);
 
   useEffect(() => {
-    if (busy || commandChipsDisabled) setModelMenuOpen(false);
-  }, [busy, commandChipsDisabled]);
+    if (busy || composerPendingApproval) setModelMenuOpen(false);
+  }, [busy, composerPendingApproval]);
 
   // Derived: conversation title from first user message
   const conversationTitle = useMemo(() => {
@@ -4227,7 +4689,81 @@ export default function Chat({ mini = false }: ChatProps) {
     });
   }, [markIncomingContentScrollIntent]);
 
-  const stopStreaming = useCallback(() => {
+  const flushAssistantDelta = useCallback(() => {
+    const delta = assistantDeltaBufferRef.current.text;
+    if (!delta) return;
+    assistantDeltaBufferRef.current = { textPartId: null, text: "" };
+    markIncomingContentScrollIntent();
+    setBubbles((prev) => {
+      const reversedIdx = [...prev].reverse().findIndex((bubble) => bubble.kind === "assistant" && bubble.streaming);
+      if (reversedIdx !== -1) {
+        const realIdx = prev.length - 1 - reversedIdx;
+        return prev.map((bubble, index) => {
+          if (index !== realIdx || bubble.kind !== "assistant") return bubble;
+          return {
+            ...bubble,
+            text: `${bubble.text ?? ""}${delta}`,
+          };
+        });
+      }
+      return [
+        ...prev,
+        {
+          id: uid(),
+          kind: "assistant",
+          text: delta,
+          streaming: true,
+        },
+      ];
+    });
+  }, [markIncomingContentScrollIntent]);
+
+  const startAssistantTextPart = useCallback((textPartId: string) => {
+    const current = assistantDeltaBufferRef.current;
+    if (current.text && current.textPartId && current.textPartId !== textPartId) {
+      flushAssistantDelta();
+    }
+    assistantDeltaBufferRef.current = {
+      textPartId,
+      text: assistantDeltaBufferRef.current.textPartId === textPartId ? assistantDeltaBufferRef.current.text : "",
+    };
+  }, [flushAssistantDelta]);
+
+  const scheduleAssistantDeltaFlush = useCallback((lineReady = false) => {
+    if (lineReady && assistantDeltaFrameRef.current === null) {
+      assistantDeltaFrameRef.current = window.requestAnimationFrame(() => {
+        if (assistantDeltaTimerRef.current !== null) {
+          window.clearTimeout(assistantDeltaTimerRef.current);
+          assistantDeltaTimerRef.current = null;
+        }
+        assistantDeltaFrameRef.current = null;
+        flushAssistantDelta();
+      });
+    }
+    if (assistantDeltaTimerRef.current === null) {
+      assistantDeltaTimerRef.current = window.setTimeout(() => {
+        if (assistantDeltaFrameRef.current !== null) {
+          window.cancelAnimationFrame(assistantDeltaFrameRef.current);
+          assistantDeltaFrameRef.current = null;
+        }
+        assistantDeltaTimerRef.current = null;
+        flushAssistantDelta();
+      }, 76);
+    }
+  }, [flushAssistantDelta]);
+
+  const stopStreaming = useCallback((textPartId?: string) => {
+    if (assistantDeltaFrameRef.current !== null) {
+      window.cancelAnimationFrame(assistantDeltaFrameRef.current);
+      assistantDeltaFrameRef.current = null;
+    }
+    if (assistantDeltaTimerRef.current !== null) {
+      window.clearTimeout(assistantDeltaTimerRef.current);
+      assistantDeltaTimerRef.current = null;
+    }
+    if (!textPartId || assistantDeltaBufferRef.current.textPartId === textPartId) {
+      flushAssistantDelta();
+    }
     setBubbles((prev) => {
       const reversedIdx = [...prev].reverse().findIndex((bubble) => bubble.kind === "assistant" && bubble.streaming);
       if (reversedIdx !== -1) {
@@ -4244,36 +4780,33 @@ export default function Chat({ mini = false }: ChatProps) {
       }
       return prev;
     });
-  }, []);
+  }, [flushAssistantDelta]);
 
-  const appendAssistantDelta = useCallback((delta: string) => {
+  const appendAssistantDelta = useCallback((delta: string, textPartId?: string) => {
     if (!delta) return;
-    markIncomingContentScrollIntent();
-    setBubbles((prev) => {
-      const reversedIdx = [...prev].reverse().findIndex((bubble) => bubble.kind === "assistant" && bubble.streaming);
-      if (reversedIdx !== -1) {
-        const realIdx = prev.length - 1 - reversedIdx;
-        return prev.map((bubble, index) => {
-          if (index !== realIdx || bubble.kind !== "assistant") return bubble;
-          return {
-            ...bubble,
-            text: `${bubble.text ?? ""}${delta}`,
-            parts: appendTextDeltaToConversationParts(bubble.parts, delta),
-          };
-        });
-      }
-      return [
-        ...prev,
-        {
-          id: uid(),
-          kind: "assistant",
-          text: delta,
-          parts: appendTextDeltaToConversationParts(undefined, delta),
-          streaming: true,
-        },
-      ];
-    });
-  }, [markIncomingContentScrollIntent]);
+    const current = assistantDeltaBufferRef.current;
+    if (current.text && textPartId && current.textPartId && current.textPartId !== textPartId) {
+      flushAssistantDelta();
+      assistantDeltaBufferRef.current = { textPartId, text: delta };
+    } else {
+      assistantDeltaBufferRef.current = {
+        textPartId: textPartId ?? current.textPartId,
+        text: `${current.text}${delta}`,
+      };
+    }
+    scheduleAssistantDeltaFlush(/\r?\n/.test(delta));
+  }, [flushAssistantDelta, scheduleAssistantDeltaFlush]);
+
+  useEffect(() => () => {
+    if (assistantDeltaFrameRef.current !== null) {
+      window.cancelAnimationFrame(assistantDeltaFrameRef.current);
+      assistantDeltaFrameRef.current = null;
+    }
+    if (assistantDeltaTimerRef.current !== null) {
+      window.clearTimeout(assistantDeltaTimerRef.current);
+      assistantDeltaTimerRef.current = null;
+    }
+  }, []);
 
   const upsertToolBubble = useCallback((
     snapshot: ToolCallPartSnapshot,
@@ -4408,15 +4941,16 @@ export default function Chat({ mini = false }: ChatProps) {
 
       case "text-start":
         setStatusText(null);
+        startAssistantTextPart(chunk.id);
         break;
 
       case "text-delta":
         setStatusText(null);
-        appendAssistantDelta(chunk.delta);
+        appendAssistantDelta(chunk.delta, chunk.id);
         break;
 
       case "text-end":
-        stopStreaming();
+        stopStreaming(chunk.id);
         break;
 
       case "progress":
@@ -4498,7 +5032,7 @@ export default function Chat({ mini = false }: ChatProps) {
         appendToolOutputDelta(chunk.toolName, chunk.stream, chunk.delta, chunk.toolCallId);
         break;
     }
-  }, [addErrorBubbleOnce, appendAssistantDelta, appendToolOutputDelta, mergeAssistantMetadata, stopStreaming, upsertToolBubble]);
+  }, [addErrorBubbleOnce, appendAssistantDelta, appendToolOutputDelta, mergeAssistantMetadata, startAssistantTextPart, stopStreaming, upsertToolBubble]);
 
   const toggleTool = useCallback((id: string) => {
     setBubbles((prev) =>
@@ -4532,9 +5066,9 @@ export default function Chat({ mini = false }: ChatProps) {
     }
 
     const repo = repoPath || ".";
-    const resolvedModelChoice = activeModel === "custom" && customModel.available ? "custom" : "built_in";
-    if (activeModel === "custom" && !customModel.available) {
-      setStatusText("Custom model is no longer configured, using built-in model.");
+    const resolvedModelChoice = activeModel !== "built_in" && activeCustomModel ? activeModel : "built_in";
+    if (activeModel !== "built_in" && !activeCustomModel) {
+      setStatusText(`Selected model is no longer configured, using ${DEFAULT_CONVERSATION_MODEL_LABEL}.`);
     }
 
     let resolvedSessionId = sessionId;
@@ -4699,6 +5233,7 @@ export default function Chat({ mini = false }: ChatProps) {
               }
             : undefined;
           const cleanText = ev.result?.response?.trim() ?? "";
+          stopStreaming();
           finaliseWithResponse(
             cleanText,
             meta,
@@ -4733,7 +5268,7 @@ export default function Chat({ mini = false }: ChatProps) {
     cancelRef.current = cancel;
   }, [
     busy,
-    customModel.available,
+    activeCustomModel,
     sessionId,
     repoPath,
     activeProfileId,
@@ -4902,6 +5437,7 @@ export default function Chat({ mini = false }: ChatProps) {
               }
             : undefined;
           const cleanText = ev.result?.response?.trim() ?? "";
+          stopStreaming();
           finaliseWithResponse(
             cleanText,
             meta,
@@ -5299,8 +5835,21 @@ export default function Chat({ mini = false }: ChatProps) {
     ? Math.min(historyPageStart + visibleHistory.length, history.length)
     : Math.min(visibleHistory.length, history.length);
 
+  const closeModelMenuFromChatSurface = (event: { target: EventTarget | null }) => {
+    if (!modelMenuOpen) return;
+    const target = event.target;
+    if (target instanceof Node && modelMenuRef.current?.contains(target)) return;
+    setModelMenuOpen(false);
+  };
+
   return (
-    <div className={`flex flex-col overflow-hidden bg-zinc-950 text-zinc-100 ${mini ? "h-full rounded-xl" : "flex-1 min-w-0 h-full"}`}>
+    <div
+      className={`flex flex-col overflow-hidden bg-zinc-950 text-zinc-100 ${mini ? "h-full rounded-xl" : "flex-1 min-w-0 h-full"}`}
+      onPointerDownCapture={closeModelMenuFromChatSurface}
+      onMouseDownCapture={closeModelMenuFromChatSurface}
+      onClickCapture={closeModelMenuFromChatSurface}
+      onFocusCapture={closeModelMenuFromChatSurface}
+    >
 
       {/* ── Full-width top bar — zones mirror the three panel columns ─────── */}
       {!mini ? (
@@ -5311,6 +5860,8 @@ export default function Chat({ mini = false }: ChatProps) {
           rightPanelOpen={rightPanelOpen}
           rightWidth={rightWidth}
           onToggleRight={() => setRightPanelOpen((v) => !v)}
+          summaryPinnedOpen={summaryPinnedOpen}
+          onToggleSummaryPinned={() => setSummaryPinnedOpen((value) => !value)}
           titleEditing={titleEditing}
           customTitle={customTitle}
           conversationTitle={conversationTitle}
@@ -5696,6 +6247,7 @@ export default function Chat({ mini = false }: ChatProps) {
                         typingIndicator={<ThinkingDots />}
                         selectedArtifactId={selectedArtifactId}
                         onArtifactSelect={selectArtifact}
+                        onSourceSelect={selectSource}
                       />
                     </div>
                     {b.meta && (
@@ -5831,7 +6383,6 @@ export default function Chat({ mini = false }: ChatProps) {
                   )}
                 </div>
               )}
-              <CommandChipBar commands={commandChips} onPick={handleSuggestionReply} disabled={commandChipsDisabled} />
               <SuggestionReplyBar
                 suggestions={suggestionReplies}
                 onPick={handleSuggestionReply}
@@ -5873,7 +6424,7 @@ export default function Chat({ mini = false }: ChatProps) {
                   >
                     <span className="text-xl leading-none">+</span>
                   </button>
-                  <div className="relative">
+                  <div ref={modelMenuRef} className="relative">
                     <button
                       type="button"
                       onClick={() => setModelMenuOpen((value) => !value)}
@@ -5885,7 +6436,7 @@ export default function Chat({ mini = false }: ChatProps) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M13 3L6 13h5l-1 8 7-11h-5l1-7z" />
                       </svg>
                       <span className="max-w-[190px] truncate">
-                        {activeModel === "custom" && customModel.available ? customModel.label : "Built-in model"}
+                        {activeCustomModel ? activeCustomModel.label : DEFAULT_CONVERSATION_MODEL_LABEL}
                       </span>
                       <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M6 9l6 6 6-6" />
@@ -5902,22 +6453,23 @@ export default function Chat({ mini = false }: ChatProps) {
                           }}
                           className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm transition hover:bg-[rgb(var(--app-surface-raised))]"
                         >
-                          <span>Built-in model</span>
-                          {activeModel !== "custom" && <span className="text-[rgb(var(--app-text-muted))]">✓</span>}
+                          <span>{DEFAULT_CONVERSATION_MODEL_LABEL}</span>
+                          {activeModel === "built_in" && <span className="text-[rgb(var(--app-text-muted))]">✓</span>}
                         </button>
-                        {customModel.available && (
+                        {customModels.map((model) => (
                           <button
+                            key={model.id}
                             type="button"
                             onClick={() => {
-                              setActiveModel("custom");
+                              setActiveModel(model.id);
                               setModelMenuOpen(false);
                             }}
                             className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm transition hover:bg-[rgb(var(--app-surface-raised))]"
                           >
-                            <span className="min-w-0 truncate">{customModel.label}</span>
-                            {activeModel === "custom" && <span className="ml-2 text-[rgb(var(--app-text-muted))]">✓</span>}
+                            <span className="min-w-0 truncate">{model.label}</span>
+                            {activeModel === model.id && <span className="ml-2 text-[rgb(var(--app-text-muted))]">✓</span>}
                           </button>
-                        )}
+                        ))}
                       </div>
                     )}
                   </div>
@@ -5956,8 +6508,28 @@ export default function Chat({ mini = false }: ChatProps) {
           </div>{/* end middle-panel-inner */}
         </div>{/* end middle-panel */}
 
+        {!mini && summaryPinnedOpen && (
+          <PinnedSummaryPanel
+            repoPath={repoPath}
+            setRepoPath={setRepoPath}
+            currentBranch={currentBranch}
+            branchList={branchList}
+            gitStatus={gitStatus}
+            diffStats={diffStats}
+            taskState={taskState}
+            workflowState={workflowState}
+            busy={busy}
+            profiles={availableProfiles}
+            activeProfileId={activeProfileId}
+            setActiveProfileId={setActiveProfileId}
+            statusText={statusText}
+            codePanelOpen={rightPanelOpen}
+            codePanelWidth={rightWidth}
+            onAction={runWorkspaceAction}
+          />
+        )}
 
-        {/* ── Right context panel (col 3) ──────────────────────────────────── */}
+        {/* ── Right code panel (col 3) ─────────────────────────────────────── */}
         {!mini && (
           <>
             {/* Drag handle — middle/right boundary */}
@@ -5976,28 +6548,17 @@ export default function Chat({ mini = false }: ChatProps) {
                 pointerEvents: rightPanelOpen ? "auto" : "none",
               }}
             >
-              <WorkspacePanel
-                repoPath={repoPath}
-                setRepoPath={setRepoPath}
-                currentBranch={currentBranch}
-                branchList={branchList}
-                gitStatus={gitStatus}
-                diffStats={diffStats}
-                taskState={taskState}
-                workflowState={workflowState}
-                busy={busy}
-                profiles={availableProfiles}
-                activeProfileId={activeProfileId}
-                setActiveProfileId={setActiveProfileId}
-                statusText={statusText}
-                selectedArtifact={selectedArtifact}
-                selectedArtifactLookupState={selectedArtifactLookupState}
+              <CodeSidePanel
+                source={selectedSource}
+                sources={sourceParts}
+                artifact={selectedArtifact}
+                artifactLookupState={selectedArtifactLookupState}
                 artifactCount={artifactParts.length}
+                onSourceSelect={selectSource}
                 onClearArtifact={() => {
                   setSelectedArtifactId(null);
                   setSelectedExternalArtifact(null);
                 }}
-                onAction={runWorkspaceAction}
               />
             </aside>
           </>

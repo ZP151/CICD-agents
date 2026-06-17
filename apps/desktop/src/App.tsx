@@ -682,6 +682,7 @@ function UserFooter() {
   const { user, save, refresh } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const handleLogin = () => { setMenuOpen(false); setLoggingIn(true); };
   const handleLoginDone = (u: AuthUser) => {
@@ -698,6 +699,24 @@ function UserFooter() {
   };
 
   const displayName = user.name ?? user.upn ?? "Azure User";
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && menuRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
 
   return (
     <>
@@ -719,7 +738,7 @@ function UserFooter() {
           </button>
         </div>
       ) : (
-        <div className="relative border-t border-zinc-800/60 p-2.5">
+        <div ref={menuRef} className="relative border-t border-zinc-800/60 p-2.5">
           <button
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-zinc-800/60"
             onClick={() => setMenuOpen((v) => !v)}

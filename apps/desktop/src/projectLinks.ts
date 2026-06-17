@@ -7,8 +7,6 @@ import {
   type WorkspaceProfileInput,
 } from "./api";
 
-export type PatStatus = "none" | "pending" | "verified" | "invalid";
-
 export const DEFAULT_ADO_ORG_URL = "https://tebssg.visualstudio.com/";
 export const ACTIVE_PROJECT_LINK_LS_KEY = "cicd_agent_active_project_link_id";
 const LEGACY_CHAT_PROFILE_LS_KEY = "chat_profile_id";
@@ -78,23 +76,6 @@ export async function fetchAzureDevOpsRemoteSuggestion(repoPath: string): Promis
   return fetchAzureDevOpsRemoteSuggestionFromDaemon(repoPath.trim());
 }
 
-export async function verifyPat(orgUrl: string, pat: string): Promise<boolean> {
-  if (!orgUrl || !pat) return false;
-  try {
-    const base = orgUrl.replace(/\/$/, "");
-    const r = await fetch(`${base}/_apis/projects?api-version=7.1&$top=1`, {
-      redirect: "manual",
-      headers: { Authorization: `Basic ${btoa(`:${pat}`)}` },
-    });
-    if (r.status === 301 || r.status === 302 || r.status === 303 || r.status === 307 || r.status === 308) {
-      return false;
-    }
-    return r.ok;
-  } catch {
-    return false;
-  }
-}
-
 export function projectLinkNameFromRepo(repoPath: string): string {
   const repoName = repoPath.replace(/\\/g, "/").split("/").filter(Boolean).pop();
   return repoName ? `${repoName} link` : "Project link";
@@ -149,6 +130,17 @@ export function withProjectLinkInputDefaults<T extends Partial<WorkspaceProfileI
     buildCommand: "",
     testCommand: "",
     ...link,
+  };
+}
+
+export function withoutProjectLinkFallbacks<T extends WorkspaceProfileInput>(link: T): T {
+  return {
+    ...link,
+    adoPat: "",
+    adoMcpEnabled: false,
+    adoMcpCommand: "",
+    adoMcpAuthentication: "",
+    adoMcpDomains: "repositories,pipelines,work-items",
   };
 }
 

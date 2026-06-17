@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter } from "react-router-dom";
 import App from "./App.js";
 import { ThemeProvider } from "./theme.js";
+import "streamdown/styles.css";
 import "./index.css";
 
 const queryClient = new QueryClient();

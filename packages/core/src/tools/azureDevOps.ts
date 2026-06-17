@@ -129,7 +129,7 @@ export function adoAuthDiagnosticFromError(err: unknown, authMode?: AdoAuthMode)
     return {
       status: "oauth_unavailable",
       authMode: "oauth",
-      message: err instanceof Error ? err.message : "Azure DevOps OAuth token is unavailable. Sign in again or configure a PAT fallback.",
+      message: err instanceof Error ? err.message : "Azure DevOps OAuth token is unavailable. Sign in again and confirm Azure DevOps access.",
       retryable: true,
     };
   }
@@ -417,7 +417,7 @@ async function resolveAdoAuth(ctx: ToolContext): Promise<AdoAuth> {
   } catch (err) {
     if (err instanceof ToolError) {
       throw new ToolError(
-        "Azure DevOps OAuth token is unavailable and no PAT fallback is configured. Sign in again or configure an ADO PAT.",
+        "Azure DevOps OAuth token is unavailable. Sign in again and confirm Azure DevOps access.",
       );
     }
     throw err;
@@ -1485,7 +1485,7 @@ export async function checkAzureDevOpsTools(args: {
     source: "internal",
     authMode: auth.mode,
     authStatus: "ok",
-    authMessage: `ADO tools are reachable via ${auth.mode === "oauth" ? "OAuth" : "PAT fallback"}.`,
+    authMessage: `ADO tools are reachable via ${auth.mode === "oauth" ? "OAuth" : "PAT"}.`,
     toolCount: INTERNAL_AZURE_DEVOPS_TOOL_MANIFEST.length,
     tools: INTERNAL_AZURE_DEVOPS_TOOL_MANIFEST,
     projectCount: projects.length,

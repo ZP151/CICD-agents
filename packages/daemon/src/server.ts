@@ -150,6 +150,12 @@ const LlmConfigSchema = z.object({
   openaiModel:     z.string().optional(),
 }).optional();
 
+const TestLlmConfigSchema = z.object({
+  llmConfig: LlmConfigSchema.refine((value) => value !== undefined, {
+    message: "llmConfig is required",
+  }),
+});
+
 // Inline profile data sent from the frontend Profiles page (localStorage).
 // Skips the daemon-side DB lookup entirely.
 const InlineProfileSchema = z.object({
@@ -2966,6 +2972,31 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     };
 
     return { ok: true, llmConfigured: nowConfigured, ...cloudStores };
+  });
+
+  app.post("/daemon/test-llm", async (req, reply) => {
+    const parsed = TestLlmConfigSchema.safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const effectiveSettings = buildInlineLlmSettings(parsed.data.llmConfig);
+    if (!effectiveSettings.llmConfigured) {
+      return reply.code(400).send({ ok: false, message: "Model configuration is incomplete." });
+    }
+    try {
+      const llm = new LLMClient(effectiveSettings);
+      await llm.chat({
+        messages: [
+          { role: "system", content: "Reply with ok." },
+          { role: "user", content: "health" },
+        ],
+        temperature: 0,
+        maxTokens: 1,
+        retries: 1,
+      });
+      return { ok: true, message: "Connection verified." };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.code(400).send({ ok: false, message });
+    }
   });
 
   app.post("/tasks/submit-pipeline", async (req, reply) => {

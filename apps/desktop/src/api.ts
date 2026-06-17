@@ -424,36 +424,42 @@ export interface ChatIndexRefreshResult {
 }
 
 // ─── localStorage config readers ─────────────────────────────────────────────
-type ConversationModelChoice = "built_in" | "custom";
+type ConversationModelChoice = "built_in" | string;
 
 // Read at call time so any changes the user makes in Settings / Profiles are
 // picked up immediately without a page reload.
 function readLlmConfig(conversationModelChoice: ConversationModelChoice = "built_in"): Record<string, unknown> | undefined {
   try {
-    if (conversationModelChoice !== "custom") return undefined;
+    if (conversationModelChoice === "built_in") return undefined;
 
     const raw = localStorage.getItem("dev_agent_settings");
     if (!raw) return undefined;
     const s = JSON.parse(raw) as Record<string, unknown>;
-    if (s["additionalModelsEnabled"] !== true) return undefined;
+    const models = Array.isArray(s["additionalModels"]) ? s["additionalModels"] : [];
+    const selected = models.find((item) => {
+      const model = item as Record<string, unknown>;
+      return model["id"] === conversationModelChoice && model["enabled"] === true && model["available"] === true;
+    }) as Record<string, unknown> | undefined;
+    if (!selected) return undefined;
+
     // Settings stores optional user-provided API candidates. Conversation uses
-    // the built-in model by default and must explicitly choose the custom model
-    // before we send these fields to the daemon.
-    const provider = s["llmProvider"] === "openai" ? "openai" : "azure";
-    const hasAzureCustomModel = Boolean(s["azureEndpoint"] && s["azureApiKey"] && s["azureDeployment"]);
-    const hasOpenAiCustomModel = Boolean(s["openaiApiKey"] && s["openaiModel"]);
+    // the built-in model by default and must explicitly choose an enabled
+    // additional model before we send these fields to the daemon.
+    const provider = selected["provider"] === "openai" ? "openai" : "azure";
+    const hasAzureCustomModel = Boolean(selected["azureEndpoint"] && selected["azureApiKey"] && selected["azureDeployment"]);
+    const hasOpenAiCustomModel = Boolean(selected["openaiApiKey"] && selected["openaiModel"]);
     if (provider === "azure" && !hasAzureCustomModel) return undefined;
     if (provider === "openai" && !hasOpenAiCustomModel) return undefined;
 
     // Only include fields the daemon understands; omit empty strings.
     const config: Record<string, unknown> = {};
     config["llmProvider"] = provider;
-    if (s["azureEndpoint"]) config["azureEndpoint"] = s["azureEndpoint"];
-    if (s["azureApiKey"]) config["azureApiKey"] = s["azureApiKey"];
-    if (s["azureDeployment"]) config["azureDeployment"] = s["azureDeployment"];
-    if (s["azureApiVersion"]) config["azureApiVersion"] = s["azureApiVersion"];
-    if (s["openaiApiKey"]) config["openaiApiKey"] = s["openaiApiKey"];
-    if (s["openaiModel"]) config["openaiModel"] = s["openaiModel"];
+    if (selected["azureEndpoint"]) config["azureEndpoint"] = selected["azureEndpoint"];
+    if (selected["azureApiKey"]) config["azureApiKey"] = selected["azureApiKey"];
+    if (selected["azureDeployment"]) config["azureDeployment"] = selected["azureDeployment"];
+    if (selected["azureApiVersion"]) config["azureApiVersion"] = selected["azureApiVersion"];
+    if (selected["openaiApiKey"]) config["openaiApiKey"] = selected["openaiApiKey"];
+    if (selected["openaiModel"]) config["openaiModel"] = selected["openaiModel"];
     return Object.keys(config).length > 0 ? config : undefined;
   } catch { return undefined; }
 }
@@ -795,18 +801,6 @@ export interface AdoDiscoveryResult {
   retryable?: boolean;
 }
 
-export interface AdoMcpCheckResult {
-  ok: boolean;
-  source: "internal" | "mcp";
-  authMode?: "oauth" | "pat";
-  authStatus?: "ok" | "oauth_unavailable" | "oauth_no_org_access" | "pat_invalid_or_missing_scope" | "unknown_error";
-  authMessage?: string;
-  retryable?: boolean;
-  toolCount: number;
-  tools: Array<{ name: string; description: string }>;
-  projectCount?: number;
-}
-
 export interface PipelineRunSummary {
   id: number;
   name: string;
@@ -1093,39 +1087,6 @@ export async function discoverAdoProjectLinkOptions(
     throw new Error(messageFromErrorBody(`discover ${kind} HTTP ${r.status}`, text));
   }
   return (await r.json()) as AdoDiscoveryResult;
-}
-
-export async function checkAdoProjectLinkTools(
-  profile: Partial<WorkspaceProfileInput>,
-): Promise<AdoMcpCheckResult> {
-  const r = await fetch(`${RUNTIME_URL}/profiles/check-ado-tools`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ profile }),
-  });
-  if (!r.ok) {
-    const text = await r.text();
-    try {
-      const diagnostic = JSON.parse(text) as Partial<AdoMcpCheckResult> & { error?: string };
-      if (diagnostic.authStatus || diagnostic.authMessage) {
-        return {
-          ok: false,
-          source: diagnostic.source ?? "internal",
-          authMode: diagnostic.authMode,
-          authStatus: diagnostic.authStatus,
-          authMessage: diagnostic.authMessage ?? diagnostic.error ?? `check ADO tools HTTP ${r.status}`,
-          retryable: diagnostic.retryable,
-          toolCount: diagnostic.toolCount ?? 0,
-          tools: diagnostic.tools ?? [],
-          projectCount: diagnostic.projectCount,
-        };
-      }
-    } catch {
-      /* throw below */
-    }
-    throw new Error(`check ADO tools HTTP ${r.status}: ${text}`);
-  }
-  return (await r.json()) as AdoMcpCheckResult;
 }
 
 export async function fetchProfilePullRequests(
@@ -1658,9 +1619,8 @@ export interface ReviewRunResult {
 /**
  * POST /profiles/:id/review-run
  * Invokes the Review Agent immediately on the given PR.
- * The daemon uses ADO OAuth first, then optional profile PAT fallback, plus the
- * daemon's LLM config to build context, run the planner, decide the queue lane,
- * and persist the result.
+ * The daemon uses ADO OAuth plus the daemon's LLM config to build context, run
+ * the planner, decide the queue lane, and persist the result.
  * Returns the decision so the frontend can update the history record in-place.
  */
 export async function runProfileReviewRun(
@@ -1729,6 +1689,11 @@ export interface DaemonConfigPayload {
   reviewAutoApproveEnabled?: boolean;
   reviewStaleAgeHours?: number;
 }
+
+export type LlmProviderConfig = Pick<
+  DaemonConfigPayload,
+  "llmProvider" | "azureEndpoint" | "azureApiKey" | "azureDeployment" | "azureApiVersion" | "openaiApiKey" | "openaiModel"
+>;
 
 export interface DaemonConfig {
   llmProvider: string;
@@ -1805,4 +1770,19 @@ export async function configureDaemon(
   });
   if (!r.ok) throw new Error(`/daemon/configure HTTP ${r.status}: ${await r.text()}`);
   return (await r.json()) as { ok: boolean; llmConfigured: boolean; cloudProfileStore?: boolean; cloudSecrets?: boolean; cloudSessions?: boolean };
+}
+
+export async function testLlmConfig(
+  llmConfig: LlmProviderConfig,
+): Promise<{ ok: boolean; message: string }> {
+  const r = await fetch(`${RUNTIME_URL}/daemon/test-llm`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ llmConfig }),
+  });
+  const body = await r.json().catch(() => ({})) as { ok?: boolean; message?: string; error?: unknown };
+  if (!r.ok || !body.ok) {
+    throw new Error(body.message ?? `/daemon/test-llm HTTP ${r.status}`);
+  }
+  return { ok: true, message: body.message ?? "Connection verified." };
 }
