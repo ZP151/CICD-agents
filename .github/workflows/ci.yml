@@ -40,6 +40,9 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
+      - name: Install Linux keychain deps
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libsecret-1-0
       - name: Install
         run: pnpm install --frozen-lockfile=false
       # core must be built first so downstream packages (cli, daemon, review-agent)

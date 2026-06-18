@@ -55,7 +55,7 @@ describe("chat context", () => {
       repoPath: repo,
       message: "What are the current workspace changes about?",
       llm,
-      profile: { targetBranch: "main" },
+      projectLink: { targetBranch: "main" },
     });
 
     expect(bundle.changedFiles).toHaveLength(1);
@@ -92,7 +92,7 @@ describe("chat context", () => {
       repoPath: repo,
       message: "Where is the chat session flow implemented?",
       llm,
-      profile: { buildCommand: "npm run build", testCommand: "npm test", targetBranch: "main" },
+      projectLink: { buildCommand: "npm run build", testCommand: "npm test", targetBranch: "main" },
     });
 
     expect(bundle.indexed).toBe(false);
