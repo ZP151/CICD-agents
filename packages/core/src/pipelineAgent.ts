@@ -2,16 +2,24 @@ import fs from "node:fs";
 import path from "node:path";
 import { ContextBuilder } from "./contextBuilder.js";
 import { LLMClient } from "./llm.js";
-import { Planner, type PlannerResult } from "./planner.js";
+import { Planner } from "./planner.js";
 import { emitTaskMetrics } from "./telemetry.js";
-import { getProfile, type Profile } from "./profiles.js";
+import { getProjectTemplate } from "./projectTemplates.js";
+import {
+  applyProjectLinkConfigToProjectTemplate,
+  readProjectLinkConfig,
+  resolveProjectTemplateName,
+} from "./projectLinkConfig.js";
 import {
   ToolExecutor,
-  ToolError,
-  runCommand,
-  splitCommand,
   type ToolContext,
 } from "./tools/executor.js";
+import {
+  computePipelineDiff,
+  maybeCreatePipelinePr,
+  recordPipelineToolError,
+  runValidationCommand,
+} from "./pipelineAgentSupport.js";
 import { azureDevOpsTools } from "./tools/azureDevOps.js";
 import { dotnetTools } from "./tools/dotnet.js";
 import { gitTools } from "./tools/git.js";
@@ -22,7 +30,7 @@ import type { TaskHandle } from "./queue.js";
 
 export interface PipelinePayload {
   repoPath: string;
-  profile?: string;
+  projectTemplate?: string;
   targetBranch?: string;
   workItem?: string | number | null;
   title?: string | null;
@@ -37,19 +45,30 @@ export async function runPipelineTask(handle: TaskHandle): Promise<Record<string
   if (!fs.existsSync(repoPath) || !fs.statSync(repoPath).isDirectory()) {
     throw new Error(`repoPath does not exist: ${repoPath}`);
   }
-  const profileName = payload.profile ?? "default";
-  handle.step("load_profile", "info", `profile=${profileName}`);
-  const profile = getProfile(profileName);
+  const localConfig = readProjectLinkConfig(repoPath);
+  const projectTemplateName = resolveProjectTemplateName({
+    projectTemplate: payload.projectTemplate,
+    config: localConfig,
+  });
+  handle.step(
+    "load_project_link_config",
+    "info",
+    `project_template=${projectTemplateName}${localConfig ? `, config=${path.relative(repoPath, localConfig.path)}` : ""}`,
+  );
+  const projectTemplate = applyProjectLinkConfigToProjectTemplate(
+    getProjectTemplate(projectTemplateName),
+    localConfig,
+  );
 
   const { RepoIndexer } = await import("./indexer/repoIndexer.js");
   const { VectorIndex } = await import("./vectorIndex.js");
   const { MemoryStore } = await import("./memoryStore.js");
-  const indexer = new RepoIndexer(repoPath, profile);
+  const indexer = new RepoIndexer(repoPath, projectTemplate);
   const vectors = new VectorIndex(repoPath);
   const memory = new MemoryStore(repoPath);
   const llm = new LLMClient();
   const startedAt = Date.now();
-  let plan: PlannerResult | null = null;
+  let plan: Awaited<ReturnType<Planner["run"]>> | null = null;
 
   try {
     handle.step("index_repo", "info", "incremental scan");
@@ -73,9 +92,9 @@ export async function runPipelineTask(handle: TaskHandle): Promise<Record<string
     }
 
     const targetBranch =
-      payload.targetBranch || profile.azure_devops.default_target_branch || "main";
+      payload.targetBranch || projectTemplate.azure_devops.default_target_branch || "main";
     handle.step("compute_diff", "info", `target=${targetBranch}`);
-    const { diffText, currentBranch } = await computeDiff(repoPath, targetBranch);
+    const { diffText, currentBranch } = await computePipelineDiff(repoPath, targetBranch);
     handle.step(
       "compute_diff",
       "ok",
@@ -95,9 +114,9 @@ export async function runPipelineTask(handle: TaskHandle): Promise<Record<string
       env: {},
       timeoutSec: 900,
       extra: {
-        ado_org: profile.azure_devops.organization,
-        ado_project: profile.azure_devops.project,
-        ado_repository: profile.azure_devops.repository,
+        ado_org: projectTemplate.azure_devops.organization,
+        ado_project: projectTemplate.azure_devops.project,
+        ado_repository: projectTemplate.azure_devops.repository,
       },
     };
     const executor = new ToolExecutor(ctx);
@@ -120,37 +139,35 @@ export async function runPipelineTask(handle: TaskHandle): Promise<Record<string
       `risk=${plan.riskLevel}, tool_calls=${plan.toolCallsMade.length}, used_llm=${plan.usedLlm}`,
     );
 
-    const buildResult = await maybeRun(repoPath, profile.build.command, handle, "build");
-    const testResult = await maybeRun(repoPath, profile.test.command, handle, "test");
+    const buildResult = await runValidationCommand(repoPath, projectTemplate.build.command, handle, "build");
+    const testResult = await runValidationCommand(repoPath, projectTemplate.test.command, handle, "test");
 
     let prInfo: Record<string, unknown> = {};
     if (payload.autoCreatePr ?? true) {
       try {
-        prInfo = await maybeCreatePr({
+        prInfo = await maybeCreatePipelinePr({
           executor,
-          profile,
+          projectTemplate,
           payload,
           plan,
           sourceBranch: currentBranch,
           handle,
         });
       } catch (err) {
-        if (err instanceof ToolError) handle.step("create_pr", "error", err.message);
-        else throw err;
+        recordPipelineToolError(handle, "create_pr", err);
       }
     }
 
     let pipelineRun: Record<string, unknown> = {};
-    if (payload.triggerPipeline && profile.azure_devops.pipeline_id) {
+    if (payload.triggerPipeline && projectTemplate.azure_devops.pipeline_id) {
       try {
         pipelineRun = await executor.call("ado_trigger_pipeline", {
-          pipeline_id: Number(profile.azure_devops.pipeline_id),
+          pipeline_id: Number(projectTemplate.azure_devops.pipeline_id),
           branch: currentBranch,
         });
         handle.step("trigger_pipeline", "ok", `run_id=${pipelineRun["run_id"]}`);
       } catch (err) {
-        if (err instanceof ToolError) handle.step("trigger_pipeline", "error", err.message);
-        else throw err;
+        recordPipelineToolError(handle, "trigger_pipeline", err);
       }
     }
 
@@ -204,121 +221,4 @@ export async function runPipelineTask(handle: TaskHandle): Promise<Record<string
       toolCallCount: plan?.toolCallsMade.length ?? 0,
     });
   }
-}
-
-async function computeDiff(
-  repoPath: string,
-  targetBranch: string,
-): Promise<{ diffText: string; currentBranch: string }> {
-  const branchRes = await runCommand(["git", "rev-parse", "--abbrev-ref", "HEAD"], {
-    cwd: repoPath,
-    allowed: ["git"],
-  });
-  const currentBranch = branchRes.stdout.trim() || "HEAD";
-  const diffRes = await runCommand(["git", "diff", `${targetBranch}...HEAD`], {
-    cwd: repoPath,
-    allowed: ["git"],
-  });
-  if (diffRes.returncode !== 0 || !diffRes.stdout.trim()) {
-    const fallback = await runCommand(["git", "diff", "HEAD"], {
-      cwd: repoPath,
-      allowed: ["git"],
-    });
-    return { diffText: fallback.stdout, currentBranch };
-  }
-  return { diffText: diffRes.stdout, currentBranch };
-}
-
-async function maybeRun(
-  repoPath: string,
-  command: string,
-  handle: TaskHandle,
-  label: string,
-): Promise<Record<string, unknown>> {
-  if (command.trim().length === 0) {
-    handle.step(label, "info", "skipped (no command in profile)");
-    return { skipped: true };
-  }
-  const cmd = splitCommand(command);
-  handle.step(label, "info", cmd.join(" "));
-  try {
-    const res = await runCommand(cmd, { cwd: repoPath, timeoutSec: 900 });
-    handle.step(
-      label,
-      res.returncode === 0 ? "ok" : "error",
-      `exit=${res.returncode} in ${res.durationMs}ms`,
-    );
-    return {
-      ok: res.returncode === 0,
-      returncode: res.returncode,
-      stdout_tail: res.stdout.slice(-4000),
-      stderr_tail: res.stderr.slice(-2000),
-      duration_ms: res.durationMs,
-    };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    handle.step(label, "error", msg);
-    return { ok: false, error: msg };
-  }
-}
-
-async function maybeCreatePr(args: {
-  executor: ToolExecutor;
-  profile: Profile;
-  payload: PipelinePayload;
-  plan: PlannerResult;
-  sourceBranch: string;
-  handle: TaskHandle;
-}): Promise<Record<string, unknown>> {
-  const { executor, profile, payload, plan, sourceBranch, handle } = args;
-  if (!profile.azure_devops.repository) {
-    handle.step(
-      "create_pr",
-      "warn",
-      "profile missing azure_devops.repository; skipping PR creation",
-    );
-    return { skipped: true };
-  }
-  if (sourceBranch === "HEAD" || sourceBranch === profile.azure_devops.default_target_branch) {
-    handle.step(
-      "create_pr",
-      "warn",
-      `source branch '${sourceBranch}' is invalid for a PR; checkout a feature branch first`,
-    );
-    return { skipped: true };
-  }
-  const title = (payload.title ?? "").toString().trim() || plan.title || `Update from ${sourceBranch}`;
-  let description = plan.summary;
-  if (payload.workItem) {
-    description = `Work Item: AB#${payload.workItem}\n\n${description}`;
-  }
-  handle.step(
-    "create_pr",
-    "info",
-    `opening PR ${sourceBranch} -> ${profile.azure_devops.default_target_branch}`,
-  );
-  const pr = await executor.call("ado_create_pr", {
-    source_branch: sourceBranch,
-    target_branch: payload.targetBranch ?? profile.azure_devops.default_target_branch,
-    title,
-    description,
-    draft: Boolean(payload.draft ?? false),
-  });
-  handle.step("create_pr", "ok", `PR #${pr["pull_request_id"]} (${pr["url"]})`);
-  if (payload.workItem) {
-    try {
-      const link = await executor.call("ado_link_work_item", {
-        pull_request_id: Number(pr["pull_request_id"] ?? 0),
-        work_item_id: Number(payload.workItem),
-      });
-      handle.step(
-        "link_work_item",
-        link["ok"] ? "ok" : "warn",
-        `work_item=${payload.workItem}, ok=${link["ok"]}`,
-      );
-    } catch (err) {
-      handle.step("link_work_item", "warn", err instanceof Error ? err.message : String(err));
-    }
-  }
-  return pr;
 }

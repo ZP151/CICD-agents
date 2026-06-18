@@ -1,97 +1,54 @@
-import fs from "node:fs";
 import path from "node:path";
-import fastGlob from "fast-glob";
-import { parseDiff, type ChangedFile } from "./contextBuilder.js";
 import type { LLMClient } from "./llm.js";
 import { RepoIndexer } from "./indexer/repoIndexer.js";
 import { VectorIndex, type VectorIndexStats } from "./vectorIndex.js";
-import { runCommand } from "./tools/executor.js";
-import type { ChatPlannerSource } from "./chatPlanner.js";
+import {
+  getChangedFiles,
+  getChangeDiffExcerpt,
+  inferChangeSummary,
+  shouldInspectGit,
+} from "./chatContextChanges.js";
+import {
+  dedupeChunks,
+  heuristicChunks,
+  listQuickRepoFiles,
+  projectLinkToIndexerProjectTemplate,
+  readImportantFiles,
+  summarizeProjectStructure,
+  summarizeRepo,
+} from "./chatContextScan.js";
+import type {
+  ChatContextBundle,
+  ChatContextChunk,
+  ChatContextProjectLink,
+} from "./chatContextTypes.js";
 
-export interface ChatContextProfile {
-  buildCommand?: string;
-  testCommand?: string;
-  targetBranch?: string;
-  pipelineName?: string;
-  ignoredGlobs?: string[];
-}
-
-export interface ChatContextChunk {
-  path: string;
-  startLine: number;
-  endLine: number;
-  text: string;
-  score?: number;
-  reason: string;
-}
-
-export interface ChatContextBundle {
-  repoSummary?: string;
-  projectStructure: Array<{ path: string; kind: string; reason: string }>;
-  relevantChunks: ChatContextChunk[];
-  changedFiles: ChangedFile[];
-  changeSummary?: string;
-  changeDiffExcerpt?: string;
-  memories: Array<{ key: string; value: string }>;
-  profile?: ChatContextProfile;
-  indexStats: VectorIndexStats;
-  indexed: boolean;
-  embedded: boolean;
-  fallbackUsed: boolean;
-}
-
-interface DiffHunkSource {
-  path: string;
-  line: number;
-  snippet: string;
-}
-
-const IMPORTANT_FILES = [
-  "README.md",
-  "readme.md",
-  "package.json",
-  "pnpm-workspace.yaml",
-  "tsconfig.json",
-  "pyproject.toml",
-  "requirements.txt",
-  "Dockerfile",
-  "docker-compose.yml",
-  "azure-pipelines.yml",
-];
-
-const DEFAULT_IGNORED = [
-  "**/.git/**",
-  "**/node_modules/**",
-  "**/__pycache__/**",
-  "**/.venv/**",
-  "**/.idea/**",
-  "**/.vs/**",
-  "**/bin/**",
-  "**/obj/**",
-  "**/dist/**",
-  "**/build/**",
-  "**/coverage/**",
-];
-
-const GIT_INTENT_RE =
-  /\b(git|status|diff|commit|branch|push|pull|merge|rebase|stash|pr|pull request|changes?|changed|review|stage|checkout)\b/i;
-
-export function shouldInspectGit(message: string): boolean {
-  return GIT_INTENT_RE.test(message);
-}
+export type {
+  ChatContextBundle,
+  ChatContextChunk,
+  ChatContextProjectLink,
+  ChatContextProjectStructureItem,
+} from "./chatContextTypes.js";
+export {
+  chatContextSources,
+  chatContextToPrompt,
+  describeChatContext,
+} from "./chatContextFormat.js";
+export { shouldInspectGit } from "./chatContextChanges.js";
 
 export async function buildChatContext(args: {
   repoPath: string;
   message: string;
   llm: LLMClient;
-  profile?: ChatContextProfile;
+  projectLink?: ChatContextProjectLink;
   maxChunks?: number;
   useSemanticIndex?: boolean;
 }): Promise<ChatContextBundle> {
   const repoPath = path.resolve(args.repoPath);
   const maxChunks = args.maxChunks ?? 8;
+  const projectLink = args.projectLink;
 
-  const repoFiles = await listQuickRepoFiles(repoPath, args.profile?.ignoredGlobs ?? []);
+  const repoFiles = await listQuickRepoFiles(repoPath, projectLink?.ignoredGlobs ?? []);
   const projectStructure = summarizeProjectStructure(repoFiles);
   const importantChunks = readImportantFiles(repoPath);
   const semanticEnabled = args.useSemanticIndex ?? true;
@@ -137,10 +94,10 @@ export async function buildChatContext(args: {
 
   const inspectGit = shouldInspectGit(args.message);
   const changedFiles = inspectGit
-    ? await getChangedFiles(repoPath, args.profile?.targetBranch)
+    ? await getChangedFiles(repoPath, projectLink?.targetBranch)
     : [];
   const changeDiffExcerpt = inspectGit && changedFiles.length > 0
-    ? await getChangeDiffExcerpt(repoPath, args.profile?.targetBranch)
+    ? await getChangeDiffExcerpt(repoPath, projectLink?.targetBranch)
     : "";
 
   return {
@@ -151,7 +108,7 @@ export async function buildChatContext(args: {
     changeSummary: changedFiles.length > 0 ? inferChangeSummary(changedFiles, changeDiffExcerpt) : undefined,
     changeDiffExcerpt,
     memories: [],
-    profile: args.profile,
+    projectLink,
     indexStats,
     indexed: indexStats.filesIndexed > 0 || indexStats.chunksIndexed > 0,
     embedded: semanticUsed,
@@ -162,10 +119,11 @@ export async function buildChatContext(args: {
 export async function refreshChatIndex(args: {
   repoPath: string;
   llm: LLMClient;
-  profile?: ChatContextProfile;
+  projectLink?: ChatContextProjectLink;
 }): Promise<{ filesSeen: number; filesIndexed: number; embedded: number; embeddingError?: string }> {
   const repoPath = path.resolve(args.repoPath);
-  const indexer = new RepoIndexer(repoPath, profileToIndexerProfile(args.profile));
+  const projectLink = args.projectLink;
+  const indexer = new RepoIndexer(repoPath, projectLinkToIndexerProjectTemplate(projectLink));
   const vectors = new VectorIndex(repoPath);
   try {
     const stats = await indexer.update();
@@ -215,443 +173,4 @@ export function getChatIndexStatus(repoPath: string): {
   } finally {
     vectors.close();
   }
-}
-
-export function chatContextToPrompt(bundle: ChatContextBundle, charBudget = 12000): string {
-  const parts: string[] = ["## Repository context"];
-  if (bundle.repoSummary) parts.push(bundle.repoSummary);
-  parts.push(
-    `Index status: ${bundle.indexed ? `indexed (${bundle.indexStats.filesIndexed} files, ${bundle.indexStats.chunksEmbedded}/${bundle.indexStats.chunksIndexed} embedded chunks)` : "quick scan; background index may refresh separately"}`,
-  );
-  parts.push(`Context retrieval: ${bundle.fallbackUsed ? "project docs, changed files, and file-structure scan" : "semantic embeddings"}`);
-
-  if (bundle.profile) {
-    parts.push("\n## Profile");
-    if (bundle.profile.targetBranch) parts.push(`- Target branch: ${bundle.profile.targetBranch}`);
-    if (bundle.profile.buildCommand) parts.push(`- Build command: ${bundle.profile.buildCommand}`);
-    if (bundle.profile.testCommand) parts.push(`- Test command: ${bundle.profile.testCommand}`);
-    if (bundle.profile.pipelineName) parts.push(`- Pipeline: ${bundle.profile.pipelineName}`);
-  }
-
-  if (bundle.projectStructure.length > 0) {
-    parts.push("\n## Project structure signals");
-    for (const item of bundle.projectStructure.slice(0, 30)) {
-      parts.push(`- ${item.path} (${item.kind}): ${item.reason}`);
-    }
-  }
-
-  if (bundle.changedFiles.length > 0) {
-    parts.push("\n## Changed files");
-    for (const cf of bundle.changedFiles.slice(0, 40)) {
-      parts.push(`- ${cf.status}: ${cf.path} (+${cf.additions}/-${cf.deletions})`);
-    }
-    if (bundle.changeSummary) {
-      parts.push("\n## Change interpretation");
-      parts.push(bundle.changeSummary);
-    }
-    if (bundle.changeDiffExcerpt) {
-      parts.push("\n## Diff excerpt for understanding the change");
-      parts.push("```diff");
-      parts.push(bundle.changeDiffExcerpt.trim());
-      parts.push("```");
-    }
-  }
-
-  if (bundle.memories.length > 0) {
-    parts.push("\n## Repository memory");
-    for (const mem of bundle.memories.slice(0, 30)) parts.push(`- ${mem.key}: ${mem.value}`);
-  }
-
-  parts.push("\n## Relevant code and docs");
-  let used = parts.join("\n").length;
-  for (const chunk of bundle.relevantChunks) {
-    const block =
-      `\n### ${chunk.path}:${chunk.startLine}-${chunk.endLine} (${chunk.reason})\n` +
-      "```\n" +
-      `${chunk.text.trim()}\n` +
-      "```\n";
-    if (used + block.length > charBudget) {
-      parts.push("\n_(remaining repository context truncated)_");
-      break;
-    }
-    parts.push(block);
-    used += block.length;
-  }
-
-  return parts.join("\n");
-}
-
-export function describeChatContext(bundle: ChatContextBundle): string {
-  if (bundle.embedded) {
-    return `Repository context: semantic index used (${bundle.indexStats.filesIndexed} indexed files, ${bundle.indexStats.chunksEmbedded} embedded chunks).`;
-  }
-  if (bundle.indexed) {
-    return `Repository context: quick scan used; index is available (${bundle.indexStats.filesIndexed} indexed files, ${bundle.indexStats.chunksEmbedded}/${bundle.indexStats.chunksIndexed} embedded chunks).`;
-  }
-  return `Repository context: quick scan used; background indexing may improve future answers.`;
-}
-
-export function chatContextSources(bundle: ChatContextBundle, maxSources = 8): ChatPlannerSource[] {
-  const sources: ChatPlannerSource[] = [];
-  const seen = new Set<string>();
-  const perFileCounts = new Map<string, number>();
-  const add = (source: ChatPlannerSource): void => {
-    const key = source.type === "source_document"
-      ? `${source.file ?? source.title}:${source.line ?? ""}`
-      : source.url;
-    if (seen.has(key)) return;
-    if (source.type === "source_document" && source.file) {
-      const count = perFileCounts.get(source.file) ?? 0;
-      if (count >= 3) return;
-      perFileCounts.set(source.file, count + 1);
-    }
-    seen.add(key);
-    sources.push(source);
-  };
-
-  for (const hunk of diffHunkSources(bundle.changeDiffExcerpt ?? "")) {
-    if (sources.length >= maxSources) break;
-    add({
-      type: "source_document",
-      sourceId: sourceIdFor("hunk", `${hunk.path}:${hunk.line}`),
-      title: `${hunk.path}:${hunk.line}`,
-      file: hunk.path,
-      line: hunk.line,
-      snippet: hunk.snippet,
-    });
-  }
-
-  for (const file of bundle.changedFiles.slice(0, Math.min(4, maxSources))) {
-    if (sources.length >= maxSources) break;
-    add({
-      type: "source_document",
-      sourceId: sourceIdFor("changed", file.path),
-      title: file.path,
-      file: file.path,
-      snippet: [
-        `Changed file: ${file.status} (+${file.additions}/-${file.deletions}).`,
-        bundle.changeSummary,
-      ].filter(Boolean).join(" "),
-    });
-  }
-
-  for (const item of bundle.projectStructure) {
-    if (sources.length >= maxSources) break;
-    add({
-      type: "source_document",
-      sourceId: sourceIdFor("structure", `${item.kind}:${item.path}`),
-      title: `${item.path} (${item.kind})`,
-      file: item.path,
-      snippet: `Project structure signal: ${item.reason}.`,
-    });
-  }
-
-  for (const chunk of bundle.relevantChunks) {
-    if (sources.length >= maxSources) break;
-    add({
-      type: "source_document",
-      sourceId: sourceIdFor("context", `${chunk.path}:${chunk.startLine}-${chunk.endLine}`),
-      title: `${chunk.path}:${chunk.startLine}-${chunk.endLine}`,
-      file: chunk.path,
-      line: chunk.startLine,
-      snippet: snippetForSource(chunk.text),
-    });
-  }
-
-  return sources.slice(0, maxSources);
-}
-
-function diffHunkSources(diffText: string, maxHunks = 8): DiffHunkSource[] {
-  if (!diffText.trim()) return [];
-  const hunks: DiffHunkSource[] = [];
-  let currentPath = "";
-  let currentHunk: { path: string; line: number; lines: string[] } | null = null;
-
-  const flush = (): void => {
-    if (!currentHunk) return;
-    const snippet = currentHunk.lines
-      .filter((line) => line && !line.startsWith("\\ No newline"))
-      .slice(0, 18)
-      .join("\n")
-      .trim();
-    if (snippet) {
-      hunks.push({
-        path: currentHunk.path,
-        line: currentHunk.line,
-        snippet: snippetForSource(snippet, 700),
-      });
-    }
-    currentHunk = null;
-  };
-
-  for (const rawLine of diffText.split(/\r?\n/)) {
-    const header = rawLine.match(/^diff --git a\/(.+?) b\/(.+)$/);
-    if (header) {
-      flush();
-      currentPath = header[2] ?? header[1] ?? "";
-      continue;
-    }
-
-    const newFile = rawLine.match(/^\+\+\+ b\/(.+)$/);
-    if (newFile) {
-      currentPath = newFile[1] ?? currentPath;
-      continue;
-    }
-
-    const hunk = rawLine.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-    if (hunk && currentPath) {
-      flush();
-      currentHunk = {
-        path: currentPath,
-        line: Number.parseInt(hunk[1] ?? "1", 10) || 1,
-        lines: [rawLine],
-      };
-      if (hunks.length >= maxHunks) break;
-      continue;
-    }
-
-    if (currentHunk) {
-      if (rawLine.startsWith("diff --git ")) {
-        flush();
-      } else {
-        currentHunk.lines.push(rawLine);
-      }
-    }
-  }
-  flush();
-  return hunks.slice(0, maxHunks);
-}
-
-async function listQuickRepoFiles(repoPath: string, ignoredGlobs: string[]): Promise<string[]> {
-  return fastGlob("**/*", {
-    cwd: repoPath,
-    ignore: [...DEFAULT_IGNORED, ...ignoredGlobs],
-    onlyFiles: true,
-    dot: false,
-    followSymbolicLinks: false,
-    caseSensitiveMatch: false,
-  });
-}
-
-function summarizeRepo(files: string[], indexed: number, seen: number): string {
-  const byExt = new Map<string, number>();
-  for (const file of files) {
-    const ext = path.extname(file).toLowerCase() || "(none)";
-    byExt.set(ext, (byExt.get(ext) ?? 0) + 1);
-  }
-  const top = [...byExt.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
-    .map(([ext, count]) => `${ext}:${count}`)
-    .join(", ");
-  return `Files seen in quick scan: ${seen}; files indexed synchronously this turn: ${indexed}; file types: ${top || "unknown"}.`;
-}
-
-function profileToIndexerProfile(profile?: ChatContextProfile): ConstructorParameters<typeof RepoIndexer>[1] {
-  if (!profile) return null;
-  return {
-    name: "chat",
-    description: "",
-    languages: [],
-    build: { command: profile.buildCommand ?? "" },
-    test: { command: profile.testCommand ?? "" },
-    azure_devops: {
-      organization: "",
-      project: "",
-      repository: "",
-      default_target_branch: profile.targetBranch ?? "main",
-      pipeline_id: null,
-    },
-    ignored_globs: profile.ignoredGlobs ?? [],
-  };
-}
-
-function summarizeProjectStructure(files: string[]): ChatContextBundle["projectStructure"] {
-  const signals: ChatContextBundle["projectStructure"] = [];
-  const addIf = (predicate: (f: string) => boolean, kind: string, reason: string) => {
-    for (const file of files.filter(predicate).slice(0, 8)) {
-      signals.push({ path: file, kind, reason });
-    }
-  };
-  addIf((f) => /^src\//i.test(f), "source", "top-level source file");
-  addIf((f) => /^lib\//i.test(f), "source", "top-level library file");
-  addIf((f) => /^apps\//i.test(f), "app", "application workspace");
-  addIf((f) => /^packages\//i.test(f), "package", "library or service package");
-  addIf((f) => /^docs\//i.test(f), "docs", "project documentation");
-  addIf((f) => /(^|\/)(src|lib)\/(index|main|server|app)\./i.test(f), "entrypoint", "likely runtime entrypoint");
-  addIf((f) => /test|spec/i.test(f), "test", "test file");
-  return dedupeStructure(signals);
-}
-
-function readImportantFiles(repoPath: string): ChatContextChunk[] {
-  const out: ChatContextChunk[] = [];
-  for (const rel of IMPORTANT_FILES) {
-    const full = path.join(repoPath, rel);
-    try {
-      const stat = fs.statSync(full);
-      if (!stat.isFile() || stat.size > 16000) continue;
-      const text = fs.readFileSync(full, "utf8");
-      out.push({
-        path: rel,
-        startLine: 1,
-        endLine: text.split(/\r?\n/).length,
-        text: text.slice(0, 6000),
-        reason: "project-important-file",
-      });
-    } catch {
-      // ignore missing files
-    }
-  }
-  return out;
-}
-
-function heuristicChunks(repoPath: string, files: string[], message: string, maxChunks: number): ChatContextChunk[] {
-  const terms = new Set(
-    message
-      .toLowerCase()
-      .split(/[^a-z0-9_.-]+/)
-      .filter((t) => t.length >= 3),
-  );
-  const scored = files
-    .map((file) => {
-      const lower = file.toLowerCase();
-      let score = 0;
-      for (const term of terms) {
-        if (lower.includes(term)) score += 3;
-      }
-      if (/readme|package\.json|architecture|chat|planner|agent|server|index/i.test(file)) score += 1;
-      return { file, score };
-    })
-    .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, maxChunks);
-
-  const out: ChatContextChunk[] = [];
-  for (const { file } of scored) {
-    const full = path.join(repoPath, file);
-    try {
-      const stat = fs.statSync(full);
-      if (!stat.isFile() || stat.size > 24000) continue;
-      const text = fs.readFileSync(full, "utf8");
-      out.push({
-        path: file,
-        startLine: 1,
-        endLine: text.split(/\r?\n/).length,
-        text: text.slice(0, 8000),
-        reason: "heuristic-file-match",
-      });
-    } catch {
-      // ignore unreadable files
-    }
-  }
-  return out;
-}
-
-async function getChangedFiles(repoPath: string, targetBranch = "main"): Promise<ChangedFile[]> {
-  try {
-    const diff = await runCommand(["git", "diff", `${targetBranch}...HEAD`], {
-      cwd: repoPath,
-      allowed: ["git"],
-      timeoutSec: 30,
-    });
-    if (diff.returncode === 0 && diff.stdout.trim()) return parseDiff(diff.stdout);
-  } catch {
-    // fall back to working tree diff
-  }
-  try {
-    const diff = await runCommand(["git", "diff", "HEAD"], {
-      cwd: repoPath,
-      allowed: ["git"],
-      timeoutSec: 30,
-    });
-    return parseDiff(diff.stdout);
-  } catch {
-    return [];
-  }
-}
-
-async function getChangeDiffExcerpt(repoPath: string, targetBranch = "main", maxChars = 9000): Promise<string> {
-  const attempts = [
-    ["diff", "--unified=40", `${targetBranch}...HEAD`],
-    ["diff", "--unified=40", "HEAD"],
-  ];
-  for (const args of attempts) {
-    try {
-      const diff = await runCommand(["git", ...args], {
-        cwd: repoPath,
-        allowed: ["git"],
-        timeoutSec: 30,
-      });
-      const text = diff.stdout.trim();
-      if (diff.returncode === 0 && text) {
-        return text.length > maxChars ? `${text.slice(0, maxChars)}\n...diff truncated...` : text;
-      }
-    } catch {
-      // try the next diff shape
-    }
-  }
-  return "";
-}
-
-function inferChangeSummary(files: ChangedFile[], diffExcerpt = ""): string {
-  const paths = files.map((file) => file.path.toLowerCase());
-  const totalAdditions = files.reduce((sum, file) => sum + file.additions, 0);
-  const totalDeletions = files.reduce((sum, file) => sum + file.deletions, 0);
-  const areas: string[] = [];
-  if (paths.some((file) => /test|spec/.test(file))) areas.push("tests");
-  if (paths.some((file) => /controller|route|api|endpoint/.test(file))) areas.push("API/controller behavior");
-  if (paths.some((file) => /service|manager|client|provider/.test(file))) areas.push("service/client logic");
-  if (paths.some((file) => /config|settings|appsettings|\.env|pipeline|workflow|dockerfile/.test(file))) areas.push("configuration or CI/CD");
-  if (paths.some((file) => /model|schema|migration|entity|dto/.test(file))) areas.push("data model/schema");
-  if (paths.some((file) => /\.(tsx|jsx|css|scss)$/.test(file))) areas.push("frontend/UI");
-  if (paths.some((file) => /\.(cs)$/.test(file))) areas.push(".NET code");
-  if (paths.some((file) => /\.(ts|js|mts|mjs)$/.test(file))) areas.push("TypeScript/JavaScript code");
-
-  const signals: string[] = [];
-  const lowerDiff = diffExcerpt.toLowerCase();
-  if (/\b(auth|token|permission|credential|oauth|pat)\b/.test(lowerDiff)) signals.push("authentication/permission handling");
-  if (/\b(error|exception|catch|retry|fallback|diagnostic)\b/.test(lowerDiff)) signals.push("error handling or diagnostics");
-  if (/\b(validate|validation|required|schema)\b/.test(lowerDiff)) signals.push("validation");
-  if (/\b(stream|delta|event|sse)\b/.test(lowerDiff)) signals.push("streaming/event flow");
-  if (/\b(add|stage|commit|push|branch|diff|status)\b/.test(lowerDiff)) signals.push("Git workflow behavior");
-
-  const areaText = areas.length > 0 ? areas.slice(0, 4).join(", ") : "general code";
-  const signalText = signals.length > 0 ? ` Signals in the diff suggest ${signals.slice(0, 4).join(", ")}.` : "";
-  return `Likely change focus: ${areaText}. Scope: ${files.length} file(s), +${totalAdditions}/-${totalDeletions}.${signalText}`;
-}
-
-function dedupeChunks(chunks: ChatContextChunk[]): ChatContextChunk[] {
-  const seen = new Set<string>();
-  const out: ChatContextChunk[] = [];
-  for (const chunk of chunks) {
-    const key = `${chunk.path}:${chunk.startLine}:${chunk.endLine}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(chunk);
-  }
-  return out;
-}
-
-function dedupeStructure(items: ChatContextBundle["projectStructure"]): ChatContextBundle["projectStructure"] {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    if (seen.has(item.path)) return false;
-    seen.add(item.path);
-    return true;
-  });
-}
-
-function sourceIdFor(prefix: string, value: string): string {
-  return `${prefix}-${Buffer.from(value).toString("base64url").slice(0, 24)}`;
-}
-
-function snippetForSource(text: string, maxChars = 1800): string {
-  const cleaned = text
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  return cleaned.length > maxChars ? `${cleaned.slice(0, maxChars).trimEnd()}\n...` : cleaned;
 }

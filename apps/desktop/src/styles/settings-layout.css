@@ -1,0 +1,89 @@
+.settings-page {
+  width: min(100%, 64rem);
+  margin: 0 auto;
+  padding: 0.5rem 0 4rem;
+}
+
+.settings-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgb(var(--app-border) / 0.55);
+}
+
+.settings-title {
+  color: rgb(var(--app-text));
+  font-size: 1.5rem;
+  font-weight: 650;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.settings-subtitle {
+  margin-top: 0.35rem;
+  max-width: 36rem;
+  color: rgb(var(--app-text-muted));
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.settings-eyebrow {
+  color: rgb(var(--app-text-subtle));
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.settings-section {
+  margin-top: 2rem;
+}
+
+.settings-section-title {
+  margin-bottom: 0.75rem;
+  color: rgb(var(--app-text));
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.settings-list {
+  overflow: hidden;
+  border: 1px solid rgb(var(--app-border) / 0.72);
+  border-radius: 0.75rem;
+  background: rgb(var(--app-surface) / 0.48);
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, 24rem);
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1rem 1.125rem;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid rgb(var(--app-border) / 0.55);
+}
+
+.settings-row-title {
+  color: rgb(var(--app-text));
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.settings-row-copy {
+  margin-top: 0.25rem;
+  color: rgb(var(--app-text-muted));
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.settings-row-control {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}

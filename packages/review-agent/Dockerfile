@@ -4,13 +4,13 @@ RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 COPY pnpm-workspace.yaml package.json .npmrc tsconfig.base.json ./
 COPY packages/core/package.json packages/core/
 COPY packages/review-agent/package.json packages/review-agent/
-RUN pnpm install --frozen-lockfile=false --filter @cicd-agent/review-agent... --prod=false
+RUN pnpm install --frozen-lockfile=false --filter @mergepilot/review-agent... --prod=false
 
 FROM deps AS build
 COPY packages/core packages/core
 COPY packages/review-agent packages/review-agent
-RUN pnpm --filter @cicd-agent/core build
-RUN pnpm --filter @cicd-agent/review-agent build
+RUN pnpm --filter @mergepilot/core build
+RUN pnpm --filter @mergepilot/review-agent build
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
@@ -21,6 +21,6 @@ COPY --from=build /app/packages/core/package.json packages/core/
 COPY --from=build /app/packages/core/dist packages/core/dist
 COPY --from=build /app/packages/review-agent/package.json packages/review-agent/
 COPY --from=build /app/packages/review-agent/dist packages/review-agent/dist
-RUN pnpm install --filter @cicd-agent/review-agent... --prod
+RUN pnpm install --filter @mergepilot/review-agent... --prod
 EXPOSE 8080
 CMD ["node", "packages/review-agent/dist/bin.js"]

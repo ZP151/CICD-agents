@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { WorkspaceProfile } from "./api";
+import type { ProjectLink } from "./api";
 import {
   ACTIVE_PROJECT_LINK_LS_KEY,
+  adoDiscoverySignature,
+  applyAdoDiscoveryToProjectLinkInput,
   loadStoredActiveProjectLinkId,
   pickRecommendedPipeline,
   resolveActiveProjectLinkId,
@@ -71,26 +73,82 @@ describe("pickRecommendedPipeline", () => {
   });
 });
 
+describe("ADO Project Link discovery state", () => {
+  it("builds a stable trimmed discovery signature", () => {
+    expect(adoDiscoverySignature("repositories", {
+      adoOrgUrl: " https://dev.azure.com/demo ",
+      adoProject: " Project ",
+      adoRepoName: " Repo ",
+    } as ProjectLink)).toBe(JSON.stringify({
+      kind: "repositories",
+      org: "https://dev.azure.com/demo",
+      project: "Project",
+      repo: "Repo",
+    }));
+  });
+
+  it("resets repo and pipeline fields when a different ADO project is selected", () => {
+    const next = applyAdoDiscoveryToProjectLinkInput({
+      adoProject: "Old",
+      adoRepoName: "repo",
+      adoPipelineId: "42",
+      adoPipelineName: "CI",
+    } as ProjectLink, "projects", {
+      id: "project-1",
+      name: "New",
+      description: "",
+      url: "",
+    });
+
+    expect(next).toMatchObject({
+      adoProject: "New",
+      adoRepoName: "",
+      adoPipelineId: "",
+      adoPipelineName: "",
+    });
+  });
+
+  it("sets pipeline identity without changing selected project or repository", () => {
+    const next = applyAdoDiscoveryToProjectLinkInput({
+      adoProject: "Project",
+      adoRepoName: "Repo",
+      adoPipelineId: "",
+      adoPipelineName: "",
+    } as ProjectLink, "pipelines", {
+      id: "42",
+      name: "Repo CI",
+      description: "",
+      url: "",
+    });
+
+    expect(next).toMatchObject({
+      adoProject: "Project",
+      adoRepoName: "Repo",
+      adoPipelineId: "42",
+      adoPipelineName: "Repo CI",
+    });
+  });
+});
+
 describe("active Project Link persistence", () => {
-  it("stores the active Project Link under the shared and legacy chat keys", () => {
+  it("stores the active Project Link under the canonical key", () => {
     localStorage.clear();
 
-    saveStoredActiveProjectLinkId("profile-2");
+    saveStoredActiveProjectLinkId("project-link-2");
 
-    expect(localStorage.getItem(ACTIVE_PROJECT_LINK_LS_KEY)).toBe("profile-2");
-    expect(localStorage.getItem("chat_profile_id")).toBe("profile-2");
-    expect(loadStoredActiveProjectLinkId()).toBe("profile-2");
+    expect(localStorage.getItem(ACTIVE_PROJECT_LINK_LS_KEY)).toBe("project-link-2");
+    expect(loadStoredActiveProjectLinkId()).toBe("project-link-2");
   });
 
   it("resolves a persisted Project Link before falling back to the first link", () => {
     localStorage.clear();
-    saveStoredActiveProjectLinkId("profile-2");
+    saveStoredActiveProjectLinkId("project-link-2");
 
     const resolved = resolveActiveProjectLinkId([
-      { id: "profile-1", name: "PL 1" },
-      { id: "profile-2", name: "PL 2" },
-    ] as WorkspaceProfile[]);
+      { id: "project-link-1", name: "PL 1" },
+      { id: "project-link-2", name: "PL 2" },
+    ] as ProjectLink[]);
 
-    expect(resolved).toBe("profile-2");
+    expect(resolved).toBe("project-link-2");
   });
 });

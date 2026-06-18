@@ -9,8 +9,8 @@ architecture" section.
 ```mermaid
 flowchart TD
     subgraph LocalMachine[Developer machine]
-        DevCLI["dev-agent CLI / TUI (Node)"]
-        DevDaemon["Local Dev Agent daemon (Node, Fastify)"]
+        DevCLI["mergepilot CLI / TUI (Node)"]
+        DevDaemon["Local MergePilot daemon (Node, Fastify)"]
         LocalDB[("SQLite + sqlite-vec\nper-repo index + memory")]
         DevCLI -->|"HTTP + SSE"| DevDaemon
         DevDaemon --> LocalDB
@@ -45,11 +45,11 @@ flowchart TD
 sequenceDiagram
     participant Dev
     participant CLI
-    participant Daemon as Dev Agent daemon
+    participant Daemon as MergePilot daemon
     participant Idx as Indexer
     participant LLM as Azure AI Foundry
     participant ADO
-    Dev->>CLI: dev-agent submit-pipeline
+    Dev->>CLI: mergepilot submit-pipeline
     CLI->>Daemon: POST /tasks/submit-pipeline
     Daemon-->>CLI: { taskId }
     CLI->>Daemon: GET /tasks/{id}/events (SSE)

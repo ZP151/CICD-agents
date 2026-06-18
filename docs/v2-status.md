@@ -1,4 +1,4 @@
-# Dev Agent v2 - implementation status
+# MergePilot v2 - implementation status
 
 This document tracks which roadmap items are delivered as code in the
 repository vs. which still require **owner-driven** runtime actions
@@ -13,16 +13,16 @@ repository vs. which still require **owner-driven** runtime actions
 | 1 | Fastify daemon (parity routes + SSE) + commander CLI with auto-start | YES | --- |
 | 1 | Vitest port of the 18 Python tests | YES (core + cli + review-agent test/) | run `pnpm test` |
 | 1 | Tag Python tree as `python-poc-final`; freeze main | partial - [runtime/NOTICE.md](../runtime/NOTICE.md), CI exclusion in [ci.yml](../.github/workflows/ci.yml) | run `git tag python-poc-final && git push origin python-poc-final` |
-| 2 | ink TUI shell + init wizard + profile editor | YES - [packages/cli/src/tui/](../packages/cli/src/tui/) | --- |
-| 2 | `dev-agent ai` + `git_intent_translator` + dry-run + 3 canned scenarios | YES - [packages/core/src/tools/gitIntent.ts](../packages/core/src/tools/gitIntent.ts), [packages/cli/test/scenarios/canned.test.ts](../packages/cli/test/scenarios/canned.test.ts) | --- |
+| 2 | ink TUI shell + init wizard + template profile viewer | YES - [packages/cli/src/tui/](../packages/cli/src/tui/) | --- |
+| 2 | `mergepilot ai` + `git_intent_translator` + dry-run + 3 canned scenarios | YES - [packages/core/src/tools/gitIntent.ts](../packages/core/src/tools/gitIntent.ts), [packages/cli/test/scenarios/canned.test.ts](../packages/cli/test/scenarios/canned.test.ts) | --- |
 | 2 | SSE `/tasks/{id}/events`, streaming chat, fragmented tool_call assembler | YES - daemon route + [LLMClient.chatStream](../packages/core/src/llm.ts), `ToolCallAssembler` unit-tested | --- |
 | 3 | Review Agent service + ADO webhook (signature validation + idempotent queue) | YES - [packages/review-agent/](../packages/review-agent/) | provision Container App + push image |
 | 3 | Cloud-mode context + review planner + `ado.git.createThread` | YES - [cloudContext.ts](../packages/review-agent/src/cloudContext.ts), [reviewPlanner.ts](../packages/review-agent/src/reviewPlanner.ts), [reviewService.ts](../packages/review-agent/src/reviewService.ts) | --- |
-| 3 | Table Storage state + Key Vault secrets + `dev-agent review enable` | YES - [stateStore.ts](../packages/review-agent/src/stateStore.ts), [secrets.ts](../packages/review-agent/src/secrets.ts), [reviewEnable.ts](../packages/cli/src/reviewEnable.ts), [containerapp.bicep](../packages/review-agent/deploy/containerapp.bicep) | provision storage + Key Vault + register subscription |
+| 3 | Table Storage state + Key Vault secrets + `mergepilot review enable` | YES - [stateStore.ts](../packages/review-agent/src/stateStore.ts), [secrets.ts](../packages/review-agent/src/secrets.ts), [reviewEnable.ts](../packages/cli/src/reviewEnable.ts), [containerapp.bicep](../packages/review-agent/deploy/containerapp.bicep) | provision storage + Key Vault + register subscription |
 | 3 | Evaluation harness for 20-PR labelled set + App Insights cost emitters | YES - [evaluation.ts](../packages/review-agent/src/evaluation.ts), [telemetry.ts](../packages/core/src/telemetry.ts) | label 20 real PRs and run `eval/run.ts` |
 | 4 | Tauri + React + shadcn scaffold with SSE wiring | YES - [apps/desktop/](../apps/desktop/) | install Rust toolchain; produce signed installers (needs cert secrets) |
 | X | `.github/workflows/ci.yml` lint/test/build + Tauri matrix | YES - [.github/workflows/ci.yml](../.github/workflows/ci.yml) | add `TAURI_SIGNING_*` secrets to enable signed installers |
-| X | pino logs + App Insights wiring + per-task token/tool metrics + opt-in toggle | YES - [logger.ts](../packages/core/src/logger.ts), [telemetry.ts](../packages/core/src/telemetry.ts), `dev-agent settings --telemetry on` | provision Application Insights resource(s) |
+| X | pino logs + App Insights wiring + per-task token/tool metrics + opt-in toggle | YES - [logger.ts](../packages/core/src/logger.ts), [telemetry.ts](../packages/core/src/telemetry.ts), `mergepilot settings --telemetry on` | provision Application Insights resource(s) |
 
 ## Owner-driven follow-up checklist
 
@@ -34,5 +34,5 @@ repository vs. which still require **owner-driven** runtime actions
 5. Tag and push: `git tag python-poc-final && git push origin python-poc-final`
 6. Provision Azure resources per [packages/review-agent/deploy/README.md](../packages/review-agent/deploy/README.md)
 7. Push the review-agent image and deploy via the Bicep template
-8. Register PR webhooks with `dev-agent review enable ...`
+8. Register PR webhooks with `mergepilot review enable ...`
 9. Add CI secrets if/when you want signed installers from the desktop matrix

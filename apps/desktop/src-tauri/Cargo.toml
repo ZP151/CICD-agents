@@ -1,11 +1,11 @@
 [package]
-name = "cicd-agent-desktop"
+name = "mergepilot-desktop"
 version = "0.1.0"
 edition = "2021"
 description = "Tauri shell for MergePilot"
 
 [lib]
-name = "cicd_agent_desktop_lib"
+name = "mergepilot_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -23,5 +23,5 @@ log = "0.4"
 custom-protocol = ["tauri/custom-protocol"]
 
 [package.metadata.bundle]
-identifier = "com.cicdagent.desktop"
+identifier = "com.mergepilot.desktop"
 icon = ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"]

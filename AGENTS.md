@@ -1,4 +1,4 @@
-# CI/CD Agent Workspace Rules
+# MergePilot Workspace Rules
 
 ## Project Toolchain
 
@@ -6,15 +6,15 @@
 - Preferred Windows runner:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/checkpointHandoff.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/checkpointHandoff.test.ts
 ```
 
 - If invoking tools manually, prepend the local tool paths first:
 
 ```powershell
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
 ```
 
 ## Sandbox And Approval Policy
@@ -34,10 +34,10 @@ $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 ## Verification Command Examples
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
 ```

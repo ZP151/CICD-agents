@@ -5,7 +5,7 @@ export type PrInsightArtifactKind = "insight_preview" | "review_run";
 
 export interface PrInsightArtifactRecord {
   id: string;
-  profileId: string;
+  projectLinkId: string;
   repository: string;
   pullRequestId: number;
   title: string;
@@ -81,10 +81,10 @@ export function prInsightArtifactsStorePath(dataDir: string): string {
 }
 
 function artifactId(
-  input: Pick<PrInsightArtifactRecord, "profileId" | "repository" | "pullRequestId" | "kind">,
+  input: Pick<PrInsightArtifactRecord, "projectLinkId" | "repository" | "pullRequestId" | "kind">,
   at: string,
 ): string {
-  return `${input.profileId}/${input.repository}/${input.pullRequestId}/${input.kind}/${encodeURIComponent(at)}`;
+  return `${input.projectLinkId ?? ""}/${input.repository}/${input.pullRequestId}/${input.kind}/${encodeURIComponent(at)}`;
 }
 
 function loadStore(dataDir: string): PrInsightArtifactStore {
@@ -106,15 +106,18 @@ function saveStore(dataDir: string, store: PrInsightArtifactStore): void {
 
 export function upsertLocalPrInsightArtifact(
   dataDir: string,
-  artifact: Omit<PrInsightArtifactRecord, "id" | "at"> & {
+  artifact: Omit<PrInsightArtifactRecord, "id" | "at" | "projectLinkId"> & {
+    projectLinkId?: string;
     id?: string;
     at?: string;
   },
 ): PrInsightArtifactRecord {
   const at = artifact.at ?? new Date().toISOString();
+  const projectLinkId = artifact.projectLinkId ?? "";
   const saved: PrInsightArtifactRecord = {
     ...artifact,
-    id: artifact.id ?? artifactId(artifact, at),
+    projectLinkId,
+    id: artifact.id ?? artifactId({ ...artifact, projectLinkId }, at),
     at,
   };
   const next = [saved, ...loadStore(dataDir).filter((item) => item.id !== saved.id)]
@@ -125,15 +128,15 @@ export function upsertLocalPrInsightArtifact(
 
 export function listLocalPrInsightArtifacts(args: {
   dataDir: string;
-  profileId?: string;
+  projectLinkId?: string;
   repository?: string;
   pullRequestId?: number;
   limit?: number;
 }): PrInsightArtifactRecord[] {
-  const profileId = args.profileId?.trim() ?? "";
+  const projectLinkId = args.projectLinkId?.trim() ?? "";
   const repository = args.repository?.trim() ?? "";
   const events = loadStore(args.dataDir)
-    .filter((artifact) => !profileId || artifact.profileId === profileId)
+    .filter((artifact) => !projectLinkId || artifactProjectLinkId(artifact) === projectLinkId)
     .filter((artifact) => !repository || artifact.repository === repository)
     .filter((artifact) => args.pullRequestId === undefined || artifact.pullRequestId === args.pullRequestId)
     .sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"));
@@ -143,15 +146,15 @@ export function listLocalPrInsightArtifacts(args: {
 
 export function getLocalPrInsightArtifact(args: {
   dataDir: string;
-  profileId?: string;
+  projectLinkId?: string;
   artifactId: string;
 }): PrInsightArtifactRecord | null {
   const artifactId = args.artifactId.trim();
   if (!artifactId) return null;
-  const profileId = args.profileId?.trim() ?? "";
+  const projectLinkId = args.projectLinkId?.trim() ?? "";
   return loadStore(args.dataDir).find((artifact) => (
     artifact.id === artifactId &&
-    (!profileId || artifact.profileId === profileId)
+    (!projectLinkId || artifactProjectLinkId(artifact) === projectLinkId)
   )) ?? null;
 }
 
@@ -160,7 +163,7 @@ export function summarizePrInsightArtifactHistory(
 ): PrInsightArtifactHistoryMeta[] {
   const groups = new Map<string, PrInsightArtifactRecord[]>();
   for (const artifact of artifacts) {
-    const key = `${artifact.profileId}/${artifact.repository}/${artifact.pullRequestId}/${artifact.kind}`;
+    const key = `${artifactProjectLinkId(artifact)}/${artifact.repository}/${artifact.pullRequestId}/${artifact.kind}`;
     groups.set(key, [...(groups.get(key) ?? []), artifact]);
   }
   const summary: PrInsightArtifactHistoryMeta[] = [];
@@ -176,4 +179,8 @@ export function summarizePrInsightArtifactHistory(
     });
   }
   return summary.sort((a, b) => a.artifactId.localeCompare(b.artifactId));
+}
+
+function artifactProjectLinkId(artifact: PrInsightArtifactRecord): string {
+  return artifact.projectLinkId || "";
 }

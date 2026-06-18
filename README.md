@@ -1,8 +1,8 @@
-# CI/CD Dev Agent Architecture
+# CI/CD MergePilot Architecture
 
 > Status: `v0.5.3` in active development.
 
-CI/CD Dev Agent is a local-first developer agent for repository, pull request,
+CI/CD MergePilot is a local-first developer agent for repository, pull request,
 and Azure DevOps workflows. The current product is built around a desktop chat
 client, a local daemon, shared agent/tooling packages, and source-first reuse of
 mature upstream agent infrastructure.
@@ -31,7 +31,7 @@ frozen. Current development lives in `packages/`, `apps/desktop/`, `docs/`, and
 |                        |
 | - Chat sessions        |
 | - Approval state       |
-| - Profile persistence  |
+| - Project Link persistence |
 | - Workflow events      |
 +-----------+------------+
             |
@@ -65,7 +65,7 @@ frozen. Current development lives in `packages/`, `apps/desktop/`, `docs/`, and
 | Component | Path | Responsibility |
 | --- | --- | --- |
 | Desktop app | `apps/desktop/` | Tauri shell, chat UI, Project Link setup, PR workspace, review queue, settings. |
-| Daemon | `packages/daemon/` | Local HTTP/SSE API, chat session lifecycle, approval cards, event compatibility, profile and cloud store routing. |
+| Daemon | `packages/daemon/` | Local HTTP/SSE API, chat session lifecycle, approval cards, event compatibility, Project Link and cloud store routing. |
 | Core | `packages/core/` | Planner, tool executor, tool risk policy, Git/build/test tools, Azure DevOps tools, MCP stdio bridge, Project Link model. |
 | Review Agent | `packages/review-agent/` | PR review context, finding generation, decision routing for review queue and auto-approval. |
 | CLI | `packages/cli/` | Thin command-line entry points for daemon and developer workflows. |
@@ -85,8 +85,9 @@ connects a local repository to its DevOps context:
 - optional PAT
 - optional Azure DevOps MCP bridge settings
 
-The internal TypeScript/API name `WorkspaceProfile` is still kept for
-compatibility with existing routes and storage.
+The canonical TypeScript/API name is `ProjectLink`. Legacy `/profiles`,
+`profileId`, and `WorkspaceProfile` references are compatibility boundaries
+for existing routes, stored chat sessions, and artifacts only.
 
 ## Safety And Approval Flow
 
@@ -152,9 +153,9 @@ Reuse tracking is maintained in `docs/third-party-source-reuse.md`.
 ```text
 Desktop localStorage
     |
-    | inline settings/profile data for current chat
+    | inline Project Link data for current chat
     v
-Daemon profile store
+Daemon Project Link store
     |
     +--> local JSON store under daemon data dir
     |
@@ -183,9 +184,9 @@ Use the repository-local Node.js and pnpm when running tests, typechecks, and
 builds. On Windows, prefer the wrapper script:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/checkpointHandoff.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/checkpointHandoff.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
 ```
 
 The wrapper prepends `.tools\node-v22.11.0-win-x64` and `.tools` to `PATH`, then
@@ -200,7 +201,7 @@ not the Node.js runtime.
 ## Further Architecture Documents
 
 - `docs/architecture.md`
-- `docs/dev-agent-product-roadmap-and-reuse-plan.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-product-roadmap-and-reuse-plan.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 - `docs/adr/`

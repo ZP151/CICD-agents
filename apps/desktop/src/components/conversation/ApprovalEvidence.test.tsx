@@ -15,13 +15,13 @@ describe("ApprovalEvidence", () => {
         workflow={{
           kind: "commit",
           phase: "stage",
-          branch: "feature/cicd-agent",
+          branch: "feature/mergepilot",
           pushAfterCommit: true,
         }}
       />,
     );
 
-    expect(html).toContain("Action scope");
+    expect(html).toContain("Scope and checks");
     expect(html).toContain("git add --dry-run --");
     expect(html).toContain("BotToSharePoint/Common/CommonFunctions.cs");
     expect(html).toContain("Flags");
@@ -34,26 +34,26 @@ describe("ApprovalEvidence", () => {
     const html = renderToStaticMarkup(
       <ApprovalEvidence
         toolName="git_push"
-        args={{ branch: "feature/cicd-agent", setUpstream: true }}
+        args={{ branch: "feature/mergepilot", setUpstream: true }}
         workflow={{
           kind: "commit",
           phase: "push",
-          branch: "feature/cicd-agent",
+          branch: "feature/mergepilot",
           pushAfterCommit: true,
         }}
         readiness={{
           kind: "push",
           status: "ahead",
-          upstream: "origin/feature/cicd-agent",
+          upstream: "origin/feature/mergepilot",
           ahead: 1,
           behind: 0,
-          summary: "Branch is ahead of origin/feature/cicd-agent by 1 commit.",
+          summary: "Branch is ahead of origin/feature/mergepilot by 1 commit.",
         }}
       />,
     );
 
-    expect(html).toContain("git push -u origin feature/cicd-agent");
-    expect(html).toContain("Branch is ahead of origin/feature/cicd-agent by 1 commit.");
+    expect(html).toContain("git push -u origin feature/mergepilot");
+    expect(html).toContain("Branch is ahead of origin/feature/mergepilot by 1 commit.");
     expect(html).toContain("This workflow ends after push");
     expect(html).toContain("PR creation");
   });
@@ -63,25 +63,25 @@ describe("ApprovalEvidence", () => {
       <ApprovalEvidence
         toolName="ado_create_pr"
         args={{
-          source_branch: "feature/cicd-agent",
+          source_branch: "feature/mergepilot",
           target_branch: "main",
           title: "Update agent workflow",
         }}
-        workflow={{ kind: "pr", phase: "create", branch: "feature/cicd-agent" }}
+        workflow={{ kind: "pr", phase: "create", branch: "feature/mergepilot" }}
         preflight={{
           kind: "pr",
           status: "ready",
-          sourceBranch: "feature/cicd-agent",
+          sourceBranch: "feature/mergepilot",
           targetBranch: "main",
           repository: "ClaimBot_API",
           project: "TeBS-ClaimBot",
           title: "Update agent workflow",
-          summary: "Ready to create a pull request from feature/cicd-agent to main.",
+          summary: "Ready to create a pull request from feature/mergepilot to main.",
         }}
       />,
     );
 
-    expect(html).toContain("ado_create_pr source=feature/cicd-agent target=main");
+    expect(html).toContain("ado_create_pr source=feature/mergepilot target=main");
     expect(html).toContain("Update agent workflow");
     expect(html).toContain("Ready to create a pull request");
     expect(html).toContain("pull-request workflow");

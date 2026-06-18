@@ -28,7 +28,7 @@ function getRustTargetTriple() {
 
 const triple = getRustTargetTriple();
 const ext = process.platform === "win32" ? ".exe" : "";
-const sidecarPath = resolve(binariesDir, `cicd-daemon-${triple}${ext}`);
+const sidecarPath = resolve(binariesDir, `mergepilot-daemon-${triple}${ext}`);
 
 if (existsSync(sidecarPath)) {
   console.log(`[ensure-sidecar] Binary already exists: ${sidecarPath}`);

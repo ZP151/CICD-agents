@@ -1,15 +1,15 @@
-# Dev Agent Product Roadmap And Reuse Plan
+# MergePilot Product Roadmap And Reuse Plan
 
 ## Purpose
 
-This document describes how the current Dev Agent should evolve into the
+This document describes how the current MergePilot should evolve into the
 ideal product: a local-first CI/CD agent desktop runtime that understands a
 repository, reasons about Git and Azure DevOps state, executes approved
 developer workflows, reviews pull requests, analyzes pipeline failures, and
 keeps an auditable activity trail.
 
 Progress is tracked separately in
-[`dev-agent-progress-tracker.md`](dev-agent-progress-tracker.md). Update that
+[`mergepilot-progress-tracker.md`](mergepilot-progress-tracker.md). Update that
 tracker after every meaningful development session.
 
 Third-party source reuse is tracked in
@@ -23,7 +23,7 @@ workflow patterns.
 
 ## Target Product Definition
 
-The final product should be a local-first CI/CD Agent Harness:
+The final product should be a local-first MergePilot Harness:
 
 ```text
 Tauri Desktop App
@@ -232,7 +232,7 @@ Required improvement:
 
 - Avoid hand-writing every ADO capability.
 - Add MCP support and integrate Azure DevOps MCP where possible.
-- Load only selected domains per profile to avoid tool overload.
+- Load only selected domains per Project Link to avoid tool overload.
 - Keep local approval and audit controls in front of ADO tools.
 - Continue using custom ADO logic only where the product needs specialized
   behavior, such as PR readiness and Review Queue decisions.
@@ -453,7 +453,7 @@ When porting logic from Python/Rust/Go to TypeScript:
 | Runtime mismatch creates packaging burden | Prefer external process or port over embedding |
 | Copied code becomes unupgradeable | Preserve upstream commit SHA and isolate local patches |
 | Large upstream architecture overwhelms this product | Reuse modules, not whole platforms |
-| MCP tool exposes too much power | Enable domains per profile and require approval for write tools |
+| MCP tool exposes too much power | Enable domains per Project Link and require approval for write tools |
 | PR review logic becomes too platform-specific | Keep a platform adapter boundary around ADO/GitHub/GitLab logic |
 | Fork drifts from upstream | Schedule periodic upstream sync and regression tests |
 
@@ -798,7 +798,7 @@ Work items:
 - Add MCP client support to the daemon.
 - Add profile-level MCP server configuration.
 - Integrate Azure DevOps MCP.
-- Enable ADO domains per profile:
+- Enable ADO domains per Project Link:
   - `core`
   - `repositories`
   - `work-items`

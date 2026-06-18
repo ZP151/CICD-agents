@@ -9,8 +9,8 @@ export {
   scoreReviewFilePriority,
   summarizeContextCoverage,
   REVIEW_SYSTEM_PROMPT,
-} from "./reviewPlanner.js";
-export { decideReviewOutcome, DEFAULT_AUTO_APPROVAL_POLICY } from "./reviewDecision.js";
+} from "@mergepilot/core";
+export { decideReviewOutcome, DEFAULT_AUTO_APPROVAL_POLICY } from "@mergepilot/core";
 export type {
   ReviewCompressionSummary,
   ReviewContextCoverage,
@@ -18,12 +18,12 @@ export type {
   ReviewFinding,
   ReviewMetadata,
   ReviewResult,
-} from "./reviewPlanner.js";
-export type { AutoApprovalPolicy, ReviewDecision } from "./reviewDecision.js";
-export { buildCloudContext } from "./cloudContext.js";
-export type { CloudContextBundle, CloudChangedFile, CloudPullRequestSignals } from "./cloudContext.js";
-export { AdoClient, COMMENT_TYPE_TEXT, THREAD_STATUS_ACTIVE } from "./adoClient.js";
-export type { ReviewThreadPayload } from "./adoClient.js";
+} from "@mergepilot/core";
+export type { AutoApprovalPolicy, ReviewDecision } from "@mergepilot/core";
+export { buildCloudContext } from "@mergepilot/core";
+export type { CloudContextBundle, CloudChangedFile, CloudPullRequestSignals } from "@mergepilot/core";
+export { AdoClient, COMMENT_TYPE_TEXT, THREAD_STATUS_ACTIVE } from "@mergepilot/core";
+export type { ReviewThreadPayload } from "@mergepilot/core";
 export { AdoPrEventSchema, eventKey } from "./webhook.js";
 export type { AdoPrEvent } from "./webhook.js";
 export { verifyBasicSecret, verifyHmacSha256 } from "./signature.js";
@@ -33,8 +33,8 @@ export {
   TableStateStore,
   FileStateStore,
   InMemoryStateStore,
-} from "./stateStore.js";
-export type { StateStore, ReviewHistoryRow, ConventionRow } from "./stateStore.js";
+} from "@mergepilot/core";
+export type { StateStore, ReviewHistoryRow, ConventionRow } from "@mergepilot/core";
 export { KeyVaultSecretProvider, EnvSecretProvider, defaultSecretProvider } from "./secrets.js";
 export type { SecretProvider } from "./secrets.js";
 export { loadConfig } from "./config.js";

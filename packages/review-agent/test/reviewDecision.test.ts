@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decideReviewOutcome, DEFAULT_AUTO_APPROVAL_POLICY } from "../src/reviewDecision.js";
+import { decideReviewOutcome, DEFAULT_AUTO_APPROVAL_POLICY } from "@mergepilot/core";
 
 const policy = {
   ...DEFAULT_AUTO_APPROVAL_POLICY,

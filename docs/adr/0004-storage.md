@@ -7,7 +7,7 @@
 
 Two surfaces persist state:
 
-- The local Dev Agent: per-repo code index (files, symbols, imports,
+- The local MergePilot: per-repo code index (files, symbols, imports,
   chunks, embeddings), memory tables (PR history, conventions,
   reviewer_map, known_flaky_tests), and the task queue.
 - The cloud Review Agent: review history (PR id -> last reviewed

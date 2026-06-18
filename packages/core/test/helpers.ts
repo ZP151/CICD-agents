@@ -21,7 +21,7 @@ function git(cwd: string, ...args: string[]): void {
 }
 
 export function makeFixtureRepo(): TempEnv {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-agent-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mergepilot-"));
   const dataDir = path.join(root, "data");
   fs.mkdirSync(dataDir, { recursive: true });
   process.env.RUNTIME_DATA_DIR = dataDir;

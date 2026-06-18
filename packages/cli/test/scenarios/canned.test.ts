@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { translateIntent } from "@cicd-agent/core";
+import { translateIntent } from "@mergepilot/core";
 
 describe("AI git intent - canned scenarios", () => {
   it("scenario 1: create a branch and PR for work item 1234", () => {

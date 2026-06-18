@@ -1,6 +1,6 @@
 {
-  "name": "cicd-agent-monorepo",
-  "version": "0.5.7",
+  "name": "mergepilot-monorepo",
+  "version": "0.5.8",
   "private": true,
   "packageManager": "pnpm@9.0.0",
   "engines": {
@@ -13,8 +13,8 @@
     "lint": "pnpm -r --filter=./packages/* run lint",
     "typecheck": "pnpm -r --filter=./packages/* run typecheck",
     "tui": "tsx packages/cli/src/bin.ts tui",
-    "dev:daemon": "pnpm --filter @cicd-agent/daemon run dev",
-    "dev:cli": "pnpm --filter @cicd-agent/cli run dev",
+    "dev:daemon": "pnpm --filter @mergepilot/daemon run dev",
+    "dev:cli": "pnpm --filter @mergepilot/cli run dev",
     "e2e:chat": "playwright test tests/e2e/chat-layout.spec.ts",
     "format": "prettier --write \"packages/**/*.{ts,tsx,js,json,md}\"",
     "format:check": "prettier --check \"packages/**/*.{ts,tsx,js,json,md}\""

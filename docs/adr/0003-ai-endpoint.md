@@ -23,7 +23,7 @@ backend.
   `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`), never hard-coded.
 - API version pinned in `.env.example` and the daemon refuses to start if
   the env var is missing.
-- Local Dev Agent authenticates with the user's API key (env or OS
+- Local MergePilot authenticates with the user's API key (env or OS
   keyring).
 - Review Agent authenticates with a managed-identity-protected client
   secret pulled from Key Vault.

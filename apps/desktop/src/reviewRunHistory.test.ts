@@ -184,7 +184,7 @@ describe("applyReviewRunToQueueItem", () => {
       lastIterationId: 4,
       findingCount: 2,
       lastRunAt: "2026-06-11T00:05:00.000Z",
-      sourceCommit: "",
+      sourceCommit: "abc123",
       decisionQueue: "needs_human_review",
       decisionRiskLevel: "medium",
       decisionReason: "Review Agent found warnings.",

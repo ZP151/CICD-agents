@@ -13,7 +13,7 @@ hosted on Azure Container Apps.
 - A service principal (SPN) for the agent to call Azure DevOps:
   - permissions: `vso.code` (read), `vso.code_status`, `vso.threads_full`,
     `vso.serviceendpoint_query`.
-- A PAT on your local machine (for `dev-agent review enable`).
+- A PAT on your local machine (for `mergepilot review enable`).
 
 ## Required Key Vault secrets
 
@@ -31,8 +31,8 @@ Container App must be configured to use the identity for secret resolution
 
 ```bash
 # from the repo root
-docker build -f packages/review-agent/Dockerfile -t <registry>/cicd-agent/review-agent:<tag> .
-docker push <registry>/cicd-agent/review-agent:<tag>
+docker build -f packages/review-agent/Dockerfile -t <registry>/mergepilot/review-agent:<tag> .
+docker push <registry>/mergepilot/review-agent:<tag>
 ```
 
 ## Deploy
@@ -42,7 +42,7 @@ az deployment group create \
   -g <rg> \
   -f packages/review-agent/deploy/containerapp.bicep \
   -p name=<prefix> \
-      image=<registry>/cicd-agent/review-agent:<tag> \
+      image=<registry>/mergepilot/review-agent:<tag> \
       azureOpenAiEndpoint=https://<aoai>.openai.azure.com/ \
       azureDevOpsOrg=<org> \
       keyVaultName=<kv> \
@@ -51,14 +51,14 @@ az deployment group create \
       appInsightsConnectionString=<conn-string>
 ```
 
-The output value `fqdn` is the URL you pass to `dev-agent review enable
+The output value `fqdn` is the URL you pass to `mergepilot review enable
 --url https://<fqdn>`.
 
 ## Register the webhook from your laptop
 
 ```bash
-dev-agent configure-pat                  # one-time
-dev-agent review enable \
+mergepilot configure-pat                  # one-time
+mergepilot review enable \
   --project <project> \
   --repository <repo-uuid> \
   --url https://<fqdn> \
@@ -84,4 +84,4 @@ during business hours.
   identity, Key Vault, storage account, and the SPN itself.
 - Push the first image and update the bicep with the registry URL.
 - Configure ADO with the SPN's tenant.
-- Run `dev-agent review enable` once per repository.
+- Run `mergepilot review enable` once per repository.

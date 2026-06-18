@@ -1,28 +1,31 @@
 import { Command } from "commander";
 import chalk from "chalk";
-import { ensureRunning, RuntimeClient, RuntimeUnavailableError } from "./runtimeClient.js";
-import { getSettings, translateIntent, type IntentPlan } from "@cicd-agent/core";
-import { detectRepoKind, suggestProfileFor, writeProfileFile } from "./init.js";
+import { getSettings, translateIntent, type IntentPlan } from "@mergepilot/core";
+import {
+  detectRepoKind,
+  suggestProjectTemplateFor,
+  writeProjectLinkFile,
+} from "./init.js";
 import { enableReview } from "./reviewEnable.js";
-
-const PAT_KEYRING_SERVICE = "cicd-agent";
-const PAT_KEYRING_USER = "azure-devops-pat";
-
-async function client(): Promise<RuntimeClient> {
-  const url = await ensureRunning();
-  return new RuntimeClient(url);
-}
+import { buildSubmitPipelinePayload } from "./submitPipelinePayload.js";
+import { createRuntimeClient } from "./cliRuntime.js";
+import { registerAuthCommands } from "./authCommands.js";
+import { registerConfigurePatCommand } from "./patCommand.js";
+import { registerSettingsCommand } from "./settingsCommand.js";
+import { registerSetupGlobalCommand } from "./setupGlobalCommand.js";
+import { renderSteps, streamTask } from "./taskOutput.js";
+import { RuntimeClient, RuntimeUnavailableError } from "./runtimeClient.js";
 
 export function createProgram(): Command {
   const program = new Command();
-  program.name("dev-agent").description("Local Agent Runtime for CI/CD (entrance only).");
+  program.name("mergepilot").description("Local Agent Runtime for CI/CD (entrance only).");
 
   program
     .command("healthz")
     .description("Print runtime health (auto-starts the runtime).")
     .action(async () => {
       try {
-        const c = await client();
+        const c = await createRuntimeClient();
         const data = await c.healthz();
         // eslint-disable-next-line no-console
         console.log(JSON.stringify(data, null, 2));
@@ -40,7 +43,7 @@ export function createProgram(): Command {
     .command("submit-pipeline")
     .description("Submit a pipeline task and (by default) wait for completion.")
     .option("-r, --repo <path>", "path to the local git repo", process.cwd())
-    .option("-p, --profile <name>", "profile name", "default")
+    .option("--project-template <name>", "YAML project template name")
     .option("-t, --target-branch <name>", "target branch")
     .option("-w, --work-item <id>", "Azure DevOps work item id")
     .option("--title <title>", "PR title")
@@ -49,17 +52,17 @@ export function createProgram(): Command {
     .option("--trigger-pipeline", "queue the ADO pipeline after PR creation", false)
     .option("--no-wait", "do not wait for completion")
     .action(async (opts: Record<string, unknown>) => {
-      const payload = {
-        repoPath: String(opts["repo"]),
-        profile: String(opts["profile"]),
-        targetBranch: opts["targetBranch"] ?? null,
-        workItem: opts["workItem"] ?? null,
-        title: opts["title"] ?? null,
-        draft: Boolean(opts["draft"]),
+      const payload = buildSubmitPipelinePayload({
+        repoPath: opts["repo"],
+        projectTemplate: opts["projectTemplate"],
+        targetBranch: opts["targetBranch"],
+        workItem: opts["workItem"],
+        title: opts["title"],
+        draft: opts["draft"],
         autoCreatePr: opts["pr"] !== false,
-        triggerPipeline: Boolean(opts["triggerPipeline"]),
-      };
-      const c = await client();
+        triggerPipeline: opts["triggerPipeline"],
+      });
+      const c = await createRuntimeClient();
       const resp = await c.submitPipeline(payload);
       // eslint-disable-next-line no-console
       console.log(`submitted ${chalk.bold(resp.taskId)} (status=${resp.status})`);
@@ -71,7 +74,7 @@ export function createProgram(): Command {
     .command("status <taskId>")
     .description("Show task status as JSON.")
     .action(async (taskId: string) => {
-      const c = await client();
+      const c = await createRuntimeClient();
       const view = await c.getTask(taskId);
       // eslint-disable-next-line no-console
       console.log(JSON.stringify(view, null, 2));
@@ -82,7 +85,7 @@ export function createProgram(): Command {
     .description("Print task steps. With --tail, follow until terminal status.")
     .option("--tail", "follow the live stream", false)
     .action(async (taskId: string, opts: Record<string, unknown>) => {
-      const c = await client();
+      const c = await createRuntimeClient();
       if (opts["tail"]) {
         await streamTask(c, taskId);
       } else {
@@ -112,16 +115,13 @@ export function createProgram(): Command {
   program
     .command("tui")
     .description("Launch the multi-panel terminal UI.")
-    .option("--view <name>", "initial view (feed|profiles|init)", "feed")
+    .option("--view <name>", "initial view (feed|submit|templates|init)", "feed")
     .action(async (opts: Record<string, unknown>) => {
-      const url = await ensureRunning();
-      const client = new RuntimeClient(url);
+      const c = await createRuntimeClient();
       const { render } = await import("ink");
       const { App } = await import("./tui/App.js");
       const React = (await import("react")).default;
-      render(
-        React.createElement(App, { client, initialView: String(opts["view"] ?? "feed") }),
-      );
+      render(React.createElement(App, { client: c, initialView: String(opts["view"] ?? "feed") }));
     });
 
   program
@@ -132,8 +132,7 @@ export function createProgram(): Command {
     .option("--json", "emit the plan as JSON", false)
     .option("--yes", "execute the plan instead of just printing it (work in progress)", false)
     .action(async (intent: string[], opts: Record<string, unknown>) => {
-      const text = intent.join(" ");
-      const plan = translateIntent(text);
+      const plan = translateIntent(intent.join(" "));
       if (opts["json"]) {
         // eslint-disable-next-line no-console
         console.log(JSON.stringify(plan, null, 2));
@@ -152,9 +151,9 @@ export function createProgram(): Command {
 
   program
     .command("init")
-    .description("Detect the repo type and write .cicd-agent/profile.yaml.")
+    .description("Detect the repo type and write .mergepilot/project-link.yaml.")
     .option("-r, --repo <path>", "path to the local git repo", process.cwd())
-    .option("-p, --profile <name>", "override the detected profile")
+    .option("--project-template <name>", "override the detected YAML project template")
     .option("--organization <name>", "Azure DevOps organization")
     .option("--project <name>", "Azure DevOps project")
     .option("--repository <name>", "Azure DevOps repository")
@@ -162,10 +161,12 @@ export function createProgram(): Command {
     .action(async (opts: Record<string, unknown>) => {
       const repoPath = String(opts["repo"]);
       const kind = detectRepoKind(repoPath);
-      const profile = String(opts["profile"] ?? suggestProfileFor(kind));
-      const result = writeProfileFile({
+      const projectTemplate = String(
+        opts["projectTemplate"] ?? suggestProjectTemplateFor(kind),
+      );
+      const result = writeProjectLinkFile({
         repoPath,
-        profile,
+        projectTemplate,
         organization: opts["organization"] as string | undefined,
         project: opts["project"] as string | undefined,
         repository: opts["repository"] as string | undefined,
@@ -196,9 +197,7 @@ export function createProgram(): Command {
           webhookPassword: String(opts["password"]),
         });
         // eslint-disable-next-line no-console
-        console.log(
-          chalk.green(`registered ${subs.length} subscription(s):`),
-        );
+        console.log(chalk.green(`registered ${subs.length} subscription(s):`));
         for (const s of subs) {
           // eslint-disable-next-line no-console
           console.log(`  ${s.eventType}  id=${s.id}`);
@@ -210,253 +209,12 @@ export function createProgram(): Command {
       }
     });
 
-  program
-    .command("settings")
-    .description("Inspect or toggle local settings (telemetry, etc).")
-    .option("--telemetry <on|off>", "enable or disable App Insights metrics")
-    .action(async (opts: Record<string, unknown>) => {
-      const fs = await import("node:fs");
-      const path = await import("node:path");
-      const settings = getSettings();
-      const file = path.join(settings.dataDir, "settings.json");
-      let saved: Record<string, unknown> = {};
-      if (fs.existsSync(file)) {
-        try {
-          saved = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
-        } catch {
-          saved = {};
-        }
-      }
-      const tel = opts["telemetry"];
-      if (tel === "on" || tel === "off") {
-        saved["telemetryEnabled"] = tel === "on";
-        fs.writeFileSync(file, JSON.stringify(saved, null, 2), "utf8");
-        // eslint-disable-next-line no-console
-        console.log(chalk.green(`telemetry: ${tel}`));
-        // eslint-disable-next-line no-console
-        console.log(`Set TELEMETRY_ENABLED=${tel === "on" ? "1" : "0"} in your environment to apply at startup.`);
-        return;
-      }
-      // eslint-disable-next-line no-console
-      console.log(JSON.stringify({ file, saved, runtime: settings }, null, 2));
-    });
-
-  program
-    .command("setup-global")
-    .description(
-      "Write a global dev-agent wrapper to ~/.cicd-agent/bin so it can be invoked from any directory.",
-    )
-    .option("--uninstall", "remove the global wrapper instead of creating it", false)
-    .action(async (opts: Record<string, unknown>) => {
-      const fs = await import("node:fs");
-      const path = await import("node:path");
-      const os = await import("node:os");
-
-      const binDir = path.join(os.homedir(), ".cicd-agent", "bin");
-      const batPath = path.join(binDir, "dev-agent.bat");
-      const ps1Path = path.join(binDir, "dev-agent.ps1");
-
-      if (opts["uninstall"]) {
-        [batPath, ps1Path].forEach((f) => {
-          if (fs.existsSync(f)) fs.unlinkSync(f);
-        });
-        // eslint-disable-next-line no-console
-        console.log(chalk.green("Removed global dev-agent wrappers."));
-        // eslint-disable-next-line no-console
-        console.log(chalk.dim(`You can also remove ${binDir} from your PATH.`));
-        return;
-      }
-
-      // Resolve the absolute path to the tsx entry point in this package
-      const repoRoot = findGlobalRepoRoot();
-      const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx.cmd");
-      const entry = path.join(repoRoot, "packages", "cli", "src", "bin.ts");
-
-      // Check for the compiled dist as a better option
-      const distBin = path.join(repoRoot, "packages", "cli", "dist", "bin.js");
-      const useNode = fs.existsSync(distBin);
-      const runner = useNode ? "node" : tsxBin;
-      const script = useNode ? distBin : entry;
-
-      fs.mkdirSync(binDir, { recursive: true });
-
-      // Windows CMD batch wrapper
-      fs.writeFileSync(
-        batPath,
-        `@echo off\r\n"${runner}" "${script}" %*\r\n`,
-        "utf8",
-      );
-
-      // PowerShell wrapper
-      fs.writeFileSync(
-        ps1Path,
-        `& "${runner}" "${script}" @args\r\n`,
-        "utf8",
-      );
-
-      // eslint-disable-next-line no-console
-      console.log(chalk.green("Global dev-agent wrapper written."));
-      // eslint-disable-next-line no-console
-      console.log(chalk.bold("\nTo finish setup, add this directory to your PATH:"));
-      // eslint-disable-next-line no-console
-      console.log(chalk.cyan(`  ${binDir}`));
-      // eslint-disable-next-line no-console
-      console.log(chalk.dim("\nPowerShell (run once):"));
-      // eslint-disable-next-line no-console
-      console.log(
-        chalk.dim(
-          `  [Environment]::SetEnvironmentVariable('PATH', $env:PATH + ';${binDir}', 'User')`,
-        ),
-      );
-      // eslint-disable-next-line no-console
-      console.log(chalk.dim("\nThen open a new terminal and run: dev-agent healthz"));
-    });
-
-  // ── auth subcommand ───────────────────────────────────────────────────────────
-  const auth = program.command("auth").description("Azure account management.");
-
-  auth
-    .command("login")
-    .description("Sign in with Microsoft (opens browser via az login).")
-    .action(async () => {
-      const c = await client();
-      const baseUrl = c.baseUrl;
-      const { default: EventSource } = await import("eventsource");
-      const url = `${baseUrl}/auth/login`;
-
-      console.log(chalk.dim("Opening browser for Microsoft sign-in…\n"));
-
-      await new Promise<void>((resolve) => {
-        // POST via fetch-then-EventSource pattern: daemon streams SSE from az login
-        const controller = new AbortController();
-
-        fetch(url, { method: "POST", signal: controller.signal })
-          .then(async (r) => {
-            if (!r.ok || !r.body) {
-              console.error(chalk.red(`Login request failed: HTTP ${r.status}`));
-              resolve();
-              return;
-            }
-            const reader = r.body.getReader();
-            const dec = new TextDecoder();
-            let buf = "";
-            let currentEvent = "output";
-
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              buf += dec.decode(value, { stream: true });
-              const lines = buf.split("\n");
-              buf = lines.pop() ?? "";
-              for (const line of lines) {
-                if (line.startsWith("event: ")) { currentEvent = line.slice(7).trim(); }
-                else if (line.startsWith("data: ")) {
-                  try {
-                    const d = JSON.parse(line.slice(6)) as Record<string, unknown>;
-                    if (currentEvent === "output" && d["line"]) {
-                      console.log(chalk.dim(String(d["line"])));
-                    } else if (currentEvent === "status") {
-                      console.log(chalk.cyan(String(d["message"] ?? "")));
-                    } else if (currentEvent === "done") {
-                      if (d["authenticated"]) {
-                        console.log();
-                        console.log(chalk.green("Signed in successfully."));
-                        console.log(`  ${chalk.bold("Name:")} ${d["name"] ?? "-"}`);
-                        console.log(`  ${chalk.bold("Email:")} ${d["upn"] ?? "-"}`);
-                        console.log(`  ${chalk.bold("OID:")} ${d["oid"] ?? "-"}`);
-                      } else {
-                        console.log(chalk.red("Sign-in did not complete."));
-                      }
-                    } else if (currentEvent === "error") {
-                      console.error(chalk.red(String(d["message"] ?? "Login error")));
-                    }
-                  } catch { /* ignore */ }
-                }
-              }
-            }
-            resolve();
-          })
-          .catch((err: unknown) => {
-            console.error(chalk.red(err instanceof Error ? err.message : String(err)));
-            resolve();
-          });
-      });
-    });
-
-  auth
-    .command("logout")
-    .description("Sign out of Microsoft account (az logout).")
-    .action(async () => {
-      const c = await client();
-      const baseUrl = c.baseUrl;
-      const r = await fetch(`${baseUrl}/auth/logout`, { method: "POST" });
-      if (r.ok) {
-        console.log(chalk.green("Signed out successfully."));
-      } else {
-        console.error(chalk.red(`Logout failed: HTTP ${r.status}`));
-      }
-    });
-
-  auth
-    .command("status")
-    .description("Show current Azure account (cached, instant).")
-    .action(async () => {
-      const c = await client();
-      const baseUrl = c.baseUrl;
-
-      // Try live check first, fall back to cache
-      const r = await fetch(`${baseUrl}/auth/me`);
-      const user = await r.json() as Record<string, unknown>;
-
-      if (user["authenticated"]) {
-        console.log(chalk.green("Signed in"));
-        console.log(`  ${chalk.bold("Name:")}  ${user["name"] ?? "-"}`);
-        console.log(`  ${chalk.bold("Email:")} ${user["upn"] ?? "-"}`);
-        console.log(`  ${chalk.bold("OID:")}   ${user["oid"] ?? "-"}`);
-      } else {
-        console.log(chalk.yellow("Not signed in."));
-        console.log(chalk.dim("Run: dev-agent auth login"));
-        if (user["message"]) console.log(chalk.dim(String(user["message"])));
-      }
-    });
-
-  program
-    .command("configure-pat")
-    .description("Store the Azure DevOps PAT in the OS keyring.")
-    .action(async () => {
-      const readline = await import("node:readline/promises");
-      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-      const pat = (await rl.question("Azure DevOps PAT: ")).trim();
-      rl.close();
-      if (!pat) {
-        // eslint-disable-next-line no-console
-        console.error(chalk.red("empty PAT, aborted."));
-        process.exit(1);
-      }
-      const keytarMod = await import("keytar");
-      const keytar = keytarMod.default ?? keytarMod;
-      await keytar.setPassword(PAT_KEYRING_SERVICE, PAT_KEYRING_USER, pat);
-      // eslint-disable-next-line no-console
-      console.log(chalk.green(`stored PAT in OS keyring under service '${PAT_KEYRING_SERVICE}'.`));
-    });
+  registerSettingsCommand(program);
+  registerSetupGlobalCommand(program);
+  registerAuthCommands(program);
+  registerConfigurePatCommand(program);
 
   return program;
-}
-
-function findGlobalRepoRoot(): string {
-  // Walk up from __dirname (packages/cli/src) to find the monorepo root
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { existsSync } = require("node:fs") as typeof import("node:fs");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { dirname, join } = require("node:path") as typeof import("node:path");
-  let dir = dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1"));
-  for (let i = 0; i < 6; i++) {
-    if (existsSync(join(dir, "pnpm-workspace.yaml"))) return dir;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return process.cwd();
 }
 
 function renderIntentPlan(plan: IntentPlan): void {
@@ -472,78 +230,4 @@ function renderIntentPlan(plan: IntentPlan): void {
     // eslint-disable-next-line no-console
     console.log(`     ${JSON.stringify(s.args)}`);
   });
-}
-
-function renderSteps(view: Record<string, unknown>): void {
-  const steps = (view["steps"] as Array<Record<string, unknown>>) ?? [];
-  for (const s of steps) {
-    const colorFn = pickColor(String(s["status"] ?? "info"));
-    // eslint-disable-next-line no-console
-    console.log(
-      `  ${colorFn(String(s["status"]).padStart(5))} ${s["name"]}${s["detail"] ? ` - ${s["detail"]}` : ""}`,
-    );
-  }
-  if (view["error"]) {
-    // eslint-disable-next-line no-console
-    console.log(chalk.red(`error: ${view["error"]}`));
-  }
-}
-
-function pickColor(status: string): (s: string) => string {
-  switch (status) {
-    case "ok":
-      return chalk.green;
-    case "warn":
-      return chalk.yellow;
-    case "error":
-      return chalk.red;
-    default:
-      return chalk.white;
-  }
-}
-
-async function streamTask(c: RuntimeClient, taskId: string): Promise<void> {
-  // Use SSE if available; fall back to polling otherwise.
-  const { default: EventSource } = await import("eventsource");
-  const url = `${c.baseUrl}/tasks/${taskId}/events`;
-  let resolved = false;
-  await new Promise<void>((resolve) => {
-    const es = new EventSource(url);
-    es.addEventListener("step", (ev) => {
-      try {
-        const s = JSON.parse(ev.data) as Record<string, unknown>;
-        const colorFn = pickColor(String(s["status"] ?? "info"));
-        // eslint-disable-next-line no-console
-        console.log(
-          `  ${colorFn(String(s["status"]).padStart(5))} ${s["name"]}${s["detail"] ? ` - ${s["detail"]}` : ""}`,
-        );
-      } catch {
-        // ignored
-      }
-    });
-    es.addEventListener("done", () => {
-      es.close();
-      if (!resolved) {
-        resolved = true;
-        resolve();
-      }
-    });
-    es.addEventListener("error", () => {
-      es.close();
-      if (!resolved) {
-        resolved = true;
-        resolve();
-      }
-    });
-  });
-  const view = await c.getTask(taskId);
-  const status = String(view["status"] ?? "");
-  const color = status === "succeeded" ? chalk.green : status === "failed" ? chalk.red : chalk.yellow;
-  // eslint-disable-next-line no-console
-  console.log(color(`task ${status}`));
-  if (view["result"]) {
-    // eslint-disable-next-line no-console
-    console.log(JSON.stringify(view["result"], null, 2));
-  }
-  if (status !== "succeeded") process.exit(1);
 }

@@ -8,7 +8,7 @@ export function logger(): pino.Logger {
   const settings = getSettings();
   cached = pino({
     level: settings.runtimeLogLevel.toLowerCase(),
-    base: { service: "cicd-agent" },
+    base: { service: "mergepilot" },
     redact: {
       paths: [
         "*.authorization",

@@ -1,7 +1,7 @@
 import type { ReviewQueueItem } from "./api.js";
 import { reviewQueueItemKey } from "./reviewRunHistory.js";
 
-export const REVIEW_OPERATIONS_LS_KEY = "cicd_agent_review_operations_v1";
+export const REVIEW_OPERATIONS_LS_KEY = "mergepilot_review_operations_v1";
 const MAX_REVIEW_OPERATIONS = 50;
 
 export type ReviewOperationKind =

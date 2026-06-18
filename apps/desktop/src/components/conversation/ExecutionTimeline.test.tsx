@@ -103,6 +103,30 @@ describe("ExecutionTimeline", () => {
     expect(html).toContain("Azure DevOps token is unavailable");
   });
 
+  it("hides machine-readable JSON stdout from expanded tool evidence", () => {
+    const items: ExecutionTimelineItem[] = [
+      {
+        id: "tool-1",
+        toolName: "repo_refresh_index",
+        state: "result",
+        ok: true,
+        output: { stdout: "{\"returncode\":0,\"stdout\":\"indexed\"}", returncode: 0 },
+        open: true,
+      },
+      {
+        id: "tool-2",
+        toolName: "repo_explain",
+        state: "running",
+      },
+    ];
+
+    const html = renderToStaticMarkup(<ExecutionTimeline items={items} onToggleItem={() => undefined} />);
+
+    expect(html).toContain("Structured result received.");
+    expect(html).not.toContain("&quot;returncode&quot;");
+    expect(html).not.toContain("&quot;stdout&quot;");
+  });
+
   it("renders raw command evidence from direct workflow tools", () => {
     const items: ExecutionTimelineItem[] = [
       {

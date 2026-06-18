@@ -1,8 +1,8 @@
-# Azure App Registration Request — CI/CD Agent Desktop
+# Azure App Registration Request — MergePilot Desktop
 
 ## Purpose
 
-The **CI/CD Agent** is an internal desktop application (Windows/macOS) that assists developers with repository indexing, pull request preparation, and pipeline automation. It is distributed as a packaged installer to company employees.
+The **MergePilot** is an internal desktop application (Windows/macOS) that assists developers with repository indexing, pull request preparation, and pipeline automation. It is distributed as a packaged installer to company employees.
 
 The application needs to authenticate users against Azure Active Directory so that it can:
 
@@ -22,7 +22,7 @@ Please create one **App Registration** in Azure Active Directory with the follow
 
 | Field | Value |
 |---|---|
-| **Display name** | CI/CD Agent Desktop |
+| **Display name** | MergePilot Desktop |
 | **Supported account types** | Accounts in this organizational directory only (single tenant) |
 | **Platform** | Mobile and desktop applications |
 | **Redirect URI** | `http://localhost` (loopback, required by MSAL Auth Code + PKCE desktop flow) |

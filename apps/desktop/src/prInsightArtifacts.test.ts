@@ -5,8 +5,7 @@ import {
   clearPrInsightArtifacts,
   latestPrInsightArtifact,
   listPrInsightArtifacts,
-  comparePrInsightArtifacts,
-  prInsightArtifactFreshness,
+  prInsightArtifactProjectLinkId,
   savePrInsightPreviewArtifact,
   savePrReviewRunArtifact,
 } from "./prInsightArtifacts";
@@ -112,7 +111,7 @@ describe("PR insight artifacts", () => {
 
   it("saves preview artifacts and returns the latest artifact for a PR", () => {
     savePrInsightPreviewArtifact({
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       title: "Improve pipeline",
@@ -121,10 +120,11 @@ describe("PR insight artifacts", () => {
     });
 
     expect(latestPrInsightArtifact({
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
     })).toMatchObject({
+      projectLinkId: "project-link-1",
       kind: "insight_preview",
       summary: "Preview summary.",
       readiness: "needs_attention",
@@ -140,9 +140,25 @@ describe("PR insight artifacts", () => {
     });
   });
 
+  it("reads artifacts through Project Link identity", () => {
+    savePrInsightPreviewArtifact({
+      projectLinkId: "project-link-1",
+      repository: "demo-repo",
+      pullRequestId: 42,
+      title: "Improve pipeline",
+      result: preview(),
+      at: "2026-06-11T00:00:00.000Z",
+    });
+
+    const artifacts = listPrInsightArtifacts("project-link-1");
+    expect(artifacts).toHaveLength(1);
+    const artifact = artifacts[0]!;
+    expect(prInsightArtifactProjectLinkId(artifact)).toBe("project-link-1");
+  });
+
   it("stores newer full review artifacts ahead of older previews", () => {
     savePrInsightPreviewArtifact({
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       title: "Improve pipeline",
@@ -150,14 +166,14 @@ describe("PR insight artifacts", () => {
       at: "2026-06-11T00:00:00.000Z",
     });
     savePrReviewRunArtifact({
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       title: "Improve pipeline",
       result: reviewRun(),
     });
 
-    const artifacts = listPrInsightArtifacts("profile-1");
+    const artifacts = listPrInsightArtifacts("project-link-1");
     expect(artifacts.map((artifact) => artifact.kind)).toEqual(["review_run", "insight_preview"]);
     expect(artifacts[0]).toMatchObject({
       summary: "Full review summary.",
@@ -168,23 +184,23 @@ describe("PR insight artifacts", () => {
     });
   });
 
-  it("filters artifacts by profile and ignores corrupt storage", () => {
+  it("filters artifacts by Project Link and ignores corrupt storage", () => {
     savePrInsightPreviewArtifact({
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       title: "Improve pipeline",
       result: preview(),
     });
     savePrInsightPreviewArtifact({
-      profileId: "profile-2",
+      projectLinkId: "project-link-2",
       repository: "demo-repo",
       pullRequestId: 43,
       title: "Other PR",
       result: preview({ summary: "Other summary." }),
     });
 
-    expect(listPrInsightArtifacts("profile-1")).toHaveLength(1);
+    expect(listPrInsightArtifacts("project-link-1")).toHaveLength(1);
 
     localStorage.setItem(PR_INSIGHT_ARTIFACTS_LS_KEY, "{not-json");
     expect(listPrInsightArtifacts()).toEqual([]);
@@ -192,7 +208,7 @@ describe("PR insight artifacts", () => {
 
   it("preserves refreshed artifacts as separate history entries", () => {
     savePrInsightPreviewArtifact({
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       title: "Improve pipeline",
@@ -200,7 +216,7 @@ describe("PR insight artifacts", () => {
       at: "2026-06-11T00:00:00.000Z",
     });
     savePrInsightPreviewArtifact({
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       title: "Improve pipeline",
@@ -208,87 +224,14 @@ describe("PR insight artifacts", () => {
       at: "2026-06-11T00:01:00.000Z",
     });
 
-    const artifacts = listPrInsightArtifacts("profile-1");
+    const artifacts = listPrInsightArtifacts("project-link-1");
     expect(artifacts).toHaveLength(2);
     expect(artifacts.map((artifact) => artifact.summary)).toEqual(["New summary.", "Old summary."]);
     expect(latestPrInsightArtifact({
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
     })).toMatchObject({ summary: "New summary." });
   });
 
-  it("compares preview and full review artifacts for the same PR", () => {
-    const previewArtifact = savePrInsightPreviewArtifact({
-      profileId: "profile-1",
-      repository: "demo-repo",
-      pullRequestId: 42,
-      title: "Improve pipeline",
-      result: preview({
-        readiness: "ready",
-        risks: ["Small PR"],
-        tokensIn: 100,
-        tokensOut: 20,
-      }),
-      at: "2026-06-11T00:00:00.000Z",
-    });
-    const reviewArtifact = savePrReviewRunArtifact({
-      profileId: "profile-1",
-      repository: "demo-repo",
-      pullRequestId: 42,
-      title: "Improve pipeline",
-      result: reviewRun({
-        readiness: "needs_attention",
-        categories: {
-          blocking: [],
-          warnings: ["Missing tests"],
-          info: [],
-        },
-        findingCount: 3,
-        tokensIn: 1000,
-        tokensOut: 300,
-      }),
-    });
-
-    expect(comparePrInsightArtifacts(previewArtifact, reviewArtifact)).toMatchObject({
-      readinessChanged: true,
-      previewReadiness: "ready",
-      reviewReadiness: "needs_attention",
-      addedRisks: ["Missing tests"],
-      resolvedRisks: ["Small PR"],
-      tokenDelta: 1180,
-    });
-  });
-
-  it("classifies saved insight freshness against the current PR baseline", () => {
-    expect(prInsightArtifactFreshness({
-      iterationId: 5,
-      sourceCommit: "abc123",
-    }, {
-      iterationId: 5,
-      sourceCommit: "abc123",
-    })).toMatchObject({
-      state: "fresh",
-      reasons: [],
-    });
-
-    expect(prInsightArtifactFreshness({
-      iterationId: 5,
-      sourceCommit: "abc123",
-    }, {
-      iterationId: 6,
-      sourceCommit: "def456",
-    })).toMatchObject({
-      state: "stale",
-      reasons: ["iteration_changed", "source_commit_changed"],
-    });
-
-    expect(prInsightArtifactFreshness({}, {
-      iterationId: 6,
-      sourceCommit: "def456",
-    })).toMatchObject({
-      state: "unknown",
-      reasons: ["missing_baseline"],
-    });
-  });
 });

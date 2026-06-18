@@ -2,13 +2,13 @@
  * Azure Key Vault integration for storing secrets (ADO PAT, Azure OpenAI API key).
  *
  * Secret naming convention:
- *   ado-pat-{profileId}          → ADO Personal Access Token per profile
+ *   ado-pat-{projectLinkId}      → ADO Personal Access Token per Project Link
  *   aoai-key-{shortUserId}       → Azure OpenAI API key per user
  *
  * Usage:
  *   const kv = new KeyVaultSecrets("https://my-vault.vault.azure.net/");
- *   await kv.setAdoPat(profileId, "patValue");
- *   const pat = await kv.getAdoPat(profileId);
+ *   await kv.setAdoPat(projectLinkId, "patValue");
+ *   const pat = await kv.getAdoPat(projectLinkId);
  */
 import { SecretClient } from "@azure/keyvault-secrets";
 import { getAzureCredential, requireCurrentUser } from "./azureAuth.js";
@@ -20,11 +20,11 @@ export class KeyVaultSecrets {
     this.client = new SecretClient(vaultUrl, getAzureCredential({ interactive: false }));
   }
 
-  // ── ADO PAT (per profile) ───────────────────────────────────────────────────
+  // ── ADO PAT (per Project Link) ──────────────────────────────────────────────
 
-  async getAdoPat(profileId: string): Promise<string | null> {
+  async getAdoPat(projectLinkId: string): Promise<string | null> {
     try {
-      const secret = await this.client.getSecret(`ado-pat-${profileId}`);
+      const secret = await this.client.getSecret(`ado-pat-${projectLinkId}`);
       return secret.value ?? null;
     } catch (err: unknown) {
       if ((err as { statusCode?: number })?.statusCode === 404) return null;
@@ -32,16 +32,16 @@ export class KeyVaultSecrets {
     }
   }
 
-  async setAdoPat(profileId: string, pat: string): Promise<void> {
-    await this.client.setSecret(`ado-pat-${profileId}`, pat, {
-      tags: { type: "ado-pat", profileId },
+  async setAdoPat(projectLinkId: string, pat: string): Promise<void> {
+    await this.client.setSecret(`ado-pat-${projectLinkId}`, pat, {
+      tags: { type: "ado-pat", projectLinkId },
       contentType: "text/plain",
     });
   }
 
-  async deleteAdoPat(profileId: string): Promise<void> {
+  async deleteAdoPat(projectLinkId: string): Promise<void> {
     try {
-      const poller = await this.client.beginDeleteSecret(`ado-pat-${profileId}`);
+      const poller = await this.client.beginDeleteSecret(`ado-pat-${projectLinkId}`);
       await poller.pollUntilDone();
     } catch (err: unknown) {
       if ((err as { statusCode?: number })?.statusCode !== 404) throw err;

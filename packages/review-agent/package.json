@@ -1,6 +1,6 @@
 {
-  "name": "@cicd-agent/review-agent",
-  "version": "0.5.7",
+  "name": "@mergepilot/review-agent",
+  "version": "0.5.8",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -11,7 +11,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "bin": {
     "review-agent": "./dist/bin.js"
   },
@@ -27,7 +29,7 @@
     "@azure/data-tables": "^13.3.0",
     "@azure/identity": "^4.4.0",
     "@azure/keyvault-secrets": "^4.9.0",
-    "@cicd-agent/core": "workspace:*",
+    "@mergepilot/core": "workspace:*",
     "applicationinsights": "^3.2.0",
     "dotenv": "^16.4.0",
     "fastify": "^4.28.0",

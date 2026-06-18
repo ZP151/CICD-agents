@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PROJECT_CHAT_DEPLOYMENT } from "@cicd-agent/core";
+import { PROJECT_CHAT_DEPLOYMENT } from "@mergepilot/core";
 
 const ConfigSchema = z.object({
   port: z.coerce.number().default(8080),
@@ -51,7 +51,7 @@ export function loadConfig(): ReviewAgentConfig {
     servicePrincipalTenantId: process.env.ADO_SPN_TENANT_ID,
     keyVaultName: process.env.KEY_VAULT_NAME,
     tablesConnectionString: process.env.AZURE_TABLES_CONNECTION_STRING,
-    dataDir: process.env.CICD_AGENT_DATA_DIR,
+    dataDir: process.env.MERGEPILOT_DATA_DIR,
     appInsightsConnectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING,
     reviewMaxFilesPerPr: process.env.REVIEW_MAX_FILES_PER_PR,
     reviewAutoApproveEnabled: process.env.REVIEW_AUTO_APPROVE_ENABLED,

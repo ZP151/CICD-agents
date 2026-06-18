@@ -1,15 +1,15 @@
 import {
   fetchAzureDevOpsRemoteSuggestionFromDaemon,
   fetchGitBranchesFromDaemon,
+  type AdoDiscoveryKind,
   type AdoDiscoveryOption,
   type AzureDevOpsRemoteSuggestion,
-  type WorkspaceProfile,
-  type WorkspaceProfileInput,
+  type ProjectLink,
+  type ProjectLinkInput,
 } from "./api";
 
 export const DEFAULT_ADO_ORG_URL = "https://tebssg.visualstudio.com/";
-export const ACTIVE_PROJECT_LINK_LS_KEY = "cicd_agent_active_project_link_id";
-const LEGACY_CHAT_PROFILE_LS_KEY = "chat_profile_id";
+export const ACTIVE_PROJECT_LINK_LS_KEY = "mergepilot_active_project_link_id";
 
 function browserStorage(): Storage | null {
   return typeof localStorage === "undefined" ? null : localStorage;
@@ -19,37 +19,38 @@ export function loadStoredActiveProjectLinkId(): string {
   const storage = browserStorage();
   if (!storage) return "";
   try {
-    return storage.getItem(ACTIVE_PROJECT_LINK_LS_KEY) || storage.getItem(LEGACY_CHAT_PROFILE_LS_KEY) || "";
+    return storage.getItem(ACTIVE_PROJECT_LINK_LS_KEY) || "";
   } catch {
     return "";
   }
 }
 
-export function saveStoredActiveProjectLinkId(profileId: string | null | undefined): void {
+export function saveStoredActiveProjectLinkId(projectLinkId: string | null | undefined): void {
   const storage = browserStorage();
   if (!storage) return;
   try {
-    const normalized = profileId?.trim() ?? "";
+    const normalized = projectLinkId?.trim() ?? "";
     if (normalized) {
       storage.setItem(ACTIVE_PROJECT_LINK_LS_KEY, normalized);
-      storage.setItem(LEGACY_CHAT_PROFILE_LS_KEY, normalized);
       return;
     }
     storage.removeItem(ACTIVE_PROJECT_LINK_LS_KEY);
-    storage.removeItem(LEGACY_CHAT_PROFILE_LS_KEY);
   } catch {
     /* localStorage can be unavailable in restricted browser contexts */
   }
 }
 
-export function resolveActiveProjectLinkId(profiles: WorkspaceProfile[], currentId?: string | null): string {
+export function resolveActiveProjectLinkId(
+  projectLinks: ProjectLink[],
+  currentId?: string | null,
+): string {
   const current = currentId?.trim() ?? "";
-  if (current && profiles.some((profile) => profile.id === current)) return current;
+  if (current && projectLinks.some((projectLink) => projectLink.id === current)) return current;
 
   const stored = loadStoredActiveProjectLinkId();
-  if (stored && profiles.some((profile) => profile.id === stored)) return stored;
+  if (stored && projectLinks.some((projectLink) => projectLink.id === stored)) return stored;
 
-  return profiles[0]?.id ?? "";
+  return projectLinks[0]?.id ?? "";
 }
 
 // In a Tauri context we invoke the native Rust command first (it uses cmd /c on
@@ -71,7 +72,9 @@ export async function fetchGitBranches(repoPath: string): Promise<string[]> {
   return fetchGitBranchesFromDaemon(repoPath);
 }
 
-export async function fetchAzureDevOpsRemoteSuggestion(repoPath: string): Promise<AzureDevOpsRemoteSuggestion | null> {
+export async function fetchAzureDevOpsRemoteSuggestion(
+  repoPath: string,
+): Promise<AzureDevOpsRemoteSuggestion | null> {
   if (!repoPath.trim()) return null;
   return fetchAzureDevOpsRemoteSuggestionFromDaemon(repoPath.trim());
 }
@@ -82,7 +85,10 @@ export function projectLinkNameFromRepo(repoPath: string): string {
 }
 
 function normalizeToken(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 export function pickRecommendedPipeline(
@@ -96,21 +102,64 @@ export function pickRecommendedPipeline(
   const repo = normalizeToken(context.adoRepoName || repoFromPath);
   const project = normalizeToken(context.adoProject ?? "");
 
-  const scored = pipelines.map((pipeline) => {
-    const haystack = normalizeToken(`${pipeline.name} ${pipeline.description} ${pipeline.url}`);
-    let score = 0;
-    if (repo && haystack.includes(repo)) score += 6;
-    if (project && haystack.includes(project)) score += 2;
-    if (/\b(ci|build|pr|pull request|validation|verify)\b/.test(haystack)) score += 3;
-    if (haystack.includes("azure pipelines") || haystack.includes("azure-pipelines")) score += 2;
-    if (haystack.includes("release") || haystack.includes("deploy") || haystack.includes("prod")) score -= 3;
-    return { pipeline, score };
-  }).sort((a, b) => b.score - a.score || a.pipeline.name.localeCompare(b.pipeline.name));
+  const scored = pipelines
+    .map((pipeline) => {
+      const haystack = normalizeToken(`${pipeline.name} ${pipeline.description} ${pipeline.url}`);
+      let score = 0;
+      if (repo && haystack.includes(repo)) score += 6;
+      if (project && haystack.includes(project)) score += 2;
+      if (/\b(ci|build|pr|pull request|validation|verify)\b/.test(haystack)) score += 3;
+      if (haystack.includes("azure pipelines") || haystack.includes("azure-pipelines")) score += 2;
+      if (haystack.includes("release") || haystack.includes("deploy") || haystack.includes("prod"))
+        score -= 3;
+      return { pipeline, score };
+    })
+    .sort((a, b) => b.score - a.score || a.pipeline.name.localeCompare(b.pipeline.name));
 
   return scored[0]?.pipeline ?? null;
 }
 
-export function withProjectLinkInputDefaults<T extends Partial<WorkspaceProfileInput>>(link: T): T & WorkspaceProfileInput {
+export function adoDiscoverySignature(kind: AdoDiscoveryKind, form: ProjectLinkInput): string {
+  return JSON.stringify({
+    kind,
+    org: form.adoOrgUrl.trim(),
+    project: form.adoProject.trim(),
+    repo: form.adoRepoName.trim(),
+  });
+}
+
+export function applyAdoDiscoveryToProjectLinkInput(
+  form: ProjectLinkInput,
+  kind: AdoDiscoveryKind,
+  option: AdoDiscoveryOption,
+): ProjectLinkInput {
+  if (kind === "projects") {
+    return {
+      ...form,
+      adoProject: option.name,
+      adoRepoName: form.adoProject === option.name ? form.adoRepoName : "",
+      adoPipelineId: form.adoProject === option.name ? form.adoPipelineId : "",
+      adoPipelineName: form.adoProject === option.name ? form.adoPipelineName : "",
+    };
+  }
+  if (kind === "repositories") {
+    return {
+      ...form,
+      adoRepoName: option.name,
+      adoPipelineId: form.adoRepoName === option.name ? form.adoPipelineId : "",
+      adoPipelineName: form.adoRepoName === option.name ? form.adoPipelineName : "",
+    };
+  }
+  return {
+    ...form,
+    adoPipelineId: option.id,
+    adoPipelineName: option.name,
+  };
+}
+
+export function withProjectLinkInputDefaults<T extends Partial<ProjectLinkInput>>(
+  link: T,
+): T & ProjectLinkInput {
   return {
     name: "",
     repoPath: "",
@@ -126,14 +175,14 @@ export function withProjectLinkInputDefaults<T extends Partial<WorkspaceProfileI
     adoMcpCommand: "",
     adoMcpAuthentication: "",
     adoMcpDomains: "repositories,pipelines,work-items",
-    templateProfile: "",
+    projectTemplate: "",
     buildCommand: "",
     testCommand: "",
     ...link,
   };
 }
 
-export function withoutProjectLinkFallbacks<T extends WorkspaceProfileInput>(link: T): T {
+export function withoutProjectLinkFallbacks<T extends ProjectLinkInput>(link: T): T {
   return {
     ...link,
     adoPat: "",
@@ -144,7 +193,7 @@ export function withoutProjectLinkFallbacks<T extends WorkspaceProfileInput>(lin
   };
 }
 
-export function withProjectLinkDefaults<T extends Partial<WorkspaceProfile>>(link: T): T & WorkspaceProfile {
+export function withProjectLinkDefaults<T extends Partial<ProjectLink>>(link: T): T & ProjectLink {
   const withInput = withProjectLinkInputDefaults(link);
   return {
     ...withInput,

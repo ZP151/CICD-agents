@@ -9,13 +9,13 @@ The v2 stack uses two channels:
    persisted.
 
 2. **Application Insights (opt-in)**: per-task and per-PR-review metrics.
-   Off by default. Enable locally with `dev-agent settings --telemetry on`
+   Off by default. Enable locally with `mergepilot settings --telemetry on`
    and set `APPLICATIONINSIGHTS_CONNECTION_STRING` + `TELEMETRY_ENABLED=1`
    in your environment.
 
 ## Metrics emitted
 
-### Local Dev Agent (pipeline tasks)
+### Local MergePilot (pipeline tasks)
 
 | Event / metric        | Description                                          |
 | --------------------- | ---------------------------------------------------- |

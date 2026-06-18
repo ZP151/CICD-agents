@@ -179,13 +179,13 @@ The first migration is now source-first, not service-first:
 Verification:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatUiStream.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/chatUiStream.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
 ```
 
 ## Control Event Split Started
@@ -229,14 +229,14 @@ an internal synthetic tool:
 Verification:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts test/chatUiStream.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatEvents.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/chatPlannerApproval.test.ts test/chatUiStream.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatEvents.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
 ```
 
 ## Tool Output Delta Migration Completed
@@ -260,12 +260,12 @@ existing tool result contract:
 Verification:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/toolExecutor.test.ts test/chatUiStream.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatEvents.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/toolExecutor.test.ts test/chatUiStream.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatEvents.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
 ```

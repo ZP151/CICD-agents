@@ -1,7 +1,7 @@
 import type { ReviewFinding, ReviewQueueItem } from "./api.js";
 
-export const REVIEW_HISTORY_LS_KEY = "cicd_agent_review_history_v1";
-export const FINDINGS_LS_KEY = "cicd_agent_pr_findings_v1";
+export const REVIEW_HISTORY_LS_KEY = "mergepilot_review_history_v1";
+export const FINDINGS_LS_KEY = "mergepilot_pr_findings_v1";
 
 type FindingsStore = Record<string, Record<string, ReviewFinding[]>>;
 

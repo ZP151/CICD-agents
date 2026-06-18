@@ -1,13 +1,13 @@
 import type { PullRequestInsightPreview, ReviewRunResult } from "./api.js";
 
-export const PR_INSIGHT_ARTIFACTS_LS_KEY = "cicd_agent_pr_insight_artifacts_v1";
+export const PR_INSIGHT_ARTIFACTS_LS_KEY = "mergepilot_pr_insight_artifacts_v1";
 const MAX_PR_INSIGHT_ARTIFACTS = 100;
 
 export type PrInsightArtifactKind = "insight_preview" | "review_run";
 
 export interface PrInsightArtifact {
   id: string;
-  profileId: string;
+  projectLinkId: string;
   repository: string;
   pullRequestId: number;
   title: string;
@@ -34,16 +34,21 @@ export interface PrInsightArtifact {
 }
 
 type PrInsightArtifactStore = PrInsightArtifact[];
+type ProjectLinkIdentityInput = { projectLinkId?: string };
 
 function storage(): Storage | null {
   return typeof localStorage === "undefined" ? null : localStorage;
 }
 
+export function prInsightArtifactProjectLinkId(input: ProjectLinkIdentityInput): string {
+  return input.projectLinkId || "";
+}
+
 function artifactId(
-  input: Pick<PrInsightArtifact, "profileId" | "repository" | "pullRequestId" | "kind">,
+  input: ProjectLinkIdentityInput & Pick<PrInsightArtifact, "repository" | "pullRequestId" | "kind">,
   at: string,
 ): string {
-  return `${input.profileId}/${input.repository}/${input.pullRequestId}/${input.kind}/${encodeURIComponent(at)}`;
+  return `${prInsightArtifactProjectLinkId(input)}/${input.repository}/${input.pullRequestId}/${input.kind}/${encodeURIComponent(at)}`;
 }
 
 function loadStore(): PrInsightArtifactStore {
@@ -63,25 +68,25 @@ function saveStore(store: PrInsightArtifactStore): void {
   storage()?.setItem(PR_INSIGHT_ARTIFACTS_LS_KEY, JSON.stringify(store.slice(0, MAX_PR_INSIGHT_ARTIFACTS)));
 }
 
-export function listPrInsightArtifacts(profileId?: string): PrInsightArtifact[] {
-  const targetProfile = profileId?.trim() ?? "";
+export function listPrInsightArtifacts(projectLinkId?: string): PrInsightArtifact[] {
+  const targetProjectLinkId = projectLinkId?.trim() ?? "";
   return loadStore()
-    .filter((artifact) => !targetProfile || artifact.profileId === targetProfile)
+    .filter((artifact) => !targetProjectLinkId || prInsightArtifactProjectLinkId(artifact) === targetProjectLinkId)
     .sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"));
 }
 
 export function latestPrInsightArtifact(args: {
-  profileId: string;
+  projectLinkId?: string;
   repository: string;
   pullRequestId: number;
 }): PrInsightArtifact | null {
-  const artifacts = listPrInsightArtifacts(args.profileId)
+  const artifacts = listPrInsightArtifacts(prInsightArtifactProjectLinkId(args))
     .filter((artifact) => artifact.repository === args.repository && artifact.pullRequestId === args.pullRequestId);
   return artifacts[0] ?? null;
 }
 
 export function savePrInsightPreviewArtifact(args: {
-  profileId: string;
+  projectLinkId?: string;
   repository: string;
   pullRequestId: number;
   title: string;
@@ -89,9 +94,10 @@ export function savePrInsightPreviewArtifact(args: {
   at?: string;
 }): PrInsightArtifact {
   const at = args.at ?? new Date().toISOString();
+  const projectLinkId = prInsightArtifactProjectLinkId(args);
   const artifact: PrInsightArtifact = {
     id: artifactId({ ...args, kind: "insight_preview" }, at),
-    profileId: args.profileId,
+    projectLinkId,
     repository: args.repository,
     pullRequestId: args.pullRequestId,
     title: args.title,
@@ -112,7 +118,7 @@ export function savePrInsightPreviewArtifact(args: {
 }
 
 export function savePrReviewRunArtifact(args: {
-  profileId: string;
+  projectLinkId?: string;
   repository: string;
   pullRequestId: number;
   title: string;
@@ -120,9 +126,10 @@ export function savePrReviewRunArtifact(args: {
   at?: string;
 }): PrInsightArtifact {
   const at = args.at ?? args.result.lastRunAt ?? new Date().toISOString();
+  const projectLinkId = prInsightArtifactProjectLinkId(args);
   const artifact: PrInsightArtifact = {
     id: artifactId({ ...args, kind: "review_run" }, at),
-    profileId: args.profileId,
+    projectLinkId,
     repository: args.repository,
     pullRequestId: args.pullRequestId,
     title: args.title,
@@ -174,7 +181,7 @@ export function comparePrInsightArtifacts(
 ): PrInsightArtifactComparison | null {
   if (!preview || !review) return null;
   if (preview.kind !== "insight_preview" || review.kind !== "review_run") return null;
-  if (preview.profileId !== review.profileId) return null;
+  if (prInsightArtifactProjectLinkId(preview) !== prInsightArtifactProjectLinkId(review)) return null;
   if (preview.repository !== review.repository) return null;
   if (preview.pullRequestId !== review.pullRequestId) return null;
 

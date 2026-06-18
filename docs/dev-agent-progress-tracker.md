@@ -1,8 +1,8 @@
-# Dev Agent Progress Tracker
+# MergePilot Progress Tracker
 
 ## Purpose
 
-This tracker is the durable project progress board for the Dev Agent product
+This tracker is the durable project progress board for the MergePilot product
 roadmap. It should be updated after every meaningful development session.
 
 Use this file to answer:
@@ -29,7 +29,7 @@ Status values:
 
 | Area | Status | Completion | Notes |
 | --- | --- | ---: | --- |
-| Product roadmap | Complete | 100% | Roadmap and source-first reuse plan documented in `docs/dev-agent-product-roadmap-and-reuse-plan.md`. |
+| Product roadmap | Complete | 100% | Roadmap and source-first reuse plan documented in `docs/mergepilot-product-roadmap-and-reuse-plan.md`. |
 | Current-state audit | Complete | 100% | Main shortfalls identified: prompt-driven approval, shallow workflow state, incomplete semantic retrieval, weak rollback, custom ADO tooling. |
 | Source-first reuse strategy | Complete | 100% | Reuse modes, license gate, priority table, risk register, and third-party source registry documented. OpenHarness and Azure DevOps MCP source have been vendored for direct reuse. |
 | Implementation phases | In progress | 82% | Progress is tracked against product readiness rather than accumulated implementation activity. PR insight, Review Queue, Activity, checkpointing, internal ADO tools, and Chat use-case coverage are usable foundations. The largest remaining gaps are durable workflow execution for broader write workflows, richer repository understanding UX, complete ADO OAuth recovery, live ADO validation, and production hardening. Recent work added explicit workflow kind/phase metadata, right-panel phase rendering for structured commit workflows, push readiness checks before push approval, structured commit-message generation after staging, branch checkout/create preflight, right-panel metadata details, a first-class create-PR workflow action, deterministic PR-created completion state, retired fixed Git-to-PR continuation from the production chat path, structured PR insight/policy/work-item follow-up actions, conflict-aware Git workflow blocking, first-class structured rebase/merge/cherry-pick/revert recovery approvals, and guarded selected-conflict-file staging. |
@@ -72,7 +72,7 @@ Completed:
   - Git checkpoint and rollback are immature
   - ADO tool surface is too custom
   - Review Queue needs stronger policy and audit model
-- Created `docs/dev-agent-product-roadmap-and-reuse-plan.md`.
+- Created `docs/mergepilot-product-roadmap-and-reuse-plan.md`.
 - Added source-first reuse strategy.
 - Ranked reusable upstream projects.
 
@@ -362,11 +362,12 @@ Current fallback switch:
   - `adoMcpAuthentication`
   - `adoMcpDomains`
 - Environment variables remain optional global fallbacks:
-  - `CICD_AGENT_ADO_MCP_ENABLED`
-  - `CICD_AGENT_ADO_MCP_COMMAND`
-  - `CICD_AGENT_ADO_MCP_AUTHENTICATION`
-  - `CICD_AGENT_ADO_MCP_DOMAINS`
-  - `CICD_AGENT_ADO_MCP_TIMEOUT_MS`
+  - `MERGEPILOT_ADO_MCP_ENABLED`
+  - `MERGEPILOT_ADO_MCP_COMMAND`
+  - `MERGEPILOT_ADO_MCP_AUTHENTICATION`
+  - `MERGEPILOT_ADO_MCP_DOMAINS`
+  - `MERGEPILOT_ADO_MCP_TIMEOUT_MS`
+  - legacy `CICD_AGENT_ADO_MCP_*` names are compatibility fallbacks only
 - Default remains disabled, so existing self-authored ADO tools continue to run
   without requiring the upstream MCP server binary.
 
@@ -376,11 +377,11 @@ Progress log:
 | --- | --- |
 | 2026-06-09 | Phase defined; no implementation started. |
 | 2026-06-09 | Vendored `microsoft/azure-devops-mcp` at commit `1ddc03970864bcd28521cd4bef7402f0dcfcb3a1` under `third_party/azure-devops-mcp`. Copied source includes ADO repositories/PRs, pipelines, work items, auth, MCP registration, docs, and tests. |
-| 2026-06-09 | Added a dependency-free stdio MCP bridge in core, mapped MCP tools into local `Tool` wrappers, added MCP risk classification, and wired optional Azure DevOps MCP discovery into daemon chat sessions behind `CICD_AGENT_ADO_MCP_ENABLED`. |
+| 2026-06-09 | Added a dependency-free stdio MCP bridge in core, mapped MCP tools into local `Tool` wrappers, added MCP risk classification, and wired optional Azure DevOps MCP discovery into daemon chat sessions behind the then-current `CICD_AGENT_ADO_MCP_ENABLED` compatibility flag. |
 | 2026-06-09 | Stabilized daemon full tests by clearing host Azure persistence env vars in `server.test.ts`. Full daemon verification now passes locally. |
 | 2026-06-10 | Added daemon `/profiles/discover` route and exposed discovery actions in Profiles and in-chat Project Link onboarding. This was first backed by Project Link MCP settings, then corrected to an internal ADO implementation. |
 | 2026-06-10 | Added daemon `/profiles/check-ado-tools` route and desktop health-check controls. This was first a bridge check under `/profiles/check-mcp`, then corrected to validate internally ported ADO tools with the old route kept as a compatibility alias. |
-| 2026-06-10 | Corrected Phase 4 direction: external MCP process is now treated as fallback infrastructure, while project/repository/pipeline discovery and ADO tool health checks are internally ported into `@cicd-agent/core`. |
+| 2026-06-10 | Corrected Phase 4 direction: external MCP process is now treated as fallback infrastructure, while project/repository/pipeline discovery and ADO tool health checks are internally ported into `@mergepilot/core`. |
 
 ## Phase 5: Pull Requests Workspace
 
@@ -681,13 +682,13 @@ Implemented:
 
 Verification:
 
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core test -- azureDevOpsInternal.test.ts`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core build`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core typecheck`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/desktop build`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- server.test.ts`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/core test -- azureDevOpsInternal.test.ts`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/core build`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/core typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/desktop build`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/daemon test -- server.test.ts`.
 - Passed `git diff --check`.
 
 Remaining gaps:
@@ -704,7 +705,11 @@ Phase 8: Product Hardening And Distribution
 
 Progress changes:
 
-- Clarified Azure DevOps OAuth readiness: the portal screenshot confirms the default desktop client ID is the registered `DevCICDAgent` app with Azure DevOps `user_impersonation` consent, so the remaining issue is active-account token acquisition rather than an app-registration ID mismatch.
+- Clarified Azure DevOps OAuth readiness: the portal screenshot confirmed the
+  default desktop client ID was registered with Azure DevOps
+  `user_impersonation` consent under the legacy app-registration name, so the
+  remaining issue was active-account token acquisition rather than an
+  app-registration ID mismatch.
 
 Implemented:
 
@@ -714,24 +719,29 @@ Implemented:
 - Persisted MSAL account identity fields (`homeAccountId`, `tenantId`, and `username`) after sign-in and cache load.
 - Updated Azure DevOps token acquisition to prefer the requested or cached MSAL account instead of blindly using the first account in the token cache.
 - Added daemon config support for:
-  - `CICD_AGENT_AZURE_TENANT_ID`
-  - `CICD_AGENT_AZURE_CLIENT_ID`
-- Added Settings fields for Azure tenant ID and Azure client ID so the app can be pointed at the registered `DevCICDAgent` application that already has Azure DevOps consent.
+  - `MERGEPILOT_AZURE_TENANT_ID`
+  - `MERGEPILOT_AZURE_CLIENT_ID`
+  - legacy `CICD_AGENT_AZURE_*` names are compatibility fallbacks only
+- Added Settings fields for Azure tenant ID and Azure client ID so the app can
+  be pointed at the registered MergePilot application that already has Azure
+  DevOps consent.
 - Extended `/auth/status`, `/auth/me`, and `/daemon/config` to expose non-secret Azure auth configuration diagnostics.
 - Fixed Settings hydration so Azure tenant/client settings can still be written after a failed daemon-config read.
 
 Verification:
 
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core build`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/desktop build`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- server.test.ts`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/core build`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/desktop build`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/daemon test -- server.test.ts`.
 - Passed `git diff --check`.
 
 Observed local diagnostic:
 
-- Current runtime uses the built-in default client ID `03da33ef-7161-4b27-ae80-3079313f131d`, matching the Azure Portal `DevCICDAgent` application shown by the user.
+- Current runtime uses the built-in default client ID
+  `03da33ef-7161-4b27-ae80-3079313f131d`, matching the Azure Portal application
+  originally shown under the legacy app-registration name.
 - The likely failure path was selecting a stale or wrong cached MSAL account for Azure DevOps token acquisition after login.
 
 ### 2026-06-12 Session Update 106
@@ -756,10 +766,10 @@ Implemented:
 
 Verification:
 
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core test -- azureDevOpsInternal.test.ts`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core typecheck`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/desktop build`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/core test -- azureDevOpsInternal.test.ts`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/core typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/desktop build`.
 - Passed `git diff --check`.
 
 Notes:
@@ -800,11 +810,11 @@ Implemented:
 
 Verification:
 
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core test -- chatUseCases.test.ts`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core test -- chatPlannerApproval.test.ts`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core typecheck`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core build`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/core test -- chatUseCases.test.ts`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/core test -- chatPlannerApproval.test.ts`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/core typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/core build`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck`.
 
 Remaining gaps:
 
@@ -838,11 +848,11 @@ Implemented:
 
 Verification:
 
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- chatSessionWorkflow.test.ts`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core test -- gitOptions.test.ts`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core build`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck`.
-- Passed `.\.tools\pnpm.exe --filter @cicd-agent/core typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/daemon test -- chatSessionWorkflow.test.ts`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/core test -- gitOptions.test.ts`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/core build`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck`.
+- Passed `.\.tools\pnpm.exe --filter @mergepilot/core typecheck`.
 
 Remaining gaps:
 
@@ -936,9 +946,9 @@ Implemented:
 
 Verification:
 
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`.
 
 Remaining gaps:
 
@@ -974,11 +984,11 @@ Implemented:
 
 Verification:
 
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`.
 
 Remaining gaps:
 
@@ -1016,11 +1026,11 @@ Implemented:
 
 Verification:
 
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`.
 
 Remaining gaps:
 
@@ -1055,10 +1065,10 @@ Implemented:
 
 Verification:
 
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck`.
 
 Remaining gaps:
 
@@ -1097,8 +1107,8 @@ Implemented:
 
 Verification:
 
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts`.
 
 Remaining gaps:
 
@@ -1133,11 +1143,11 @@ Implemented:
 
 Verification:
 
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`.
 
 Remaining gaps:
 
@@ -1169,8 +1179,8 @@ Implemented:
 
 Verification:
 
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts src/components/conversation/ConversationPartRenderer.test.tsx`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatBubbles.test.ts src/components/conversation/ConversationPartRenderer.test.tsx`.
 
 Remaining gaps:
 
@@ -1209,10 +1219,10 @@ Implemented:
 
 Verification:
 
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`.
 
 Remaining gaps:
 
@@ -1249,10 +1259,10 @@ Implemented:
 
 Verification:
 
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`.
 
 Remaining gaps:
 
@@ -1292,9 +1302,9 @@ Design decision:
 Verification:
 
 - Added a regression update proving executed Git history alone does not create the next PR workflow approval.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts`.
 - `git diff --check` was clean apart from expected CRLF warnings.
 
 Remaining gaps:
@@ -1336,11 +1346,11 @@ Implemented:
 
 Verification:
 
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`.
 
 Remaining gaps:
 
@@ -1351,7 +1361,7 @@ Remaining gaps:
 
 Phase:
 
-Phase 3: Durable Workflow Engine / Phase 5: Conversational Dev Agent Runtime
+Phase 3: Durable Workflow Engine / Phase 5: Conversational MergePilot Runtime
 
 Progress changes:
 
@@ -1370,8 +1380,8 @@ Implemented:
 
 Verification:
 
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts test/server.test.ts`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts test/server.test.ts`.
 - Added a real Git merge-conflict daemon test proving `prepare_commit` becomes a blocked workflow state and does not create `git_add`.
 - Added a chat workflow regression proving unresolved rebase conflicts strip normal `git_commit` approval proposals.
 
@@ -1384,7 +1394,7 @@ Remaining gaps:
 
 Phase:
 
-Phase 3: Durable Workflow Engine / Phase 5: Conversational Dev Agent Runtime
+Phase 3: Durable Workflow Engine / Phase 5: Conversational MergePilot Runtime
 
 Progress changes:
 
@@ -1406,11 +1416,11 @@ Implemented:
 
 Verification:
 
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts test/server.test.ts` with 62 tests.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts test/server.test.ts` with 62 tests.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build`.
 - Added a real Git rebase-conflict daemon test proving structured `abort_rebase` creates an approval and confirmed execution completes the workflow.
 
 Remaining gaps:
@@ -1423,7 +1433,7 @@ Remaining gaps:
 
 Phase:
 
-Phase 3: Durable Workflow Engine / Phase 5: Conversational Dev Agent Runtime
+Phase 3: Durable Workflow Engine / Phase 5: Conversational MergePilot Runtime
 
 Progress changes:
 
@@ -1449,13 +1459,13 @@ Implemented:
 
 Verification:
 
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/gitOptions.test.ts test/toolCapabilities.test.ts` with 6 tests.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts test/server.test.ts` with 63 tests.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/gitOptions.test.ts test/toolCapabilities.test.ts` with 6 tests.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts test/server.test.ts` with 63 tests.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build`.
 - Added a real Git merge-conflict daemon test proving structured `abort_merge` creates an approval and confirmed execution completes the workflow.
 - Added core Git tool tests proving merge, cherry-pick, and revert recovery actions do not require a start `ref`.
 
@@ -1469,7 +1479,7 @@ Remaining gaps:
 
 Phase:
 
-Phase 3: Durable Workflow Engine / Phase 5: Conversational Dev Agent Runtime
+Phase 3: Durable Workflow Engine / Phase 5: Conversational MergePilot Runtime
 
 Progress changes:
 
@@ -1489,12 +1499,12 @@ Implemented:
 
 Verification:
 
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck`.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/gitOptions.test.ts test/toolCapabilities.test.ts` with 6 tests.
-- Passed `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts test/server.test.ts` with 64 tests.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/gitOptions.test.ts test/toolCapabilities.test.ts` with 6 tests.
+- Passed `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts test/server.test.ts` with 64 tests.
 - Added a real Git merge-conflict daemon test proving `stage_resolved_conflicts` rejects missing paths, creates a selected-path `git_add` approval, and confirmed execution stages only the selected conflict file.
 
 Remaining gaps:
@@ -1550,24 +1560,24 @@ Files changed:
 - `packages/core/test/chatPlannerApproval.test.ts`
 - `packages/core/test/toolCapabilities.test.ts`
 - `docs/third-party-source-reuse.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts test/toolCapabilities.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/chatPlannerApproval.test.ts test/toolCapabilities.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
 ```
 
 Result:
 
-- `@cicd-agent/core` focused tests passed: 2 files, 10 tests.
-- `@cicd-agent/core` typecheck passed.
-- `@cicd-agent/core` full tests passed: 13 files, 40 tests.
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/core` focused tests passed: 2 files, 10 tests.
+- `@mergepilot/core` typecheck passed.
+- `@mergepilot/core` full tests passed: 13 files, 40 tests.
+- `@mergepilot/daemon` typecheck passed.
 
 Next recommended task:
 
@@ -1638,24 +1648,24 @@ Files changed:
 - `packages/daemon/src/server.ts`
 - `packages/daemon/test/chatEvents.test.ts`
 - `apps/desktop/src/api.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatEvents.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatEvents.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
 ```
 
 Result:
 
-- `@cicd-agent/daemon` focused event tests passed: 1 file, 8 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/daemon` full test run: 2 files passed, 1 file failed because of
+- `@mergepilot/daemon` focused event tests passed: 1 file, 8 tests.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/daemon` full test run: 2 files passed, 1 file failed because of
   an existing auth/Cosmos environment issue unrelated to the event
   compatibility change.
 
@@ -1716,24 +1726,24 @@ Files changed:
 - `third_party/open-harness/**`
 - `third_party/open-harness/SOURCE.md`
 - `docs/third-party-source-reuse.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/toolExecutor.test.ts test/chatPlannerApproval.test.ts test/toolCapabilities.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/toolExecutor.test.ts test/chatPlannerApproval.test.ts test/toolCapabilities.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
 ```
 
 Result:
 
-- `@cicd-agent/core` focused tests passed: 3 files, 18 tests.
-- `@cicd-agent/core` typecheck passed.
-- `@cicd-agent/core` full tests passed: 13 files, 42 tests.
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/core` focused tests passed: 3 files, 18 tests.
+- `@mergepilot/core` typecheck passed.
+- `@mergepilot/core` full tests passed: 13 files, 42 tests.
+- `@mergepilot/daemon` typecheck passed.
 
 Next recommended task:
 
@@ -1771,7 +1781,8 @@ Completed:
   - read/list/get/search/query/download MCP tools are low risk
   - create/update/run/link/vote/reply style MCP tools require approval
 - Wired optional Azure DevOps MCP tool discovery into daemon chat sessions
-  behind `CICD_AGENT_ADO_MCP_ENABLED`.
+  behind `MERGEPILOT_ADO_MCP_ENABLED`; legacy `CICD_AGENT_ADO_MCP_ENABLED`
+  remains a compatibility fallback.
 - Preserved default behavior: MCP is disabled unless explicitly enabled, and
   existing self-authored ADO tools remain registered.
 - Fixed daemon test environment isolation by clearing host Azure persistence
@@ -1793,25 +1804,25 @@ Files changed:
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/test/server.test.ts`
 - `docs/third-party-source-reuse.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
 ```
 
 Result:
 
-- `@cicd-agent/core` full tests passed: 14 files, 46 tests.
-- `@cicd-agent/daemon` full tests passed: 3 files, 22 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
+- `@mergepilot/core` full tests passed: 14 files, 46 tests.
+- `@mergepilot/daemon` full tests passed: 3 files, 22 tests.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
 
 Next recommended task:
 
@@ -1862,20 +1873,20 @@ Files changed:
 - `apps/desktop/src/pages/Profiles.tsx`
 - `apps/desktop/src/App.tsx`
 - `apps/desktop/src/api.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 - Vite dev server was started at `http://localhost:1420/`.
 
 Next recommended task:
@@ -1929,20 +1940,20 @@ Files changed:
 - `apps/desktop/src/pages/Repos.tsx`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
 - `apps/desktop/src/pages/Settings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -1984,8 +1995,8 @@ Completed:
 - Added MCP controls to:
   - the Project Links management page
   - the in-chat Project Link creation card
-- Refreshed cross-package build declarations for `@cicd-agent/core` and
-  `@cicd-agent/review-agent`; daemon typecheck depends on those package
+- Refreshed cross-package build declarations for `@mergepilot/core` and
+  `@mergepilot/review-agent`; daemon typecheck depends on those package
   declaration outputs.
 - Updated the third-party reuse registry with the new Project Link-backed MCP
   enablement boundary.
@@ -1999,33 +2010,33 @@ Files changed:
 - `packages/core/src/store/tableProfileStore.ts`
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/src/server.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/core typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/core typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/core` typecheck passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/core` full tests passed: 14 files, 46 tests.
-- `@cicd-agent/daemon` full tests passed: 3 files, 22 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/core` typecheck passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/core` full tests passed: 14 files, 46 tests.
+- `@mergepilot/daemon` full tests passed: 3 files, 22 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -2067,22 +2078,22 @@ Files changed:
 
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/test/chatSessionMcp.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionMcp.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatSessionMcp.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
 ```
 
 Result:
 
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/daemon` typecheck passed.
 - Focused MCP registration test passed.
-- `@cicd-agent/daemon` full tests passed: 4 files, 23 tests.
+- `@mergepilot/daemon` full tests passed: 4 files, 23 tests.
 
 Next recommended task:
 
@@ -2146,21 +2157,21 @@ Files changed:
 - `packages/core/src/chatUiStream.ts`
 - `packages/core/src/index.ts`
 - `packages/core/test/chatUiStream.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatUiStream.test.ts test/gitOptions.test.ts test/chatContext.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/chatUiStream.test.ts test/gitOptions.test.ts test/chatContext.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
 ```
 
 Result:
 
 - Focused core tests passed: 3 files, 9 tests.
-- `@cicd-agent/core` typecheck passed.
-- `@cicd-agent/core` build passed.
+- `@mergepilot/core` typecheck passed.
+- `@mergepilot/core` build passed.
 
 Next recommended task:
 
@@ -2227,28 +2238,28 @@ Files changed:
 - `packages/core/test/chatContext.test.ts`
 - `packages/core/test/gitOptions.test.ts`
 - `packages/daemon/src/server.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/gitOptions.test.ts test/chatContext.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/gitOptions.test.ts test/chatContext.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
 ```
 
 Result:
 
 - Focused core tests passed: 2 files, 6 tests.
-- `@cicd-agent/core` typecheck passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
-- `@cicd-agent/core` build passed.
+- `@mergepilot/core` typecheck passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
+- `@mergepilot/core` build passed.
 - Focused daemon server tests passed: 1 file, 23 tests.
 
 Next recommended task:
@@ -2308,20 +2319,20 @@ Files changed:
 
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/Chat.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -2382,26 +2393,26 @@ Files changed:
 
 - `apps/desktop/src/pages/Chat.tsx`
 - `apps/desktop/src/index.css`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests and verification run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Visual verification artifacts:
 
-- `C:\Users\15492\AppData\Local\Temp\cicd-agent-visual-check\no-profile-model-menu-2.png`
-- `C:\Users\15492\AppData\Local\Temp\cicd-agent-visual-check\profile-branch-menu-2.png`
-- `C:\Users\15492\AppData\Local\Temp\cicd-agent-visual-check\profile-commit-menu-2.png`
+- `C:\Users\15492\AppData\Local\Temp\mergepilot-visual-check\no-profile-model-menu-2.png`
+- `C:\Users\15492\AppData\Local\Temp\mergepilot-visual-check\profile-branch-menu-2.png`
+- `C:\Users\15492\AppData\Local\Temp\mergepilot-visual-check\profile-commit-menu-2.png`
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 - Headless Chrome visual checks passed for the targeted Conversation states.
 
 Next recommended task:
@@ -2449,20 +2460,20 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/Chat.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -2493,14 +2504,14 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/Chat.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests and verification run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Headless Chrome verification:
@@ -2513,8 +2524,8 @@ Headless Chrome verification:
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -2571,28 +2582,28 @@ Files changed:
 - `apps/desktop/src/pages/PullRequests.tsx`
 - `packages/daemon/src/server.ts`
 - `packages/daemon/test/server.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/daemon` tests passed: 4 files, 31 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/review-agent` tests passed: 6 files, 24 tests.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/daemon` tests passed: 4 files, 31 tests.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/review-agent` tests passed: 6 files, 24 tests.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -2643,28 +2654,28 @@ Files changed:
 - `packages/daemon/src/server.ts`
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/api.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/review-agent` tests passed: 7 files, 27 tests.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` tests passed: 4 files, 31 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/review-agent` tests passed: 7 files, 27 tests.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` tests passed: 4 files, 31 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -2700,28 +2711,28 @@ Files changed:
 
 - `packages/review-agent/src/reviewPlanner.ts`
 - `packages/review-agent/test/reviewPlanner.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/review-agent` tests passed: 7 files, 28 tests.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` tests passed: 4 files, 31 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/review-agent` tests passed: 7 files, 28 tests.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` tests passed: 4 files, 31 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -2766,28 +2777,28 @@ Files changed:
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/review-agent` tests passed: 7 files, 29 tests.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` tests passed: 4 files, 31 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/review-agent` tests passed: 7 files, 29 tests.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` tests passed: 4 files, 31 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -2850,32 +2861,32 @@ Files changed:
 - `apps/desktop/src/reviewHistoryLocal.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/reviewHistoryLocal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/reviewHistoryLocal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/core` focused review-history tests passed: 3 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` tests passed: 7 files, 29 tests.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` tests passed: 4 files, 31 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/core` focused review-history tests passed: 3 tests.
+- `@mergepilot/core` build passed.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` tests passed: 7 files, 29 tests.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` tests passed: 4 files, 31 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -2923,30 +2934,30 @@ Files changed:
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test -- test/reviewDecision.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test -- test/reviewDecision.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/review-agent` focused decision tests passed: 1 file, 7 tests.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/review-agent` full tests passed: 7 files, 30 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` tests passed: 4 files, 31 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/review-agent` focused decision tests passed: 1 file, 7 tests.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/review-agent` full tests passed: 7 files, 30 tests.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` tests passed: 4 files, 31 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -2996,33 +3007,33 @@ Files changed:
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/reviewHistoryLocal.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/reviewHistoryLocal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/reviewHistoryLocal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/core` focused review-history tests passed: 1 file, 3 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` tests passed: 7 files, 30 tests.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` tests passed: 4 files, 31 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/core` focused review-history tests passed: 1 file, 3 tests.
+- `@mergepilot/core` build passed.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` tests passed: 7 files, 30 tests.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` tests passed: 4 files, 31 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -3074,32 +3085,32 @@ Files changed:
 - `apps/desktop/src/reviewHistoryLocal.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/reviewHistoryLocal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/reviewHistoryLocal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
 ```
 
 Result:
 
-- `@cicd-agent/core` focused review-history tests passed: 1 file, 3 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/desktop` production build passed.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` tests passed: 7 files, 30 tests.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` tests passed: 4 files, 31 tests.
+- `@mergepilot/core` focused review-history tests passed: 1 file, 3 tests.
+- `@mergepilot/core` build passed.
+- `@mergepilot/desktop` production build passed.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` tests passed: 7 files, 30 tests.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` tests passed: 4 files, 31 tests.
 
 Next recommended task:
 
@@ -3151,33 +3162,33 @@ Files changed:
 - `apps/desktop/src/reviewHistoryLocal.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/reviewHistoryLocal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/reviewHistoryLocal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
 ```
 
 Result:
 
-- `@cicd-agent/core` focused review-history tests passed: 1 file, 3 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/desktop` production build passed.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` tests passed: 7 files, 30 tests.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` tests passed: 4 files, 31 tests.
+- `@mergepilot/core` focused review-history tests passed: 1 file, 3 tests.
+- `@mergepilot/core` build passed.
+- `@mergepilot/desktop` production build passed.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` tests passed: 7 files, 30 tests.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` tests passed: 4 files, 31 tests.
 
 Next recommended task:
 
@@ -3222,24 +3233,24 @@ Files changed:
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
 ```
 
 Result:
 
 - Focused daemon server tests passed: 1 file, 16 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -3290,33 +3301,33 @@ Files changed:
 - `apps/desktop/src/reviewHistoryLocal.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/reviewHistoryLocal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/reviewHistoryLocal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
 ```
 
 Result:
 
-- `@cicd-agent/core` focused review-history tests passed: 1 file, 3 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/desktop` production build passed.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` tests passed: 7 files, 30 tests.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` tests passed: 4 files, 33 tests.
+- `@mergepilot/core` focused review-history tests passed: 1 file, 3 tests.
+- `@mergepilot/core` build passed.
+- `@mergepilot/desktop` production build passed.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` tests passed: 7 files, 30 tests.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` tests passed: 4 files, 33 tests.
 - Focused daemon server tests passed: 1 file, 16 tests.
 
 Next recommended task:
@@ -3351,28 +3362,28 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
 ```
 
 Result:
 
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` production build passed.
 - Focused daemon server tests passed: 1 file, 16 tests.
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/daemon` typecheck passed.
 
 Next recommended task:
 
 - Persist the Azure DevOps thread id and URL returned by successful
   disposition write-back, then display that link in Review Queue so reviewers
-  can jump from Dev Agent audit history to the exact ADO PR discussion.
+  can jump from MergePilot audit history to the exact ADO PR discussion.
 
 ### 2026-06-11 Session Update 40
 
@@ -3419,31 +3430,31 @@ Files changed:
 - `apps/desktop/src/reviewHistoryLocal.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/reviewHistoryLocal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/reviewHistoryLocal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/core` focused review-history tests passed: 1 file, 3 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/core` focused review-history tests passed: 1 file, 3 tests.
+- `@mergepilot/core` build passed.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/daemon` typecheck passed.
 - Focused daemon server tests passed: 1 file, 16 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -3480,18 +3491,18 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -3550,31 +3561,31 @@ Files changed:
 - `apps/desktop/src/reviewHistoryLocal.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/reviewHistoryLocal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/reviewHistoryLocal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/core` focused review-history tests passed: 1 file, 3 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` build passed.
+- `@mergepilot/core` focused review-history tests passed: 1 file, 3 tests.
+- `@mergepilot/core` build passed.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` build passed.
 - Focused daemon server tests passed: 1 file, 16 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -3608,20 +3619,20 @@ Completed:
 Files changed:
 
 - `packages/daemon/test/server.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
 ```
 
 Result:
 
 - Focused daemon server tests passed: 1 file, 17 tests.
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/daemon` typecheck passed.
 
 Next recommended task:
 
@@ -3654,24 +3665,24 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/reviewHistoryLocal.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/reviewHistoryLocal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/reviewHistoryLocal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
 - Focused desktop review-history tests passed: 1 file, 4 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` tests passed: 2 files, 6 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` tests passed: 2 files, 6 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -3713,24 +3724,24 @@ Files changed:
 - `apps/desktop/src/reviewAudit.ts`
 - `apps/desktop/src/reviewAudit.test.ts`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/reviewAudit.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/reviewAudit.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
 - Focused desktop audit view-model tests passed: 1 file, 4 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` tests passed: 3 files, 10 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` tests passed: 3 files, 10 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -3776,23 +3787,23 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
-- `@cicd-agent/desktop` tests passed: 3 files, 10 tests.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
+- `@mergepilot/desktop` tests passed: 3 files, 10 tests.
 - Focused daemon server tests passed: 1 file, 17 tests.
 
 ### 2026-06-11 Session Update 47
@@ -3832,24 +3843,24 @@ Files changed:
 - `apps/desktop/src/reviewRunHistory.ts`
 - `apps/desktop/src/reviewRunHistory.test.ts`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/reviewRunHistory.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/reviewRunHistory.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
 - Focused desktop rerun-history tests passed: 1 file, 4 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` tests passed: 4 files, 14 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` tests passed: 4 files, 14 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -3891,24 +3902,24 @@ Files changed:
 - `apps/desktop/src/reviewRunHistory.ts`
 - `apps/desktop/src/reviewRunHistory.test.ts`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/reviewRunHistory.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/reviewRunHistory.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
 - Focused desktop rerun-history tests passed: 1 file, 5 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` tests passed: 4 files, 15 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` tests passed: 4 files, 15 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -3949,24 +3960,24 @@ Files changed:
 - `apps/desktop/src/reviewRunHistory.ts`
 - `apps/desktop/src/reviewRunHistory.test.ts`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/reviewRunHistory.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/reviewRunHistory.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
 - Focused desktop rerun-history tests passed: 1 file, 8 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` tests passed: 4 files, 18 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` tests passed: 4 files, 18 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -4007,29 +4018,29 @@ Files changed:
 - `packages/daemon/src/server.ts`
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/settings.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/settings.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
 ```
 
 Result:
 
 - Focused core settings tests passed: 1 file, 2 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` tests passed: 4 files, 18 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` tests passed: 4 files, 18 tests.
+- `@mergepilot/desktop` production build passed.
 - Focused daemon server tests passed: 1 file, 17 tests.
 
 Next recommended task:
@@ -4071,24 +4082,24 @@ Files changed:
 - `apps/desktop/src/reviewRunHistory.ts`
 - `apps/desktop/src/reviewRunHistory.test.ts`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/reviewRunHistory.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/reviewRunHistory.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
 - Focused desktop rerun-history tests passed: 1 file, 8 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` tests passed: 4 files, 18 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` tests passed: 4 files, 18 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -4135,24 +4146,24 @@ Files changed:
 - `apps/desktop/src/reviewAudit.ts`
 - `apps/desktop/src/reviewAudit.test.ts`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/reviewAudit.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/reviewAudit.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
 - Focused desktop audit tests passed: 1 file, 8 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` tests passed: 4 files, 22 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` tests passed: 4 files, 22 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -4197,24 +4208,24 @@ Files changed:
 - `apps/desktop/src/reviewOperations.ts`
 - `apps/desktop/src/reviewOperations.test.ts`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/reviewOperations.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/reviewOperations.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
 - Focused desktop review-operation tests passed: 1 file, 4 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` tests passed: 5 files, 26 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` tests passed: 5 files, 26 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -4245,7 +4256,7 @@ Completed:
   - filtering operations by repository
   - limiting returned operations
   - tolerating corrupt operation stores
-- Exported review-operation helpers through `@cicd-agent/core`.
+- Exported review-operation helpers through `@mergepilot/core`.
 - Added daemon endpoints:
   - `GET /profiles/:id/review-operations`
   - `POST /profiles/:id/review-operations`
@@ -4264,30 +4275,30 @@ Files changed:
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/ReviewFindings.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/reviewOperationsLocal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/reviewOperationsLocal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
 - Focused core review-operation tests passed: 1 file, 4 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
 - Focused daemon server tests passed: 1 file, 18 tests.
-- `@cicd-agent/desktop` tests passed: 5 files, 26 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` tests passed: 5 files, 26 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -4333,22 +4344,22 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` tests passed: 5 files, 26 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` tests passed: 5 files, 26 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -4388,22 +4399,22 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` tests passed: 5 files, 26 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` tests passed: 5 files, 26 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -4449,22 +4460,22 @@ Files changed:
 - `packages/core/src/tools/capabilities.ts`
 - `packages/core/test/gitCheckpoint.test.ts`
 - `packages/core/test/toolCapabilities.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/gitCheckpoint.test.ts test/toolCapabilities.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/gitCheckpoint.test.ts test/toolCapabilities.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
 ```
 
 Result:
 
 - Focused core Git checkpoint/capability tests passed: 2 files, 3 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` typecheck passed.
 
 Next recommended task:
 
@@ -4508,23 +4519,23 @@ Files changed:
 - `packages/core/test/toolCapabilities.test.ts`
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/test/chatSessionCheckpoint.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/toolExecutor.test.ts test/gitCheckpoint.test.ts test/toolCapabilities.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/toolExecutor.test.ts test/gitCheckpoint.test.ts test/toolCapabilities.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatSessionCheckpoint.test.ts
 ```
 
 Result:
 
 - Focused core executor/checkpoint/capability tests passed: 3 files, 13 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` typecheck passed.
 - Focused daemon checkpoint tests passed: 1 file, 2 tests.
 
 Next recommended task:
@@ -4565,23 +4576,23 @@ Files changed:
 - `packages/core/test/toolExecutor.test.ts`
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/test/chatSessionCheckpoint.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/toolExecutor.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/toolExecutor.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatSessionCheckpoint.test.ts
 ```
 
 Result:
 
 - Focused core ToolExecutor tests passed: 1 file, 11 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` typecheck passed.
 - Focused daemon checkpoint tests passed: 1 file, 2 tests.
 
 Next recommended task:
@@ -4634,22 +4645,22 @@ Files changed:
 - `packages/daemon/test/chatSessionCheckpoint.test.ts`
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatSessionCheckpoint.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
 ```
 
 Result:
 
 - Focused daemon checkpoint tests passed: 1 file, 4 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
 
 Next recommended task:
 
@@ -4693,22 +4704,22 @@ Files changed:
 - `packages/core/src/tools/capabilities.ts`
 - `packages/core/test/gitCheckpoint.test.ts`
 - `packages/core/test/toolCapabilities.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/gitCheckpoint.test.ts test/toolCapabilities.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/gitCheckpoint.test.ts test/toolCapabilities.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
 ```
 
 Result:
 
 - Focused core checkpoint/capability tests passed: 2 files, 3 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` typecheck passed.
 
 Next recommended task:
 
@@ -4761,30 +4772,30 @@ Files changed:
 - `packages/daemon/test/chatSessionCheckpoint.test.ts`
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/gitCheckpoint.test.ts test/toolCapabilities.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/gitCheckpoint.test.ts test/toolCapabilities.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatSessionCheckpoint.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
 - Focused core checkpoint/capability tests passed: 2 files, 3 tests.
-- `@cicd-agent/core` build passed.
+- `@mergepilot/core` build passed.
 - Focused daemon checkpoint tests passed: 1 file, 4 tests.
 - Daemon HTTP tests passed: 1 file, 19 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -4839,28 +4850,28 @@ Files changed:
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/gitCheckpoint.test.ts test/toolCapabilities.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/gitCheckpoint.test.ts test/toolCapabilities.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
 - Focused core checkpoint/capability tests passed: 2 files, 4 tests.
-- `@cicd-agent/core` build passed.
+- `@mergepilot/core` build passed.
 - Daemon HTTP tests passed: 1 file, 20 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -4913,28 +4924,28 @@ Files changed:
 - `packages/core/test/toolCapabilities.test.ts`
 - `packages/daemon/test/chatSessionCheckpoint.test.ts`
 - `apps/desktop/src/api.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/gitCheckpoint.test.ts test/toolCapabilities.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/gitCheckpoint.test.ts test/toolCapabilities.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatSessionCheckpoint.test.ts test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
 - Focused core checkpoint/capability tests passed: 2 files, 5 tests.
-- `@cicd-agent/core` build passed.
+- `@mergepilot/core` build passed.
 - Daemon checkpoint and HTTP tests passed: 2 files, 25 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -4977,20 +4988,20 @@ Files changed:
 
 - `apps/desktop/src/pages/TaskViewer.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -5032,22 +5043,22 @@ Files changed:
 - `packages/daemon/test/chatSessionCheckpoint.test.ts`
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatSessionCheckpoint.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
 ```
 
 Result:
 
-- `@cicd-agent/daemon` checkpoint tests passed: 1 file, 6 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
+- `@mergepilot/daemon` checkpoint tests passed: 1 file, 6 tests.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
 
 Next recommended task:
 
@@ -5090,20 +5101,20 @@ Files changed:
 - `apps/desktop/src/checkpointHandoff.test.ts`
 - `apps/desktop/src/pages/TaskViewer.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/checkpointHandoff.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/checkpointHandoff.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
 ```
 
 Result:
 
-- `@cicd-agent/desktop` handoff tests passed: 1 file, 2 tests.
-- `@cicd-agent/desktop` typecheck passed.
+- `@mergepilot/desktop` handoff tests passed: 1 file, 2 tests.
+- `@mergepilot/desktop` typecheck passed.
 
 Next recommended task:
 
@@ -5157,26 +5168,26 @@ Files changed:
 - `packages/core/test/reviewOperationsLocal.test.ts`
 - `packages/daemon/src/server.ts`
 - `packages/daemon/test/server.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/reviewOperationsLocal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/reviewOperations.test.ts src/checkpointHandoff.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/reviewOperationsLocal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/reviewOperations.test.ts src/checkpointHandoff.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
 ```
 
 Result:
 
-- `@cicd-agent/core` review-operation tests passed: 1 file, 4 tests.
-- `@cicd-agent/desktop` focused tests passed: 2 files, 6 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` server tests passed: 1 file, 20 tests.
+- `@mergepilot/core` review-operation tests passed: 1 file, 4 tests.
+- `@mergepilot/desktop` focused tests passed: 2 files, 6 tests.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` server tests passed: 1 file, 20 tests.
 
 Next recommended task:
 
@@ -5216,22 +5227,22 @@ Files changed:
 - `apps/desktop/src/prInsightArtifacts.ts`
 - `apps/desktop/src/prInsightArtifacts.test.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/prInsightArtifacts.test.ts src/reviewOperations.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/prInsightArtifacts.test.ts src/reviewOperations.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` focused tests passed: 2 files, 7 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` focused tests passed: 2 files, 7 tests.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -5275,30 +5286,30 @@ Files changed:
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/prInsightArtifactsLocal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/prInsightArtifactsLocal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/core` PR insight artifact tests passed: 1 file, 3 tests.
-- `@cicd-agent/core` typecheck passed.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` server tests passed: 1 file, 21 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/core` PR insight artifact tests passed: 1 file, 3 tests.
+- `@mergepilot/core` typecheck passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` server tests passed: 1 file, 21 tests.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -5349,22 +5360,22 @@ Files changed:
 
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/test/chatSessionCheckpoint.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatSessionCheckpoint.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon build
 ```
 
 Result:
 
-- `@cicd-agent/daemon` checkpoint/chat context tests passed: 1 file, 8 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` build passed.
+- `@mergepilot/daemon` checkpoint/chat context tests passed: 1 file, 8 tests.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` build passed.
 
 Next recommended task:
 
@@ -5396,22 +5407,22 @@ Completed:
 Files changed:
 
 - `packages/daemon/src/chatSession.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatSessionCheckpoint.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon build
 ```
 
 Result:
 
-- `@cicd-agent/daemon` checkpoint/chat context tests passed: 1 file, 8 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` build passed.
+- `@mergepilot/daemon` checkpoint/chat context tests passed: 1 file, 8 tests.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` build passed.
 
 Next recommended task:
 
@@ -5450,22 +5461,22 @@ Files changed:
 - `apps/desktop/src/checkpointHandoff.ts`
 - `apps/desktop/src/checkpointHandoff.test.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/checkpointHandoff.test.ts src/prInsightArtifacts.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/checkpointHandoff.test.ts src/prInsightArtifacts.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` focused tests passed: 2 files, 6 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` focused tests passed: 2 files, 6 tests.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -5513,20 +5524,20 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -5559,20 +5570,20 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -5615,22 +5626,22 @@ Files changed:
 - `apps/desktop/src/prInsightArtifacts.ts`
 - `apps/desktop/src/prInsightArtifacts.test.ts`
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/prInsightArtifacts.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/prInsightArtifacts.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` PR insight artifact tests passed: 1 file, 4 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` PR insight artifact tests passed: 1 file, 4 tests.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -5671,34 +5682,34 @@ Files changed:
 - `packages/core/test/prInsightArtifactsLocal.test.ts`
 - `packages/daemon/src/server.ts`
 - `packages/daemon/test/server.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/prInsightArtifactsLocal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/prInsightArtifacts.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/prInsightArtifactsLocal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/prInsightArtifacts.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/daemon build
 ```
 
 Result:
 
-- `@cicd-agent/core` PR insight artifact tests passed: 1 file, 3 tests.
-- `@cicd-agent/desktop` PR insight artifact tests passed: 1 file, 4 tests.
-- `@cicd-agent/core` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` typecheck passed after core build refreshed exported types.
-- `@cicd-agent/daemon` server tests passed: 1 file, 21 tests.
-- `@cicd-agent/desktop` production build passed.
-- `@cicd-agent/daemon` build passed.
+- `@mergepilot/core` PR insight artifact tests passed: 1 file, 3 tests.
+- `@mergepilot/desktop` PR insight artifact tests passed: 1 file, 4 tests.
+- `@mergepilot/core` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` typecheck passed after core build refreshed exported types.
+- `@mergepilot/daemon` server tests passed: 1 file, 21 tests.
+- `@mergepilot/desktop` production build passed.
+- `@mergepilot/daemon` build passed.
 
 Next recommended task:
 
@@ -5736,22 +5747,22 @@ Files changed:
 - `apps/desktop/src/prInsightArtifacts.ts`
 - `apps/desktop/src/prInsightArtifacts.test.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/prInsightArtifacts.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/prInsightArtifacts.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` PR insight artifact tests passed: 1 file, 5 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` PR insight artifact tests passed: 1 file, 5 tests.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -5790,20 +5801,20 @@ Files changed:
 - `apps/desktop/src/pages/PullRequests.tsx`
 - `packages/core/src/prInsightArtifactsLocal.ts`
 - `packages/core/test/prInsightArtifactsLocal.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/prInsightArtifacts.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/prInsightArtifactsLocal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/prInsightArtifacts.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/prInsightArtifactsLocal.test.ts
 ```
 
 Result:
 
-- `@cicd-agent/desktop` PR insight artifact tests passed: 1 file, 6 tests.
-- `@cicd-agent/core` PR insight artifact local-store tests passed: 1 file, 4
+- `@mergepilot/desktop` PR insight artifact tests passed: 1 file, 6 tests.
+- `@mergepilot/core` PR insight artifact local-store tests passed: 1 file, 4
   tests.
 
 Next recommended task:
@@ -5837,20 +5848,20 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/PullRequests.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -5886,20 +5897,20 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -5937,22 +5948,22 @@ Files changed:
 
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/test/chatSessionCheckpoint.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatSessionCheckpoint.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
 ```
 
 Result:
 
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` checkpoint/chat-context tests passed: 1 file, 9 tests.
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` checkpoint/chat-context tests passed: 1 file, 9 tests.
+- `@mergepilot/daemon` typecheck passed.
 
 Next recommended task:
 
@@ -5987,14 +5998,14 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/Chat.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
@@ -6002,8 +6013,8 @@ Result:
 - Initial sandboxed runs failed because the sandboxed Node process could not see
   pnpm's TypeScript/Vite files under `node_modules/.pnpm`.
 - Re-running the same commands with approved elevated execution passed.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -6040,20 +6051,20 @@ Files changed:
 - `apps/desktop/src/checkpointHandoff.ts`
 - `apps/desktop/src/pages/Chat.tsx`
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -6093,20 +6104,20 @@ Files changed:
 - `apps/desktop/src/checkpointHandoff.ts`
 - `apps/desktop/src/pages/TaskViewer.tsx`
 - `apps/desktop/src/pages/PullRequests.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -6146,22 +6157,22 @@ Files changed:
 - `apps/desktop/src/checkpointHandoff.test.ts`
 - `apps/desktop/src/pages/Chat.tsx`
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/checkpointHandoff.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/checkpointHandoff.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` handoff tests passed: 1 file, 5 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` handoff tests passed: 1 file, 5 tests.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -6195,20 +6206,20 @@ Files changed:
 
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/test/chatSessionCheckpoint.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatSessionCheckpoint.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
 ```
 
 Result:
 
-- `@cicd-agent/daemon` checkpoint/chat-context tests passed: 1 file, 10 tests.
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/daemon` checkpoint/chat-context tests passed: 1 file, 10 tests.
+- `@mergepilot/daemon` typecheck passed.
 
 Next recommended task:
 
@@ -6245,22 +6256,22 @@ Files changed:
 - `apps/desktop/src/checkpointHandoff.test.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/checkpointHandoff.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/checkpointHandoff.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` handoff tests passed: 1 file, 5 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` handoff tests passed: 1 file, 5 tests.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -6298,20 +6309,20 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -6344,20 +6355,20 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -6388,20 +6399,20 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/PullRequests.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -6444,24 +6455,24 @@ Files changed:
 - `packages/core/test/prInsightArtifactsLocal.test.ts`
 - `packages/daemon/src/server.ts`
 - `packages/daemon/test/server.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/prInsightArtifactsLocal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/prInsightArtifactsLocal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
 ```
 
 Result:
 
-- `@cicd-agent/core` PR insight artifact tests passed: 1 file, 5 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` server tests passed: 1 file, 21 tests.
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/core` PR insight artifact tests passed: 1 file, 5 tests.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` server tests passed: 1 file, 21 tests.
+- `@mergepilot/daemon` typecheck passed.
 
 Next recommended task:
 
@@ -6496,20 +6507,20 @@ Files changed:
 
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -6547,26 +6558,26 @@ Files changed:
 - `packages/daemon/src/server.ts`
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/api.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/prInsightArtifactsLocal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/prInsightArtifactsLocal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
 ```
 
 Result:
 
-- `@cicd-agent/core` PR insight artifact tests passed: 1 file, 6 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` server tests passed: 1 file, 21 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
+- `@mergepilot/core` PR insight artifact tests passed: 1 file, 6 tests.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` server tests passed: 1 file, 21 tests.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
 
 Next recommended task:
 
@@ -6635,32 +6646,32 @@ Files changed:
 - `packages/core/src/tools/capabilities.ts`
 - `packages/core/test/chatContext.test.ts`
 - `packages/daemon/src/chatSession.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/chatContext.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionMcp.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/chatContext.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatSessionCheckpoint.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatSessionMcp.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/core` chat context tests passed: 1 file, 3 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` checkpoint tests passed: 1 file, 10 tests.
-- `@cicd-agent/daemon` MCP/chat registration tests passed: 1 file, 1 test.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
-- `@cicd-agent/desktop` typecheck passed after adding Conversation quick
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/core` chat context tests passed: 1 file, 3 tests.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` checkpoint tests passed: 1 file, 10 tests.
+- `@mergepilot/daemon` MCP/chat registration tests passed: 1 file, 1 test.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed after adding Conversation quick
   suggestions.
 
 Next recommended task:
@@ -6721,27 +6732,27 @@ Files changed:
 - `apps/desktop/src/pages/Settings.tsx`
 - `packages/core/test/chatPlannerApproval.test.ts`
 - `docs/conversation-streaming-design.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/chatPlannerApproval.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
-- `@cicd-agent/core` ChatPlanner approval/JSON guard tests passed: 1 file, 9
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
+- `@mergepilot/core` ChatPlanner approval/JSON guard tests passed: 1 file, 9
   tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/desktop` typecheck passed after Context source metadata rendering.
+- `@mergepilot/core` build passed.
+- `@mergepilot/desktop` typecheck passed after Context source metadata rendering.
 
 Next recommended task:
 
@@ -6795,29 +6806,29 @@ Files changed:
 - `apps/desktop/src/chatBubbles.test.ts`
 - `apps/desktop/src/pages/Chat.tsx`
 - `docs/conversation-streaming-design.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/chatPlannerApproval.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/chatBubbles.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/core` ChatPlanner approval/streaming tests passed: 1 file, 10
+- `@mergepilot/core` ChatPlanner approval/streaming tests passed: 1 file, 10
   tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` Chat bubble finalization tests passed: 1 file, 3 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` Chat bubble finalization tests passed: 1 file, 3 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -6860,27 +6871,27 @@ Files changed:
 - `packages/core/src/chatPlanner.ts`
 - `packages/core/test/chatPlannerApproval.test.ts`
 - `docs/conversation-streaming-design.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/chatPlannerApproval.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/core` ChatPlanner approval/streaming tests passed: 1 file, 12
+- `@mergepilot/core` ChatPlanner approval/streaming tests passed: 1 file, 12
   tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -6940,28 +6951,28 @@ Files changed:
 - `packages/daemon/src/server.ts`
 - `packages/review-agent/src/config.ts`
 - `packages/review-agent/deploy/containerapp.bicep`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/settings.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/settings.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/core` settings tests passed: 1 file, 5 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/core` settings tests passed: 1 file, 5 tests.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -7016,22 +7027,22 @@ Files changed:
 - `apps/desktop/src/pages/Settings.tsx`
 - `packages/core/src/llm.ts`
 - `packages/core/src/chatPlanner.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -7082,26 +7093,26 @@ Files changed:
 - `packages/daemon/src/server.ts`
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/Chat.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/chatContext.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/chatContext.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/core` chat context tests passed: 1 file, 3 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/core` chat context tests passed: 1 file, 3 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -7160,27 +7171,27 @@ Files changed:
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/Profiles.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/daemon` typecheck passed.
 - Focused daemon server tests passed.
-- `@cicd-agent/daemon` full tests passed: 4 files, 24 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/daemon` full tests passed: 4 files, 24 tests.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Current product impact:
 
@@ -7239,26 +7250,26 @@ Files changed:
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/Profiles.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/daemon` typecheck passed.
 - Focused daemon server tests passed: 8 tests.
-- `@cicd-agent/daemon` full tests passed: 4 files, 25 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/daemon` full tests passed: 4 files, 25 tests.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -7325,32 +7336,32 @@ Files changed:
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/Profiles.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/core` typecheck and build passed.
-- `@cicd-agent/core` full tests passed: 14 files, 46 tests.
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/core` typecheck and build passed.
+- `@mergepilot/core` full tests passed: 14 files, 46 tests.
+- `@mergepilot/daemon` typecheck passed.
 - Focused daemon server tests passed: 8 tests.
-- `@cicd-agent/daemon` full tests passed: 4 files, 25 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/daemon` full tests passed: 4 files, 25 tests.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -7407,33 +7418,33 @@ Files changed:
 - `packages/daemon/src/server.ts`
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/api.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/azureDevOpsInternal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/azureDevOpsInternal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/core` typecheck passed.
+- `@mergepilot/core` typecheck passed.
 - Focused Azure DevOps internal-port tests passed: 4 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/daemon` typecheck passed.
 - Focused daemon server tests passed: 9 tests.
-- `@cicd-agent/core` full tests passed: 15 files, 50 tests.
-- `@cicd-agent/daemon` full tests passed: 4 files, 26 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/core` full tests passed: 15 files, 50 tests.
+- `@mergepilot/daemon` full tests passed: 4 files, 26 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -7481,20 +7492,20 @@ Files changed:
 
 - `apps/desktop/src/pages/PullRequests.tsx`
 - `apps/desktop/src/api.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -7591,31 +7602,31 @@ Files changed:
 - `apps/desktop/src/projectLinks.ts`
 - `apps/desktop/src/pages/Profiles.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/azureDevOpsInternal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/azureDevOpsInternal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
 ```
 
 Result:
 
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
 - Focused daemon server tests passed: 10 tests.
 - Focused Azure DevOps internal-port tests passed: 5 tests.
-- `@cicd-agent/desktop` production build passed.
-- `@cicd-agent/core` full tests passed: 15 files, 51 tests.
-- `@cicd-agent/daemon` full tests passed: 4 files, 27 tests.
+- `@mergepilot/desktop` production build passed.
+- `@mergepilot/core` full tests passed: 15 files, 51 tests.
+- `@mergepilot/daemon` full tests passed: 4 files, 27 tests.
 
 Next recommended task:
 
@@ -7677,32 +7688,32 @@ Files changed:
 - `apps/desktop/src/pages/Profiles.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
 - `apps/desktop/src/pages/PullRequests.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/azureDevOpsInternal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/azureDevOpsInternal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
 ```
 
 Result:
 
 - Focused Azure DevOps internal-port tests passed: 6 tests.
-- `@cicd-agent/core` build passed.
+- `@mergepilot/core` build passed.
 - Focused daemon server tests passed: 10 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
-- `@cicd-agent/core` full tests passed: 15 files, 52 tests.
-- `@cicd-agent/daemon` full tests passed: 4 files, 27 tests.
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
+- `@mergepilot/core` full tests passed: 15 files, 52 tests.
+- `@mergepilot/daemon` full tests passed: 4 files, 27 tests.
+- `@mergepilot/daemon` typecheck passed.
 
 Next recommended task:
 
@@ -7754,29 +7765,29 @@ Files changed:
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/core test
 ```
 
 Result:
 
-- `@cicd-agent/daemon` typecheck passed.
+- `@mergepilot/daemon` typecheck passed.
 - Focused daemon server tests passed: 11 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
-- `@cicd-agent/daemon` full tests passed: 4 files, 28 tests.
-- `@cicd-agent/core` full tests passed: 15 files, 52 tests.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
+- `@mergepilot/daemon` full tests passed: 4 files, 28 tests.
+- `@mergepilot/core` full tests passed: 15 files, 52 tests.
 
 Next recommended task:
 
@@ -7804,7 +7815,7 @@ Status change:
 
 Completed:
 
-- Added structured ADO auth diagnostics in `@cicd-agent/core`.
+- Added structured ADO auth diagnostics in `@mergepilot/core`.
 - Added diagnostic statuses:
   - `ok`
   - `oauth_unavailable`
@@ -7834,30 +7845,30 @@ Files changed:
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/Profiles.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/azureDevOpsInternal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/azureDevOpsInternal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
 - Focused Azure DevOps internal-port tests passed: 7 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/desktop` typecheck passed.
+- `@mergepilot/core` build passed.
+- `@mergepilot/desktop` typecheck passed.
 - Focused daemon server tests passed: 12 tests.
-- `@cicd-agent/core` full tests passed: 15 files, 53 tests.
-- `@cicd-agent/daemon` full tests passed: 4 files, 29 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/core` full tests passed: 15 files, 53 tests.
+- `@mergepilot/daemon` full tests passed: 4 files, 29 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -7905,24 +7916,24 @@ Files changed:
 - `pnpm-lock.yaml`
 - `apps/desktop/src/pages/Profiles.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 .\.tools\pnpm.exe install --lockfile-only
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 - Lockfile-only install completed.
-- `@cicd-agent/desktop` tests passed: 1 file, 2 tests.
+- `@mergepilot/desktop` tests passed: 1 file, 2 tests.
 
 Next recommended task:
 
@@ -7962,24 +7973,24 @@ Files changed:
 
 - `packages/daemon/src/server.ts`
 - `apps/desktop/src/api.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
 - Focused daemon server tests passed: 12 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -8025,25 +8036,25 @@ Files changed:
 - `packages/core/src/tools/azureDevOps.ts`
 - `packages/core/test/azureDevOpsInternal.test.ts`
 - `packages/daemon/test/server.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/azureDevOpsInternal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/azureDevOpsInternal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
 ```
 
 Result:
 
 - Focused Azure DevOps internal-port tests passed: 8 tests.
-- `@cicd-agent/core` build passed.
-- `@cicd-agent/desktop` tests passed: 1 file, 2 tests.
-- `@cicd-agent/daemon` full tests passed: 4 files, 30 tests.
+- `@mergepilot/core` build passed.
+- `@mergepilot/desktop` tests passed: 1 file, 2 tests.
+- `@mergepilot/daemon` full tests passed: 4 files, 30 tests.
 
 Next recommended task:
 
@@ -8100,27 +8111,27 @@ Files changed:
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/daemon` tests passed: 4 files, 30 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` tests passed: 1 file, 2 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/daemon` tests passed: 4 files, 30 tests.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` tests passed: 1 file, 2 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -8165,33 +8176,33 @@ Files changed:
 - `packages/daemon/src/server.ts`
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/review-agent` tests passed: 6 files, 19 tests.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` tests passed: 4 files, 30 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` tests passed: 1 file, 2 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/review-agent` tests passed: 6 files, 19 tests.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` tests passed: 4 files, 30 tests.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` tests passed: 1 file, 2 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -8232,29 +8243,29 @@ Files changed:
 - `packages/review-agent/src/reviewPlanner.ts`
 - `packages/review-agent/src/index.ts`
 - `packages/review-agent/test/reviewPlanner.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/review-agent` tests passed: 6 files, 20 tests.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` tests passed: 4 files, 30 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/review-agent` tests passed: 6 files, 20 tests.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` tests passed: 4 files, 30 tests.
+- `@mergepilot/desktop` production build passed.
 - Vite dev server HTTP smoke test passed on `http://127.0.0.1:1421`:
   - `/` returned `200`
   - app shell contained `#root` and `/src/main.tsx`
@@ -8302,29 +8313,29 @@ Files changed:
 - `packages/review-agent/src/reviewPlanner.ts`
 - `packages/review-agent/src/index.ts`
 - `packages/review-agent/test/reviewPlanner.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/review-agent` tests passed: 6 files, 21 tests.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` tests passed: 4 files, 30 tests.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/review-agent` tests passed: 6 files, 21 tests.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` tests passed: 4 files, 30 tests.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -8366,29 +8377,29 @@ Files changed:
 - `packages/daemon/src/server.ts`
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/PullRequests.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/third-party-source-reuse.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/review-agent` tests passed: 6 files, 21 tests.
-- `@cicd-agent/review-agent` build passed.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/daemon` tests passed: 4 files, 30 tests.
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/review-agent` tests passed: 6 files, 21 tests.
+- `@mergepilot/review-agent` build passed.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/daemon` tests passed: 4 files, 30 tests.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -8429,28 +8440,28 @@ Completed:
 Files changed:
 
 - `packages/daemon/test/server.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
 ```
 
 Result:
 
-- `@cicd-agent/daemon` tests passed: 4 files, 31 tests.
-- `@cicd-agent/daemon` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
-- `@cicd-agent/review-agent` tests passed: 6 files, 22 tests.
-- `@cicd-agent/review-agent` typecheck passed.
-- `@cicd-agent/review-agent` build passed.
+- `@mergepilot/daemon` tests passed: 4 files, 31 tests.
+- `@mergepilot/daemon` typecheck passed.
+- `@mergepilot/desktop` production build passed.
+- `@mergepilot/review-agent` tests passed: 6 files, 22 tests.
+- `@mergepilot/review-agent` typecheck passed.
+- `@mergepilot/review-agent` build passed.
 
 Next recommended task:
 
@@ -8488,20 +8499,20 @@ Files changed:
 
 - `apps/desktop/src/projectLinks.ts`
 - `apps/desktop/src/App.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
 
-- `@cicd-agent/desktop` typecheck passed.
-- `@cicd-agent/desktop` production build passed.
+- `@mergepilot/desktop` typecheck passed.
+- `@mergepilot/desktop` production build passed.
 
 Next recommended task:
 
@@ -8514,7 +8525,7 @@ Next recommended task:
 
 Phase:
 
-Phase 5: Conversational Dev Agent Runtime
+Phase 5: Conversational MergePilot Runtime
 
 Status change:
 
@@ -8557,19 +8568,19 @@ Files changed:
 - `apps/desktop/src/api.ts`
 - `apps/desktop/src/pages/Chat.tsx`
 - `docs/source-reuse-streaming-event-intake.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/toolExecutor.test.ts test/chatUiStream.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatEvents.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/toolExecutor.test.ts test/chatUiStream.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatEvents.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
 ```
 
 Result:
@@ -8591,7 +8602,7 @@ Next recommended task:
 
 Phase:
 
-Phase 5: Conversational Dev Agent Runtime
+Phase 5: Conversational MergePilot Runtime
 
 Status change:
 
@@ -8630,7 +8641,7 @@ Files changed:
 
 - `docs/agent-architecture-alignment.md`
 - `docs/source-reuse-streaming-event-intake.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `packages/core/src/chatPlanner.ts`
 - `packages/core/src/chatUiStream.ts`
 - `packages/core/test/chatPlannerApproval.test.ts`
@@ -8643,14 +8654,14 @@ Files changed:
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts test/chatUiStream.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatEvents.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/chatPlannerApproval.test.ts test/chatUiStream.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatEvents.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
 ```
 
 Result:
@@ -8672,7 +8683,7 @@ Next recommended task:
 
 Phase:
 
-Phase 5: Conversational Dev Agent Runtime
+Phase 5: Conversational MergePilot Runtime
 
 Status change:
 
@@ -8705,19 +8716,19 @@ Files changed:
 - `packages/core/test/chatPlannerApproval.test.ts`
 - `docs/source-reuse-streaming-event-intake.md`
 - `docs/agent-architecture-alignment.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts test/chatUiStream.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatEvents.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/chatPlannerApproval.test.ts test/chatUiStream.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatEvents.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
 ```
 
 Result:
@@ -8738,7 +8749,7 @@ Next recommended task:
 
 Phase:
 
-Phase 5: Conversational Dev Agent Runtime
+Phase 5: Conversational MergePilot Runtime
 
 Status change:
 
@@ -8766,19 +8777,19 @@ Files changed:
 - `packages/core/src/chatPlanner.ts`
 - `packages/core/test/chatPlannerApproval.test.ts`
 - `docs/source-reuse-streaming-event-intake.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts test/chatUiStream.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatEvents.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/chatPlannerApproval.test.ts test/chatUiStream.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatEvents.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
 ```
 
 Result:
@@ -8800,7 +8811,7 @@ Next recommended task:
 
 Phase:
 
-Phase 5: Conversational Dev Agent Runtime
+Phase 5: Conversational MergePilot Runtime
 
 Status change:
 
@@ -8829,16 +8840,16 @@ Files changed:
 - `apps/desktop/src/pages/Chat.tsx`
 - `packages/daemon/src/chatSession.ts`
 - `docs/source-reuse-streaming-event-intake.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts test/chatUiStream.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/chatPlannerApproval.test.ts test/chatUiStream.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatBubbles.test.ts
 ```
 
 Result:
@@ -8890,14 +8901,14 @@ Files changed:
 - `tests/e2e/chat-layout.spec.ts`
 - `apps/desktop/src/pages/Chat.tsx`
 - `docs/conversation-frontend-ux-progress-tracker.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 git diff --check
 ```
 
@@ -8952,13 +8963,13 @@ Files changed:
 - `apps/desktop/src/pages/Chat.tsx`
 - `tests/e2e/chat-layout.spec.ts`
 - `docs/conversation-frontend-ux-progress-tracker.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
 ```
@@ -9008,13 +9019,13 @@ Files changed:
 - `apps/desktop/src/pages/Chat.tsx`
 - `tests/e2e/chat-layout.spec.ts`
 - `docs/conversation-frontend-ux-progress-tracker.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ExecutionTimeline.test.tsx src/chatRenderItems.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ExecutionTimeline.test.tsx src/chatRenderItems.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
 ```
@@ -9061,13 +9072,13 @@ Files changed:
 - `apps/desktop/src/pages/Chat.tsx`
 - `tests/e2e/chat-layout.spec.ts`
 - `docs/conversation-frontend-ux-progress-tracker.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
 ```
@@ -9115,15 +9126,15 @@ Files changed:
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/test/chatSessionWorkflow.test.ts`
 - `docs/conversation-frontend-ux-progress-tracker.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatContext.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/chatContext.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
 ```
 
 Result:
@@ -9169,14 +9180,14 @@ Files changed:
 - `apps/desktop/src/pages/Chat.tsx`
 - `tests/e2e/chat-layout.spec.ts`
 - `docs/conversation-frontend-ux-progress-tracker.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 ```
 
 Result:
@@ -9221,7 +9232,7 @@ Files changed:
 - `apps/desktop/src/pages/Chat.tsx`
 - `tests/e2e/chat-layout.spec.ts`
 - `docs/conversation-frontend-ux-progress-tracker.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `pnpm-lock.yaml`
 
 Tests run:
@@ -9229,7 +9240,7 @@ Tests run:
 ```powershell
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 ```
 
 Result:
@@ -9277,7 +9288,7 @@ Files changed:
 - `apps/desktop/src/pages/Chat.tsx`
 - `tests/e2e/chat-layout.spec.ts`
 - `docs/conversation-frontend-ux-progress-tracker.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `package.json`
 - `playwright.config.ts`
 - `pnpm-lock.yaml`
@@ -9289,8 +9300,8 @@ $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe install
 .\.tools\pnpm.exe exec playwright install chromium
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
 ```
 
 Result:
@@ -9350,16 +9361,16 @@ Files changed:
 - `apps/desktop/src/pages/Chat.tsx`
 - `apps/desktop/src/index.css`
 - `docs/conversation-frontend-ux-progress-tracker.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
 ```
 
 Result:
@@ -9407,17 +9418,17 @@ Files changed:
 - `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
 - `docs/conversation-frontend-ux-progress-tracker.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
 ```
 
 Result:
@@ -9486,19 +9497,19 @@ Files changed:
 - `apps/desktop/src/chatBubbles.test.ts`
 - `tests/e2e/chat-layout.spec.ts`
 - `docs/conversation-frontend-ux-progress-tracker.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatUiStream.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatEvents.test.ts test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatBubbles.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/chatUiStream.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatEvents.test.ts test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatBubbles.test.ts src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
 git diff --check
@@ -9556,12 +9567,12 @@ Files changed:
 - `apps/desktop/src/pages/Chat.tsx`
 - `tests/e2e/chat-layout.spec.ts`
 - `docs/conversation-frontend-ux-progress-tracker.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "deduplicates legacy and UI stream error events"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
@@ -9611,12 +9622,12 @@ Files changed:
 - `apps/desktop/src/pages/Chat.tsx`
 - `tests/e2e/chat-layout.spec.ts`
 - `docs/conversation-frontend-ux-progress-tracker.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "renders long streamed markdown with sources and tool output"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
@@ -9660,13 +9671,13 @@ Files changed:
 - `apps/desktop/src/api.test.ts`
 - `tests/e2e/chat-layout.spec.ts`
 - `docs/conversation-frontend-ux-progress-tracker.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/api.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/api.test.ts
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "releases the composer after a UI-stream-only finish"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
@@ -9720,15 +9731,15 @@ Files changed:
 - `packages/core/test/chatPlannerApproval.test.ts`
 - `packages/core/test/toolCapabilities.test.ts`
 - `docs/conversation-git-agent-optimization.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts test/chatUseCases.test.ts test/toolCapabilities.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/chatPlannerApproval.test.ts test/chatUseCases.test.ts test/toolCapabilities.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
 ```
 
 Result:
@@ -9780,12 +9791,12 @@ Files changed:
 - `apps/desktop/src/pages/Chat.tsx`
 - `tests/e2e/chat-layout.spec.ts`
 - `docs/conversation-git-agent-optimization.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "routes right-panel commit controls as explicit structured actions"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
@@ -9834,14 +9845,14 @@ Files changed:
 - `packages/daemon/test/server.test.ts`
 - `tests/e2e/chat-layout.spec.ts`
 - `docs/conversation-git-agent-optimization.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts -t "latest active PR fallback"
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts -t "latest active PR fallback"
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "routes PR insight controls without requiring a typed PR id"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
@@ -9904,15 +9915,15 @@ Files changed:
 - `packages/core/src/chatPlanner.ts`
 - `apps/desktop/src/pages/Chat.tsx`
 - `docs/conversation-git-agent-optimization.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
 ```
@@ -9987,17 +9998,17 @@ Files changed:
 - `apps/desktop/src/pages/Chat.tsx`
 - `tests/e2e/chat-layout.spec.ts`
 - `docs/conversation-git-agent-optimization.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
 ```
@@ -10067,18 +10078,18 @@ Files changed:
 - `apps/desktop/src/pages/Chat.tsx`
 - `apps/desktop/src/components/conversation/ApprovalEvidence.tsx`
 - `docs/conversation-git-agent-optimization.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/validationTools.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/validationTools.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
 $env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts
 ```
@@ -10141,17 +10152,17 @@ Files changed:
 - `packages/daemon/src/server.ts`
 - `packages/daemon/test/server.test.ts`
 - `docs/conversation-git-agent-optimization.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/validationTools.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/validationTools.test.ts
 ```
 
 Result:
@@ -10205,14 +10216,14 @@ Files changed:
 - `packages/daemon/src/server.ts`
 - `packages/daemon/test/server.test.ts`
 - `docs/conversation-git-agent-optimization.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
 ```
 
 Result:
@@ -10270,17 +10281,17 @@ Files changed:
 - `apps/desktop/src/components/conversation/ApprovalEvidence.tsx`
 - `apps/desktop/src/components/conversation/ApprovalEvidence.test.tsx`
 - `docs/conversation-git-agent-optimization.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ApprovalEvidence.test.tsx
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ApprovalEvidence.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
 ```
 
 Result:
@@ -10353,16 +10364,16 @@ Files changed:
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/test/chatSessionWorkflow.test.ts`
 - `docs/conversation-git-agent-optimization.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatBubbles.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
 ```
 
 Result:
@@ -10426,15 +10437,15 @@ Files changed:
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/test/chatSessionWorkflow.test.ts`
 - `docs/conversation-git-agent-optimization.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
 ```
 
 Result:
@@ -10489,13 +10500,13 @@ Files changed:
 
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/test/chatSessionWorkflow.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
 ```
 
 Result:
@@ -10539,13 +10550,13 @@ Files changed:
 
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/test/chatSessionWorkflow.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
 ```
 
 Result:
@@ -10595,18 +10606,18 @@ Files changed:
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/components/conversation/ApprovalEvidence.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
 .\.tools\pnpm.exe install --frozen-lockfile --force
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts
 ```
 
 Result:
@@ -10644,13 +10655,13 @@ Files changed:
 
 - `apps/desktop/src/components/conversation/ApprovalEvidence.tsx`
 - `apps/desktop/src/components/conversation/ApprovalEvidence.test.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ApprovalEvidence.test.tsx
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ApprovalEvidence.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 ```
 
 Result:
@@ -10691,13 +10702,13 @@ Files changed:
 
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/test/chatSessionWorkflow.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
 ```
 
 Result:
@@ -10739,13 +10750,13 @@ Files changed:
 
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/test/chatSessionCheckpoint.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionCheckpoint.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
 ```
 
 Result:
@@ -10781,13 +10792,13 @@ Files changed:
 
 - `apps/desktop/src/components/conversation/SuggestionReplyBar.tsx`
 - `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 ```
 
 Result:
@@ -10830,13 +10841,13 @@ Files changed:
 
 - `apps/desktop/src/pages/Chat.tsx`
 - `apps/desktop/src/pages/ChatWorkflowState.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/pages/ChatWorkflowState.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ChatWorkflowState.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 ```
 
 Result:
@@ -10875,13 +10886,13 @@ Files changed:
 
 - `apps/desktop/src/pages/Chat.tsx`
 - `apps/desktop/src/pages/ChatWorkflowState.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/pages/ChatWorkflowState.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ChatWorkflowState.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 ```
 
 Result:
@@ -10917,13 +10928,13 @@ Completed:
 Files changed:
 
 - `tests/e2e/chat-layout.spec.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "routes PR insight controls" --project=chromium
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/pages/ChatWorkflowState.test.ts src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ChatWorkflowState.test.ts src/components/conversation/SuggestionReplyBar.test.tsx
 git diff --check
 ```
 
@@ -10973,13 +10984,13 @@ Files changed:
 - `packages/daemon/src/server.ts`
 - `packages/daemon/test/server.test.ts`
 - `docs/conversation-git-agent-optimization.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
 ```
 
 Result:
@@ -11030,17 +11041,17 @@ Files changed:
 - `packages/daemon/src/server.ts`
 - `packages/daemon/test/server.test.ts`
 - `docs/conversation-git-agent-optimization.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/prInsightArtifactsLocal.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/prInsightArtifacts.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/prInsightArtifactsLocal.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/prInsightArtifacts.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 ```
 
 Result:
@@ -11089,13 +11100,13 @@ Files changed:
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/test/chatSessionCheckpoint.test.ts`
 - `docs/conversation-git-agent-optimization.md`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionCheckpoint.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionCheckpoint.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
 ```
 
 Result:
@@ -11134,12 +11145,12 @@ Completed:
 Files changed:
 
 - `apps/desktop/src/pages/TaskViewer.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 ```
 
 Result:
@@ -11184,13 +11195,13 @@ Files changed:
 - `apps/desktop/src/pages/TaskViewer.test.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
 - `apps/desktop/src/pages/ChatPrInsightArtifact.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/pages/ChatPrInsightArtifact.test.ts src/pages/TaskViewer.test.tsx
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ChatPrInsightArtifact.test.ts src/pages/TaskViewer.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 ```
 
 Result:
@@ -11232,13 +11243,13 @@ Files changed:
 
 - `apps/desktop/src/components/conversation/SuggestionReplyBar.tsx`
 - `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 ```
 
 Result:
@@ -11278,7 +11289,7 @@ Completed:
 Files changed:
 
 - `tests/e2e/chat-layout.spec.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
@@ -11323,13 +11334,13 @@ Files changed:
 - `apps/desktop/src/components/conversation/SuggestionReplyBar.tsx`
 - `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "loads a saved PR insight artifact source" --project=chromium
 ```
 
@@ -11379,13 +11390,13 @@ Files changed:
 - `apps/desktop/src/pages/Chat.tsx`
 - `apps/desktop/src/pages/ChatWorkflowState.test.ts`
 - `tests/e2e/chat-layout.spec.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/pages/ChatWorkflowState.test.ts src/components/conversation/SuggestionReplyBar.test.tsx
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ChatWorkflowState.test.ts src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "shows right-panel PR readiness step states" --project=chromium
 ```
 
@@ -11443,16 +11454,16 @@ Files changed:
 - `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
 - `apps/desktop/src/components/conversation/ApprovalEvidence.tsx`
 - `tests/e2e/chat-layout.spec.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/pages/ChatWorkflowState.test.ts src/components/conversation/SuggestionReplyBar.test.tsx
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ChatWorkflowState.test.ts src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "routes pipeline controls" --project=chromium
 ```
 
@@ -11528,18 +11539,18 @@ Files changed:
 - `apps/desktop/src/components/conversation/SuggestionReplyBar.tsx`
 - `apps/desktop/src/components/conversation/SuggestionReplyBar.test.tsx`
 - `tests/e2e/chat-layout.spec.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/conversation-git-agent-optimization.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "routes pipeline controls" --project=chromium
 git diff --check
 ```
@@ -11598,17 +11609,17 @@ Files changed:
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/pages/Chat.tsx`
 - `tests/e2e/chat-layout.spec.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/conversation-git-agent-optimization.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/azureDevOpsInternal.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/server.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/azureDevOpsInternal.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts
 .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "routes pipeline controls" --project=chromium
 git diff --check
 ```
@@ -11664,16 +11675,16 @@ Files changed:
 - `packages/core/src/tools/azureDevOps.ts`
 - `packages/core/src/chatUseCases.ts`
 - `packages/core/test/azureDevOpsInternal.test.ts`
-- `docs/dev-agent-progress-tracker.md`
+- `docs/mergepilot-progress-tracker.md`
 - `docs/conversation-git-agent-optimization.md`
 
 Tests run:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/azureDevOpsInternal.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/azureDevOpsInternal.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 ```
 
 Result:

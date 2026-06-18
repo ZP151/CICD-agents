@@ -111,7 +111,7 @@ pub fn run() {
         .setup(|app| {
             // ── System-tray ──────────────────────────────────────────────────
             let open_main =
-                MenuItem::with_id(app, "open_main", "Open CI/CD Agent", true, None::<&str>)?;
+                MenuItem::with_id(app, "open_main", "Open MergePilot", true, None::<&str>)?;
             let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open_main, &separator, &quit])?;
@@ -119,7 +119,7 @@ pub fn run() {
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
-                .tooltip("CI/CD Agent")
+                .tooltip("MergePilot")
                 .show_menu_on_left_click(false)
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click {
@@ -148,7 +148,7 @@ pub fn run() {
             let _ = DAEMON_PORT.set(daemon_port_num);
             let daemon_port_str = daemon_port_num.to_string();
             let daemon_port = daemon_port_str.as_str();
-            match app.shell().sidecar("cicd-daemon") {
+            match app.shell().sidecar("mergepilot-daemon") {
                 Ok(cmd) => match cmd
                     // Pass port both ways: CLI arg is the most reliable mechanism for
                     // sidecar processes; env var is the existing fallback.
@@ -157,7 +157,7 @@ pub fn run() {
                     .spawn() {
                     Ok((mut rx, child)) => {
                         *app.state::<DaemonProcess>().0.lock().unwrap() = Some(child);
-                        log::info!("cicd-daemon started on port {daemon_port}");
+                        log::info!("mergepilot-daemon started on port {daemon_port}");
 
                         // Consume the output receiver on a background thread so
                         // stdout/stderr are logged and early exits are detected.
@@ -173,7 +173,7 @@ pub fn run() {
                                     }
                                     CommandEvent::Terminated(payload) => {
                                         let code = payload.code.unwrap_or(-1);
-                                        log::error!("cicd-daemon exited with code {code}");
+                                        log::error!("mergepilot-daemon exited with code {code}");
                                         if code != 0 {
                                             show_daemon_error(
                                                 &handle,
@@ -188,7 +188,7 @@ pub fn run() {
                         });
                     }
                     Err(e) => {
-                        log::error!("Failed to spawn cicd-daemon: {e}");
+                        log::error!("Failed to spawn mergepilot-daemon: {e}");
                         show_daemon_error(&app.handle(), &e.to_string());
                     }
                 },
@@ -212,7 +212,7 @@ pub fn run() {
 fn kill_daemon(app: &tauri::AppHandle) {
     if let Some(child) = app.state::<DaemonProcess>().0.lock().unwrap().take() {
         let _ = child.kill();
-        log::info!("cicd-daemon stopped");
+        log::info!("mergepilot-daemon stopped");
     }
 }
 
@@ -233,7 +233,7 @@ fn show_daemon_error(app: &tauri::AppHandle, msg: &str) {
     if let Some(win) = app.get_webview_window("main") {
         let escaped = msg.replace('\'', "\\'");
         let _ = win.eval(&format!(
-            "console.error('CI/CD Agent: daemon failed to start — {escaped}')"
+            "console.error('MergePilot: daemon failed to start — {escaped}')"
         ));
         let _ = win.show();
     }

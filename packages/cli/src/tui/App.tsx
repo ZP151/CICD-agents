@@ -3,7 +3,7 @@ import { Box, Text, useApp, useInput } from "ink";
 import { RuntimeClient } from "../runtimeClient.js";
 import { Nav, type NavItem } from "./Nav.js";
 import { TaskFeed } from "./TaskFeed.js";
-import { ProfileEditor } from "./ProfileEditor.js";
+import { ProjectTemplates } from "./ProjectTemplates.js";
 import { InitWizard } from "./InitWizard.js";
 import { SubmitForm } from "./SubmitForm.js";
 
@@ -15,13 +15,17 @@ interface AppProps {
 const ITEMS: NavItem[] = [
   { key: "feed", label: "Task feed" },
   { key: "submit", label: "Submit" },
-  { key: "profiles", label: "Profiles" },
+  { key: "templates", label: "Templates" },
   { key: "init", label: "Init wizard" },
 ];
 
+function normalizeInitialView(value: string): string {
+  return value === "profiles" ? "templates" : value;
+}
+
 export const App: React.FC<AppProps> = ({ client, initialView = "feed" }) => {
   const { exit } = useApp();
-  const [active, setActive] = useState(initialView);
+  const [active, setActive] = useState(normalizeInitialView(initialView));
 
   // Tab cycles through nav items; arrow keys are reserved for panel-internal use.
   useInput((input, key) => {
@@ -40,7 +44,7 @@ export const App: React.FC<AppProps> = ({ client, initialView = "feed" }) => {
       <Box flexGrow={1} flexDirection="column" paddingX={1}>
         {active === "feed" && <TaskFeed client={client} />}
         {active === "submit" && <SubmitForm client={client} />}
-        {active === "profiles" && <ProfileEditor />}
+        {active === "templates" && <ProjectTemplates />}
         {active === "init" && <InitWizard />}
         {!ITEMS.find((i) => i.key === active) && <Text dimColor>(empty)</Text>}
       </Box>

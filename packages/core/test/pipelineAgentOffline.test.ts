@@ -32,6 +32,8 @@ describe("pipeline agent (offline)", () => {
     const result = await runPipelineTask(handle);
 
     const stepNames = handle.steps.map((s) => s.name);
+    expect(stepNames).toContain("load_project_link_config");
+    expect(stepNames).not.toContain("load_profile");
     expect(stepNames).toContain("index_repo");
     expect(stepNames).toContain("plan");
 

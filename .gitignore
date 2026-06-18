@@ -28,6 +28,8 @@ node_modules/
 packages/*/dist/
 apps/*/dist/
 apps/*/src-tauri/target/
+apps/*/src-tauri/binaries/*.exe
+apps/*/src-tauri/binaries/*
 *.tsbuildinfo
 
 # Editor

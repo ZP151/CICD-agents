@@ -13,7 +13,7 @@ decision.
 
 - Azure OpenAI deployment available; `AZURE_OPENAI_CHAT_DEPLOYMENT`
 and `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` set in `.env`.
-- Azure DevOps PAT stored: `dev-agent configure-pat`.
+- Azure DevOps PAT stored: `mergepilot configure-pat`.
 - `AZURE_DEVOPS_ORG` and `AZURE_DEVOPS_PROJECT` set in `.env`.
 - Profile present in `runtime/config/profiles.yaml` for the repo type;
 the `azure_devops.repository` field is populated.

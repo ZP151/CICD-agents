@@ -7,7 +7,7 @@
     "core:default",
     {
       "identifier": "shell:allow-spawn",
-      "allow": [{ "name": "binaries/cicd-daemon", "sidecar": true }]
+      "allow": [{ "name": "binaries/mergepilot-daemon", "sidecar": true }]
     },
     "shell:allow-kill",
     "shell:allow-stdin-write",

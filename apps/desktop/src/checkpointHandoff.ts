@@ -5,44 +5,50 @@ export const PULL_REQUESTS_HANDOFF_KEY = "dev_agent_pull_requests_handoff_v1";
 export interface ChatHandoffDraft {
   message?: string;
   repoPath?: string;
-  profileId?: string;
+  projectLinkId?: string;
   source?: string;
 }
 
 export interface ActivityHandoffDraft {
   kind: "pr_insight";
   artifactId: string;
-  profileId?: string;
+  projectLinkId?: string;
 }
 
 export interface PullRequestsHandoffDraft {
   kind: "pr";
-  profileId: string;
+  projectLinkId?: string;
   repository: string;
   pullRequestId: number;
   artifactId?: string;
+}
+
+export function handoffProjectLinkId(input: { projectLinkId?: string }): string {
+  return input.projectLinkId ?? "";
 }
 
 export function buildActivityPrInsightHandoffDraft(input: {
   artifactId: string;
-  profileId?: string;
+  projectLinkId?: string;
 }): ActivityHandoffDraft {
+  const projectLinkId = handoffProjectLinkId(input);
   return {
     kind: "pr_insight",
     artifactId: input.artifactId,
-    profileId: input.profileId,
+    projectLinkId,
   };
 }
 
 export function buildPullRequestsPrHandoffDraft(input: {
-  profileId: string;
+  projectLinkId?: string;
   repository: string;
   pullRequestId: number;
   artifactId?: string;
 }): PullRequestsHandoffDraft {
+  const projectLinkId = handoffProjectLinkId(input);
   return {
     kind: "pr",
-    profileId: input.profileId,
+    projectLinkId,
     repository: input.repository,
     pullRequestId: input.pullRequestId,
     artifactId: input.artifactId,
@@ -60,7 +66,7 @@ export function buildCheckpointRollbackHandoffDraft(input: {
   proposal: CheckpointRollbackProposal;
   checkpointId: string;
   repoPath: string;
-  profileId?: string;
+  projectLinkId?: string;
 }): ChatHandoffDraft {
   const { proposal } = input;
   const message = [
@@ -80,7 +86,7 @@ export function buildCheckpointRollbackHandoffDraft(input: {
   return {
     message,
     repoPath: input.repoPath,
-    profileId: input.profileId,
+    projectLinkId: input.projectLinkId,
     source: "activity-checkpoint-rollback",
   };
 }
@@ -90,7 +96,7 @@ export function buildPrInsightChatHandoffDraft(input: {
   title: string;
   repository: string;
   repoPath: string;
-  profileId?: string;
+  projectLinkId?: string;
   kind?: "insight_preview" | "review_run";
   artifactId?: string;
 }): ChatHandoffDraft {
@@ -110,7 +116,7 @@ export function buildPrInsightChatHandoffDraft(input: {
   return {
     message,
     repoPath: input.repoPath,
-    profileId: input.profileId,
+    projectLinkId: input.projectLinkId,
     source: "pull-requests-pr-insight",
   };
 }

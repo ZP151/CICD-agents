@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 
-export const PROJECT_CHAT_DEPLOYMENT = "cicd-agent-chat";
-export const PROJECT_EMBEDDING_DEPLOYMENT = "cicd-agent-embeddings";
+export const PROJECT_CHAT_DEPLOYMENT = "mergepilot-chat";
+export const PROJECT_EMBEDDING_DEPLOYMENT = "mergepilot-embeddings";
 
 const SettingsSchema = z.object({
   llmProvider: z.enum(["azure", "openai"]).default("azure"),
@@ -32,7 +32,7 @@ const SettingsSchema = z.object({
   reviewAutoApproveEnabled: z.coerce.boolean().default(true),
   reviewStaleAgeHours: z.coerce.number().positive().default(24),
   // ── Azure cloud persistence (optional — falls back to local JSON when unset) ──
-  /** Azure Storage account name for profile persistence (Table Storage) */
+  /** Azure Storage account name for Project Link persistence (Table Storage) */
   azureStorageAccount: z.string().default(""),
   /** Azure Key Vault URL for secret storage, e.g. https://my-vault.vault.azure.net/ */
   azureKeyVaultUrl: z.string().default(""),
@@ -84,7 +84,7 @@ function readEnv(): Record<string, string | undefined> {
 }
 
 function defaultDataDir(): string {
-  return path.join(os.homedir(), ".cicd-agent");
+  return path.join(os.homedir(), ".mergepilot");
 }
 
 export function getSettings(): Settings {

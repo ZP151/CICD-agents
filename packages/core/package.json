@@ -1,6 +1,6 @@
 {
-  "name": "@cicd-agent/core",
-  "version": "0.5.7",
+  "name": "@mergepilot/core",
+  "version": "0.5.8",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",

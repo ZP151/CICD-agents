@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ChatEvent } from "@cicd-agent/core";
+import type { ChatEvent } from "@mergepilot/core";
 import { chatEventToSseEvents, sessionStartedEvent } from "../src/chatEvents.js";
 
 describe("chat SSE event compatibility layer", () => {

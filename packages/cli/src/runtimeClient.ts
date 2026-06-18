@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { request } from "undici";
-import { getSettings } from "@cicd-agent/core";
+import { getSettings } from "@mergepilot/core";
 
 export class RuntimeUnavailableError extends Error {}
 
@@ -22,7 +22,7 @@ async function isRunning(url: string, timeoutMs = 1500): Promise<boolean> {
 
 function resolveDaemon(repoRoot: string): { cmd: string; args: string[]; shell: boolean } {
   // 1. pnpm .bin shim (present when daemon is a dep of another workspace package)
-  const shimName = process.platform === "win32" ? "cicd-agent-daemon.cmd" : "cicd-agent-daemon";
+  const shimName = process.platform === "win32" ? "mergepilot-daemon.cmd" : "mergepilot-daemon";
   const shim = path.join(repoRoot, "node_modules", ".bin", shimName);
   if (fs.existsSync(shim)) {
     return { cmd: shim, args: [], shell: process.platform === "win32" };

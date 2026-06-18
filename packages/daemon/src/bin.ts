@@ -13,9 +13,10 @@ import { startServer } from "./server.js";
 startServer()
   .then((app) => {
     const addr = app.server.address();
-    const port = typeof addr === "object" && addr ? addr.port : process.env["RUNTIME_PORT"] ?? "?";
+    const port =
+      typeof addr === "object" && addr ? addr.port : (process.env["RUNTIME_PORT"] ?? "?");
     // eslint-disable-next-line no-console
-    console.log(`cicd-daemon listening on port ${port}`);
+    console.log(`mergepilot-daemon listening on port ${port}`);
   })
   .catch((err) => {
     // eslint-disable-next-line no-console

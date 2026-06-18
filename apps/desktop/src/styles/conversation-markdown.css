@@ -1,0 +1,55 @@
+/* ── Conversation streaming markdown ─────────────────────────────────────── */
+.conversation-streamdown {
+  color: rgb(var(--app-text));
+  text-wrap: pretty;
+}
+
+.conversation-streamdown > * {
+  max-width: 72ch;
+}
+
+.conversation-markdown[data-streaming="true"] .conversation-streamdown > *:last-child {
+  animation: conversation-stream-line-in 180ms ease-out both;
+}
+
+.conversation-streamdown :where(p, ul, ol, blockquote, table, pre) {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.conversation-streamdown :where(h1, h2, h3, h4, h5, h6) {
+  text-wrap: balance;
+}
+
+.conversation-streamdown [data-streamdown="code-block"] {
+  border-radius: 0.5rem;
+  border-color: rgb(var(--app-border));
+  background: rgb(var(--app-bg-muted));
+}
+
+.conversation-streamdown [data-streamdown="code-block-body"] {
+  border-color: rgb(var(--app-border));
+  background: rgb(var(--app-bg));
+}
+
+.conversation-streamdown [data-streamdown="code-block-actions"] {
+  border-color: rgb(var(--app-border));
+  background: rgb(var(--app-surface) / 0.92);
+}
+
+@keyframes conversation-stream-line-in {
+  from {
+    opacity: 0.48;
+    filter: saturate(0.82);
+  }
+  to {
+    opacity: 1;
+    filter: saturate(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-markdown[data-streaming="true"] .conversation-streamdown > *:last-child {
+    animation: none;
+  }
+}

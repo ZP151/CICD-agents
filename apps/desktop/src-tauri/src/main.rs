@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    cicd_agent_desktop_lib::run();
+    mergepilot_desktop_lib::run();
 }

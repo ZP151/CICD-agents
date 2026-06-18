@@ -1,6 +1,8 @@
 export * from "./settings.js";
 export * from "./logger.js";
-export * from "./profiles.js";
+export * from "./projectLinks.js";
+export * from "./projectTemplates.js";
+export * from "./projectLinkConfig.js";
 export * from "./llm.js";
 export * from "./contextBuilder.js";
 export * from "./planner.js";
@@ -27,15 +29,16 @@ export * from "./reviewQueue.js";
 export * from "./reviewHistoryLocal.js";
 export * from "./reviewOperationsLocal.js";
 export * from "./prInsightArtifactsLocal.js";
+export * from "./review/index.js";
 
 // Azure cloud persistence (opt-in — requires env vars)
 export * from "./store/azureAuth.js";
-export * from "./store/tableProfileStore.js";
+export * from "./store/tableProjectLinkStore.js";
 export * from "./store/keyVaultSecrets.js";
 export * from "./store/cosmosSessionStore.js";
 
 // SQLite-heavy modules — import directly when needed, not via barrel:
-// import { openRepoDb } from "@cicd-agent/core/db/database"
-// import { VectorIndex } from "@cicd-agent/core/vectorIndex"
-// import { MemoryStore } from "@cicd-agent/core/memoryStore"
-// import { RepoIndexer } from "@cicd-agent/core/indexer/repoIndexer"
+// import { openRepoDb } from "@mergepilot/core/db/database"
+// import { VectorIndex } from "@mergepilot/core/vectorIndex"
+// import { MemoryStore } from "@mergepilot/core/memoryStore"
+// import { RepoIndexer } from "@mergepilot/core/indexer/repoIndexer"

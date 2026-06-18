@@ -43,9 +43,9 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile=false
       # core must be built first so downstream packages (cli, daemon, review-agent)
-      # can resolve @cicd-agent/core types during typecheck.
+      # can resolve @mergepilot/core types during typecheck.
       - name: Build core
-        run: pnpm --filter @cicd-agent/core run build
+        run: pnpm --filter @mergepilot/core run build
       - name: Typecheck
         run: pnpm -r --filter "./packages/*" run typecheck
       - name: Lint
@@ -85,7 +85,7 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: pnpm --filter @cicd-agent/desktop tauri:build || true
+        run: pnpm --filter @mergepilot/desktop tauri:build || true
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.os }}

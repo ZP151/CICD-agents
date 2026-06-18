@@ -114,7 +114,7 @@ describe("MCP tool bridge", () => {
 });
 
 function writeFakeMcpServer(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-agent-mcp-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mergepilot-mcp-"));
   const scriptPath = path.join(dir, "fake-mcp-server.mjs");
   fs.writeFileSync(
     scriptPath,

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ReviewFinding, ReviewResult } from "./reviewPlanner.js";
+import type { ReviewFinding, ReviewResult } from "@mergepilot/core";
 
 export interface LabeledPr {
   id: string;

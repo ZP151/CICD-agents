@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This tracker is the durable execution plan for upgrading the Dev Agent
+This tracker is the durable execution plan for upgrading the MergePilot
 Conversation frontend into a real agent workbench.
 
 It should be updated after every meaningful frontend development session.
@@ -96,7 +96,7 @@ Last checked: `2026-06-13`
 
 Decision: `impeccable` is usable and valuable for this project. Use it as the
 front-end product-quality guardrail for Conversation polish, especially where
-the app needs to feel like a precise Dev Agent workbench rather than a generic
+the app needs to feel like a precise MergePilot workbench rather than a generic
 chat UI.
 
 Highest-value commands for the next front-end batches:
@@ -146,7 +146,7 @@ Usage boundary:
 
 ## Current Dependency Baseline
 
-Current `@cicd-agent/desktop` frontend stack:
+Current `@mergepilot/desktop` frontend stack:
 
 - React 18
 - React Router
@@ -206,7 +206,7 @@ artifacts under `output/playwright/` if screenshots or traces are needed.
 
 ## Product Objective
 
-The target product is not a generic chatbot. It is a local Dev Agent workbench
+The target product is not a generic chatbot. It is a local MergePilot workbench
 that can inspect a linked repository, understand code changes, reason about
 Azure DevOps context, and help the user complete development workflows with
 clear evidence and controlled actions.
@@ -373,8 +373,8 @@ Tasks:
 Verification:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 ```
 
 ### Stage B: Grounded Answers
@@ -478,9 +478,9 @@ Tasks:
 Verification:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
 ```
 
 ## Open-Source Chatbot Architecture Benchmark
@@ -599,7 +599,7 @@ Completed:
 - Selected `high-end-visual-design` for restrained micro-interaction polish.
 - Confirmed `gpt-taste` is not appropriate for the core workbench flow except
   isolated motion-heavy moments.
-- Checked current `@cicd-agent/desktop` dependencies.
+- Checked current `@mergepilot/desktop` dependencies.
 - Benchmarked current leading open-source chatbot/agent UI projects:
   Vercel AI SDK/Chatbot/AI Elements, assistant-ui, Open WebUI, and LibreChat.
 - Converted benchmark findings into local phases and reuse targets.
@@ -754,20 +754,20 @@ Remaining:
 Verification:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatBubbles.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 ```
 
 Latest verification:
 
 | Date | Command | Result |
 | --- | --- | --- |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts` | Passed, 7 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts` | Passed, 10 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts src/components/conversation/ConversationPartRenderer.test.tsx` | Passed, 14 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatBubbles.test.ts` | Passed, 7 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatBubbles.test.ts` | Passed, 10 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatBubbles.test.ts src/components/conversation/ConversationPartRenderer.test.tsx` | Passed, 14 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
 
 ## Phase 2: Markdown And Code Rendering
 
@@ -796,7 +796,7 @@ Work items:
 Implemented:
 
 - Added `react-markdown`, `remark-gfm`, and `rehype-sanitize` to
-  `@cicd-agent/desktop`.
+  `@mergepilot/desktop`.
 - Replaced temporary `markdown` paragraph rendering with a `MarkdownContent`
   component in `ConversationPartRenderer`.
 - Added GFM support for tables, lists, links, inline code, and fenced code.
@@ -833,18 +833,18 @@ Latest verification:
 
 | Date | Command | Result |
 | --- | --- | --- |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 16 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 18 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 21 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 16 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 18 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 21 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
 
 Verification:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
 ```
 
 Manual scenarios:
@@ -950,29 +950,29 @@ Latest verification:
 
 | Date | Command | Result |
 | --- | --- | --- |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts src/components/conversation/ConversationPartRenderer.test.tsx` | Passed, 23 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatPlannerApproval.test.ts` | Passed, 17 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build` | Passed; refreshed core declarations used by daemon. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatContext.test.ts` | Passed, 5 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts` | Passed, 19 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatContext.test.ts test/chatPlannerApproval.test.ts` | Passed, 22 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts src/components/conversation/ConversationPartRenderer.test.tsx` | Passed, 23 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build` | Passed; refreshed core declarations used by daemon. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts` | Passed, 17 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core test -- test/chatContext.test.ts` | Passed, 5 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 24 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/core build` | Passed; refreshed core declarations used by daemon. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatBubbles.test.ts src/components/conversation/ConversationPartRenderer.test.tsx` | Passed, 23 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/chatPlannerApproval.test.ts` | Passed, 17 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build` | Passed; refreshed core declarations used by daemon. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/chatContext.test.ts` | Passed, 5 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts` | Passed, 19 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/chatContext.test.ts test/chatPlannerApproval.test.ts` | Passed, 22 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatBubbles.test.ts src/components/conversation/ConversationPartRenderer.test.tsx` | Passed, 23 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build` | Passed; refreshed core declarations used by daemon. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts` | Passed, 17 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/chatContext.test.ts` | Passed, 5 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 24 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build` | Passed; refreshed core declarations used by daemon. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck` | Passed. |
 
 ## Phase 4: Execution Timeline And Evidence UI
 
@@ -1083,18 +1083,18 @@ Latest verification:
 
 | Date | Command | Result |
 | --- | --- | --- |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 26 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon test -- test/chatSessionWorkflow.test.ts` | Passed, 18 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 29 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 30 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 32 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ExecutionTimeline.test.tsx src/chatRenderItems.test.ts` | Passed, 6 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 26 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/chatSessionWorkflow.test.ts` | Passed, 18 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 29 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 30 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 32 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ExecutionTimeline.test.tsx src/chatRenderItems.test.ts` | Passed, 6 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
 | 2026-06-13 | `.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts` | Passed, 4 tests. |
 
 ## Phase 5: Contextual Quick Replies
@@ -1207,14 +1207,14 @@ Latest verification:
 
 | Date | Command | Result |
 | --- | --- | --- |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 37 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 41 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 43 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 46 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 37 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 41 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 43 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 46 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
 
 ## Phase 6: Conversation Input Upgrade
 
@@ -1309,36 +1309,36 @@ Latest verification:
 
 | Date | Command | Result |
 | --- | --- | --- |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 51 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 55 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 51 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 55 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 4 Playwright tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 58 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx` | Passed, 26 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx src/chatBubbles.test.ts` | Passed, 58 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx` | Passed, 26 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
 | 2026-06-13 | `.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts` | Passed, 4 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx` | Passed, 28 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx` | Passed, 28 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
 | 2026-06-13 | `.\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts` | Passed, 5 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/chatBubbles.test.ts` | Passed, 62 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/chatBubbles.test.ts` | Passed, 65 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/chatBubbles.test.ts` | Passed, 62 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/chatBubbles.test.ts` | Passed, 65 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 6 Playwright tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after artifact content rendering. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after artifact content rendering. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 6 Playwright tests covering Mermaid, markdown, and text artifact workspace content. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after persisted PR insight artifact workspace loading. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after persisted PR insight artifact workspace loading. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 10 Playwright tests covering artifact content, persisted PR insight loading, lookup errors, and ordinary artifact bypass behavior. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/chatBubbles.test.ts` | Passed, 65 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after Mermaid artifact rendering. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/chatBubbles.test.ts` | Passed, 65 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after Mermaid artifact rendering. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 11 Playwright tests including Mermaid SVG rendering, Mermaid error fallback, and copy-content action. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/chatBubbles.test.ts` | Passed, 65 tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx` | Passed, 7 approval/timeline tests after approval decision panel polish. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after `impeccable`-guided approval card polish. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/chatBubbles.test.ts` | Passed, 65 tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx` | Passed, 7 approval/timeline tests after approval decision panel polish. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after `impeccable`-guided approval card polish. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 11 Playwright tests including approval composer lockout and no-overflow checks. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after Result workspace visual-system polish. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after Result workspace visual-system polish. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 11 Playwright tests including artifact workspace, Mermaid render/error states, copy/download actions, persisted PR insight, and no-overflow checks. |
 
 ## Phase 7: Visual System Refinement
@@ -1394,18 +1394,18 @@ Latest verification:
 
 | Date | Command | Result |
 | --- | --- | --- |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx` | Passed, 7 focused approval/timeline tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after approval decision panel polish. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx` | Passed, 7 focused approval/timeline tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after approval decision panel polish. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 11 Playwright Chat layout scenarios including approval composer lockout and overflow checks. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after Result workspace visual-system polish. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after Result workspace visual-system polish. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 11 Playwright Chat layout scenarios including artifact workspace, Mermaid render/error states, copy/download actions, persisted PR insight, and overflow checks. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx` | Passed, 14 renderer tests after response block visual polish. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after response block visual polish. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/chatBubbles.test.ts` | Passed, 65 focused conversation tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx` | Passed, 14 renderer tests after response block visual polish. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after response block visual polish. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/chatBubbles.test.ts` | Passed, 65 focused conversation tests. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 11 Playwright Chat layout scenarios including reference rendering, artifact workspace, approval composer lockout, and overflow checks. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/components/conversation/ExecutionTimeline.test.tsx` | Passed, 32 timeline/suggestion tests after F7.4 polish. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after F7.4 timeline/composer polish. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/chatBubbles.test.ts` | Passed, 65 focused conversation tests after F7.4 polish. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/SuggestionReplyBar.test.tsx src/components/conversation/ExecutionTimeline.test.tsx` | Passed, 32 timeline/suggestion tests after F7.4 polish. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after F7.4 timeline/composer polish. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/chatBubbles.test.ts` | Passed, 65 focused conversation tests after F7.4 polish. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 11 Playwright Chat layout scenarios including command chips, queued follow-up, approval composer lockout, artifact workspace, references, and overflow checks. |
 
 Progress log:
@@ -1465,29 +1465,29 @@ Latest verification:
 
 | Date | Command | Result |
 | --- | --- | --- |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts` | Passed, 17 streaming/finalization and conversation-part tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after parts-only streaming finalization hardening. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/chatBubbles.test.ts` | Passed, 69 focused conversation tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatBubbles.test.ts` | Passed, 17 streaming/finalization and conversation-part tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after parts-only streaming finalization hardening. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/chatRenderItems.test.ts src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx src/chatBubbles.test.ts` | Passed, 69 focused conversation tests. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 11 Playwright Chat layout scenarios. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatScroll.test.ts src/chatBubbles.test.ts src/chatRenderItems.test.ts src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx` | Passed, 74 focused conversation and scroll tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after scroll-intent hardening. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatScroll.test.ts src/chatBubbles.test.ts src/chatRenderItems.test.ts src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx` | Passed, 74 focused conversation and scroll tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after scroll-intent hardening. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 11 Playwright Chat layout scenarios after scroll-intent hardening. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts` | Passed, 22 streaming/finalization/source metadata tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatScroll.test.ts src/chatBubbles.test.ts src/chatRenderItems.test.ts src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx` | Passed, 78 focused conversation, reference metadata, and scroll tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after `metadata-available` source merge hardening. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatBubbles.test.ts` | Passed, 22 streaming/finalization/source metadata tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatScroll.test.ts src/chatBubbles.test.ts src/chatRenderItems.test.ts src/components/conversation/ConversationPartRenderer.test.tsx src/components/conversation/SuggestionReplyBar.test.tsx src/components/conversation/ApprovalEvidence.test.tsx src/components/conversation/ExecutionTimeline.test.tsx` | Passed, 78 focused conversation, reference metadata, and scroll tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after `metadata-available` source merge hardening. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/chat-layout.spec.ts -g "renders tool lifecycle from UI stream chunks without legacy tool events"` | Passed after adding metadata-chunk source de-duplication coverage. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 13 Playwright Chat scenarios including UI-stream-only tool lifecycle rendering, metadata-source de-duplication, and Stop ignoring late responses. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after interrupted-stream draft restore hardening. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after interrupted-stream draft restore hardening. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm playwright test tests/e2e/chat-layout.spec.ts -g "restores interrupted streaming drafts"` | Passed, focused Playwright coverage for restored streaming drafts. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 15 Playwright Chat scenarios including UI-stream-only tool lifecycle rendering, source metadata, Stop ignoring late responses, interrupted-stream draft restore, artifacts, and overflow checks. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/api.test.ts` | Passed, `chatStream` emits `ui.chunk` text deltas as response chunks arrive before stream close. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/chatBubbles.test.ts src/components/conversation/ConversationPartRenderer.test.tsx src/chatScroll.test.ts` | Passed, 40 focused streaming/rendering/scroll tests. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after API streaming parser regression coverage. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/api.test.ts` | Passed, `chatStream` emits `ui.chunk` text deltas as response chunks arrive before stream close. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/chatBubbles.test.ts src/components/conversation/ConversationPartRenderer.test.tsx src/chatScroll.test.ts` | Passed, 40 focused streaming/rendering/scroll tests. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after API streaming parser regression coverage. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 17 Playwright Chat scenarios including long streamed markdown with source/tool-output rendering, UI-stream-only finish release, Stop/late-response cancellation, interrupted-stream draft restore, artifacts, and overflow checks. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/api.test.ts` | Passed, 2 API streaming parser tests including arbitrary split SSE line buffering. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after split-chunk SSE parser coverage. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/api.test.ts` | Passed, 2 API streaming parser tests including arbitrary split SSE line buffering. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after split-chunk SSE parser coverage. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm playwright test tests/e2e/chat-layout.spec.ts -g "preserves manual history scroll"` | Passed, browser-level delayed-response scroll preservation coverage. |
-| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck` | Passed after adding the message-panel test id and scroll-preservation scenario. |
+| 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` | Passed after adding the message-panel test id and scroll-preservation scenario. |
 | 2026-06-13 | `.\scripts\windows\pnpm-project.ps1 exec pnpm e2e:chat` | Passed, 18 Playwright Chat scenarios including delayed-response scroll preservation. |
 | 2026-06-13 | Live local app QA via repo-local Playwright script against `http://127.0.0.1:1420/#/chat?new=1` and real `http://127.0.0.1:8787/chat` | Passed for real-daemon/model long-answer path: `/chat` returned 200, first current-panel answer text appeared after about 5.6s, final answer was about 1.7k chars, Stop hid, composer re-enabled, and no current-answer error appeared. |
 
@@ -1546,9 +1546,9 @@ Manual QA scenarios:
 Required verification commands:
 
 ```powershell
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop typecheck
-.\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
 .\scripts\windows\pnpm-project.ps1 exec playwright --version
 ```
 

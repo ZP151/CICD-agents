@@ -2,14 +2,15 @@ import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
 import { RuntimeClient } from "../runtimeClient.js";
+import { buildSubmitPipelinePayload } from "../submitPipelinePayload.js";
 
-type FieldKey = "repo" | "profile" | "targetBranch" | "workItem";
+type FieldKey = "repo" | "projectTemplate" | "targetBranch" | "workItem";
 
-const FIELDS: FieldKey[] = ["repo", "profile", "targetBranch", "workItem"];
+const FIELDS: FieldKey[] = ["repo", "projectTemplate", "targetBranch", "workItem"];
 
 const LABELS: Record<FieldKey, string> = {
   repo: "Repo path",
-  profile: "Profile",
+  projectTemplate: "Project template",
   targetBranch: "Target branch",
   workItem: "Work item ID",
 };
@@ -32,7 +33,7 @@ function statusColor(s: string): string {
 export const SubmitForm: React.FC<{ client: RuntimeClient }> = ({ client }) => {
   const [fields, setFields] = useState<Record<FieldKey, string>>({
     repo: process.cwd(),
-    profile: "default",
+    projectTemplate: "",
     targetBranch: "main",
     workItem: "",
   });
@@ -53,15 +54,15 @@ export const SubmitForm: React.FC<{ client: RuntimeClient }> = ({ client }) => {
   const handleSubmit = async (): Promise<void> => {
     setFormState("submitting");
     try {
-      const resp = await client.submitPipeline({
+      const resp = await client.submitPipeline(buildSubmitPipelinePayload({
         repoPath: fields.repo,
-        profile: fields.profile,
-        targetBranch: fields.targetBranch || null,
-        workItem: fields.workItem || null,
+        projectTemplate: fields.projectTemplate,
+        targetBranch: fields.targetBranch,
+        workItem: fields.workItem,
         draft: false,
         autoCreatePr: true,
         triggerPipeline: false,
-      });
+      }));
       setTaskId(resp.taskId);
       const { default: EventSource } = await import("eventsource");
       const es = new EventSource(`${client.baseUrl}/tasks/${resp.taskId}/events`);

@@ -4,9 +4,14 @@ import { loadConfig, type ReviewAgentConfig } from "./config.js";
 import { AdoPrEventSchema, eventKey } from "./webhook.js";
 import { verifyBasicSecret, verifyHmacSha256 } from "./signature.js";
 import { IdempotentQueue } from "./queue.js";
-import { AdoClient } from "./adoClient.js";
+import {
+  AdoClient,
+  FileStateStore,
+  InMemoryStateStore,
+  TableStateStore,
+  type StateStore,
+} from "@mergepilot/core";
 import { ReviewService } from "./reviewService.js";
-import { FileStateStore, InMemoryStateStore, TableStateStore, type StateStore } from "./stateStore.js";
 import nodeOs from "node:os";
 import nodePath from "node:path";
 import { defaultSecretProvider } from "./secrets.js";
@@ -104,7 +109,7 @@ export async function buildApp(opts: BuildOptions = {}): Promise<FastifyInstance
 
 async function pickState(config: ReviewAgentConfig): Promise<StateStore> {
   if (!config.tablesConnectionString) {
-    const dataDir = config.dataDir.trim() || nodePath.join(nodeOs.homedir(), ".cicd-agent");
+    const dataDir = config.dataDir.trim() || nodePath.join(nodeOs.homedir(), ".mergepilot");
     return new FileStateStore(dataDir);
   }
   const store = new TableStateStore(config.tablesConnectionString);

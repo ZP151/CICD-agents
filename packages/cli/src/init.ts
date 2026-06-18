@@ -6,7 +6,7 @@ export type RepoKind = "python" | "dotnet" | "node" | "unknown";
 
 export interface InitInput {
   repoPath: string;
-  profile: string;
+  projectTemplate: string;
   organization?: string;
   project?: string;
   repository?: string;
@@ -32,7 +32,7 @@ export function detectRepoKind(repoPath: string): RepoKind {
   return "unknown";
 }
 
-export function suggestProfileFor(kind: RepoKind): string {
+export function suggestProjectTemplateFor(kind: RepoKind): string {
   switch (kind) {
     case "python":
       return "python-api";
@@ -53,12 +53,12 @@ function anyMatching(dir: string, suffixes: string[]): boolean {
   );
 }
 
-export function writeProfileFile(input: InitInput): InitResult {
-  const dir = path.join(input.repoPath, ".cicd-agent");
+export function writeProjectLinkFile(input: InitInput): InitResult {
+  const dir = path.join(input.repoPath, ".mergepilot");
   fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, "profile.yaml");
+  const file = path.join(dir, "project-link.yaml");
   const doc = {
-    profile: input.profile,
+    project_template: input.projectTemplate,
     azure_devops: {
       organization: input.organization ?? "",
       project: input.project ?? "",

@@ -15,7 +15,7 @@ The GUI is intentionally deferred to Phase 4 of the v2 roadmap and will be
 a Tauri desktop app (see ADR-0007). Phases 1-3 deliver a usable product
 through the CLI + TUI only.
 
-The Phase 4 GUI talks to the *existing* local Dev Agent daemon over HTTP +
+The Phase 4 GUI talks to the *existing* local MergePilot daemon over HTTP +
 SSE - no new business logic in the desktop app.
 
 ## Consequences

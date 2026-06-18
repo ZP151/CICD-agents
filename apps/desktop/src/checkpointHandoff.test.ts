@@ -7,6 +7,7 @@ import {
   buildCheckpointRollbackHandoffDraft,
   buildPullRequestsPrHandoffDraft,
   buildPrInsightChatHandoffDraft,
+  handoffProjectLinkId,
 } from "./checkpointHandoff";
 
 describe("checkpoint rollback chat handoff", () => {
@@ -20,7 +21,7 @@ describe("checkpoint rollback chat handoff", () => {
     const draft = buildCheckpointRollbackHandoffDraft({
       checkpointId: "git-20260611-abcdef",
       repoPath: "C:\\work\\repo",
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       proposal: {
         tool: "git_checkpoint_apply",
         args: {
@@ -34,7 +35,7 @@ describe("checkpoint rollback chat handoff", () => {
 
     expect(draft).toMatchObject({
       repoPath: "C:\\work\\repo",
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       source: "activity-checkpoint-rollback",
     });
     expect(draft.message).toContain("Tool: git_checkpoint_apply");
@@ -52,14 +53,14 @@ describe("checkpoint rollback chat handoff", () => {
       title: "Improve pipeline checks",
       repository: "demo-repo",
       repoPath: "C:\\work\\repo",
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       kind: "review_run",
       artifactId: "artifact-42",
     });
 
     expect(draft).toMatchObject({
       repoPath: "C:\\work\\repo",
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       source: "pull-requests-pr-insight",
     });
     expect(draft.message).toContain("Use the saved AI insight for PR #42.");
@@ -72,27 +73,32 @@ describe("checkpoint rollback chat handoff", () => {
 
   it("builds an Activity handoff draft for a saved PR insight artifact", () => {
     expect(buildActivityPrInsightHandoffDraft({
-      artifactId: "profile-1/demo-repo/42/review_run/2026-06-11T00%3A10%3A00.000Z",
-      profileId: "profile-1",
+      artifactId: "project-link-1/demo-repo/42/review_run/2026-06-11T00%3A10%3A00.000Z",
+      projectLinkId: "project-link-1",
     })).toEqual({
       kind: "pr_insight",
-      artifactId: "profile-1/demo-repo/42/review_run/2026-06-11T00%3A10%3A00.000Z",
-      profileId: "profile-1",
+      artifactId: "project-link-1/demo-repo/42/review_run/2026-06-11T00%3A10%3A00.000Z",
+      projectLinkId: "project-link-1",
     });
   });
 
   it("builds a Pull Requests handoff draft for returning to the operational PR workspace", () => {
     expect(buildPullRequestsPrHandoffDraft({
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       artifactId: "artifact-42",
     })).toEqual({
       kind: "pr",
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       artifactId: "artifact-42",
     });
+  });
+
+  it("reads Project Link ids without legacy profile fallback", () => {
+    expect(handoffProjectLinkId({ projectLinkId: "project-link-1" })).toBe("project-link-1");
+    expect(handoffProjectLinkId({})).toBe("");
   });
 });

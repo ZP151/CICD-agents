@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import fs from "node:fs";
 import path from "node:path";
 import { Box, Text } from "ink";
-import { detectRepoKind, suggestProfileFor, type RepoKind } from "../init.js";
+import { detectRepoKind, suggestProjectTemplateFor, type RepoKind } from "../init.js";
 
 const HINTS: Record<RepoKind, string> = {
   python: "python-api",
@@ -18,7 +18,9 @@ export const InitWizard: React.FC = () => {
 
   useEffect(() => {
     setKind(detectRepoKind(cwd));
-    setHasConfig(fs.existsSync(path.join(cwd, ".cicd-agent", "profile.yaml")));
+    setHasConfig(
+      fs.existsSync(path.join(cwd, ".mergepilot", "project-link.yaml")),
+    );
   }, [cwd]);
 
   return (
@@ -27,16 +29,16 @@ export const InitWizard: React.FC = () => {
       <Text>cwd: {cwd}</Text>
       <Text>
         detected: <Text color="cyan">{kind}</Text>
-        {"  "}suggested profile: <Text color="green">{HINTS[kind]}</Text>
+        {"  "}suggested template: <Text color="green">{HINTS[kind]}</Text>
       </Text>
       <Text>
         existing config: {hasConfig ? <Text color="green">yes</Text> : <Text color="yellow">no</Text>}
       </Text>
       <Box marginTop={1} flexDirection="column">
         <Text>Next steps:</Text>
-        <Text>  1) dev-agent init --profile {suggestProfileFor(kind)}</Text>
-        <Text>  2) dev-agent configure-pat</Text>
-        <Text>  3) dev-agent submit-pipeline --profile {suggestProfileFor(kind)}</Text>
+        <Text>  1) mergepilot init --project-template {suggestProjectTemplateFor(kind)}</Text>
+        <Text>  2) mergepilot configure-pat</Text>
+        <Text>  3) mergepilot submit-pipeline --project-template {suggestProjectTemplateFor(kind)}</Text>
       </Box>
     </Box>
   );

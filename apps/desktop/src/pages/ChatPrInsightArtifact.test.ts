@@ -4,8 +4,8 @@ import { prInsightArtifactRecordToMarkdown } from "./Chat.js";
 
 function artifact(): PrInsightArtifactRecord {
   return {
-    id: "profile-1/demo/42/review_run/2026-06-13T00%3A00%3A00.000Z",
-    profileId: "profile-1",
+    id: "project-link-1/demo/42/review_run/2026-06-13T00%3A00%3A00.000Z",
+    projectLinkId: "project-link-1",
     repository: "demo",
     pullRequestId: 42,
     title: "Improve PR insight",

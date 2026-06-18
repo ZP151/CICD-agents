@@ -1,6 +1,6 @@
 {
-  "name": "@cicd-agent/desktop",
-  "version": "0.5.7",
+  "name": "@mergepilot/desktop",
+  "version": "0.5.8",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,7 +17,6 @@
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.0",
     "@radix-ui/react-tabs": "^1.1.0",
-    "@streamdown/code": "^1.1.1",
     "@tanstack/react-query": "^5.51.0",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
@@ -31,7 +30,6 @@
     "react-router-dom": "^6.26.0",
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
-    "shiki": "^4.2.0",
     "streamdown": "2.5.0",
     "tailwind-merge": "^2.5.0"
   },

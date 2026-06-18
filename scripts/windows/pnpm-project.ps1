@@ -9,8 +9,8 @@ workspace. It avoids accidentally using a Codex, system, nvm, or globally
 installed Node.js runtime.
 
 Examples:
-  .\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/daemon typecheck
-  .\scripts\windows\pnpm-project.ps1 --filter @cicd-agent/desktop test -- src/checkpointHandoff.test.ts
+  .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+  .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/checkpointHandoff.test.ts
 #>
 
 [CmdletBinding()]

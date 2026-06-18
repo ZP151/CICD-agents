@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildCloudContext } from "../src/cloudContext.js";
-import type { AdoClient } from "../src/adoClient.js";
+import { buildCloudContext, type AdoClient } from "@mergepilot/core";
 
 describe("cloud context", () => {
   it("enriches changed files with Azure DevOps file diff hunks", async () => {
@@ -29,14 +28,14 @@ describe("cloud context", () => {
     const bundle = await buildCloudContext({
       ado,
       project: "Agents",
-      repositoryId: "cicd-agent",
+      repositoryId: "mergepilot",
       prId: 42,
       iterationId: 3,
       sourceCommit: "source",
       baseCommit: "base",
     });
 
-    expect(ado.getFileDiffs).toHaveBeenCalledWith("Agents", "cicd-agent", {
+    expect(ado.getFileDiffs).toHaveBeenCalledWith("Agents", "mergepilot", {
       baseVersionCommit: "base",
       targetVersionCommit: "source",
       fileDiffParams: [{ path: "src/app.ts", originalPath: "src/app.ts" }],

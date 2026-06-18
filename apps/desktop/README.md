@@ -1,14 +1,14 @@
 # Desktop GUI (Phase 4)
 
 Tauri 2 shell + React + TanStack Query + Tailwind. Talks to the local
-Dev Agent daemon at `http://127.0.0.1:8787` via HTTP + SSE; no business
+MergePilot daemon at `http://127.0.0.1:8787` via HTTP + SSE; no business
 logic is duplicated.
 
 ## Develop
 
 ```bash
 pnpm install
-pnpm --filter @cicd-agent/desktop dev
+pnpm --filter @mergepilot/desktop dev
 ```
 
 The Tauri dev shell will launch once you have the Rust toolchain
@@ -17,7 +17,7 @@ installed (`rustup`).
 ## Build installers (owner-driven)
 
 ```bash
-pnpm --filter @cicd-agent/desktop tauri:build
+pnpm --filter @mergepilot/desktop tauri:build
 ```
 
 Signing certificates and updater keys are NOT checked in; they are stored

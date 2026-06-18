@@ -11,12 +11,12 @@ afterEach(() => {
 });
 
 describe("MemoryStore", () => {
-  it("stores and retrieves repo profile values", () => {
+  it("stores and retrieves repository memory values", () => {
     env = makeFixtureRepo();
     const mem = new MemoryStore(env.repoPath);
-    mem.setProfile("language", "python");
-    expect(mem.getProfile<string>("language")).toBe("python");
-    expect(mem.getProfile<string>("missing", "fallback")).toBe("fallback");
+    mem.setMemory("language", "python");
+    expect(mem.getMemory<string>("language")).toBe("python");
+    expect(mem.getMemory<string>("missing", "fallback")).toBe("fallback");
     mem.close();
   });
 

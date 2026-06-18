@@ -1,0 +1,62 @@
+
+:root {
+  --app-bg: 12 14 18;
+  --app-bg-muted: 21 24 30;
+  --app-surface: 24 27 33;
+  --app-surface-raised: 31 35 43;
+  --app-border: 45 50 60;
+  --app-border-strong: 68 76 90;
+  --app-text: 236 238 242;
+  --app-text-muted: 165 172 184;
+  --app-text-subtle: 119 128 145;
+  --app-text-faint: 86 96 112;
+  --app-accent: 72 113 184;
+  --app-accent-soft: 29 45 74;
+  --app-success: 68 157 118;
+  --app-warning: 205 143 66;
+  --app-danger: 214 99 99;
+}
+
+:root[data-theme="light"] {
+  --app-bg: 247 246 243;
+  --app-bg-muted: 240 239 235;
+  --app-surface: 255 255 253;
+  --app-surface-raised: 250 249 246;
+  --app-border: 226 223 216;
+  --app-border-strong: 203 199 190;
+  --app-text: 39 43 48;
+  --app-text-muted: 91 96 105;
+  --app-text-subtle: 126 128 132;
+  --app-text-faint: 163 162 156;
+  --app-accent: 56 103 168;
+  --app-accent-soft: 226 237 250;
+  --app-success: 66 128 85;
+  --app-warning: 149 100 0;
+  --app-danger: 159 47 45;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: rgb(var(--app-bg));
+  color: rgb(var(--app-text));
+}
+
+/* Global scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--app-border-strong), 0.8) transparent;
+}
+*::-webkit-scrollbar        { width: 5px; height: 5px; }
+*::-webkit-scrollbar-track  { background: transparent; }
+*::-webkit-scrollbar-thumb  { background-color: rgba(var(--app-border-strong), 0.8); border-radius: 9999px; }
+*::-webkit-scrollbar-thumb:hover { background-color: rgba(var(--app-text-faint), 0.9); }
+*::-webkit-scrollbar-corner { background: transparent; }

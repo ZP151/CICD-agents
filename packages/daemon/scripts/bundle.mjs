@@ -22,7 +22,7 @@ await build({
   format: "cjs",
   outfile: resolve(root, "dist/bundle.cjs"),
   // Replace import.meta.url with the CJS-compatible equivalent so that
-  // ESM-compiled core files (profiles.ts, db/database.ts) don't crash at
+  // ESM-compiled core files (projectTemplates.ts, db/database.ts) don't crash at
   // module load time with "ERR_INVALID_ARG_TYPE: path must be string or URL".
   // esbuild define values must be identifiers or JSON, so we inject the
   // expression as a top-level variable via banner and reference it by name.

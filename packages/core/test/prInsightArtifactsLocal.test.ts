@@ -19,8 +19,8 @@ describe("prInsightArtifactsLocal", () => {
   });
 
   it("upserts PR insight artifacts and lists newest first", () => {
-    upsertLocalPrInsightArtifact(dataDir, {
-      profileId: "profile-1",
+    const preview = upsertLocalPrInsightArtifact(dataDir, {
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       title: "Preview",
@@ -47,7 +47,7 @@ describe("prInsightArtifactsLocal", () => {
       tokensOut: 20,
     });
     upsertLocalPrInsightArtifact(dataDir, {
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       title: "Full review",
@@ -67,7 +67,8 @@ describe("prInsightArtifactsLocal", () => {
       tokensOut: 300,
     });
 
-    const artifacts = listLocalPrInsightArtifacts({ dataDir, profileId: "profile-1" });
+    expect(preview.projectLinkId).toBe("project-link-1");
+    const artifacts = listLocalPrInsightArtifacts({ dataDir, projectLinkId: "project-link-1" });
     expect(artifacts.map((artifact) => artifact.kind)).toEqual(["review_run", "insight_preview"]);
     expect(artifacts[0]).toMatchObject({ iterationId: 5, sourceCommit: "abc123" });
     expect(artifacts[1].signals).toMatchObject({
@@ -79,9 +80,26 @@ describe("prInsightArtifactsLocal", () => {
     });
   });
 
-  it("preserves refreshed artifacts for the same profile, PR, and kind", () => {
+  it("reads artifacts through the Project Link filter", () => {
+    upsertLocalPrInsightArtifact(dataDir, {
+      projectLinkId: "project-link-1",
+      repository: "demo-repo",
+      pullRequestId: 42,
+      title: "Preview",
+      kind: "insight_preview",
+      summary: "Preview summary.",
+      risks: [],
+      tokensIn: 10,
+      tokensOut: 5,
+    });
+
+    expect(listLocalPrInsightArtifacts({ dataDir, projectLinkId: "project-link-1" })).toHaveLength(1);
+    expect(listLocalPrInsightArtifacts({ dataDir, projectLinkId: "other-link" })).toHaveLength(0);
+  });
+
+  it("preserves refreshed artifacts for the same Project Link, PR, and kind", () => {
     const base = {
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       title: "Preview",
@@ -102,7 +120,7 @@ describe("prInsightArtifactsLocal", () => {
       summary: "New summary.",
     });
 
-    const artifacts = listLocalPrInsightArtifacts({ dataDir, profileId: "profile-1" });
+    const artifacts = listLocalPrInsightArtifacts({ dataDir, projectLinkId: "project-link-1" });
     expect(artifacts).toHaveLength(2);
     expect(artifacts.map((artifact) => artifact.summary)).toEqual(["New summary.", "Old summary."]);
   });
@@ -110,7 +128,7 @@ describe("prInsightArtifactsLocal", () => {
   it("replaces an explicitly addressed artifact id for compatibility", () => {
     const base = {
       id: "artifact-1",
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       title: "Preview",
@@ -131,14 +149,14 @@ describe("prInsightArtifactsLocal", () => {
       summary: "New summary.",
     });
 
-    const artifacts = listLocalPrInsightArtifacts({ dataDir, profileId: "profile-1" });
+    const artifacts = listLocalPrInsightArtifacts({ dataDir, projectLinkId: "project-link-1" });
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0]).toMatchObject({ id: "artifact-1", summary: "New summary." });
   });
 
   it("filters artifacts and returns an empty list for corrupt stores", () => {
     upsertLocalPrInsightArtifact(dataDir, {
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       title: "Preview",
@@ -149,7 +167,7 @@ describe("prInsightArtifactsLocal", () => {
       tokensOut: 5,
     });
     upsertLocalPrInsightArtifact(dataDir, {
-      profileId: "profile-2",
+      projectLinkId: "project-link-2",
       repository: "other-repo",
       pullRequestId: 7,
       title: "Other",
@@ -162,7 +180,7 @@ describe("prInsightArtifactsLocal", () => {
 
     expect(listLocalPrInsightArtifacts({
       dataDir,
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       limit: 1,
@@ -172,9 +190,9 @@ describe("prInsightArtifactsLocal", () => {
     expect(listLocalPrInsightArtifacts({ dataDir })).toEqual([]);
   });
 
-  it("summarizes artifact history by profile, repository, PR, and kind", () => {
+  it("summarizes artifact history by Project Link, repository, PR, and kind", () => {
     const oldRun = upsertLocalPrInsightArtifact(dataDir, {
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       title: "Preview",
@@ -186,7 +204,7 @@ describe("prInsightArtifactsLocal", () => {
       tokensOut: 5,
     });
     const newRun = upsertLocalPrInsightArtifact(dataDir, {
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       title: "Preview",
@@ -198,7 +216,7 @@ describe("prInsightArtifactsLocal", () => {
       tokensOut: 5,
     });
     const otherKind = upsertLocalPrInsightArtifact(dataDir, {
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       title: "Full review",
@@ -217,9 +235,9 @@ describe("prInsightArtifactsLocal", () => {
     ]));
   });
 
-  it("looks up a saved artifact by id with optional profile isolation", () => {
+  it("looks up a saved artifact by id with optional Project Link isolation", () => {
     const saved = upsertLocalPrInsightArtifact(dataDir, {
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       repository: "demo-repo",
       pullRequestId: 42,
       title: "Preview",
@@ -233,12 +251,12 @@ describe("prInsightArtifactsLocal", () => {
 
     expect(getLocalPrInsightArtifact({
       dataDir,
-      profileId: "profile-1",
+      projectLinkId: "project-link-1",
       artifactId: saved.id,
     })).toMatchObject({ id: saved.id, summary: "Lookup summary." });
     expect(getLocalPrInsightArtifact({
       dataDir,
-      profileId: "profile-2",
+      projectLinkId: "project-link-2",
       artifactId: saved.id,
     })).toBeNull();
     expect(getLocalPrInsightArtifact({

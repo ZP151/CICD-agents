@@ -54,14 +54,14 @@ jobs:
       # Bundle the daemon into a platform binary and drop it in
       # apps/desktop/src-tauri/binaries/ with the correct Tauri naming
       - name: Build daemon sidecar
-        run: pnpm --filter @cicd-agent/desktop build:sidecar
+        run: pnpm --filter @mergepilot/desktop build:sidecar
 
       # Build the Tauri installer (skips the sidecar step since it was done above)
       - name: Build Tauri installer
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: pnpm --filter @cicd-agent/desktop tauri build
+        run: pnpm --filter @mergepilot/desktop tauri build
 
       # Collect the produced installers as a workflow artifact and as a release asset
       - name: Upload installer artifacts
@@ -99,7 +99,7 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          name: "CI/CD Agent ${{ github.ref_name }}"
+          name: "MergePilot ${{ github.ref_name }}"
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true

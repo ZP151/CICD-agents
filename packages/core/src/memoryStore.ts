@@ -31,7 +31,7 @@ export class MemoryStore {
     this.handle.close();
   }
 
-  setProfile(key: string, value: unknown): void {
+  setMemory(key: string, value: unknown): void {
     const now = Math.floor(Date.now() / 1000);
     this.db
       .prepare(
@@ -41,7 +41,7 @@ export class MemoryStore {
       .run(key, JSON.stringify(value), now);
   }
 
-  getProfile<T = unknown>(key: string, defaultValue: T | null = null): T | null {
+  getMemory<T = unknown>(key: string, defaultValue: T | null = null): T | null {
     const row = this.db
       .prepare("SELECT value FROM repo_profile WHERE key = ?")
       .get(key) as { value: string } | undefined;

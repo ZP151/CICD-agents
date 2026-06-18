@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { PrInsightArtifactRecord } from "../api.js";
 import { PrInsightReadinessBlockers } from "./TaskViewer.js";
 
-function prInsightArtifact(overrides: Partial<PrInsightArtifactRecord> = {}): PrInsightArtifactRecord {
+function prInsightArtifact(
+  overrides: Partial<PrInsightArtifactRecord> = {},
+): PrInsightArtifactRecord {
   return {
-    id: "profile-1/demo/42/review_run/2026-06-13T00%3A00%3A00.000Z",
-    profileId: "profile-1",
+    id: "project-link-1/demo/42/review_run/2026-06-13T00%3A00%3A00.000Z",
+    projectLinkId: "project-link-1",
     repository: "demo",
     pullRequestId: 42,
     title: "Improve PR insight",
@@ -32,34 +34,42 @@ describe("TaskViewer PR insight readiness blockers", () => {
             failedBuildCount: 1,
             failedPolicyCount: 1,
             workItemCount: 1,
-            buildBlockers: [{
-              id: 77,
-              buildNumber: "20260610.1",
-              definitionName: "CI",
-              status: "completed",
-              result: "failed",
-              url: "https://ado/build/77",
-            }],
-            policyBlockers: [{
-              id: "policy-1",
-              name: "Minimum reviewers",
-              typeName: "Reviewer policy",
-              status: "failed",
-              isBlocking: true,
-            }],
-            activeThreads: [{
-              id: 5,
-              status: 1,
-              author: "Ada",
-              firstComment: "Needs tests",
-            }],
-            linkedWorkItems: [{
-              id: 123,
-              type: "User Story",
-              title: "Improve agent insight",
-              state: "Active",
-              url: "https://ado/workItems/123",
-            }],
+            buildBlockers: [
+              {
+                id: 77,
+                buildNumber: "20260610.1",
+                definitionName: "CI",
+                status: "completed",
+                result: "failed",
+                url: "https://ado/build/77",
+              },
+            ],
+            policyBlockers: [
+              {
+                id: "policy-1",
+                name: "Minimum reviewers",
+                typeName: "Reviewer policy",
+                status: "failed",
+                isBlocking: true,
+              },
+            ],
+            activeThreads: [
+              {
+                id: 5,
+                status: 1,
+                author: "Ada",
+                firstComment: "Needs tests",
+              },
+            ],
+            linkedWorkItems: [
+              {
+                id: 123,
+                type: "User Story",
+                title: "Improve agent insight",
+                state: "Active",
+                url: "https://ado/workItems/123",
+              },
+            ],
           },
         })}
       />,
@@ -77,6 +87,8 @@ describe("TaskViewer PR insight readiness blockers", () => {
   });
 
   it("renders nothing when no structured blocker metadata is available", () => {
-    expect(renderToStaticMarkup(<PrInsightReadinessBlockers item={prInsightArtifact()} />)).toBe("");
+    expect(renderToStaticMarkup(<PrInsightReadinessBlockers item={prInsightArtifact()} />)).toBe(
+      "",
+    );
   });
 });

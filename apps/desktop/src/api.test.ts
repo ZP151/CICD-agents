@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chatStream, type ChatEventPayload } from "./api.js";
+import { chatStream, runChatWorkflowAction, type ChatEventPayload } from "./api.js";
 
 function sse(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+function firstRequestBody(fetchMock: { mock: { calls: unknown[][] } }): Record<string, unknown> {
+  const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+  return JSON.parse(String(request?.body)) as Record<string, unknown>;
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
@@ -41,8 +46,14 @@ describe("chatStream", () => {
       "C:\\repo",
       null,
       (event) => events.push(event),
+      "project-link-1",
     );
     await waitFor(() => fetchMock.mock.calls.length === 1 && streamControllerRef.current !== undefined);
+    expect(firstRequestBody(fetchMock)).toMatchObject({
+      message: "stream a long answer",
+      repoPath: "C:\\repo",
+      projectLinkId: "project-link-1",
+    });
 
     const streamController = streamControllerRef.current;
     if (!streamController) throw new Error("Readable stream controller was not created");
@@ -123,5 +134,67 @@ describe("chatStream", () => {
       delta: "Split chunk text.",
     });
     streamController.close();
+  });
+});
+
+describe("runChatWorkflowAction", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("sends projectLinkId without legacy profile mirroring", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      action: "inspect_changes",
+      repoPath: "C:\\repo",
+      tools: [],
+      workflowState: {
+        status: "done",
+        currentStep: "done",
+        completedTools: [],
+        pendingTools: [],
+      },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runChatWorkflowAction("inspect_changes", "C:\\repo", "project-link-1");
+
+    expect(firstRequestBody(fetchMock)).toMatchObject({
+      action: "inspect_changes",
+      repoPath: "C:\\repo",
+      projectLinkId: "project-link-1",
+    });
+  });
+
+  it("omits Project Link identity when no Project Link is selected", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      action: "inspect_environment",
+      repoPath: "C:\\repo",
+      tools: [],
+      workflowState: {
+        status: "done",
+        currentStep: "done",
+        completedTools: [],
+        pendingTools: [],
+      },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runChatWorkflowAction("inspect_environment", "C:\\repo", null);
+
+    const body = firstRequestBody(fetchMock);
+    expect(body).toMatchObject({
+      action: "inspect_environment",
+      repoPath: "C:\\repo",
+    });
+    expect(body).not.toHaveProperty("projectLinkId");
   });
 });

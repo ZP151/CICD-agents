@@ -1,7 +1,7 @@
 import { request } from "undici";
-import { getSettings } from "@cicd-agent/core";
+import { getSettings } from "@mergepilot/core";
 
-const PAT_KEYRING_SERVICE = "cicd-agent";
+const PAT_KEYRING_SERVICE = "mergepilot";
 const PAT_KEYRING_USER = "azure-devops-pat";
 
 export interface EnableReviewArgs {
@@ -83,7 +83,7 @@ async function loadPat(): Promise<string> {
   const keytar = keytarMod.default ?? keytarMod;
   const pat = (await keytar.getPassword(PAT_KEYRING_SERVICE, PAT_KEYRING_USER)) ?? "";
   if (!pat) {
-    throw new Error("Azure DevOps PAT not configured. Run `dev-agent configure-pat`.");
+    throw new Error("Azure DevOps PAT not configured. Run `mergepilot configure-pat`.");
   }
   return pat;
 }

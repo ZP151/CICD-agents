@@ -6,7 +6,7 @@
 @description('Resource name prefix')
 param name string
 
-@description('Container image (e.g. myregistry.azurecr.io/cicd-agent/review-agent:latest)')
+@description('Container image (e.g. myregistry.azurecr.io/mergepilot/review-agent:latest)')
 param image string
 
 @description('Azure region')
@@ -16,7 +16,7 @@ param location string = resourceGroup().location
 param azureOpenAiEndpoint string
 
 @description('Azure OpenAI chat deployment name')
-param azureOpenAiChatDeployment string = 'cicd-agent-chat'
+param azureOpenAiChatDeployment string = 'mergepilot-chat'
 
 @description('Azure DevOps organization')
 param azureDevOpsOrg string

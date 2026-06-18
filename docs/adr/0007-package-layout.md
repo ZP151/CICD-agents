@@ -15,7 +15,7 @@ entry points and avoids version drift between them.
 A pnpm-workspaces monorepo:
 
 ```
-cicd-agent/
+mergepilot/
   package.json           # workspace root, scripts only
   pnpm-workspace.yaml
   tsconfig.base.json

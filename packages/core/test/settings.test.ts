@@ -48,7 +48,7 @@ describe("settings", () => {
 
     expect(settings.llmProvider).toBe("azure");
     expect(settings.llmConfigured).toBe(true);
-    expect(settings.azureOpenAiChatDeployment).toBe("cicd-agent-chat");
+    expect(settings.azureOpenAiChatDeployment).toBe("mergepilot-chat");
   });
 
   it("uses OpenAI as a configured custom provider only when key and model are present", () => {

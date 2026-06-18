@@ -79,7 +79,7 @@ export function applyReviewRunToQueueItem(
     lastIterationId: result.iterationId,
     findingCount: result.findingCount,
     lastRunAt: result.lastRunAt,
-    sourceCommit: "",
+    sourceCommit: result.sourceCommit ?? previous.sourceCommit ?? "",
     decisionQueue: result.decisionQueue,
     decisionRiskLevel: result.decisionRiskLevel,
     decisionReason: result.decisionReason,

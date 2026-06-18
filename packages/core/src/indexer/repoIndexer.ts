@@ -5,7 +5,7 @@ import fastGlob from "fast-glob";
 import type { Database as DbType } from "better-sqlite3";
 import { openRepoDb, transaction, type RepoDatabase } from "../db/database.js";
 import { getSettings } from "../settings.js";
-import type { Profile } from "../profiles.js";
+import type { ProjectTemplate } from "../projectTemplates.js";
 import { chunksForFile } from "./chunks.js";
 import { detectLanguage, isTestPath, parseFile } from "./parsers.js";
 import type { IndexStats, ParsedSymbol } from "./types.js";
@@ -44,22 +44,22 @@ function loadGitignore(repo: string): string[] {
 
 export class RepoIndexer {
   readonly repoPath: string;
-  readonly profile: Profile | null;
+  readonly projectTemplate: ProjectTemplate | null;
   private readonly handle: RepoDatabase;
   private readonly db: DbType;
   private readonly maxFileBytes: number;
   private readonly ignored: string[];
 
-  constructor(repoPath: string, profile: Profile | null = null) {
+  constructor(repoPath: string, projectTemplate: ProjectTemplate | null = null) {
     this.repoPath = path.resolve(repoPath);
-    this.profile = profile;
+    this.projectTemplate = projectTemplate;
     this.handle = openRepoDb(this.repoPath);
     this.db = this.handle.db;
     const settings = getSettings();
     this.maxFileBytes = settings.indexMaxFileBytes;
     this.ignored = [
       ...DEFAULT_IGNORED,
-      ...(profile?.ignored_globs ?? []),
+      ...(projectTemplate?.ignored_globs ?? []),
       ...loadGitignore(this.repoPath),
     ];
   }

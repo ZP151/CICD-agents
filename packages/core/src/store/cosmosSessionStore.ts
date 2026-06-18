@@ -1,7 +1,7 @@
 /**
  * Azure Cosmos DB for NoSQL — chat session persistence.
  *
- * Database:  cicd-agent  (created on first use)
+ * Database:  mergepilot  (created on first use)
  * Container: chat-sessions
  * Partition: /userId
  * TTL:       7_776_000 s = 90 days (configurable via COSMOS_SESSION_TTL_SEC)
@@ -12,7 +12,7 @@
 import { CosmosClient, type ContainerRequest } from "@azure/cosmos";
 import { getAzureCredential, requireCurrentUser } from "./azureAuth.js";
 
-const DB_NAME = "cicd-agent";
+const DB_NAME = "mergepilot";
 const CONTAINER_NAME = "chat-sessions";
 const DEFAULT_TTL = 7_776_000; // 90 days
 
@@ -24,7 +24,7 @@ export interface CosmosStoredSession {
   title?: string;
   pinned?: boolean;
   repoPath: string;
-  profileId?: string;
+  projectLinkId?: string;
   messages: unknown[];
   bubbles: unknown[];
   approvalProposal?: unknown;
@@ -32,7 +32,7 @@ export interface CosmosStoredSession {
   pendingAction?: unknown;
   workflowState?: unknown;
   llmConfig?: unknown;
-  inlineProfile?: unknown;
+  inlineProjectLink?: unknown;
   ttl?: number;         // auto-expire via Cosmos TTL
 }
 

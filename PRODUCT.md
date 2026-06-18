@@ -6,7 +6,7 @@ product
 
 ## Users
 
-CI/CD Dev Agent is used by developers, tech leads, and DevOps-oriented engineers who are already inside a repository workflow. They are usually reviewing local changes, preparing commits, inspecting pull requests, checking Azure DevOps context, or deciding whether an automated action is safe to run.
+CI/CD MergePilot is used by developers, tech leads, and DevOps-oriented engineers who are already inside a repository workflow. They are usually reviewing local changes, preparing commits, inspecting pull requests, checking Azure DevOps context, or deciding whether an automated action is safe to run.
 
 Users need the interface to feel like an operational workbench: compact, evidence-rich, fast to scan, and trustworthy during repeated daily use.
 

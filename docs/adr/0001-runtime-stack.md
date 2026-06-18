@@ -10,7 +10,7 @@ fast. We now need to commit to a long-term stack that:
 
 - runs cleanly on Windows developer machines (most of our users),
 - ships as a single self-contained installable artifact,
-- shares code between the local Dev Agent and a cloud-hosted Review Agent,
+- shares code between the local MergePilot and a cloud-hosted Review Agent,
 - can later be embedded into a desktop GUI (Tauri webview),
 - has first-class libraries for Tree-sitter, sqlite, OpenAI/Azure OpenAI,
   Server-Sent Events, and Azure DevOps REST.

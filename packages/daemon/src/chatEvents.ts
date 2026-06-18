@@ -1,4 +1,4 @@
-import type { ChatEvent } from "@cicd-agent/core";
+import type { ChatEvent } from "@mergepilot/core";
 
 export type CanonicalChatEventType =
   | "session.started"

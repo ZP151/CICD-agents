@@ -1,13 +1,21 @@
 /**
- * Builds the cicd-daemon Node.js app into a self-contained binary and places it
+ * Builds the mergepilot-daemon Node.js app into a self-contained binary and places it
  * in apps/desktop/src-tauri/binaries/ with the Tauri sidecar naming convention:
- *   cicd-daemon-{rustc-target-triple}[.exe]
+ *   mergepilot-daemon-{rustc-target-triple}[.exe]
  *
- * Run from repo root: pnpm --filter @cicd-agent/desktop build:sidecar
+ * Run from repo root: pnpm --filter @mergepilot/desktop build:sidecar
  * Or from the desktop app dir: node scripts/build-sidecar.mjs
  */
 import { execSync, spawnSync } from "child_process";
-import { copyFileSync, mkdirSync, existsSync, readdirSync, readFileSync, statSync, rmSync } from "fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  rmSync,
+} from "fs";
 import { resolve, dirname, join } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { createRequire } from "module";
@@ -25,9 +33,7 @@ const coreSchemaPath = resolve(repoRoot, "packages/core/src/db/schema.sql");
 function getRustTargetTriple() {
   const result = spawnSync("rustc", ["-Vv"], { encoding: "utf8" });
   if (result.error || result.status !== 0) {
-    throw new Error(
-      "rustc not found. Please install the Rust toolchain: https://rustup.rs"
-    );
+    throw new Error("rustc not found. Please install the Rust toolchain: https://rustup.rs");
   }
   const match = result.stdout.match(/^host:\s+(.+)$/m);
   if (!match) throw new Error("Could not parse rustc host triple");
@@ -76,7 +82,9 @@ function copyDirRecursive(src, dest) {
       } else {
         copyFileSync(srcFull, destFull);
       }
-    } catch { /* skip permission-denied files (e.g. locked .node on Windows) */ }
+    } catch {
+      /* skip permission-denied files (e.g. locked .node on Windows) */
+    }
   }
 }
 
@@ -98,10 +106,16 @@ function stageNativeModules() {
     let pkgMain;
     let pkgRoot;
     for (const root of searchRoots) {
-      try { pkgMain = req.resolve(`${pkgName}/package.json`, { paths: [root] }); break; }
-      catch {
-        try { pkgMain = req.resolve(pkgName, { paths: [root] }); break; }
-        catch { /* try next */ }
+      try {
+        pkgMain = req.resolve(`${pkgName}/package.json`, { paths: [root] });
+        break;
+      } catch {
+        try {
+          pkgMain = req.resolve(pkgName, { paths: [root] });
+          break;
+        } catch {
+          /* try next */
+        }
       }
     }
     if (!pkgMain) {
@@ -127,7 +141,9 @@ function stageNativeModules() {
               foundRoot = true;
               break;
             }
-          } catch { /* keep walking */ }
+          } catch {
+            /* keep walking */
+          }
         }
         candidate = dirname(candidate);
       }
@@ -154,7 +170,9 @@ function stageNativeModules() {
           const content = readFileSync(stagedManifest, "utf8");
           validStage = content.includes(`"name": "${pkgName}"`);
         }
-      } catch { /* treat as invalid */ }
+      } catch {
+        /* treat as invalid */
+      }
 
       if (validStage) {
         console.log(`  already present: ${pkgName}`);
@@ -163,7 +181,11 @@ function stageNativeModules() {
       }
 
       console.log(`  re-staging ${pkgName} (clearing invalid existing directory):`);
-      try { rmSync(destPkg, { recursive: true, force: true }); } catch { /* best-effort */ }
+      try {
+        rmSync(destPkg, { recursive: true, force: true });
+      } catch {
+        /* best-effort */
+      }
     }
 
     console.log(`  staging ${pkgName} (full package):`);
@@ -189,7 +211,11 @@ function findPnpmPackageRoot(pkgName) {
 
 function cleanupStagedDirs(dirs) {
   for (const d of dirs) {
-    try { rmSync(d, { recursive: true, force: true }); } catch { /* ignore */ }
+    try {
+      rmSync(d, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -199,7 +225,7 @@ function cleanupStagedDirs(dirs) {
 const triple = getRustTargetTriple();
 const pkgTarget = pkgTargetFor(triple);
 const ext = process.platform === "win32" ? ".exe" : "";
-const sidecarName = `cicd-daemon-${triple}${ext}`;
+const sidecarName = `mergepilot-daemon-${triple}${ext}`;
 const outputPath = resolve(binariesDir, sidecarName);
 
 console.log(`\nBuilding sidecar for ${triple} (pkg target: ${pkgTarget})`);
@@ -209,7 +235,7 @@ mkdirSync(binariesDir, { recursive: true });
 
 // 1. Build core first so daemon sees fresh workspace type declarations.
 console.log("--- 1/4  core build ---");
-run("pnpm --filter @cicd-agent/core build", { cwd: repoRoot });
+run("pnpm --filter @mergepilot/core build", { cwd: repoRoot });
 
 // 2. Build TypeScript → dist/
 console.log("--- 2/4  daemon tsc build ---");
@@ -237,7 +263,7 @@ try {
       ` --target ${pkgTarget}` +
       ` --output "${outputPath}"` +
       ` --compress GZip`,
-    { cwd: daemonRoot }
+    { cwd: daemonRoot },
   );
 } finally {
   // Remove the staged copies so the working tree stays clean

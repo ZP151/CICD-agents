@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { detectRepoKind, suggestProfileFor, writeProfileFile } from "../src/init.js";
+import {
+  detectRepoKind,
+  suggestProjectTemplateFor,
+  writeProjectLinkFile,
+} from "../src/init.js";
 
 function tempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "cicd-init-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "mergepilot-init-"));
 }
 
 describe("init helpers", () => {
@@ -32,18 +36,18 @@ describe("init helpers", () => {
     expect(detectRepoKind(dir)).toBe("unknown");
   });
 
-  it("maps kinds to profile names", () => {
-    expect(suggestProfileFor("python")).toBe("python-api");
-    expect(suggestProfileFor("dotnet")).toBe("dotnet-api");
-    expect(suggestProfileFor("node")).toBe("node-web");
-    expect(suggestProfileFor("unknown")).toBe("default");
+  it("maps kinds to project template names", () => {
+    expect(suggestProjectTemplateFor("python")).toBe("python-api");
+    expect(suggestProjectTemplateFor("dotnet")).toBe("dotnet-api");
+    expect(suggestProjectTemplateFor("node")).toBe("node-web");
+    expect(suggestProjectTemplateFor("unknown")).toBe("default");
   });
 
-  it("writes .cicd-agent/profile.yaml", () => {
+  it("writes .mergepilot/project-link.yaml", () => {
     const dir = tempDir();
-    const out = writeProfileFile({
+    const out = writeProjectLinkFile({
       repoPath: dir,
-      profile: "python-api",
+      projectTemplate: "python-api",
       organization: "contoso",
       project: "demo",
       repository: "demo-api",
@@ -53,5 +57,14 @@ describe("init helpers", () => {
     const text = fs.readFileSync(out.configPath, "utf8");
     expect(text).toContain("python-api");
     expect(text).toContain("contoso");
+    expect(path.basename(out.configPath)).toBe("project-link.yaml");
+  });
+
+  it("does not write legacy profile config files", () => {
+    const dir = tempDir();
+    writeProjectLinkFile({
+      repoPath: dir,
+      projectTemplate: "python-api",
+    });
   });
 });

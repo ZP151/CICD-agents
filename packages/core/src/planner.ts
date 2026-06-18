@@ -2,25 +2,17 @@ import type { ChatCompletionMessageParam } from "openai/resources/chat/completio
 import { bundleToPrompt, type ContextBundle } from "./contextBuilder.js";
 import { LLMUnavailableError, type LLMClient } from "./llm.js";
 import { logger } from "./logger.js";
+import {
+  buildPlannerOfflineSummary,
+  firstPlannerLine,
+  parsePlannerFinalJson,
+  PIPELINE_SYSTEM_PROMPT,
+  truncatePlannerText,
+} from "./plannerSupport.js";
 import { getSettings } from "./settings.js";
 import type { ToolExecutor } from "./tools/executor.js";
 
-export const SYSTEM_PROMPT = `You are the Pipeline Agent for an internal CI/CD assistant.
-You work on a local code index of a developer's repository and have access to
-tools for inspecting code, running tests/builds, and interacting with Azure
-DevOps. Decide which tools to call and stop as soon as you have enough
-information to produce a final answer.
-
-Always return your final answer as a JSON object with these fields:
-  title            : short pull request title (<=80 chars)
-  summary          : markdown PR description, with sections "What" and "Why"
-                     and a short "Risks" bullet list
-  risk_level       : one of "low", "medium", "high"
-  reasoning        : 2-4 sentence justification of risk_level
-  next_actions     : optional list of strings for follow-up
-
-Do not invent file paths or symbols that are not present in the context. If
-the diff is empty, return a short summary that explains why.`;
+export const SYSTEM_PROMPT = PIPELINE_SYSTEM_PROMPT;
 
 export interface PlannerResult {
   title: string;
@@ -109,7 +101,7 @@ export class Planner {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
-            content: truncate(JSON.stringify(toolResult), 6000),
+            content: truncatePlannerText(JSON.stringify(toolResult), 6000),
           });
           void ok;
         }
@@ -119,7 +111,7 @@ export class Planner {
       lastText = resp.content ?? "";
       messages.push({ role: "assistant", content: lastText });
 
-      const parsed = parseFinalJson(lastText);
+      const parsed = parsePlannerFinalJson(lastText);
       if (parsed) {
         return {
           title: String(parsed.title ?? "").slice(0, 160),
@@ -139,7 +131,7 @@ export class Planner {
     }
 
     return {
-      title: firstLine(lastText) || "Automated PR",
+      title: firstPlannerLine(lastText) || "Automated PR",
       summary: lastText || "(no model output)",
       riskLevel: "medium",
       reasoning: "Planner reached the step ceiling without a structured answer.",
@@ -224,7 +216,7 @@ export class Planner {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
-            content: truncate(JSON.stringify(toolResult), 6000),
+            content: truncatePlannerText(JSON.stringify(toolResult), 6000),
           });
         }
         continue;
@@ -232,7 +224,7 @@ export class Planner {
 
       lastText = accumulated;
       messages.push({ role: "assistant", content: lastText });
-      const parsed = parseFinalJson(lastText);
+      const parsed = parsePlannerFinalJson(lastText);
       if (parsed) {
         const result: PlannerResult = {
           title: String(parsed.title ?? "").slice(0, 160),
@@ -253,7 +245,7 @@ export class Planner {
       });
     }
     const fallback: PlannerResult = {
-      title: firstLine(lastText) || "Automated PR",
+      title: firstPlannerLine(lastText) || "Automated PR",
       summary: lastText || "(no model output)",
       riskLevel: "medium",
       reasoning: "Planner reached the step ceiling without a structured answer.",
@@ -286,79 +278,6 @@ export class Planner {
   }
 
   static buildOfflineSummary(bundle: ContextBundle): { title: string; summary: string } {
-    const first = bundle.changedFiles[0];
-    if (!first) {
-      return { title: "No changes", summary: "There are no file changes against the target branch." };
-    }
-    const added = bundle.changedFiles.filter((f) => f.status === "added").length;
-    const modified = bundle.changedFiles.filter((f) => f.status === "modified").length;
-    const deleted = bundle.changedFiles.filter((f) => f.status === "deleted").length;
-    const additions = bundle.changedFiles.reduce((s, f) => s + f.additions, 0);
-    const deletions = bundle.changedFiles.reduce((s, f) => s + f.deletions, 0);
-    let title = `Update ${first.path}`;
-    if (bundle.changedFiles.length > 1) {
-      title = `Update ${bundle.changedFiles.length} files including ${first.path}`;
-    }
-    title = title.slice(0, 80);
-    const lines = [
-      "## What",
-      `- ${bundle.changedFiles.length} file(s) changed (${added} added, ${modified} modified, ${deleted} deleted)`,
-      `- +${additions} / -${deletions} lines`,
-      "",
-      "## Why",
-      "_Automatically generated; LLM unavailable. Edit before merging._",
-      "",
-      "## Risks",
-      "- Review the diff manually.",
-    ];
-    if (bundle.affectedSymbols.length > 0) {
-      lines.push("", "## Affected symbols");
-      for (const s of bundle.affectedSymbols.slice(0, 20)) lines.push(`- ${s}`);
-    }
-    return { title, summary: lines.join("\n") };
+    return buildPlannerOfflineSummary(bundle);
   }
-}
-
-function parseFinalJson(text: string): Record<string, unknown> | null {
-  if (!text) return null;
-  const trimmed = text.trim();
-  if (trimmed.startsWith("```")) {
-    const end = trimmed.lastIndexOf("```");
-    if (end > 3) {
-      const inner = trimmed.slice(trimmed.indexOf("\n") + 1, end).trim();
-      try {
-        const obj = JSON.parse(inner);
-        if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-          return obj as Record<string, unknown>;
-        }
-      } catch {
-        // fall through
-      }
-    }
-  }
-  const open = trimmed.indexOf("{");
-  const close = trimmed.lastIndexOf("}");
-  if (open !== -1 && close !== -1 && close > open) {
-    try {
-      const obj = JSON.parse(trimmed.slice(open, close + 1));
-      if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-        return obj as Record<string, unknown>;
-      }
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-function firstLine(text: string): string {
-  for (const line of text.split(/\r?\n/)) {
-    const s = line.trim();
-    if (s) return s.slice(0, 80);
-  }
-  return "";
-}
-
-function truncate(text: string, max: number): string {
-  return text.length <= max ? text : text.slice(0, max - 20) + "...(truncated)...";
 }

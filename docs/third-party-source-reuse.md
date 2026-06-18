@@ -101,24 +101,25 @@ Local integration:
 - `packages/core/src/tools/capabilities.ts` classifies `mcp_ado_*` tools so
   read-only MCP tools can run directly and mutating MCP tools require approval.
 - `packages/daemon/src/chatSession.ts` optionally discovers Azure DevOps MCP
-  tools when `CICD_AGENT_ADO_MCP_ENABLED=1`.
+  tools when the Project Link or global compatibility fallback enables the
+  bridge.
 
 Runtime switch:
 
 ```powershell
-$env:CICD_AGENT_ADO_MCP_ENABLED = "1"
-$env:CICD_AGENT_ADO_MCP_COMMAND = "mcp-server-azuredevops"
-$env:CICD_AGENT_ADO_MCP_DOMAINS = "repositories,pipelines,work-items"
+$env:MERGEPILOT_ADO_MCP_ENABLED = "1"
+$env:MERGEPILOT_ADO_MCP_COMMAND = "mcp-server-azuredevops"
+$env:MERGEPILOT_ADO_MCP_DOMAINS = "repositories,pipelines,work-items"
 ```
 
 Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/mcpTools.test.ts test/toolCapabilities.test.ts test/toolExecutor.test.ts test/chatPlannerApproval.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatEvents.test.ts test/chatSessionWorkflow.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/mcpTools.test.ts test/toolCapabilities.test.ts test/toolExecutor.test.ts test/chatPlannerApproval.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatEvents.test.ts test/chatSessionWorkflow.test.ts
 ```
 
 ### 2026-06-09: `@openharness/core`
@@ -188,11 +189,11 @@ Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/toolExecutor.test.ts test/chatPlannerApproval.test.ts test/toolCapabilities.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatEvents.test.ts test/chatSessionWorkflow.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/toolExecutor.test.ts test/chatPlannerApproval.test.ts test/toolCapabilities.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatEvents.test.ts test/chatSessionWorkflow.test.ts
 ```
 
 ### 2026-06-09: Project Link-backed Azure DevOps MCP enablement
@@ -206,10 +207,10 @@ Local implementation:
 
 - `packages/core/src/tools/mcp.ts`
 - `packages/core/src/profiles.ts`
-- `packages/core/src/store/tableProfileStore.ts`
+- `packages/core/src/store/tableProjectLinkStore.ts`
 - `packages/daemon/src/chatSession.ts`
 - `packages/daemon/src/server.ts`
-- `apps/desktop/src/pages/Profiles.tsx`
+- `apps/desktop/src/pages/ProjectLinks.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
 
 Reuse boundary:
@@ -223,11 +224,12 @@ Reuse boundary:
   - `adoMcpAuthentication`
   - `adoMcpDomains`
 - Environment variables remain a global fallback:
-  - `CICD_AGENT_ADO_MCP_ENABLED`
-  - `CICD_AGENT_ADO_MCP_COMMAND`
-  - `CICD_AGENT_ADO_MCP_AUTHENTICATION`
-  - `CICD_AGENT_ADO_MCP_DOMAINS`
-  - `CICD_AGENT_ADO_MCP_TIMEOUT_MS`
+  - `MERGEPILOT_ADO_MCP_ENABLED`
+  - `MERGEPILOT_ADO_MCP_COMMAND`
+  - `MERGEPILOT_ADO_MCP_AUTHENTICATION`
+  - `MERGEPILOT_ADO_MCP_DOMAINS`
+  - `MERGEPILOT_ADO_MCP_TIMEOUT_MS`
+  - legacy `CICD_AGENT_ADO_MCP_*` names are compatibility fallbacks only
 
 Decision:
 
@@ -242,14 +244,14 @@ Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/core typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/core typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 ### 2026-06-10: Daemon coverage for Project Link-enabled MCP registration
@@ -272,9 +274,9 @@ Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/chatSessionMcp.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/chatSessionMcp.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
 ```
 
 Result:
@@ -297,7 +299,7 @@ Local implementation:
 - `packages/daemon/src/server.ts`
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/api.ts`
-- `apps/desktop/src/pages/Profiles.tsx`
+- `apps/desktop/src/pages/ProjectLinks.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
 
 Reuse boundary:
@@ -328,11 +330,11 @@ Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
@@ -354,7 +356,7 @@ Local implementation:
 - `packages/daemon/src/server.ts`
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/api.ts`
-- `apps/desktop/src/pages/Profiles.tsx`
+- `apps/desktop/src/pages/ProjectLinks.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
 
 Reuse boundary:
@@ -379,11 +381,11 @@ Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
@@ -407,7 +409,7 @@ Local implementation:
 - `packages/daemon/src/server.ts`
 - `packages/daemon/test/server.test.ts`
 - `apps/desktop/src/api.ts`
-- `apps/desktop/src/pages/Profiles.tsx`
+- `apps/desktop/src/pages/ProjectLinks.tsx`
 - `apps/desktop/src/pages/Chat.tsx`
 
 What was ported:
@@ -446,14 +448,14 @@ Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
@@ -508,14 +510,14 @@ Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/azureDevOpsInternal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/azureDevOpsInternal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
@@ -577,13 +579,13 @@ Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/azureDevOpsInternal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/azureDevOpsInternal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
 ```
 
 Result:
@@ -644,14 +646,14 @@ Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/azureDevOpsInternal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/azureDevOpsInternal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
 ```
 
 Result:
@@ -699,7 +701,7 @@ What changed:
   - file/thread/build/work-item counts
   - token usage
 - Added desktop API:
-  - `fetchProfilePullRequestInsightPreview`
+  - `fetchProjectLinkPullRequestInsightPreview`
 - Added Pull Requests workspace UI:
   - `Preview Insight`
   - inline preview summary and risk chips
@@ -710,18 +712,19 @@ Reuse boundary:
 - It reuses internally ported ADO MCP-style context helpers.
 - It deliberately does not duplicate the full Review Agent path.
 - It is non-mutating; full review and persistence remain owned by
-  `/profiles/:id/review-run`.
+  `/project-links/:id/review-run`, with `/profiles/:id/review-run` kept as a
+  compatibility alias.
 
 Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/core test
 ```
 
 Result:
@@ -777,13 +780,13 @@ Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/azureDevOpsInternal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/azureDevOpsInternal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
@@ -838,10 +841,10 @@ Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 .\.tools\pnpm.exe install --lockfile-only
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
 ```
 
 Result:
@@ -887,10 +890,10 @@ Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/core test -- test/azureDevOpsInternal.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/core build
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/core test -- test/azureDevOpsInternal.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/core build
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
 ```
 
 Result:
@@ -934,10 +937,10 @@ Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test -- test/server.test.ts
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/daemon test -- test/server.test.ts
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:
@@ -1070,14 +1073,14 @@ Verification:
 
 ```powershell
 $env:PATH = "C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64;C:\Users\15492\Develop\Agents\CICD-agents\.tools;" + $env:PATH
-.\.tools\pnpm.exe --filter @cicd-agent/daemon test
-.\.tools\pnpm.exe --filter @cicd-agent/daemon typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent test
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/review-agent build
-.\.tools\pnpm.exe --filter @cicd-agent/desktop typecheck
-.\.tools\pnpm.exe --filter @cicd-agent/desktop test
-.\.tools\pnpm.exe --filter @cicd-agent/desktop build
+.\.tools\pnpm.exe --filter @mergepilot/daemon test
+.\.tools\pnpm.exe --filter @mergepilot/daemon typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent test
+.\.tools\pnpm.exe --filter @mergepilot/review-agent typecheck
+.\.tools\pnpm.exe --filter @mergepilot/review-agent build
+.\.tools\pnpm.exe --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe --filter @mergepilot/desktop test
+.\.tools\pnpm.exe --filter @mergepilot/desktop build
 ```
 
 Result:

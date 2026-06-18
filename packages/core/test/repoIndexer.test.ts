@@ -1,6 +1,7 @@
 import { describe, expect, it, afterEach } from "vitest";
 import { detectLanguage, isTestPath } from "../src/indexer/parsers.js";
 import { RepoIndexer } from "../src/indexer/repoIndexer.js";
+import type { ProjectTemplate } from "../src/projectTemplates.js";
 import { makeFixtureRepo, type TempEnv } from "./helpers.js";
 
 let env: TempEnv | null = null;
@@ -37,6 +38,30 @@ describe("RepoIndexer", () => {
     expect(stats.filesIndexed).toBeGreaterThan(0);
     expect(idx.symbolsInFile("app.py").length).toBeGreaterThan(0);
     expect(idx.allTestFiles()).toContain("test_app.py");
+    idx.close();
+  });
+
+  it("uses project template ignored globs", async () => {
+    env = makeFixtureRepo();
+    const projectTemplate: ProjectTemplate = {
+      name: "python",
+      description: "",
+      languages: ["python"],
+      build: { command: "" },
+      test: { command: "" },
+      azure_devops: {
+        organization: "",
+        project: "",
+        repository: "",
+        default_target_branch: "main",
+        pipeline_id: null,
+      },
+      ignored_globs: ["test_app.py"],
+    };
+    const idx = new RepoIndexer(env.repoPath, projectTemplate);
+    const files = await idx.listRepoFiles();
+    expect(files).toContain("app.py");
+    expect(files).not.toContain("test_app.py");
     idx.close();
   });
 });

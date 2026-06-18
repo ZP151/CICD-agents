@@ -75,7 +75,7 @@ export class StdioMcpClient {
       protocolVersion: DEFAULT_PROTOCOL_VERSION,
       capabilities: {},
       clientInfo: {
-        name: "cicd-agent",
+        name: "mergepilot",
         version: "0.5.0",
       },
     });
