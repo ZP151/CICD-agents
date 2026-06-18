@@ -112,7 +112,7 @@ describe("daemon PR workflow routes", () => {
       }
       return new Response(JSON.stringify({ message: `unexpected URL ${url}` }), { status: 404 });
     });
-    const profile = {
+    const projectLink = {
       repoPath: process.cwd(),
       defaultBranch: "main",
       targetBranch: "main",
@@ -128,7 +128,7 @@ describe("daemon PR workflow routes", () => {
       payload: {
         action: "check_pr_policy",
         repoPath: process.cwd(),
-        profile,
+        projectLink,
       },
     });
     expect(policy.statusCode, policy.body).toBe(200);
@@ -143,7 +143,7 @@ describe("daemon PR workflow routes", () => {
       payload: {
         action: "list_pr_work_items",
         repoPath: process.cwd(),
-        profile,
+        projectLink,
       },
     });
     expect(workItems.statusCode, workItems.body).toBe(200);
