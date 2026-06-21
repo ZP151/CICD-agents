@@ -96,6 +96,35 @@ describe("chat draft persistence", () => {
     expect(loadChatDraft()).toBeNull();
   });
 
+  it("strips transient image payloads before persisting drafts", () => {
+    installSessionStorageMock();
+
+    saveChatDraft(draft({
+      bubbles: [{
+        id: "user-with-image",
+        kind: "user",
+        text: "What is in this screenshot?",
+        transientImageAttachments: [{
+          id: "image-1",
+          name: "composer-screenshot.png",
+          mimeType: "image/png",
+          size: 68,
+          dataUrl: "data:image/png;base64,secret-image-bytes",
+        }],
+      }],
+    }));
+
+    const raw = sessionStorage.getItem("dev_agent_chat_draft_v1") ?? "";
+    expect(raw).not.toContain("secret-image-bytes");
+    expect(raw).not.toContain("data:image/png");
+    expect(raw).toContain("[image: composer-screenshot.png]");
+    expect(loadChatDraft()?.bubbles[0]).toEqual({
+      id: "user-with-image",
+      kind: "user",
+      text: "What is in this screenshot?\n\n[image: composer-screenshot.png]",
+    });
+  });
+
   it("loads legacy activeProfileId drafts as activeProjectLinkId", () => {
     installSessionStorageMock();
     sessionStorage.setItem("dev_agent_chat_draft_v1", JSON.stringify({

@@ -135,6 +135,50 @@ describe("chatStream", () => {
     });
     streamController.close();
   });
+
+  it("sends image attachment payloads with chat requests", async () => {
+    const streamControllerRef: { current?: ReadableStreamDefaultController<Uint8Array> } = {};
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        streamControllerRef.current = controller;
+      },
+    });
+    const fetchMock = vi.fn(async () => new Response(stream, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    chatStream(
+      "",
+      "C:\\repo",
+      null,
+      () => undefined,
+      undefined,
+      undefined,
+      [
+        {
+          name: "screen.png",
+          mimeType: "image/png",
+          dataUrl: "data:image/png;base64,aGVsbG8=",
+        },
+      ],
+    );
+
+    await waitFor(() => fetchMock.mock.calls.length === 1 && streamControllerRef.current !== undefined);
+    expect(firstRequestBody(fetchMock)).toMatchObject({
+      message: "",
+      repoPath: "C:\\repo",
+      imageAttachments: [
+        {
+          name: "screen.png",
+          mimeType: "image/png",
+          dataUrl: "data:image/png;base64,aGVsbG8=",
+        },
+      ],
+    });
+    streamControllerRef.current?.close();
+  });
 });
 
 describe("runChatWorkflowAction", () => {

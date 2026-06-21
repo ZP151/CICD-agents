@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { expect, type Page, test } from "@playwright/test";
+import { readFile, writeFile } from "node:fs/promises";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 const profile = {
   id: "pw-profile",
@@ -210,10 +210,125 @@ async function expectNoVisibleHorizontalOverflow(page: Page): Promise<void> {
   expect(overflow).toEqual([]);
 }
 
+async function expectNoHorizontalOverlap(left: Locator, right: Locator): Promise<void> {
+  const [leftBox, rightBox] = await Promise.all([
+    left.boundingBox(),
+    right.boundingBox(),
+  ]);
+  expect(leftBox).not.toBeNull();
+  expect(rightBox).not.toBeNull();
+  expect((leftBox?.x ?? 0) + (leftBox?.width ?? 0)).toBeLessThanOrEqual((rightBox?.x ?? 0) + 1);
+}
+
+async function expectRightShellSplitStartsAtTop(page: Page): Promise<void> {
+  await expect.poll(async () => {
+    const [handleBox, messagePanelBox] = await Promise.all([
+      page.getByTestId("right-shell-resize-handle").boundingBox(),
+      page.getByTestId("chat-message-panel").boundingBox(),
+    ]);
+    if (!handleBox || !messagePanelBox) return Number.POSITIVE_INFINITY;
+    return handleBox.y <= 2 && handleBox.y < messagePanelBox.y ? 0 : Number.POSITIVE_INFINITY;
+  }).toBe(0);
+}
+
+async function expectSummaryToggleNearRightSplit(page: Page): Promise<void> {
+  await expect.poll(async () => {
+    const [handleBox, summaryBox] = await Promise.all([
+      page.getByTestId("right-shell-resize-handle").boundingBox(),
+      page.getByLabel(/pinned summary/i).boundingBox(),
+    ]);
+    if (!handleBox || !summaryBox) return Number.POSITIVE_INFINITY;
+    const gap = handleBox.x - (summaryBox.x + summaryBox.width);
+    return gap >= 0 ? gap : Number.POSITIVE_INFINITY;
+  }).toBeLessThanOrEqual(18);
+  const [handleBox, summaryBox] = await Promise.all([
+    page.getByTestId("right-shell-resize-handle").boundingBox(),
+    page.getByLabel(/pinned summary/i).boundingBox(),
+  ]);
+  expect((summaryBox?.x ?? 0) + (summaryBox?.width ?? 0)).toBeLessThanOrEqual((handleBox?.x ?? 0) + 1);
+}
+
 function sse(events: Array<{ event: string; data: unknown }>): string {
   return events
     .map((entry) => `event: ${entry.event}\ndata: ${JSON.stringify(entry.data)}\n\n`)
     .join("");
+}
+
+async function seedLongWorkflowTranscriptDraft(page: Page): Promise<void> {
+  await page.addInitScript((seedProfile) => {
+    sessionStorage.setItem(
+      "dev_agent_chat_draft_v1",
+      JSON.stringify({
+        repoPath: seedProfile.repoPath,
+        input: "",
+        bubbles: [
+          {
+            id: "user-review-stage",
+            kind: "user",
+            text: "Review my changes and stage the safe files",
+          },
+          {
+            id: "tool-status-long",
+            kind: "tool",
+            toolName: "git_status",
+            toolArgs: { command: "git status --short -b" },
+            toolOk: true,
+            toolSummary: "2 modified",
+            toolResult: {
+              stdout: "## feature/review...origin/feature/review\n M src/app.ts\n M src/api.ts",
+              returncode: 0,
+            },
+          },
+          {
+            id: "tool-diff-long",
+            kind: "tool",
+            toolName: "git_diff",
+            toolArgs: { command: "git diff -- src/app.ts src/api.ts" },
+            toolOk: true,
+            toolSummary: "diff inspected",
+            toolResult: {
+              stdout: "diff --git a/src/app.ts b/src/app.ts\n+export const reviewed = true;",
+              returncode: 0,
+            },
+          },
+          {
+            id: "tool-add-long",
+            kind: "tool",
+            toolName: "git_add",
+            toolArgs: { paths: ["src/app.ts", "src/api.ts"] },
+            toolOk: true,
+            toolSummary: "ready to stage selected files",
+            toolResult: { stdout: "", returncode: 0 },
+          },
+          {
+            id: "assistant-review-stage",
+            kind: "assistant",
+            text: "The diff is focused on local API wiring and app state. No generated files or broad formatting churn were detected.",
+          },
+          {
+            id: "pending-stage-long",
+            kind: "pending_confirm",
+            pendingTool: "git_add",
+            pendingArgs: { paths: ["src/app.ts", "src/api.ts"] },
+            pendingDescription: "Stage selected files for commit",
+            pendingStatus: "waiting",
+            riskLevel: "medium",
+          },
+        ],
+        sessionId: "long-workflow-transcript-session",
+        statusText: null,
+        workflowState: {
+          status: "waiting_for_approval",
+          currentStep: "Stage selected files",
+          workflowKind: "git",
+          workflowPhase: "stage",
+          completedTools: ["git_status", "git_diff"],
+        },
+        customTitle: "Long workflow transcript",
+        activeProfileId: seedProfile.id,
+      }),
+    );
+  }, profile);
 }
 
 async function seedPendingApprovalDraft(page: Page): Promise<void> {
@@ -297,6 +412,241 @@ async function seedRunningWorkflowDraft(page: Page): Promise<void> {
   }, profile);
 }
 
+async function seedFetchedGitWorkflowDraft(page: Page): Promise<void> {
+  await page.addInitScript((seedProfile) => {
+    sessionStorage.setItem(
+      "dev_agent_chat_draft_v1",
+      JSON.stringify({
+        repoPath: seedProfile.repoPath,
+        input: "",
+        bubbles: [
+          {
+            id: "user-fetch",
+            kind: "user",
+            text: "Fetch remotes",
+          },
+          {
+            id: "tool-fetch",
+            kind: "tool",
+            toolName: "git_fetch",
+            toolArgs: { remote: "origin", prune: true },
+            toolOk: true,
+            toolSummary: "fetched origin",
+            toolResult: { stdout: "", stderr: "", returncode: 0 },
+          },
+          {
+            id: "assistant-fetch",
+            kind: "assistant",
+            text: "Fetched latest refs from origin. Refresh branch status next, then decide whether to rebase or push.",
+            meta: {
+              suggestions: ["Refresh branch status", "Pull/rebase first", "Push branch"],
+            },
+          },
+        ],
+        sessionId: "fetched-git-session",
+        statusText: null,
+        workflowState: {
+          status: "done",
+          currentStep: "Fetched origin",
+          workflowKind: "git",
+          workflowPhase: "fetched",
+          completedTools: ["git_fetch"],
+        },
+        customTitle: "Fetched remotes",
+        activeProfileId: seedProfile.id,
+      }),
+    );
+  }, profile);
+}
+
+async function seedReviewedChangesDraft(page: Page): Promise<void> {
+  await page.addInitScript((seedProfile) => {
+    sessionStorage.setItem(
+      "dev_agent_chat_draft_v1",
+      JSON.stringify({
+        repoPath: seedProfile.repoPath,
+        input: "",
+        bubbles: [
+          {
+            id: "user-review-follow-up",
+            kind: "user",
+            text: "Review my changes",
+          },
+          {
+            id: "assistant-review-follow-up",
+            kind: "assistant",
+            text: "git_status found modified files and git_diff inspected the diff. The changes are narrow and ready for a scoped follow-up.",
+          },
+        ],
+        sessionId: "reviewed-changes-follow-up-session",
+        statusText: null,
+        workflowState: null,
+        customTitle: "Reviewed changes",
+        activeProfileId: seedProfile.id,
+      }),
+    );
+  }, profile);
+}
+
+async function seedCommitReadyDraft(page: Page): Promise<void> {
+  await page.addInitScript((seedProfile) => {
+    sessionStorage.setItem(
+      "dev_agent_chat_draft_v1",
+      JSON.stringify({
+        repoPath: seedProfile.repoPath,
+        input: "",
+        bubbles: [
+          {
+            id: "user-commit-ready",
+            kind: "user",
+            text: "Commit the staged changes",
+          },
+          {
+            id: "assistant-commit-ready",
+            kind: "assistant",
+            text: "The files are staged and ready for a commit message.",
+          },
+        ],
+        sessionId: "commit-ready-follow-up-session",
+        statusText: null,
+        workflowState: {
+          status: "done",
+          currentStep: "Staged files ready",
+          workflowKind: "commit",
+          workflowPhase: "commit",
+          completedTools: ["git_status", "git_diff", "git_add"],
+        },
+        customTitle: "Commit ready",
+        activeProfileId: seedProfile.id,
+      }),
+    );
+  }, profile);
+}
+
+async function seedPushReadyDraft(page: Page): Promise<void> {
+  await page.addInitScript((seedProfile) => {
+    sessionStorage.setItem(
+      "dev_agent_chat_draft_v1",
+      JSON.stringify({
+        repoPath: seedProfile.repoPath,
+        input: "",
+        bubbles: [
+          {
+            id: "user-push-ready",
+            kind: "user",
+            text: "Push this branch",
+          },
+          {
+            id: "assistant-push-ready",
+            kind: "assistant",
+            text: "The commit is ready to push after checking the remote target.",
+          },
+        ],
+        sessionId: "push-ready-follow-up-session",
+        statusText: null,
+        workflowState: {
+          status: "waiting_for_approval",
+          currentStep: "Push branch",
+          workflowKind: "commit",
+          workflowPhase: "waiting_for_push_approval",
+          completedTools: ["git_status", "git_upstream"],
+        },
+        customTitle: "Push ready",
+        activeProfileId: seedProfile.id,
+      }),
+    );
+  }, profile);
+}
+
+async function seedPushedCommitDraft(page: Page): Promise<void> {
+  await page.addInitScript((seedProfile) => {
+    sessionStorage.setItem(
+      "dev_agent_chat_draft_v1",
+      JSON.stringify({
+        repoPath: seedProfile.repoPath,
+        input: "",
+        bubbles: [
+          {
+            id: "user-pushed-commit",
+            kind: "user",
+            text: "Stage, commit and push",
+          },
+          {
+            id: "assistant-pushed-commit",
+            kind: "assistant",
+            text: "The committed changes have been pushed. I stopped here because the requested scope was stage, commit, and push.",
+          },
+        ],
+        sessionId: "pushed-commit-follow-up-session",
+        statusText: null,
+        workflowState: {
+          status: "done",
+          currentStep: "Push complete",
+          workflowKind: "commit",
+          workflowPhase: "pushed",
+          completedTools: ["git_add", "git_commit", "git_push"],
+        },
+        customTitle: "Pushed commit",
+        activeProfileId: seedProfile.id,
+      }),
+    );
+  }, profile);
+}
+
+async function seedValidationFailureDraft(page: Page): Promise<void> {
+  await page.addInitScript((seedProfile) => {
+    sessionStorage.setItem(
+      "dev_agent_chat_draft_v1",
+      JSON.stringify({
+        repoPath: seedProfile.repoPath,
+        input: "",
+        bubbles: [
+          {
+            id: "user-validation-failure",
+            kind: "user",
+            text: "Run tests",
+          },
+          {
+            id: "assistant-validation-failure",
+            kind: "assistant",
+            text: "Tests failed. Key output: FAIL src/app.test.ts",
+            artifacts: [
+              {
+                type: "artifact",
+                artifactId: "validation-test-failed-e2e",
+                title: "Test failure report",
+                artifactType: "markdown",
+                status: "error",
+                content: [
+                  "# Test Failure Report",
+                  "",
+                  "## Recovery Signals",
+                  "- Framework: vitest",
+                  "- Failing files: `src/app.test.ts`",
+                  "- Candidate rerun: `npm test -- src/app.test.ts`",
+                  "",
+                  "AssertionError: expected true to be false",
+                ].join("\n"),
+              },
+            ],
+          },
+        ],
+        sessionId: "validation-failure-follow-up-session",
+        statusText: null,
+        workflowState: {
+          status: "done",
+          currentStep: "Test validation failed",
+          workflowKind: "ci",
+          workflowPhase: "test_failed",
+          completedTools: ["validation_command"],
+        },
+        customTitle: "Validation failed",
+        activeProfileId: seedProfile.id,
+      }),
+    );
+  }, profile);
+}
+
 async function seedRunningPrReadinessWorkflowDraft(page: Page): Promise<void> {
   await page.addInitScript((seedProfile) => {
     sessionStorage.setItem(
@@ -328,6 +678,41 @@ async function seedRunningPrReadinessWorkflowDraft(page: Page): Promise<void> {
           completedTools: ["ado_get_pull_request_by_id"],
         },
         customTitle: "PR readiness",
+        activeProfileId: seedProfile.id,
+      }),
+    );
+  }, profile);
+}
+
+async function seedPrCiRecoveryDraft(page: Page): Promise<void> {
+  await page.addInitScript((seedProfile) => {
+    sessionStorage.setItem(
+      "dev_agent_chat_draft_v1",
+      JSON.stringify({
+        repoPath: seedProfile.repoPath,
+        input: "",
+        bubbles: [
+          {
+            id: "user-pr-ci-recovery",
+            kind: "user",
+            text: "Analyze PR readiness",
+          },
+          {
+            id: "assistant-pr-ci-recovery",
+            kind: "assistant",
+            text: "PR readiness is blocked by failed CI validation and a required policy.",
+          },
+        ],
+        sessionId: "pr-ci-recovery-follow-up-session",
+        statusText: null,
+        workflowState: {
+          status: "done",
+          currentStep: "PR readiness inspected",
+          workflowKind: "pr",
+          workflowPhase: "inspected",
+          completedTools: ["ado_get_pull_request_by_id"],
+        },
+        customTitle: "PR CI recovery",
         activeProfileId: seedProfile.id,
       }),
     );
@@ -601,6 +986,27 @@ async function seedSourceReferenceDraft(page: Page): Promise<void> {
   }, profile);
 }
 
+async function mockWorkspaceFilePreview(page: Page): Promise<void> {
+  await page.route("http://127.0.0.1:8787/workspace/file", async (route) => {
+    const payload = await route.request().postDataJSON() as { filePath?: string };
+    const content = Array.from(
+      { length: 300 },
+      (_, index) => `export const previewLine${index + 1} = ${index + 1};`,
+    ).join("\n");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        repoPath: profile.repoPath,
+        path: payload.filePath ?? "apps/desktop/src/pages/Chat.tsx",
+        content,
+        size: content.length,
+        lineCount: 300,
+      }),
+    });
+  });
+}
+
 test.describe("Chat layout", () => {
   test.beforeEach(async ({ page }) => {
     await mockRuntime(page);
@@ -722,7 +1128,7 @@ test.describe("Chat layout", () => {
 
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
-    await page.getByTitle("Expand context panel").click();
+    await expect(page.getByText("Environment")).toBeVisible();
 
     await page.getByRole("button", { name: "Commit or push" }).click();
     await page.getByRole("button", { name: "Prepare commit", exact: true }).click();
@@ -752,6 +1158,440 @@ test.describe("Chat layout", () => {
       branch: "main",
     });
     expect(workflowPayloads[2]).not.toHaveProperty("commitMode");
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("shows branch divergence before commit or push actions", async ({ page }) => {
+    const workflowPayloads: Array<Record<string, unknown>> = [];
+    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
+      const payload = await route.request().postDataJSON();
+      workflowPayloads.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          action: payload.action,
+          repoPath: payload.repoPath,
+          summary: "sync proposal",
+          workflowState: {
+            status: "waiting_for_approval",
+            currentStep: "Pull latest changes from origin/main with rebase before pushing.",
+            completedTools: ["git_current_branch", "git_status", "git_dir", "git_remote", "git_upstream", "git_divergence"],
+            pendingApproval: {
+              id: "approval-sync",
+              action: {
+                tool: "git_pull",
+                args: { remote: "origin", branch: "main", rebase: true },
+                description: "Pull latest changes from origin/main with rebase before pushing.",
+              },
+              riskLevel: "high",
+              explanation: "Pull latest changes from origin/main with rebase before pushing.",
+            },
+          },
+          tools: [],
+        }),
+      });
+    });
+    await page.addInitScript((seedProfile) => {
+      sessionStorage.setItem(
+        "dev_agent_chat_draft_v1",
+        JSON.stringify({
+          repoPath: seedProfile.repoPath,
+          input: "",
+          bubbles: [
+            {
+              id: "tool-diverged-status",
+              kind: "tool",
+              toolName: "git_status",
+              toolOk: true,
+              toolResult: {
+                stdout: "## main...origin/main [ahead 1, behind 2]\n M src/app.ts",
+                returncode: 0,
+              },
+            },
+          ],
+          sessionId: "branch-divergence-session",
+          statusText: null,
+          workflowState: null,
+          customTitle: "Branch divergence",
+          activeProfileId: seedProfile.id,
+        }),
+      );
+    }, profile);
+
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("/chat");
+    const collapseCodePanel = page.getByTitle("Collapse code panel");
+    if (await collapseCodePanel.count()) await collapseCodePanel.click();
+
+    await expect(page.getByText("Environment")).toBeVisible();
+    await page.getByRole("button", { name: "Commit or push" }).click();
+    await expect(page.getByText("Diverged: 1 ahead, 2 behind")).toBeVisible();
+    await expect(page.getByText("Include unstaged changes")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Pull with rebase before pushing" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Prepare commit", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Prepare commit and push" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Push branch" })).toBeDisabled();
+    await page.getByRole("button", { name: "Pull with rebase before pushing" }).click();
+    await expect.poll(() => workflowPayloads.length).toBe(1);
+    expect(workflowPayloads[0]).toMatchObject({
+      action: "sync_branch_rebase",
+      branch: "main",
+    });
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("refreshes branch readiness from the synced progress follow-up", async ({ page }) => {
+    const workflowPayloads: Array<Record<string, unknown>> = [];
+    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
+      const payload = await route.request().postDataJSON();
+      workflowPayloads.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          action: payload.action,
+          repoPath: payload.repoPath,
+          summary: "Branch: main\nGit status: 1 line(s)",
+          workflowState: {
+            status: "done",
+            currentStep: "refresh_branch complete",
+            completedTools: ["git_current_branch", "git_branch_list", "git_status", "git_remote", "git_upstream", "git_divergence"],
+          },
+          tools: [
+            { name: "git_current_branch", command: "git branch --show-current", ok: true, stdout: "main\n", stderr: "", returncode: 0 },
+            { name: "git_branch_list", command: "git branch -a", ok: true, stdout: "* main\n", stderr: "", returncode: 0 },
+            { name: "git_status", command: "git status --porcelain=v1 -b", ok: true, stdout: "## main...origin/main\n", stderr: "", returncode: 0 },
+            { name: "git_remote", command: "git remote -v", ok: true, stdout: "origin https://example.test/repo.git (fetch)\norigin https://example.test/repo.git (push)\n", stderr: "", returncode: 0 },
+            { name: "git_upstream", command: "git rev-parse --abbrev-ref --symbolic-full-name @{u}", ok: true, stdout: "origin/main\n", stderr: "", returncode: 0 },
+            { name: "git_divergence", command: "git rev-list --left-right --count origin/main...HEAD", ok: true, stdout: "0\t0\n", stderr: "", returncode: 0 },
+          ],
+        }),
+      });
+    });
+    await page.addInitScript((seedProfile) => {
+      sessionStorage.setItem(
+        "dev_agent_chat_draft_v1",
+        JSON.stringify({
+          repoPath: seedProfile.repoPath,
+          input: "",
+          bubbles: [
+            {
+              id: "tool-old-diverged-status",
+              kind: "tool",
+              toolName: "git_status",
+              toolOk: true,
+              toolResult: {
+                stdout: "## main...origin/main [ahead 1, behind 2]\n",
+                returncode: 0,
+              },
+            },
+          ],
+          sessionId: "branch-synced-session",
+          statusText: null,
+          workflowState: {
+            status: "done",
+            currentStep: "Synced branch main",
+            completedTools: ["git_current_branch", "git_status", "git_dir", "git_remote", "git_upstream", "git_divergence", "git_pull"],
+            workflowKind: "git",
+            workflowPhase: "synced",
+          },
+          customTitle: "Branch synced",
+          activeProfileId: seedProfile.id,
+        }),
+      );
+    }, profile);
+
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("/chat");
+    const collapseCodePanel = page.getByTitle("Collapse code panel");
+    if (await collapseCodePanel.count()) await collapseCodePanel.click();
+
+    await page.getByRole("button", { name: "Progress" }).click();
+    await expect(page.getByRole("button", { name: /Refresh branch status/ })).toBeVisible();
+    await page.getByRole("button", { name: /Refresh branch status/ }).click();
+    await expect.poll(() => workflowPayloads.length).toBe(1);
+    expect(workflowPayloads[0]).toMatchObject({
+      action: "refresh_branch",
+    });
+
+    await page.getByRole("button", { name: "Commit or push" }).click();
+    await expect(page.getByText("Diverged: 1 ahead, 2 behind")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Prepare commit and push" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Push branch" })).toBeEnabled();
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("keeps pinned summary branch and commit dropdowns mutually exclusive", async ({ page }) => {
+    const workflowPayloads: Array<Record<string, unknown>> = [];
+    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
+      workflowPayloads.push(await route.request().postDataJSON());
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          action: "fetch_remotes",
+          repoPath: profile.repoPath,
+          summary: "Branch: main",
+          workflowState: {
+            status: "waiting_for_approval",
+            currentStep: "Fetch latest remote refs from origin.",
+            completedTools: ["git_current_branch", "git_status", "git_dir", "git_remote"],
+            workflowKind: "git",
+            workflowPhase: "waiting_for_fetch_remotes_approval",
+            pendingApproval: {
+              id: "approval-fetch",
+              riskLevel: "medium",
+              explanation: "Fetch latest remote refs from origin.",
+              action: {
+                tool: "git_fetch",
+                args: { remote: "origin", prune: true },
+                description: "Fetch latest remote refs from origin.",
+                workflow: { kind: "git", phase: "fetch_remotes", branch: "main" },
+              },
+            },
+          },
+          tools: [],
+        }),
+      });
+    });
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("/chat?new=1");
+    const collapseCodePanel = page.getByTitle("Collapse code panel");
+    if (await collapseCodePanel.count()) await collapseCodePanel.click();
+    await expect(page.getByText("Environment")).toBeVisible();
+
+    await page.getByRole("button", { name: "main" }).click();
+    await expect(page.getByText("Refresh branch state")).toBeVisible();
+    await expect(page.getByText("Fetch remotes")).toBeVisible();
+    await page.getByText("Fetch remotes").click();
+    await expect.poll(() => workflowPayloads.length).toBe(1);
+    expect(workflowPayloads[0]).toMatchObject({ action: "fetch_remotes" });
+
+    await page.getByRole("button", { name: "main" }).click();
+    await page.getByRole("button", { name: "Commit or push" }).click();
+    await expect(page.getByText("Refresh branch state")).toBeHidden();
+    await expect(page.getByText("Include unstaged changes")).toBeVisible();
+
+    await page.getByTitle("Project Link").click();
+    await expect(page.getByText("Include unstaged changes")).toBeHidden();
+  });
+
+  test("keeps the pinned summary hidden during empty Project Link onboarding", async ({ page }) => {
+    await page.route("http://127.0.0.1:8787/project-links", async (route) => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("mergepilot_project_links_v1", JSON.stringify([]));
+      localStorage.removeItem("mergepilot_active_project_link_id");
+      localStorage.removeItem("chat_repo");
+      sessionStorage.removeItem("dev_agent_chat_draft_v1");
+    });
+
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("/chat?new=1");
+
+    await expect(page.getByText("Create a Project Link")).toBeVisible();
+    await expect(page.getByText("No Project Link yet — create one above")).toBeVisible();
+    await expect(page.getByText("Environment")).toHaveCount(0);
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("sends image attachments from the compact composer add menu", async ({ page }, testInfo) => {
+    const chatPayloads: Array<Record<string, unknown>> = [];
+    await page.route("http://127.0.0.1:8787/chat", async (route) => {
+      chatPayloads.push(await route.request().postDataJSON());
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: sse([
+          { event: "ui.chunk", data: { type: "ui.chunk", chunk: { type: "start" } } },
+          { event: "session", data: { sessionId: "image-attachment-session" } },
+          {
+            event: "done",
+            data: {
+              type: "done",
+              result: {
+                response: "Image received.",
+                streamedResponse: "Image received.",
+                finalizationMode: "agent_final",
+                riskLevel: "low",
+                actionsTaken: [],
+                suggestions: [],
+              },
+            },
+          },
+        ]),
+      });
+    });
+
+    const imagePath = testInfo.outputPath("composer-screenshot.png");
+    await writeFile(
+      imagePath,
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+        "base64",
+      ),
+    );
+
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("/chat?new=1");
+
+    await page.getByTitle("Add image").click();
+    await expect(page.getByRole("menuitem", { name: "Image" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Path" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Log" })).toHaveCount(0);
+
+    const [fileChooser] = await Promise.all([
+      page.waitForEvent("filechooser"),
+      page.getByRole("menuitem", { name: "Image" }).click(),
+    ]);
+    await fileChooser.setFiles(imagePath);
+
+    await expect(page.getByText("composer-screenshot.png")).toBeVisible();
+    await page.getByPlaceholder(/Ask MergePilot/).fill("What is in this screenshot?");
+    await page.getByLabel("Send message").click();
+
+    await expect(page.getByRole("img", { name: "composer-screenshot.png" })).toBeVisible();
+    await expect(page.getByText("[image: composer-screenshot.png]")).toHaveCount(0);
+    await expect(page.getByText("Image received.")).toBeVisible();
+    await expect.poll(() => chatPayloads.length).toBe(1);
+    expect(chatPayloads[0]).toMatchObject({
+      message: "What is in this screenshot?",
+      repoPath: profile.repoPath,
+      imageAttachments: [
+        {
+          name: "composer-screenshot.png",
+          mimeType: "image/png",
+        },
+      ],
+    });
+    expect(
+      ((chatPayloads[0]?.["imageAttachments"] as Array<Record<string, unknown>> | undefined)?.[0]?.["dataUrl"] as string | undefined) ?? "",
+    ).toMatch(/^data:image\/png;base64,/);
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("accepts dropped image attachments in the composer", async ({ page }) => {
+    const chatPayloads: Array<Record<string, unknown>> = [];
+    await page.route("http://127.0.0.1:8787/chat", async (route) => {
+      chatPayloads.push(await route.request().postDataJSON());
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: sse([
+          { event: "ui.chunk", data: { type: "ui.chunk", chunk: { type: "start" } } },
+          { event: "session", data: { sessionId: "dropped-image-session" } },
+          {
+            event: "done",
+            data: {
+              type: "done",
+              result: {
+                response: "Dropped image received.",
+                streamedResponse: "Dropped image received.",
+                finalizationMode: "agent_final",
+                riskLevel: "low",
+                actionsTaken: [],
+                suggestions: [],
+              },
+            },
+          },
+        ]),
+      });
+    });
+
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("/chat?new=1");
+    const dataTransfer = await page.evaluateHandle(() => {
+      const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
+      const bytes = Uint8Array.from(atob(pngBase64), (char) => char.charCodeAt(0));
+      const file = new File([bytes], "dropped-screenshot.png", { type: "image/png" });
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      return transfer;
+    });
+
+    await page.getByPlaceholder(/Ask MergePilot/).dispatchEvent("drop", { dataTransfer });
+    await expect(page.getByText("dropped-screenshot.png")).toBeVisible();
+    await page.getByLabel("Send message").click();
+
+    await expect(page.getByRole("img", { name: "dropped-screenshot.png" })).toBeVisible();
+    await expect(page.getByText("Dropped image received.")).toBeVisible();
+    await expect.poll(() => chatPayloads.length).toBe(1);
+    expect(chatPayloads[0]).toMatchObject({
+      message: "",
+      repoPath: profile.repoPath,
+      imageAttachments: [
+        {
+          name: "dropped-screenshot.png",
+          mimeType: "image/png",
+        },
+      ],
+    });
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("accepts pasted image attachments in the composer", async ({ page }) => {
+    const chatPayloads: Array<Record<string, unknown>> = [];
+    await page.route("http://127.0.0.1:8787/chat", async (route) => {
+      chatPayloads.push(await route.request().postDataJSON());
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: sse([
+          { event: "ui.chunk", data: { type: "ui.chunk", chunk: { type: "start" } } },
+          { event: "session", data: { sessionId: "pasted-image-session" } },
+          {
+            event: "done",
+            data: {
+              type: "done",
+              result: {
+                response: "Pasted image received.",
+                streamedResponse: "Pasted image received.",
+                finalizationMode: "agent_final",
+                riskLevel: "low",
+                actionsTaken: [],
+                suggestions: [],
+              },
+            },
+          },
+        ]),
+      });
+    });
+
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("/chat?new=1");
+    await page.getByPlaceholder(/Ask MergePilot/).evaluate((textarea) => {
+      const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
+      const bytes = Uint8Array.from(atob(pngBase64), (char) => char.charCodeAt(0));
+      const file = new File([bytes], "pasted-screenshot.png", { type: "image/png" });
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      textarea.dispatchEvent(new ClipboardEvent("paste", {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: transfer,
+      }));
+    });
+    await expect(page.getByText("pasted-screenshot.png")).toBeVisible();
+    await page.getByLabel("Send message").click();
+
+    await expect(page.getByRole("img", { name: "pasted-screenshot.png" })).toBeVisible();
+    await expect(page.getByText("Pasted image received.")).toBeVisible();
+    await expect.poll(() => chatPayloads.length).toBe(1);
+    expect(chatPayloads[0]).toMatchObject({
+      message: "",
+      repoPath: profile.repoPath,
+      imageAttachments: [
+        {
+          name: "pasted-screenshot.png",
+          mimeType: "image/png",
+        },
+      ],
+    });
     await expectNoVisibleHorizontalOverflow(page);
   });
 
@@ -935,6 +1775,27 @@ test.describe("Chat layout", () => {
     await expectNoVisibleHorizontalOverflow(page);
   });
 
+  test("keeps active Project Link long workflow transcript clear of the pinned summary", async ({ page }) => {
+    await seedLongWorkflowTranscriptDraft(page);
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("/chat");
+
+    const transcriptColumn = page.locator(".middle-panel-inner");
+    const environmentCard = page.locator(".pointer-events-auto.rounded-2xl").filter({ hasText: "Environment" }).first();
+    const approvalCard = page.getByText("Approve this command?").locator("xpath=ancestor::section[1]");
+
+    await expect(page.getByText("Review my changes and stage the safe files")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Worked 3 commands/ })).toBeVisible();
+    await expect(page.getByText("The diff is focused on local API wiring")).toBeVisible();
+    await expect(page.getByText("git add -- src/app.ts src/api.ts")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Yes, run this action" })).toBeVisible();
+    await expect(environmentCard).toBeVisible();
+    await expect(transcriptColumn).toBeVisible();
+    await expect(approvalCard).toBeVisible();
+    await expectNoHorizontalOverlap(transcriptColumn, environmentCard);
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
   test("queues suggestion replies while a restored workflow is running", async ({ page }) => {
     await seedRunningWorkflowDraft(page);
     await page.setViewportSize({ width: 1100, height: 780 });
@@ -950,6 +1811,476 @@ test.describe("Chat layout", () => {
     await expect(page.getByText("Commit message").first()).toBeVisible();
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(page.getByText("Queued follow-up:")).toBeHidden();
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("routes Git workflow follow-up chips as structured actions", async ({ page }) => {
+    const workflowPayloads: Array<Record<string, unknown>> = [];
+    let chatRequestCount = 0;
+    await seedFetchedGitWorkflowDraft(page);
+    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      workflowPayloads.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          action: payload.action,
+          repoPath: payload.repoPath,
+          summary: `${payload.action} prepared`,
+          workflowState: {
+            status: "waiting_for_approval",
+            workflowKind: "commit",
+            workflowPhase: "push",
+            currentStep: "Prepare push",
+            completedTools: [],
+          },
+          tools: [],
+        }),
+      });
+    });
+    await page.route("http://127.0.0.1:8787/chat", async (route) => {
+      chatRequestCount += 1;
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Suggestion should use workflow-action" }),
+      });
+    });
+
+    await page.setViewportSize({ width: 1100, height: 780 });
+    await page.goto("/chat");
+
+    const pushFollowUp = page
+      .locator('button[data-action-kind="workspace_action"]')
+      .filter({ hasText: "Push branch" });
+    await expect(pushFollowUp).toBeVisible();
+    await pushFollowUp.click();
+
+    await expect.poll(() => workflowPayloads.length).toBe(1);
+    expect(workflowPayloads[0]).toMatchObject({ action: "push_branch" });
+    expect(chatRequestCount).toBe(0);
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("routes review stage follow-up chip as a structured commit workflow", async ({ page }) => {
+    const workflowPayloads: Array<Record<string, unknown>> = [];
+    let chatRequestCount = 0;
+    await seedReviewedChangesDraft(page);
+    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      workflowPayloads.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          action: payload.action,
+          repoPath: payload.repoPath,
+          summary: "Commit preparation approval created",
+          workflowState: {
+            status: "waiting_for_approval",
+            workflowKind: "commit",
+            workflowPhase: "stage",
+            currentStep: "Stage all current changes",
+            completedTools: [],
+          },
+          tools: [],
+        }),
+      });
+    });
+    await page.route("http://127.0.0.1:8787/chat", async (route) => {
+      chatRequestCount += 1;
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Stage follow-up should use workflow-action" }),
+      });
+    });
+
+    await page.setViewportSize({ width: 1100, height: 780 });
+    await page.goto("/chat");
+
+    const stageFollowUp = page
+      .locator('button[data-action-kind="workspace_action"]')
+      .filter({ hasText: "Stage selected" });
+    await expect(stageFollowUp).toBeVisible();
+    await stageFollowUp.click();
+
+    await expect.poll(() => workflowPayloads.length).toBe(1);
+    expect(workflowPayloads[0]).toMatchObject({
+      action: "prepare_commit",
+      includeUnstaged: true,
+      commitMode: "commit",
+    });
+    expect(chatRequestCount).toBe(0);
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("routes staged diff follow-up chip as a read-only workflow action", async ({ page }) => {
+    const workflowPayloads: Array<Record<string, unknown>> = [];
+    let chatRequestCount = 0;
+    await seedCommitReadyDraft(page);
+    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      workflowPayloads.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          action: payload.action,
+          repoPath: payload.repoPath,
+          summary: "Changed files: README.md",
+          workflowState: {
+            status: "done",
+            currentStep: "inspect_staged_changes complete",
+            completedTools: ["git_status", "git_diff_staged", "git_diff_staged_name_only"],
+          },
+          tools: [],
+        }),
+      });
+    });
+    await page.route("http://127.0.0.1:8787/chat", async (route) => {
+      chatRequestCount += 1;
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Staged diff follow-up should use workflow-action" }),
+      });
+    });
+
+    await page.setViewportSize({ width: 1100, height: 780 });
+    await page.goto("/chat");
+
+    const stagedDiffFollowUp = page
+      .locator('button[data-action-kind="workspace_action"]')
+      .filter({ hasText: "Check staged diff" });
+    await expect(stagedDiffFollowUp).toBeVisible();
+    await stagedDiffFollowUp.click();
+
+    await expect.poll(() => workflowPayloads.length).toBe(1);
+    expect(workflowPayloads[0]).toMatchObject({ action: "inspect_staged_changes" });
+    expect(chatRequestCount).toBe(0);
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("routes draft commit message follow-up chip as a read-only workflow action", async ({ page }) => {
+    const workflowPayloads: Array<Record<string, unknown>> = [];
+    let chatRequestCount = 0;
+    await seedCommitReadyDraft(page);
+    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      workflowPayloads.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          action: payload.action,
+          repoPath: payload.repoPath,
+          summary: "Suggested commit message: `chore: update workspace changes`",
+          workflowState: {
+            status: "done",
+            currentStep: "draft_commit_message complete",
+            completedTools: ["git_status", "git_diff", "git_diff_staged", "git_log"],
+          },
+          tools: [],
+        }),
+      });
+    });
+    await page.route("http://127.0.0.1:8787/chat", async (route) => {
+      chatRequestCount += 1;
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Draft commit message should use workflow-action" }),
+      });
+    });
+
+    await page.setViewportSize({ width: 1100, height: 780 });
+    await page.goto("/chat");
+
+    const draftMessageFollowUp = page
+      .locator('button[data-action-kind="workspace_action"]')
+      .filter({ hasText: "Draft commit message" });
+    await expect(draftMessageFollowUp).toBeVisible();
+    await draftMessageFollowUp.click();
+
+    await expect.poll(() => workflowPayloads.length).toBe(1);
+    expect(workflowPayloads[0]).toMatchObject({ action: "draft_commit_message" });
+    expect(chatRequestCount).toBe(0);
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("routes change-scope follow-up chip as a read-only workflow action", async ({ page }) => {
+    const workflowPayloads: Array<Record<string, unknown>> = [];
+    let chatRequestCount = 0;
+    await seedCommitReadyDraft(page);
+    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      workflowPayloads.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          action: payload.action,
+          repoPath: payload.repoPath,
+          summary: "Change scope: 1 area(s), 1 file(s).",
+          workflowState: {
+            status: "done",
+            currentStep: "explain_change_scope complete",
+            completedTools: ["git_status", "git_diff", "git_diff_staged"],
+          },
+          tools: [],
+        }),
+      });
+    });
+    await page.route("http://127.0.0.1:8787/chat", async (route) => {
+      chatRequestCount += 1;
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Explain change scope should use workflow-action" }),
+      });
+    });
+
+    await page.setViewportSize({ width: 1100, height: 780 });
+    await page.goto("/chat");
+
+    const changeScopeFollowUp = page
+      .locator('button[data-action-kind="workspace_action"]')
+      .filter({ hasText: "Explain change scope" });
+    await expect(changeScopeFollowUp).toBeVisible();
+    await changeScopeFollowUp.click();
+
+    await expect.poll(() => workflowPayloads.length).toBe(1);
+    expect(workflowPayloads[0]).toMatchObject({ action: "explain_change_scope" });
+    expect(chatRequestCount).toBe(0);
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("routes remote-target follow-up chip as a read-only workflow action", async ({ page }) => {
+    const workflowPayloads: Array<Record<string, unknown>> = [];
+    let chatRequestCount = 0;
+    await seedPushReadyDraft(page);
+    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      workflowPayloads.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          action: payload.action,
+          repoPath: payload.repoPath,
+          summary: "Remote target: origin/main",
+          workflowState: {
+            status: "done",
+            currentStep: "inspect_remote_target complete",
+            completedTools: ["git_current_branch", "git_upstream", "git_divergence"],
+          },
+          tools: [],
+        }),
+      });
+    });
+    await page.route("http://127.0.0.1:8787/chat", async (route) => {
+      chatRequestCount += 1;
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Show remote target should use workflow-action" }),
+      });
+    });
+
+    await page.setViewportSize({ width: 1100, height: 780 });
+    await page.goto("/chat");
+
+    const remoteTargetFollowUp = page
+      .locator('button[data-action-kind="workspace_action"]')
+      .filter({ hasText: "Show remote target" });
+    await expect(remoteTargetFollowUp).toBeVisible();
+    await remoteTargetFollowUp.click();
+
+    await expect.poll(() => workflowPayloads.length).toBe(1);
+    expect(workflowPayloads[0]).toMatchObject({ action: "inspect_remote_target" });
+    expect(chatRequestCount).toBe(0);
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("routes pushed-commit summary follow-up chip as a read-only workflow action", async ({ page }) => {
+    const workflowPayloads: Array<Record<string, unknown>> = [];
+    let chatRequestCount = 0;
+    await seedPushedCommitDraft(page);
+    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      workflowPayloads.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          action: payload.action,
+          repoPath: payload.repoPath,
+          summary: "Latest commit: abc123 docs: local update",
+          workflowState: {
+            status: "done",
+            currentStep: "inspect_latest_commit complete",
+            completedTools: ["git_current_branch", "git_log_subject", "git_show_head_stat"],
+          },
+          tools: [],
+        }),
+      });
+    });
+    await page.route("http://127.0.0.1:8787/chat", async (route) => {
+      chatRequestCount += 1;
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Summarize push should use workflow-action" }),
+      });
+    });
+
+    await page.setViewportSize({ width: 1100, height: 780 });
+    await page.goto("/chat");
+
+    const summarizePushFollowUp = page
+      .locator('button[data-action-kind="workspace_action"]')
+      .filter({ hasText: "Summarize push" });
+    await expect(summarizePushFollowUp).toBeVisible();
+    await summarizePushFollowUp.click();
+
+    await expect.poll(() => workflowPayloads.length).toBe(1);
+    expect(workflowPayloads[0]).toMatchObject({ action: "inspect_latest_commit" });
+    expect(chatRequestCount).toBe(0);
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("routes validation failure analysis follow-up chip as a read-only workflow action", async ({ page }) => {
+    const workflowPayloads: Array<Record<string, unknown>> = [];
+    let chatRequestCount = 0;
+    await seedValidationFailureDraft(page);
+    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      workflowPayloads.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          action: payload.action,
+          repoPath: payload.repoPath,
+          summary: "Validation failure artifact: Test failure report\nFramework: vitest",
+          workflowState: {
+            status: "done",
+            workflowKind: "ci",
+            workflowPhase: "validation_failure_inspected",
+            currentStep: "inspect_validation_failure complete",
+            completedTools: ["validation_failure_artifact"],
+          },
+          tools: [
+            {
+              name: "validation_failure_artifact",
+              command: "internal validation_failure_artifact",
+              ok: true,
+              stdout: "{}",
+              stderr: "",
+              returncode: 0,
+            },
+          ],
+        }),
+      });
+    });
+    await page.route("http://127.0.0.1:8787/chat", async (route) => {
+      chatRequestCount += 1;
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Analyze failure should use workflow-action" }),
+      });
+    });
+
+    await page.setViewportSize({ width: 1100, height: 780 });
+    await page.goto("/chat");
+
+    const analyzeFailureFollowUp = page
+      .locator('button[data-action-kind="workspace_action"]')
+      .filter({ hasText: "Analyze failure" });
+    await expect(analyzeFailureFollowUp).toBeVisible();
+    await analyzeFailureFollowUp.click();
+
+    await expect.poll(() => workflowPayloads.length).toBe(1);
+    expect(workflowPayloads[0]).toMatchObject({ action: "inspect_validation_failure" });
+    expect(chatRequestCount).toBe(0);
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("routes PR validation recovery chip as a structured CI recovery workflow action", async ({ page }) => {
+    const workflowPayloads: Array<Record<string, unknown>> = [];
+    let chatRequestCount = 0;
+    await seedPrCiRecoveryDraft(page);
+    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      workflowPayloads.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          action: payload.action,
+          repoPath: payload.repoPath,
+          summary: "Validation failure artifact: Test failure report\nPipeline failure artifact: Pipeline #12 run #77 failure",
+          workflowState: {
+            status: "done",
+            workflowKind: "ci",
+            workflowPhase: "ci_recovery_context_inspected",
+            currentStep: "inspect_ci_recovery_context complete",
+            completedTools: ["validation_failure_artifact", "pipeline_failure_artifact"],
+          },
+          tools: [
+            {
+              name: "validation_failure_artifact",
+              command: "internal validation_failure_artifact",
+              ok: true,
+              stdout: "{}",
+              stderr: "",
+              returncode: 0,
+            },
+            {
+              name: "pipeline_failure_artifact",
+              command: "internal pipeline_failure_artifact",
+              ok: true,
+              stdout: "{}",
+              stderr: "",
+              returncode: 0,
+            },
+          ],
+        }),
+      });
+    });
+    await page.route("http://127.0.0.1:8787/chat", async (route) => {
+      chatRequestCount += 1;
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Validation recovery should use workflow-action" }),
+      });
+    });
+
+    await page.setViewportSize({ width: 1100, height: 780 });
+    await page.goto("/chat");
+
+    const validationRecoveryFollowUp = page
+      .locator('button[data-action-kind="workspace_action"]')
+      .filter({ hasText: "Validation recovery" });
+    await expect(validationRecoveryFollowUp).toBeVisible();
+    await validationRecoveryFollowUp.click();
+
+    await expect.poll(() => workflowPayloads.length).toBe(1);
+    expect(workflowPayloads[0]).toMatchObject({ action: "inspect_ci_recovery_context" });
+    expect(chatRequestCount).toBe(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
 
@@ -1784,19 +3115,64 @@ test.describe("Chat layout", () => {
 
   test("renders project-context source references in the conversation", async ({ page }) => {
     await seedSourceReferenceDraft(page);
+    await mockWorkspaceFilePreview(page);
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat");
 
     await expect(page.getByText("Explain this project architecture")).toBeVisible();
     await expect(page.getByText("The Conversation page coordinates the desktop UI")).toBeVisible();
-    await expect(page.getByText("References", { exact: true })).toBeVisible();
-    await expect(page.getByText("2 files")).toBeVisible();
-    await expect(page.getByText("apps/desktop/src/pages/Chat.tsx (app)")).toBeVisible();
-    await expect(page.getByText("apps/desktop/src/pages/Chat.tsx", { exact: true })).toBeVisible();
-    await expect(page.getByText("packages/core/src/chatContext.ts:291-350")).toBeVisible();
-    await expect(page.getByText("packages/core/src/chatContext.ts:line 291")).toBeVisible();
-    await expect(page.getByText("Project structure signal: application workspace.")).toBeVisible();
-    await expect(page.getByText("chatContextSources emits source_document metadata")).toBeVisible();
+    await expect(page.getByRole("button", { name: "chatContext" })).toBeVisible();
+
+    const expandCodePanel = page.getByTitle("Expand code panel");
+    if (await expandCodePanel.count()) await expandCodePanel.click();
+    const rightPanel = page.locator(".right-panel");
+    await expectRightShellSplitStartsAtTop(page);
+    await expectSummaryToggleNearRightSplit(page);
+    await expect(rightPanel.getByText("No file open")).toBeVisible();
+    await expect(rightPanel.getByText("Select a reference.")).toHaveCount(0);
+    await expect(rightPanel.getByRole("button", { name: /Chat\.tsx/ })).toHaveCount(0);
+    await expect(rightPanel.locator('button[aria-pressed="true"]').filter({ hasText: "chatContext.ts" })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "chatContext" }).click();
+
+    await expect(rightPanel.locator('button[aria-pressed="true"]').filter({ hasText: "chatContext.ts" })).toHaveCount(1);
+    await expect(rightPanel.getByRole("button", { name: /Chat\.tsx/ })).toHaveCount(0);
+    await expect(rightPanel.getByText("300 lines")).toBeVisible();
+    await expect(rightPanel.getByText("line 291")).toBeVisible();
+    await expect(rightPanel.locator(".cm-sourceTargetLine")).toContainText("previewLine291");
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("supports source preview copy actions and tab cleanup", async ({ page }) => {
+    await seedSourceReferenceDraft(page);
+    await mockWorkspaceFilePreview(page);
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: "http://127.0.0.1:1420" });
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("/chat");
+
+    const expandCodePanel = page.getByTitle("Expand code panel");
+    if (await expandCodePanel.count()) await expandCodePanel.click();
+    const rightPanel = page.locator(".right-panel");
+    await page.getByRole("button", { name: "chatContext" }).click();
+
+    await expect(rightPanel.getByText("300 lines")).toBeVisible();
+    await rightPanel.getByRole("button", { name: "Path" }).click();
+    await expect(rightPanel.getByRole("button", { name: "Copied" })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("packages/core/src/chatContext.ts");
+
+    await rightPanel.getByRole("button", { name: "Copy" }).click();
+    await expect(rightPanel.getByRole("button", { name: "Copied" })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain("previewLine291");
+
+    await rightPanel.getByRole("button", { name: "Close chatContext.ts" }).click();
+    await expect(rightPanel.getByText("No file open")).toBeVisible();
+    await expect(rightPanel.getByRole("button", { name: /chatContext\.ts/ })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "chatContext" }).click();
+    await expect(rightPanel.getByRole("button", { name: "chatContext.ts", exact: true })).toBeVisible();
+    await rightPanel.getByRole("button", { name: "Close all files" }).click();
+    await expect(rightPanel.getByText("No file open")).toBeVisible();
+    await expect(rightPanel.getByRole("button", { name: /chatContext\.ts/ })).toHaveCount(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
 

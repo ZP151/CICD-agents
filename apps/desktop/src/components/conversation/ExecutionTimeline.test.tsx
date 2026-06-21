@@ -30,24 +30,22 @@ describe("ExecutionTimeline", () => {
 
     const html = renderToStaticMarkup(<ExecutionTimeline items={items} onToggleItem={() => undefined} />);
 
-    expect(html).toContain("Execution");
-    expect(html).toContain("running");
+    expect(html).toContain("Working");
     expect(html).toContain("Prepare workspace");
     expect(html).toContain("Update local Git history");
-    expect(html).toContain("The result is sufficient to move into update local git history.");
     expect(html).toContain("git_add");
     expect(html).toContain("Shell");
     expect(html).toContain("Ran git add --dry-run -- BotToSharePoint/Common/CommonFunctions.cs");
     expect(html).toContain("git add --dry-run -- BotToSharePoint/Common/CommonFunctions.cs");
     expect(html).toContain("staged 2 files");
-    expect(html).toContain("staged selected files");
+    expect(html).not.toContain("staged selected files");
     expect(html).not.toContain("{&quot;paths&quot;");
     expect(html).toContain("git_commit");
-    expect(html).toContain("Ran git commit -m &quot;Review claim workflow changes&quot;");
-    expect(html).toContain("streaming output");
+    expect(html).toContain("Running git commit -m &quot;Review claim workflow changes&quot;");
+    expect(html).not.toContain("Ran git commit -m &quot;Review claim workflow changes&quot;");
   });
 
-  it("renders only a compact summary after all steps complete", () => {
+  it("renders collapsed ran rows after all steps complete", () => {
     const items: ExecutionTimelineItem[] = [
       {
         id: "tool-1",
@@ -71,17 +69,12 @@ describe("ExecutionTimeline", () => {
 
     const html = renderToStaticMarkup(<ExecutionTimeline items={items} onToggleItem={() => undefined} />);
 
-    expect(html).toContain("origin remote found");
-    expect(html).toContain("pushed main");
-    expect(html).toContain("Summary");
-    expect(html).toContain("2 steps · 2 commands");
-    expect(html).not.toContain("Next:");
-    expect(html).not.toContain("Inspect repository state");
-    expect(html).not.toContain("Sync remote repository");
-    expect(html).not.toContain("▲");
-    expect(html).not.toContain("▼");
-    expect(html).not.toContain("git remote -v");
-    expect(html).not.toContain("git push ado main");
+    expect(html).toContain("Worked");
+    expect(html).not.toContain("Ran git remote -v");
+    expect(html).not.toContain("Ran git push ado main");
+    expect(html).not.toContain("origin remote found");
+    expect(html).not.toContain("pushed main");
+    expect(html).not.toContain("Shell");
   });
 
   it("marks failed tool output as an error timeline", () => {
@@ -98,9 +91,24 @@ describe("ExecutionTimeline", () => {
 
     const html = renderToStaticMarkup(<ExecutionTimeline items={items} onToggleItem={() => undefined} />);
 
-    expect(html).toContain("error");
-    expect(html).toContain("ado_create_pr");
+    expect(html).toContain("Stopped");
+    expect(html).toContain("Stopped after ado_create_pr");
     expect(html).toContain("Azure DevOps token is unavailable");
+  });
+
+  it("shows thinking before a concrete command is available", () => {
+    const items: ExecutionTimelineItem[] = [
+      {
+        id: "tool-1",
+        toolName: "repo_explain",
+        state: "running",
+      },
+    ];
+
+    const html = renderToStaticMarkup(<ExecutionTimeline items={items} onToggleItem={() => undefined} />);
+
+    expect(html).toContain("Thinking...");
+    expect(html).not.toContain("Ran repo_explain");
   });
 
   it("hides machine-readable JSON stdout from expanded tool evidence", () => {
@@ -122,7 +130,7 @@ describe("ExecutionTimeline", () => {
 
     const html = renderToStaticMarkup(<ExecutionTimeline items={items} onToggleItem={() => undefined} />);
 
-    expect(html).toContain("Structured result received.");
+    expect(html).toContain("Success");
     expect(html).not.toContain("&quot;returncode&quot;");
     expect(html).not.toContain("&quot;stdout&quot;");
   });
@@ -150,6 +158,7 @@ describe("ExecutionTimeline", () => {
 
     expect(html).toContain("git_status");
     expect(html).toContain("git status --short -b");
+    expect(html).toContain("Running git diff --stat");
     expect(html).toContain("## feature/x");
   });
 
@@ -187,8 +196,7 @@ describe("ExecutionTimeline", () => {
       />,
     );
 
-    expect(html).toContain("approval");
-    expect(html).toContain("Approval pending");
+    expect(html).toContain("Waiting for approval");
     expect(html).toContain("Stage selected files for commit");
     expect(html).toContain('data-approval-for="tool-2"');
     expect(html).toContain("Approve git_add");

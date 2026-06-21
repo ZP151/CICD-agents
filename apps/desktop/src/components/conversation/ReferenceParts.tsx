@@ -1,5 +1,6 @@
 import type { ConversationSourcePart } from "../../chatBubbles.js";
 import { conversationPartCardClass } from "./conversationPartStyles.js";
+import { stripSourceLineSuffix } from "./sourceTitleUtils.js";
 
 export type ReferencePart = ConversationSourcePart;
 
@@ -114,8 +115,4 @@ function truncateMiddle(value: string, maxLength: number): string {
   const head = Math.max(8, Math.floor((maxLength - 1) * 0.58));
   const tail = Math.max(6, maxLength - head - 1);
   return `${value.slice(0, head)}…${value.slice(-tail)}`;
-}
-
-function stripSourceLineSuffix(title: string): string {
-  return title.replace(/:(?:line\s*)?\d+$/i, "").trim();
 }

@@ -133,6 +133,33 @@ describe("chat session workflow action derivation", () => {
     expect(done?.result.response).toContain("will not create a pull request");
   });
 
+  it("returns a structured done result after fetching remote refs", () => {
+    const action: PendingToolAction = {
+      tool: "git_fetch",
+      args: { remote: "origin", prune: true },
+      description: "Fetch latest remote refs from origin.",
+      nextHint: "refresh branch status",
+      workflow: {
+        kind: "git",
+        phase: "fetch_remotes",
+        branch: "main",
+      },
+    };
+
+    const done = structuredDoneAfterConfirmedAction(action, { stdout: "", returncode: 0 });
+
+    expect(done?.workflowKind).toBe("git");
+    expect(done?.workflowPhase).toBe("fetched");
+    expect(done?.currentStep).toBe("Fetched origin");
+    expect(done?.result.response).toContain("Refresh branch status next");
+    expect(done?.result.suggestions).toContain("Refresh branch status");
+    expect(done?.result.toolCallsMade).toEqual([{
+      name: "git_fetch",
+      args: { remote: "origin", prune: true },
+      ok: true,
+    }]);
+  });
+
   it("stops after commit when the user only asked to stage and commit", () => {
     const derived = deriveWorkflowPendingAction(
       "s1",

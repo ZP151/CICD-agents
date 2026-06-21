@@ -39,6 +39,24 @@ function restoreInterruptedStreamingBubble(bubble: Bubble): Bubble {
   };
 }
 
+function imagePlaceholderText(bubble: Bubble): string {
+  const attachments = bubble.transientImageAttachments ?? [];
+  if (attachments.length === 0) return bubble.text ?? "";
+  const existing = bubble.text ?? "";
+  const placeholders = attachments.map((attachment) => `[image: ${attachment.name}]`).join("\n");
+  return existing.includes("[image:") ? existing : [existing, placeholders].filter(Boolean).join("\n\n");
+}
+
+function stripTransientBubbleState(bubble: Bubble): Bubble {
+  if (!bubble.transientImageAttachments?.length) return bubble;
+  const rest = { ...bubble };
+  delete rest.transientImageAttachments;
+  return {
+    ...rest,
+    text: imagePlaceholderText(bubble),
+  };
+}
+
 export function sanitizeChatDraft(draft: ChatDraftState): ChatDraftState {
   const hadInterruptedStream = draft.bubbles.some((bubble) => bubble.kind === "assistant" && bubble.streaming);
   const activeWorkflow = isActiveWorkflowDraft(draft.workflowState);
@@ -47,7 +65,7 @@ export function sanitizeChatDraft(draft: ChatDraftState): ChatDraftState {
     ...draft,
     activeProjectLinkId,
     activeProfileId: undefined,
-    bubbles: draft.bubbles.map(restoreInterruptedStreamingBubble),
+    bubbles: draft.bubbles.map(restoreInterruptedStreamingBubble).map(stripTransientBubbleState),
     statusText: hadInterruptedStream && !activeWorkflow ? null : draft.statusText,
   };
 }
@@ -64,7 +82,7 @@ export function loadChatDraft(): ChatDraftState | null {
 
 export function saveChatDraft(draft: ChatDraftState): void {
   try {
-    sessionStorage.setItem(CHAT_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    sessionStorage.setItem(CHAT_DRAFT_STORAGE_KEY, JSON.stringify(sanitizeChatDraft(draft)));
   } catch {
     /* ignore storage quota / privacy mode */
   }

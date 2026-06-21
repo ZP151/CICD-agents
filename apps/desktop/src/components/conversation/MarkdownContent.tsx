@@ -121,7 +121,6 @@ export function MarkdownContent({
       <Streamdown
         mode={streaming ? "streaming" : "static"}
         isAnimating={streaming}
-        caret={streaming ? "block" : undefined}
         animated={false}
         parseIncompleteMarkdown={streaming}
         normalizeHtmlIndentation

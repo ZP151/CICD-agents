@@ -66,6 +66,27 @@ describe("ChatPlanner approval guards", () => {
     }
   });
 
+  it("blocks direct git_add calls for review-only change requests", async () => {
+    const tool: Tool = {
+      name: "git_add",
+      description: "Stage files",
+      parameters: { type: "object", properties: {} },
+      handler: async () => ({ ok: true }),
+    };
+
+    const { called, result, events } = await runPlannerWithToolCall(
+      tool,
+      { paths: ["src/a.ts"] },
+      "review my changes",
+    );
+
+    expect(called).toBe(false);
+    expect(events.some((event) => event.type === "tool_start")).toBe(false);
+    expect(result.approvalProposal).toBeUndefined();
+    expect(result.response).toContain("review-only request");
+    expect(result.response).toContain("without proposing staging");
+  });
+
   it.each([
     ["git_fetch", { remote: "origin", prune: true }, "medium"],
     ["git_commit", { message: "feat: test approval" }, "medium"],

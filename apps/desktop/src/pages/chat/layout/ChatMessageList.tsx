@@ -18,10 +18,10 @@ import type {
   Bubble,
   SavedPrInsightSource,
 } from "../chat.types.js";
+import { imageAttachmentLabel } from "../chatAttachments.js";
 import type { WorkspaceAction } from "../workflowTaskState.js";
 import { ChatAssistantMetaPanel } from "./ChatAssistantMetaPanel.js";
 import { ChatEmptyState } from "./ChatEmptyState.js";
-import { ChatThinkingDots } from "./ChatThinkingDots.js";
 
 interface ChatMessageListProps {
   bubbles: Bubble[];
@@ -39,7 +39,7 @@ interface ChatMessageListProps {
   runWorkspaceAction: (action: WorkspaceAction) => void;
   toggleTool: (id: string) => void;
   confirmPendingAction: (id: string) => void;
-  cancelPendingAction: (id: string) => void;
+  cancelPendingAction: (id: string, feedback?: string) => void;
   resolveConfirm: (id: string, confirmed: boolean) => Promise<void>;
   selectArtifact: (artifact: ConversationArtifactPart) => void;
   selectSource: (source: ConversationSourcePart) => void;
@@ -115,11 +115,8 @@ export function ChatMessageList({
       ))}
 
       {busy && statusText && !bubbles.some((bubble) => bubble.kind === "assistant" && bubble.streaming) && (
-        <div className="mb-2 flex items-center gap-2 pl-1">
-          <div className="rounded-2xl rounded-tl-sm border border-[rgb(var(--app-border))]/70 bg-[rgb(var(--app-surface-raised))] px-4 py-2.5 text-sm text-[rgb(var(--app-text-muted))]">
-            {statusText}
-            <ChatThinkingDots />
-          </div>
+        <div className="mb-2 pl-1 text-sm text-[rgb(var(--app-text-muted))]" aria-live="polite">
+          {statusText}
         </div>
       )}
     </>
@@ -140,7 +137,7 @@ function ChatBubbleRow({
   bubble: Bubble;
   selectedArtifactId: string | null;
   confirmPendingAction: (id: string) => void;
-  cancelPendingAction: (id: string) => void;
+  cancelPendingAction: (id: string, feedback?: string) => void;
   resolveConfirm: (id: string, confirmed: boolean) => Promise<void>;
   selectArtifact: (artifact: ConversationArtifactPart) => void;
   selectSource: (source: ConversationSourcePart) => void;
@@ -148,10 +145,32 @@ function ChatBubbleRow({
   openPrInsightSourceInWorkspace: (source: SavedPrInsightSource) => void;
 }) {
   if (bubble.kind === "user") {
+    const attachments = bubble.transientImageAttachments ?? [];
+    const text = attachments.length > 0 ? visibleUserTextWithoutImagePlaceholders(bubble.text ?? "") : bubble.text;
     return (
       <div className="mb-3 flex justify-end">
         <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-[rgb(var(--app-accent))] px-4 py-2.5 text-sm text-white shadow-md ring-1 ring-[rgb(var(--app-accent))]/25">
-          {bubble.text}
+          {text && <p className="whitespace-pre-wrap">{text}</p>}
+          {attachments.length > 0 && (
+            <div className={text ? "mt-2 flex flex-wrap justify-end gap-1.5" : "flex flex-wrap justify-end gap-1.5"}>
+              {attachments.map((attachment) => (
+                <figure
+                  key={attachment.id}
+                  className="max-w-[112px] overflow-hidden rounded-md border border-white/20 bg-white/10"
+                  title={imageAttachmentLabel(attachment)}
+                >
+                  <img
+                    src={attachment.dataUrl}
+                    alt={attachment.name}
+                    className="h-16 w-28 object-cover"
+                  />
+                  <figcaption className="truncate px-1.5 py-1 text-[10px] leading-none text-white/85">
+                    {attachment.name}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -160,17 +179,14 @@ function ChatBubbleRow({
   if (bubble.kind === "assistant") {
     return (
       <div className="mb-3 flex justify-start">
-        <div className="max-w-[85%]">
-          <div className="rounded-2xl rounded-tl-sm border border-[rgb(var(--app-border))]/70 bg-[rgb(var(--app-surface))] px-4 py-2.5 text-sm text-[rgb(var(--app-text))] shadow-sm">
-            <ConversationPartRenderer
-              parts={conversationPartsFromAssistantBubble(bubble)}
-              streaming={bubble.streaming}
-              typingIndicator={<ChatThinkingDots />}
-              selectedArtifactId={selectedArtifactId}
-              onArtifactSelect={selectArtifact}
-              onSourceSelect={selectSource}
-            />
-          </div>
+        <div className="max-w-[72ch] text-sm leading-relaxed text-[rgb(var(--app-text))]">
+          <ConversationPartRenderer
+            parts={conversationPartsFromAssistantBubble(bubble)}
+            streaming={bubble.streaming}
+            selectedArtifactId={selectedArtifactId}
+            onArtifactSelect={selectArtifact}
+            onSourceSelect={selectSource}
+          />
           {bubble.meta && (
             <ChatAssistantMetaPanel
               meta={bubble.meta}
@@ -201,7 +217,7 @@ function ChatBubbleRow({
         <PendingActionCard
           bubble={bubble}
           onConfirm={() => confirmPendingAction(bubble.id)}
-          onCancel={() => cancelPendingAction(bubble.id)}
+          onCancel={(feedback) => cancelPendingAction(bubble.id, feedback)}
         />
       </div>
     );
@@ -226,4 +242,12 @@ function ChatBubbleRow({
   }
 
   return null;
+}
+
+function visibleUserTextWithoutImagePlaceholders(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .filter((line) => !/^\[image: .+\]$/.test(line.trim()))
+    .join("\n")
+    .trim();
 }

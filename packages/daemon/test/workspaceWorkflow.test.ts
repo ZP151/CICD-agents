@@ -60,6 +60,64 @@ describe("workspaceWorkflow", () => {
     expect(workflowRiskForAction("push_branch", "", undefined)).toBe("high");
   });
 
+  it("builds a pull-rebase proposal for branch sync before push", () => {
+    const readiness = pushReadinessFromTools([
+      tool("git_upstream", "origin/main\n"),
+      tool("git_divergence", "2\t1\n"),
+    ]);
+    const proposal = buildWorkspaceWorkflowProposal(
+      "sync_branch_rebase",
+      payload({ action: "sync_branch_rebase", branch: "main" }),
+      "main",
+      "",
+      readiness,
+    );
+
+    expect(proposal).toMatchObject({
+      tool: "git_pull",
+      args: {
+        remote: "origin",
+        branch: "main",
+        rebase: true,
+      },
+      readiness: {
+        status: "diverged",
+        upstream: "origin/main",
+      },
+      workflow: {
+        kind: "git",
+        phase: "sync_branch",
+        branch: "main",
+      },
+    });
+    expect(proposal?.description).toContain("Pull latest changes from origin/main with rebase");
+    expect(workflowRiskForAction("sync_branch_rebase", "", undefined)).toBe("high");
+  });
+
+  it("builds a fetch-remotes proposal without changing the working tree", () => {
+    const proposal = buildWorkspaceWorkflowProposal(
+      "fetch_remotes",
+      payload({ action: "fetch_remotes" }),
+      "main",
+      "",
+    );
+
+    expect(proposal).toMatchObject({
+      tool: "git_fetch",
+      args: {
+        remote: "origin",
+        prune: true,
+      },
+      workflow: {
+        kind: "git",
+        phase: "fetch_remotes",
+        branch: "main",
+      },
+    });
+    expect(proposal?.description).toContain("Fetch latest remote refs from origin");
+    expect(workflowRiskForAction("fetch_remotes", "", undefined)).toBe("medium");
+  });
+
   it("builds a staged commit proposal with commit-push context", () => {
     const proposal = buildWorkspaceWorkflowProposal(
       "prepare_commit",

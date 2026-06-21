@@ -7,6 +7,10 @@ import type {
   ConversationPart,
   ConversationSourcePart,
 } from "./chatBubbleTypes.js";
+import {
+  sourceLineNumberFromTitle,
+  stripSourceLineSuffix,
+} from "./components/conversation/sourceTitleUtils.js";
 
 export function conversationPartsFromAssistantBubble(input: {
   text?: string;
@@ -127,7 +131,9 @@ function sourcePartsFromMeta(meta?: AssistantBubbleMeta): ConversationSourcePart
         sourceId: `document-${key || index}`,
         title: title || fileNameFromPath(file) || `Source file ${index + 1}`,
         file,
-        line: undefined,
+        line: current?.type === "source_document"
+          ? current.line ?? sourceLineNumberFromTitle(source.line, source.title)
+          : sourceLineNumberFromTitle(source.line, source.title),
         snippet: mergeSnippetText(
           current?.type === "source_document" ? current.snippet : undefined,
           source.snippet,
@@ -167,10 +173,6 @@ function documentSourceKey(file: string | undefined, title: string): string {
 
 function fileNameFromPath(path: string | undefined): string {
   return path?.split(/[\\/]/).filter(Boolean).pop() ?? "";
-}
-
-function stripSourceLineSuffix(title: string): string {
-  return title.replace(/:(?:line\s*)?\d+$/i, "").trim();
 }
 
 function mergeSnippetText(current: string | undefined, incoming: string | undefined): string | undefined {

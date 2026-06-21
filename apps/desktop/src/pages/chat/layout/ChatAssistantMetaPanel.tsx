@@ -29,11 +29,8 @@ export function ChatAssistantMetaPanel({
         : null;
     })
     .filter((source): source is SavedPrInsightSource & { raw: string } => Boolean(source));
-  const sourceMessages = new Set(insightSources.map((source) => source.raw));
-  const contextMessages = new Set(suggestions.filter((source) => source.startsWith("Repository context: ")));
-  const otherSuggestions = suggestions.filter((source) => !sourceMessages.has(source) && !contextMessages.has(source));
   const runtimeSignals: string[] = [];
-  if (suggestions.length === 0 && runtimeSignals.length === 0) return null;
+  if (insightSources.length === 0 && runtimeSignals.length === 0) return null;
   return (
     <div className="ml-1 mt-1.5 space-y-1.5 text-xs text-zinc-500">
       {runtimeSignals.length > 0 && (
@@ -77,13 +74,6 @@ export function ChatAssistantMetaPanel({
             </div>
           ))}
         </div>
-      )}
-      {otherSuggestions.length > 0 && (
-        <ul className="space-y-0.5">
-          {otherSuggestions.map((suggestion, index) => (
-            <li key={index} className="flex gap-1"><span className="text-zinc-600">›</span>{suggestion}</li>
-          ))}
-        </ul>
       )}
     </div>
   );

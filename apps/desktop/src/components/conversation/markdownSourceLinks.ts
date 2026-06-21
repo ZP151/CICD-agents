@@ -1,4 +1,5 @@
 import type { ReferencePart } from "./ReferenceParts.js";
+import { stripSourceLineSuffix } from "./sourceTitleUtils.js";
 
 interface SourceLinkTerm {
   source: ReferencePart;
@@ -132,10 +133,6 @@ function isSourceBoundary(char: string | undefined): boolean {
 
 function basenameFromPath(path: string | undefined): string {
   return path?.split(/[\\/]/).filter(Boolean).pop() ?? "";
-}
-
-function stripSourceLineSuffix(title: string): string {
-  return title.replace(/:(?:line\s*)?\d+$/i, "").trim();
 }
 
 function stabilizeStreamingMarkdown(markdown: string): string {

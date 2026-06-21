@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { ProjectLink } from "../../../api.js";
 import type { WorkflowEventState } from "../chat.types.js";
 import type { GitStatusData } from "../toolOutputRenderers.js";
@@ -44,6 +45,8 @@ export function WorkspaceEnvironmentCard({
   statusText,
   onAction,
 }: WorkspaceEnvironmentCardProps) {
+  const menuRootRef = useRef<HTMLDivElement | null>(null);
+  const [activeMenu, setActiveMenu] = useState<"branch" | "commit" | null>(null);
   const repoName = repoPath ? repoPath.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? "" : "";
   const activeProjectLink = projectLinks.find((projectLink) => projectLink.id === activeProjectLinkId) ?? null;
   const adoReady = Boolean(activeProjectLink?.adoOrgUrl && activeProjectLink.adoProject && activeProjectLink.adoRepoName);
@@ -67,11 +70,38 @@ export function WorkspaceEnvironmentCard({
 
   const runAction = (action: WorkspaceAction) => {
     if (busy) return;
+    setActiveMenu(null);
     onAction(action);
   };
 
+  useEffect(() => {
+    if (!activeMenu) return;
+    const closeIfOutside = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Node && menuRootRef.current?.contains(target)) return;
+      setActiveMenu(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActiveMenu(null);
+    };
+    document.addEventListener("pointerdown", closeIfOutside, true);
+    document.addEventListener("mousedown", closeIfOutside, true);
+    document.addEventListener("focusin", closeIfOutside, true);
+    document.addEventListener("keydown", closeOnEscape, true);
+    return () => {
+      document.removeEventListener("pointerdown", closeIfOutside, true);
+      document.removeEventListener("mousedown", closeIfOutside, true);
+      document.removeEventListener("focusin", closeIfOutside, true);
+      document.removeEventListener("keydown", closeOnEscape, true);
+    };
+  }, [activeMenu]);
+
   return (
-    <>
+    <div
+      onKeyDownCapture={(event) => {
+        if (event.key === "Escape") setActiveMenu(null);
+      }}
+    >
       <WorkspaceEnvironmentHeader hasRepoPath={hasRepoPath} busy={busy} runAction={runAction} />
       <WorkspaceChangesButton
         hasRepoPath={hasRepoPath}
@@ -83,38 +113,51 @@ export function WorkspaceEnvironmentCard({
         removed={removed}
         runAction={runAction}
       />
-      <WorkspaceBranchMenu
-        hasRepoPath={hasRepoPath}
-        busy={busy}
-        branchName={branchName}
-        branchLabel={branchLabel}
-        branchList={branchList}
-        runAction={runAction}
-      />
-      <WorkspaceCommitMenu
-        hasRepoPath={hasRepoPath}
-        busy={busy}
-        branchName={branchName}
-        branchLabel={branchLabel}
-        hasChanges={hasChanges}
-        added={added}
-        removed={removed}
-        activeProjectLink={activeProjectLink}
-        runAction={runAction}
-      />
+      <div ref={menuRootRef}>
+        <WorkspaceBranchMenu
+          hasRepoPath={hasRepoPath}
+          busy={busy}
+          branchName={branchName}
+          branchLabel={branchLabel}
+          branchList={branchList}
+          open={activeMenu === "branch"}
+          onOpenChange={(open) => setActiveMenu(open ? "branch" : null)}
+          runAction={runAction}
+        />
+        <WorkspaceCommitMenu
+          hasRepoPath={hasRepoPath}
+          busy={busy}
+          branchName={branchName}
+          branchLabel={branchLabel}
+          hasChanges={hasChanges}
+          added={added}
+          removed={removed}
+          gitStatus={gitStatus}
+          activeProjectLink={activeProjectLink}
+          open={activeMenu === "commit"}
+          onOpenChange={(open) => setActiveMenu(open ? "commit" : null)}
+          runAction={runAction}
+        />
+      </div>
       <WorkspaceGitRecoveryPanel gitRecovery={gitRecovery} busy={busy} runAction={runAction} />
-      <WorkspaceProjectLinkPanel
-        repoName={repoName}
-        repoPath={repoPath}
-        projectLinks={projectLinks}
-        activeProjectLink={activeProjectLink}
-        activeProjectLinkId={activeProjectLinkId}
-        adoReady={adoReady}
-        branchName={branchName}
-        busy={busy}
-        onProjectLinkSelect={handleProjectLinkSelect}
-        runAction={runAction}
-      />
-    </>
+      <div
+        onClickCapture={() => setActiveMenu(null)}
+        onFocusCapture={() => setActiveMenu(null)}
+        onPointerDownCapture={() => setActiveMenu(null)}
+      >
+        <WorkspaceProjectLinkPanel
+          repoName={repoName}
+          repoPath={repoPath}
+          projectLinks={projectLinks}
+          activeProjectLink={activeProjectLink}
+          activeProjectLinkId={activeProjectLinkId}
+          adoReady={adoReady}
+          branchName={branchName}
+          busy={busy}
+          onProjectLinkSelect={handleProjectLinkSelect}
+          runAction={runAction}
+        />
+      </div>
+    </div>
   );
 }

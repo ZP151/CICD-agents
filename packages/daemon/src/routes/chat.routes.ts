@@ -11,6 +11,9 @@ import {
 import type { ChatSessionManager, InlineLlmConfig, InlineProjectLink } from "../chatSession.js";
 import { createChatSseWriter, isTerminalChatEvent } from "./chatSse.js";
 
+const MAX_CHAT_IMAGE_ATTACHMENT_BYTES = 4 * 1024 * 1024;
+const CHAT_IMAGE_DATA_URL_PATTERN = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([a-zA-Z0-9+/=\s]+)$/;
+
 const LlmConfigSchema = z.object({
   llmProvider: z.enum(["azure", "openai"]).optional(),
   azureEndpoint: z.string().optional(),
@@ -43,13 +46,53 @@ const InlineProjectLinkSchema = z.object({
   ignoredGlobs: z.array(z.string()).default([]),
 }).optional();
 
+const ChatImageAttachmentSchema = z.object({
+  name: z.string().min(1).max(160),
+  mimeType: z.string().regex(/^image\//),
+  dataUrl: z.string().regex(/^data:image\/[a-zA-Z0-9.+-]+;base64,/),
+}).superRefine((value, ctx) => {
+  const match = value.dataUrl.match(CHAT_IMAGE_DATA_URL_PATTERN);
+  if (!match) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "image attachment must be a base64 image data URL",
+      path: ["dataUrl"],
+    });
+    return;
+  }
+
+  const dataUrlMimeType = match[1] ?? "";
+  const base64Payload = match[2] ?? "";
+  if (dataUrlMimeType.toLowerCase() !== value.mimeType.toLowerCase()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "image attachment MIME type must match data URL",
+      path: ["mimeType"],
+    });
+  }
+
+  const normalizedPayload = base64Payload.replace(/\s/g, "");
+  const padding = normalizedPayload.endsWith("==") ? 2 : normalizedPayload.endsWith("=") ? 1 : 0;
+  const decodedBytes = Math.max(0, Math.floor((normalizedPayload.length * 3) / 4) - padding);
+  if (decodedBytes > MAX_CHAT_IMAGE_ATTACHMENT_BYTES) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "image attachment must be 4 MB or smaller",
+      path: ["dataUrl"],
+    });
+  }
+});
+
 const ChatStartSchema = z.object({
-  message: z.string().min(1),
+  message: z.string().default(""),
   repoPath: z.string().default(process.cwd()),
   sessionId: z.string().optional(),
   projectLinkId: z.string().optional(),
   llmConfig: LlmConfigSchema,
   projectLink: InlineProjectLinkSchema,
+  imageAttachments: z.array(ChatImageAttachmentSchema).max(3).default([]),
+}).refine((value) => value.message.trim().length > 0 || value.imageAttachments.length > 0, {
+  message: "message or image attachment is required",
 });
 
 const ChatIndexSchema = z.object({
@@ -148,7 +191,7 @@ export function registerChatRoutes(
     const parsed = ChatStartSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
 
-    const { message, repoPath, sessionId: existingId, llmConfig } = parsed.data;
+    const { imageAttachments, message, repoPath, sessionId: existingId, llmConfig } = parsed.data;
     const projectLinkId = projectLinkIdFromChatPayload(parsed.data);
     const projectLink = inlineProjectLinkFromPayload(parsed.data);
     const sessionId = existingId ?? chatSessions.createSession(repoPath, projectLinkId);
@@ -157,7 +200,7 @@ export function registerChatRoutes(
     return new Promise<void>((resolve) => {
       (async () => {
         try {
-          for await (const event of chatSessions.run(sessionId, message, repoPath, projectLinkId, llmConfig, projectLink)) {
+          for await (const event of chatSessions.run(sessionId, message, repoPath, projectLinkId, llmConfig, projectLink, imageAttachments)) {
             sseWriter.sendChatEvent(event);
             if (isTerminalChatEvent(event)) {
               sseWriter.end();

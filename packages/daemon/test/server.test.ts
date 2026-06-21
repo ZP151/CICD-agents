@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { resetSettingsForTests } from "@mergepilot/core";
 import { buildApp } from "../src/server.js";
+import { loadSession } from "../src/chatHistoryStore.js";
 
 let app: Awaited<ReturnType<typeof buildApp>> | null = null;
 
@@ -30,6 +31,86 @@ afterEach(async () => {
 });
 
 describe("daemon HTTP", () => {
+  it("serves repository-relative workspace file previews", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-workspace-file-"));
+    fs.mkdirSync(path.join(repo, "src"), { recursive: true });
+    fs.writeFileSync(path.join(repo, "src", "app.ts"), "export const value = 1;\n", "utf8");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/workspace/file",
+      payload: {
+        repoPath: repo,
+        filePath: "src/app.ts",
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toMatchObject({
+      path: "src/app.ts",
+      content: "export const value = 1;\n",
+      lineCount: 2,
+    });
+  });
+
+  it("rejects workspace file previews outside the selected repository", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-workspace-file-"));
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/workspace/file",
+      payload: {
+        repoPath: repo,
+        filePath: "../outside.txt",
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toContain("repository-relative");
+  });
+
+  it("rejects workspace file previews for large text files", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-workspace-file-large-"));
+    fs.writeFileSync(path.join(repo, "large.log"), "a".repeat(800 * 1024), "utf8");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/workspace/file",
+      payload: {
+        repoPath: repo,
+        filePath: "large.log",
+      },
+    });
+
+    expect(response.statusCode).toBe(413);
+    expect(response.json()).toMatchObject({
+      error: "file too large",
+    });
+  });
+
+  it("rejects workspace file previews for binary files", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-workspace-file-binary-"));
+    fs.writeFileSync(path.join(repo, "image.bin"), Buffer.from([0x89, 0x50, 0x00, 0x47]));
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/workspace/file",
+      payload: {
+        repoPath: repo,
+        filePath: "image.bin",
+      },
+    });
+
+    expect(response.statusCode).toBe(415);
+    expect(response.json()).toMatchObject({
+      error: "binary file preview is not supported",
+    });
+  });
+
   it("continues structured commit workflow from stage approval to commit approval", async () => {
     app = await buildApp();
     const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-commit-next-"));
@@ -268,6 +349,114 @@ describe("daemon HTTP", () => {
           chunk?.type === "text-delta" && typeof chunk.delta === "string" && chunk.delta.length > 0,
       ),
     ).toBe(true);
+  });
+
+  it("accepts image-only chat requests without storing raw image data", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-image-only-"));
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat",
+      payload: {
+        message: "",
+        repoPath: repo,
+        imageAttachments: [
+          {
+            name: "screen.png",
+            mimeType: "image/png",
+            dataUrl: "data:image/png;base64,aGVsbG8=",
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const events = parseSse(response.body);
+    const sessionId = (events.find((entry) => entry.event === "session")?.data as { sessionId?: string } | undefined)
+      ?.sessionId;
+    expect(sessionId).toBeTruthy();
+    expect(events.some((entry) => entry.event === "final")).toBe(true);
+
+    const session = await loadSession(sessionId!);
+    const storedContent = [
+      ...(session?.messages.map((message) => message.content) ?? []),
+      ...(session?.bubbles.map((bubble) => bubble.content) ?? []),
+    ].join("\n");
+    expect(storedContent).toContain("[image: screen.png]");
+    expect(storedContent).not.toContain("aGVsbG8=");
+    expect(storedContent).not.toContain("data:image/png");
+  });
+
+  it("rejects chat image attachments when the MIME type does not match the data URL", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-image-mime-"));
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat",
+      payload: {
+        message: "",
+        repoPath: repo,
+        imageAttachments: [
+          {
+            name: "screen.png",
+            mimeType: "image/jpeg",
+            dataUrl: "data:image/png;base64,aGVsbG8=",
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toContain("MIME type must match data URL");
+  });
+
+  it("rejects chat image attachments larger than 4 MB", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-image-large-"));
+    const tooLargeBase64 = "a".repeat(Math.ceil(((4 * 1024 * 1024) + 1) / 3) * 4);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat",
+      payload: {
+        message: "",
+        repoPath: repo,
+        imageAttachments: [
+          {
+            name: "large.png",
+            mimeType: "image/png",
+            dataUrl: `data:image/png;base64,${tooLargeBase64}`,
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toContain("4 MB or smaller");
+  });
+
+  it("rejects chat requests with more than three image attachments", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-image-count-"));
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat",
+      payload: {
+        message: "compare these",
+        repoPath: repo,
+        imageAttachments: Array.from({ length: 4 }, (_, index) => ({
+          name: `screen-${index + 1}.png`,
+          mimeType: "image/png",
+          dataUrl: "data:image/png;base64,aGVsbG8=",
+        })),
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toContain("at most 3");
   });
 
 });

@@ -3,6 +3,10 @@ import type {
   AssistantBubbleSource,
   ConversationArtifactPart,
 } from "./chatBubbleTypes.js";
+import {
+  sourceLineNumberFromTitle,
+  stripSourceLineSuffix,
+} from "./components/conversation/sourceTitleUtils.js";
 
 export function assistantBubbleMetaFromUnknown(value: unknown): AssistantBubbleMeta | undefined {
   if (!value || typeof value !== "object") return undefined;
@@ -190,7 +194,7 @@ function normalizeDocumentSource(
   return {
     ...source,
     title: stripSourceLineSuffix(source.title),
-    line: undefined,
+    line: sourceLineNumberFromTitle(source.line, source.title),
   };
 }
 
@@ -207,17 +211,14 @@ function mergeDocumentSource(
     sourceId: current.sourceId ?? incoming.sourceId,
     title: stripSourceLineSuffix(current.title) || stripSourceLineSuffix(incoming.title),
     file: current.file ?? incoming.file,
-    line: undefined,
+    line: sourceLineNumberFromTitle(current.line, current.title)
+      ?? sourceLineNumberFromTitle(incoming.line, incoming.title),
     snippet: mergeSnippetText(current.snippet, incoming.snippet),
   };
 }
 
 function normalizeSourcePath(path: string | undefined): string {
   return path?.replace(/\\/g, "/").trim().toLowerCase() ?? "";
-}
-
-function stripSourceLineSuffix(title: string): string {
-  return title.replace(/:(?:line\s*)?\d+$/i, "").trim();
 }
 
 function mergeSnippetText(current: string | undefined, incoming: string | undefined): string | undefined {

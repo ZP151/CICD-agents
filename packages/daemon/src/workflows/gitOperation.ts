@@ -65,7 +65,7 @@ export function gitOperationBlockForAction(
 ): { workflowPhase: string; summary: string } | undefined {
   if (state.status === "normal") return undefined;
   if (action === "inspect_environment" || action === "inspect_changes" || action === "refresh_branch") return undefined;
-  if (!["checkout_branch", "create_branch", "push_branch", "prepare_commit", "create_pr"].includes(action)) return undefined;
+  if (!["checkout_branch", "create_branch", "sync_branch_rebase", "push_branch", "prepare_commit", "create_pr"].includes(action)) return undefined;
 
   const phase = state.phase === "normal" ? "git" : gitOperationPhaseLabel(state.phase);
   const workflowPhase = state.status === "conflicted"

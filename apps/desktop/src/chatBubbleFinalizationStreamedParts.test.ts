@@ -96,7 +96,7 @@ describe("chat bubble finalization streamed parts", () => {
         sourceId: "document-packages/core/src/tools/azuredevops.ts",
         title: "Policy status",
         file: "packages/core/src/tools/azureDevOps.ts",
-        line: undefined,
+        line: 42,
         snippet: undefined,
       },
       {

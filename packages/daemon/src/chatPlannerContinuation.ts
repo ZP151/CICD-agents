@@ -1,5 +1,6 @@
 import {
   type ChatEvent,
+  type ChatImageAttachment,
   type ChatMessage,
   type ChatPlanner,
   type LLMClient,
@@ -25,6 +26,7 @@ export interface StreamPlannerContinuationArgs {
   planner: ChatPlanner;
   waitForConfirm: () => Promise<boolean>;
   inlineProjectLink?: InlineProjectLink;
+  imageAttachments?: ChatImageAttachment[];
   projectLinkId?: string;
   persistUserMessage?: boolean;
   contextProgressMessage: string;
@@ -42,6 +44,7 @@ export async function* streamPlannerContinuation(args: StreamPlannerContinuation
     inlineProjectLink,
     llm,
     message,
+    imageAttachments = [],
     persistUserMessage,
     planner,
     planningProgressMessage,
@@ -75,6 +78,7 @@ export async function* streamPlannerContinuation(args: StreamPlannerContinuation
     planner,
     waitForConfirm,
     contextPrompt: context.prompt,
+    imageAttachments,
     contextNotes: context.notes,
     contextSources: context.sources,
     adapters,

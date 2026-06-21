@@ -13,6 +13,7 @@ import {
 } from "./chatPlannerControl.js";
 import { isConfirmationMessage, isDenialMessage } from "./chatPlannerAffirmation.js";
 import {
+  guardReviewOnlyFinalResult,
   outOfScopeWriteMessage,
   requiredChangeInspectionGuidance,
 } from "./chatPlannerGuards.js";
@@ -29,11 +30,12 @@ import {
   repeatedToolFailureResult,
   updateToolFailureTracker,
 } from "./chatPlannerToolExecution.js";
-import type { ChatEvent, ChatMessage, ChatPlannerResult } from "./chatPlannerTypes.js";
+import type { ChatEvent, ChatImageAttachment, ChatMessage, ChatPlannerResult } from "./chatPlannerTypes.js";
 
 export type {
   ChatApprovalRequest,
   ChatEvent,
+  ChatImageAttachment,
   ChatMessage,
   ChatPlannerArtifact,
   ChatPlannerResult,
@@ -63,6 +65,7 @@ export class ChatPlanner {
     repoPath: string,
     waitForConfirm: () => Promise<boolean>,
     contextPrompt?: string,
+    imageAttachments: ChatImageAttachment[] = [],
   ): AsyncGenerator<ChatEvent> {
     if (!this.llm.configured) {
       yield* offlineFallbackEvents(message);
@@ -76,6 +79,7 @@ export class ChatPlanner {
       repoPath,
       contextPrompt,
       tools: registeredTools,
+      imageAttachments,
     });
     const tools = buildPlannerToolSchemas(registeredTools);
     const capabilitiesByName = buildToolCapabilitiesByName(registeredTools);
@@ -105,14 +109,14 @@ export class ChatPlanner {
         if (finalizationCalls.length > 0 && executableToolCalls.length === 0) {
           const finalCall = finalizationCalls[finalizationCalls.length - 1]!;
           const args = parseToolArguments(finalCall.arguments);
-          const result = plannerResultFromControl(args, {
+          const result = guardReviewOnlyFinalResult(plannerResultFromControl(args, {
             visibleText: accumulated,
             fallbackText: accumulated,
             finalizationMode: "agent_final",
             streamedResponse: emittedVisibleResponse || undefined,
             toolCallsMade,
             usedLlm: true,
-          });
+          }), message);
           yield { type: "assistant_control", control: result };
           yield { type: "done", result };
           return;
@@ -225,14 +229,14 @@ export class ChatPlanner {
       const control = parseControlResponse(lastText);
       const parsed = control.control;
       if (parsed) {
-        const result = plannerResultFromControl(parsed, {
+        const result = guardReviewOnlyFinalResult(plannerResultFromControl(parsed, {
           visibleText: control.visibleText,
           fallbackText: lastText,
           finalizationMode: control.mode,
           streamedResponse: emittedVisibleResponse || undefined,
           toolCallsMade,
           usedLlm: true,
-        });
+        }), message);
         const riskLevel = result.riskLevel;
         const response = result.response;
         const approvalProposal = result.approvalProposal;

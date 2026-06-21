@@ -18,6 +18,12 @@ import type {
   ChatWorkflowState,
 } from "./chatTypes.js";
 
+export interface ChatImageAttachmentPayload {
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+}
+
 /**
  * POST /chat — streams a conversational turn via SSE.
  * Returns a cancel function for aborting the in-flight request.
@@ -29,6 +35,7 @@ export function chatStream(
   onEvent: (payload: ChatEventPayload) => void,
   projectLinkId?: string,
   conversationModelChoice: ConversationModelChoice = "built_in",
+  imageAttachments: ChatImageAttachmentPayload[] = [],
 ): { cancel: () => void } {
   const controller = new AbortController();
 
@@ -42,6 +49,7 @@ export function chatStream(
   if (llmConfig) body["llmConfig"] = llmConfig;
   const projectLink = readProjectLinkData(projectLinkId);
   if (projectLink) body["projectLink"] = projectLink;
+  if (imageAttachments.length > 0) body["imageAttachments"] = imageAttachments;
 
   fetch(`${RUNTIME_URL}/chat`, {
     method: "POST",

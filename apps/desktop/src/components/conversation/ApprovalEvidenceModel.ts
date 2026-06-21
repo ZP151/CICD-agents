@@ -4,6 +4,8 @@ export interface ApprovalWorkflowEvidence {
     | "stage"
     | "commit"
     | "push"
+    | "fetch_remotes"
+    | "sync_branch"
     | "test"
     | "build"
     | "pipeline_trigger"
@@ -125,11 +127,12 @@ export function toolCommandPreview(toolName?: string, args?: Record<string, unkn
   }
   if (toolName === "git_add") {
     const paths = stringArray(args?.["paths"]);
+    const stageAll = Boolean(args?.["all"]) || paths.length === 0;
     const flags = [
       args?.["dryRun"] ? "--dry-run" : "",
       args?.["intentToAdd"] ? "--intent-to-add" : "",
       args?.["update"] ? "--update" : "",
-      args?.["all"] || paths.length === 0 ? "--all" : "",
+      stageAll ? "-A" : "",
     ].filter(Boolean);
     return ["git", "add", ...flags, ...(paths.length ? ["--", ...paths] : [])].join(" ");
   }
@@ -153,6 +156,13 @@ export function toolCommandPreview(toolName?: string, args?: Record<string, unkn
       args?.["dryRun"] ? "--dry-run" : "",
     ].filter(Boolean);
     return ["git", "push", ...flags, remote, branch].join(" ");
+  }
+  if (toolName === "git_fetch") {
+    const remote = String(args?.["remote"] ?? "origin");
+    const flags = [
+      args?.["prune"] ? "--prune" : "",
+    ].filter(Boolean);
+    return ["git", "fetch", ...flags, remote].join(" ");
   }
   if (toolName === "ado_create_pr") {
     const source = String(args?.["source_branch"] ?? args?.["sourceBranch"] ?? "<source>");
@@ -184,6 +194,8 @@ export function workflowBoundaryText(workflow: ApprovalWorkflowEvidence, nextHin
     return "This approval belongs to a pull-request workflow. Work-item linking and pipeline runs still require their own explicit request or approval.";
   }
   if (workflow.kind === "git") {
+    if (workflow.phase === "fetch_remotes") return "This approval only fetches remote refs. It does not checkout, merge, rebase, pull, or change working-tree files.";
+    if (workflow.phase === "sync_branch") return "This approval only pulls the current branch with rebase so push readiness can be checked again.";
     if (workflow.phase === "stage_conflicts") return "This approval only stages the selected files that are part of the current Git conflict recovery.";
     if (workflow.phase === "continue_rebase") return "This approval only continues the in-progress rebase after conflicts have been resolved and staged.";
     if (workflow.phase === "abort_rebase") return "This approval only aborts the in-progress rebase and returns the branch to its pre-rebase state.";

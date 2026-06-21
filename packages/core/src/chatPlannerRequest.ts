@@ -6,7 +6,7 @@ import type { Tool } from "./tools/executor.js";
 import { toolCapabilities, toolCapabilityPrompt } from "./tools/capabilities.js";
 import { finalizationToolSchema } from "./chatPlannerFinalizationTool.js";
 import { CHAT_SYSTEM_PROMPT } from "./chatPlannerPrompt.js";
-import type { ChatMessage } from "./chatPlannerTypes.js";
+import type { ChatImageAttachment, ChatMessage } from "./chatPlannerTypes.js";
 
 export function buildPlannerMessages(opts: {
   message: string;
@@ -14,7 +14,31 @@ export function buildPlannerMessages(opts: {
   repoPath: string;
   contextPrompt?: string;
   tools: Tool[];
+  imageAttachments?: ChatImageAttachment[];
 }): ChatCompletionMessageParam[] {
+  const userText = [
+    `Working directory: ${opts.repoPath}`,
+    opts.contextPrompt ? opts.contextPrompt : "",
+    opts.imageAttachments?.length
+      ? `Attached images: ${opts.imageAttachments.map((attachment) => attachment.name).join(", ")}`
+      : "",
+    `## User request\n${opts.message}`,
+  ].filter(Boolean).join("\n\n");
+  const userMessage: ChatCompletionMessageParam = opts.imageAttachments?.length
+    ? {
+        role: "user",
+        content: [
+          { type: "text", text: userText },
+          ...opts.imageAttachments.map((attachment) => ({
+            type: "image_url" as const,
+            image_url: { url: attachment.dataUrl, detail: "auto" as const },
+          })),
+        ],
+      }
+    : {
+        role: "user",
+        content: userText,
+      };
   return [
     {
       role: "system",
@@ -25,14 +49,7 @@ export function buildPlannerMessages(opts: {
     ...opts.history.slice(-20).map(
       (m): ChatCompletionMessageParam => ({ role: m.role, content: m.content }),
     ),
-    {
-      role: "user",
-      content: [
-        `Working directory: ${opts.repoPath}`,
-        opts.contextPrompt ? opts.contextPrompt : "",
-        `## User request\n${opts.message}`,
-      ].filter(Boolean).join("\n\n"),
-    },
+    userMessage,
   ];
 }
 

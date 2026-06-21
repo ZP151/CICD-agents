@@ -88,6 +88,35 @@ export function buildWorkspaceWorkflowProposal(
       preflight: branchPreflight,
     };
   }
+  if (action === "fetch_remotes") {
+    return {
+      tool: "git_fetch",
+      args: { remote: "origin", prune: true },
+      description: "Fetch latest remote refs from origin and prune deleted remote-tracking branches.",
+      nextHint: "refresh branch status",
+      workflow: {
+        kind: "git",
+        phase: "fetch_remotes",
+        branch: branch || undefined,
+      },
+    };
+  }
+  if (action === "sync_branch_rebase") {
+    if (!branch) throw new Error("Current branch is required before syncing.");
+    const readinessSummary = pushReadiness?.summary ? ` ${pushReadiness.summary}` : "";
+    return {
+      tool: "git_pull",
+      args: { remote: "origin", branch, rebase: true },
+      description: `Pull latest changes from origin/${branch} with rebase before pushing.${readinessSummary}`,
+      nextHint: "inspect branch status",
+      readiness: pushReadiness,
+      workflow: {
+        kind: "git",
+        phase: "sync_branch",
+        branch,
+      },
+    };
+  }
   if (action === "push_branch") {
     if (!branch) throw new Error("Current branch is required before pushing.");
     const readinessSummary = pushReadiness?.summary ? ` ${pushReadiness.summary}` : "";
@@ -220,6 +249,7 @@ export function workflowRiskForAction(
   statusText: string,
   preflight?: PendingToolAction["preflight"],
 ): string {
+  if (action === "sync_branch_rebase") return "high";
   if (action === "push_branch") return "high";
   if (action === "create_pr") return "high";
   if (isGitRecoveryWorkflowAction(action)) return "high";
@@ -236,8 +266,26 @@ export function summarizeWorkspaceWorkflow(action: string, args: {
   diffStat: string;
   changedFiles: string[];
   operationState?: GitOperationState;
+  pushReadiness?: PendingToolAction["readiness"];
+  latestCommitSubject?: string;
+  latestCommitStat?: string;
 }): string {
   const lines: string[] = [];
+  if (action === "draft_commit_message") {
+    lines.push(`Suggested commit message: \`${draftCommitMessageFromChangedFiles(args.changedFiles)}\``);
+    if (args.changedFiles.length > 0) {
+      lines.push(`Basis: ${args.changedFiles.length} changed file(s).`);
+    }
+  }
+  if (action === "explain_change_scope") {
+    lines.push(...changeScopeSummaryLines(args.changedFiles));
+  }
+  if (action === "inspect_remote_target") {
+    lines.push(...remoteTargetSummaryLines(args.currentBranch, args.pushReadiness));
+  }
+  if (action === "inspect_latest_commit") {
+    lines.push(...latestCommitSummaryLines(args.latestCommitSubject ?? "", args.latestCommitStat ?? "", args.pushReadiness));
+  }
   if (args.currentBranch) lines.push(`Branch: ${args.currentBranch}`);
   if (args.operationState && args.operationState.status !== "normal") lines.push(args.operationState.summary);
   if (args.statusText) {
@@ -251,4 +299,118 @@ export function summarizeWorkspaceWorkflow(action: string, args: {
   if (action === "run_tests") lines.push("Validation: waiting to run tests after approval.");
   if (action === "run_build") lines.push("Validation: waiting to run build after approval.");
   return lines.join("\n") || "Workspace state refreshed.";
+}
+
+export function draftCommitMessageFromChangedFiles(files: string[]): string {
+  const normalized = files.map((file) => file.replace(/\\/g, "/")).filter(Boolean);
+  if (normalized.length === 0) return "chore: refresh workspace state";
+  const scope = commitScopeFromFiles(normalized);
+  const type = commitTypeFromFiles(normalized);
+  const subject = commitSubjectFromFiles(normalized, scope, type);
+  return scope ? `${type}(${scope}): ${subject}` : `${type}: ${subject}`;
+}
+
+function commitTypeFromFiles(files: string[]): string {
+  if (files.every((file) => /\.(md|mdx|txt|adoc)$/i.test(file) || file.startsWith("docs/"))) return "docs";
+  if (files.every((file) => /\b(test|spec)\.[a-z0-9]+$/i.test(file) || file.includes("__tests__/"))) return "test";
+  if (files.some((file) => file.startsWith(".github/") || file.includes("/workflows/"))) return "ci";
+  if (files.some((file) => /(^|\/)(package.json|pnpm-lock.yaml|tsconfig[^/]*\.json|vite\.config\.)/i.test(file))) return "chore";
+  return "chore";
+}
+
+function commitScopeFromFiles(files: string[]): string {
+  const first = files[0] ?? "";
+  if (files.every((file) => file.startsWith("apps/desktop/"))) return "desktop";
+  if (files.every((file) => file.startsWith("packages/daemon/"))) return "daemon";
+  if (files.every((file) => file.startsWith("packages/core/"))) return "core";
+  if (files.every((file) => file.startsWith("docs/"))) return "docs";
+  if (files.every((file) => file.startsWith(".github/"))) return "ci";
+  const match = first.match(/^(apps|packages)\/([^/]+)/);
+  return match?.[2] ?? "";
+}
+
+function commitSubjectFromFiles(files: string[], scope: string, type: string): string {
+  if (type === "docs") return "update documentation";
+  if (type === "test") return "update tests";
+  if (type === "ci") return "update ci workflow";
+  if (scope === "desktop") return "update desktop workflow";
+  if (scope === "daemon") return "update daemon workflow";
+  if (scope === "core") return "update core workflow";
+  if (scope === "docs") return "update documentation";
+  return files.length === 1 ? `update ${basenameWithoutExtension(files[0] ?? "workspace")}` : "update workspace changes";
+}
+
+function basenameWithoutExtension(file: string): string {
+  const basename = file.split("/").pop() || "workspace";
+  return basename.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ");
+}
+
+function changeScopeSummaryLines(files: string[]): string[] {
+  if (files.length === 0) return ["Change scope: no changed files detected."];
+  const groups = new Map<string, string[]>();
+  for (const file of files.map((item) => item.replace(/\\/g, "/")).filter(Boolean)) {
+    const scope = changeScopeForFile(file);
+    groups.set(scope, [...(groups.get(scope) ?? []), file]);
+  }
+  const lines = [`Change scope: ${groups.size} area(s), ${files.length} file(s).`];
+  for (const [scope, scopedFiles] of groups) {
+    const preview = scopedFiles.slice(0, 5).join(", ");
+    lines.push(`- ${scope}: ${preview}${scopedFiles.length > 5 ? ", ..." : ""}`);
+  }
+  return lines;
+}
+
+function changeScopeForFile(file: string): string {
+  if (file.startsWith("apps/desktop/")) return "desktop app";
+  if (file.startsWith("packages/daemon/")) return "daemon service";
+  if (file.startsWith("packages/core/")) return "core agent logic";
+  if (file.startsWith("tests/e2e/")) return "end-to-end tests";
+  if (file.startsWith("docs/") || /\.(md|mdx|txt|adoc)$/i.test(file)) return "documentation";
+  if (file.startsWith(".github/")) return "ci workflow";
+  if (file.includes("/test/") || /\b(test|spec)\.[a-z0-9]+$/i.test(file)) return "tests";
+  return file.split("/")[0] || "workspace";
+}
+
+function remoteTargetSummaryLines(
+  currentBranch: string,
+  readiness?: PendingToolAction["readiness"],
+): string[] {
+  const branch = currentBranch || "current branch";
+  if (readiness?.kind !== "push") {
+    return [`Remote target: ${branch} has no readable upstream target.`];
+  }
+  if (readiness.status === "no_upstream") {
+    return [
+      `Remote target: origin/${branch}`,
+      "Upstream: not configured; push will set upstream on origin.",
+    ];
+  }
+  const upstream = readiness.upstream || `origin/${branch}`;
+  const lines = [
+    `Remote target: ${upstream}`,
+    `Readiness: ${readiness.summary}`,
+  ];
+  if (typeof readiness.ahead === "number" || typeof readiness.behind === "number") {
+    lines.push(`Divergence: ahead ${readiness.ahead ?? 0}, behind ${readiness.behind ?? 0}.`);
+  }
+  return lines;
+}
+
+function latestCommitSummaryLines(
+  subject: string,
+  stat: string,
+  readiness?: PendingToolAction["readiness"],
+): string[] {
+  const lines = subject ? [`Latest commit: ${subject}`] : ["Latest commit: unavailable."];
+  if (readiness?.kind === "push") {
+    lines.push(`Remote status: ${readiness.summary}`);
+  }
+  const statLines = stat.split(/\r?\n/).map((line) => line.trimEnd()).filter(Boolean);
+  const fileLines = statLines.filter((line) => /\|\s+\d+/.test(line));
+  const summaryLine = statLines.find((line) => /\bfiles? changed\b/.test(line));
+  if (fileLines.length > 0) {
+    lines.push(`Commit files: ${fileLines.slice(0, 8).join("; ")}${fileLines.length > 8 ? "; ..." : ""}`);
+  }
+  if (summaryLine) lines.push(`Commit stat: ${summaryLine.trim()}`);
+  return lines;
 }

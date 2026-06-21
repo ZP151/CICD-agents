@@ -19,6 +19,8 @@ import type {
   WorkflowEventState,
 } from "./chat.types.js";
 import { useAssistantVisibleStream } from "./useAssistantVisibleStream.js";
+import type { ComposerImageAttachment } from "./chatAttachments.js";
+import { canSendComposerTurn } from "./chatComposerSendState.js";
 import { useChatBubbleRuntime } from "./useChatBubbleRuntime.js";
 import { useChatRuntimeActions, useChatRuntimeAdapter } from "./useChatRuntime.js";
 import { useChatSessionLifecycle } from "./useChatSessionLifecycle.js";
@@ -62,11 +64,11 @@ interface UseChatTurnRuntimeArgs {
 
 export interface ChatTurnRuntime {
   addBubble: (bubble: Bubble, options?: { forceScroll?: boolean }) => void;
-  cancelPendingAction: (id: string) => void;
+  cancelPendingAction: (id: string, feedback?: string) => void;
   confirmPendingAction: (id: string) => void;
   loadSession: (sessionId: string) => Promise<void>;
   resolveConfirm: (id: string, confirmed: boolean) => Promise<void>;
-  send: () => void;
+  send: (options?: { message?: string; imageAttachments?: ComposerImageAttachment[] }) => void;
   showApprovalRequest: (approval: ApprovalRequest) => void;
   stopCurrentTurn: () => void;
   toggleTool: (id: string) => void;
@@ -215,16 +217,22 @@ export function useChatTurnRuntime({
     addBubble,
   });
 
-  const send = useCallback(() => {
-    const msg = input.trim();
-    if (composerInputState.sendDisabled) return;
+  const send = useCallback((options?: { message?: string; imageAttachments?: ComposerImageAttachment[] }) => {
+    const msg = (options?.message ?? input).trim();
+    const imageAttachments = options?.imageAttachments ?? [];
+    if (!canSendComposerTurn({
+      controlsDisabled: composerInputState.controlsDisabled,
+      sendDisabled: composerInputState.sendDisabled,
+      message: msg,
+      imageAttachmentCount: imageAttachments.length,
+    })) return;
     setInput("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
 
-    sendMessage(msg);
-  }, [composerInputState.sendDisabled, input, sendMessage, setInput, textareaRef]);
+    sendMessage(msg, { imageAttachments });
+  }, [composerInputState.controlsDisabled, composerInputState.sendDisabled, input, sendMessage, setInput, textareaRef]);
 
   return {
     addBubble,

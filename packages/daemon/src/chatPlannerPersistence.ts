@@ -1,5 +1,6 @@
 import {
   type ChatEvent,
+  type ChatImageAttachment,
   type ChatMessage,
   type ChatPlanner,
   type ChatPlannerResult,
@@ -30,6 +31,7 @@ export interface StreamPlannerAndPersistArgs {
   planner: ChatPlanner;
   waitForConfirm: () => Promise<boolean>;
   contextPrompt?: string;
+  imageAttachments?: ChatImageAttachment[];
   contextNotes?: string[];
   contextSources?: ChatPlannerResult["sources"];
   adapters: PlannerPersistenceAdapters;
@@ -40,6 +42,7 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
     adapters,
     contextNotes = [],
     contextPrompt,
+    imageAttachments = [],
     contextSources = [],
     history,
     message,
@@ -51,7 +54,7 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
   let assistantReply = "";
   const pendingToolArgs = new Map<string, Record<string, unknown>>();
 
-  for await (const event of planner.run(message, history, repoPath, waitForConfirm, contextPrompt)) {
+  for await (const event of planner.run(message, history, repoPath, waitForConfirm, contextPrompt, imageAttachments)) {
     if (event.type === "tool_start") {
       pendingToolArgs.set(event.name, event.args);
       yield event;

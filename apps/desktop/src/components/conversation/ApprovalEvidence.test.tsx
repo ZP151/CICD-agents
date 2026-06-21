@@ -58,6 +58,25 @@ describe("ApprovalEvidence", () => {
     expect(html).toContain("PR creation");
   });
 
+  it("renders fetch-remotes command and a narrow git boundary", () => {
+    const html = renderToStaticMarkup(
+      <ApprovalEvidence
+        toolName="git_fetch"
+        args={{ remote: "origin", prune: true }}
+        workflow={{
+          kind: "git",
+          phase: "fetch_remotes",
+          branch: "main",
+        }}
+      />,
+    );
+
+    expect(html).toContain("git fetch --prune origin");
+    expect(html).toContain("This approval only fetches remote refs");
+    expect(html).toContain("does not checkout");
+    expect(html).toContain("rebase");
+  });
+
   it("renders Azure DevOps pull request preflight evidence", () => {
     const html = renderToStaticMarkup(
       <ApprovalEvidence

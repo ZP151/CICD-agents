@@ -5,6 +5,7 @@ import type {
   ApprovalWorkflowEvidence,
 } from "../../components/conversation/ApprovalEvidence.js";
 import type { AssistantBubbleMeta, ConversationPart } from "../../chatBubbles.js";
+import type { ComposerImageAttachment } from "./chatAttachments.js";
 
 export type BubbleKind = "user" | "assistant" | "tool" | "confirm" | "pending_confirm" | "error" | "system";
 
@@ -34,6 +35,7 @@ export interface Bubble {
   pendingReadiness?: ApprovalReadinessEvidence;
   pendingPreflight?: ApprovalPreflightEvidence;
   pendingStatus?: "waiting" | "executing" | "done" | "cancelled";
+  transientImageAttachments?: ComposerImageAttachment[];
   meta?: AssistantBubbleMeta;
 }
 
@@ -108,6 +110,8 @@ export interface ApprovalRequest {
         | "stage"
         | "commit"
         | "push"
+        | "fetch_remotes"
+        | "sync_branch"
         | "test"
         | "build"
         | "pipeline_trigger"

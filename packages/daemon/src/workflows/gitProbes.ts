@@ -32,7 +32,7 @@ export async function runGitWorkflowProbes(
     await add(command);
   }
 
-  if (action === "push_branch") {
+  if (action === "refresh_branch" || action === "inspect_remote_target" || action === "inspect_latest_commit" || action === "inspect_pr_plan_context" || action === "push_branch" || action === "sync_branch_rebase") {
     const upstream = tools.find((tool) => tool.name === "git_upstream" && tool.ok)?.stdout.trim();
     if (upstream) {
       await add({
@@ -70,13 +70,98 @@ export function gitProbePlanForAction(
       diffNameOnlyProbe(),
     ];
   }
+  if (action === "inspect_staged_changes") {
+    return [
+      statusProbe(),
+      gitDirProbe(),
+      stagedDiffStatProbe(),
+      stagedDiffNameOnlyProbe(),
+    ];
+  }
+  if (action === "draft_commit_message") {
+    return [
+      currentBranchProbe(),
+      statusProbe(),
+      gitDirProbe(),
+      diffStatProbe(),
+      diffNameOnlyProbe(),
+      stagedDiffStatProbe(),
+      stagedDiffNameOnlyProbe(),
+      { name: "git_log", args: ["log", "-5", "--oneline"], timeoutSec: 20 },
+    ];
+  }
+  if (action === "explain_change_scope") {
+    return [
+      currentBranchProbe(),
+      statusProbe(),
+      gitDirProbe(),
+      diffStatProbe(),
+      diffNameOnlyProbe(),
+      stagedDiffStatProbe(),
+      stagedDiffNameOnlyProbe(),
+    ];
+  }
   if (action === "refresh_branch") {
-    return [currentBranchProbe(), branchListProbe()];
+    return [
+      currentBranchProbe(),
+      branchListProbe(),
+      statusProbe(),
+      remoteProbe(),
+      {
+        name: "git_upstream",
+        args: ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+      },
+    ];
+  }
+  if (action === "inspect_remote_target") {
+    return [
+      currentBranchProbe(),
+      statusProbe(),
+      remoteProbe(),
+      {
+        name: "git_upstream",
+        args: ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+      },
+    ];
+  }
+  if (action === "inspect_latest_commit") {
+    return [
+      currentBranchProbe(),
+      statusProbe(),
+      remoteProbe(),
+      {
+        name: "git_upstream",
+        args: ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+      },
+      { name: "git_log_subject", args: ["log", "-1", "--pretty=%h %s"], timeoutSec: 20 },
+      { name: "git_show_head_stat", args: ["show", "--stat", "--oneline", "--decorate", "--no-renames", "HEAD"], timeoutSec: 20 },
+    ];
+  }
+  if (action === "inspect_pr_plan_context") {
+    return [
+      currentBranchProbe(),
+      statusProbe(),
+      gitDirProbe(),
+      remoteProbe(),
+      {
+        name: "git_upstream",
+        args: ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+      },
+      { name: "git_log_subject", args: ["log", "-1", "--pretty=%s"], timeoutSec: 20 },
+    ];
+  }
+  if (action === "fetch_remotes") {
+    return [
+      currentBranchProbe(),
+      statusProbe(),
+      gitDirProbe(),
+      remoteProbe(),
+    ];
   }
   if (action === "checkout_branch" || action === "create_branch") {
     return [currentBranchProbe(), statusProbe(), gitDirProbe(), branchListProbe()];
   }
-  if (action === "push_branch") {
+  if (action === "sync_branch_rebase" || action === "push_branch") {
     return [
       currentBranchProbe(),
       statusProbe(),
@@ -94,7 +179,7 @@ export function gitProbePlanForAction(
       statusProbe(),
       gitDirProbe(),
       diffStatProbe(),
-      { name: "git_diff_staged", args: ["diff", "--cached", "--stat"], timeoutSec: 20 },
+      stagedDiffStatProbe(),
       { name: "git_log", args: ["log", "-5", "--oneline"], timeoutSec: 20 },
     ];
   }
@@ -138,7 +223,11 @@ async function runGitProbe(repoPath: string, command: GitProbeCommand): Promise<
 
 function nonBlockingGitProbeNames(action: string): Set<string> {
   if (action === "prepare_commit") return new Set(["git_log", "git_diff_staged"]);
-  if (action === "push_branch") return new Set(["git_upstream", "git_divergence"]);
+  if (action === "draft_commit_message") return new Set(["git_log", "git_diff", "git_diff_name_only", "git_diff_staged", "git_diff_staged_name_only"]);
+  if (action === "explain_change_scope") return new Set(["git_diff", "git_diff_name_only", "git_diff_staged", "git_diff_staged_name_only"]);
+  if (action === "inspect_latest_commit") return new Set(["git_upstream", "git_divergence", "git_log_subject", "git_show_head_stat"]);
+  if (action === "inspect_pr_plan_context") return new Set(["git_upstream", "git_divergence", "git_log_subject"]);
+  if (action === "refresh_branch" || action === "inspect_remote_target" || action === "push_branch" || action === "sync_branch_rebase") return new Set(["git_upstream", "git_divergence"]);
   return new Set();
 }
 
@@ -168,4 +257,12 @@ function diffStatProbe(): GitProbeCommand {
 
 function diffNameOnlyProbe(): GitProbeCommand {
   return { name: "git_diff_name_only", args: ["diff", "--name-only"], timeoutSec: 20 };
+}
+
+function stagedDiffStatProbe(): GitProbeCommand {
+  return { name: "git_diff_staged", args: ["diff", "--cached", "--stat"], timeoutSec: 20 };
+}
+
+function stagedDiffNameOnlyProbe(): GitProbeCommand {
+  return { name: "git_diff_staged_name_only", args: ["diff", "--cached", "--name-only"], timeoutSec: 20 };
 }

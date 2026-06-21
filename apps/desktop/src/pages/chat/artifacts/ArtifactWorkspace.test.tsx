@@ -1,8 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { ConversationArtifactPart } from "../../../chatBubbles.js";
+import type {
+  ConversationArtifactPart,
+  ConversationSourcePart,
+} from "../../../chatBubbles.js";
 import { ArtifactWorkspaceShell } from "./ArtifactWorkspace.js";
 import { ArtifactWorkspaceContent } from "./ArtifactWorkspaceContent.js";
+import { CodeSidePanel, sourceLineStartOffset } from "./SourceWorkspace.js";
 
 const markdownArtifact: ConversationArtifactPart = {
   type: "artifact",
@@ -21,6 +25,21 @@ const mermaidArtifact: ConversationArtifactPart = {
   status: "ready",
   content: "flowchart TD\n  A[Diff] --> B[Insight]",
 };
+
+const sourceTabs: ConversationSourcePart[] = [
+  {
+    type: "source_document",
+    sourceId: "source-1",
+    title: "src/index.ts",
+    file: "src/index.ts",
+  },
+  {
+    type: "source_document",
+    sourceId: "source-2",
+    title: "README.md",
+    file: "README.md",
+  },
+];
 
 describe("ArtifactWorkspace", () => {
   it("renders empty shell state with available artifact count", () => {
@@ -81,5 +100,37 @@ describe("ArtifactWorkspace", () => {
     expect(html).toContain("Render diagram");
     expect(html).toContain("flowchart TD");
     expect(html).not.toContain("mermaid-artifact-svg");
+  });
+
+  it("renders source workspace tab controls", () => {
+    const html = renderToStaticMarkup(
+      <CodeSidePanel
+        repoPath="C:\\repo"
+        source={null}
+        sources={sourceTabs}
+        artifact={null}
+        artifactLookupState={null}
+        artifactCount={0}
+        onSourceSelect={() => undefined}
+        onSourceClose={() => undefined}
+        onClearSources={() => undefined}
+        onClearArtifact={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("src/index.ts");
+    expect(html).toContain("README.md");
+    expect(html).toContain("Close all files");
+    expect(html).toContain("Clear");
+    expect(html).toContain("No file open");
+  });
+
+  it("converts source line numbers to CodeMirror document offsets", () => {
+    expect(sourceLineStartOffset("alpha\nbeta\ngamma", 1)).toBe(0);
+    expect(sourceLineStartOffset("alpha\nbeta\ngamma", 2)).toBe(6);
+    expect(sourceLineStartOffset("alpha\r\nbeta\r\ngamma", 3)).toBe(13);
+    expect(sourceLineStartOffset("alpha\nbeta\ngamma", 4)).toBeNull();
+    expect(sourceLineStartOffset("alpha\nbeta\ngamma", 0)).toBeNull();
+    expect(sourceLineStartOffset("alpha\nbeta\ngamma", undefined)).toBeNull();
   });
 });

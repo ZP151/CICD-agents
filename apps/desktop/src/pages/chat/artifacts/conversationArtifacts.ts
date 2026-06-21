@@ -4,6 +4,7 @@ import {
   type ConversationArtifactPart,
   type ConversationSourcePart,
 } from "../../../chatBubbles.js";
+import { stripSourceLineSuffix } from "../../../components/conversation/sourceTitleUtils.js";
 import type { Bubble } from "../chat.types.js";
 
 export function collectConversationArtifacts(bubbles: Bubble[]): ConversationArtifactPart[] {
@@ -25,13 +26,20 @@ export function collectConversationSources(bubbles: Bubble[]): ConversationSourc
       if (part.type === "source_document" || part.type === "source_url") {
         const key = sourceReferenceKey(part);
         const current = sources.get(key);
-        sources.set(key, current && current.type === "source_document" && part.type === "source_document"
-          ? mergeDocumentSource(current, part)
-          : part);
+        sources.set(key, current ? mergeConversationSource(current, part) : part);
       }
     }
   }
   return [...sources.values()].slice(-16);
+}
+
+export function mergeConversationSource(
+  current: ConversationSourcePart,
+  incoming: ConversationSourcePart,
+): ConversationSourcePart {
+  return current.type === "source_document" && incoming.type === "source_document"
+    ? mergeDocumentSource(current, incoming)
+    : incoming;
 }
 
 export function sourceReferenceKey(source: ConversationSourcePart): string {
@@ -77,10 +85,6 @@ function mergeDocumentSource(
     line: undefined,
     snippet: mergeSnippetText(current.snippet, incoming.snippet),
   };
-}
-
-function stripSourceLineSuffix(title: string): string {
-  return title.replace(/:(?:line\s*)?\d+$/i, "").trim();
 }
 
 function mergeSnippetText(current: string | undefined, incoming: string | undefined): string | undefined {

@@ -38,6 +38,9 @@ export function outOfScopeWriteMessage(
   message: string,
   history: ChatMessage[],
 ): string {
+  const reviewOnlyMessage = reviewOnlyWriteMessage(toolName, message);
+  if (reviewOnlyMessage) return reviewOnlyMessage;
+
   const scope = userScopeText(message, history).toLowerCase();
   if (toolName === "ado_create_pr" && !/\b(pr|pull request)\b/.test(scope)) {
     return "The requested workflow scope does not include creating a pull request. I will stop at the requested Git workflow boundary unless you explicitly ask me to create a PR.";
@@ -49,6 +52,42 @@ export function outOfScopeWriteMessage(
     return "The requested workflow scope does not include triggering a pipeline. I will not run the pipeline unless you explicitly ask for it.";
   }
   return "";
+}
+
+export function guardReviewOnlyFinalResult(
+  result: ChatPlannerResult,
+  message: string,
+): ChatPlannerResult {
+  const proposal = result.approvalProposal;
+  if (!proposal || !reviewOnlyWriteMessage(proposal.tool, message)) return result;
+  return {
+    ...result,
+    response: stripWritePermissionPrompts(result.response),
+    approvalProposal: undefined,
+  };
+}
+
+export function isReviewOnlyChangeRequest(message: string): boolean {
+  const lower = message.toLowerCase();
+  const asksForReview = /\b(review my changes|what changed|inspect diff|review changes|diff|risk before commit|current changes)\b/.test(lower);
+  if (!asksForReview) return false;
+  return !/\b(stage|stage all|stage selected|git add|commit these|commit all|commit my|make a commit|prepare commit|push|publish|create pr|open pull request|pull request|run tests?|build)\b/.test(lower);
+}
+
+function reviewOnlyWriteMessage(toolName: string, message: string): string {
+  if (!["git_add", "git_commit", "git_push"].includes(toolName)) return "";
+  if (!isReviewOnlyChangeRequest(message)) return "";
+  return "This is a review-only request. I will summarize the working-tree changes, risks, and validation recommendations without proposing staging, committing, or pushing unless you explicitly ask for that action.";
+}
+
+function stripWritePermissionPrompts(text: string): string {
+  return text
+    .replace(
+      /\s*(?:Would you like me to|Do you want me to|Should I|Shall I)\s+(?:stage|commit|push|run|rerun|create|open|proceed|continue|apply|trigger|update|retry)\b[^?]*\?/gi,
+      "",
+    )
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function userScopeText(message: string, history: ChatMessage[]): string {

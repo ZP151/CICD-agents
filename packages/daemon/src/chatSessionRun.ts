@@ -1,4 +1,4 @@
-import { type ChatEvent } from "@mergepilot/core";
+import { type ChatEvent, type ChatImageAttachment } from "@mergepilot/core";
 import type { InlineLlmConfig } from "./llmSettings.js";
 import type { ActiveChatSessions } from "./chatActiveSessions.js";
 import {
@@ -22,6 +22,7 @@ export interface RunChatSessionTurnArgs {
   projectLinkId?: string;
   llmConfig?: InlineLlmConfig;
   inlineProjectLink?: InlineProjectLink;
+  imageAttachments?: ChatImageAttachment[];
   adapters: PlannerContinuationAdapters;
 }
 
@@ -32,6 +33,7 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
     inlineProjectLink,
     llmConfig,
     message,
+    imageAttachments = [],
     projectLinkId,
     repoPath,
     sessionId,
@@ -76,8 +78,9 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
   const waitForConfirm = (): Promise<boolean> => active.waitForConfirm(sessionId);
 
   try {
-    await adapters.appendBubble(sessionId, { role: "user", content: message, timestamp: now(), repoPath });
-    await adapters.appendMessage(sessionId, "user", message);
+    const storedMessage = messageWithImageNames(message, imageAttachments);
+    await adapters.appendBubble(sessionId, { role: "user", content: storedMessage, timestamp: now(), repoPath });
+    await adapters.appendMessage(sessionId, "user", storedMessage);
 
     const handledApproval = yield* handleChatMessageApproval({
       sessionId,
@@ -102,6 +105,7 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
       planner,
       inlineProjectLink: projectLinkSnapshot,
       projectLinkId,
+      imageAttachments,
       waitForConfirm,
       contextProgressMessage: "Reading project context",
       planningProgressMessage: "Planning response",
@@ -115,4 +119,10 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
 
 function now(): number {
   return Math.floor(Date.now() / 1000);
+}
+
+function messageWithImageNames(message: string, imageAttachments: ChatImageAttachment[]): string {
+  if (imageAttachments.length === 0) return message;
+  const imageLines = imageAttachments.map((attachment) => `[image: ${attachment.name}]`).join("\n");
+  return [message, imageLines].filter(Boolean).join("\n\n");
 }

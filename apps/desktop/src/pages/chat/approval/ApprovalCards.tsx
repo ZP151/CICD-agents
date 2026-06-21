@@ -21,7 +21,7 @@ interface ExecutionLogProps {
   approval?: Bubble;
   onToggleTool: (id: string) => void;
   onConfirmApproval?: (id: string) => void;
-  onCancelApproval?: (id: string) => void;
+  onCancelApproval?: (id: string, feedback?: string) => void;
 }
 
 /** Groups consecutive tool bubbles into a compact execution log. */
@@ -79,7 +79,7 @@ export function ExecutionLog({
           <PendingActionCard
             bubble={approval}
             onConfirm={() => onConfirmApproval?.(approval.id)}
-            onCancel={() => onCancelApproval?.(approval.id)}
+            onCancel={(feedback) => onCancelApproval?.(approval.id, feedback)}
           />
         );
       }}

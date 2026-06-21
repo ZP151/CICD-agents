@@ -87,6 +87,46 @@ export function structuredDoneAfterConfirmedAction(action: PendingToolAction, to
     };
   }
 
+  if (action.tool === "git_pull" && action.workflow?.kind === "git" && action.workflow.phase === "sync_branch") {
+    const branch = String(action.args["branch"] ?? action.workflow.branch ?? "").trim();
+    const response = [
+      branch ? `Branch ${branch} has been updated with rebase.` : "The branch has been updated with rebase.",
+      "Refresh branch status, then continue with push or commit-and-push if that is still the goal.",
+    ].join(" ");
+    return {
+      currentStep: branch ? `Synced branch ${branch}` : "Synced branch",
+      workflowKind: "git",
+      workflowPhase: "synced",
+      result: {
+        response,
+        finalizationMode: "none",
+        riskLevel: "low",
+        actionsTaken: ["Synced branch with rebase"],
+        suggestions: ["Refresh branch status", "Push branch", "Commit and push"],
+        toolCallsMade: [{ name: action.tool, args: action.args, ok: true }],
+        usedLlm: false,
+      },
+    };
+  }
+
+  if (action.tool === "git_fetch" && action.workflow?.kind === "git" && action.workflow.phase === "fetch_remotes") {
+    const remote = String(action.args["remote"] ?? "origin").trim() || "origin";
+    return {
+      currentStep: `Fetched ${remote}`,
+      workflowKind: "git",
+      workflowPhase: "fetched",
+      result: {
+        response: `Fetched latest refs from ${remote}. Refresh branch status next to recompute ahead, behind, and divergence.`,
+        finalizationMode: "none",
+        riskLevel: "low",
+        actionsTaken: [`Fetched ${remote}`],
+        suggestions: ["Refresh branch status", "Pull/rebase first", "Push branch"],
+        toolCallsMade: [{ name: action.tool, args: action.args, ok: true }],
+        usedLlm: false,
+      },
+    };
+  }
+
   if (action.tool === "ado_link_work_item" && action.workflow?.kind === "pr") {
     const result = typeof toolResult === "object" && toolResult !== null ? toolResult as Record<string, unknown> : {};
     const prId = Number(result["pull_request_id"] ?? action.args["pull_request_id"] ?? 0);

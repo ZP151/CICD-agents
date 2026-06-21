@@ -122,7 +122,7 @@ describe("conversation part composition", () => {
         sourceId: "document-apps/desktop/src/pages/chat.tsx",
         title: "Chat.tsx",
         file: "apps/desktop/src/pages/Chat.tsx",
-        line: undefined,
+        line: 3590,
         snippet: "ConversationPartRenderer",
       },
       {
@@ -168,7 +168,7 @@ describe("conversation part composition", () => {
         sourceId: "document-bottosharepoint/controllers/claimcontroller.cs",
         title: "ClaimController.cs",
         file: "BotToSharePoint/Controllers/ClaimController.cs",
-        line: undefined,
+        line: 42,
         snippet: "public ActionResult GetClaim()\n\npublic ActionResult SaveClaim()",
       },
     ]);

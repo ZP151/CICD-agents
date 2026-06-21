@@ -2,6 +2,7 @@ import "dotenv/config";
 import crypto from "node:crypto";
 import {
   type ChatEvent,
+  type ChatImageAttachment,
   type ChatWorkflowState,
   type PendingToolAction,
 } from "@mergepilot/core";
@@ -192,6 +193,7 @@ export class ChatSessionManager {
     projectLinkId?: string,
     llmConfig?: InlineLlmConfig,
     inlineProjectLink?: InlineProjectLink,
+    imageAttachments: ChatImageAttachment[] = [],
   ): AsyncGenerator<ChatEvent> {
     yield* runChatSessionTurn({
       active: this.active,
@@ -201,6 +203,7 @@ export class ChatSessionManager {
       projectLinkId,
       llmConfig,
       inlineProjectLink,
+      imageAttachments,
       adapters: this.plannerContinuationAdapters(),
     });
   }

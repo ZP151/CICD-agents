@@ -7,6 +7,8 @@ interface WorkspaceBranchMenuProps {
   branchName: string;
   branchLabel: string;
   branchList: string[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   runAction: (action: WorkspaceAction) => void;
 }
 
@@ -16,14 +18,15 @@ export function WorkspaceBranchMenu({
   branchName,
   branchLabel,
   branchList,
+  open,
+  onOpenChange,
   runAction,
 }: WorkspaceBranchMenuProps) {
-  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [newBranchName, setNewBranchName] = useState("");
   const branchOptions = Array.from(new Set([branchName, ...branchList].filter(Boolean)));
 
   const runBranchAction = (action: WorkspaceAction) => {
-    setBranchMenuOpen(false);
+    onOpenChange(false);
     runAction(action);
   };
 
@@ -37,7 +40,7 @@ export function WorkspaceBranchMenu({
     <div className="relative mt-1">
       <button
         type="button"
-        onClick={() => setBranchMenuOpen((value) => !value)}
+        onClick={() => onOpenChange(!open)}
         disabled={!hasRepoPath || busy}
         className="flex w-full items-center gap-2 rounded-md bg-[rgb(var(--app-surface-raised))] px-1.5 py-1.5 text-sm transition hover:bg-[rgb(var(--app-accent-soft))]"
       >
@@ -49,7 +52,7 @@ export function WorkspaceBranchMenu({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M6 9l6 6 6-6" />
         </svg>
       </button>
-      {branchMenuOpen && (
+      {open && (
         <div className="absolute right-0 top-full z-30 mt-1 w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl">
           <div className="mb-3 flex items-center gap-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-xs text-[rgb(var(--app-text-muted))]">
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -67,6 +70,17 @@ export function WorkspaceBranchMenu({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 4v6h6M20 20v-6h-6M5 15a7 7 0 0011.9 3M19 9A7 7 0 007.1 6" />
             </svg>
             Refresh branch state
+          </button>
+          <button
+            type="button"
+            onClick={() => runBranchAction({ type: "fetch_remotes" })}
+            disabled={busy}
+            className="mb-2 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14" />
+            </svg>
+            Fetch remotes
           </button>
           <p className="mb-2 text-xs text-[rgb(var(--app-text-muted))]">Branches</p>
           <div className="space-y-1">

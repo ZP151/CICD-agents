@@ -9,6 +9,8 @@ import {
   collectConversationArtifacts,
   collectConversationSources,
   latestRepositoryContextSources,
+  mergeConversationSource,
+  sourceReferenceKey,
 } from "./conversationArtifacts.js";
 import { prInsightArtifactTitle } from "./prInsightArtifacts.js";
 
@@ -26,8 +28,11 @@ export interface ArtifactWorkspaceState {
   selectedArtifact: ConversationArtifactPart | null;
   selectedArtifactLookupState: ArtifactLookupState | null;
   selectedSource: ConversationSourcePart | null;
+  openSources: ConversationSourcePart[];
   selectArtifact: (artifact: ConversationArtifactPart) => void;
   selectSource: (source: ConversationSourcePart) => void;
+  closeSource: (source: ConversationSourcePart) => void;
+  clearSources: () => void;
   clearArtifact: () => void;
   openPrInsightSourceInWorkspace: (source: SavedPrInsightSource) => void;
 }
@@ -40,6 +45,7 @@ export function useArtifactWorkspace({
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   const [selectedExternalArtifact, setSelectedExternalArtifact] = useState<ConversationArtifactPart | null>(null);
   const [selectedSource, setSelectedSource] = useState<ConversationSourcePart | null>(null);
+  const [openSources, setOpenSources] = useState<ConversationSourcePart[]>([]);
   const [artifactLookupState, setArtifactLookupState] = useState<Record<string, ArtifactLookupState>>({});
   const [persistedPrInsightArtifactIds, setPersistedPrInsightArtifactIds] = useState<Set<string>>(() => new Set());
   const artifactLookupRequestRef = useRef(0);
@@ -60,6 +66,31 @@ export function useArtifactWorkspace({
     if (selectedArtifactId && !selectedArtifact) setSelectedArtifactId(null);
   }, [selectedArtifact, selectedArtifactId]);
 
+  useEffect(() => {
+    setOpenSources((current) => {
+      const next = pruneOpenSourcesForConversation(current, sourceParts);
+      if (next.length === current.length) return current;
+      setSelectedSource((selected) => {
+        if (!selected) return selected;
+        const selectedKey = sourceReferenceKey(selected);
+        return next.some((source) => sourceReferenceKey(source) === selectedKey)
+          ? selected
+          : next[next.length - 1] ?? null;
+      });
+      return next;
+    });
+  }, [sourceParts]);
+
+  useEffect(() => {
+    setSelectedSource((selected) => {
+      if (!selected) return selected;
+      const selectedKey = sourceReferenceKey(selected);
+      const refreshed = sourceParts.find((source) => sourceReferenceKey(source) === selectedKey);
+      return refreshed ?? selected;
+    });
+    setOpenSources((current) => refreshOpenSourcesFromConversation(current, sourceParts));
+  }, [sourceParts]);
+
   const selectArtifact = useCallback((artifact: ConversationArtifactPart) => {
     setSelectedSource(null);
     setSelectedExternalArtifact(null);
@@ -75,8 +106,28 @@ export function useArtifactWorkspace({
 
   const selectSource = useCallback((source: ConversationSourcePart) => {
     setSelectedSource(source);
+    setOpenSources((current) => addOpenSource(current, source));
+    setSelectedArtifactId(null);
+    setSelectedExternalArtifact(null);
     onOpenPanel();
   }, [onOpenPanel]);
+
+  const closeSource = useCallback((source: ConversationSourcePart) => {
+    const closingKey = sourceReferenceKey(source);
+    setOpenSources((current) => {
+      const remaining = current.filter((entry) => sourceReferenceKey(entry) !== closingKey);
+      setSelectedSource((selected) => {
+        if (!selected || sourceReferenceKey(selected) !== closingKey) return selected;
+        return remaining[remaining.length - 1] ?? null;
+      });
+      return remaining;
+    });
+  }, []);
+
+  const clearSources = useCallback(() => {
+    setOpenSources([]);
+    setSelectedSource(null);
+  }, []);
 
   const clearArtifact = useCallback(() => {
     setSelectedArtifactId(null);
@@ -149,9 +200,42 @@ export function useArtifactWorkspace({
     selectedArtifact,
     selectedArtifactLookupState,
     selectedSource,
+    openSources,
     selectArtifact,
     selectSource,
+    closeSource,
+    clearSources,
     clearArtifact,
     openPrInsightSourceInWorkspace,
   };
+}
+
+function addOpenSource(
+  current: ConversationSourcePart[],
+  source: ConversationSourcePart,
+): ConversationSourcePart[] {
+  const key = sourceReferenceKey(source);
+  const existingIndex = current.findIndex((entry) => sourceReferenceKey(entry) === key);
+  if (existingIndex < 0) return [...current, source];
+  const next = [...current];
+  next[existingIndex] = mergeConversationSource(next[existingIndex]!, source);
+  return next;
+}
+
+export function pruneOpenSourcesForConversation(
+  current: ConversationSourcePart[],
+  availableSources: ConversationSourcePart[],
+): ConversationSourcePart[] {
+  if (availableSources.length === 0) return [];
+  const availableKeys = new Set(availableSources.map(sourceReferenceKey));
+  return current.filter((source) => availableKeys.has(sourceReferenceKey(source)));
+}
+
+export function refreshOpenSourcesFromConversation(
+  current: ConversationSourcePart[],
+  availableSources: ConversationSourcePart[],
+): ConversationSourcePart[] {
+  if (current.length === 0 || availableSources.length === 0) return current;
+  const availableByKey = new Map(availableSources.map((source) => [sourceReferenceKey(source), source]));
+  return current.map((source) => availableByKey.get(sourceReferenceKey(source)) ?? source);
 }

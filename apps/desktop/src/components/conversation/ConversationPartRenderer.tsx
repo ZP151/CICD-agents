@@ -76,7 +76,7 @@ function ConversationPartView({
     case "text":
       return (
         <MarkdownContentRuntime
-          markdown={part.text}
+          markdown={cleanAssistantTranscriptMarkdown(part.text)}
           streaming={streaming}
           inlineSources={inlineSources}
           onSourceSelect={onSourceSelect}
@@ -86,7 +86,7 @@ function ConversationPartView({
     case "markdown":
       return (
         <MarkdownContentRuntime
-          markdown={part.markdown}
+          markdown={cleanAssistantTranscriptMarkdown(part.markdown)}
           streaming={streaming}
           inlineSources={inlineSources}
           onSourceSelect={onSourceSelect}
@@ -184,18 +184,34 @@ function ConversationPartView({
       );
 
     case "suggested_reply":
-      return (
-        <button
-          type="button"
-          className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1 text-xs text-[rgb(var(--app-text-muted))]"
-          disabled
-          title={part.message}
-        >
-          {part.label}
-        </button>
-      );
+      return null;
 
     case "metadata":
       return null;
   }
+}
+
+export function cleanAssistantTranscriptMarkdown(markdown: string): string {
+  return stripInlineActionPermissionQuestions(markdown)
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .filter((line) => !isActionSuggestionQuote(line))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd();
+}
+
+function stripInlineActionPermissionQuestions(markdown: string): string {
+  return markdown
+    .replace(
+      /\s*(?:Would you like me to|Do you want me to|Should I|Shall I)\s+(?:stage|commit|push|run|rerun|create|open|proceed|continue|apply|trigger|update|retry)\b[^?]*\?/gi,
+      "",
+    );
+}
+
+function isActionSuggestionQuote(line: string): boolean {
+  const match = line.match(/^\s*(?:>|›|»|&rsaquo;|&#8250;|&#x203a;)\s*(.+?)\s*$/i);
+  if (!match) return false;
+  const text = match[1] ?? "";
+  return /^(test|run|rerun|ensure|proceed|stage|commit|push|create|draft|check|inspect|review|verify|open|continue|retry|update)\b/i.test(text);
 }

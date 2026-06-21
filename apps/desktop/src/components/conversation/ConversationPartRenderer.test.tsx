@@ -131,4 +131,36 @@ describe("ConversationPartRenderer markdown and code parts", () => {
     expect(html).toContain("Write-Host");
     expect(html).toContain("Copy");
   });
+
+  it("removes quoted action suggestions from assistant transcript markdown", () => {
+    const markdown = [
+      "The changes focus on error handling. Would you like me to stage these changes for a commit?",
+      "",
+      "› Test error handling changes thoroughly.",
+      "&rsaquo; Review ClaimController.cs for consistency.",
+      "› Update documentation for error handling improvements.",
+    ].join("\n");
+
+    const html = renderToStaticMarkup(<ConversationPartRenderer parts={[{ type: "markdown", markdown }]} />);
+
+    expect(html).toContain("The changes focus on error handling.");
+    expect(html).not.toContain("Would you like me to stage");
+    expect(html).not.toContain("Test error handling");
+    expect(html).not.toContain("Review ClaimController");
+    expect(html).not.toContain("Update documentation");
+  });
+
+  it("omits inline suggested reply parts from the transcript", () => {
+    const html = renderToStaticMarkup(
+      <ConversationPartRenderer
+        parts={[
+          { type: "markdown", markdown: "Done." },
+          { type: "suggested_reply", id: "run-tests", label: "Run tests", message: "Run unit tests" },
+        ]}
+      />,
+    );
+
+    expect(html).toContain("Done.");
+    expect(html).not.toContain("Run tests");
+  });
 });

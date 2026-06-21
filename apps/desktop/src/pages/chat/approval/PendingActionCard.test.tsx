@@ -24,7 +24,7 @@ const baseApproval: Bubble = {
 };
 
 describe("PendingActionCard", () => {
-  it("renders actionable approval evidence and scoped decision controls", () => {
+  it("renders compact approval decision controls without duplicate evidence copy", () => {
     const html = renderToStaticMarkup(
       <PendingActionCard
         bubble={baseApproval}
@@ -34,15 +34,29 @@ describe("PendingActionCard", () => {
     );
 
     expect(html).toContain("Approval required");
-    expect(html).toContain("git_add");
     expect(html).toContain("MEDIUM risk");
-    expect(html).toContain("Stage selected files for commit");
-    expect(html).toContain("Continue to commit after staging.");
-    expect(html).toContain("Approving runs only the scoped action shown here.");
-    expect(html).toContain("Confirm");
-    expect(html).toContain("Skip");
+    expect(html).toContain("Approve this command?");
+    expect(html).not.toContain("Stage selected files for commit");
+    expect(html).not.toContain("Continue to commit after staging.");
+    expect(html).not.toContain("Review scope");
+    expect(html).toContain("Tell MergePilot what to do differently...");
+    expect(html).toContain("Yes, run this action");
+    expect(html).toContain("No, don&#x27;t run it");
     expect(html).toContain("git add --dry-run --");
     expect(html).toContain("apps/desktop/src/pages/Chat.tsx");
+    expect(html).not.toContain("git_add");
+  });
+
+  it("shows an explicit stage-all command when no paths are scoped", () => {
+    const html = renderToStaticMarkup(
+      <PendingActionCard
+        bubble={{ ...baseApproval, pendingArgs: {} }}
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("git add -A");
   });
 
   it("renders terminal approval states without decision buttons", () => {
@@ -69,10 +83,10 @@ describe("PendingActionCard", () => {
     );
 
     expect(executing).toContain("Executing approved action");
-    expect(executing).not.toContain("Confirm");
+    expect(executing).not.toContain("Yes, run this action");
     expect(done).toContain("Approved action finished");
     expect(done).toContain("done");
-    expect(cancelled).toContain("Approval skipped");
+    expect(cancelled).toContain("Action not run");
     expect(cancelled).toContain("cancelled");
   });
 });

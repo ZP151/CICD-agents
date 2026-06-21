@@ -118,6 +118,43 @@ export function defaultGroupOpen(group: ExecutionGroup, completed: boolean): boo
   );
 }
 
+export function executionGroupTranscriptLabel(group: ExecutionGroup): string {
+  if (group.status === "approval") return "Waiting for approval";
+
+  if (group.status === "error") {
+    const failed = group.items.find((item) => item.state === "error" || item.ok === false) ?? group.items.at(-1);
+    const command = failed ? executionItemSubject(failed) : "";
+    return command
+      ? `Stopped after ${command}`
+      : `Stopped after ${group.items.length} command${group.items.length === 1 ? "" : "s"}`;
+  }
+
+  if (group.status === "running") {
+    const running = group.items.filter((item) => isRunningState(item.state));
+    const subjects = running.map(executionItemSubject).filter(Boolean);
+    if (subjects.length === 0) return "Thinking...";
+    if (subjects.length === 1) return `Running ${truncateText(subjects[0]!, 96)}`;
+    return `Running ${subjects.length} commands`;
+  }
+
+  const subjects = group.items.map(executionItemSubject).filter(Boolean);
+  if (subjects.length === 1) return `Ran ${truncateText(subjects[0]!, 96)}`;
+  return `Ran ${group.items.length} command${group.items.length === 1 ? "" : "s"}`;
+}
+
+export function executionItemTranscriptLabel(item: ExecutionTimelineItem): string {
+  if (item.approval) return "Waiting for approval";
+  const subject = executionItemSubject(item);
+  if (item.state === "error" || item.ok === false) {
+    return subject ? `Stopped after ${truncateText(subject, 96)}` : "Stopped after command";
+  }
+  if (isRunningState(item.state)) {
+    if (!subject) return "Thinking...";
+    return `Running ${truncateText(subject, 96)}`;
+  }
+  return subject ? `Ran ${truncateText(subject, 96)}` : "Ran command";
+}
+
 export function stateLabel(state: ExecutionTimelineState): string {
   if (state === "input-streaming") return "preparing";
   if (state === "input-available") return "ready";
@@ -255,6 +292,22 @@ function executionGroupStatus(items: ExecutionTimelineItem[]): ExecutionGroupSta
 
 function objectInput(input: unknown): Record<string, unknown> | undefined {
   return input && typeof input === "object" ? (input as Record<string, unknown>) : undefined;
+}
+
+function executionItemSubject(item: ExecutionTimelineItem): string {
+  if (isRunningState(item.state) && !hasConcreteInput(item.input)) return "";
+  const command = commandPreviewForItem(item).trim();
+  if (command) return command;
+  if (hasConcreteInput(item.input) && item.toolName) return item.toolName;
+  if (!isRunningState(item.state) && item.toolName) return item.toolName;
+  return "";
+}
+
+function hasConcreteInput(input: unknown): boolean {
+  if (input === undefined || input === null) return false;
+  if (typeof input === "string") return input.trim().length > 0;
+  if (typeof input !== "object") return true;
+  return Object.keys(input as Record<string, unknown>).length > 0;
 }
 
 function isMachineReadableJsonText(value: string): boolean {

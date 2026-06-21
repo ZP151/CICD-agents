@@ -25,12 +25,15 @@ import { registerPullRequestRoutes } from "./routes/pull-requests.routes.js";
 import { registerReviewRunRoutes } from "./routes/review-run.routes.js";
 import { registerReviewRoutes } from "./routes/review.routes.js";
 import { registerTaskRoutes } from "./routes/tasks.routes.js";
+import { registerWorkspaceRoutes } from "./routes/workspace.routes.js";
 import { workflowActionFailureResponse } from "./workflows/workflowActions.js";
 import { runWorkspaceWorkflowAction } from "./workflows/workspaceWorkflowRunner.js";
 
 loadDaemonEnv();
 
 export { workflowActionFailureResponse } from "./workflows/workflowActions.js";
+
+const RUNTIME_BODY_LIMIT_BYTES = 20 * 1024 * 1024;
 
 export interface BuildAppOptions {
   /** Override the task runner. Defaults to runPipelineTask. */
@@ -41,6 +44,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   const settings = getSettings();
   const app = Fastify({
     logger: { level: settings.runtimeLogLevel.toLowerCase() },
+    bodyLimit: RUNTIME_BODY_LIMIT_BYTES,
   });
 
   const projectLinkStore = createProjectLinkStoreAdapter(settings);
@@ -79,6 +83,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         message: "Azure credential expired or missing. Please sign in again.",
       });
     }
+    if (status && status >= 400 && status < 500) {
+      return reply.code(status).send({ error: error.message ?? "request error" });
+    }
     // Re-throw non-auth errors for Fastify's default handler
     reply.code(500).send({ error: error.message ?? "internal error" });
   });
@@ -97,6 +104,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   registerAuthRoutes(app, { settings });
 
   registerGitRoutes(app);
+
+  registerWorkspaceRoutes(app);
 
   registerDaemonConfigRoutes(app, { settings, buildInlineLlmSettings: buildEffectiveLlmSettings });
 

@@ -9,29 +9,42 @@ export type ChatRenderItem<T extends ChatRenderBubbleLike> =
 
 export function groupChatRenderItems<T extends ChatRenderBubbleLike>(bubbles: T[]): ChatRenderItem<T>[] {
   const items: ChatRenderItem<T>[] = [];
-  let i = 0;
+  let turn: T[] = [];
 
-  while (i < bubbles.length) {
-    const bubble = bubbles[i]!;
-    if (bubble.kind === "tool") {
-      const group: T[] = [bubble];
-      while (i + 1 < bubbles.length && bubbles[i + 1]!.kind === "tool") {
-        i++;
-        group.push(bubbles[i]!);
-      }
-
-      let approval: T | undefined;
-      if (i + 1 < bubbles.length && bubbles[i + 1]!.kind === "pending_confirm") {
-        i++;
-        approval = bubbles[i]!;
-      }
-
-      items.push({ kind: "tool-group", tools: group, approval, key: group[0]!.id });
-    } else {
+  for (const bubble of bubbles) {
+    if (bubble.kind === "user") {
+      appendTurnItems(items, turn);
+      turn = [];
       items.push({ kind: "bubble", bubble });
+      continue;
     }
-    i++;
+    turn.push(bubble);
   }
 
+  appendTurnItems(items, turn);
   return items;
+}
+
+function appendTurnItems<T extends ChatRenderBubbleLike>(
+  items: ChatRenderItem<T>[],
+  turn: T[],
+): void {
+  if (turn.length === 0) return;
+
+  const tools = turn.filter((bubble) => bubble.kind === "tool");
+  if (tools.length > 0) {
+    items.push({ kind: "tool-group", tools, key: tools[0]!.id });
+  }
+
+  for (const bubble of turn) {
+    if (bubble.kind !== "tool" && bubble.kind !== "pending_confirm") {
+      items.push({ kind: "bubble", bubble });
+    }
+  }
+
+  for (const bubble of turn) {
+    if (bubble.kind === "pending_confirm") {
+      items.push({ kind: "bubble", bubble });
+    }
+  }
 }

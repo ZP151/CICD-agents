@@ -25,6 +25,7 @@ export function addCiSuggestions(
       "ci-analyze-pipeline-failure",
       "Analyze pipeline",
       "Analyze the latest Azure Pipeline failure evidence and identify whether it needs logs, a local validation run, or a rerun.",
+      { kind: "workspace_action", action: "inspect_pipeline" },
     );
     add("ci-rerun-pipeline", "Rerun pipeline", "Prepare an approval to trigger the configured Azure Pipeline again.", {
       kind: "workspace_action",
@@ -37,7 +38,10 @@ export function addCiSuggestions(
     return;
   }
   if (failed) {
-    add("ci-analyze-failure", "Analyze failure", "Analyze the latest validation failure report and suggest the smallest safe fix or rerun.");
+    add("ci-analyze-failure", "Analyze failure", "Analyze the latest validation failure report and suggest the smallest safe fix or rerun.", {
+      kind: "workspace_action",
+      action: "inspect_validation_failure",
+    });
     add(
       "ci-rerun",
       isBuild ? "Rerun build" : "Rerun tests",
@@ -57,8 +61,14 @@ export function addCiSuggestions(
       kind: "workspace_action",
       action: "inspect_changes",
     });
-    add("ci-commit", "Prepare commit", "Prepare a scoped commit for the validated changes.");
-    add("ci-pr", "Check PR readiness", "Check whether these validated changes are ready for pull request insight.");
+    add("ci-commit", "Prepare commit", "Prepare a scoped commit for the validated changes.", {
+      kind: "workspace_action",
+      action: "prepare_commit",
+    });
+    add("ci-pr", "Check PR readiness", "Check whether these validated changes are ready for pull request insight.", {
+      kind: "workspace_action",
+      action: "inspect_pr_insight",
+    });
   }
 }
 
@@ -69,26 +79,53 @@ export function addCommitSuggestions(
 ): void {
   if (context.workflowKind !== "commit") return;
   if (phase.includes("stage") || phase.includes("preflight")) {
-    add("commit-diff", "Check detailed diff", "Show a detailed diff-aware review before staging.");
-    add("commit-message", "Draft commit message", "Generate a commit message from the reviewed diff.");
-    add("commit-scope", "Explain change scope", "Explain which files should be staged and why.");
+    add("commit-diff", "Check detailed diff", "Show a detailed diff-aware review before staging.", {
+      kind: "workspace_action",
+      action: "inspect_changes",
+    });
+    add("commit-message", "Draft commit message", "Generate a commit message from the reviewed diff.", {
+      kind: "workspace_action",
+      action: "draft_commit_message",
+    });
+    add("commit-scope", "Explain change scope", "Explain which files should be staged and why.", {
+      kind: "workspace_action",
+      action: "explain_change_scope",
+    });
   } else if (phase.includes("commit")) {
-    add("commit-staged", "Check staged diff", "Show the staged diff and summarize commit risk.");
-    add("commit-message", "Draft commit message", "Generate a commit message from the staged changes.");
-    add("commit-scope", "Explain change scope", "Explain what is included in this commit.");
+    add("commit-staged", "Check staged diff", "Show the staged diff and summarize commit risk.", {
+      kind: "workspace_action",
+      action: "inspect_staged_changes",
+    });
+    add("commit-message", "Draft commit message", "Generate a commit message from the staged changes.", {
+      kind: "workspace_action",
+      action: "draft_commit_message",
+    });
+    add("commit-scope", "Explain change scope", "Explain what is included in this commit.", {
+      kind: "workspace_action",
+      action: "explain_change_scope",
+    });
   } else if (phase.includes("pushed") || context.workflowStatus === "done") {
-    add("commit-summary", "Summarize push", "Summarize the commit and push that just completed.");
+    add("commit-summary", "Summarize push", "Summarize the commit and push that just completed.", {
+      kind: "workspace_action",
+      action: "inspect_latest_commit",
+    });
     add("commit-branch", "Check branch", "Check the branch status after the push.", {
       kind: "workspace_action",
       action: "refresh_branch",
     });
-    add("commit-review", "Review commit", "Review the pushed commit for any remaining risks.");
-  } else if (phase.includes("push")) {
-    add("commit-push", "Push branch", "Push the committed changes to the configured remote branch.", {
-      kind: "requires_approval",
-      reason: "Pushing writes to the remote repository.",
+    add("commit-review", "Review commit", "Review the pushed commit for any remaining risks.", {
+      kind: "workspace_action",
+      action: "inspect_latest_commit",
     });
-    add("commit-remote", "Show remote target", "Show the remote branch target and push command.");
+  } else if (phase.includes("push")) {
+    add("commit-push", "Push branch", "Prepare a push approval for the configured remote branch.", {
+      kind: "workspace_action",
+      action: "push_branch",
+    });
+    add("commit-remote", "Show remote target", "Show the remote branch target and push command.", {
+      kind: "workspace_action",
+      action: "inspect_remote_target",
+    });
     add("commit-status", "Check branch status", "Check local branch status before pushing.", {
       kind: "workspace_action",
       action: "refresh_branch",
@@ -96,8 +133,50 @@ export function addCommitSuggestions(
   }
 }
 
+export function addGitSuggestions(
+  context: SuggestionReplyContext,
+  phase: string,
+  add: AddSuggestion,
+): void {
+  if (context.workflowKind !== "git") return;
+  if (phase.includes("fetched")) {
+    add("git-refresh-after-fetch", "Refresh branch status", "Refresh branch status after fetching remote refs.", {
+      kind: "workspace_action",
+      action: "refresh_branch",
+    });
+    add("git-sync-after-fetch", "Pull/rebase first", "Prepare a pull with rebase if the refreshed branch is behind or diverged.", {
+      kind: "workspace_action",
+      action: "sync_branch_rebase",
+    });
+    add("git-push-after-fetch", "Push branch", "Prepare a push approval after checking branch readiness.", {
+      kind: "workspace_action",
+      action: "push_branch",
+    });
+    return;
+  }
+  if (phase.includes("synced")) {
+    add("git-refresh-after-sync", "Refresh branch status", "Refresh branch status after the rebase sync.", {
+      kind: "workspace_action",
+      action: "refresh_branch",
+    });
+    add("git-push-after-sync", "Push branch", "Prepare a push approval if the branch is ready.", {
+      kind: "workspace_action",
+      action: "push_branch",
+    });
+    add("git-fetch-after-sync", "Fetch remotes", "Fetch remote refs again before another branch readiness check.", {
+      kind: "workspace_action",
+      action: "fetch_remotes",
+    });
+  }
+}
+
 export function addPrSuggestions(context: SuggestionReplyContext, text: string, add: AddSuggestion): void {
   if (context.workflowKind !== "pr") return;
+  const phase = context.workflowPhase ?? "";
+  if (phase.includes("pr_plan_context")) {
+    addPrPlanContextSuggestions(text, add);
+    return;
+  }
   const hasCiReadinessBlocker = /\b(ci|build|test|validation|failed|failure|blocked|blocker|readiness|ready|policy)\b/.test(text);
   const hasStructuredBuildBlocker = /\b(build blockers?|failedbuilds=[1-9]|failed builds?:\s*[1-9]|failed\/canceled build)\b/.test(text);
   const hasStructuredPolicyBlocker = /\b(policy blockers?|failedpolicies=[1-9]|failed policies?:\s*[1-9]|failed\/error policy)\b/.test(text);
@@ -132,6 +211,7 @@ export function addPrSuggestions(context: SuggestionReplyContext, text: string, 
       "pr-validation-recovery",
       "Validation recovery",
       "Analyze validation failure context together with PR readiness, policy, and linked work items.",
+      { kind: "workspace_action", action: "inspect_ci_recovery_context" },
     );
     add("pr-policy", "Check policy", "Check pull request policy status.", {
       kind: "workspace_action",
@@ -154,5 +234,54 @@ export function addPrSuggestions(context: SuggestionReplyContext, text: string, 
   add("pr-work-items", "List work items", "List linked work items for this pull request.", {
     kind: "workspace_action",
     action: "list_pr_work_items",
+  });
+}
+
+function addPrPlanContextSuggestions(text: string, add: AddSuggestion): void {
+  const lower = text.toLowerCase();
+  const dirty = /\b(working tree:\s+(?!clean\b)|uncommitted|unstaged|modified|staged|untracked|dirty)\b/.test(lower);
+  const missingMapping = /\b(missing_ado_mapping|missing ado|project link is missing|mapping is incomplete|ado target:\s*not configured|complete project link|no project link)\b/.test(lower);
+  const authIssue = /\b(oauth token is unavailable|pat|sign in|credential|auth)\b/.test(lower);
+  const behindOrDiverged = /\b(behind|diverged|pull\/rebase|pull or rebase|rebase before pushing)\b/.test(lower);
+  const noUpstream = /\b(no upstream|set upstream|publish branch|upstream.*missing)\b/.test(lower);
+
+  if (dirty) {
+    add("pr-plan-review-changes", "Review changes", "Review the working tree before preparing the PR branch.", {
+      kind: "workspace_action",
+      action: "inspect_changes",
+    });
+    add("pr-plan-commit", "Prepare commit", "Prepare a commit for the local changes before pushing the PR branch.", {
+      kind: "workspace_action",
+      action: "prepare_commit",
+    });
+  }
+
+  if (behindOrDiverged) {
+    add("pr-plan-sync", "Pull/rebase first", "Sync the branch with its upstream before pushing or creating a PR.", {
+      kind: "workspace_action",
+      action: "sync_branch_rebase",
+    });
+  }
+
+  if (missingMapping || authIssue) {
+    add("pr-plan-auth", "Check ADO context", "Inspect Azure DevOps auth and Project Link mapping before PR creation.", {
+      kind: "workspace_action",
+      action: "inspect_ado_auth_context",
+    });
+  }
+
+  add(
+    "pr-plan-push",
+    noUpstream ? "Publish branch" : "Push branch",
+    noUpstream ? "Publish the current branch to the configured remote." : "Prepare a push approval for the current branch.",
+    { kind: "workspace_action", action: "push_branch" },
+  );
+  add("pr-plan-create-pr", "Create PR", "Prepare a pull request approval after the branch is pushed.", {
+    kind: "workspace_action",
+    action: "create_pr",
+  });
+  add("pr-plan-risks", "Check PR risks", "Analyze PR risks once the branch and Project Link are ready.", {
+    kind: "workspace_action",
+    action: "inspect_pr_insight",
   });
 }

@@ -208,8 +208,34 @@ describe("assistant bubble metadata", () => {
       suggestions: ["Review", "Stage"],
       sources: [
         { type: "source_document", sourceId: "doc-1", title: "A", file: "a.ts", line: undefined },
-        { type: "source_document", title: "B", file: "b.ts", line: undefined },
+        { type: "source_document", title: "B", file: "b.ts", line: 12 },
       ],
     });
+  });
+
+  it("deduplicates document sources with single-line and ranged title suffixes", () => {
+    expect(
+      mergeAssistantBubbleMeta(
+        {
+          sources: [{
+            type: "source_document",
+            title: "ClaimController.cs:42",
+            snippet: "first",
+          }],
+        },
+        {
+          sources: [{
+            type: "source_document",
+            title: "ClaimController.cs:42-58",
+            snippet: "second",
+          }],
+        },
+      )?.sources,
+    ).toEqual([{
+      type: "source_document",
+      title: "ClaimController.cs",
+      line: 42,
+      snippet: "first\n\nsecond",
+    }]);
   });
 });

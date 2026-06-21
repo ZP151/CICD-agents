@@ -49,6 +49,7 @@ export function ChatWorkspaceLayout({
   modelMenuRef,
   openPrInsightSourceInActivity,
   openPrInsightSourceInWorkspace,
+  openSources,
   queuePrompt,
   queuedSuggestionId,
   renamingHistoryId,
@@ -65,6 +66,8 @@ export function ChatWorkspaceLayout({
   selectedArtifactId,
   selectedArtifactLookupState,
   selectedSource,
+  closeSource,
+  clearSources,
   selectProjectLink,
   selectSource,
   send,
@@ -78,9 +81,7 @@ export function ChatWorkspaceLayout({
   setModelMenuOpen,
   setRepoPath,
   setRenamingHistoryValue,
-  sourceParts,
   startHistoryDrag,
-  startRightDrag,
   statusText,
   stopCurrentTurn,
   suggestionReplies,
@@ -93,6 +94,9 @@ export function ChatWorkspaceLayout({
   workflowState,
   workspaceRef,
 }: ChatShellProps) {
+  const summaryPinnedAvailable = Boolean(activeProjectLinkId || bubbles.length > 0);
+  const summaryVisible = summaryPinnedAvailable && summaryPinnedOpen && !rightPanelOpen;
+
   return (
     <div ref={workspaceRef} className={mini ? "flex flex-1 flex-col overflow-hidden" : "chat-workspace"}>
       {!mini && (
@@ -128,7 +132,7 @@ export function ChatWorkspaceLayout({
         </>
       )}
 
-      <div className={mini ? "flex flex-1 flex-col overflow-hidden" : "middle-panel"}>
+      <div className={mini ? "flex flex-1 flex-col overflow-hidden" : `middle-panel${summaryVisible ? " with-pinned-summary" : ""}`}>
         <div className={mini ? "flex flex-1 flex-col overflow-hidden" : "middle-panel-inner"}>
           <div
             ref={scrollContainerRef}
@@ -191,7 +195,7 @@ export function ChatWorkspaceLayout({
         </div>
       </div>
 
-      {!mini && summaryPinnedOpen && (
+      {!mini && summaryVisible && (
         <PinnedSummaryPanel
           repoPath={repoPath}
           setRepoPath={setRepoPath}
@@ -213,12 +217,6 @@ export function ChatWorkspaceLayout({
 
       {!mini && (
         <>
-          {rightPanelOpen && (
-            <div
-              className="panel-resize-handle"
-              onMouseDown={(event) => { event.preventDefault(); startRightDrag(event.clientX); }}
-            />
-          )}
           <aside
             className="right-panel"
             style={{
@@ -228,12 +226,15 @@ export function ChatWorkspaceLayout({
             }}
           >
             <CodeSidePanel
+              repoPath={repoPath}
               source={selectedSource}
-              sources={sourceParts}
+              sources={openSources}
               artifact={selectedArtifact}
               artifactLookupState={selectedArtifactLookupState}
               artifactCount={artifactCount}
               onSourceSelect={selectSource}
+              onSourceClose={closeSource}
+              onClearSources={clearSources}
               onClearArtifact={clearArtifact}
             />
           </aside>

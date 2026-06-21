@@ -7,16 +7,42 @@ export function workspaceActionToDirectWorkflow(action: WorkspaceAction): Direct
       return { action: "inspect_environment" };
     case "inspect_changes":
       return { action: "inspect_changes" };
+    case "inspect_staged_changes":
+      return { action: "inspect_staged_changes" };
+    case "draft_commit_message":
+      return { action: "draft_commit_message" };
+    case "explain_change_scope":
+      return { action: "explain_change_scope" };
     case "run_tests":
       return { action: "run_tests" };
     case "run_build":
       return { action: "run_build" };
     case "refresh_branch":
       return { action: "refresh_branch" };
+    case "inspect_remote_target":
+      return { action: "inspect_remote_target" };
+    case "inspect_latest_commit":
+      return { action: "inspect_latest_commit" };
+    case "fetch_remotes":
+      return { action: "fetch_remotes" };
+    case "inspect_validation_failure":
+      return { action: "inspect_validation_failure" };
+    case "inspect_ci_recovery_context":
+      return { action: "inspect_ci_recovery_context" };
+    case "inspect_source_context":
+      return { action: "inspect_source_context" };
+    case "inspect_architecture_context":
+      return { action: "inspect_architecture_context" };
+    case "inspect_ado_auth_context":
+      return { action: "inspect_ado_auth_context" };
+    case "inspect_pr_plan_context":
+      return { action: "inspect_pr_plan_context" };
     case "checkout_branch":
       return { action: "checkout_branch", input: { branch: action.branch } };
     case "create_branch":
       return { action: "create_branch", input: { branch: action.branch } };
+    case "sync_branch_rebase":
+      return { action: "sync_branch_rebase", input: { branch: action.branch } };
     case "continue_rebase":
       return { action: "continue_rebase" };
     case "abort_rebase":

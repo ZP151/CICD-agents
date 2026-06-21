@@ -72,6 +72,147 @@ function projectLink(
 }
 
 describe("daemon commit and validation workflow routes", () => {
+  it("inspects staged changes as a read-only workflow action", async () => {
+    app = await buildApp();
+    const repo = initRepo("cicd-chat-workflow-staged-diff-");
+    fs.writeFileSync(path.join(repo, "README.md"), "# demo\n", "utf8");
+    commitAll(repo, "docs: initial");
+    fs.appendFileSync(path.join(repo, "README.md"), "staged line\n", "utf8");
+    spawnSync("git", ["add", "README.md"], { cwd: repo, encoding: "utf8" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "inspect_staged_changes",
+        repoPath: repo,
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      action: string;
+      summary: string;
+      workflowState: {
+        status: string;
+        currentStep: string;
+        pendingApproval?: unknown;
+      };
+      tools: Array<{ name: string; command: string }>;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.action).toBe("inspect_staged_changes");
+    expect(body.workflowState.status).toBe("done");
+    expect(body.workflowState.currentStep).toBe("inspect_staged_changes complete");
+    expect(body.workflowState.pendingApproval).toBeUndefined();
+    expect(body.summary).toContain("Changed files: README.md");
+    expect(body.tools.map((tool) => tool.name)).toEqual([
+      "git_status",
+      "git_dir",
+      "git_diff_staged",
+      "git_diff_staged_name_only",
+    ]);
+    expect(body.tools.find((tool) => tool.name === "git_diff_staged")?.command).toBe("git diff --cached --stat");
+  });
+
+  it("drafts commit messages as a read-only workflow action", async () => {
+    app = await buildApp();
+    const repo = initRepo("cicd-chat-workflow-draft-message-");
+    fs.writeFileSync(path.join(repo, "README.md"), "# demo\n", "utf8");
+    commitAll(repo, "docs: initial");
+    fs.appendFileSync(path.join(repo, "README.md"), "draft line\n", "utf8");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "draft_commit_message",
+        repoPath: repo,
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      action: string;
+      summary: string;
+      workflowState: {
+        status: string;
+        currentStep: string;
+        pendingApproval?: unknown;
+      };
+      tools: Array<{ name: string; command: string }>;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.action).toBe("draft_commit_message");
+    expect(body.workflowState.status).toBe("done");
+    expect(body.workflowState.currentStep).toBe("draft_commit_message complete");
+    expect(body.workflowState.pendingApproval).toBeUndefined();
+    expect(body.summary).toContain("Suggested commit message: `docs: update documentation`");
+    expect(body.tools.map((tool) => tool.name)).toEqual([
+      "git_current_branch",
+      "git_status",
+      "git_dir",
+      "git_diff",
+      "git_diff_name_only",
+      "git_diff_staged",
+      "git_diff_staged_name_only",
+      "git_log",
+    ]);
+  });
+
+  it("explains change scope as a read-only workflow action", async () => {
+    app = await buildApp();
+    const repo = initRepo("cicd-chat-workflow-change-scope-");
+    fs.mkdirSync(path.join(repo, "packages", "daemon", "src"), { recursive: true });
+    fs.mkdirSync(path.join(repo, "docs"), { recursive: true });
+    fs.writeFileSync(path.join(repo, "packages", "daemon", "src", "server.ts"), "export const value = 1;\n", "utf8");
+    fs.writeFileSync(path.join(repo, "docs", "guide.md"), "# Guide\n", "utf8");
+    commitAll(repo, "chore: initial");
+    fs.appendFileSync(path.join(repo, "packages", "daemon", "src", "server.ts"), "export const next = 2;\n", "utf8");
+    fs.appendFileSync(path.join(repo, "docs", "guide.md"), "More docs\n", "utf8");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "explain_change_scope",
+        repoPath: repo,
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      ok: boolean;
+      action: string;
+      summary: string;
+      workflowState: {
+        status: string;
+        currentStep: string;
+        pendingApproval?: unknown;
+      };
+      tools: Array<{ name: string; command: string }>;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.action).toBe("explain_change_scope");
+    expect(body.workflowState.status).toBe("done");
+    expect(body.workflowState.currentStep).toBe("explain_change_scope complete");
+    expect(body.workflowState.pendingApproval).toBeUndefined();
+    expect(body.summary).toContain("Change scope: 2 area(s), 2 file(s).");
+    expect(body.summary).toContain("- daemon service: packages/daemon/src/server.ts");
+    expect(body.summary).toContain("- documentation: docs/guide.md");
+    expect(body.tools.map((tool) => tool.name)).toEqual([
+      "git_current_branch",
+      "git_status",
+      "git_dir",
+      "git_diff",
+      "git_diff_name_only",
+      "git_diff_staged",
+      "git_diff_staged_name_only",
+    ]);
+  });
+
   it("prepares commit workflow actions as a staged approval instead of a chat prompt", async () => {
     app = await buildApp();
     const repo = initRepo("cicd-chat-workflow-commit-");

@@ -7,6 +7,7 @@ import {
   type ChatHistoryEntry,
   type ChatUiChunk,
 } from "../../api.js";
+import type { ComposerImageAttachment } from "./chatAttachments.js";
 import type { ToolCallPartSnapshot } from "../../chatBubbles.js";
 import type { ApprovalRequest, Bubble, WorkflowEventState } from "./chat.types.js";
 import { reduceChatBubbles } from "./chatBubbleReducer.js";
@@ -115,19 +116,32 @@ export interface UseChatRuntimeActionsArgs {
 }
 
 export interface ChatRuntimeActions {
-  sendMessage: (message: string, options?: { silent?: boolean }) => void;
+  sendMessage: (message: string, options?: { silent?: boolean; imageAttachments?: ComposerImageAttachment[] }) => void;
   confirmPendingAction: (bubbleId: string) => void;
-  cancelPendingAction: (bubbleId: string) => void;
+  cancelPendingAction: (bubbleId: string, feedback?: string) => void;
   stopCurrentTurn: () => void;
 }
 
+export function approvalDenialMessage(feedback?: string): string {
+  return feedback?.trim() || "no";
+}
+
 export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRuntimeActions {
-  const sendMessage = useCallback((message: string, options?: { silent?: boolean }) => {
-    if (!message || args.busy) return;
+  const sendMessage = useCallback((message: string, options?: { silent?: boolean; imageAttachments?: ComposerImageAttachment[] }) => {
+    const imageAttachments = options?.imageAttachments ?? [];
+    if ((!message && imageAttachments.length === 0) || args.busy) return;
     args.setBusy(true);
     args.setStatusText("Planning");
+    const visibleMessage = imageAttachments.length > 0
+      ? [message, imageAttachments.map((attachment) => `[image: ${attachment.name}]`).join("\n")].filter(Boolean).join("\n\n")
+      : message;
     if (!options?.silent) {
-      args.addBubble({ id: uid(), kind: "user", text: message }, { forceScroll: true });
+      args.addBubble({
+        id: uid(),
+        kind: "user",
+        text: visibleMessage,
+        transientImageAttachments: imageAttachments,
+      }, { forceScroll: true });
     }
 
     const repo = args.repoPath || ".";
@@ -155,6 +169,11 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
       },
       args.activeProjectLinkId ?? undefined,
       resolvedModelChoice,
+      imageAttachments.map((attachment) => ({
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+        dataUrl: attachment.dataUrl,
+      })),
     );
     args.cancelRef.current = cancel;
   }, [
@@ -203,13 +222,13 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
     args.uiStreamAvailableRef,
   ]);
 
-  const cancelPendingAction = useCallback((bubbleId: string) => {
+  const cancelPendingAction = useCallback((bubbleId: string, feedback?: string) => {
     args.setBubbles((prev) => reduceChatBubbles(prev, {
       type: "mark_pending_status",
       id: bubbleId,
       status: "cancelled",
     }, uid));
-    sendMessage("no");
+    sendMessage(approvalDenialMessage(feedback));
   }, [args.setBubbles, sendMessage]);
 
   const stopCurrentTurn = useCallback(() => {

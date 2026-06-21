@@ -7,6 +7,7 @@ import type {
 import {
   addCiSuggestions,
   addCommitSuggestions,
+  addGitSuggestions,
   addPrSuggestions,
 } from "./suggestionReplyWorkflowSuggestions.js";
 
@@ -26,7 +27,9 @@ export function deriveCommandChips(context: CommandChipContext): SuggestionReply
       id: "cmd-explain-architecture",
       label: "Explain architecture",
       message: "Explain this project architecture using the current repository context.",
-      action: { kind: "fill_composer" },
+      action: context.hasRepoPath
+        ? { kind: "workspace_action", action: "inspect_architecture_context" }
+        : { kind: "fill_composer" },
     },
     {
       id: "cmd-run-tests",
@@ -91,18 +94,34 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
   const architectureContext = /\b(architecture|entry point|request flow|project structure|controller|daemon|api|data model|integration)\b/.test(text);
 
   if (architectureContext) {
-    add("arch-flow", "Trace request flow", "Trace the main request flow through this project.");
-    add("arch-entry", "List entry points", "List the main entry points and startup path.");
-    add("arch-data-model", "Explain data model", "Explain the key data models and how they connect.");
+    add("arch-flow", "Trace request flow", "Trace the main request flow through this project.", {
+      kind: "workspace_action",
+      action: "inspect_architecture_context",
+    });
+    add("arch-entry", "List entry points", "List the main entry points and startup path.", {
+      kind: "workspace_action",
+      action: "inspect_architecture_context",
+    });
+    add("arch-data-model", "Explain data model", "Explain the key data models and how they connect.", {
+      kind: "workspace_action",
+      action: "inspect_architecture_context",
+    });
   }
 
   if (context.hasAuthError || /\b(auth|oauth|pat|token|credential|sign in|permission)\b/.test(text)) {
-    add("auth-retry", "Retry auth", "Retry the Azure DevOps operation after checking authentication.");
-    add("auth-explain", "Explain auth", "Explain the current Azure DevOps authentication state and what is missing.");
+    add("auth-check", "Check auth", "Check the current Azure DevOps authentication state.", {
+      kind: "workspace_action",
+      action: "inspect_ado_auth_context",
+    });
+    add("auth-explain", "Explain auth", "Explain the current Azure DevOps authentication state and what is missing.", {
+      kind: "workspace_action",
+      action: "inspect_ado_auth_context",
+    });
   }
 
   addCiSuggestions(context, text, phase, add);
   addCommitSuggestions(context, phase, add);
+  addGitSuggestions(context, phase, add);
   addPrSuggestions(context, text, add);
 
   if (
@@ -110,18 +129,36 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
     || actions.has("refresh repository index")
     || /\b(index|indexed|repo_refresh_index|repository context)\b/.test(text)
   ) {
-    add("index-architecture-follow-up", "Check architecture gaps", "Identify unclear parts of the architecture that need deeper inspection.");
-    add("index-request-flow", "Trace request flow", "Explain the main request flow using the repository context.");
-    add("index-test-surface", "Find test surface", "Find the main test/build surface for this architecture.");
+    add("index-architecture-follow-up", "Check architecture gaps", "Identify unclear parts of the architecture that need deeper inspection.", {
+      kind: "workspace_action",
+      action: "inspect_architecture_context",
+    });
+    add("index-request-flow", "Trace request flow", "Explain the main request flow using the repository context.", {
+      kind: "workspace_action",
+      action: "inspect_architecture_context",
+    });
+    add("index-test-surface", "Find test surface", "Find the main test/build surface for this architecture.", {
+      kind: "workspace_action",
+      action: "inspect_architecture_context",
+    });
   }
 
   if (sourceTypes.has("source_document")) {
-    add("source-key-files", "List key files", "Show the referenced project files and what each one proves.");
-    add("source-request-flow", "Trace source flow", "Explain the request flow using the referenced files.");
+    add("source-key-files", "List key files", "Show the referenced project files and what each one proves.", {
+      kind: "workspace_action",
+      action: "inspect_source_context",
+    });
+    add("source-request-flow", "Trace source flow", "Explain the request flow using the referenced files.", {
+      kind: "workspace_action",
+      action: "inspect_source_context",
+    });
   }
 
   if (sourceTypes.has("source_url")) {
-    add("source-web-summary", "Summarize sources", "Summarize the external sources used in this answer.");
+    add("source-web-summary", "Summarize sources", "Summarize the external sources used in this answer.", {
+      kind: "workspace_action",
+      action: "inspect_source_context",
+    });
   }
 
   if (context.workflowKind !== "commit" && /\b(review my changes|what changed|diff|modified|unstaged|staged|git_status|git_diff)\b/.test(text)) {
@@ -130,10 +167,13 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
       action: "inspect_changes",
     });
     add("review-stage", "Stage selected", "Stage only the files that belong to the reviewed change scope.", {
-      kind: "requires_approval",
-      reason: "Staging changes writes to the local Git index.",
+      kind: "workspace_action",
+      action: "prepare_commit",
     });
-    add("review-message", "Draft commit message", "Generate a commit message from the reviewed diff.");
+    add("review-message", "Draft commit message", "Generate a commit message from the reviewed diff.", {
+      kind: "workspace_action",
+      action: "draft_commit_message",
+    });
   }
 
   if (context.workflowKind !== "commit" && /\b(pr|pull request|policy|work item|pipeline|build|review queue|insight)\b/.test(text)) {

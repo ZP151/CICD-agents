@@ -10,12 +10,38 @@ export function workspaceActionToolCandidates(action: WorkspaceAction): string[]
       return ["validation_command", "npm_test", "npm_build", "pytest_run", "dotnet_test", "dotnet_build"];
     case "inspect_changes":
       return ["git_status", "git_diff"];
+    case "inspect_staged_changes":
+      return ["git_status", "git_diff_staged", "git_diff_staged_name_only"];
+    case "draft_commit_message":
+      return ["git_status", "git_diff", "git_diff_name_only", "git_diff_staged", "git_diff_staged_name_only", "git_log"];
+    case "explain_change_scope":
+      return ["git_status", "git_diff", "git_diff_name_only", "git_diff_staged", "git_diff_staged_name_only"];
     case "refresh_branch":
-      return ["git_current_branch", "git_branch_list"];
+      return ["git_current_branch", "git_branch_list", "git_status", "git_remote", "git_upstream", "git_divergence"];
+    case "inspect_remote_target":
+      return ["git_current_branch", "git_status", "git_remote", "git_upstream", "git_divergence"];
+    case "inspect_latest_commit":
+      return ["git_current_branch", "git_status", "git_remote", "git_upstream", "git_divergence", "git_log_subject", "git_show_head_stat"];
+    case "fetch_remotes":
+      return ["git_fetch"];
+    case "inspect_validation_failure":
+      return ["validation_failure_artifact"];
+    case "inspect_ci_recovery_context":
+      return ["validation_failure_artifact", "pipeline_failure_artifact"];
+    case "inspect_source_context":
+      return ["source_context"];
+    case "inspect_architecture_context":
+      return ["repository_context"];
+    case "inspect_ado_auth_context":
+      return ["ado_auth_context"];
+    case "inspect_pr_plan_context":
+      return ["git_current_branch", "git_status", "git_remote", "git_upstream", "git_divergence", "git_log_subject"];
     case "checkout_branch":
       return ["git_checkout", "git_switch"];
     case "create_branch":
       return ["git_create_branch", "git_checkout"];
+    case "sync_branch_rebase":
+      return ["git_pull"];
     case "continue_rebase":
     case "abort_rebase":
     case "skip_rebase":

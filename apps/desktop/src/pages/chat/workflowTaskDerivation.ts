@@ -53,6 +53,10 @@ export function taskStateFromWorkflow(
 ): TaskState | null {
   if (!workflowState) return null;
   if (workflowState.workflowKind === "commit") return taskStateFromCommitWorkflow(workflowState, fallbackGoal);
+  if (workflowState.workflowKind === "git") {
+    const gitTask = taskStateFromGitWorkflow(workflowState, fallbackGoal);
+    if (gitTask) return gitTask;
+  }
   if (workflowState.workflowKind === "pr") return taskStateFromPrWorkflow(workflowState, fallbackGoal);
   if (workflowState.workflowKind === "ci") return taskStateFromCiWorkflow(workflowState, fallbackGoal);
 
@@ -82,12 +86,93 @@ export function taskStateFromWorkflow(
   };
 }
 
+function taskStateFromGitWorkflow(
+  workflowState: WorkflowEventState,
+  fallbackGoal: string | null,
+): TaskState | null {
+  const completed = new Set(workflowState.completedTools ?? []);
+  const phase = workflowState.workflowPhase ?? "";
+  const pending = workflowState.pendingApproval?.action;
+  const isFetch =
+    phase === "waiting_for_fetch_remotes_approval"
+    || phase === "fetched"
+    || (pending?.tool === "git_fetch" && pending.workflow?.phase === "fetch_remotes");
+  if (isFetch) {
+    const fetched = phase === "fetched" || completed.has("git_fetch");
+    const waiting = workflowState.status === "waiting_for_approval";
+    return {
+      goal: fallbackGoal ?? "Remote refs",
+      steps: [
+        {
+          label: "Check remote",
+          done: completed.has("git_remote") || Boolean(pending),
+          active: false,
+        },
+        {
+          label: "Fetch remotes",
+          done: fetched,
+          active: waiting,
+        },
+        {
+          label: "Refresh branch status",
+          done: false,
+          active: fetched,
+          action: { type: "refresh_branch" },
+        },
+      ],
+      currentStepLabel: pending?.description ?? workflowState.currentStep ?? workflowState.status,
+      details: workflowDetailLines(workflowState),
+      risk: workflowState.pendingApproval?.riskLevel,
+    };
+  }
+  const isSync =
+    phase === "waiting_for_sync_branch_approval"
+    || phase === "synced"
+    || (pending?.tool === "git_pull" && pending.workflow?.phase === "sync_branch");
+  if (!isSync) return null;
+
+  const synced = phase === "synced" || completed.has("git_pull");
+  const waiting = workflowState.status === "waiting_for_approval";
+  const branch = pending?.workflow?.branch ?? syncBranchFromStep(workflowState.currentStep);
+  return {
+    goal: fallbackGoal ?? "Branch sync",
+    steps: [
+      {
+        label: "Check branch readiness",
+        done: completed.has("git_status") || Boolean(pending?.readiness),
+        active: false,
+      },
+      {
+        label: "Pull with rebase",
+        done: synced,
+        active: waiting,
+      },
+      {
+        label: "Refresh branch status",
+        done: false,
+        active: synced,
+        action: { type: "refresh_branch" },
+      },
+      {
+        label: "Push when ready",
+        done: false,
+        active: false,
+        action: branch ? { type: "push_branch", branch } : { type: "push_branch" },
+      },
+    ],
+    currentStepLabel: pending?.description ?? workflowState.currentStep ?? workflowState.status,
+    details: workflowDetailLines(workflowState),
+    risk: workflowState.pendingApproval?.riskLevel,
+  };
+}
+
 function taskStateFromPrWorkflow(
   workflowState: WorkflowEventState,
   fallbackGoal: string | null,
 ): TaskState {
   const completed = new Set(workflowState.completedTools ?? []);
   const phase = workflowState.workflowPhase ?? "";
+  if (phase.includes("pr_plan_context")) return taskStateFromPrPlanWorkflow(workflowState, completed, fallbackGoal);
   const pendingTool = workflowState.pendingApproval?.action.tool;
   const readinessSteps = prReadinessFollowUpSteps(workflowState, completed);
   const steps: WorkflowStep[] = phase === "inspected" || phase === "policy_checked" || phase === "work_items_listed"
@@ -129,6 +214,92 @@ function taskStateFromPrWorkflow(
   };
 }
 
+function taskStateFromPrPlanWorkflow(
+  workflowState: WorkflowEventState,
+  completed: Set<string>,
+  fallbackGoal: string | null,
+): TaskState {
+  const summary = `${workflowState.workflowSummary ?? ""}\n${workflowState.currentStep ?? ""}`;
+  const lower = summary.toLowerCase();
+  const dirty = /\bworking tree:\s+(?!clean\b)|\b(uncommitted|unstaged|modified|staged|untracked|dirty)\b/.test(lower);
+  const missingMapping = /\b(missing_ado_mapping|missing ado|azure devops target:\s*missing|project link.*mapping|complete project link|no project link)\b/.test(lower);
+  const authIssue = /\b(oauth token is unavailable|credential|sign in|pat)\b/.test(lower);
+  const needsSync = /\b(behind|diverged|pull or rebase|rebase before pushing)\b/.test(lower);
+  const noUpstream = /\b(no upstream|set upstream|upstream tracking|push the branch with upstream)\b/.test(lower);
+  const sourceBranch = textSignal(summary, /^-\s*Source branch:\s*(.+)$/im);
+  const targetBranch = textSignal(summary, /^-\s*Target branch:\s*(.+)$/im);
+  const steps: WorkflowStep[] = [
+    {
+      label: "Inspect PR plan",
+      done: workflowState.status === "done" || completed.has("git_status") || completed.has("git_current_branch"),
+      active: workflowState.status === "planning" || workflowState.status === "running",
+    },
+  ];
+  let activatedNextAction = false;
+  const nextActionActive = (done: boolean): boolean => {
+    if (done || activatedNextAction) return false;
+    activatedNextAction = true;
+    return true;
+  };
+  const addFollowUp = (step: WorkflowStep): void => {
+    steps.push({
+      ...step,
+      active: step.active || nextActionActive(step.done),
+    });
+  };
+
+  if (dirty) {
+    addFollowUp({
+      label: "Review and commit changes",
+      done: false,
+      active: false,
+      action: { type: "prepare_commit", branch: sourceBranch, includeUnstaged: true },
+    });
+  }
+  if (needsSync) {
+    addFollowUp({
+      label: "Sync branch",
+      done: false,
+      active: false,
+      action: { type: "sync_branch_rebase", branch: sourceBranch },
+    });
+  }
+  addFollowUp({
+    label: noUpstream ? "Publish branch" : "Push branch",
+    done: completed.has("git_push"),
+    active: false,
+    action: { type: "push_branch", branch: sourceBranch },
+  });
+  if (missingMapping || authIssue) {
+    addFollowUp({
+      label: "Check ADO context",
+      done: false,
+      active: false,
+      action: { type: "inspect_ado_auth_context" },
+    });
+  } else {
+    addFollowUp({
+      label: "Create pull request",
+      done: completed.has("ado_create_pr"),
+      active: false,
+      action: {
+        type: "create_pr",
+        branch: sourceBranch,
+        targetBranch,
+        draft: false,
+      },
+    });
+  }
+
+  return {
+    goal: fallbackGoal ?? "PR plan",
+    steps,
+    currentStepLabel: workflowState.currentStep ?? workflowState.status,
+    details: workflowDetailLines(workflowState),
+    risk: workflowState.pendingApproval?.riskLevel,
+  };
+}
+
 function prReadinessFollowUpSteps(workflowState: WorkflowEventState, completed: Set<string>): WorkflowStep[] {
   const summary = `${workflowState.workflowSummary ?? ""}\n${workflowState.currentStep ?? ""}`;
   const failedBuilds = numericSignal(summary, /(\d+)\s+failed\/canceled build/i);
@@ -162,6 +333,11 @@ function numericSignal(text: string, pattern: RegExp): number | undefined {
   if (!match?.[1]) return undefined;
   const value = Number(match[1]);
   return Number.isFinite(value) ? value : undefined;
+}
+
+function textSignal(text: string, pattern: RegExp): string | undefined {
+  const match = text.match(pattern);
+  return match?.[1]?.trim() || undefined;
 }
 
 function taskStateFromCommitWorkflow(
@@ -250,6 +426,11 @@ function workflowDetailLines(workflowState: WorkflowEventState): string[] {
   if (action?.workflow?.branch) lines.push(`Branch: ${action.workflow.branch}`);
   if (action?.workflow?.message) lines.push(`Message: ${truncateMiddle(action.workflow.message, 90)}`);
   return lines.slice(0, 4);
+}
+
+function syncBranchFromStep(step: string): string | undefined {
+  const match = step.match(/\b(?:Synced branch|Branch)\s+([^\s.]+)/i);
+  return match?.[1];
 }
 
 function truncateMiddle(value: string, maxLength: number): string {

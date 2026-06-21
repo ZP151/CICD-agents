@@ -15,7 +15,7 @@ describe("deriveCommandChips", () => {
       "Run tests",
     ]);
     expect(commands[0]?.action).toEqual({ kind: "workspace_action", action: "inspect_changes" });
-    expect(commands[1]?.action).toEqual({ kind: "fill_composer" });
+    expect(commands[1]?.action).toEqual({ kind: "workspace_action", action: "inspect_architecture_context" });
     expect(commands[2]?.action).toEqual({ kind: "workspace_action", action: "run_tests" });
   });
 

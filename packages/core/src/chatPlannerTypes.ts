@@ -4,6 +4,12 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+export interface ChatImageAttachment {
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+}
+
 /** A specific write-operation the agent is proposing to execute on user confirmation. */
 export interface PendingToolAction {
   tool: string;
@@ -73,6 +79,8 @@ export interface PendingToolAction {
       | "stage"
       | "commit"
       | "push"
+      | "fetch_remotes"
+      | "sync_branch"
       | "test"
       | "build"
       | "pipeline_trigger"

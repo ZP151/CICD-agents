@@ -3,9 +3,22 @@ import type { WorkflowStatus } from "./chat.types.js";
 export type WorkspaceAction =
   | { type: "inspect_environment" }
   | { type: "inspect_changes" }
+  | { type: "inspect_staged_changes" }
+  | { type: "draft_commit_message" }
+  | { type: "explain_change_scope" }
   | { type: "refresh_branch" }
+  | { type: "inspect_remote_target" }
+  | { type: "inspect_latest_commit" }
+  | { type: "fetch_remotes" }
+  | { type: "inspect_validation_failure" }
+  | { type: "inspect_ci_recovery_context" }
+  | { type: "inspect_source_context" }
+  | { type: "inspect_architecture_context" }
+  | { type: "inspect_ado_auth_context" }
+  | { type: "inspect_pr_plan_context" }
   | { type: "checkout_branch"; branch: string }
   | { type: "create_branch"; branch: string }
+  | { type: "sync_branch_rebase"; branch?: string }
   | { type: "continue_rebase" }
   | { type: "abort_rebase" }
   | { type: "skip_rebase" }

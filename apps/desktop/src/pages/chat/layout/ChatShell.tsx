@@ -7,6 +7,8 @@ export type { ChatShellProps } from "./ChatShell.types.js";
 export function ChatShell(props: ChatShellProps) {
   const {
     closeModelMenuFromChatSurface,
+    activeProjectLinkId,
+    bubbles,
     conversationTitle,
     customTitle,
     historyOpen,
@@ -19,19 +21,33 @@ export function ChatShell(props: ChatShellProps) {
     setRightPanelOpen,
     setSummaryPinnedOpen,
     setTitleEditing,
+    startRightDrag,
     summaryPinnedOpen,
     titleEditing,
     titleInputRef,
   } = props;
+  const summaryPinnedAvailable = Boolean(activeProjectLinkId || bubbles.length > 0);
 
   return (
     <div
-      className={`flex flex-col overflow-hidden bg-zinc-950 text-zinc-100 ${mini ? "h-full rounded-xl" : "flex-1 min-w-0 h-full"}`}
+      className={`relative flex flex-col overflow-hidden bg-zinc-950 text-zinc-100 ${mini ? "h-full rounded-xl" : "flex-1 min-w-0 h-full"}`}
       onPointerDownCapture={closeModelMenuFromChatSurface}
       onMouseDownCapture={closeModelMenuFromChatSurface}
       onClickCapture={closeModelMenuFromChatSurface}
       onFocusCapture={closeModelMenuFromChatSurface}
     >
+      {!mini && rightPanelOpen && (
+        <div
+          aria-hidden="true"
+          data-testid="right-shell-resize-handle"
+          className="chat-shell-right-resize-handle right-panel-resize-handle"
+          style={{ right: rightWidth - 3 }}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            startRightDrag(event.clientX);
+          }}
+        />
+      )}
       {!mini ? (
         <ConversationTopBar
           historyOpen={historyOpen}
@@ -40,6 +56,7 @@ export function ChatShell(props: ChatShellProps) {
           rightPanelOpen={rightPanelOpen}
           rightWidth={rightWidth}
           onToggleRight={() => setRightPanelOpen((value) => !value)}
+          summaryPinnedAvailable={summaryPinnedAvailable}
           summaryPinnedOpen={summaryPinnedOpen}
           onToggleSummaryPinned={() => setSummaryPinnedOpen((value) => !value)}
           titleEditing={titleEditing}

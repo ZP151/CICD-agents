@@ -22,6 +22,7 @@ import type {
   ConversationModelChoice,
   CustomConversationModel,
 } from "../chatModelSelection.js";
+import type { ComposerImageAttachment } from "../chatAttachments.js";
 import type {
   ArtifactLookupState,
   Bubble,
@@ -49,7 +50,7 @@ export interface ChatShellProps {
   branchList: string[];
   bubbles: Bubble[];
   busy: boolean;
-  cancelPendingAction: (id: string) => void;
+  cancelPendingAction: (id: string, feedback?: string) => void;
   cancelQueuedSuggestion: () => void;
   cancelHistoryRename: () => void;
   clearArtifact: () => void;
@@ -100,9 +101,12 @@ export interface ChatShellProps {
   selectedArtifactId: string | null;
   selectedArtifactLookupState: ArtifactLookupState | null;
   selectedSource: ConversationSourcePart | null;
+  openSources: ConversationSourcePart[];
+  closeSource: (source: ConversationSourcePart) => void;
+  clearSources: () => void;
   selectProjectLink: (id: string) => void;
   selectSource: (source: ConversationSourcePart) => void;
-  send: () => void;
+  send: (options?: { message?: string; imageAttachments?: ComposerImageAttachment[] }) => void;
   sessionId: string | null;
   setActiveModel: Dispatch<SetStateAction<ConversationModelChoice>>;
   setActiveProjectLinkId: (id: string | null) => void;

@@ -29,6 +29,9 @@ function desktopManualChunk(id: string): string | undefined {
   if (packageName === "react-router" || packageName === "react-router-dom") {
     return "vendor-router";
   }
+  if (packageName.startsWith("@codemirror/") || packageName.startsWith("@uiw/")) {
+    return "vendor-codemirror";
+  }
   if (packageName === "lucide-react") return "vendor-icons";
   return undefined;
 }
