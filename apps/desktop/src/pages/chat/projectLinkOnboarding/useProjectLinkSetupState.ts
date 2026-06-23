@@ -12,7 +12,6 @@ import {
   applyAdoDiscoveryToProjectLinkInput,
   fetchAzureDevOpsRemoteSuggestion,
   fetchGitBranches,
-  pickRecommendedPipeline,
   projectLinkNameFromRepo,
   withoutProjectLinkFallbacks,
 } from "../../../projectLinks.js";
@@ -26,8 +25,6 @@ export const EMPTY_PROJECT_LINK: ProjectLinkInput = {
   adoProject: "",
   adoRepoName: "",
   adoPat: "",
-  adoPipelineId: "",
-  adoPipelineName: "",
   adoMcpEnabled: false,
   adoMcpCommand: "",
   adoMcpAuthentication: "",
@@ -61,7 +58,6 @@ export function useProjectLinkSetupState({
   const [branchError, setBranchError] = useState(false);
   const [discovering, setDiscovering] = useState<AdoDiscoveryKind | null>(null);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
-  const [pipelineHint, setPipelineHint] = useState<string | null>(null);
   const [discovered, setDiscovered] = useState<Record<AdoDiscoveryKind, AdoDiscoveryOption[]>>({
     projects: [],
     repositories: [],
@@ -138,13 +134,9 @@ export function useProjectLinkSetupState({
     setDiscoveryError(null);
     if (kind === "projects") {
       setDiscovered((current) => ({ ...current, repositories: [], pipelines: [] }));
-      setPipelineHint(null);
       setForm((current) => applyAdoDiscoveryToProjectLinkInput(current, kind, option));
     } else if (kind === "repositories") {
       setDiscovered((current) => ({ ...current, pipelines: [] }));
-      setPipelineHint(null);
-      setForm((current) => applyAdoDiscoveryToProjectLinkInput(current, kind, option));
-    } else {
       setForm((current) => applyAdoDiscoveryToProjectLinkInput(current, kind, option));
     }
   }, []);
@@ -161,13 +153,6 @@ export function useProjectLinkSetupState({
       });
       setDiscovered((current) => ({ ...current, [kind]: result.items }));
       if (result.items.length === 1) applyDiscovery(kind, result.items[0]!);
-      if (kind === "pipelines" && result.items.length > 1 && !form.adoPipelineId) {
-        const recommended = pickRecommendedPipeline(result.items, form);
-        if (recommended) {
-          applyDiscovery(kind, recommended);
-          setPipelineHint(`Recommended pipeline selected: ${recommended.name}`);
-        }
-      }
     } catch (err) {
       setDiscoveryError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -226,7 +211,6 @@ export function useProjectLinkSetupState({
     error,
     form,
     loadBranches,
-    pipelineHint,
     save,
     saving,
     setAdvanced,
@@ -234,7 +218,6 @@ export function useProjectLinkSetupState({
     setDiscoveryError,
     setField,
     setForm,
-    setPipelineHint,
     runDiscovery,
   };
 }

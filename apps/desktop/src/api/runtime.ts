@@ -18,7 +18,7 @@ export function explainRuntimeError(message: string): string {
       envSource ? `Daemon env source: ${envSource}.` : "",
       deployment ? `Deployment: ${deployment}.` : "",
     ].filter(Boolean).join(" ");
-    return `Azure OpenAI deployment not found. ${details} Check Settings -> Additional Models deployment name, endpoint, and API version, or restart the daemon after fixing the .env file.`.trim();
+    return `Azure OpenAI deployment not found. ${details} Check Settings -> Additional Models deployment name, endpoint, and API version, or restart the daemon after updating model settings.`.trim();
   }
   return message;
 }

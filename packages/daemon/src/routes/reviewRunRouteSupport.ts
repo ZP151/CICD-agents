@@ -5,8 +5,8 @@ import {
   buildCloudContext,
   getAzureDevOpsAuth,
   getAzurePullRequestById,
-  listAzureBuilds,
   listAzurePullRequestThreads,
+  type AzureBuildSummary,
   type Settings,
 } from "@mergepilot/core";
 import type { InlineLlmConfig, InlineProjectLink } from "../chatSession.js";
@@ -30,7 +30,6 @@ const InlineProjectLinkSchema = z.object({
   adoRepoName: z.string().default(""),
   adoPat: z.string().default(""),
   targetBranch: z.string().default("main"),
-  adoPipelineId: z.string().default(""),
 }).passthrough().optional();
 
 export const ReviewRunSchema = z.object({
@@ -52,7 +51,6 @@ export interface ReviewRunProjectLink {
   adoRepoName: string;
   adoPat: string;
   targetBranch: string;
-  adoPipelineId: string;
 }
 
 export function sendAdoDiagnostic(
@@ -106,7 +104,6 @@ export async function resolveReviewRunProjectLink(
     adoRepoName: stored.adoRepoName,
     adoPat: stored.adoPat,
     targetBranch: stored.targetBranch,
-    adoPipelineId: stored.adoPipelineId,
   };
 }
 
@@ -126,7 +123,7 @@ export async function enrichBundleWithPrSignals(args: {
     auth: adoAuth,
     includeWorkItemRefs: true,
   });
-  const [threads, builds] = await Promise.all([
+  const [threads] = await Promise.all([
     listAzurePullRequestThreads({
       organization: projectLink.adoOrgUrl,
       project: projectLink.adoProject,
@@ -135,17 +132,8 @@ export async function enrichBundleWithPrSignals(args: {
       auth: adoAuth,
       top: 100,
     }),
-    projectLink.adoPipelineId
-      ? listAzureBuilds({
-        organization: projectLink.adoOrgUrl,
-        project: projectLink.adoProject,
-        auth: adoAuth,
-        definitions: [projectLink.adoPipelineId],
-        branchName: pullRequest.sourceBranch,
-        top: 20,
-      })
-      : Promise.resolve([]),
   ]);
+  const builds: AzureBuildSummary[] = [];
   const latestBuild = builds[0];
   return {
     ...args.bundle,

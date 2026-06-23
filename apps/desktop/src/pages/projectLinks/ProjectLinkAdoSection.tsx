@@ -1,6 +1,5 @@
 import type { AdoDiscoveryKind, AdoDiscoveryOption, ProjectLinkInput } from "../../api.js";
 import { Field, ProjectDiscoveryField } from "./ProjectLinkFormControls.js";
-import { PipelineDetails } from "./ProjectLinkPipelineDetails.js";
 
 interface ProjectLinkAdoSectionProps {
   form: ProjectLinkInput;
@@ -8,9 +7,7 @@ interface ProjectLinkAdoSectionProps {
   discovered: Record<AdoDiscoveryKind, AdoDiscoveryOption[]>;
   discovering: AdoDiscoveryKind | null;
   discoveryError: string | null;
-  pipelineHint: string | null;
   onApplyDiscovery: (kind: AdoDiscoveryKind, option: AdoDiscoveryOption) => void;
-  onRunDiscovery: (kind: AdoDiscoveryKind) => void;
   onManualProjectChange: (value: string) => void;
   onManualRepositoryChange: (value: string) => void;
 }
@@ -21,9 +18,7 @@ export function ProjectLinkAdoSection({
   discovered,
   discovering,
   discoveryError,
-  pipelineHint,
   onApplyDiscovery,
-  onRunDiscovery,
   onManualProjectChange,
   onManualRepositoryChange,
 }: ProjectLinkAdoSectionProps): JSX.Element {
@@ -65,16 +60,6 @@ export function ProjectLinkAdoSection({
           {discoveryError}
         </p>
       )}
-
-      <PipelineDetails
-        form={form}
-        discovered={discovered.pipelines}
-        discovering={discovering}
-        pipelineHint={pipelineHint}
-        onApply={onApplyDiscovery}
-        onDiscover={() => onRunDiscovery("pipelines")}
-        onFieldChange={set}
-      />
     </section>
   );
 }

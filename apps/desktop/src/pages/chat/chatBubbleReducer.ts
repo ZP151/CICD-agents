@@ -107,6 +107,9 @@ export function reduceChatBubbles(
         bubble.id === action.id ? { ...bubble, confirmed: action.confirmed } : bubble,
       );
     case "mark_pending_status":
+      if (action.status === "done" || action.status === "cancelled") {
+        return prev.filter((bubble) => bubble.id !== action.id);
+      }
       return prev.map((bubble) =>
         bubble.id === action.id ? { ...bubble, pendingStatus: action.status } : bubble,
       );

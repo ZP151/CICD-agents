@@ -18,9 +18,41 @@ import {
   TOKEN_CACHE_NAME,
 } from "./azureAuthConfig.js";
 
+let cacheAccessQueue: Promise<void> = Promise.resolve();
+
 function getAuthority(): string {
   const tenantId = desktopTenantId();
   return `https://login.microsoftonline.com/${tenantId || "organizations"}`;
+}
+
+export async function withMsalCacheAccess<T>(operation: () => Promise<T>): Promise<T> {
+  const previous = cacheAccessQueue.catch(() => undefined);
+  const next = previous.then(() => retryMsalCacheAccess(operation));
+  cacheAccessQueue = next.then(() => undefined, () => undefined);
+  return next;
+}
+
+async function retryMsalCacheAccess<T>(operation: () => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      return await operation();
+    } catch (err) {
+      lastErr = err;
+      if (!isMsalCacheLockError(err) || attempt === 4) break;
+      await sleep(75 * 2 ** attempt);
+    }
+  }
+  throw lastErr;
+}
+
+function isMsalCacheLockError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err ?? "");
+  return /CrossPlatformLockError|lockfile|IdentityService|EPERM|EBUSY|EACCES/i.test(message);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function createMsalClient(): Promise<PublicClientApplication> {

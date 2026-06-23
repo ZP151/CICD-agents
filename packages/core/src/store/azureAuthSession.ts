@@ -1,14 +1,16 @@
 import { getSettings } from "../settings.js";
+import type { AccountInfo } from "@azure/msal-node";
 import { selectMsalAccount } from "./azureAuthAccountSelection.js";
 import { browserCompletionTemplate, openBrowser } from "./azureAuthBrowser.js";
 import { getAzureCredential } from "./azureAuthCredential.js";
 import {
   AZURE_DEVOPS_SCOPES,
+  CLOUD_RESOURCE_SCOPES,
   IDENTITY_SCOPE,
   desktopClientId,
 } from "./azureAuthConfig.js";
 import { decodeUserFromJwt, fetchGraphAvatar } from "./azureAuthIdentity.js";
-import { createMsalClient } from "./azureAuthMsal.js";
+import { createMsalClient, withMsalCacheAccess } from "./azureAuthMsal.js";
 import {
   clearPersistedUser,
   getCachedUser,
@@ -36,15 +38,20 @@ export {
  * Resolve the current user's identity from the active Azure credential.
  * Falls back to `{ oid: "anonymous" }` when no credential is available.
  */
-export async function getCurrentUser(): Promise<AzureUser> {
-  const cached = getCachedUser();
-  if (cached) return cached;
+export async function getCurrentUser(opts: { refreshProfile?: boolean } = {}): Promise<AzureUser> {
+  const cached = hydrateCachedUser(getSettings().dataDir) ?? getCachedUser();
+  if (cached && !opts.refreshProfile) return cached;
 
   try {
     const cred = getAzureCredential({ interactive: false });
     const token = await cred.getToken(IDENTITY_SCOPE);
     if (token?.token) {
-      return setCachedUser(decodeUserFromJwt(token.token))!;
+      const decoded = decodeUserFromJwt(token.token);
+      return setCachedUser({
+        ...cached,
+        ...decoded,
+        avatarDataUrl: await fetchGraphAvatar(token.token) ?? cached?.avatarDataUrl,
+      })!;
     }
   } catch {
     // No cached credential via @azure/identity; try MSAL next.
@@ -52,78 +59,140 @@ export async function getCurrentUser(): Promise<AzureUser> {
 
   if (desktopClientId()) {
     try {
-      const user = await trySilentMsalLogin();
+      const user = await trySilentMsalLogin(cached?.homeAccountId);
       if (user) {
-        return setCachedUser(user)!;
+        return setCachedUser({
+          ...cached,
+          ...user,
+          avatarDataUrl: user.avatarDataUrl ?? cached?.avatarDataUrl,
+        })!;
       }
     } catch {
       // MSAL cache miss or error; fall through.
     }
   }
 
+  if (cached) return cached;
   return setCachedUser({ oid: "anonymous" })!;
 }
 
 export async function trySilentMsalLogin(homeAccountId?: string): Promise<AzureUser | null> {
-  const client = await createMsalClient();
-  const accounts = await client.getTokenCache().getAllAccounts();
-  if (accounts.length === 0) return null;
-  const account = homeAccountId
-    ? accounts.find((candidate) => candidate.homeAccountId === homeAccountId)
-    : accounts[0];
-  if (!account) return null;
-  try {
-    const result = await client.acquireTokenSilent({
-      scopes: [IDENTITY_SCOPE],
-      account,
-    });
-    if (!result?.accessToken) return null;
-    return {
-      ...decodeUserFromJwt(result.idToken ?? result.accessToken),
-      homeAccountId: account.homeAccountId,
-      tenantId: account.tenantId,
-      username: account.username,
-      avatarDataUrl: await fetchGraphAvatar(result.accessToken),
-    };
-  } catch {
-    return null;
-  }
-}
-
-export async function getCachedAzureAccounts(): Promise<AzureCachedAccount[]> {
-  const client = await createMsalClient();
-  const accounts = await client.getTokenCache().getAllAccounts();
-  return Promise.all(accounts.map(async (account) => {
-    let avatarDataUrl: string | undefined;
+  return withMsalCacheAccess(async () => {
+    const client = await createMsalClient();
+    const accounts = await client.getTokenCache().getAllAccounts();
+    if (accounts.length === 0) return null;
+    const account = homeAccountId
+      ? accounts.find((candidate) => candidate.homeAccountId === homeAccountId)
+      : accounts[0];
+    if (!account) return null;
     try {
       const result = await client.acquireTokenSilent({
         scopes: [IDENTITY_SCOPE],
         account,
       });
-      avatarDataUrl = result?.accessToken ? await fetchGraphAvatar(result.accessToken) : undefined;
+      if (!result?.accessToken) return null;
+      return {
+        ...decodeUserFromJwt(result.idToken ?? result.accessToken),
+        homeAccountId: account.homeAccountId,
+        tenantId: account.tenantId,
+        username: account.username,
+        avatarDataUrl: await fetchGraphAvatar(result.accessToken),
+      };
     } catch {
-      avatarDataUrl = undefined;
+      return null;
     }
-    return {
-      homeAccountId: account.homeAccountId,
-      localAccountId: account.localAccountId,
-      tenantId: account.tenantId,
-      username: account.username,
-      name: account.name,
-      avatarDataUrl,
-    };
-  }));
+  });
+}
+
+export async function getCachedAzureAccounts(): Promise<AzureCachedAccount[]> {
+  return withMsalCacheAccess(async () => {
+    const client = await createMsalClient();
+    const accounts = await client.getTokenCache().getAllAccounts();
+    return Promise.all(accounts.map(async (account) => {
+      let avatarDataUrl: string | undefined;
+      try {
+        const result = await client.acquireTokenSilent({
+          scopes: [IDENTITY_SCOPE],
+          account,
+        });
+        avatarDataUrl = result?.accessToken ? await fetchGraphAvatar(result.accessToken) : undefined;
+      } catch {
+        avatarDataUrl = undefined;
+      }
+      return {
+        homeAccountId: account.homeAccountId,
+        localAccountId: account.localAccountId,
+        tenantId: account.tenantId,
+        username: account.username,
+        name: account.name,
+        avatarDataUrl,
+      };
+    }));
+  });
 }
 
 export async function loginWithCachedAccount(homeAccountId: string): Promise<AzureUser | null> {
   const user = await trySilentMsalLogin(homeAccountId);
   if (!user) return null;
   try {
+    await trySilentCloudResourceConsent(homeAccountId);
+  } catch {
+    // Cloud resource consent can be requested during an interactive login.
+  }
+  try {
     await getAzureDevOpsToken({ homeAccountId });
   } catch {
     // The caller can trigger interactive ADO consent explicitly when needed.
   }
   return setCachedUser(user);
+}
+
+async function trySilentCloudResourceConsent(homeAccountId?: string): Promise<boolean> {
+  return withMsalCacheAccess(async () => {
+    const client = await createMsalClient();
+    const accounts = await client.getTokenCache().getAllAccounts();
+    const account = selectMsalAccount(accounts, homeAccountId, getCachedUser());
+    if (!account) return false;
+    for (const scope of CLOUD_RESOURCE_SCOPES) {
+      const result = await client.acquireTokenSilent({
+        scopes: [scope],
+        account,
+      });
+      if (!result?.accessToken) return false;
+    }
+    return true;
+  });
+}
+
+async function ensureInteractiveCloudResourceConsent(opts: {
+  account?: AccountInfo;
+  browser: BrowserLoginChoice;
+  loginHint?: string;
+}): Promise<void> {
+  try {
+    await trySilentCloudResourceConsent(opts.account?.homeAccountId);
+    return;
+  } catch {
+    // Consent may not exist yet; request it below.
+  }
+  const client = await createMsalClient();
+  for (const scope of CLOUD_RESOURCE_SCOPES) {
+    await client.acquireTokenInteractive({
+      scopes: [scope],
+      account: opts.account,
+      loginHint: opts.loginHint ?? opts.account?.username,
+      openBrowser: (url) => openBrowser(url, opts.browser),
+      successTemplate: browserCompletionTemplate({
+        title: "Cloud resource access is enabled",
+        message: "MergePilot can now access configured Azure resources. Return to the app to continue.",
+      }),
+      errorTemplate: browserCompletionTemplate({
+        title: "Cloud resource consent did not complete",
+        message: "Return to the app and sign in again to enable Azure resource access.",
+        tone: "error",
+      }),
+    });
+  }
 }
 
 export async function getAzureDevOpsToken(opts: {
@@ -134,31 +203,39 @@ export async function getAzureDevOpsToken(opts: {
 } = {}): Promise<string> {
   const clientId = desktopClientId();
   if (clientId) {
-    try {
-      hydrateCachedUser(getSettings().dataDir);
-    } catch {
-      // Best-effort active account hydration.
-    }
+    const silentToken = await withMsalCacheAccess(async () => {
+      try {
+        hydrateCachedUser(getSettings().dataDir);
+      } catch {
+        // Best-effort active account hydration.
+      }
 
-    const client = await createMsalClient();
-    const accounts = await client.getTokenCache().getAllAccounts();
-    const account = selectMsalAccount(accounts, opts.homeAccountId, getCachedUser());
+      const client = await createMsalClient();
+      const accounts = await client.getTokenCache().getAllAccounts();
+      const account = selectMsalAccount(accounts, opts.homeAccountId, getCachedUser());
 
-    if (account) {
-      for (const scope of AZURE_DEVOPS_SCOPES) {
-        try {
-          const result = await client.acquireTokenSilent({
-            scopes: [scope],
-            account,
-          });
-          if (result?.accessToken) return result.accessToken;
-        } catch {
-          // Consent may not have been granted; try another ADO scope or interactive flow.
+      if (account) {
+        for (const scope of AZURE_DEVOPS_SCOPES) {
+          try {
+            const result = await client.acquireTokenSilent({
+              scopes: [scope],
+              account,
+            });
+            if (result?.accessToken) return result.accessToken;
+          } catch {
+            // Consent may not have been granted; try another ADO scope or interactive flow.
+          }
         }
       }
-    }
+
+      return null;
+    });
+    if (silentToken) return silentToken;
 
     if (opts.interactive) {
+      const client = await createMsalClient();
+      const accounts = await withMsalCacheAccess(async () => client.getTokenCache().getAllAccounts());
+      const account = selectMsalAccount(accounts, opts.homeAccountId, getCachedUser());
       for (const scope of AZURE_DEVOPS_SCOPES) {
         try {
           const result = await client.acquireTokenInteractive({
@@ -234,6 +311,11 @@ export async function loginWithBrowser(
     username: result.account?.username,
     avatarDataUrl: await fetchGraphAvatar(result.accessToken),
   })!;
+  await ensureInteractiveCloudResourceConsent({
+    account: result.account ?? undefined,
+    browser,
+    loginHint: opts.loginHint,
+  });
   await getAzureDevOpsToken({
     interactive: true,
     browser,

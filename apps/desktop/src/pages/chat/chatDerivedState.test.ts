@@ -21,8 +21,6 @@ function projectLink(overrides: Partial<ProjectLink> = {}): ProjectLink {
     adoProject: "",
     adoRepoName: "",
     adoPat: "",
-    adoPipelineId: "",
-    adoPipelineName: "",
     adoMcpEnabled: false,
     adoMcpCommand: "",
     adoMcpAuthentication: "",
@@ -114,11 +112,10 @@ describe("chat derived state", () => {
       adoOrgUrl: "https://dev.azure.com/org",
       adoProject: "Project",
       adoRepoName: "Repo",
-      adoPipelineName: "CI",
     }), indexed)).toEqual(expect.arrayContaining([
       "Understand this project",
       "Analyze PR insight for this repo",
-      "Check the CI/CD pipeline state",
+      "Open Pipelines workspace",
       "Push and create PR",
     ]));
     expect(pendingApprovalFromBubbles([

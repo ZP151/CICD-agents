@@ -3,7 +3,6 @@ import type {
   AdoDiscoveryOption,
   ProjectLinkInput,
 } from "../../../api.js";
-import { ProjectLinkPipelineFields } from "./ProjectLinkPipelineFields.js";
 
 export interface ProjectLinkAdoFieldsProps {
   applyDiscovery: (kind: AdoDiscoveryKind, option: AdoDiscoveryOption) => void;
@@ -11,13 +10,10 @@ export interface ProjectLinkAdoFieldsProps {
   discovering: AdoDiscoveryKind | null;
   discoveryError: string | null;
   form: ProjectLinkInput;
-  pipelineHint: string | null;
-  runDiscovery: (kind: AdoDiscoveryKind, mode?: "manual" | "auto") => Promise<void>;
   setDiscovered: React.Dispatch<React.SetStateAction<Record<AdoDiscoveryKind, AdoDiscoveryOption[]>>>;
   setDiscoveryError: React.Dispatch<React.SetStateAction<string | null>>;
   setField: <K extends keyof ProjectLinkInput>(key: K) => (value: ProjectLinkInput[K]) => void;
   setForm: React.Dispatch<React.SetStateAction<ProjectLinkInput>>;
-  setPipelineHint: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 export function ProjectLinkAdoFields({
@@ -26,16 +22,11 @@ export function ProjectLinkAdoFields({
   discovering,
   discoveryError,
   form,
-  pipelineHint,
-  runDiscovery,
   setDiscovered,
   setDiscoveryError,
   setField,
   setForm,
-  setPipelineHint,
 }: ProjectLinkAdoFieldsProps) {
-  const hasPipelineConfigured = Boolean(form.adoPipelineName || form.adoPipelineId);
-
   return (
     <div className="grid min-w-0 gap-3 overflow-hidden rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3">
       <input
@@ -56,7 +47,6 @@ export function ProjectLinkAdoFields({
           setDiscovered={setDiscovered}
           setDiscoveryError={setDiscoveryError}
           setForm={setForm}
-          setPipelineHint={setPipelineHint}
         />
         <RepositorySelect
           applyDiscovery={applyDiscovery}
@@ -66,7 +56,6 @@ export function ProjectLinkAdoFields({
           setDiscovered={setDiscovered}
           setDiscoveryError={setDiscoveryError}
           setForm={setForm}
-          setPipelineHint={setPipelineHint}
         />
       </div>
       {discoveryError && (
@@ -74,29 +63,6 @@ export function ProjectLinkAdoFields({
           {discoveryError}
         </p>
       )}
-
-      <details className="group rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))]">
-          <span className="flex items-center gap-2">
-            <svg className="h-3.5 w-3.5 transition group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            <span className="font-medium">Pipeline</span>
-          </span>
-          {hasPipelineConfigured && (
-            <span className="shrink-0 rounded-full border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-subtle))]">configured</span>
-          )}
-        </summary>
-        <ProjectLinkPipelineFields
-          applyDiscovery={applyDiscovery}
-          discovered={discovered.pipelines}
-          discovering={discovering}
-          form={form}
-          pipelineHint={pipelineHint}
-          runDiscovery={runDiscovery}
-          setField={setField}
-        />
-      </details>
     </div>
   );
 }
@@ -109,7 +75,6 @@ interface ProjectSelectProps {
   setDiscovered: React.Dispatch<React.SetStateAction<Record<AdoDiscoveryKind, AdoDiscoveryOption[]>>>;
   setDiscoveryError: React.Dispatch<React.SetStateAction<string | null>>;
   setForm: React.Dispatch<React.SetStateAction<ProjectLinkInput>>;
-  setPipelineHint: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 function ProjectSelect({
@@ -120,7 +85,6 @@ function ProjectSelect({
   setDiscovered,
   setDiscoveryError,
   setForm,
-  setPipelineHint,
 }: ProjectSelectProps) {
   if (discovered.length > 0) {
     return (
@@ -148,13 +112,10 @@ function ProjectSelect({
         const value = e.target.value;
         setDiscoveryError(null);
         setDiscovered((current) => ({ ...current, repositories: [], pipelines: [] }));
-        setPipelineHint(null);
         setForm((current) => ({
           ...current,
           adoProject: value,
           adoRepoName: current.adoProject === value ? current.adoRepoName : "",
-          adoPipelineId: current.adoProject === value ? current.adoPipelineId : "",
-          adoPipelineName: current.adoProject === value ? current.adoPipelineName : "",
         }));
       }}
       placeholder={discovering === "projects" ? "Discovering projects..." : "ADO project"}
@@ -170,7 +131,6 @@ interface RepositorySelectProps {
   setDiscovered: React.Dispatch<React.SetStateAction<Record<AdoDiscoveryKind, AdoDiscoveryOption[]>>>;
   setDiscoveryError: React.Dispatch<React.SetStateAction<string | null>>;
   setForm: React.Dispatch<React.SetStateAction<ProjectLinkInput>>;
-  setPipelineHint: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 function RepositorySelect({
@@ -181,7 +141,6 @@ function RepositorySelect({
   setDiscovered,
   setDiscoveryError,
   setForm,
-  setPipelineHint,
 }: RepositorySelectProps) {
   if (discovered.length > 0) {
     return (
@@ -209,12 +168,9 @@ function RepositorySelect({
         const value = e.target.value;
         setDiscoveryError(null);
         setDiscovered((current) => ({ ...current, pipelines: [] }));
-        setPipelineHint(null);
         setForm((current) => ({
           ...current,
           adoRepoName: value,
-          adoPipelineId: current.adoRepoName === value ? current.adoPipelineId : "",
-          adoPipelineName: current.adoRepoName === value ? current.adoPipelineName : "",
         }));
       }}
       placeholder={discovering === "repositories" ? "Discovering repositories..." : "ADO repo"}

@@ -75,8 +75,8 @@ export function UserFooter() {
             <SafeAvatar
               src={user.avatarDataUrl}
               label={displayName}
-              imageClassName="h-7 w-7 shrink-0 rounded-full object-cover"
-              fallbackClassName="h-7 w-7 text-xs"
+              imageClassName="h-7 w-7 shrink-0 rounded-full bg-blue-600 object-cover ring-1 ring-zinc-700"
+              fallbackClassName="h-7 w-7 text-xs ring-1 ring-zinc-700"
             />
             <div className="min-w-0 flex-1">
               <p className="truncate text-[12px] font-medium text-zinc-300">{displayName}</p>

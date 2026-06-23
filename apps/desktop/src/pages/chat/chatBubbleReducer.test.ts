@@ -53,7 +53,7 @@ describe("chat bubble reducer", () => {
       pendingStatus: "waiting",
     });
     expect(executing[0]).toMatchObject({ pendingStatus: "executing" });
-    expect(done[0]).toMatchObject({ pendingStatus: "done" });
+    expect(done).toEqual([]);
   });
 
   it("drives tool execution and local UI controls through reducer actions", () => {

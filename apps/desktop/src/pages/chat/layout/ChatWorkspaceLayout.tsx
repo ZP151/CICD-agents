@@ -95,7 +95,7 @@ export function ChatWorkspaceLayout({
   workspaceRef,
 }: ChatShellProps) {
   const summaryPinnedAvailable = Boolean(activeProjectLinkId || bubbles.length > 0);
-  const summaryVisible = summaryPinnedAvailable && summaryPinnedOpen && !rightPanelOpen;
+  const summaryVisible = summaryPinnedAvailable && summaryPinnedOpen;
 
   return (
     <div ref={workspaceRef} className={mini ? "flex flex-1 flex-col overflow-hidden" : "chat-workspace"}>
@@ -132,7 +132,7 @@ export function ChatWorkspaceLayout({
         </>
       )}
 
-      <div className={mini ? "flex flex-1 flex-col overflow-hidden" : `middle-panel${summaryVisible ? " with-pinned-summary" : ""}`}>
+      <div className={mini ? "flex flex-1 flex-col overflow-hidden" : "middle-panel"}>
         <div className={mini ? "flex flex-1 flex-col overflow-hidden" : "middle-panel-inner"}>
           <div
             ref={scrollContainerRef}

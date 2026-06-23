@@ -5,6 +5,8 @@ import {
   type TokenCredential,
 } from "@azure/identity";
 import { cachePersistencePlugin } from "@azure/identity-cache-persistence";
+import { getSettings } from "../settings.js";
+import { selectMsalAccount } from "./azureAuthAccountSelection.js";
 import { browserCompletionTemplate } from "./azureAuthBrowser.js";
 import {
   REDIRECT_URI,
@@ -12,6 +14,8 @@ import {
   desktopClientId,
   desktopTenantId,
 } from "./azureAuthConfig.js";
+import { createMsalClient, withMsalCacheAccess } from "./azureAuthMsal.js";
+import { getCachedUser, hydrateCachedUser } from "./azureAuthSessionCache.js";
 
 let pluginRegistered = false;
 
@@ -53,4 +57,49 @@ export function getAzureCredential(opts: {
   }
 
   return new DefaultAzureCredential();
+}
+
+export function getAzureCachedScopeCredential(defaultScope: string): TokenCredential {
+  const fallback = getAzureCredential({ interactive: false });
+  return {
+    async getToken(scopes, options) {
+      const requestedScope = Array.isArray(scopes) ? scopes[0] : scopes;
+      const scope = requestedScope || defaultScope;
+      if (desktopClientId()) {
+        return withMsalCacheAccess(async () => {
+          let msalError: unknown;
+          try {
+            hydrateCachedUser(getSettings().dataDir);
+          } catch {
+            // Best-effort account hydration; MSAL cache lookup below can still work.
+          }
+          const client = await createMsalClient();
+          const accounts = await client.getTokenCache().getAllAccounts();
+          const account = selectMsalAccount(accounts, undefined, getCachedUser());
+          if (account) {
+            try {
+              const result = await client.acquireTokenSilent({
+                scopes: [scope],
+                account,
+              });
+              if (result?.accessToken) {
+                return {
+                  token: result.accessToken,
+                  expiresOnTimestamp: result.expiresOn?.getTime() ?? Date.now() + 3_600_000,
+                };
+              }
+            } catch (err) {
+              msalError = err;
+            }
+          }
+          if (msalError) throw msalError;
+          if (accounts.length === 0) {
+            throw new Error("No signed-in Azure account is available. Sign in again to enable Azure Key Vault access.");
+          }
+          return fallback.getToken(scopes, options);
+        });
+      }
+      return fallback.getToken(scopes, options);
+    },
+  };
 }

@@ -4,6 +4,8 @@
  * Secret naming convention:
  *   ado-pat-{projectLinkId}      → ADO Personal Access Token per Project Link
  *   aoai-key-{shortUserId}       → Azure OpenAI API key per user
+ *   kv://aoai-key                → Reference to the current user's AOAI key
+ *   kv://secret/{secretName}     → Reference to an explicit Key Vault secret
  *
  * Usage:
  *   const kv = new KeyVaultSecrets("https://my-vault.vault.azure.net/");
@@ -11,13 +13,15 @@
  *   const pat = await kv.getAdoPat(projectLinkId);
  */
 import { SecretClient } from "@azure/keyvault-secrets";
-import { getAzureCredential, requireCurrentUser } from "./azureAuth.js";
+import { KEY_VAULT_SCOPE } from "./azureAuthConfig.js";
+import { getAzureCachedScopeCredential } from "./azureAuthCredential.js";
+import { requireCurrentUser } from "./azureAuth.js";
 
 export class KeyVaultSecrets {
   private readonly client: SecretClient;
 
   constructor(vaultUrl: string) {
-    this.client = new SecretClient(vaultUrl, getAzureCredential({ interactive: false }));
+    this.client = new SecretClient(vaultUrl, getAzureCachedScopeCredential(KEY_VAULT_SCOPE));
   }
 
   // ── ADO PAT (per Project Link) ──────────────────────────────────────────────
@@ -69,5 +73,19 @@ export class KeyVaultSecrets {
       tags: { type: "aoai-key", userId: user.oid },
       contentType: "text/plain",
     });
+  }
+
+  async getAoaiKeyByRef(ref: string): Promise<string | null> {
+    if (ref === "kv://aoai-key") return this.getAoaiKey();
+
+    const explicitSecret = /^kv:\/\/secret\/([^/]+)$/.exec(ref);
+    if (!explicitSecret?.[1]) return null;
+    try {
+      const secret = await this.client.getSecret(explicitSecret[1]);
+      return secret.value ?? null;
+    } catch (err: unknown) {
+      if ((err as { statusCode?: number })?.statusCode === 404) return null;
+      throw err;
+    }
   }
 }

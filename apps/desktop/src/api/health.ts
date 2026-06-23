@@ -11,6 +11,7 @@ export interface HealthStatus {
   azureEndpoint?: string;
   azureDeploymentAvailable?: boolean;
   azureDeploymentError?: string;
+  keyVaultSecretError?: string | null;
   cloudProjectLinkStore?: boolean;
   cloudSecrets?: boolean;
   cloudSessions?: boolean;

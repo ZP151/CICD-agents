@@ -241,4 +241,35 @@ describe("runChatWorkflowAction", () => {
     });
     expect(body).not.toHaveProperty("projectLinkId");
   });
+
+  it("omits null sessionId from workflow action requests", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      action: "inspect_architecture_context",
+      repoPath: "C:\\repo",
+      sessionId: "created-session",
+      tools: [],
+      workflowState: {
+        status: "done",
+        currentStep: "done",
+        completedTools: [],
+        pendingTools: [],
+      },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runChatWorkflowAction("inspect_architecture_context", "C:\\repo", null, {
+      sessionId: null,
+    });
+
+    const body = firstRequestBody(fetchMock);
+    expect(body).toMatchObject({
+      action: "inspect_architecture_context",
+      repoPath: "C:\\repo",
+    });
+    expect(body).not.toHaveProperty("sessionId");
+  });
 });

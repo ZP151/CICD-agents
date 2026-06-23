@@ -102,7 +102,6 @@ export function inlineProjectLinkToChatContextProjectLink(projectLink?: InlinePr
     buildCommand: projectLink.buildCommand,
     testCommand: projectLink.testCommand,
     targetBranch: projectLink.targetBranch || projectLink.defaultBranch || "main",
-    pipelineName: projectLink.adoPipelineName,
   };
 }
 

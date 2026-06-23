@@ -45,23 +45,21 @@ export function updateToolEndBubble(prev: Bubble[], ev: ChatEventPayload): Bubbl
 }
 
 export function markExecutingPendingBubblesDone(prev: Bubble[]): Bubble[] {
-  return prev.map((bubble) =>
-    bubble.kind === "pending_confirm" && bubble.pendingStatus === "executing"
-      ? { ...bubble, pendingStatus: "done" }
-      : bubble,
+  return prev.filter(
+    (bubble) => !(bubble.kind === "pending_confirm" && bubble.pendingStatus === "executing"),
   );
 }
 
 export function markPendingBubbleDone(prev: Bubble[], bubbleId: string | undefined): Bubble[] {
-  return prev.map((bubble) =>
-    bubble.id === bubbleId && bubble.pendingStatus === "executing" ? { ...bubble, pendingStatus: "done" } : bubble,
+  if (!bubbleId) return prev;
+  return prev.filter(
+    (bubble) => !(bubble.id === bubbleId && bubble.pendingStatus === "executing"),
   );
 }
 
 export function markPendingBubbleCancelled(prev: Bubble[], bubbleId: string | undefined): Bubble[] {
-  return prev.map((bubble) =>
-    bubble.id === bubbleId ? { ...bubble, pendingStatus: "cancelled" } : bubble,
-  );
+  if (!bubbleId) return prev;
+  return prev.filter((bubble) => bubble.id !== bubbleId);
 }
 
 function uid(): string {

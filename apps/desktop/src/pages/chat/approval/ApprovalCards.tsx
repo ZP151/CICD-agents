@@ -34,8 +34,10 @@ export function ExecutionLog({
 }: ExecutionLogProps) {
   const approvalTool = approval?.kind === "pending_confirm" ? approval.pendingTool : undefined;
   const approvalTargetId = approvalTool
-    ? (tools.find((tool) => toolNameFromBubble(tool) === approvalTool)?.id ?? tools.at(-1)?.id)
+    ? tools.find((tool) => toolNameFromBubble(tool) === approvalTool)?.id
     : undefined;
+  const groupLevelApproval =
+    approval?.kind === "pending_confirm" && !approvalTargetId ? approval : undefined;
 
   const items: ExecutionTimelineItem[] = tools.map((tool) => {
     const part = primaryToolCallPart(tool.parts);
@@ -69,21 +71,31 @@ export function ExecutionLog({
   });
 
   return (
-    <ExecutionTimeline
-      items={items}
-      onToggleItem={onToggleTool}
-      renderOutput={(item) => <ToolOutputRenderer toolName={item.toolName} toolResult={item.output} />}
-      renderApproval={(item) => {
-        if (!approval || item.approval?.id !== approval.id) return null;
-        return (
-          <PendingActionCard
-            bubble={approval}
-            onConfirm={() => onConfirmApproval?.(approval.id)}
-            onCancel={(feedback) => onCancelApproval?.(approval.id, feedback)}
-          />
-        );
-      }}
-    />
+    <>
+      <ExecutionTimeline
+        items={items}
+        onToggleItem={onToggleTool}
+        renderOutput={(item) => <ToolOutputRenderer toolName={item.toolName} toolResult={item.output} />}
+        renderApproval={(item) => {
+          if (!approval || item.approval?.id !== approval.id) return null;
+          if (approval.pendingStatus === "done" || approval.pendingStatus === "cancelled") return null;
+          return (
+            <PendingActionCard
+              bubble={approval}
+              onConfirm={() => onConfirmApproval?.(approval.id)}
+              onCancel={(feedback) => onCancelApproval?.(approval.id, feedback)}
+            />
+          );
+        }}
+      />
+      {groupLevelApproval && (
+        <PendingActionCard
+          bubble={groupLevelApproval}
+          onConfirm={() => onConfirmApproval?.(groupLevelApproval.id)}
+          onCancel={(feedback) => onCancelApproval?.(groupLevelApproval.id, feedback)}
+        />
+      )}
+    </>
   );
 }
 

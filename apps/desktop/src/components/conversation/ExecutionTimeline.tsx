@@ -36,6 +36,7 @@ export function ExecutionTimeline({
   const hasApproval = items.some((item) => item.approval);
   const completed = !running && !hasApproval && !hasError;
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [openItems, setOpenItems] = useState<Record<string, boolean>>({});
   const [timelineOpen, setTimelineOpen] = useState(() => !completed);
   const completedAutoCollapsedRef = useRef(completed);
   const headerLabel = running ? "Working" : hasError ? "Stopped" : hasApproval ? "Waiting for approval" : "Worked";
@@ -59,6 +60,15 @@ export function ExecutionTimeline({
 
   if (items.length === 0) return null;
 
+  const toggleItem = (id: string) => {
+    setOpenItems((current) => ({ ...current, [id]: !(current[id] ?? items.find((item) => item.id === id)?.open ?? false) }));
+    onToggleItem(id);
+  };
+  const itemWithOpenState = (item: ExecutionTimelineItem): ExecutionTimelineItem => ({
+    ...item,
+    open: openItems[item.id] ?? item.open,
+  });
+
   return (
     <section className="mb-3 border-t border-[rgb(var(--app-border))] pt-2 text-xs">
       <button
@@ -77,47 +87,61 @@ export function ExecutionTimeline({
       </button>
 
       {timelineOpen && (
-      <div className="space-y-1">
-        {groups.map((group) => {
-          const groupOpen = openGroups[group.id] ?? defaultGroupOpen(group, completed);
-          const groupLabel = executionGroupTranscriptLabel(group);
+        completed ? (
+          <div className="space-y-1 pb-1">
+            {groups.flatMap((group) => group.items).map((item) => (
+              <ExecutionCommandRow
+                key={item.id}
+                item={itemWithOpenState(item)}
+                onToggleItem={toggleItem}
+                renderOutput={renderOutput}
+                renderApproval={renderApproval}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {groups.map((group) => {
+              const groupOpen = openGroups[group.id] ?? defaultGroupOpen(group, completed);
+              const groupLabel = executionGroupTranscriptLabel(group);
 
-          return (
-            <div key={group.id}>
-              <button
-                type="button"
-                onClick={() => setOpenGroups((current) => ({ ...current, [group.id]: !groupOpen }))}
-                title={`${groupOpen ? "Collapse" : "Expand"} ${groupLabel}`}
-                aria-expanded={groupOpen}
-                className="flex w-full items-center gap-2 rounded-md px-0 py-1.5 text-left text-[rgb(var(--app-text-subtle))] transition hover:bg-[rgb(var(--app-surface-raised))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--app-accent))]/35 active:bg-[rgb(var(--app-bg-muted))]"
-              >
-                <TranscriptIcon status={group.status} />
-                <span className="min-w-0 flex-1 truncate">{groupLabel}</span>
-                <span className="hidden text-[11px] text-[rgb(var(--app-text-subtle))] sm:inline">
-                  {group.title}
-                </span>
-                <ChevronIcon open={groupOpen} />
-              </button>
+              return (
+                <div key={group.id}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroups((current) => ({ ...current, [group.id]: !groupOpen }))}
+                    title={`${groupOpen ? "Collapse" : "Expand"} ${groupLabel}`}
+                    aria-expanded={groupOpen}
+                    className="flex w-full items-center gap-2 rounded-md px-0 py-1.5 text-left text-[rgb(var(--app-text-subtle))] transition hover:bg-[rgb(var(--app-surface-raised))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--app-accent))]/35 active:bg-[rgb(var(--app-bg-muted))]"
+                  >
+                    <TranscriptIcon status={group.status} />
+                    <span className="min-w-0 flex-1 truncate">{groupLabel}</span>
+                    <span className="hidden text-[11px] text-[rgb(var(--app-text-subtle))] sm:inline">
+                      {group.title}
+                    </span>
+                    <ChevronIcon open={groupOpen} />
+                  </button>
 
-              {groupOpen && (
-                <div className="pb-2 pl-5">
-                  <div className="space-y-1">
-                    {group.items.map((item) => (
-                      <ExecutionCommandRow
-                        key={item.id}
-                        item={item}
-                        onToggleItem={onToggleItem}
-                        renderOutput={renderOutput}
-                        renderApproval={renderApproval}
-                      />
-                    ))}
-                  </div>
+                  {groupOpen && (
+                    <div className="pb-2 pl-5">
+                      <div className="space-y-1">
+                        {group.items.map((item) => (
+                          <ExecutionCommandRow
+                            key={item.id}
+                            item={itemWithOpenState(item)}
+                            onToggleItem={toggleItem}
+                            renderOutput={renderOutput}
+                            renderApproval={renderApproval}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
+        )
       )}
     </section>
   );

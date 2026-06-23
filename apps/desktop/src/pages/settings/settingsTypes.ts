@@ -10,6 +10,7 @@ export interface AppSettings {
   inferenceSpeed: "fast" | "balanced" | "deep";
   codeReviewMode: "inline" | "detached";
   suggestedPrompts: boolean;
+  secretSource: "key_vault" | "local_env";
   additionalModels: AdditionalModelConfig[];
   azureTenantId: string;
   azureClientId: string;
@@ -41,6 +42,7 @@ export const DEFAULTS: AppSettings = {
   inferenceSpeed: "fast",
   codeReviewMode: "inline",
   suggestedPrompts: true,
+  secretSource: "key_vault",
   additionalModels: [],
   azureTenantId: "",
   azureClientId: "",
@@ -145,6 +147,7 @@ export function loadSettings(): AppSettings {
         inferenceSpeed: stored.inferenceSpeed,
         codeReviewMode: stored.codeReviewMode,
         suggestedPrompts: stored.suggestedPrompts,
+        secretSource: parsed.secretSource === "local_env" ? "local_env" : "key_vault",
         additionalModels: normalizeAdditionalModels(parsed.additionalModels),
         azureTenantId: cleanString(parsed.azureTenantId),
         azureClientId: cleanString(parsed.azureClientId),

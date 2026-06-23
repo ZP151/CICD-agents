@@ -10,7 +10,9 @@
  * Fallback: if Cosmos is unavailable, callers should catch and use the local JSON store.
  */
 import { CosmosClient, type ContainerRequest } from "@azure/cosmos";
-import { getAzureCredential, requireCurrentUser } from "./azureAuth.js";
+import { COSMOS_SCOPE } from "./azureAuthConfig.js";
+import { getAzureCachedScopeCredential } from "./azureAuthCredential.js";
+import { requireCurrentUser } from "./azureAuth.js";
 
 const DB_NAME = "mergepilot";
 const CONTAINER_NAME = "chat-sessions";
@@ -41,7 +43,7 @@ let _ready = false;
 
 function makeClient(endpoint: string): CosmosClient {
   if (!_client) {
-    _client = new CosmosClient({ endpoint, aadCredentials: getAzureCredential({ interactive: false }) });
+    _client = new CosmosClient({ endpoint, aadCredentials: getAzureCachedScopeCredential(COSMOS_SCOPE) });
   }
   return _client;
 }

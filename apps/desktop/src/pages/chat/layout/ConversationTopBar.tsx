@@ -57,7 +57,7 @@ export function ConversationTopBar({
   onConfirmTitle,
   onCancelTitle,
 }: ConversationTopBarProps) {
-  const summaryVisible = summaryPinnedAvailable && summaryPinnedOpen && !rightPanelOpen;
+  const summaryVisible = summaryPinnedAvailable && summaryPinnedOpen;
   const summaryButtonClass = `rounded p-1.5 transition-colors ${summaryVisible ? "bg-zinc-800 text-zinc-300" : "text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"}`;
   const summaryButton = summaryPinnedAvailable ? (
     <button
@@ -123,7 +123,6 @@ export function ConversationTopBar({
       <div
         className={[
           "relative flex h-full shrink-0 items-center justify-end overflow-visible",
-          rightPanelOpen ? "border-l border-zinc-800/80" : "",
         ].join(" ")}
         style={{ width: rightPanelOpen ? rightWidth : 40 }}
       >

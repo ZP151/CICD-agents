@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Settings } from "@mergepilot/core";
+import { keyVaultSecretError } from "../daemonEnv.js";
 
 let azureDeploymentProbeCache: {
   key: string;
@@ -100,6 +101,7 @@ export function registerHealthRoutes(
       azureEndpoint: settings.azureOpenAiEndpoint,
       azureDeploymentAvailable: azureDeployment.available,
       azureDeploymentError: azureDeployment.error,
+      keyVaultSecretError: keyVaultSecretError(),
       cloudProjectLinkStore,
       cloudSecrets:      !!(settings.azureKeyVaultUrl),
       cloudSessions:     !!(settings.azureCosmosEndpoint),

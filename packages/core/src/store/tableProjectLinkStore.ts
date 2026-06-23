@@ -12,7 +12,9 @@
  */
 import { TableClient, TableServiceClient, odata } from "@azure/data-tables";
 import type { ProjectLink, ProjectLinkInput } from "../projectLinks.js";
-import { getAzureCredential, requireCurrentUser } from "./azureAuth.js";
+import { STORAGE_SCOPE } from "./azureAuthConfig.js";
+import { getAzureCachedScopeCredential } from "./azureAuthCredential.js";
+import { requireCurrentUser } from "./azureAuth.js";
 import crypto from "node:crypto";
 
 const TABLE_NAME = "MergePilotProjectLinks";
@@ -22,12 +24,12 @@ function tableUrl(accountName: string): string {
 }
 
 async function getClient(accountName: string): Promise<TableClient> {
-  const cred = getAzureCredential({ interactive: false });
+  const cred = getAzureCachedScopeCredential(STORAGE_SCOPE);
   return new TableClient(tableUrl(accountName), TABLE_NAME, cred);
 }
 
 async function ensureTable(accountName: string): Promise<void> {
-  const cred = getAzureCredential({ interactive: false });
+  const cred = getAzureCachedScopeCredential(STORAGE_SCOPE);
   const svc = new TableServiceClient(tableUrl(accountName), cred);
   try {
     await svc.createTable(TABLE_NAME);
@@ -50,8 +52,6 @@ type ProjectLinkEntity = {
   adoProject: string;
   adoRepoName: string;
   adoPat: string;
-  adoPipelineId: string;
-  adoPipelineName: string;
   adoMcpEnabled?: boolean;
   adoMcpCommand?: string;
   adoMcpAuthentication?: string;
@@ -74,8 +74,6 @@ function entityToProjectLink(e: ProjectLinkEntity): ProjectLink {
     adoProject: e.adoProject,
     adoRepoName: e.adoRepoName,
     adoPat: e.adoPat,
-    adoPipelineId: e.adoPipelineId,
-    adoPipelineName: e.adoPipelineName,
     adoMcpEnabled: e.adoMcpEnabled ?? false,
     adoMcpCommand: e.adoMcpCommand ?? "",
     adoMcpAuthentication: e.adoMcpAuthentication ?? "",
@@ -100,8 +98,6 @@ function projectLinkToEntity(userId: string, p: ProjectLink): ProjectLinkEntity 
     adoProject: p.adoProject,
     adoRepoName: p.adoRepoName,
     adoPat: p.adoPat,
-    adoPipelineId: p.adoPipelineId,
-    adoPipelineName: p.adoPipelineName,
     adoMcpEnabled: p.adoMcpEnabled,
     adoMcpCommand: p.adoMcpCommand,
     adoMcpAuthentication: p.adoMcpAuthentication,

@@ -54,13 +54,10 @@ export function ProjectLinkSetupCard({
             discovering={state.discovering}
             discoveryError={state.discoveryError}
             form={state.form}
-            pipelineHint={state.pipelineHint}
-            runDiscovery={state.runDiscovery}
             setDiscovered={state.setDiscovered}
             setDiscoveryError={state.setDiscoveryError}
             setField={state.setField}
             setForm={state.setForm}
-            setPipelineHint={state.setPipelineHint}
           />
         )}
 

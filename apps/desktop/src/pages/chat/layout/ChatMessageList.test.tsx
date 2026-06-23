@@ -53,4 +53,29 @@ describe("ChatMessageList", () => {
     expect(html).toContain("src=\"data:image/png;base64,AAAA\"");
     expect(html).not.toContain("[image: composer-screenshot.png]");
   });
+
+  it("does not render completed pending approval cards", () => {
+    const html = renderMessages([
+      {
+        id: "approval-done",
+        kind: "pending_confirm",
+        pendingTool: "git_push",
+        pendingArgs: { branch: "main" },
+        pendingStatus: "done",
+        riskLevel: "medium",
+      },
+      {
+        id: "approval-cancelled",
+        kind: "pending_confirm",
+        pendingTool: "git_commit",
+        pendingArgs: { message: "test" },
+        pendingStatus: "cancelled",
+        riskLevel: "medium",
+      },
+    ]);
+
+    expect(html).not.toContain("Approved action finished");
+    expect(html).not.toContain("Action not run");
+    expect(html).not.toContain("Approval required");
+  });
 });

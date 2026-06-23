@@ -11,7 +11,7 @@ export interface InlineLlmConfig {
 }
 
 /**
- * Merge inline LLM config from the desktop client on top of env/.env defaults.
+ * Merge inline LLM config from the desktop client on top of runtime defaults.
  * The selected provider decides which inline values can affect runtime calls.
  */
 export function buildEffectiveLlmSettings(override?: InlineLlmConfig): Settings {

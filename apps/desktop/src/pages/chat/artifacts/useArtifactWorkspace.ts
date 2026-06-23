@@ -106,7 +106,7 @@ export function useArtifactWorkspace({
 
   const selectSource = useCallback((source: ConversationSourcePart) => {
     setSelectedSource(source);
-    setOpenSources((current) => addOpenSource(current, source));
+    setOpenSources((current) => replaceOpenSource(current, source));
     setSelectedArtifactId(null);
     setSelectedExternalArtifact(null);
     onOpenPanel();
@@ -210,16 +210,13 @@ export function useArtifactWorkspace({
   };
 }
 
-function addOpenSource(
+export function replaceOpenSource(
   current: ConversationSourcePart[],
   source: ConversationSourcePart,
 ): ConversationSourcePart[] {
   const key = sourceReferenceKey(source);
-  const existingIndex = current.findIndex((entry) => sourceReferenceKey(entry) === key);
-  if (existingIndex < 0) return [...current, source];
-  const next = [...current];
-  next[existingIndex] = mergeConversationSource(next[existingIndex]!, source);
-  return next;
+  const existing = current.find((entry) => sourceReferenceKey(entry) === key);
+  return [existing ? mergeConversationSource(existing, source) : source];
 }
 
 export function pruneOpenSourcesForConversation(

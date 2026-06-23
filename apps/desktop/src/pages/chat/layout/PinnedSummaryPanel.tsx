@@ -119,7 +119,7 @@ export function PinnedSummaryPanel({
 
   return (
     <div
-      className="pointer-events-none absolute top-12 z-20 hidden w-[300px] max-w-[calc(100%-24px)] lg:block"
+      className="pointer-events-none absolute top-12 z-40 hidden w-[300px] max-w-[calc(100%-24px)] lg:block"
       style={{ right: codePanelOpen ? codePanelWidth + 20 : 20 }}
     >
       <div className="pointer-events-auto rounded-2xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4 text-[rgb(var(--app-text))] shadow-lg">

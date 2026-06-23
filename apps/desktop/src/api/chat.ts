@@ -200,6 +200,7 @@ export async function runChatWorkflowAction(
   const projectLinkIdentity = projectLinkId
     ? { projectLinkId }
     : {};
+  const actionInput = compactWorkflowActionInput(input);
   const r = await fetch(`${RUNTIME_URL}/chat/workflow-action`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -207,12 +208,19 @@ export async function runChatWorkflowAction(
       action,
       repoPath,
       ...projectLinkIdentity,
-      ...(input ?? {}),
+      ...actionInput,
       ...(projectLink ? { projectLink } : {}),
     }),
   });
   if (!r.ok) throw new Error(`/chat/workflow-action HTTP ${r.status}: ${await r.text()}`);
   return (await r.json()) as ChatWorkflowActionResult;
+}
+
+function compactWorkflowActionInput(input?: ChatWorkflowActionInput): Record<string, unknown> {
+  if (!input) return {};
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== null && value !== undefined),
+  );
 }
 
 function chatIndexBody(repoPath: string, projectLinkId?: string): Record<string, unknown> {

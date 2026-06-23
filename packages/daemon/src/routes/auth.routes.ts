@@ -52,7 +52,7 @@ export function registerAuthRoutes(app: FastifyInstance, { settings }: { setting
         message: "No Azure credential found. Use the Sign-in button to enable cloud persistence.",
       });
     }
-    const user = await getCurrentUser();
+    const user = await getCurrentUser({ refreshProfile: true });
     persistUserCache(user, settings.dataDir);
     return {
       authenticated: true,

@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 export function initialsFromText(value: string | undefined, fallback = "?"): string {
   const source = value?.trim() || fallback;
   const parts = source.split(/[^A-Za-z0-9]+/).filter(Boolean);
@@ -28,9 +30,12 @@ export function SafeAvatar({
   fallbackClassName: string;
 }) {
   const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
   if (src && !failed) {
     return <img src={src} alt="" className={imageClassName} onError={() => setFailed(true)} />;
   }
   return <InitialsAvatar label={label} className={fallbackClassName} />;
 }
-import { useState } from "react";

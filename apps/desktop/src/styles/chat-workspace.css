@@ -71,12 +71,6 @@
   background: rgba(99, 102, 241, 0.2);
 }
 
-@media (min-width: 1024px) {
-  .middle-panel.with-pinned-summary {
-    margin-right: 320px;
-  }
-}
-
 /* Inner conversation column: width-capped, always centered */
 /*
   max-width is intentionally narrow so justify-content:center has room to apply:
@@ -99,6 +93,8 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  overflow-anchor: none;
+  scroll-padding-block-end: 24px;
 }
 
 /* Input bar: owned by middle column, never scrolls */
@@ -115,9 +111,8 @@
   flex-direction: column;
   flex-shrink: 0;
   overflow: hidden;
-  overflow-y: auto;
   overscroll-behavior: contain;
-  border-left: 1px solid rgba(39, 39, 42, 0.6);
+  border-left: 0;
   transition: width 180ms ease, opacity 150ms ease;
   min-width: 0;
 }
@@ -148,7 +143,7 @@
   top: 0;
   width: 1px;
   transform: translateX(-50%);
-  background: rgba(39, 39, 42, 0.85);
+  background: rgb(var(--app-border));
   pointer-events: none;
 }
 

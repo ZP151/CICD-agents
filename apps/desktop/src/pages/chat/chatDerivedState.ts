@@ -115,14 +115,13 @@ export function welcomeSuggestionsForProjectLink(
   indexStatus: ChatIndexStatus | null,
 ): string[] {
   const hasAdoMapping = Boolean(activeProjectLink?.adoOrgUrl && activeProjectLink.adoProject && activeProjectLink.adoRepoName);
-  const hasPipeline = Boolean(activeProjectLink?.adoPipelineId || activeProjectLink?.adoPipelineName);
   const needsProjectUnderstanding = indexStatus ? (!indexStatus.indexed || !indexStatus.semanticReady) : false;
   const suggestions = [
     needsProjectUnderstanding ? "Understand this project" : "Explain this project architecture",
     "Review my changes",
     "What's on this branch?",
     hasAdoMapping ? "Analyze PR insight for this repo" : "Run tests",
-    hasPipeline ? "Check the CI/CD pipeline state" : "Find the build and test commands",
+    hasAdoMapping ? "Open Pipelines workspace" : "Find the build and test commands",
     "Stage and commit",
     hasAdoMapping ? "Push and create PR" : "Prepare a PR plan",
   ];

@@ -2,13 +2,19 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { resetSettingsForTests } from "@mergepilot/core";
+import {
+  AzureTableProjectLinkStore,
+  createProjectLink,
+  resetSettingsForTests,
+} from "@mergepilot/core";
 import { buildApp } from "../src/server.js";
 
 let app: Awaited<ReturnType<typeof buildApp>> | null = null;
+let tmpDataDir = "";
 
 beforeAll(() => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "mergepilot-daemon-project-link-"));
+  tmpDataDir = tmp;
   process.env.RUNTIME_DATA_DIR = tmp;
   process.env.RUNTIME_HOST = "127.0.0.1";
   process.env.RUNTIME_PORT = "0";
@@ -22,6 +28,9 @@ beforeAll(() => {
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  process.env.AZURE_STORAGE_ACCOUNT = "";
+  process.env.AZURE_KEYVAULT_URL = "";
+  resetSettingsForTests();
   if (app) {
     await app.close();
     app = null;
@@ -68,6 +77,39 @@ describe("daemon Project Link routes", () => {
     const deleted = await app.inject({ method: "DELETE", url: `/project-links/${body.id}` });
     expect(deleted.statusCode).toBe(200);
     expect(deleted.json()).toEqual({ ok: true });
+  });
+
+  it("falls back to local Project Links when Azure Table authentication is unavailable", async () => {
+    const local = createProjectLink(tmpDataDir, {
+      name: "Local Project Link",
+      repoPath: process.cwd(),
+      defaultBranch: "main",
+      targetBranch: "main",
+      adoOrgUrl: "https://dev.azure.com/demo-org",
+      adoProject: "Agents",
+      adoRepoName: "mergepilot",
+      adoPat: "",
+      adoPipelineId: "",
+      adoPipelineName: "",
+      adoMcpEnabled: false,
+      adoMcpCommand: "",
+      adoMcpAuthentication: "",
+      adoMcpDomains: "repositories,pipelines,work-items",
+      projectTemplate: "",
+      buildCommand: "",
+      testCommand: "",
+    });
+    process.env.AZURE_STORAGE_ACCOUNT = "demoaccount";
+    resetSettingsForTests();
+    vi.spyOn(AzureTableProjectLinkStore.prototype, "list").mockRejectedValue(
+      new Error("Automatic authentication has been disabled. You may call the authentication() method."),
+    );
+
+    app = await buildApp();
+    const listed = await app.inject({ method: "GET", url: "/project-links" });
+
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json()).toEqual(expect.arrayContaining([expect.objectContaining({ id: local.id })]));
   });
 
   it("discovers Project Link Azure DevOps options through internal ADO logic", async () => {

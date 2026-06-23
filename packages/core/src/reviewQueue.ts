@@ -1,7 +1,8 @@
 import { TableClient, odata, type TableEntity } from "@azure/data-tables";
 import { entityToQueueItem, type ReviewHistoryEntity } from "./reviewQueueEntity.js";
 import type { ReviewQueueItem, ReviewQueuePriority } from "./reviewQueueTypes.js";
-import { getAzureCredential } from "./store/azureAuth.js";
+import { STORAGE_SCOPE } from "./store/azureAuthConfig.js";
+import { getAzureCachedScopeCredential } from "./store/azureAuthCredential.js";
 
 export type {
   ReviewDispositionEvent,
@@ -38,7 +39,7 @@ export async function listReviewQueueItems(args: {
   const repository = args.repository.trim();
   if (!storageAccount || !repository) return [];
 
-  const client = new TableClient(tableUrl(storageAccount), REVIEW_HISTORY_TABLE, getAzureCredential({ interactive: false }));
+  const client = new TableClient(tableUrl(storageAccount), REVIEW_HISTORY_TABLE, getAzureCachedScopeCredential(STORAGE_SCOPE));
   const items: ReviewQueueItem[] = [];
   try {
     const iter = client.listEntities<TableEntity<ReviewHistoryEntity>>({

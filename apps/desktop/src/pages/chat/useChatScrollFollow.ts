@@ -13,7 +13,10 @@ export function useChatScrollFollow(trigger: unknown) {
 
   const scrollToBottomIfNeeded = useCallback(() => {
     if (atBottomRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      const container = scrollContainerRef.current;
+      if (container) {
+        container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+      }
     }
   }, []);
 

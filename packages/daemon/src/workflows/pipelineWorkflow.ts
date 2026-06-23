@@ -129,9 +129,9 @@ function pipelineIdFromWorkflowPayload(
   payload: ChatWorkflowActionPayload,
   projectLink: WorkflowProjectLink,
 ): number {
-  const pipelineId = Number(payload.pipelineId ?? projectLink.adoPipelineId ?? 0);
+  const pipelineId = Number(payload.pipelineId ?? 0);
   if (!Number.isFinite(pipelineId) || pipelineId <= 0) {
-    throw new Error("Project Link is missing Azure DevOps pipeline ID before pipeline workflow actions can run.");
+    throw new Error("Pipeline ID is required before pipeline workflow actions can run.");
   }
   return pipelineId;
 }

@@ -59,7 +59,7 @@ describe("PendingActionCard", () => {
     expect(html).toContain("git add -A");
   });
 
-  it("renders terminal approval states without decision buttons", () => {
+  it("renders only active approval states", () => {
     const executing = renderToStaticMarkup(
       <PendingActionCard
         bubble={{ ...baseApproval, pendingStatus: "executing" }}
@@ -84,9 +84,7 @@ describe("PendingActionCard", () => {
 
     expect(executing).toContain("Executing approved action");
     expect(executing).not.toContain("Yes, run this action");
-    expect(done).toContain("Approved action finished");
-    expect(done).toContain("done");
-    expect(cancelled).toContain("Action not run");
-    expect(cancelled).toContain("cancelled");
+    expect(done).toBe("");
+    expect(cancelled).toBe("");
   });
 });

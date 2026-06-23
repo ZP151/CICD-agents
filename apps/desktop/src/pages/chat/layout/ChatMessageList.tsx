@@ -50,8 +50,6 @@ interface ChatMessageListProps {
 export function ChatMessageList({
   bubbles,
   renderItems,
-  busy,
-  statusText,
   repoPath,
   availableProjectLinks,
   activeProjectLinkId,
@@ -114,11 +112,6 @@ export function ChatMessageList({
             )
       ))}
 
-      {busy && statusText && !bubbles.some((bubble) => bubble.kind === "assistant" && bubble.streaming) && (
-        <div className="mb-2 pl-1 text-sm text-[rgb(var(--app-text-muted))]" aria-live="polite">
-          {statusText}
-        </div>
-      )}
     </>
   );
 }
@@ -212,6 +205,7 @@ function ChatBubbleRow({
   }
 
   if (bubble.kind === "pending_confirm") {
+    if (bubble.pendingStatus === "done" || bubble.pendingStatus === "cancelled") return null;
     return (
       <div className="mb-3">
         <PendingActionCard

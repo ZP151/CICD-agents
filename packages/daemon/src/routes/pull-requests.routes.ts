@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   getAzureDevOpsAuth,
-  listAzurePipelineRuns,
   listAzurePullRequests,
 } from "@mergepilot/core";
 import { buildPullRequestInsightPreview, loadPullRequestContext } from "./pullRequestInsight.js";
@@ -46,19 +45,9 @@ function registerPullRequestRouteSet(
       status,
       top: 50,
     });
-    const runs = projectLink.adoPipelineId
-      ? await listAzurePipelineRuns({
-        organization: projectLink.adoOrgUrl,
-        project: projectLink.adoProject,
-        pipelineId: projectLink.adoPipelineId,
-        auth: adoAuth,
-        top: 100,
-      })
-      : [];
     return {
       pullRequests: prs.map((pr) => ({
         ...pr,
-        pipelineRun: runs.find((run) => run.sourceBranch === pr.sourceBranch),
       })),
     };
   };

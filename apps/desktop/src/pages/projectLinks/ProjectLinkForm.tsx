@@ -13,8 +13,6 @@ export const BLANK_PROJECT_LINK: ProjectLinkInput = {
   adoProject: "",
   adoRepoName: "",
   adoPat: "",
-  adoPipelineId: "",
-  adoPipelineName: "",
   adoMcpEnabled: false,
   adoMcpCommand: "",
   adoMcpAuthentication: "",
@@ -85,9 +83,7 @@ export function ProjectLinkForm({
           discovered={runtime.discovered}
           discovering={runtime.discovering}
           discoveryError={runtime.discoveryError}
-          pipelineHint={runtime.pipelineHint}
           onApplyDiscovery={runtime.applyDiscovery}
-          onRunDiscovery={(kind) => void runtime.runDiscovery(kind)}
           onManualProjectChange={runtime.setManualProject}
           onManualRepositoryChange={runtime.setManualRepository}
         />

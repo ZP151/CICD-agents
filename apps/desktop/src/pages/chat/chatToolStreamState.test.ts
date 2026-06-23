@@ -59,10 +59,13 @@ describe("chat tool stream state", () => {
     ];
 
     expect(markExecutingPendingBubblesDone(bubbles)).toEqual([
-      expect.objectContaining({ id: "p1", pendingStatus: "done" }),
       expect.objectContaining({ id: "p2", pendingStatus: "waiting" }),
     ]);
-    expect(markPendingBubbleDone(bubbles, "p1")[0]).toMatchObject({ pendingStatus: "done" });
-    expect(markPendingBubbleCancelled(bubbles, "p2")[1]).toMatchObject({ pendingStatus: "cancelled" });
+    expect(markPendingBubbleDone(bubbles, "p1")).toEqual([
+      expect.objectContaining({ id: "p2", pendingStatus: "waiting" }),
+    ]);
+    expect(markPendingBubbleCancelled(bubbles, "p2")).toEqual([
+      expect.objectContaining({ id: "p1", pendingStatus: "executing" }),
+    ]);
   });
 });

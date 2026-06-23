@@ -32,8 +32,10 @@ function appendTurnItems<T extends ChatRenderBubbleLike>(
   if (turn.length === 0) return;
 
   const tools = turn.filter((bubble) => bubble.kind === "tool");
+  const approvals = turn.filter((bubble) => bubble.kind === "pending_confirm");
+  const attachedApproval = tools.length > 0 ? approvals[approvals.length - 1] : undefined;
   if (tools.length > 0) {
-    items.push({ kind: "tool-group", tools, key: tools[0]!.id });
+    items.push({ kind: "tool-group", tools, approval: attachedApproval, key: tools[0]!.id });
   }
 
   for (const bubble of turn) {
@@ -43,7 +45,7 @@ function appendTurnItems<T extends ChatRenderBubbleLike>(
   }
 
   for (const bubble of turn) {
-    if (bubble.kind === "pending_confirm") {
+    if (bubble.kind === "pending_confirm" && bubble !== attachedApproval) {
       items.push({ kind: "bubble", bubble });
     }
   }

@@ -24,6 +24,7 @@ export function useSettingsRuntime() {
   const [saved, setSaved] = useState(false);
   const [daemonStatus, setDaemonStatus] = useState<DaemonStatus>("unknown");
   const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [daemonConfigKeyVaultError, setDaemonConfigKeyVaultError] = useState<string | null>(null);
   const [authUser, setAuthUser] = useState<AuthUser>({ authenticated: false });
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
   const [modelDraft, setModelDraft] = useState<AdditionalModelConfig>(createEmptyAdditionalModel);
@@ -31,6 +32,7 @@ export function useSettingsRuntime() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didHydrateDaemonRef = useRef(false);
+  const didSyncAvailableModelRef = useRef(false);
 
   useEffect(() => {
     setDaemonStatus("checking");
@@ -49,8 +51,10 @@ export function useSettingsRuntime() {
     fetchDaemonConfig()
       .then((config) => {
         if (!config) return;
+        setDaemonConfigKeyVaultError(config.keyVaultSecretError ?? null);
         setSettings((current) => ({
           ...current,
+          secretSource: config.secretSource ?? current.secretSource,
           azureTenantId: config.azureTenantId ?? current.azureTenantId,
           azureClientId: config.azureClientId ?? current.azureClientId,
         }));
@@ -82,10 +86,44 @@ export function useSettingsRuntime() {
       configureDaemon({
         azureTenantId: tenantId,
         azureClientId: clientId,
-      }).catch(() => undefined);
+      }).catch((err) => {
+        setDaemonConfigKeyVaultError(err instanceof Error ? err.message : String(err));
+      });
     }, 900);
     return () => clearTimeout(timer);
   }, [settings.azureTenantId, settings.azureClientId]);
+
+  useEffect(() => {
+    if (!didHydrateDaemonRef.current) return;
+    const timer = setTimeout(() => {
+      configureDaemon({ secretSource: settings.secretSource })
+        .then(() => {
+          if (settings.secretSource === "local_env") setDaemonConfigKeyVaultError(null);
+        })
+        .catch((err) => {
+          setDaemonConfigKeyVaultError(err instanceof Error ? err.message : String(err));
+        });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [settings.secretSource]);
+
+  useEffect(() => {
+    if (didSyncAvailableModelRef.current || daemonStatus !== "unconfigured") return;
+    const availableModel = settings.additionalModels.find(
+      (model) => model.enabled && model.available && additionalModelIsConfigured(model),
+    );
+    if (!availableModel) return;
+
+    didSyncAvailableModelRef.current = true;
+    configureDaemon(llmConfigFromModel(availableModel))
+      .then((result) => {
+        setDaemonConfigKeyVaultError(null);
+        setDaemonStatus(result.llmConfigured ? "configured" : "unconfigured");
+      })
+      .catch((err) => {
+        setDaemonConfigKeyVaultError(err instanceof Error ? err.message : String(err));
+      });
+  }, [daemonStatus, settings.additionalModels]);
 
   function set<K extends keyof AppSettings>(key: K, value: AppSettings[K]): void {
     setSettings((current) => ({ ...current, [key]: value }));
@@ -172,6 +210,9 @@ export function useSettingsRuntime() {
         testedAt: new Date().toISOString(),
         testError: "",
       };
+      const daemonResult = await configureDaemon(llmConfigFromModel(passed));
+      setDaemonConfigKeyVaultError(null);
+      setDaemonStatus(daemonResult.llmConfigured ? "configured" : "unconfigured");
       updateTestedModel(passed, source);
       return true;
     } catch (err) {
@@ -224,6 +265,7 @@ export function useSettingsRuntime() {
     saved,
     daemonStatus,
     health,
+    daemonConfigKeyVaultError,
     authUser,
     editingModelId,
     modelDraft,

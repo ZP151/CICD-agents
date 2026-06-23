@@ -438,7 +438,6 @@ async function runAdoAuthContextInspection(
     orgUrl: projectLink?.adoOrgUrl ?? "",
     project: projectLink?.adoProject ?? "",
     repository: projectLink?.adoRepoName ?? "",
-    pipeline: projectLink?.adoPipelineName || projectLink?.adoPipelineId || "",
   });
   const tool = {
     name: "ado_auth_context",
@@ -566,7 +565,6 @@ function adoAuthContextSummary(args: {
   orgUrl: string;
   project: string;
   repository: string;
-  pipeline: string;
 }): string {
   const lines = [
     "Azure DevOps auth context:",
@@ -576,7 +574,6 @@ function adoAuthContextSummary(args: {
     `- Project: ${args.project || "missing"}`,
     `- Repository: ${args.repository || "missing"}`,
   ];
-  if (args.pipeline) lines.push(`- Pipeline: ${args.pipeline}`);
   if (args.authMessage) lines.push(`- Detail: ${args.authMessage}`);
   if (args.missingMapping) {
     lines.push("- Project Link mapping is incomplete. Complete organization, project, and repository before Azure DevOps workflow actions can run.");

@@ -28,8 +28,6 @@ export const InlineProjectLinkSchema = z.object({
   adoProject: z.string().default(""),
   adoRepoName: z.string().default(""),
   adoPat: z.string().default(""),
-  adoPipelineId: z.string().default(""),
-  adoPipelineName: z.string().default(""),
   adoMcpEnabled: z.coerce.boolean().default(false),
   adoMcpCommand: z.string().default(""),
   adoMcpAuthentication: z.string().default(""),

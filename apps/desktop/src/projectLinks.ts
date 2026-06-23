@@ -138,23 +138,15 @@ export function applyAdoDiscoveryToProjectLinkInput(
       ...form,
       adoProject: option.name,
       adoRepoName: form.adoProject === option.name ? form.adoRepoName : "",
-      adoPipelineId: form.adoProject === option.name ? form.adoPipelineId : "",
-      adoPipelineName: form.adoProject === option.name ? form.adoPipelineName : "",
     };
   }
   if (kind === "repositories") {
     return {
       ...form,
       adoRepoName: option.name,
-      adoPipelineId: form.adoRepoName === option.name ? form.adoPipelineId : "",
-      adoPipelineName: form.adoRepoName === option.name ? form.adoPipelineName : "",
     };
   }
-  return {
-    ...form,
-    adoPipelineId: option.id,
-    adoPipelineName: option.name,
-  };
+  return form;
 }
 
 export function withProjectLinkInputDefaults<T extends Partial<ProjectLinkInput>>(
@@ -169,8 +161,6 @@ export function withProjectLinkInputDefaults<T extends Partial<ProjectLinkInput>
     adoProject: "",
     adoRepoName: "",
     adoPat: "",
-    adoPipelineId: "",
-    adoPipelineName: "",
     adoMcpEnabled: false,
     adoMcpCommand: "",
     adoMcpAuthentication: "",

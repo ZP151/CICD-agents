@@ -5,6 +5,7 @@ import {
 } from "./conversationArtifacts.js";
 import {
   pruneOpenSourcesForConversation,
+  replaceOpenSource,
   refreshOpenSourcesFromConversation,
 } from "./useArtifactWorkspace.js";
 
@@ -72,5 +73,18 @@ describe("useArtifactWorkspace source tab helpers", () => {
     ]);
 
     expect(refreshed).toEqual([source("src/current.ts", "new snippet")]);
+  });
+
+  it("replaces previous source tabs when the user opens a new source reference", () => {
+    expect(replaceOpenSource([
+      source("src/old.ts"),
+      source("src/current.ts", "old snippet"),
+    ], source("src/current.ts", "new snippet"))).toEqual([
+      source("src/current.ts", "old snippet\n\nnew snippet"),
+    ]);
+
+    expect(replaceOpenSource([source("src/old.ts")], source("src/new.ts"))).toEqual([
+      source("src/new.ts"),
+    ]);
   });
 });

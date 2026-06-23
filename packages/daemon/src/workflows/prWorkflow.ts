@@ -1,7 +1,6 @@
 import {
   getAzureDevOpsAuth,
   getAzurePullRequestById,
-  listAzureBuilds,
   listAzurePullRequests,
   listAzurePullRequestChanges,
   listAzurePullRequestPolicyEvaluations,
@@ -118,7 +117,7 @@ export async function runAdoPullRequestWorkflowAction(
     auth,
     includeWorkItemRefs: true,
   });
-  const [threads, changes, builds, workItems, policies] = await Promise.all([
+  const [threads, changes, workItems, policies] = await Promise.all([
     listAzurePullRequestThreads({
       organization: projectLink.adoOrgUrl,
       project: projectLink.adoProject,
@@ -135,16 +134,6 @@ export async function runAdoPullRequestWorkflowAction(
       auth,
       top: 100,
     }),
-    projectLink.adoPipelineId
-      ? listAzureBuilds({
-        organization: projectLink.adoOrgUrl,
-        project: projectLink.adoProject,
-        auth,
-        definitions: [projectLink.adoPipelineId],
-        branchName: pullRequest.sourceBranch,
-        top: 20,
-      }).catch(() => [])
-      : Promise.resolve([]),
     listAzurePullRequestWorkItems({
       organization: projectLink.adoOrgUrl,
       project: projectLink.adoProject,
@@ -160,6 +149,7 @@ export async function runAdoPullRequestWorkflowAction(
       auth,
     }).catch(() => []),
   ]);
+  const builds: [] = [];
   const insight = buildWorkflowPrInsight({ pullRequest, threads, changes, builds, workItems, policies });
   return adoWorkflowDoneResult({
     action,

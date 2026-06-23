@@ -180,7 +180,7 @@ function SourceCodeViewport({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]">
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]">
       <div className="flex shrink-0 items-center gap-2 border-b border-[rgb(var(--app-border))] px-3 py-1.5 text-[11px] text-[rgb(var(--app-text-subtle))]">
         <span className="min-w-0 flex-1 truncate font-mono" title={displayPath}>
           {displayPath}
@@ -212,7 +212,7 @@ function SourceCodeViewport({
           </button>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         <CodeMirror
           value={content}
           height="100%"
@@ -289,7 +289,7 @@ export function CodeSidePanel({
   const detail = activeSource ? sourcePathDetail(activeSource) : "";
 
   return (
-    <div className="flex h-full w-full min-w-0 flex-col bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text))]">
+    <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text))]">
       {sources.length > 0 && (
         <div className="flex shrink-0 items-center gap-1 border-b border-[rgb(var(--app-border))]">
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 py-2">
@@ -363,7 +363,7 @@ export function CodeSidePanel({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-auto bg-[rgb(var(--app-bg-muted))] p-2">
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-[rgb(var(--app-bg-muted))] p-2">
         {activeSource ? (
           <SourceCodeViewport repoPath={repoPath} source={activeSource} />
         ) : artifact ? (
@@ -403,18 +403,34 @@ const sourcePreviewTheme = EditorView.theme({
   "&": {
     height: "100%",
     fontSize: "12px",
+    overflow: "hidden",
+  },
+  "&.cm-editor": {
+    height: "100%",
+    width: "100%",
+  },
+  ".cm-editor": {
+    height: "100%",
+  },
+  ".cm-content": {
+    minWidth: "max-content",
+  },
+  ".cm-line": {
+    paddingLeft: "12px",
+    whiteSpace: "pre",
   },
   ".cm-scroller": {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
     lineHeight: "1.55",
+    overflow: "auto",
+    scrollbarGutter: "stable both-edges",
   },
   ".cm-gutters": {
     backgroundColor: "rgb(var(--app-bg-muted))",
     borderRight: "1px solid rgb(var(--app-border))",
     color: "rgb(var(--app-text-subtle))",
-  },
-  ".cm-line": {
-    paddingLeft: "12px",
+    display: "flex",
+    flexShrink: 0,
   },
   ".cm-activeLine": {
     backgroundColor: "transparent",

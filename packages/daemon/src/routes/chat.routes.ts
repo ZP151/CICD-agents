@@ -34,8 +34,6 @@ const InlineProjectLinkSchema = z.object({
   adoProject: z.string().default(""),
   adoRepoName: z.string().default(""),
   adoPat: z.string().default(""),
-  adoPipelineId: z.string().default(""),
-  adoPipelineName: z.string().default(""),
   adoMcpEnabled: z.coerce.boolean().default(false),
   adoMcpCommand: z.string().default(""),
   adoMcpAuthentication: z.string().default(""),
@@ -121,7 +119,6 @@ function inlineProjectLinkToIndexProjectLink(projectLink?: InlineProjectLink) {
     buildCommand: projectLink.buildCommand,
     testCommand: projectLink.testCommand,
     targetBranch: projectLink.targetBranch || projectLink.defaultBranch,
-    pipelineName: projectLink.adoPipelineName,
     ignoredGlobs: projectLink.ignoredGlobs,
   };
 }

@@ -10,7 +10,6 @@ import {
   applyAdoDiscoveryToProjectLinkInput,
   fetchAzureDevOpsRemoteSuggestion,
   fetchGitBranches,
-  pickRecommendedPipeline,
   withoutProjectLinkFallbacks,
 } from "../../projectLinks.js";
 
@@ -21,7 +20,6 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
   const [branchError, setBranchError] = useState(false);
   const [discovering, setDiscovering] = useState<AdoDiscoveryKind | null>(null);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
-  const [pipelineHint, setPipelineHint] = useState<string | null>(null);
   const [discovered, setDiscovered] = useState<Record<AdoDiscoveryKind, AdoDiscoveryOption[]>>({
     projects: [],
     repositories: [],
@@ -84,13 +82,9 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
     setDiscoveryError(null);
     if (kind === "projects") {
       setDiscovered((current) => ({ ...current, repositories: [], pipelines: [] }));
-      setPipelineHint(null);
       setForm((current) => applyAdoDiscoveryToProjectLinkInput(current, kind, option));
     } else if (kind === "repositories") {
       setDiscovered((current) => ({ ...current, pipelines: [] }));
-      setPipelineHint(null);
-      setForm((current) => applyAdoDiscoveryToProjectLinkInput(current, kind, option));
-    } else {
       setForm((current) => applyAdoDiscoveryToProjectLinkInput(current, kind, option));
     }
   }, []);
@@ -108,13 +102,6 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
       const result = await discoverAdoProjectLinkOptions(kind, withoutProjectLinkFallbacks(form));
       setDiscovered((current) => ({ ...current, [kind]: result.items }));
       if (result.items.length === 1) applyDiscovery(kind, result.items[0]!);
-      if (kind === "pipelines" && result.items.length > 1 && !form.adoPipelineId) {
-        const recommended = pickRecommendedPipeline(result.items, form);
-        if (recommended) {
-          applyDiscovery(kind, recommended);
-          setPipelineHint(`Recommended pipeline selected: ${recommended.name}`);
-        }
-      }
     } catch (err) {
       setDiscoveryError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -141,25 +128,19 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
   const setManualProject = useCallback((value: string) => {
     setDiscoveryError(null);
     setDiscovered((current) => ({ ...current, repositories: [], pipelines: [] }));
-    setPipelineHint(null);
     setForm((current) => ({
       ...current,
       adoProject: value,
       adoRepoName: current.adoProject === value ? current.adoRepoName : "",
-      adoPipelineId: current.adoProject === value ? current.adoPipelineId : "",
-      adoPipelineName: current.adoProject === value ? current.adoPipelineName : "",
     }));
   }, []);
 
   const setManualRepository = useCallback((value: string) => {
     setDiscoveryError(null);
     setDiscovered((current) => ({ ...current, pipelines: [] }));
-    setPipelineHint(null);
     setForm((current) => ({
       ...current,
       adoRepoName: value,
-      adoPipelineId: current.adoRepoName === value ? current.adoPipelineId : "",
-      adoPipelineName: current.adoRepoName === value ? current.adoPipelineName : "",
     }));
   }, []);
 
@@ -181,7 +162,6 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
     loadBranches,
     discovering,
     discoveryError,
-    pipelineHint,
     discovered,
     applyDiscovery,
     runDiscovery,

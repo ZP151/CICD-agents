@@ -1,6 +1,6 @@
 {
   "name": "@mergepilot/daemon",
-  "version": "0.5.9",
+  "version": "0.5.10",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -23,7 +23,6 @@
       "node_modules/sqlite-vec/prebuilds/**/*.node",
       "node_modules/sqlite-vec/build/Release/*.node",
       "node_modules/web-tree-sitter/**/*.wasm",
-      "node_modules/keytar/build/Release/*.node",
       "node_modules/@azure/msal-node-extensions/bin/**/*.node",
       "node_modules/@azure/msal-node-runtime/dist/**/*.node",
       "node_modules/@azure/msal-node-runtime/dist/**/*.dll",
@@ -37,7 +36,6 @@
     "@fastify/cors": "^10.1.0",
     "@fastify/sensible": "^5.6.0",
     "better-sqlite3": "^11.0.0",
-    "dotenv": "^16.4.0",
     "fastify": "^4.28.0",
     "fastify-sse-v2": "^4.1.0",
     "sqlite-vec": "^0.1.0",

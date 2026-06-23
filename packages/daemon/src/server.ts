@@ -4,11 +4,14 @@ import {
   runPipelineTask,
   TaskQueue,
   type TaskRunner,
-  KeyVaultSecrets,
   isAzureAuthenticationRequiredError,
 } from "@mergepilot/core";
 import { ChatSessionManager } from "./chatSession.js";
-import { loadDaemonEnv, envSourceLabel } from "./daemonEnv.js";
+import {
+  envSourceLabel,
+  hydrateDaemonSecretEnv,
+  loadDaemonEnv,
+} from "./daemonEnv.js";
 import { injectGitPath } from "./gitPath.js";
 import { buildEffectiveLlmSettings } from "./llmSettings.js";
 import { createProjectLinkStoreAdapter } from "./projectLinkStore.js";
@@ -41,6 +44,7 @@ export interface BuildAppOptions {
 }
 
 export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInstance> {
+  await hydrateDaemonSecretEnv();
   const settings = getSettings();
   const app = Fastify({
     logger: { level: settings.runtimeLogLevel.toLowerCase() },
@@ -48,21 +52,6 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   });
 
   const projectLinkStore = createProjectLinkStoreAdapter(settings);
-
-  // If AOAI key was stored as a KV sentinel on a previous Apply, resolve it now
-  // so LLM calls work without a restart.
-  if (
-    settings.azureKeyVaultUrl &&
-    (process.env["AZURE_OPENAI_API_KEY"] ?? "").startsWith("kv://")
-  ) {
-    try {
-      const kv = new KeyVaultSecrets(settings.azureKeyVaultUrl);
-      const key = await kv.getAoaiKey();
-      if (key) process.env["AZURE_OPENAI_API_KEY"] = key;
-    } catch {
-      // Non-fatal: if KV is unreachable at startup, leave the sentinel and retry next request
-    }
-  }
 
   // Allow cross-origin requests from the Tauri/Vite frontend
   app.addHook("onSend", async (req, reply) => {
@@ -111,7 +100,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   registerTaskRoutes(app, { queue });
 
-  registerPipelineRoutes(app, { queue });
+  registerPipelineRoutes(app, { queue, settings });
 
   registerProjectLinkRoutes(app, { projectLinkStore });
 
@@ -151,6 +140,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
 export async function startServer(): Promise<FastifyInstance> {
   injectGitPath();
+  await hydrateDaemonSecretEnv();
   const settings = getSettings();
   const app = await buildApp();
   await app.listen({ host: settings.runtimeHost, port: settings.runtimePort });

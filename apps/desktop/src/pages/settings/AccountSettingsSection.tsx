@@ -1,5 +1,5 @@
 import type { AuthUser, HealthStatus } from "../../api";
-import { SettingsRow, SettingsSection, StatusPill, TextInput } from "./SettingsControls.js";
+import { SegmentedChoice, SettingsRow, SettingsSection, StatusPill, TextInput } from "./SettingsControls.js";
 import { accountLabel, type AppSettings } from "./settingsTypes.js";
 
 export function AccountSettingsSection({
@@ -40,6 +40,19 @@ export function AccountSettingsSection({
         <StatusPill tone={authUser.authenticated ? "success" : "neutral"}>
           {authUser.authenticated ? (authUser.fromCache ? "Cached" : "Active") : "No account"}
         </StatusPill>
+      </SettingsRow>
+      <SettingsRow
+        title="Model secrets"
+        description="Choose where the built-in model API key is loaded from."
+      >
+        <SegmentedChoice
+          value={settings.secretSource}
+          onChange={(value) => onSettingChange("secretSource", value)}
+          options={[
+            { label: "Key Vault", value: "key_vault" },
+            { label: "Local .env", value: "local_env" },
+          ]}
+        />
       </SettingsRow>
       <SettingsRow
         title="Azure tenant ID"

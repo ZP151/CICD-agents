@@ -1,4 +1,12 @@
 export const IDENTITY_SCOPE = "https://graph.microsoft.com/User.Read";
+export const KEY_VAULT_SCOPE = "https://vault.azure.net/.default";
+export const STORAGE_SCOPE = "https://storage.azure.com/.default";
+export const COSMOS_SCOPE = "https://cosmos.azure.com/.default";
+export const CLOUD_RESOURCE_SCOPES = [
+  KEY_VAULT_SCOPE,
+  STORAGE_SCOPE,
+  COSMOS_SCOPE,
+];
 export const AZURE_DEVOPS_SCOPE = "499b84ac-1321-427f-aa17-267ca6975798/.default";
 export const AZURE_DEVOPS_USER_IMPERSONATION_SCOPE = "499b84ac-1321-427f-aa17-267ca6975798/user_impersonation";
 export const AZURE_DEVOPS_SCOPES = [

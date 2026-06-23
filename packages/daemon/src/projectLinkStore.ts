@@ -34,6 +34,26 @@ export interface ProjectLinkStoreAdapter {
   >;
 }
 
+function isCloudProjectLinkStoreUnavailable(err: unknown): boolean {
+  if (isAzureAuthenticationRequiredError(err)) return true;
+  const message = err instanceof Error ? err.message : String(err ?? "");
+  return /Automatic authentication has been disabled|CredentialUnavailable|InteractiveBrowserCredential|No cached account|requires? authentication|login required|network error|getaddrinfo|ENOTFOUND|ECONNREFUSED|ETIMEDOUT/i.test(
+    message,
+  );
+}
+
+async function withLocalProjectLinkFallback<T>(
+  cloudOperation: () => Promise<T>,
+  localFallback: () => T | Promise<T>,
+): Promise<T> {
+  try {
+    return await cloudOperation();
+  } catch (err) {
+    if (!isCloudProjectLinkStoreUnavailable(err)) throw err;
+    return localFallback();
+  }
+}
+
 export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkStoreAdapter {
   let tableCache: { url: string; store: AzureTableProjectLinkStore } | null = null;
   const getTableStore = (): AzureTableProjectLinkStore | null => {
@@ -85,13 +105,13 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
 
     const tableStore = getTableStore();
     if (tableStore) {
-      try {
+      return withLocalProjectLinkFallback(
+        async () => {
         const cloudProjectLink = await tableStore.get(projectLinkId);
         return cloudProjectLink ? await injectAdoPat(cloudProjectLink) : null;
-      } catch (err) {
-        if (isAzureAuthenticationRequiredError(err)) throw err;
-        return getProjectLink(settings.dataDir, projectLinkId);
-      }
+        },
+        () => getProjectLink(settings.dataDir, projectLinkId),
+      );
     }
     return getProjectLink(settings.dataDir, projectLinkId);
   }
@@ -99,8 +119,13 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
   async function listProjectLinksForStore(): Promise<Awaited<ReturnType<typeof listProjectLinks>>> {
     const tableStore = getTableStore();
     if (tableStore) {
-      const projectLinks = await tableStore.list();
-      return Promise.all(projectLinks.map(injectAdoPat));
+      return withLocalProjectLinkFallback(
+        async () => {
+          const projectLinks = await tableStore.list();
+          return Promise.all(projectLinks.map(injectAdoPat));
+        },
+        () => listProjectLinks(settings.dataDir),
+      );
     }
     return listProjectLinks(settings.dataDir);
   }
@@ -110,8 +135,13 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
   ): Promise<Awaited<ReturnType<typeof getProjectLink>> | null> {
     const tableStore = getTableStore();
     if (tableStore) {
-      const projectLink = await tableStore.get(projectLinkId);
-      return projectLink ? injectAdoPat(projectLink) : null;
+      return withLocalProjectLinkFallback(
+        async () => {
+          const projectLink = await tableStore.get(projectLinkId);
+          return projectLink ? injectAdoPat(projectLink) : null;
+        },
+        () => getProjectLink(settings.dataDir, projectLinkId),
+      );
     }
     return getProjectLink(settings.dataDir, projectLinkId);
   }
@@ -121,11 +151,16 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
   ): Promise<Awaited<ReturnType<typeof createProjectLink>>> {
     const tableStore = getTableStore();
     if (tableStore) {
-      const safePat = await resolveAdoPat("__new__", data.adoPat);
-      const projectLink = await tableStore.create({ ...data, adoPat: safePat });
-      const kv = getKvSecrets();
-      if (kv && data.adoPat) await kv.setAdoPat(projectLink.id, data.adoPat);
-      return injectAdoPat(projectLink);
+      return withLocalProjectLinkFallback(
+        async () => {
+          const safePat = await resolveAdoPat("__new__", data.adoPat);
+          const projectLink = await tableStore.create({ ...data, adoPat: safePat });
+          const kv = getKvSecrets();
+          if (kv && data.adoPat) await kv.setAdoPat(projectLink.id, data.adoPat);
+          return injectAdoPat(projectLink);
+        },
+        () => createProjectLink(settings.dataDir, data),
+      );
     }
     return createProjectLink(settings.dataDir, data);
   }
@@ -136,14 +171,19 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
   ): Promise<Awaited<ReturnType<typeof updateProjectLink>> | null> {
     const tableStore = getTableStore();
     if (tableStore) {
-      const kv = getKvSecrets();
-      const cloudData = { ...data };
-      if (cloudData.adoPat !== undefined && kv) {
-        if (cloudData.adoPat) await kv.setAdoPat(projectLinkId, cloudData.adoPat);
-        cloudData.adoPat = "";
-      }
-      const updated = await tableStore.update(projectLinkId, cloudData);
-      return updated ? injectAdoPat(updated) : null;
+      return withLocalProjectLinkFallback(
+        async () => {
+          const kv = getKvSecrets();
+          const cloudData = { ...data };
+          if (cloudData.adoPat !== undefined && kv) {
+            if (cloudData.adoPat) await kv.setAdoPat(projectLinkId, cloudData.adoPat);
+            cloudData.adoPat = "";
+          }
+          const updated = await tableStore.update(projectLinkId, cloudData);
+          return updated ? injectAdoPat(updated) : null;
+        },
+        () => updateProjectLink(settings.dataDir, projectLinkId, data),
+      );
     }
     return updateProjectLink(settings.dataDir, projectLinkId, data);
   }
@@ -151,9 +191,14 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
   async function deleteProjectLinkForStore(projectLinkId: string): Promise<boolean> {
     const tableStore = getTableStore();
     if (tableStore) {
-      const kv = getKvSecrets();
-      if (kv) await kv.deleteAdoPat(projectLinkId);
-      return tableStore.delete(projectLinkId);
+      return withLocalProjectLinkFallback(
+        async () => {
+          const kv = getKvSecrets();
+          if (kv) await kv.deleteAdoPat(projectLinkId);
+          return tableStore.delete(projectLinkId);
+        },
+        () => deleteProjectLink(settings.dataDir, projectLinkId),
+      );
     }
     return deleteProjectLink(settings.dataDir, projectLinkId);
   }

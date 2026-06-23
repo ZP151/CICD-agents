@@ -20,22 +20,7 @@ export function PendingActionCard({ bubble, onConfirm, onCancel }: PendingAction
       />
     );
   }
-  if (status === "done") {
-    return (
-      <ApprovalStateCard
-        status="done"
-        label="Approved action finished"
-      />
-    );
-  }
-  if (status === "cancelled") {
-    return (
-      <ApprovalStateCard
-        status="cancelled"
-        label="Action not run"
-      />
-    );
-  }
+  if (status === "done" || status === "cancelled") return null;
 
   const riskLevel = bubble.riskLevel ?? "medium";
   const commandPreview = toolCommandPreview(bubble.pendingTool, bubble.pendingArgs);
@@ -93,7 +78,7 @@ export function PendingActionCard({ bubble, onConfirm, onCancel }: PendingAction
 }
 
 interface ApprovalStateCardProps {
-  status: "executing" | "done" | "cancelled";
+  status: "executing";
   label: string;
 }
 
@@ -102,7 +87,7 @@ function ApprovalStateCard({ status, label }: ApprovalStateCardProps) {
     <div className="my-2 flex items-center gap-2 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2 text-xs text-[rgb(var(--app-text-muted))]">
       <span className={`h-2 w-2 shrink-0 rounded-full ${approvalStatusDotClass(status)}`} />
       <span className="font-medium text-[rgb(var(--app-text-subtle))]">{label}</span>
-      {status === "executing" ? <ApprovalBusyDots /> : <span className="ml-auto text-[10px] uppercase">{status}</span>}
+      <ApprovalBusyDots />
     </div>
   );
 }
@@ -113,9 +98,7 @@ function approvalRiskClass(level?: string): string {
   return "text-amber-600";
 }
 
-function approvalStatusDotClass(status: "executing" | "done" | "cancelled"): string {
-  if (status === "done") return "bg-emerald-500";
-  if (status === "cancelled") return "bg-zinc-400";
+function approvalStatusDotClass(status: "executing"): string {
   return "bg-blue-500";
 }
 

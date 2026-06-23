@@ -2,9 +2,11 @@ import { RUNTIME_URL } from "./runtime.js";
 
 export interface DaemonConfigPayload {
   llmProvider?: "azure" | "openai";
+  secretSource?: "key_vault" | "local_env";
   azureEndpoint?: string;
   azureApiKey?: string;
   azureDeployment?: string;
+  azureEmbeddingDeployment?: string;
   azureApiVersion?: string;
   openaiApiKey?: string;
   openaiModel?: string;
@@ -19,12 +21,14 @@ export interface DaemonConfigPayload {
 
 export type LlmProviderConfig = Pick<
   DaemonConfigPayload,
-  "llmProvider" | "azureEndpoint" | "azureApiKey" | "azureDeployment" | "azureApiVersion" | "openaiApiKey" | "openaiModel"
+  "llmProvider" | "azureEndpoint" | "azureApiKey" | "azureDeployment" | "azureEmbeddingDeployment" | "azureApiVersion" | "openaiApiKey" | "openaiModel"
 >;
 
 export interface DaemonConfig {
   llmProvider: string;
+  secretSource: "key_vault" | "local_env";
   azureDeployment: string;
+  azureEmbeddingDeployment: string;
   azureApiVersion: string;
   azureEndpoint: string;
   openaiModel: string;
@@ -38,6 +42,7 @@ export interface DaemonConfig {
   azureAuthUsesDefaultClient: boolean;
   reviewAutoApproveEnabled: boolean;
   reviewStaleAgeHours: number;
+  keyVaultSecretError?: string | null;
 }
 
 export interface AzureDevOpsRemoteSuggestion {
@@ -88,7 +93,10 @@ export async function configureDaemon(
     headers: { "content-type": "application/json" },
     body: JSON.stringify(cfg),
   });
-  if (!r.ok) throw new Error(`/daemon/configure HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) {
+    const body = await r.json().catch(() => null) as { message?: string } | null;
+    throw new Error(body?.message ?? `/daemon/configure HTTP ${r.status}: ${await r.text()}`);
+  }
   return (await r.json()) as { ok: boolean; llmConfigured: boolean; cloudProjectLinkStore?: boolean; cloudSecrets?: boolean; cloudSessions?: boolean };
 }
 

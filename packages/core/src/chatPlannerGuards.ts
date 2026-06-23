@@ -58,11 +58,11 @@ export function guardReviewOnlyFinalResult(
   result: ChatPlannerResult,
   message: string,
 ): ChatPlannerResult {
-  const proposal = result.approvalProposal;
-  if (!proposal || !reviewOnlyWriteMessage(proposal.tool, message)) return result;
+  if (!isReviewOnlyChangeRequest(message)) return result;
   return {
     ...result,
-    response: stripWritePermissionPrompts(result.response),
+    response: stripReviewOnlyWriteFollowups(result.response),
+    suggestions: filterReviewOnlySuggestions(result.suggestions),
     approvalProposal: undefined,
   };
 }
@@ -88,6 +88,29 @@ function stripWritePermissionPrompts(text: string): string {
     )
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function stripReviewOnlyWriteFollowups(text: string): string {
+  return stripWritePermissionPrompts(text)
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .filter((line) => !isWriteActionSuggestionLine(line))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function filterReviewOnlySuggestions(suggestions: string[]): string[] {
+  return suggestions.filter((suggestion) => !isWriteActionText(suggestion));
+}
+
+function isWriteActionSuggestionLine(line: string): boolean {
+  const match = line.match(/^\s*(?:>|›|»|-|\*)\s*(.+?)\s*$/);
+  return Boolean(match?.[1]);
+}
+
+function isWriteActionText(text: string): boolean {
+  return /^(stage|commit|push|create|open|trigger|run|rerun|proceed|continue|apply|update|retry)\b/i.test(text.trim());
 }
 
 function userScopeText(message: string, history: ChatMessage[]): string {

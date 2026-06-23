@@ -1,10 +1,10 @@
 import {
   getAzurePullRequestById,
-  listAzureBuilds,
   listAzurePullRequestChanges,
   listAzurePullRequestPolicyEvaluations,
   listAzurePullRequestThreads,
   listAzurePullRequestWorkItems,
+  type AzureBuildSummary,
   LLMClient,
   type Settings,
 } from "@mergepilot/core";
@@ -31,7 +31,7 @@ export async function loadPullRequestContext(args: {
     auth: adoAuth,
     includeWorkItemRefs: true,
   });
-  const [threads, changes, builds, workItems, policies] = await Promise.all([
+  const [threads, changes, workItems, policies] = await Promise.all([
     listAzurePullRequestThreads({
       organization: projectLink.adoOrgUrl,
       project: projectLink.adoProject,
@@ -48,16 +48,6 @@ export async function loadPullRequestContext(args: {
       auth: adoAuth,
       top: 100,
     }),
-    projectLink.adoPipelineId
-      ? listAzureBuilds({
-        organization: projectLink.adoOrgUrl,
-        project: projectLink.adoProject,
-        auth: adoAuth,
-        definitions: [projectLink.adoPipelineId],
-        branchName: pullRequest.sourceBranch,
-        top: 20,
-      })
-      : Promise.resolve([]),
     listAzurePullRequestWorkItems({
       organization: projectLink.adoOrgUrl,
       project: projectLink.adoProject,
@@ -73,6 +63,7 @@ export async function loadPullRequestContext(args: {
       auth: adoAuth,
     }).catch(() => []),
   ]);
+  const builds: AzureBuildSummary[] = [];
   return { pullRequest, threads, changes, builds, workItems, policies };
 }
 

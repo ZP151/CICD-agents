@@ -24,6 +24,12 @@ export default function Settings(): JSX.Element {
 
       <AppearanceSettingsSection theme={theme} onThemeChange={setTheme} />
 
+      {runtime.settings.secretSource !== "local_env" && (runtime.health?.keyVaultSecretError || runtime.daemonConfigKeyVaultError) && (
+        <p className="settings-message settings-message-warning">
+          {runtime.health?.keyVaultSecretError || runtime.daemonConfigKeyVaultError}
+        </p>
+      )}
+
       <AdditionalModelsSettingsSection
         additionalModels={runtime.settings.additionalModels}
         availableAdditionalModels={runtime.availableAdditionalModels}

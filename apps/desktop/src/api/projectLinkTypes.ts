@@ -10,8 +10,6 @@ export interface ProjectLink {
   adoProject: string;
   adoRepoName: string;
   adoPat: string;
-  adoPipelineId: string;
-  adoPipelineName: string;
   adoMcpEnabled: boolean;
   adoMcpCommand: string;
   adoMcpAuthentication: string;

@@ -87,12 +87,10 @@ describe("ADO Project Link discovery state", () => {
     }));
   });
 
-  it("resets repo and pipeline fields when a different ADO project is selected", () => {
+  it("resets repo field when a different ADO project is selected", () => {
     const next = applyAdoDiscoveryToProjectLinkInput({
       adoProject: "Old",
       adoRepoName: "repo",
-      adoPipelineId: "42",
-      adoPipelineName: "CI",
     } as ProjectLink, "projects", {
       id: "project-1",
       name: "New",
@@ -103,29 +101,6 @@ describe("ADO Project Link discovery state", () => {
     expect(next).toMatchObject({
       adoProject: "New",
       adoRepoName: "",
-      adoPipelineId: "",
-      adoPipelineName: "",
-    });
-  });
-
-  it("sets pipeline identity without changing selected project or repository", () => {
-    const next = applyAdoDiscoveryToProjectLinkInput({
-      adoProject: "Project",
-      adoRepoName: "Repo",
-      adoPipelineId: "",
-      adoPipelineName: "",
-    } as ProjectLink, "pipelines", {
-      id: "42",
-      name: "Repo CI",
-      description: "",
-      url: "",
-    });
-
-    expect(next).toMatchObject({
-      adoProject: "Project",
-      adoRepoName: "Repo",
-      adoPipelineId: "42",
-      adoPipelineName: "Repo CI",
     });
   });
 });

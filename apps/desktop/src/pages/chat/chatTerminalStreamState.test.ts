@@ -80,7 +80,7 @@ describe("chat terminal stream state", () => {
       result: { response: "Done", riskLevel: "low" },
     } as ChatEventPayload, adapter, { refreshHistoryOnDone: true });
 
-    expect(adapter.bubbles[0]).toMatchObject({ pendingStatus: "done" });
+    expect(adapter.bubbles).toEqual([]);
     expect(adapter.finalised).toMatchObject({ text: "Done", streamedText: "Done" });
     expect(adapter.calls).toEqual([
       "updateBubbles",
@@ -113,7 +113,7 @@ describe("chat terminal stream state", () => {
       errorAdapter,
       { pendingBubbleId: "p1" },
     );
-    expect(errorAdapter.bubbles[0]).toMatchObject({ pendingStatus: "cancelled" });
+    expect(errorAdapter.bubbles).toEqual([]);
     expect(errorAdapter.addErrorBubbleOnce).toHaveBeenCalledWith("Failed");
   });
 });

@@ -1,6 +1,7 @@
 export * from "./settings.js";
 export * from "./logger.js";
 export * from "./projectLinks.js";
+export * from "./pipelineConnections.js";
 export * from "./projectTemplates.js";
 export * from "./projectLinkConfig.js";
 export * from "./llm.js";
