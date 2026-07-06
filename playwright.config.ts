@@ -20,7 +20,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm --dir apps/desktop exec vite --host 127.0.0.1 --port 1420",
+    command:
+      "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/pnpm-project.ps1 --dir apps/desktop exec vite --host 127.0.0.1 --port 1420",
     url: "http://127.0.0.1:1420",
     reuseExistingServer: true,
     timeout: 60_000,
