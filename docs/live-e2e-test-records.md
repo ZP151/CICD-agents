@@ -6628,3 +6628,144 @@ try { (Invoke-RestMethod -Uri http://127.0.0.1:8787/healthz -TimeoutSec 5) | Con
 | `CHAT-12` source preview behavior is covered from transcript reference click through right-pane preview and daemon file safety. | Info | Keep this focused gate near Chat layout changes because it protects the evidence-navigation workflow users inspect manually. |
 | The installed runtime uses the persisted `ClaimBot_API link` and rejects path traversal attempts. | Info | This is the expected production boundary for file preview: repository-relative source reading only. |
 | This run validates file preview/evidence navigation, not AI answer quality. | Medium | Continue using AI scorer gates for whether answers cite the right files; use this gate for whether cited files open correctly and safely. |
+
+## Run: mp-github-release-msi-payload-smoke-20260706-1951
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-06 19:49-19:51 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | GitHub Release asset `MergePilot_0.5.11_x64_en-US.msi`, non-admin MSI administrative extraction, extracted daemon smoke on port `18911` |
+| Resource mode | Published release asset validation; no Program Files install, no ADO mutation, no Azure data-plane mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+$dest = Join-Path $PWD 'output\live-e2e\release-v0.5.11'
+gh release download v0.5.11 --repo ZP151/CICD-agents --pattern 'MergePilot_0.5.11_x64_en-US.msi' --dir $dest --clobber
+Get-FileHash -Algorithm SHA256 (Join-Path $dest 'MergePilot_0.5.11_x64_en-US.msi')
+.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath (Join-Path $PWD 'output\live-e2e\release-v0.5.11\MergePilot_0.5.11_x64_en-US.msi') -Port 18911 *> output\live-e2e\release-v0.5.11\released-msi-payload-smoke-20260706.log
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Release asset download | Pass | Downloaded `MergePilot_0.5.11_x64_en-US.msi` from [MergePilot v0.5.11](https://github.com/ZP151/CICD-agents/releases/tag/v0.5.11) into `output\live-e2e\release-v0.5.11`. |
+| Release MSI SHA256 | Pass | Local SHA256 `933A22FA17D479D33EAEE49A1A2FCCB6910A4D5E3F053C7675327DA5399C7E40` matches the GitHub Release asset digest `sha256:933a22fa17d479d33eaee49a1a2fccb6910a4d5e3f053c7675327da5399c7e40`. |
+| Published MSI payload smoke | Pass | `packaged-msi-payload-smoke.ps1` returned `ok: true`, `legacyCleanupWixValidated: true`, `healthVersion: "0.5.11"`, `refreshFilesSeen: 1`, `refreshFilesIndexed: 1`, `workflowPhase: "inspect_environment"`, and `chatStatus: 200`. Raw log: `output\live-e2e\release-v0.5.11\released-msi-payload-smoke-20260706.log`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The published GitHub Release MSI is byte-identical to the release digest and contains a runnable `0.5.11` daemon payload. | Info | Keep this as a post-release acceptance gate after publishing new installer assets. |
+| This validates the released MSI payload, not the currently installed Program Files copy. | Medium | Run `.\scripts\windows\install-and-verify-msi-state.ps1` from elevated PowerShell after installing `v0.5.11` to prove installed hash parity, auth/avatar, and installed live vision. |
+
+## Run: mp-installed-state-vs-release-msi-20260706-2000
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-06 19:59-20:00 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Current installed `C:\Program Files\MergePilot` app and daemon on `http://127.0.0.1:8787`, compared against published `v0.5.11` GitHub Release MSI |
+| Resource mode | Read-only installed-state verifier; no install, no Program Files mutation, no ADO mutation, no Azure data-plane mutation |
+| Result | Partial, expected fail for strict `0.5.11` installed parity |
+
+### Commands
+
+```powershell
+.\scripts\windows\verify-installed-msi-state.ps1 `
+  -ExpectedVersion 0.5.11 `
+  -MsiPath (Join-Path $PWD 'output\live-e2e\release-v0.5.11\MergePilot_0.5.11_x64_en-US.msi') `
+  -ProbeDaemon `
+  -ProbeAuth `
+  -RequireAvatar `
+  -RequireMsiPayloadMatch `
+  -RequireLegacyCleanup `
+  *> output\live-e2e\release-v0.5.11\installed-strict-against-release-msi-20260706.log
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Installed daemon health | Pass for current installed runtime | Installed daemon responded with `ok: true`, Azure OpenAI `gpt-4o`, config `C:\Users\15492\.mergepilot\config.toml`, `cloudSecrets: false`, and `cloudSessions: true`, but reported version `0.5.10` instead of expected `0.5.11`. |
+| Installed auth/avatar | Pass | Auth returned `Zhou Ping`, `Zhou.Ping@totalebizsolutions.com`, `hasAvatar: true`, avatar length `19339`, and JPEG data URL prefix. |
+| Legacy directory cleanup | Pass | `C:\Program Files\CICD-Agent` is absent, legacy publisher shortcut folder is absent, and the current MergePilot Start Menu shortcut exists. |
+| Strict installed version and payload parity | Fail as expected | The installed uninstall entry is `MergePilot 0.5.10`; installed desktop hash `5B70865DDBF05B76E9A2ED951124E664B499E89B0560F0B350DD0C76ED231B57` does not match release MSI payload desktop hash `BBFB598722A67397544BDE4A6AF3B09D6337CE9817ECFCDBC866B033990D0310`; installed daemon hash `FA4DD0775BAFAABB1E08F1E44342F36335ACCD74CDDCA84996F2CB52350E3EC8` does not match release MSI payload daemon hash `41342D51FA85FC747629CF96DD17115CCF4E882A7F8B8721505FF5D1E5525556`. Raw log: `output\live-e2e\release-v0.5.11\installed-strict-against-release-msi-20260706.log`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The installed app remains usable and authenticated, but it is still the old `0.5.10` Program Files payload. | High | Install `MergePilot_0.5.11_x64_en-US.msi` as administrator, then rerun the same verifier with `-RequireMsiPayloadMatch`. |
+| The published `0.5.11` MSI payload is healthy, so the remaining package acceptance gap is deployment into Program Files. | High | Run `.\scripts\windows\install-and-verify-msi-state.ps1` from elevated PowerShell to combine install, strict hash parity, daemon health/auth/avatar, and installed live vision. |
+
+## Run: mp-github-release-msi-live-vision-20260706-2007
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-06 20:06-20:07 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | GitHub Release asset `MergePilot_0.5.11_x64_en-US.msi`, extracted daemon on port `18912`, Azure OpenAI `gpt-4o` vision request |
+| Resource mode | Published release asset live vision validation; no Program Files install, no Git remote mutation, no ADO mutation, no Azure data-plane mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\packaged-live-vision-smoke.ps1 `
+  -MsiPath (Join-Path $PWD 'output\live-e2e\release-v0.5.11\MergePilot_0.5.11_x64_en-US.msi') `
+  -Port 18912 `
+  *> output\live-e2e\release-v0.5.11\released-msi-live-vision-20260706.log
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Published MSI extracted daemon health | Pass | Extracted daemon from the GitHub Release MSI reported `healthVersion: "0.5.11"`. |
+| Live image understanding | Pass | The live `gpt-4o` answer was: `The large text is "MP VISION TEST," and the two colored shapes are a blue square and a red circle.` The test reported `matchesText: true` and `matchesShapes: true`. |
+| Streaming cleanliness | Pass | `assistantDeltaCount: 24`, `leaksControlJson: false`, and `duplicateSentence: false`. Raw log: `output\live-e2e\release-v0.5.11\released-msi-live-vision-20260706.log`; SSE log: `output\live-e2e\packaged-live-vision-sse-18912.log`. |
+| Cleanup | Pass | The temporary chat session was deleted with HTTP `200`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The published `v0.5.11` MSI contains the clean live vision streaming fix. | Info | Keep this as the release-asset version of the image attachment and SSE streaming gate. |
+| This still does not prove the currently installed Program Files daemon, because the test runs from an extracted release MSI payload. | Medium | After administrator installation, rerun installed live vision through `install-and-verify-msi-state.ps1`. |
+
+## Run: mp-github-actions-release-v0511-20260706-2030
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-06 19:28-19:38 +08:00 workflow runtime; recorded at 20:30 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | GitHub-hosted runners, inspected from `zhoulaptop` |
+| Runtime | GitHub Actions CI on `main` and Release on tag `v0.5.11` for commit `e7fb81869c2869a3c2bb93ffa666e8f4df3c27c3` |
+| Resource mode | GitHub workflow/release publication evidence; no local app mutation |
+| Result | Pass |
+
+### Evidence
+
+| Gate | Result | Notes |
+|---|---|---|
+| CI workflow | Pass | [Run `28788235459`](https://github.com/ZP151/CICD-agents/actions/runs/28788235459) completed with conclusion `success` on `main`. Jobs passed: `Node 22 on ubuntu-latest`, `Node 22 on windows-latest`, `Desktop macos-latest (Tauri)`, and `Desktop windows-latest (Tauri)`. |
+| Release workflow | Pass | [Run `28788247899`](https://github.com/ZP151/CICD-agents/actions/runs/28788247899) completed with conclusion `success` on tag `v0.5.11`. Jobs passed: `Installer (windows-latest)`, `Installer (macos-latest)`, and `GitHub Release`. |
+| GitHub Release | Pass | [MergePilot v0.5.11](https://github.com/ZP151/CICD-agents/releases/tag/v0.5.11) is published, not draft, not prerelease. |
+| Windows MSI asset | Pass | `MergePilot_0.5.11_x64_en-US.msi`, size `54,558,720`, digest `sha256:933a22fa17d479d33eaee49a1a2fccb6910a4d5e3f053c7675327da5399c7e40`. This is the MSI later validated by payload and live vision smoke. |
+| Windows setup asset | Pass | `MergePilot_0.5.11_x64-setup.exe`, size `46,110,579`, digest `sha256:8072ac0e44238381adf29b937bf539372ec3fa5c746482955bbb77cd63b0b5b6`. |
+| macOS DMG asset | Pass | `MergePilot_0.5.11_aarch64.dmg`, size `57,940,332`, digest `sha256:4d54447936dec557adbc0c4f138dfa18de0c72149d7ce20db1c74df4cf8e7bd4`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Commit `e7fb818` passed both source CI and release packaging workflows. | Info | Keep this workflow-level evidence paired with release-asset payload and live vision smokes. |
+| Release publication is complete for `v0.5.11`; the remaining acceptance gap is local installation parity, not GitHub publication. | High | Install the published MSI as administrator and rerun strict installed verifier/live vision. |
