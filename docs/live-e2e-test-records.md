@@ -7578,3 +7578,147 @@ Remove-Item Env:MERGEPILOT_E2E_DESTRUCTIVE -ErrorAction SilentlyContinue
 |---|---|---|
 | PR/AI insight remains aligned with the product goal: native ADO-backed read-only analysis and AI readiness insight, not external MCP delegation or accidental write escalation. | Info | Keep expanding seeded PR/pipeline fixtures and LLM quality checks, but this is the current post-release PR/AI baseline. |
 | The live ADO PR insight gate is read-only and does not prove Review Queue cloud persistence. | Medium | Run cloud persistence success-path tests after Azure Table data-plane permissions are granted. |
+
+## Run: mp-github-release-v0517-acceptance-20260706-2340
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-06 23:30-23:42 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | GitHub Actions CI/Release for commit `da4d582`, GitHub Release asset `MergePilot_0.5.17_x64_en-US.msi`, extracted daemon on ports `18973` and `18974`, current installed daemon on `http://127.0.0.1:8787` |
+| Resource mode | Release publication and read-only package validation; no Program Files install, no ADO mutation, no Azure data-plane mutation |
+| Result | Pass for CI, Release, published MSI payload, and live vision; Partial for installed Program Files parity |
+
+### Commands
+
+```powershell
+gh release download v0.5.17 --repo ZP151/CICD-agents `
+  --pattern 'MergePilot_0.5.17_x64_en-US.msi' `
+  --dir output\live-e2e\release-v0.5.17 `
+  --clobber
+
+Get-FileHash -Algorithm SHA256 output\live-e2e\release-v0.5.17\MergePilot_0.5.17_x64_en-US.msi
+
+.\scripts\windows\packaged-msi-payload-smoke.ps1 `
+  -MsiPath (Join-Path $PWD 'output\live-e2e\release-v0.5.17\MergePilot_0.5.17_x64_en-US.msi') `
+  -Port 18973 `
+  *> output\live-e2e\release-v0.5.17\released-msi-payload-smoke-20260706-v0517.log
+
+.\scripts\windows\packaged-live-vision-smoke.ps1 `
+  -MsiPath (Join-Path $PWD 'output\live-e2e\release-v0.5.17\MergePilot_0.5.17_x64_en-US.msi') `
+  -Port 18974 `
+  *> output\live-e2e\release-v0.5.17\released-msi-live-vision-20260706-v0517.log
+
+.\scripts\windows\verify-installed-msi-state.ps1 `
+  -ExpectedVersion 0.5.17 `
+  -MsiPath (Join-Path $PWD 'output\live-e2e\release-v0.5.17\MergePilot_0.5.17_x64_en-US.msi') `
+  -ProbeDaemon `
+  -ProbeAuth `
+  -RequireAvatar `
+  -RequireMsiPayloadMatch `
+  -RequireLegacyCleanup `
+  *> output\live-e2e\release-v0.5.17\installed-strict-against-release-msi-20260706-v0517.log
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| GitHub CI workflow | Pass | Run `28803145856` completed with conclusion `success` on `main`. Jobs passed: `Node 22 on ubuntu-latest`, `Node 22 on windows-latest`, `Desktop macos-latest (Tauri)`, and `Desktop windows-latest (Tauri)`. |
+| GitHub Release workflow | Pass | Run `28803158707` completed with conclusion `success` on tag `v0.5.17`. Jobs passed: `Installer (windows-latest)`, `Installer (macos-latest)`, and `GitHub Release`. |
+| Release assets | Pass | [MergePilot v0.5.17](https://github.com/ZP151/CICD-agents/releases/tag/v0.5.17) is published, not draft, not prerelease. Assets: `MergePilot_0.5.17_x64_en-US.msi`, `MergePilot_0.5.17_x64-setup.exe`, and `MergePilot_0.5.17_aarch64.dmg`. |
+| Release MSI SHA256 | Pass | Local SHA256 `01EF33B831BBC823FF198643C0E2682CBB893DFF01DDE0E427CE5A840F4F18F4` matches the GitHub Release asset digest `sha256:01ef33b831bbc823ff198643c0e2682cbb893dff01dde0e427ce5a840f4f18f4`. |
+| Published MSI payload smoke | Pass | `packaged-msi-payload-smoke.ps1` returned `ok: true`, `legacyCleanupWixValidated: true`, `healthVersion: "0.5.17"`, `refreshFilesSeen: 1`, `refreshFilesIndexed: 1`, `workflowPhase: "inspect_environment"`, and `chatStatus: 200`. Raw log: `output\live-e2e\release-v0.5.17\released-msi-payload-smoke-20260706-v0517.log`. |
+| Published MSI live vision | Pass | Extracted daemon reported `healthVersion: "0.5.17"`. The live `gpt-4o` answer was: `The large text is "MP VISION TEST," and the two colored shapes are a blue square and a red circle.` The test reported `matchesText: true`, `matchesShapes: true`, `assistantDeltaCount: 24`, `leaksControlJson: false`, `duplicateSentence: false`, and deleted the temporary chat session with HTTP `200`. Raw log: `output\live-e2e\release-v0.5.17\released-msi-live-vision-20260706-v0517.log`; SSE log: `output\live-e2e\packaged-live-vision-sse-18974.log`. |
+| Installed daemon runtime | Pass for current installed runtime | Installed daemon responded with `ok: true`, Azure OpenAI `gpt-4o`, config `C:\Users\15492\.mergepilot\config.toml`, `cloudSecrets: false`, and `cloudSessions: true`, but reported version `0.5.10` instead of expected `0.5.17`. |
+| Strict installed version and payload parity | Fail as expected | Current Program Files install is still `0.5.10`: uninstall entry `MergePilot 0.5.10`; installed desktop hash `5B70865DDBF05B76E9A2ED951124E664B499E89B0560F0B350DD0C76ED231B57` differs from `v0.5.17` MSI desktop hash `F4B38623DFD248492746E1ACB7035B30F0BF0BC70612E1DC91672AC2419838D6`; installed daemon hash `FA4DD0775BAFAABB1E08F1E44342F36335ACCD74CDDCA84996F2CB52350E3EC8` differs from `v0.5.17` MSI daemon hash `20AA1EED37065EAE54B503DD59A5D7909C60205DC64F0D5DDFA38593D7A197CD`. Raw log: `output\live-e2e\release-v0.5.17\installed-strict-against-release-msi-20260706-v0517.log`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| `v0.5.17` source CI, release packaging, published MSI payload smoke, and published MSI live vision are all green. | Info | Use `MergePilot_0.5.17_x64_en-US.msi` as the current release candidate for administrator installation validation. |
+| The current installed app remains usable, but it is still the old `0.5.10` Program Files payload. | High | Install `MergePilot_0.5.17_x64_en-US.msi` as administrator, then rerun strict installed verifier with `-RequireMsiPayloadMatch` and installed daemon vision smoke. |
+
+## Run: mp-default-chromium-and-live-ado-post-v0517-20260706-2351
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-06 23:51-23:52 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source `@mergepilot/core@0.5.17`, source `@mergepilot/daemon@0.5.17`, source browser app, installed daemon probe on `http://127.0.0.1:8787` |
+| Resource mode | Default non-destructive Chromium browser gate plus live Azure DevOps read-only gates; `MERGEPILOT_E2E_DESTRUCTIVE` unset |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium `
+  *> output\live-e2e\default-chromium-browser-gate-post-v0517-20260706.log
+
+$env:MERGEPILOT_E2E_LIVE_ADO='1'
+Remove-Item Env:MERGEPILOT_E2E_DESTRUCTIVE -ErrorAction SilentlyContinue
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAdoDiscovery.test.ts test/liveAdoPipeline.test.ts `
+  *> output\live-e2e\live-ado-readonly-post-v0517-core-20260706.log
+
+$env:MERGEPILOT_E2E_LIVE_ADO='1'
+Remove-Item Env:MERGEPILOT_E2E_DESTRUCTIVE -ErrorAction SilentlyContinue
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts `
+  *> output\live-e2e\live-ado-readonly-post-v0517-daemon-pr-insight-20260706.log
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Default Chromium browser suite | Pass | Playwright discovered 84 Chromium tests, passed 54 default/non-live tests in 1.2 minutes, and skipped 30 gated live-app tests by design. Raw log: `output\live-e2e\default-chromium-browser-gate-post-v0517-20260706.log`. |
+| Live ADO discovery and pipeline read-only | Pass | `test/liveAdoDiscovery.test.ts` and `test/liveAdoPipeline.test.ts` passed 3/3 live read-only tests with 1 destructive queue case skipped. The current account discovered ClaimBot_API project/repo/pipeline `#117`, listed recent runs, and read timeline/log evidence for the latest failed pipeline run. Raw log: `output\live-e2e\live-ado-readonly-post-v0517-core-20260706.log`. |
+| Live daemon PR insight | Pass | `test/liveAdoPrInsight.test.ts` passed 1/1. The daemon inspected a real ClaimBot_API pull request through `/chat/workflow-action` without approval or mutation. Raw log: `output\live-e2e\live-ado-readonly-post-v0517-daemon-pr-insight-20260706.log`. |
+| Runtime and cleanup probe | Pass | `/healthz` stayed healthy with installed runtime `0.5.10`, Azure OpenAI `gpt-4o`, `cloudSecrets: false`, and `cloudSessions: true`. `/project-links` retained `ClaimBot_API link` mapped to pipeline `117 / ClaimBot_API` plus `project link2`. No `%TEMP%\mergepilot-live-*`, `%TEMP%\mergepilot-daemon-live-pr-insight-*`, or `%TEMP%\mp-installed-*` directories remained. Raw probe: `output\live-e2e\default-chromium-and-live-ado-post-v0517-probe-20260706.json`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The post-`v0.5.17` default browser and live ADO read-only gates are green without mutating ADO. | Info | Keep this as the current non-destructive app/ADO baseline after the `v0.5.17` release. |
+| The running installed daemon is still `0.5.10`, so these gates prove source/browser and ADO behavior after the release, not installed Program Files parity. | Medium | Install `v0.5.17` as administrator before claiming first-run installed parity. |
+
+## Run: mp-live-app-business-full-post-v0517-20260707-0003
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-06 23:57-2026-07-07 00:03 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source browser app plus installed daemon on `http://127.0.0.1:8787`; package versions `@mergepilot/core@0.5.17` and `@mergepilot/daemon@0.5.17` in the source test process |
+| Resource mode | Full live app business gate, non-destructive; `MERGEPILOT_E2E_LIVE_APP=1`, `MERGEPILOT_E2E_LIVE_ADO=1`, `MERGEPILOT_E2E_DESTRUCTIVE` unset |
+| Result | Pass |
+
+### Commands
+
+```powershell
+$env:MERGEPILOT_E2E_LIVE_APP='1'
+$env:MERGEPILOT_E2E_LIVE_ADO='1'
+Remove-Item Env:MERGEPILOT_E2E_DESTRUCTIVE -ErrorAction SilentlyContinue
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/live-app-business.spec.ts --project=chromium `
+  *> output\live-e2e\live-app-business-full-post-v0517-20260707.log
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Full live app business gate | Pass | 30/30 real browser workflows passed in 5.9 minutes. Raw log: `output\live-e2e\live-app-business-full-post-v0517-20260707.log`. |
+| Git staging and commit workflows | Pass | Covered selected-file staging, pending approval reload/restore, approval denial, denial feedback replanning, stage-and-commit, commit validation failure with staged changes preserved, empty commit guard, staged-only summary, and draft commit message generation. |
+| Git branch, sync, stash, restore, revert, and tag workflows | Pass | Covered credential-redacted remote target inspection, secret-like diff redaction, dirty branch switch approval, target merge, merge conflict recovery, new branch creation, local bare-remote push, pull with rebase, rebase conflict recovery, stash push/apply/pop/conflict preservation, restore, revert, local tag creation, and single-tag push. |
+| ClaimBot_API pipeline workflows | Pass | Covered ClaimBot_API pipeline `#117` discovery-to-save when Project Link lacks a pipeline ID, read-only failed-run evidence inspection, rerun approval preparation, and direct trigger approval preparation. Destructive mode was unset, so no new ADO run was queued. |
+| Runtime and cleanup probe | Pass | `/healthz` stayed healthy with installed runtime `0.5.10`, Azure OpenAI `gpt-4o`, `cloudSecrets: false`, and `cloudSessions: true`. `/project-links` retained `ClaimBot_API link` mapped to pipeline `117 / ClaimBot_API` plus `project link2`. No `%TEMP%\mergepilot-live-*`, `%TEMP%\mergepilot-daemon-live-pr-insight-*`, or `%TEMP%\mp-installed-*` directories remained. Raw probe: `output\live-e2e\live-app-business-full-post-v0517-probe-20260707.json`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The full non-destructive real Chat UI business gate is green after the `v0.5.17` release. | Info | Keep this as the current full app workflow baseline for Git, approval, pipeline discovery, and pipeline read-only insight. |
+| The installed daemon remains `0.5.10`, so this gate is not installed Program Files parity proof. | Medium | Install `v0.5.18` as administrator after publication and rerun strict installed verifier plus installed live vision. |
