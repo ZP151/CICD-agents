@@ -7722,3 +7722,110 @@ Remove-Item Env:MERGEPILOT_E2E_DESTRUCTIVE -ErrorAction SilentlyContinue
 |---|---|---|
 | The full non-destructive real Chat UI business gate is green after the `v0.5.17` release. | Info | Keep this as the current full app workflow baseline for Git, approval, pipeline discovery, and pipeline read-only insight. |
 | The installed daemon remains `0.5.10`, so this gate is not installed Program Files parity proof. | Medium | Install `v0.5.18` as administrator after publication and rerun strict installed verifier plus installed live vision. |
+
+## Run: mp-github-release-v0518-acceptance-20260707-0027
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-07 00:21-00:27 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | GitHub Actions CI/Release for commit `a0852f6`, GitHub Release asset `MergePilot_0.5.18_x64_en-US.msi`, extracted daemon on ports `18983` and `18984`, current installed daemon on `http://127.0.0.1:8787` |
+| Resource mode | Release publication and read-only package validation; no Program Files install, no ADO mutation, no Azure data-plane mutation |
+| Result | Pass for CI, Release, published MSI payload, and live vision; Partial for installed Program Files parity |
+
+### Commands
+
+```powershell
+gh release download v0.5.18 --repo ZP151/CICD-agents `
+  --pattern 'MergePilot_0.5.18_x64_en-US.msi' `
+  --dir output\live-e2e\release-v0.5.18 `
+  --clobber
+
+Get-FileHash -Algorithm SHA256 output\live-e2e\release-v0.5.18\MergePilot_0.5.18_x64_en-US.msi
+
+.\scripts\windows\packaged-msi-payload-smoke.ps1 `
+  -MsiPath (Join-Path $PWD 'output\live-e2e\release-v0.5.18\MergePilot_0.5.18_x64_en-US.msi') `
+  -Port 18983 `
+  *> output\live-e2e\release-v0.5.18\released-msi-payload-smoke-20260707-v0518.log
+
+.\scripts\windows\packaged-live-vision-smoke.ps1 `
+  -MsiPath (Join-Path $PWD 'output\live-e2e\release-v0.5.18\MergePilot_0.5.18_x64_en-US.msi') `
+  -Port 18984 `
+  *> output\live-e2e\release-v0.5.18\released-msi-live-vision-20260707-v0518.log
+
+.\scripts\windows\verify-installed-msi-state.ps1 `
+  -ExpectedVersion 0.5.18 `
+  -MsiPath (Join-Path $PWD 'output\live-e2e\release-v0.5.18\MergePilot_0.5.18_x64_en-US.msi') `
+  -ProbeDaemon `
+  -ProbeAuth `
+  -RequireAvatar `
+  -RequireMsiPayloadMatch `
+  -RequireLegacyCleanup `
+  *> output\live-e2e\release-v0.5.18\installed-strict-against-release-msi-20260707-v0518.log
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| GitHub CI workflow | Pass | Run `28805793875` completed with conclusion `success` on `main`. Jobs passed: `Node 22 on ubuntu-latest`, `Node 22 on windows-latest`, `Desktop macos-latest (Tauri)`, and `Desktop windows-latest (Tauri)`. |
+| GitHub Release workflow | Pass | Run `28805803973` completed with conclusion `success` on tag `v0.5.18`. Jobs passed: `Installer (windows-latest)`, `Installer (macos-latest)`, and `GitHub Release`. |
+| Release assets | Pass | [MergePilot v0.5.18](https://github.com/ZP151/CICD-agents/releases/tag/v0.5.18) is published, not draft, not prerelease. Assets: `MergePilot_0.5.18_x64_en-US.msi`, `MergePilot_0.5.18_x64-setup.exe`, and `MergePilot_0.5.18_aarch64.dmg`. |
+| Release MSI SHA256 | Pass | Local SHA256 `DA51874D75C1E8C4B12BA3A87512B2DD71814FF280BFAB2233D36150A4617317` matches the GitHub Release asset digest `sha256:da51874d75c1e8c4b12ba3a87512b2dd71814ff280bfab2233d36150a4617317`. |
+| Published MSI payload smoke | Pass | `packaged-msi-payload-smoke.ps1` returned `ok: true`, `legacyCleanupWixValidated: true`, `healthVersion: "0.5.18"`, `refreshFilesSeen: 1`, `refreshFilesIndexed: 1`, `workflowPhase: "inspect_environment"`, and `chatStatus: 200`. Raw log: `output\live-e2e\release-v0.5.18\released-msi-payload-smoke-20260707-v0518.log`. |
+| Published MSI live vision | Pass | Extracted daemon reported `healthVersion: "0.5.18"`. The live `gpt-4o` answer was: `The large text is "MP VISION TEST," and the two colored shapes are a blue square and a red circle.` The test reported `matchesText: true`, `matchesShapes: true`, `assistantDeltaCount: 24`, `leaksControlJson: false`, `duplicateSentence: false`, and deleted the temporary chat session with HTTP `200`. Raw log: `output\live-e2e\release-v0.5.18\released-msi-live-vision-20260707-v0518.log`; SSE log: `output\live-e2e\packaged-live-vision-sse-18984.log`. |
+| Installed daemon runtime | Pass for current installed runtime | Installed daemon responded with `ok: true`, Azure OpenAI `gpt-4o`, config `C:\Users\15492\.mergepilot\config.toml`, `cloudSecrets: false`, `cloudSessions: true`, authenticated user `Zhou Ping`, and avatar data present, but reported version `0.5.10` instead of expected `0.5.18`. |
+| Strict installed version and payload parity | Fail as expected | Current Program Files install is still `0.5.10`: uninstall entry `MergePilot 0.5.10`; installed desktop hash `5B70865DDBF05B76E9A2ED951124E664B499E89B0560F0B350DD0C76ED231B57` differs from `v0.5.18` MSI desktop hash `8B5D4B16D67B5439D5942850E5991D081229FE02A504AA029320AB5F077EDEA4`; installed daemon hash `FA4DD0775BAFAABB1E08F1E44342F36335ACCD74CDDCA84996F2CB52350E3EC8` differs from `v0.5.18` MSI daemon hash `365E2005D47E6840C772475F569D4F4042DE4E37CFCF2BB237426CF1EB6B163D`. Raw log: `output\live-e2e\release-v0.5.18\installed-strict-against-release-msi-20260707-v0518.log`. |
+| Runtime cleanup | Pass after cleanup | Follow-up cleanup removed the temporary packaged vision repo and fixture image. Post-cleanup probe found `0` `%TEMP%\mergepilot-live-*`, `%TEMP%\mergepilot-daemon-live-pr-insight-*`, `%TEMP%\mp-installed-*`, `%TEMP%\mergepilot-msi-extract-*`, `%TEMP%\mergepilot-vision-msi-extract-*`, `%TEMP%\mergepilot-packaged-vision-repo-*`, and `%TEMP%\mergepilot-vision-fixture-*` directories/files. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| `v0.5.18` source CI, release packaging, published MSI payload smoke, and published MSI live vision are all green. | Info | Use `MergePilot_0.5.18_x64_en-US.msi` as the current release candidate for administrator installation validation. |
+| The current installed app remains usable and has auth/avatar/config health, but it is still the old `0.5.10` Program Files payload. | High | Install `MergePilot_0.5.18_x64_en-US.msi` as administrator, then rerun strict installed verifier with `-RequireMsiPayloadMatch` and installed daemon vision smoke. |
+
+## Run: mp-v0518-install-guard-and-azure-permission-20260707-0036
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-07 00:34-00:37 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Non-elevated PowerShell, published `v0.5.18` MSI, Azure CLI account `Zhou.Ping@totalebizsolutions.com` |
+| Resource mode | Non-mutating install guard plus live Azure permission diagnostic; no Program Files install, no Azure data-plane write |
+| Result | Pass for guard behavior and diagnostic execution; Azure access remains Partial |
+
+### Commands
+
+```powershell
+.\scripts\windows\install-and-verify-msi-state.ps1 `
+  -ExpectedVersion 0.5.18 `
+  -MsiPath (Join-Path $PWD 'output\live-e2e\release-v0.5.18\MergePilot_0.5.18_x64_en-US.msi') `
+  *> output\live-e2e\release-v0.5.18\install-and-verify-msi-state-nonadmin-20260707-v0518.log
+
+$env:MERGEPILOT_E2E_LIVE_AZURE='1'
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAzurePermissions.test.ts `
+  *> output\live-e2e\live-azure-permission-post-v0518-20260707.log
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Non-admin install guard | Pass | The current shell is not administrator. `install-and-verify-msi-state.ps1` exited `1` with structured JSON: `ok: false`, `requiresElevation: true`, `expectedVersion: "0.5.18"`, and the published `v0.5.18` MSI path. It did not attempt a system install. Raw log: `output\live-e2e\release-v0.5.18\install-and-verify-msi-state-nonadmin-20260707-v0518.log`. |
+| Live Azure permission diagnostic | Pass as diagnostic | `test/liveAzurePermissions.test.ts` passed 1/1 and reported each Azure area separately. Raw log: `output\live-e2e\live-azure-permission-post-v0518-20260707.log`. |
+| Storage account and Table list | Pass for ARM/list | ARM metadata is readable for `devagentstorage001`, and Storage Table list sees `CicdAgentProfiles`. |
+| Storage Table entity query | Fail due permission | Entity query still fails with missing Storage data-plane roles. Required role remains `Storage Table Data Reader` or `Storage Table Data Contributor` scoped to the relevant table/account. |
+| Cosmos account and database list | Pass for ARM/list | ARM metadata is readable for `devagentcosmos001`, and SQL database list sees `cicd-agent`. |
+| Cosmos SQL data-plane role assignment | Fail due permission | No Cosmos SQL data-plane role assignments were returned. Required role remains `Cosmos DB Built-in Data Contributor`, scoped to `devagentcosmos001/cicd-agent` where possible. |
+| Key Vault ARM | Pass | ARM metadata is readable for `devagentkv001`, and RBAC authorization is enabled. |
+| Key Vault secret metadata/list | Fail due permission | Secret list fails with `Forbidden` for `Microsoft.KeyVault/vaults/secrets/readMetadata/action`. Required role remains `Key Vault Secrets User` for reads; `Secrets Officer` is needed only for writes. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The `v0.5.18` install verifier is safe to run from a normal shell: it refuses to install without elevation and tells the operator how to proceed. | Info | Run the same script from elevated PowerShell to perform the actual install and strict parity checks. |
+| Azure cloud persistence is still permission-gated, not product-gated. | High | Grant Storage Table data-plane, Cosmos SQL data-plane, and Key Vault secret read permissions before rerunning cloud persistence success-path gates. |
