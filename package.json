@@ -1,6 +1,6 @@
 {
   "name": "mergepilot-monorepo",
-  "version": "0.5.12",
+  "version": "0.5.13",
   "private": true,
   "packageManager": "pnpm@9.0.0",
   "engines": {

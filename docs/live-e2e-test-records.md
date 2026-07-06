@@ -6769,3 +6769,162 @@ Get-FileHash -Algorithm SHA256 (Join-Path $dest 'MergePilot_0.5.11_x64_en-US.msi
 |---|---|---|
 | Commit `e7fb818` passed both source CI and release packaging workflows. | Info | Keep this workflow-level evidence paired with release-asset payload and live vision smokes. |
 | Release publication is complete for `v0.5.11`; the remaining acceptance gap is local installation parity, not GitHub publication. | High | Install the published MSI as administrator and rerun strict installed verifier/live vision. |
+
+## Run: mp-github-release-v0512-acceptance-20260706-2037
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-06 20:23-20:37 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | GitHub-hosted runners plus `zhoulaptop` |
+| Runtime | GitHub Actions CI/Release for commit `d42384c4fa57db06c1c9fad9d8da7f6f9772406e`, GitHub Release asset `MergePilot_0.5.12_x64_en-US.msi`, extracted daemon on ports `18921` and `18922`, current installed daemon on `http://127.0.0.1:8787` |
+| Resource mode | Release publication and read-only package validation; no Program Files install, no ADO mutation, no Azure data-plane mutation |
+| Result | Pass for CI, Release, published MSI payload, and live vision; Partial for installed Program Files parity |
+
+### Commands
+
+```powershell
+git commit -m "chore: record release evidence and bump v0.5.12"
+git push origin main
+git tag v0.5.12
+git push origin v0.5.12
+gh run watch 28791235871 --repo ZP151/CICD-agents --exit-status
+gh run watch 28791251253 --repo ZP151/CICD-agents --exit-status
+
+$dest = Join-Path $PWD 'output\live-e2e\release-v0.5.12'
+gh release download v0.5.12 --repo ZP151/CICD-agents --pattern 'MergePilot_0.5.12_x64_en-US.msi' --dir $dest --clobber
+Get-FileHash -Algorithm SHA256 (Join-Path $dest 'MergePilot_0.5.12_x64_en-US.msi')
+
+.\scripts\windows\packaged-msi-payload-smoke.ps1 `
+  -MsiPath (Join-Path $PWD 'output\live-e2e\release-v0.5.12\MergePilot_0.5.12_x64_en-US.msi') `
+  -Port 18921 `
+  *> output\live-e2e\release-v0.5.12\released-msi-payload-smoke-20260706-v0512.log
+
+.\scripts\windows\packaged-live-vision-smoke.ps1 `
+  -MsiPath (Join-Path $PWD 'output\live-e2e\release-v0.5.12\MergePilot_0.5.12_x64_en-US.msi') `
+  -Port 18922 `
+  *> output\live-e2e\release-v0.5.12\released-msi-live-vision-20260706-v0512.log
+
+.\scripts\windows\verify-installed-msi-state.ps1 `
+  -ExpectedVersion 0.5.12 `
+  -MsiPath (Join-Path $PWD 'output\live-e2e\release-v0.5.12\MergePilot_0.5.12_x64_en-US.msi') `
+  -ProbeDaemon `
+  -ProbeAuth `
+  -RequireAvatar `
+  -RequireMsiPayloadMatch `
+  -RequireLegacyCleanup `
+  *> output\live-e2e\release-v0.5.12\installed-strict-against-release-msi-20260706-v0512.log
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| GitHub CI workflow | Pass | Run [`28791235871`](https://github.com/ZP151/CICD-agents/actions/runs/28791235871) completed with conclusion `success` on `main`. Jobs passed: `Node 22 on ubuntu-latest`, `Node 22 on windows-latest`, `Desktop macos-latest (Tauri)`, and `Desktop windows-latest (Tauri)`. |
+| GitHub Release workflow | Pass | Run [`28791251253`](https://github.com/ZP151/CICD-agents/actions/runs/28791251253) completed with conclusion `success` on tag `v0.5.12`. Jobs passed: `Installer (windows-latest)`, `Installer (macos-latest)`, and `GitHub Release`. |
+| Release assets | Pass | [MergePilot v0.5.12](https://github.com/ZP151/CICD-agents/releases/tag/v0.5.12) is published, not draft, not prerelease. Assets: `MergePilot_0.5.12_x64_en-US.msi`, `MergePilot_0.5.12_x64-setup.exe`, and `MergePilot_0.5.12_aarch64.dmg`. |
+| Release MSI SHA256 | Pass | Local SHA256 `A7B3ECBDB6C7F050E0992A02B59BFD4A78A44560844FC253EB47325399D11525` matches the GitHub Release asset digest `sha256:a7b3ecbdb6c7f050e0992a02b59bfd4a78a44560844fc253eb47325399d11525`. |
+| Published MSI payload smoke | Pass | `packaged-msi-payload-smoke.ps1` returned `ok: true`, `legacyCleanupWixValidated: true`, `healthVersion: "0.5.12"`, `refreshFilesSeen: 1`, `refreshFilesIndexed: 1`, `workflowPhase: "inspect_environment"`, and `chatStatus: 200`. Raw log: `output\live-e2e\release-v0.5.12\released-msi-payload-smoke-20260706-v0512.log`. |
+| Published MSI live vision | Pass | Extracted daemon reported `healthVersion: "0.5.12"`. The live `gpt-4o` answer was: `The large text is "MP VISION TEST," and the two colored shapes are a blue square and a red circle.` The test reported `matchesText: true`, `matchesShapes: true`, `assistantDeltaCount: 24`, `leaksControlJson: false`, `duplicateSentence: false`, and deleted the temporary chat session with HTTP `200`. Raw log: `output\live-e2e\release-v0.5.12\released-msi-live-vision-20260706-v0512.log`; SSE log: `output\live-e2e\packaged-live-vision-sse-18922.log`. |
+| Installed daemon health/auth/avatar | Pass for current installed runtime | Installed daemon responded with `ok: true`, Azure OpenAI `gpt-4o`, config `C:\Users\15492\.mergepilot\config.toml`, `cloudSecrets: false`, and `cloudSessions: true`, but reported version `0.5.10` instead of expected `0.5.12`. Auth returned `Zhou Ping`, `Zhou.Ping@totalebizsolutions.com`, `hasAvatar: true`, avatar length `19339`, and JPEG data URL prefix. |
+| Strict installed version and payload parity | Fail as expected | Current Program Files install is still `0.5.10`: uninstall entry `MergePilot 0.5.10`; installed desktop hash `5B70865DDBF05B76E9A2ED951124E664B499E89B0560F0B350DD0C76ED231B57` differs from `v0.5.12` MSI desktop hash `356199C15E00F8D053F2915D4C18D1A221BDD0B94B77330388A2FAEDC22834E9`; installed daemon hash `FA4DD0775BAFAABB1E08F1E44342F36335ACCD74CDDCA84996F2CB52350E3EC8` differs from `v0.5.12` MSI daemon hash `507A4099E0B095137AC94107E65CCF0C1E53EDE87FE8F67B497ABCDF1F4B40AB`. Raw log: `output\live-e2e\release-v0.5.12\installed-strict-against-release-msi-20260706-v0512.log`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| `v0.5.12` source CI, release packaging, published MSI payload smoke, and published MSI live vision are all green. | Info | Use `MergePilot_0.5.12_x64_en-US.msi` as the current release candidate for admin installation validation. |
+| The current installed app remains usable and authenticated, but it is still the old `0.5.10` Program Files payload. | High | Install `MergePilot_0.5.12_x64_en-US.msi` as administrator, then rerun strict installed verifier with `-RequireMsiPayloadMatch` and installed live vision. |
+| GitHub workflow annotations mention Node.js 20 deprecation for several actions, but the workflows completed successfully. | Low | Track action upgrades separately; this is not blocking the `v0.5.12` package acceptance path. |
+
+## Run: mp-live-azure-permission-post-v0512-20260706-2042
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-06 20:41-20:42 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Azure CLI live permission probe through `@mergepilot/core@0.5.12` |
+| Resource mode | Read-only Azure ARM/data-plane readiness probe; no resource writes |
+| Result | Pass as diagnostic; access remains Partial |
+
+### Commands
+
+```powershell
+$env:MERGEPILOT_E2E_LIVE_AZURE='1'
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAzurePermissions.test.ts `
+  *> output\live-e2e\live-azure-permissions-post-v0512-20260706.log
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Azure CLI account | Pass | Current account is `Zhou.Ping@totalebizsolutions.com`; default CLI subscription is `TeBS-Internal Azure Bot`, while the probe explicitly targets subscription `a99512b0-3dc5-476f-8f43-d7db40fbc923` in tenant `1f432b2e-9e7a-4aa0-ace2-53af62d309f6`. |
+| Storage account ARM | Pass | Read metadata for `devagentstorage001` in `eastus`, kind `StorageV2`. |
+| Storage Table list | Pass | Listed table `CicdAgentProfiles`. |
+| Storage Table entity query | Fail as expected | Azure CLI reported missing data-plane permissions. Remediation: grant `Storage Table Data Reader` or `Storage Table Data Contributor` on table `CicdAgentProfiles`. |
+| Cosmos account ARM | Pass | Read metadata for `devagentcosmos001`, endpoint `https://devagentcosmos001.documents.azure.com:443/`. |
+| Cosmos SQL database list | Pass | Listed SQL database `cicd-agent`. |
+| Cosmos SQL role assignments | Fail as expected | No Cosmos SQL data-plane role assignments were returned. Remediation: assign `Cosmos DB Built-in Data Contributor`, scoped to `devagentcosmos001/cicd-agent` where possible. |
+| Key Vault ARM | Pass | Read metadata for `devagentkv001`; RBAC authorization is enabled and vault URI is `https://devagentkv001.vault.azure.net/`. |
+| Key Vault secret list | Fail as expected | Azure CLI returned Forbidden for `Microsoft.KeyVault/vaults/secrets/readMetadata/action`. Remediation: grant `Key Vault Secrets User` on `devagentkv001`; `Secrets Officer` is needed only for writes. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Azure control-plane visibility is healthy for the configured Storage, Cosmos, and Key Vault resources. | Info | Keep using explicit subscription `a99512b0-3dc5-476f-8f43-d7db40fbc923` in live gates because the CLI default subscription differs. |
+| Cloud persistence success-path tests remain blocked by data-plane RBAC, not by application code. | High | Grant Storage Table entity read/write, Cosmos SQL data-plane contributor, and Key Vault secret metadata/read permissions before running cloud ReviewHistory/session persistence write gates. |
+| Runtime should continue using local model secrets while `cloudSecrets` is disabled and Key Vault secret permissions are absent. | Medium | Re-enable Key Vault secret success-path testing only after `Key Vault Secrets User` is present. |
+
+## Run: mp-live-app-business-full-post-v0512-20260706-2049
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-06 20:49-20:56 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source desktop dev server at `http://localhost:1420`, current installed daemon at `http://127.0.0.1:8787`, persisted `ClaimBot_API link` mapped to pipeline `117 / ClaimBot_API` |
+| Resource mode | Live app and live ADO read-only gate with `MERGEPILOT_E2E_DESTRUCTIVE` unset; no real PR, pipeline, or cloud data-plane mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+$args = @(
+  '-NoProfile',
+  '-ExecutionPolicy',
+  'Bypass',
+  '-File',
+  (Join-Path $PWD 'scripts\windows\pnpm-project.ps1'),
+  '--filter',
+  '@mergepilot/desktop',
+  'dev'
+)
+Start-Process -FilePath 'powershell.exe' -ArgumentList $args -WorkingDirectory $PWD -WindowStyle Hidden
+
+$env:MERGEPILOT_E2E_LIVE_APP='1'
+$env:MERGEPILOT_E2E_LIVE_ADO='1'
+Remove-Item Env:MERGEPILOT_E2E_DESTRUCTIVE -ErrorAction SilentlyContinue
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/live-app-business.spec.ts --project=chromium `
+  *> output\live-e2e\live-app-business-full-post-v0512-20260706.log
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Full live app business suite | Pass | 30/30 Playwright workflows passed in 6.5 minutes. Raw log: `output\live-e2e\live-app-business-full-post-v0512-20260706.log`. |
+| Git workflow coverage | Pass | Covered selected-file staging, approval restoration after reload, approval denial, denial feedback replanning, stage-and-commit, commit validation failure, empty commit guard, staged-only summary, commit-message drafting, remote target redaction, secret-like diff redaction, dirty branch switch approval, explicit target merge, merge conflict recovery, branch creation, local bare remote push, pull with rebase, rebase conflict recovery, stash/apply/pop/conflict flows, selected restore, revert last commit, local tag creation, and single-tag push. |
+| ADO pipeline coverage | Pass | Covered ClaimBot_API pipeline `#117` discovery-to-save, read-only failed-run evidence inspection through normal Chat input, rerun approval preparation from failure suggestions, and direct trigger approval preparation through the real Chat UI. |
+| Mutation safety | Pass | `MERGEPILOT_E2E_DESTRUCTIVE` was unset, so approvals that would mutate ADO were prepared but not executed. The test operated on run-scoped temporary Git repositories for local mutation cases. |
+| Cleanup probe | Pass | Follow-up checks found no `%TEMP%\mergepilot-live-*` directories. `/project-links` retained only the expected long-lived links: `ClaimBot_API link` mapped to `C:\Users\15492\Develop\ClaimBot_API`, `TeBS-ClaimBot / ClaimBot_API`, pipeline `117 / ClaimBot_API`, plus `project link2`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The post-`v0.5.12` full live app gate still aligns with the project goal: native Git/ADO workflow execution plus AI insight and approval control inside MergePilot, not external tool delegation. | Info | Keep this 30/30 gate as the release-candidate business regression baseline. |
+| The run used the current installed daemon on `127.0.0.1:8787`, which still reports `0.5.10`; the UI came from the source dev server. | Medium | After installing the latest MSI as administrator, rerun the same gate against the installed desktop/runtime only. |
+| Cloud Storage/Cosmos/Key Vault success-path persistence remains outside this gate because Azure data-plane RBAC is still partial. | High | Grant the documented data-plane permissions before running cloud persistence write tests. |
