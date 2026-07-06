@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
-export const InlineProjectLinkSchema = z.object({
+const InlineProjectLinkObjectSchema = z.object({
   id: z.string().optional(),
   name: z.string().optional(),
   repoPath: z.string().default(""),
@@ -11,6 +11,8 @@ export const InlineProjectLinkSchema = z.object({
   adoProject: z.string().default(""),
   adoRepoName: z.string().default(""),
   adoPat: z.string().default(""),
+  adoPipelineId: z.string().default(""),
+  adoPipelineName: z.string().default(""),
   adoMcpEnabled: z.coerce.boolean().default(false),
   adoMcpCommand: z.string().default(""),
   adoMcpAuthentication: z.string().default(""),
@@ -19,7 +21,12 @@ export const InlineProjectLinkSchema = z.object({
   buildCommand: z.string().default(""),
   testCommand: z.string().default(""),
   ignoredGlobs: z.array(z.string()).default([]),
-}).optional();
+});
+
+export const InlineProjectLinkSchema = InlineProjectLinkObjectSchema
+  .nullable()
+  .optional()
+  .transform((value) => value ?? undefined);
 
 export const ChatWorkflowActionSchema = z.object({
   action: z.enum([

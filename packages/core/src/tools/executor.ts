@@ -6,7 +6,9 @@ const SECRET_PATTERNS: Array<RegExp> = [
   /(?<lead>authorization\s*:\s*bearer\s+)\S+/gi,
   /(?<lead>api[_-]?key\s*[:=]\s*)['"]?[A-Za-z0-9_\-]{8,}['"]?/gi,
   /(?<lead>pat\s*[:=]\s*)['"]?[A-Za-z0-9_\-]{16,}['"]?/gi,
+  /(?<lead>(?:access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|token)\s*[:=]\s*)['"]?[A-Za-z0-9._~+/=-]{8,}['"]?/gi,
   /(?<lead>password\s*[:=]\s*)['"]?[^\s'"\n]{4,}['"]?/gi,
+  /(?<lead>https?:\/\/)[^@\s/]+:[^@\s/]+@/gi,
 ];
 
 export function redact(text: string): string {
@@ -14,7 +16,8 @@ export function redact(text: string): string {
   for (const pat of SECRET_PATTERNS) {
     out = out.replace(pat, (_m, ..._args) => {
       const groups = _args[_args.length - 1] as { lead?: string };
-      return `${groups?.lead ?? ""}***REDACTED***`;
+      const lead = groups?.lead ?? "";
+      return lead.startsWith("http") ? `${lead}***REDACTED***@` : `${lead}***REDACTED***`;
     });
   }
   return out;

@@ -26,9 +26,11 @@ const READ_ONLY_TOOLS = new Set([
 
 const HIGH_RISK_TOOLS = new Set([
   "git_push",
+  "git_push_tag",
   "git_rebase",
   "git_cherry_pick",
   "git_revert",
+  "git_tag",
   "ado_create_pr",
   "ado_trigger_pipeline",
 ]);

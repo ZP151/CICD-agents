@@ -76,6 +76,14 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
     } else if (event.type === "done") {
       const bubbles = await adapters.getBubbles(sessionId);
       const enrichedResult = deriveWorkflowPendingAction(sessionId, event.result, bubbles);
+      const approvalProposal = approvalProposalFromResult(enrichedResult);
+      const storedBeforeDone = await adapters.loadSession(sessionId);
+      const inheritedWorkflowMetadata = !approvalProposal && storedBeforeDone?.workflowState?.status === "running"
+        ? {
+            workflowKind: storedBeforeDone.workflowState.workflowKind,
+            workflowPhase: doneWorkflowPhaseFromRunning(storedBeforeDone.workflowState.workflowPhase),
+          }
+        : {};
       const suggestions = [...(enrichedResult.suggestions ?? []), ...contextNotes];
       const enrichedWithContext: ChatPlannerResult = {
         ...enrichedResult,
@@ -88,11 +96,12 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
       };
       const workflowState = buildWorkflowState(
         bubbles,
-        approvalProposalFromResult(enrichedWithContext),
-        approvalProposalFromResult(enrichedWithContext) ? "waiting_for_approval" : "done",
-        approvalProposalFromResult(enrichedWithContext)?.tool ?? "done",
+        approvalProposal,
+        approvalProposal ? "waiting_for_approval" : "done",
+        approvalProposal?.tool ?? "done",
         enrichedWithContext.riskLevel,
         enrichedWithContext.response,
+        inheritedWorkflowMetadata,
       );
 
       assistantReply = enrichedWithContext.response;
@@ -135,6 +144,12 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
   if (assistantReply) {
     await adapters.appendMessage(sessionId, "assistant", assistantReply);
   }
+}
+
+function doneWorkflowPhaseFromRunning(phase: string | undefined): string | undefined {
+  if (phase === "running_link_work_item") return "work_item_linked";
+  if (!phase?.startsWith("running_")) return phase;
+  return `${phase.slice("running_".length)}_done`;
 }
 
 function now(): number {

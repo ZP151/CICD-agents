@@ -179,6 +179,7 @@ function applyUserConfigToEnv(config: MergePilotUserConfig, explicitProcessEnv: 
     ["AZURE_OPENAI_EMBEDDING_DEPLOYMENT", wantsAzure ? config.azureEmbeddingDeployment : undefined],
     ["AZURE_OPENAI_API_VERSION", wantsAzure ? config.azureApiVersion : undefined],
     ["AZURE_OPENAI_API_KEY", localEnvSecrets ? undefined : wantsAzure ? config.azureApiKeyRef : undefined],
+    ["MERGEPILOT_SECRET_SOURCE", config.secretSource],
     ["MERGEPILOT_AZURE_TENANT_ID", config.azureTenantId],
     ["MERGEPILOT_AZURE_CLIENT_ID", config.azureClientId],
     ["AZURE_STORAGE_ACCOUNT", config.azureStorageAccount],

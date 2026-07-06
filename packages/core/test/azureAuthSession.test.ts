@@ -36,6 +36,7 @@ vi.mock("../src/store/azureAuthMsal.js", () => ({
     }),
     acquireTokenSilent,
   })),
+  withMsalCacheAccess: async <T>(operation: () => Promise<T>) => operation(),
 }));
 
 describe("azureAuthSession", () => {

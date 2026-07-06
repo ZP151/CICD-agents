@@ -191,7 +191,14 @@ describe("Azure DevOps discovery modules", () => {
   });
 
   it("links work items to pull requests through the ADO work-items module", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({}));
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({
+        value: [{ id: "project-guid", name: "Agents" }],
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        value: [{ id: "repo-guid", name: "mergepilot" }],
+      }))
+      .mockResolvedValueOnce(jsonResponse({}));
 
     const link = await linkAzureWorkItemToPullRequest({
       organization: "demo-org",
@@ -202,7 +209,18 @@ describe("Azure DevOps discovery modules", () => {
       pat: "pat",
     });
 
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://dev.azure.com/demo-org/_apis/projects?%24top=200&api-version=7.1-preview.4",
+      expect.objectContaining({ redirect: "manual" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://dev.azure.com/demo-org/Agents/_apis/git/repositories?api-version=7.1-preview.1",
+      expect.objectContaining({ redirect: "manual" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
       "https://dev.azure.com/demo-org/Agents/_apis/wit/workitems/123?api-version=7.1-preview.3",
       expect.objectContaining({
         method: "PATCH",
@@ -211,7 +229,7 @@ describe("Azure DevOps discovery modules", () => {
           path: "/relations/-",
           value: {
             rel: "ArtifactLink",
-            url: "vstfs:///Git/PullRequestId/Agents%2Fmergepilot%2F42",
+            url: "vstfs:///Git/PullRequestId/project-guid%2Frepo-guid%2F42",
             attributes: { name: "Pull Request" },
           },
         }]),

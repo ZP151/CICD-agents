@@ -78,6 +78,7 @@ describe("daemon branch workflow routes", () => {
         action: "checkout_branch",
         repoPath: repo,
         branch: "feature/current",
+        projectLink: null,
       },
     });
 

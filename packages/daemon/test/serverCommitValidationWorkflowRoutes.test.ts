@@ -78,6 +78,7 @@ describe("daemon commit and validation workflow routes", () => {
     fs.writeFileSync(path.join(repo, "README.md"), "# demo\n", "utf8");
     commitAll(repo, "docs: initial");
     fs.appendFileSync(path.join(repo, "README.md"), "staged line\n", "utf8");
+    fs.writeFileSync(path.join(repo, "notes.txt"), "unstaged note\n", "utf8");
     spawnSync("git", ["add", "README.md"], { cwd: repo, encoding: "utf8" });
 
     const response = await app.inject({
@@ -107,6 +108,7 @@ describe("daemon commit and validation workflow routes", () => {
     expect(body.workflowState.currentStep).toBe("inspect_staged_changes complete");
     expect(body.workflowState.pendingApproval).toBeUndefined();
     expect(body.summary).toContain("Changed files: README.md");
+    expect(body.summary).not.toContain("notes.txt");
     expect(body.tools.map((tool) => tool.name)).toEqual([
       "git_status",
       "git_dir",

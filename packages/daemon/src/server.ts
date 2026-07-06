@@ -119,6 +119,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     chatSessions,
     buildInlineLlmSettings: buildEffectiveLlmSettings,
     envSourceLabel,
+    projectLinkStore,
+    runWorkflowAction: (payload) => runWorkspaceWorkflowAction(chatSessions, payload),
   });
 
   registerCheckpointRoutes(app, { settings, chatSessions });

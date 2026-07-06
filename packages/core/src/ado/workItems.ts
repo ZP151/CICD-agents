@@ -2,6 +2,8 @@ import { ToolError } from "../tools/executor.js";
 import { getAzureDevOpsAuth, type AdoAuth } from "./auth.js";
 import { adoBase, adoFetch } from "./client.js";
 import { API_VERSION_GIT, API_VERSION_WI } from "./constants.js";
+import { listAzureProjects } from "./core.js";
+import { listAzureRepositories } from "./repositories.js";
 import { parseAdoJson } from "./response.js";
 
 export interface AzureWorkItemSummary {
@@ -105,7 +107,8 @@ export async function linkAzureWorkItemToPullRequest(args: {
     throw new ToolError("link_work_item requires 'repository', 'pull_request_id', 'work_item_id'.");
   }
   const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
-  const artifactId = `vstfs:///Git/PullRequestId/${project}%2F${repository}%2F${pullRequestId}`;
+  const ids = await resolvePullRequestArtifactIds({ org, project, repository, auth });
+  const artifactId = `vstfs:///Git/PullRequestId/${ids.projectId}%2F${ids.repositoryId}%2F${pullRequestId}`;
   const url = `${adoBase(org)}/${encodeURIComponent(project)}/_apis/wit/workitems/${workItemId}?api-version=${API_VERSION_WI}`;
   const body = [
     {
@@ -123,6 +126,40 @@ export async function linkAzureWorkItemToPullRequest(args: {
     return { ok: false, status_code: resp.status, error: (await resp.text()).slice(0, 400) };
   }
   return { ok: true, work_item_id: workItemId, pull_request_id: pullRequestId };
+}
+
+async function resolvePullRequestArtifactIds(args: {
+  org: string;
+  project: string;
+  repository: string;
+  auth: AdoAuth;
+}): Promise<{ projectId: string; repositoryId: string }> {
+  const projects = await listAzureProjects({
+    organization: args.org,
+    auth: args.auth,
+    top: 200,
+  });
+  const project = projects.find((candidate) =>
+    candidate.id === args.project ||
+    candidate.name.localeCompare(args.project, undefined, { sensitivity: "accent" }) === 0
+  );
+  const projectId = project?.id?.trim();
+  if (!projectId) throw new ToolError(`Azure DevOps project '${args.project}' was not found while linking a work item.`);
+
+  const repositories = await listAzureRepositories({
+    organization: args.org,
+    project: args.project,
+    auth: args.auth,
+    top: 500,
+  });
+  const repository = repositories.find((candidate) =>
+    candidate.id === args.repository ||
+    candidate.name.localeCompare(args.repository, undefined, { sensitivity: "accent" }) === 0
+  );
+  const repositoryId = repository?.id?.trim();
+  if (!repositoryId) throw new ToolError(`Azure DevOps repository '${args.repository}' was not found while linking a work item.`);
+
+  return { projectId, repositoryId };
 }
 
 function extractWorkItemId(url: string): string {

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { getSettings } from "../settings.js";
 import { ToolError, type ToolContext } from "./executor.js";
-import { gitStdout, gitText, runGit } from "./gitCommand.js";
+import { gitReadOnlyText, runGit, runGitReadOnly } from "./gitCommand.js";
 import {
   checkpointFilesFromDiff,
   pathsFromPorcelainStatus,
@@ -29,10 +29,11 @@ export async function createGitCheckpoint(
   const createdAt = new Date().toISOString();
   const safeTimestamp = createdAt.replace(/[:.]/g, "-");
   const id = `git-${safeTimestamp}`;
-  const branch = await gitText(ctx, ["rev-parse", "--abbrev-ref", "HEAD"]).catch(() => "");
-  const head = await gitText(ctx, ["rev-parse", "HEAD"]).catch(() => "");
-  const status = await gitText(ctx, ["status", "--porcelain=v1", "-b"]).catch(() => "");
-  const diff = await gitStdout(ctx, ["diff", "--binary"]).catch(() => "");
+  const branch = await gitReadOnlyText(ctx, ["rev-parse", "--abbrev-ref", "HEAD"]).catch(() => "");
+  const head = await gitReadOnlyText(ctx, ["rev-parse", "HEAD"]).catch(() => "");
+  const status = await gitReadOnlyText(ctx, ["status", "--porcelain=v1", "-b"]).catch(() => "");
+  const diffResult = await runGitReadOnly(ctx, ["diff", "--binary"]).catch(() => ({ stdout: "" }));
+  const diff = String(diffResult["stdout"] ?? "");
   const record = {
     id,
     kind: "git_checkpoint",
@@ -120,7 +121,7 @@ export async function planGitCheckpointRollback(
   const diff = String(checkpoint["diff"] ?? "");
   const checkpointFiles = checkpointFilesFromDiff(diff);
   const planCtx = { ...ctx, repoPath };
-  const currentStatus = await gitText(planCtx, ["status", "--porcelain=v1", "-b"]).catch(() => "");
+  const currentStatus = await gitReadOnlyText(planCtx, ["status", "--porcelain=v1", "-b"]).catch(() => "");
   const currentPaths = pathsFromPorcelainStatus(currentStatus);
   const currentStatusLines = currentStatus.split(/\r?\n/).filter((line) => line.trim().length > 0);
 
@@ -214,7 +215,7 @@ export async function applyGitCheckpoint(
   }
 
   const expectedHead = String(checkpoint["head"] ?? "").trim();
-  const currentHead = await gitText(ctx, ["rev-parse", "HEAD"]).catch(() => "");
+  const currentHead = await gitReadOnlyText(ctx, ["rev-parse", "HEAD"]).catch(() => "");
   if (!expectedHead) throw new ToolError("checkpoint is missing HEAD metadata");
   if (currentHead !== expectedHead) {
     throw new ToolError(`checkpoint HEAD mismatch: expected ${expectedHead}, current ${currentHead || "unknown"}`);
@@ -222,7 +223,7 @@ export async function applyGitCheckpoint(
 
   const diff = String(checkpoint["diff"] ?? "");
   const checkpointFiles = checkpointFilesFromDiff(diff);
-  const currentStatusBefore = await gitText(ctx, ["status", "--porcelain=v1", "-b"]).catch(() => "");
+  const currentStatusBefore = await gitReadOnlyText(ctx, ["status", "--porcelain=v1", "-b"]).catch(() => "");
 
   if (diff.trim().length === 0) {
     const currentPaths = pathsFromPorcelainStatus(currentStatusBefore);
@@ -240,7 +241,7 @@ export async function applyGitCheckpoint(
         ? "Untracked files were not removed because checkpoints do not store untracked file content."
         : "",
       statusBefore: currentStatusBefore,
-      statusAfter: await gitText(ctx, ["status", "--porcelain=v1", "-b"]).catch(() => ""),
+      statusAfter: await gitReadOnlyText(ctx, ["status", "--porcelain=v1", "-b"]).catch(() => ""),
     };
   }
 
@@ -265,6 +266,6 @@ export async function applyGitCheckpoint(
     mode: "applied_checkpoint_patch",
     restoredFiles: checkpointFiles,
     statusBefore: currentStatusBefore,
-    statusAfter: await gitText(ctx, ["status", "--porcelain=v1", "-b"]).catch(() => ""),
+    statusAfter: await gitReadOnlyText(ctx, ["status", "--porcelain=v1", "-b"]).catch(() => ""),
   };
 }

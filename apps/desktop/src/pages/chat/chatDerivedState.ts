@@ -110,6 +110,37 @@ export function pendingApprovalFromBubbles(
   );
 }
 
+export function bubblesWithWorkflowApprovalFallback(
+  bubbles: Bubble[],
+  workflowState: WorkflowEventState | null,
+): Bubble[] {
+  const approval = workflowState?.pendingApproval;
+  if (!approval) return bubbles;
+  const existing = bubbles.some((bubble) =>
+    bubble.kind === "pending_confirm" &&
+    bubble.pendingStatus === "waiting" &&
+    bubble.pendingTool === approval.action.tool &&
+    stableJson(bubble.pendingArgs ?? {}) === stableJson(approval.action.args ?? {}),
+  );
+  if (existing) return bubbles;
+  return [
+    ...bubbles,
+    {
+      id: `workflow-${approval.id}`,
+      kind: "pending_confirm",
+      pendingTool: approval.action.tool,
+      pendingArgs: approval.action.args,
+      pendingDescription: approval.explanation || approval.action.description,
+      pendingNextHint: approval.action.nextHint,
+      pendingWorkflow: approval.action.workflow,
+      pendingReadiness: approval.action.readiness,
+      pendingPreflight: approval.action.preflight,
+      pendingStatus: "waiting",
+      riskLevel: approval.riskLevel,
+    },
+  ];
+}
+
 export function welcomeSuggestionsForProjectLink(
   activeProjectLink: ProjectLink | null,
   indexStatus: ChatIndexStatus | null,
@@ -149,6 +180,7 @@ export function useChatDerivedState({
 }): ChatDerivedState {
   return useMemo(() => {
     const lastAssistant = [...bubbles].reverse().find((bubble) => bubble.kind === "assistant");
+    const lastNarrative = [...bubbles].reverse().find((bubble) => bubble.kind === "assistant" || bubble.kind === "system");
     const lastUser = [...bubbles].reverse().find((bubble) => bubble.kind === "user");
     const lastError = [...bubbles].reverse().find((bubble) => bubble.kind === "error");
     const composerPendingApproval = pendingApprovalFromBubbles(bubbles, workflowState);
@@ -161,16 +193,17 @@ export function useChatDerivedState({
     return {
       currentBranch: currentBranchFromBubbles(bubbles),
       gitStatus: gitStatusFromBubbles(bubbles),
-      renderItems: groupChatRenderItems(bubbles),
+      renderItems: groupChatRenderItems(bubblesWithWorkflowApprovalFallback(bubbles, workflowState)),
       suggestionReplies: deriveSuggestionReplies({
         metadataSuggestions: lastAssistant?.meta?.suggestions,
         metadataActions: lastAssistant?.meta?.actionsTaken,
         sourceTypes,
-        lastAssistantText: lastAssistant?.text,
+        lastAssistantText: lastNarrative?.text,
         lastUserText: lastUser?.text,
         workflowStatus: workflowState?.status,
         workflowKind: workflowState?.workflowKind,
         workflowPhase: workflowState?.workflowPhase,
+        adoPipelineId: activeProjectLink?.adoPipelineId,
         pendingTool,
         pendingApprovalTool: workflowState?.pendingApproval?.action.tool,
         pendingApprovalDescription: workflowState?.pendingApproval?.action.description,
@@ -203,4 +236,18 @@ export function useChatDerivedState({
       taskState: taskStateFromWorkflow(workflowState, conversationTitle),
     };
   }, [activeProjectLink, bubbles, busy, indexStatus, input, queuedSuggestionLabel, statusText, workflowState]);
+}
+
+function stableJson(value: unknown): string {
+  return JSON.stringify(sortJsonValue(value));
+}
+
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortJsonValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, sortJsonValue(entry)]),
+  );
 }

@@ -78,7 +78,7 @@ export function useWorkspaceActionRuntime(args: UseWorkspaceActionRuntimeArgs): 
       return;
     }
 
-    if (args.workflowState?.status === "blocked") {
+    if (args.workflowState?.status === "blocked" && !isGitRecoveryWorkspaceAction(action.type)) {
       args.setStatusText(`Workflow blocked: ${args.workflowState.currentStep}`);
       return;
     }
@@ -178,4 +178,18 @@ export function useWorkspaceActionRuntime(args: UseWorkspaceActionRuntimeArgs): 
   ]);
 
   return useMemo(() => ({ runWorkspaceAction }), [runWorkspaceAction]);
+}
+
+function isGitRecoveryWorkspaceAction(type: WorkspaceAction["type"]): boolean {
+  return type === "continue_rebase"
+    || type === "abort_rebase"
+    || type === "skip_rebase"
+    || type === "continue_merge"
+    || type === "abort_merge"
+    || type === "continue_cherry_pick"
+    || type === "abort_cherry_pick"
+    || type === "skip_cherry_pick"
+    || type === "continue_revert"
+    || type === "abort_revert"
+    || type === "skip_revert";
 }

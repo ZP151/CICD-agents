@@ -169,4 +169,38 @@ describe("dispatchChatStreamEvent", () => {
     expect(adapter.uiAvailable).toBe(false);
     expect(adapter.refreshHistory).toHaveBeenCalledTimes(1);
   });
+
+  it("releases busy state when a follow-up approval is required", () => {
+    const adapter = makeAdapter();
+    const approval = {
+      id: "approval-git-commit",
+      action: {
+        tool: "git_commit",
+        args: { message: "chore: add feature" },
+        description: "Commit staged changes",
+      },
+      riskLevel: "medium",
+      explanation: "Commit staged changes",
+    };
+
+    dispatchChatStreamEvent({
+      type: "workflow_state",
+      state: {
+        status: "waiting_for_approval",
+        currentStep: "Commit staged changes",
+        completedTools: ["git_add"],
+        pendingApproval: approval,
+      },
+    } as ChatEventPayload, adapter);
+    dispatchChatStreamEvent({
+      type: "approval_required",
+      approval,
+    } as ChatEventPayload, adapter);
+
+    expect(adapter.showApprovalRequest).toHaveBeenCalledTimes(2);
+    expect(adapter.calls).toContain("busy:false");
+    expect(adapter.calls).toContain("clearCancel");
+    expect(adapter.calls.filter((call) => call === "busy:false")).toHaveLength(2);
+    expect(adapter.calls.filter((call) => call === "clearCancel")).toHaveLength(2);
+  });
 });

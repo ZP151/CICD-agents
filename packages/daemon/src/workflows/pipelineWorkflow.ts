@@ -2,13 +2,16 @@ import {
   getAzureBuildLogExcerpt,
   getAzureBuildTimeline,
   getAzureDevOpsAuth,
+  listAzureBuildDefinitions,
   listAzurePipelineRuns,
+  redact,
   type PendingToolAction,
 } from "@mergepilot/core";
 import type { ChatSessionManager } from "../chatSession.js";
 import type { ChatWorkflowActionPayload } from "../routes/chat-workflow.routes.js";
 import {
   pipelineFailureArtifacts,
+  preferredPipelineFailureRun,
   summarizePipelineRuns,
   type PipelineLogExcerpt,
   type WorkflowActionArtifact,
@@ -24,8 +27,12 @@ export async function runAdoPipelineWorkflowAction(
 ) {
   const { action, repoPath } = payload;
   const projectLink = adoPipelineProjectLinkFromWorkflowPayload(payload);
-  const pipelineId = pipelineIdFromWorkflowPayload(payload, projectLink);
   const auth = await getAzureDevOpsAuth(projectLink.adoPat);
+  const pipelineId = pipelineIdFromWorkflowPayload(payload, projectLink);
+
+  if (!pipelineId) {
+    return await pipelineSetupRequiredResult(chatSessions, payload, projectLink, auth);
+  }
 
   if (action === "trigger_pipeline") {
     const branch = String(payload.branch ?? projectLink.defaultBranch ?? "").trim();
@@ -96,7 +103,13 @@ export async function runAdoPipelineWorkflowAction(
     workflowKind: "ci",
     phase: "pipeline_inspected",
     currentStep: `Pipeline #${pipelineId} readiness inspected`,
-    summary: summarizePipelineRuns(pipelineId, runs),
+    summary: summarizePipelineRuns(
+      pipelineId,
+      runs,
+      failureTimeline.timeline,
+      failureTimeline.logExcerpts,
+      failureTimeline.error,
+    ),
     tools: [
       adoWorkflowTool("ado_list_pipeline_runs", { pipelineId, runs, count: runs.length }),
       ...timelineTools,
@@ -128,12 +141,68 @@ function adoPipelineProjectLinkFromWorkflowPayload(payload: ChatWorkflowActionPa
 function pipelineIdFromWorkflowPayload(
   payload: ChatWorkflowActionPayload,
   projectLink: WorkflowProjectLink,
-): number {
-  const pipelineId = Number(payload.pipelineId ?? 0);
+): number | undefined {
+  const pipelineId = Number(payload.pipelineId ?? projectLink.adoPipelineId ?? 0);
   if (!Number.isFinite(pipelineId) || pipelineId <= 0) {
-    throw new Error("Pipeline ID is required before pipeline workflow actions can run.");
+    return undefined;
   }
   return pipelineId;
+}
+
+async function pipelineSetupRequiredResult(
+  chatSessions: ChatSessionManager,
+  payload: ChatWorkflowActionPayload,
+  projectLink: WorkflowProjectLink,
+  auth: Awaited<ReturnType<typeof getAzureDevOpsAuth>>,
+) {
+  const definitions = await listAzureBuildDefinitions({
+    organization: projectLink.adoOrgUrl,
+    project: projectLink.adoProject,
+    repositoryId: projectLink.adoRepoName || undefined,
+    repositoryType: projectLink.adoRepoName ? "TfsGit" : undefined,
+    auth,
+    top: 20,
+  });
+  const visibleDefinitions = definitions.slice(0, 10);
+  const lines = [
+    "No Azure Pipeline is configured on this Project Link yet.",
+    payload.action === "trigger_pipeline"
+      ? "I did not trigger a pipeline. Select a pipeline first, then rerun the action."
+      : "Select a pipeline for this Project Link before inspecting or running CI.",
+  ];
+  if (visibleDefinitions.length > 0) {
+    lines.push(
+      "",
+      "Available pipeline candidates:",
+      ...visibleDefinitions.map((definition) => {
+        const description = definition.description ? ` - ${definition.description}` : "";
+        return `- #${definition.id} ${definition.name}${description}`;
+      }),
+    );
+  } else {
+    lines.push("", "No pipeline candidates were returned for the current Azure DevOps project/repository mapping.");
+  }
+
+  const sessionId = payload.sessionId ?? chatSessions.createSession(payload.repoPath, payload.projectLinkId);
+  const result = adoWorkflowDoneResult({
+    action: payload.action,
+    repoPath: payload.repoPath,
+    sessionId,
+    workflowKind: "ci",
+    phase: "pipeline_setup_required",
+    currentStep: "Pipeline configuration required",
+    summary: lines.join("\n"),
+    tools: [
+      adoWorkflowTool("ado_discover_pipelines", {
+        project: projectLink.adoProject,
+        repository: projectLink.adoRepoName,
+        candidates: visibleDefinitions,
+        count: definitions.length,
+      }),
+    ],
+  });
+  await appendWorkflowActionAssistantBubble(chatSessions, sessionId, result.summary, undefined);
+  return result;
 }
 
 async function pipelineFailureTimeline(
@@ -145,7 +214,7 @@ async function pipelineFailureTimeline(
   logExcerpts?: PipelineLogExcerpt[];
   error?: string;
 }> {
-  const failedRun = runs.find((run) => run.id && /failed|canceled/i.test(`${run.result} ${run.state}`));
+  const failedRun = preferredPipelineFailureRun(runs);
   if (!failedRun) return {};
   try {
     const timeline = await getAzureBuildTimeline({
@@ -191,7 +260,7 @@ function adoWorkflowTool(name: string, result: unknown) {
     name,
     command: `internal ${name}`,
     ok: true,
-    stdout: JSON.stringify(result),
+    stdout: redact(JSON.stringify(result)),
     stderr: "",
     returncode: 0,
   };

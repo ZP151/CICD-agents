@@ -78,7 +78,7 @@ export function suggestionReplyButtonState(
   state: SuggestionReplyBarState | undefined,
 ): SuggestionReplyButtonState {
   if (state?.queuedSuggestionId === suggestion.id) return "queued";
-  if (state?.blocked) return "blocked";
+  if (state?.blocked && !isGitRecoverySuggestion(suggestion)) return "blocked";
   if (state?.busy || isWorkflowBusy(state?.workflowStatus)) return "running";
   return "idle";
 }
@@ -96,4 +96,19 @@ export function suggestionButtonTitle(
 
 function isWorkflowBusy(status: string | undefined): boolean {
   return status === "planning" || status === "running";
+}
+
+function isGitRecoverySuggestion(suggestion: SuggestionReply): boolean {
+  if (suggestion.action.kind !== "workspace_action") return false;
+  return suggestion.action.action === "continue_rebase"
+    || suggestion.action.action === "abort_rebase"
+    || suggestion.action.action === "skip_rebase"
+    || suggestion.action.action === "continue_merge"
+    || suggestion.action.action === "abort_merge"
+    || suggestion.action.action === "continue_cherry_pick"
+    || suggestion.action.action === "abort_cherry_pick"
+    || suggestion.action.action === "skip_cherry_pick"
+    || suggestion.action.action === "continue_revert"
+    || suggestion.action.action === "abort_revert"
+    || suggestion.action.action === "skip_revert";
 }

@@ -24,9 +24,9 @@ export default function Settings(): JSX.Element {
 
       <AppearanceSettingsSection theme={theme} onThemeChange={setTheme} />
 
-      {runtime.settings.secretSource !== "local_env" && (runtime.health?.keyVaultSecretError || runtime.daemonConfigKeyVaultError) && (
+      {runtime.settings.secretSource !== "local_env" && (runtime.daemonConfigKeyVaultError || runtime.health?.keyVaultSecretError) && (
         <p className="settings-message settings-message-warning">
-          {runtime.health?.keyVaultSecretError || runtime.daemonConfigKeyVaultError}
+          {runtime.daemonConfigKeyVaultError || runtime.health?.keyVaultSecretError}
         </p>
       )}
 

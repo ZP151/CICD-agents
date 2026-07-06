@@ -1,5 +1,6 @@
 import type { ChatPlannerSource } from "./chatPlannerTypes.js";
 import type { ChatContextBundle } from "./chatContextTypes.js";
+import { isTextContextPath } from "./repoFileGuards.js";
 
 interface DiffHunkSource {
   path: string;
@@ -86,6 +87,7 @@ export function chatContextSources(bundle: ChatContextBundle, maxSources = 8): C
   const seen = new Set<string>();
   const perFileCounts = new Map<string, number>();
   const add = (source: ChatPlannerSource): void => {
+    if (source.type === "source_document" && source.file && !isTextContextPath(source.file)) return;
     const key = source.type === "source_document"
       ? `${source.file ?? source.title}:${source.line ?? ""}`
       : source.url;

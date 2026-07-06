@@ -121,9 +121,21 @@ export function ComposerShell({
   const activeWorkflow = busy || workflowState?.status === "planning" || workflowState?.status === "running";
   const visibleComposerNotice = composerStateNotice?.tone === "queued" ? composerStateNotice : null;
   const showSuggestionReplies = !activeWorkflow && !composerStateNotice;
+  const projectLinkRequired = !mini && !activeProjectLinkId;
+  const effectiveComposerInputState = projectLinkRequired
+    ? {
+        ...composerInputState,
+        controlsDisabled: true,
+        inputDisabled: true,
+        inputTitle: "Create or select a Project Link before starting a project workflow.",
+        placeholder: "Create or select a Project Link first...",
+        sendDisabled: true,
+        sendTitle: "Create or select a Project Link first.",
+      }
+    : composerInputState;
   const sendDisabled = !canSendComposerTurn({
-    controlsDisabled: composerInputState.controlsDisabled,
-    sendDisabled: composerInputState.sendDisabled,
+    controlsDisabled: effectiveComposerInputState.controlsDisabled,
+    sendDisabled: effectiveComposerInputState.sendDisabled,
     message: input,
     imageAttachmentCount: imageAttachments.length,
     pendingImageAttachmentCount,
@@ -132,7 +144,7 @@ export function ComposerShell({
     ? "Preparing image..."
     : hasImageAttachments
       ? "Send message with image"
-      : composerInputState.sendTitle;
+      : effectiveComposerInputState.sendTitle;
   const imageAttachmentSlotAvailable = hasComposerImageAttachmentSlot(
     imageAttachments.length,
     pendingImageAttachmentCount,
@@ -189,6 +201,7 @@ export function ComposerShell({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
                 <select
+                  aria-label="Composer Project Link"
                   className="min-w-0 flex-1 cursor-pointer bg-transparent text-[11px] text-zinc-500 transition hover:text-zinc-300 focus:outline-none"
                   value={activeProjectLinkId ?? ""}
                   onChange={(event) => onProjectLinkSelect(event.target.value)}
@@ -262,11 +275,11 @@ export function ComposerShell({
         <textarea
           ref={textareaRef}
           className="w-full resize-none bg-transparent text-sm text-[rgb(var(--app-text))] placeholder:text-[rgb(var(--app-text-subtle))] transition disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none"
-          placeholder={composerInputState.placeholder}
-          title={composerInputState.inputTitle}
+          placeholder={effectiveComposerInputState.placeholder}
+          title={effectiveComposerInputState.inputTitle}
           rows={1}
           value={input}
-          disabled={composerInputState.inputDisabled}
+          disabled={effectiveComposerInputState.inputDisabled}
           onChange={(event) => {
             onInputChange(event.target.value);
             event.target.style.height = "auto";
@@ -334,9 +347,9 @@ export function ComposerShell({
             <button
               type="button"
               onClick={toggleAttachmentMenu}
-              disabled={composerInputState.controlsDisabled}
+              disabled={effectiveComposerInputState.controlsDisabled}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[rgb(var(--app-text-muted))]"
-              title={composerInputState.controlsDisabled ? composerInputState.inputTitle : "Add image"}
+              title={effectiveComposerInputState.controlsDisabled ? effectiveComposerInputState.inputTitle : "Add image"}
               aria-label="Add image"
               aria-haspopup="menu"
               aria-expanded={attachmentMenuOpen}
@@ -384,9 +397,9 @@ export function ComposerShell({
             <button
               type="button"
               onClick={toggleModelMenu}
-              disabled={composerInputState.controlsDisabled}
+              disabled={effectiveComposerInputState.controlsDisabled}
               className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[rgb(var(--app-text-muted))]"
-              title={composerInputState.controlsDisabled ? composerInputState.inputTitle : "Conversation model"}
+              title={effectiveComposerInputState.controlsDisabled ? effectiveComposerInputState.inputTitle : "Conversation model"}
             >
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M13 3L6 13h5l-1 8 7-11h-5l1-7z" />

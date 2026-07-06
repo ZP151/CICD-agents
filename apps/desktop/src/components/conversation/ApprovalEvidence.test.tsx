@@ -58,6 +58,42 @@ describe("ApprovalEvidence", () => {
     expect(html).toContain("PR creation");
   });
 
+  it("renders a single-tag push command without branch push flags", () => {
+    const html = renderToStaticMarkup(
+      <ApprovalEvidence
+        toolName="git_push_tag"
+        args={{ name: "v1.2.3-test", remote: "origin" }}
+      />,
+    );
+
+    expect(html).toContain("git push origin refs/tags/v1.2.3-test:refs/tags/v1.2.3-test");
+    expect(html).not.toContain("--tags");
+    expect(html).not.toContain("-u origin");
+  });
+
+  it("renders stash apply as a concrete non-dropping command", () => {
+    const html = renderToStaticMarkup(
+      <ApprovalEvidence
+        toolName="git_stash"
+        args={{ action: "apply" }}
+      />,
+    );
+
+    expect(html).toContain("git stash apply");
+    expect(html).not.toContain("git stash pop");
+  });
+
+  it("renders stash pop as a concrete dropping command", () => {
+    const html = renderToStaticMarkup(
+      <ApprovalEvidence
+        toolName="git_stash"
+        args={{ action: "pop" }}
+      />,
+    );
+    expect(html).toContain("git stash pop");
+    expect(html).not.toContain("git stash apply");
+  });
+
   it("renders fetch-remotes command and a narrow git boundary", () => {
     const html = renderToStaticMarkup(
       <ApprovalEvidence

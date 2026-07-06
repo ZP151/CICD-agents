@@ -1,6 +1,7 @@
 import {
   type ChatMessage,
   type ChatPlannerResult,
+  isReviewOnlyChangeRequest,
   type PendingToolAction,
 } from "@mergepilot/core";
 import type { StoredBubble } from "./chatHistoryStore.js";
@@ -19,10 +20,15 @@ export function deriveWorkflowPendingAction(
   result: ChatPlannerResult,
   bubbles: StoredBubble[],
 ): ChatPlannerResult {
+  if (latestUserBubbleIsReviewOnly(bubbles)) {
+    return { ...result, approvalProposal: undefined };
+  }
+
   const providedProposal = approvalProposalFromResult(result);
   if (providedProposal?.tool) {
-    return isProposalWithinUserScope(providedProposal.tool, bubbles, providedProposal.args)
-      ? result
+    const scopedProposal = adjustProposalForUserIntent(providedProposal, bubbles);
+    return isProposalWithinUserScope(scopedProposal.tool, bubbles, scopedProposal.args)
+      ? { ...result, approvalProposal: scopedProposal }
       : { ...result, approvalProposal: undefined };
   }
 
@@ -37,6 +43,11 @@ export function deriveWorkflowPendingAction(
     return { ...result, approvalProposal: candidate };
   }
   return result;
+}
+
+function latestUserBubbleIsReviewOnly(bubbles: StoredBubble[]): boolean {
+  const latestUser = [...bubbles].reverse().find((bubble) => bubble.role === "user")?.content ?? "";
+  return isReviewOnlyChangeRequest(latestUser);
 }
 
 export function inferPendingAction(messages: ChatMessage[]): PendingToolAction | undefined {
@@ -59,4 +70,20 @@ function isAskingConfirmation(text: string): boolean {
     text.includes("shall i proceed") ||
     text.includes("ready to") ||
     text.includes("want me to");
+}
+
+function adjustProposalForUserIntent(proposal: PendingToolAction, bubbles: StoredBubble[]): PendingToolAction {
+  if (proposal.tool !== "git_stash") return proposal;
+  const latestUser = [...bubbles].reverse().find((bubble) => bubble.role === "user")?.content.toLowerCase() ?? "";
+  const wantsApply = /\bapply\b/.test(latestUser) ||
+    latestUser.includes("without dropping") ||
+    latestUser.includes("keep the stash");
+  if (!wantsApply) return proposal;
+  return {
+    ...proposal,
+    args: {
+      ...(proposal.args ?? {}),
+      action: "apply",
+    },
+  };
 }

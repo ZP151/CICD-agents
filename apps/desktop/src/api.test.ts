@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chatStream, runChatWorkflowAction, type ChatEventPayload } from "./api.js";
+import { chatStream, confirmAction, runChatWorkflowAction, type ChatEventPayload } from "./api.js";
 
 function sse(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -179,6 +179,66 @@ describe("chatStream", () => {
     });
     streamControllerRef.current?.close();
   });
+
+  it("sends the active Project Link payload supplied by the chat runtime", async () => {
+    const streamControllerRef: { current?: ReadableStreamDefaultController<Uint8Array> } = {};
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        streamControllerRef.current = controller;
+      },
+    });
+    const fetchMock = vi.fn(async () => new Response(stream, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    chatStream(
+      "Inspect pipeline 117. Read-only only.",
+      "C:\\repo",
+      null,
+      () => undefined,
+      "project-link-1",
+      "built_in",
+      [],
+      {
+        id: "project-link-1",
+        name: "ClaimBot_API link",
+        repoPath: "C:\\repo",
+        defaultBranch: "main",
+        targetBranch: "main",
+        adoOrgUrl: "https://tebssg.visualstudio.com/",
+        adoProject: "TeBS-ClaimBot",
+        adoRepoName: "ClaimBot_API",
+        adoPat: "",
+        adoPipelineId: "117",
+        adoPipelineName: "ClaimBot_API",
+        adoMcpEnabled: false,
+        adoMcpCommand: "",
+        adoMcpAuthentication: "",
+        adoMcpDomains: "repositories,pipelines,work-items",
+        projectTemplate: "",
+        buildCommand: "",
+        testCommand: "",
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    );
+
+    await waitFor(() => fetchMock.mock.calls.length === 1 && streamControllerRef.current !== undefined);
+    expect(firstRequestBody(fetchMock)).toMatchObject({
+      message: "Inspect pipeline 117. Read-only only.",
+      repoPath: "C:\\repo",
+      projectLinkId: "project-link-1",
+      projectLink: {
+        id: "project-link-1",
+        adoRepoName: "ClaimBot_API",
+        adoPipelineId: "117",
+        adoPipelineName: "ClaimBot_API",
+      },
+    });
+    streamControllerRef.current?.close();
+  });
 });
 
 describe("runChatWorkflowAction", () => {
@@ -271,5 +331,35 @@ describe("runChatWorkflowAction", () => {
       repoPath: "C:\\repo",
     });
     expect(body).not.toHaveProperty("sessionId");
+  });
+});
+
+describe("confirmAction", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("posts an explicit JSON body so the daemon accepts the approval request", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.close();
+      },
+    });
+    const fetchMock = vi.fn(async () => new Response(stream, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    confirmAction("chat-approval-session", () => undefined);
+    await waitFor(() => fetchMock.mock.calls.length === 1);
+
+    const calls = fetchMock.mock.calls as unknown as Array<[RequestInfo | URL, RequestInit?]>;
+    const request = calls[0]?.[1];
+    expect(String(calls[0]?.[0])).toContain("/chat/chat-approval-session/confirm-action");
+    expect(request?.method).toBe("POST");
+    expect(request?.headers).toEqual({ "content-type": "application/json" });
+    expect(request?.body).toBe("{}");
   });
 });

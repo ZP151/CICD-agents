@@ -11,6 +11,12 @@ function git(repo: string, args: string[]): void {
   expect(result.status, result.stderr).toBe(0);
 }
 
+function gitText(repo: string, args: string[]): string {
+  const result = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+  expect(result.status, result.stderr).toBe(0);
+  return result.stdout.trim();
+}
+
 function context(repo: string): ToolContext {
   return { repoPath: repo, env: {}, timeoutSec: 30, extra: {} };
 }
@@ -59,6 +65,115 @@ describe("git tool options", () => {
 
     const branch = await tool("git_current_branch").handler(context(repo), {});
     expect(branch["branch"]).toBe("feature/options");
+  });
+
+  it("supports structured local tag creation without pushing tags", async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-git-tag-repo-"));
+    git(repo, ["init"]);
+    git(repo, ["config", "user.email", "test@example.com"]);
+    git(repo, ["config", "user.name", "Test User"]);
+    fs.writeFileSync(path.join(repo, "README.md"), "release\n", "utf8");
+    git(repo, ["add", "README.md"]);
+    git(repo, ["commit", "-m", "release base"]);
+
+    const result = await tool("git_tag").handler(context(repo), {
+      name: "v1.2.3-test",
+      ref: "HEAD",
+      message: "Test release tag",
+      annotated: true,
+    });
+
+    expect(result["returncode"]).toBe(0);
+    const tagList = await tool("git_show").handler(context(repo), { revision: "v1.2.3-test" });
+    expect(String(tagList["stdout"])).toContain("tag v1.2.3-test");
+    expect(String(tagList["stdout"])).toContain("Test release tag");
+  });
+
+  it("pushes one tag without pushing branches or other tags", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-git-push-tag-root-"));
+    const origin = path.join(root, "origin.git");
+    const repo = path.join(root, "work");
+    fs.mkdirSync(repo);
+    git(root, ["init", "--bare", origin]);
+    git(repo, ["init", "-b", "main"]);
+    git(repo, ["config", "user.email", "test@example.com"]);
+    git(repo, ["config", "user.name", "Test User"]);
+    fs.writeFileSync(path.join(repo, "README.md"), "release\n", "utf8");
+    git(repo, ["add", "README.md"]);
+    git(repo, ["commit", "-m", "release base"]);
+    git(repo, ["remote", "add", "origin", origin]);
+    git(repo, ["tag", "v1.2.3-test"]);
+    git(repo, ["tag", "v9.9.9-unpushed"]);
+
+    const result = await tool("git_push_tag").handler(context(repo), {
+      name: "v1.2.3-test",
+      remote: "origin",
+    });
+
+    expect(result["returncode"]).toBe(0);
+    expect(gitText(root, ["--git-dir", origin, "rev-parse", "refs/tags/v1.2.3-test"])).toBe(
+      gitText(repo, ["rev-parse", "refs/tags/v1.2.3-test"]),
+    );
+    expect(spawnSync("git", ["--git-dir", origin, "rev-parse", "refs/tags/v9.9.9-unpushed"], { encoding: "utf8" }).status).not.toBe(0);
+    expect(spawnSync("git", ["--git-dir", origin, "rev-parse", "refs/heads/main"], { encoding: "utf8" }).status).not.toBe(0);
+  });
+
+  it("applies a stash without dropping it", async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-git-stash-apply-repo-"));
+    git(repo, ["init"]);
+    git(repo, ["config", "user.email", "test@example.com"]);
+    git(repo, ["config", "user.name", "Test User"]);
+    fs.writeFileSync(path.join(repo, "README.md"), "before\n", "utf8");
+    git(repo, ["add", "README.md"]);
+    git(repo, ["commit", "-m", "initial"]);
+    fs.writeFileSync(path.join(repo, "README.md"), "after\n", "utf8");
+    git(repo, ["stash", "push", "-m", "apply fixture"]);
+
+    const result = await tool("git_stash").handler(context(repo), { action: "apply" });
+
+    expect(result["returncode"]).toBe(0);
+    expect(fs.readFileSync(path.join(repo, "README.md"), "utf8").replace(/\r\n/g, "\n")).toBe("after\n");
+    expect(gitText(repo, ["stash", "list"])).toContain("apply fixture");
+  });
+
+  it("pops a stash and drops it after a clean restore", async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-git-stash-pop-repo-"));
+    git(repo, ["init"]);
+    git(repo, ["config", "user.email", "test@example.com"]);
+    git(repo, ["config", "user.name", "Test User"]);
+    fs.writeFileSync(path.join(repo, "README.md"), "before\n", "utf8");
+    git(repo, ["add", "README.md"]);
+    git(repo, ["commit", "-m", "initial"]);
+    fs.writeFileSync(path.join(repo, "README.md"), "after pop\n", "utf8");
+    git(repo, ["stash", "push", "-m", "pop fixture"]);
+
+    const result = await tool("git_stash").handler(context(repo), { action: "pop" });
+
+    expect(result["returncode"]).toBe(0);
+    expect(fs.readFileSync(path.join(repo, "README.md"), "utf8").replace(/\r\n/g, "\n")).toBe("after pop\n");
+    expect(gitText(repo, ["stash", "list"])).toBe("");
+  });
+
+  it("keeps a stash entry when pop hits a conflict", async () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-git-stash-pop-conflict-repo-"));
+    git(repo, ["init"]);
+    git(repo, ["config", "user.email", "test@example.com"]);
+    git(repo, ["config", "user.name", "Test User"]);
+    fs.writeFileSync(path.join(repo, "README.md"), "line 1\nshared\n", "utf8");
+    git(repo, ["add", "README.md"]);
+    git(repo, ["commit", "-m", "initial"]);
+    fs.writeFileSync(path.join(repo, "README.md"), "line 1\nstashed change\n", "utf8");
+    git(repo, ["stash", "push", "-m", "conflict fixture"]);
+    fs.writeFileSync(path.join(repo, "README.md"), "line 1\ncommitted change\n", "utf8");
+    git(repo, ["add", "README.md"]);
+    git(repo, ["commit", "-m", "conflicting change"]);
+
+    const result = await tool("git_stash").handler(context(repo), { action: "pop" });
+
+    expect(result["returncode"]).not.toBe(0);
+    expect(String(result["stdout"]) + String(result["stderr"])).toMatch(/conflict|could not restore|needs merge/i);
+    expect(gitText(repo, ["stash", "list"])).toContain("conflict fixture");
+    expect(gitText(repo, ["status", "--short"])).toContain("UU README.md");
   });
 
   it("supports rebase continuation actions without requiring an onto ref", async () => {

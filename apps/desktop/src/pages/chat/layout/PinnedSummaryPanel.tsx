@@ -79,7 +79,7 @@ export function PinnedSummaryPanel({
   const runAction = (action: WorkspaceAction) => {
     if (busy) return;
     setActiveMenu(null);
-    onAction(action);
+    onAction(withDefaultBranch(action, branchName));
   };
 
   useEffect(() => {
@@ -291,6 +291,7 @@ export function PinnedSummaryPanel({
         >
           {projectLinks.length > 0 ? (
             <select
+              aria-label="Pinned Summary Project Link"
               className="w-full bg-transparent text-xs text-[rgb(var(--app-text-muted))] outline-none"
               value={activeProjectLinkId ?? ""}
               onChange={(event) => handleProjectLinkSelect(event.target.value)}
@@ -361,4 +362,18 @@ export function PinnedSummaryPanel({
       </div>
     </div>
   );
+}
+
+function withDefaultBranch(action: WorkspaceAction, branchName: string): WorkspaceAction {
+  if (!branchName) return action;
+  switch (action.type) {
+    case "prepare_commit":
+    case "commit_and_push":
+    case "push_branch":
+    case "sync_branch_rebase":
+    case "trigger_pipeline":
+      return action.branch ? action : { ...action, branch: branchName };
+    default:
+      return action;
+  }
 }

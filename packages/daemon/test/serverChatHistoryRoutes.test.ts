@@ -111,6 +111,51 @@ describe("daemon chat history routes", () => {
     });
   });
 
+  it("uses a displayable chat message instead of confirmed-action internals for history titles", async () => {
+    app = await buildApp();
+    const storePath = path.join(getSettings().dataDir, "chat-history.json");
+    const now = Math.floor(Date.now() / 1000);
+    fs.mkdirSync(path.dirname(storePath), { recursive: true });
+    fs.writeFileSync(
+      storePath,
+      JSON.stringify(
+        {
+          "chat-confirmed-action-title": {
+            id: "chat-confirmed-action-title",
+            createdAt: now,
+            updatedAt: now + 2,
+            title: "WORKFLOW STEP COMPLETED: git_push executed successfully. Result: pushed.",
+            repoPath: process.cwd(),
+            messages: [
+              { role: "user", content: "Stage selected README changes", timestamp: now },
+              {
+                role: "assistant",
+                content: "[confirmed & executed] git_add({\"paths\":[\"README.md\"]}): staged",
+                timestamp: now + 1,
+              },
+            ],
+            bubbles: [],
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const response = await app.inject({ method: "GET", url: "/chat/history" });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as Array<{ sessionId: string; title?: string; preview?: string }>;
+    const entry = body.find((item) => item.sessionId === "chat-confirmed-action-title");
+    expect(entry).toMatchObject({
+      title: "Stage selected README changes",
+      preview: "Stage selected README changes",
+    });
+    expect(entry?.title).not.toContain("git_add");
+    expect(entry?.preview).not.toContain("confirmed & executed");
+  });
+
   it("deletes a chat session", async () => {
     app = await buildApp();
     const storePath = path.join(getSettings().dataDir, "chat-history.json");

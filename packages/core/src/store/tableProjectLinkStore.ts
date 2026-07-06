@@ -52,6 +52,8 @@ type ProjectLinkEntity = {
   adoProject: string;
   adoRepoName: string;
   adoPat: string;
+  adoPipelineId?: string;
+  adoPipelineName?: string;
   adoMcpEnabled?: boolean;
   adoMcpCommand?: string;
   adoMcpAuthentication?: string;
@@ -74,6 +76,8 @@ function entityToProjectLink(e: ProjectLinkEntity): ProjectLink {
     adoProject: e.adoProject,
     adoRepoName: e.adoRepoName,
     adoPat: e.adoPat,
+    adoPipelineId: e.adoPipelineId ?? "",
+    adoPipelineName: e.adoPipelineName ?? "",
     adoMcpEnabled: e.adoMcpEnabled ?? false,
     adoMcpCommand: e.adoMcpCommand ?? "",
     adoMcpAuthentication: e.adoMcpAuthentication ?? "",
@@ -98,6 +102,8 @@ function projectLinkToEntity(userId: string, p: ProjectLink): ProjectLinkEntity 
     adoProject: p.adoProject,
     adoRepoName: p.adoRepoName,
     adoPat: p.adoPat,
+    adoPipelineId: p.adoPipelineId,
+    adoPipelineName: p.adoPipelineName,
     adoMcpEnabled: p.adoMcpEnabled,
     adoMcpCommand: p.adoMcpCommand,
     adoMcpAuthentication: p.adoMcpAuthentication,

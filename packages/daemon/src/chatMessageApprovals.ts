@@ -88,6 +88,13 @@ export async function* handleChatMessageApproval(
   }
 
   if (!isConfirmationMessage(message)) {
+    if (storedSession) {
+      clearStoredApprovalProposal(storedSession);
+      storedSession.workflowState = buildWorkflowState([], undefined, "running", "revising approval");
+      await adapters.saveSession(storedSession);
+    }
+    yield { type: "approval_resolved", approvalId: approvalIdFor(pending), approved: false };
+    yield { type: "workflow_state", state: buildWorkflowState([], undefined, "running", "revising approval") };
     return false;
   }
 

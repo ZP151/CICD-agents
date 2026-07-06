@@ -59,6 +59,24 @@ describe("PendingActionCard", () => {
     expect(html).toContain("git add -A");
   });
 
+  it("shows a concrete pull rebase command with remote and branch arguments", () => {
+    const html = renderToStaticMarkup(
+      <PendingActionCard
+        bubble={{
+          ...baseApproval,
+          pendingTool: "git_pull",
+          pendingArgs: { remote: "origin", branch: "main", rebase: true },
+          pendingWorkflow: { kind: "git", phase: "sync_branch", branch: "main" },
+        }}
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("git pull --rebase origin main");
+    expect(html).not.toContain("git_pull remote=origin branch=main rebase=true");
+  });
+
   it("renders only active approval states", () => {
     const executing = renderToStaticMarkup(
       <PendingActionCard

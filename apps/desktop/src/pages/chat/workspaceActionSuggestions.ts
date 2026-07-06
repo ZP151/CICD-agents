@@ -40,6 +40,28 @@ export function workspaceActionFromSuggestion(suggestion: SuggestionReply): Work
       return { type: "inspect_pr_plan_context" };
     case "sync_branch_rebase":
       return { type: "sync_branch_rebase" };
+    case "continue_rebase":
+      return { type: "continue_rebase" };
+    case "abort_rebase":
+      return { type: "abort_rebase" };
+    case "skip_rebase":
+      return { type: "skip_rebase" };
+    case "continue_merge":
+      return { type: "continue_merge" };
+    case "abort_merge":
+      return { type: "abort_merge" };
+    case "continue_cherry_pick":
+      return { type: "continue_cherry_pick" };
+    case "abort_cherry_pick":
+      return { type: "abort_cherry_pick" };
+    case "skip_cherry_pick":
+      return { type: "skip_cherry_pick" };
+    case "continue_revert":
+      return { type: "continue_revert" };
+    case "abort_revert":
+      return { type: "abort_revert" };
+    case "skip_revert":
+      return { type: "skip_revert" };
     case "prepare_commit":
       return { type: "prepare_commit", includeUnstaged: true };
     case "push_branch":
@@ -65,7 +87,7 @@ export function workspaceActionFromWelcomeSuggestion(suggestion: string): Worksp
   if (/^review my changes$/i.test(suggestion)) return { type: "inspect_changes" };
   if (/^what'?s on this branch\??$/i.test(suggestion)) return { type: "refresh_branch" };
   if (/^analyze pr insight for this repo$/i.test(suggestion)) return { type: "inspect_pr_insight" };
-  if (/^check the ci\/cd pipeline state$/i.test(suggestion)) return { type: "inspect_pipeline" };
+  if (/^(check the ci\/cd pipeline state|open pipelines workspace)$/i.test(suggestion)) return { type: "inspect_pipeline" };
   if (/^find the build and test commands$/i.test(suggestion)) return { type: "inspect_architecture_context" };
   if (/^stage and commit$/i.test(suggestion)) return { type: "prepare_commit", includeUnstaged: true };
   if (/^(prepare a pr plan|push and create pr)$/i.test(suggestion)) return { type: "inspect_pr_plan_context" };

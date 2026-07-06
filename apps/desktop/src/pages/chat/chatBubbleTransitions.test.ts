@@ -49,6 +49,44 @@ describe("chat bubble transitions", () => {
       pendingTool: "git_push",
       pendingDescription: "Review exact args",
       pendingStatus: "waiting",
+      riskLevel: "high",
+    });
+  });
+
+  it("allows a revised approval for the same tool when the arguments change", () => {
+    const firstApproval: ApprovalRequest = {
+      id: "approval-readme",
+      riskLevel: "medium",
+      explanation: "Stage README",
+      action: {
+        tool: "git_add",
+        args: { paths: ["README.md"] },
+        description: "Stage README.md",
+      },
+    };
+    const revisedApproval: ApprovalRequest = {
+      id: "approval-notes",
+      riskLevel: "medium",
+      explanation: "Stage notes",
+      action: {
+        tool: "git_add",
+        args: { paths: ["notes.txt"] },
+        description: "Stage notes.txt",
+      },
+    };
+
+    const first = showApprovalRequestTransition([], firstApproval, makeId);
+    const cancelledFirst: Bubble[] = first.map((bubble) =>
+      bubble.kind === "pending_confirm" ? { ...bubble, pendingStatus: "cancelled" } : bubble,
+    );
+    const second = showApprovalRequestTransition(cancelledFirst, revisedApproval, makeId);
+
+    expect(second).toHaveLength(2);
+    expect(second[1]).toMatchObject({
+      kind: "pending_confirm",
+      pendingTool: "git_add",
+      pendingArgs: { paths: ["notes.txt"] },
+      pendingStatus: "waiting",
     });
   });
 

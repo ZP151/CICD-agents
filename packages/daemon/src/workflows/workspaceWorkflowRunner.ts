@@ -74,13 +74,16 @@ export async function runWorkspaceWorkflowAction(
     tools.find((tool) => tool.name === "git_diff") ??
     tools.find((tool) => tool.name === "git_diff_staged")
   )?.stdout.trim() || "";
-  const changedFiles = changedFilesFromGitOutputs(
-    [
-      tools.find((tool) => tool.name === "git_diff_name_only")?.stdout ?? "",
-      tools.find((tool) => tool.name === "git_diff_staged_name_only")?.stdout ?? "",
-    ].filter(Boolean).join("\n"),
-    statusText,
-  );
+  const stagedNameOnly = tools.find((tool) => tool.name === "git_diff_staged_name_only")?.stdout ?? "";
+  const changedFiles = action === "inspect_staged_changes"
+    ? changedFilesFromGitOutputs(stagedNameOnly, "")
+    : changedFilesFromGitOutputs(
+      [
+        tools.find((tool) => tool.name === "git_diff_name_only")?.stdout ?? "",
+        stagedNameOnly,
+      ].filter(Boolean).join("\n"),
+      statusText,
+    );
   const operationState = gitOperationStateFromTools(repoPath, statusText, tools);
   const operationBlock = gitOperationBlockForAction(action, operationState);
   const pushReadiness = pushReadinessFromTools(tools);
@@ -148,6 +151,8 @@ export async function runWorkspaceWorkflowAction(
       status: failed ? "failed" : "done",
       currentStep: failed ? `${failed.name} failed` : `${action} complete`,
       completedTools: tools.filter((tool) => tool.ok).map((tool) => tool.name),
+      workflowKind: "git" as const,
+      workflowPhase: action,
     },
     tools,
   };

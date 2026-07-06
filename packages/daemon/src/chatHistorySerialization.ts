@@ -14,15 +14,30 @@ import type {
 } from "./chatHistoryTypes.js";
 
 export function chatHistoryEntryFromSession(session: StoredSession): ChatHistoryEntry {
-  const last = session.messages[session.messages.length - 1];
+  const last = lastDisplayableHistoryMessage(session.messages);
+  const preview = last ? last.content.slice(0, 100) : "";
+  const storedTitle = session.title && !isInternalHistoryText(session.title)
+    ? session.title
+    : undefined;
+  const title = storedTitle ?? (preview || undefined);
   return {
     sessionId: session.id,
-    preview: last ? last.content.slice(0, 100) : "",
+    preview,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt ?? session.createdAt,
-    title: session.title,
+    title,
     pinned: Boolean(session.pinned),
   };
+}
+
+function lastDisplayableHistoryMessage(messages: ChatMessage[]): ChatMessage | undefined {
+  return [...messages].reverse().find((message) => !isInternalHistoryText(message.content));
+}
+
+function isInternalHistoryText(content: string): boolean {
+  const text = content.trim();
+  return /^\[(?:confirmed & executed|executed)\]\s+\w+\(/.test(text) ||
+    /^WORKFLOW STEP (?:COMPLETED|FAILED):/i.test(text);
 }
 
 export function sortChatHistoryEntries(a: ChatHistoryEntry, b: ChatHistoryEntry): number {

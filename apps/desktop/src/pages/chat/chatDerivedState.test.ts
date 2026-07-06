@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ChatIndexStatus, ProjectLink } from "../../api.js";
 import {
   branchListFromBubbles,
+  bubblesWithWorkflowApprovalFallback,
   conversationTitleFromBubbles,
   currentBranchFromBubbles,
   diffStatsFromBubbles,
@@ -20,6 +21,8 @@ function projectLink(overrides: Partial<ProjectLink> = {}): ProjectLink {
     adoOrgUrl: "",
     adoProject: "",
     adoRepoName: "",
+    adoPipelineId: "",
+    adoPipelineName: "",
     adoPat: "",
     adoMcpEnabled: false,
     adoMcpCommand: "",
@@ -121,5 +124,36 @@ describe("chat derived state", () => {
     expect(pendingApprovalFromBubbles([
       { id: "pending", kind: "pending_confirm", pendingStatus: "waiting", pendingTool: "git_add" },
     ], workflowState)).toBe(workflowState.pendingApproval);
+  });
+
+  it("adds a render fallback when workflow state has approval but no approval bubble", () => {
+    const bubbles: Bubble[] = [
+      { id: "u1", kind: "user", text: "Actually stage notes.txt" },
+      { id: "t1", kind: "tool", toolName: "git_status", toolOk: true },
+    ];
+    const withFallback = bubblesWithWorkflowApprovalFallback(bubbles, {
+      status: "waiting_for_approval",
+      currentStep: "git_add",
+      completedTools: ["git_status"],
+      pendingApproval: {
+        id: "approval-git-add-notes",
+        riskLevel: "medium",
+        explanation: "Stage notes.txt",
+        action: {
+          tool: "git_add",
+          args: { paths: ["notes.txt"] },
+          description: "Stage notes.txt",
+        },
+      },
+    });
+
+    expect(withFallback).toHaveLength(3);
+    expect(withFallback[2]).toMatchObject({
+      kind: "pending_confirm",
+      id: "workflow-approval-git-add-notes",
+      pendingTool: "git_add",
+      pendingArgs: { paths: ["notes.txt"] },
+      pendingStatus: "waiting",
+    });
   });
 });

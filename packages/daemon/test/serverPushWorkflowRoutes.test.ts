@@ -196,6 +196,44 @@ describe("daemon push workflow routes", () => {
     ]);
   });
 
+  it("redacts credentials from remote target inspection output", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-redacted-remote-"));
+    spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["checkout", "-b", "main"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "mergepilot@example.test"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["config", "user.name", "MergePilot"], { cwd: repo, encoding: "utf8" });
+    fs.writeFileSync(path.join(repo, "README.md"), "# demo\n", "utf8");
+    spawnSync("git", ["add", "README.md"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", ["commit", "-m", "docs: initial"], { cwd: repo, encoding: "utf8" });
+    spawnSync("git", [
+      "remote",
+      "add",
+      "origin",
+      "https://mergepilot:supersecrettoken@example.visualstudio.com/Claims/_git/Repo",
+    ], { cwd: repo, encoding: "utf8" });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "inspect_remote_target",
+        repoPath: repo,
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      summary: string;
+      tools: Array<{ name: string; stdout?: string; stderr?: string }>;
+    };
+    const remoteTool = body.tools.find((tool) => tool.name === "git_remote");
+    const serialized = JSON.stringify(body);
+    expect(remoteTool?.stdout).toContain("https://***REDACTED***@example.visualstudio.com/Claims/_git/Repo");
+    expect(serialized).not.toContain("supersecrettoken");
+    expect(serialized).not.toContain("mergepilot:supersecrettoken");
+  });
+
   it("inspects latest commit after push as a read-only workflow action", async () => {
     app = await buildApp();
     const remote = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-workflow-latest-remote-"));

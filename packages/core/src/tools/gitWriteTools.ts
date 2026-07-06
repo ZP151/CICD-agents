@@ -37,6 +37,29 @@ export function gitWriteTools(): Tool[] {
       },
     },
     {
+      name: "git_push_tag",
+      description: "Push one local Git tag to a remote without pushing branches or other tags.",
+      parameters: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string", description: "Tag name to push, such as v1.2.3." },
+          remote: { type: "string", default: "origin" },
+          dryRun: { type: "boolean", default: false },
+        },
+      },
+      allowedCommands: ALLOWED,
+      handler: (ctx, payload) => {
+        const name = String(payload["name"] ?? "").trim();
+        if (!name) throw new ToolError("git_push_tag requires 'name'");
+        const remote = String(payload["remote"] ?? "origin").trim() || "origin";
+        const args = ["push"];
+        if (payload["dryRun"]) args.push("--dry-run");
+        args.push(remote, `refs/tags/${name}:refs/tags/${name}`);
+        return git(ctx, args);
+      },
+    },
+    {
       name: "git_create_branch",
       description: "Create and switch to a new branch.",
       parameters: {
@@ -206,18 +229,49 @@ export function gitWriteTools(): Tool[] {
       },
     },
     {
+      name: "git_tag",
+      description: "Create a local Git tag at a ref, defaulting to HEAD. Supports annotated tags, tag messages, and --force. Does not push tags.",
+      parameters: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string", description: "Tag name, such as v1.2.3." },
+          ref: { type: "string", default: "HEAD", description: "Commit, branch, or revision to tag." },
+          message: { type: "string", description: "Optional annotation message. When provided, an annotated tag is created." },
+          annotated: { type: "boolean", default: false, description: "Create an annotated tag even if no message is provided." },
+          force: { type: "boolean", default: false, description: "Replace an existing local tag with the same name." },
+        },
+      },
+      allowedCommands: ALLOWED,
+      handler: (ctx, payload) => {
+        const name = String(payload["name"] ?? "").trim();
+        if (!name) throw new ToolError("git_tag requires 'name'");
+        const ref = String(payload["ref"] ?? "HEAD").trim() || "HEAD";
+        const message = String(payload["message"] ?? "").trim();
+        const args = ["tag"];
+        if (payload["force"]) args.push("--force");
+        if (message || payload["annotated"]) {
+          args.push("-a", name, ref, "-m", message || name);
+        } else {
+          args.push(name, ref);
+        }
+        return git(ctx, args);
+      },
+    },
+    {
       name: "git_stash",
-      description: "Stash or pop working-tree changes. action='push' to stash, 'pop' to restore.",
+      description: "Stash, apply, or pop working-tree changes. action='push' to stash, 'apply' to restore without dropping, 'pop' to restore and drop.",
       parameters: {
         type: "object",
         properties: {
-          action: { type: "string", enum: ["push", "pop"], default: "push" },
+          action: { type: "string", enum: ["push", "apply", "pop"], default: "push" },
           message: { type: "string", description: "Optional stash message." },
         },
       },
       allowedCommands: ALLOWED,
       handler: (ctx, payload) => {
         const action = String(payload["action"] ?? "push");
+        if (action === "apply") return git(ctx, ["stash", "apply"]);
         if (action === "pop") return git(ctx, ["stash", "pop"]);
         const msg = String(payload["message"] ?? "").trim();
         return msg ? git(ctx, ["stash", "push", "-m", msg]) : git(ctx, ["stash", "push"]);

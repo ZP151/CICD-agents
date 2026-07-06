@@ -1,8 +1,8 @@
 import { ToolError, type Tool } from "./executor.js";
-import { ALLOWED_GIT_COMMANDS, runGit } from "./gitCommand.js";
+import { ALLOWED_GIT_COMMANDS, runGit, runGitReadOnly } from "./gitCommand.js";
 
 const ALLOWED = ALLOWED_GIT_COMMANDS;
-const git = runGit;
+const git = runGitReadOnly;
 
 export function gitReadTools(): Tool[] {
   return [
@@ -121,7 +121,7 @@ export function gitReadTools(): Tool[] {
       handler: (ctx, payload) => {
         const remote = String(payload["remote"] ?? "origin").trim() || "origin";
         const args = payload["prune"] ? ["fetch", "--prune", remote] : ["fetch", remote];
-        return git(ctx, args);
+        return runGit(ctx, args);
       },
     },
     {

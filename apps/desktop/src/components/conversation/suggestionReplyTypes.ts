@@ -28,6 +28,17 @@ export type SuggestionReplyAction =
         | "inspect_ado_auth_context"
         | "inspect_pr_plan_context"
         | "sync_branch_rebase"
+        | "continue_rebase"
+        | "abort_rebase"
+        | "skip_rebase"
+        | "continue_merge"
+        | "abort_merge"
+        | "continue_cherry_pick"
+        | "abort_cherry_pick"
+        | "skip_cherry_pick"
+        | "continue_revert"
+        | "abort_revert"
+        | "skip_revert"
         | "prepare_commit"
         | "push_branch"
         | "create_pr"
@@ -36,6 +47,13 @@ export type SuggestionReplyAction =
         | "list_pr_work_items"
         | "inspect_pipeline"
         | "trigger_pipeline";
+    }
+  | {
+      kind: "project_link_update";
+      update: {
+        adoPipelineId?: string;
+        adoPipelineName?: string;
+      };
     }
   | { kind: "requires_approval"; reason: string };
 
@@ -48,6 +66,7 @@ export interface SuggestionReplyContext {
   workflowStatus?: string;
   workflowKind?: "commit" | "git" | "ado" | "ci" | "pr";
   workflowPhase?: string;
+  adoPipelineId?: string;
   pendingTool?: string;
   pendingApprovalTool?: string;
   pendingApprovalDescription?: string;

@@ -206,6 +206,26 @@ describe("deriveSuggestionReplies", () => {
     ]);
   });
 
+  it("routes rebase conflict recovery follow-ups as structured workspace actions", () => {
+    const suggestions = deriveSuggestionReplies({
+      workflowKind: "git",
+      workflowPhase: "rebase_conflict",
+      workflowStatus: "blocked",
+      lastAssistantText: "Git is in rebase with unresolved conflicts: app.config.",
+    });
+
+    expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
+      "Continue rebase",
+      "Abort rebase",
+      "Skip rebase patch",
+    ]);
+    expect(suggestions.map((suggestion) => suggestion.action)).toEqual([
+      { kind: "workspace_action", action: "continue_rebase" },
+      { kind: "workspace_action", action: "abort_rebase" },
+      { kind: "workspace_action", action: "skip_rebase" },
+    ]);
+  });
+
   it("marks pull request read suggestions as workspace actions", () => {
     const suggestions = deriveSuggestionReplies({
       workflowKind: "pr",
@@ -366,6 +386,48 @@ describe("deriveSuggestionReplies", () => {
     expect(suggestions[0]?.action).toEqual({ kind: "workspace_action", action: "inspect_pipeline" });
     expect(suggestions[1]?.action).toEqual({ kind: "workspace_action", action: "trigger_pipeline" });
     expect(suggestions[2]?.action).toEqual({ kind: "workspace_action", action: "run_tests" });
+  });
+
+  it("suggests saving a discovered pipeline candidate when setup is required", () => {
+    const suggestions = deriveSuggestionReplies({
+      workflowKind: "ci",
+      workflowPhase: "pipeline_setup_required",
+      workflowStatus: "done",
+      lastAssistantText: [
+        "No Azure Pipeline is configured on this Project Link yet.",
+        "Select a pipeline for this Project Link before inspecting or running CI.",
+        "",
+        "Available pipeline candidates:",
+        "- #117 ClaimBot_API - repo:CICD-agents · type:TfsGit · yaml:/azure-pipelines.yml",
+      ].join("\n"),
+    });
+
+    expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
+      "Use #117 ClaimBot_API",
+    ]);
+    expect(suggestions[0]?.action).toEqual({
+      kind: "project_link_update",
+      update: {
+        adoPipelineId: "117",
+        adoPipelineName: "ClaimBot_API",
+      },
+    });
+  });
+
+  it("does not suggest saving the already configured pipeline candidate", () => {
+    const suggestions = deriveSuggestionReplies({
+      workflowKind: "ci",
+      workflowPhase: "pipeline_setup_required",
+      workflowStatus: "done",
+      adoPipelineId: "117",
+      lastAssistantText: [
+        "No Azure Pipeline is configured on this Project Link yet.",
+        "Available pipeline candidates:",
+        "- #117 ClaimBot_API - repo:CICD-agents · type:TfsGit · yaml:/azure-pipelines.yml",
+      ].join("\n"),
+    });
+
+    expect(suggestions).toEqual([]);
   });
 
   it("uses repository index context for follow-up question prediction", () => {

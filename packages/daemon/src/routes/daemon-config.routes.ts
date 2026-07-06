@@ -172,6 +172,7 @@ function patchLiveProcessEnv(
 ): void {
   if (cfg.llmProvider !== undefined) process.env["LLM_PROVIDER"] = cfg.llmProvider;
   if (cfg.openaiModel !== undefined) process.env["OPENAI_MODEL"] = cfg.openaiModel;
+  if (cfg.secretSource !== undefined) process.env["MERGEPILOT_SECRET_SOURCE"] = cfg.secretSource;
   if (cfg.openaiApiKey !== undefined) process.env["OPENAI_API_KEY"] = cfg.openaiApiKey;
   else if (secretRefs.openaiApiKeyRef) process.env["OPENAI_API_KEY"] = secretRefs.openaiApiKeyRef;
 
@@ -208,6 +209,7 @@ function patchLiveSettings(settings: Settings, cfg: z.infer<typeof DaemonConfigu
 
   target["llmProvider"] = provider;
   target["llmConfigured"] = nowConfigured;
+  if (cfg.secretSource !== undefined) target["secretSource"] = cfg.secretSource;
   if (cfg.azureEndpoint !== undefined) target["azureOpenAiEndpoint"] = cfg.azureEndpoint;
   if (cfg.azureApiKey !== undefined) target["azureOpenAiApiKey"] = cfg.azureApiKey || settings.azureOpenAiApiKey;
   if (cfg.azureDeployment !== undefined) target["azureOpenAiChatDeployment"] = cfg.azureDeployment || settings.azureOpenAiChatDeployment;
@@ -267,7 +269,7 @@ export function registerDaemonConfigRoutes(
       ok: true,
       llmConfigured: nowConfigured,
       cloudProjectLinkStore,
-      cloudSecrets:      !!(settings.azureKeyVaultUrl),
+      cloudSecrets:      settings.secretSource !== LOCAL_ENV_SECRET_SOURCE && !!(settings.azureKeyVaultUrl),
       cloudSessions:     !!(settings.azureCosmosEndpoint),
     };
   });

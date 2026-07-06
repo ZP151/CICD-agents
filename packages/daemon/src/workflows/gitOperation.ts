@@ -72,11 +72,13 @@ export function gitOperationBlockForAction(
     ? `${state.phase === "normal" ? "git" : state.phase}_conflict`
     : `${state.phase}_in_progress`;
   const recovery =
-    state.phase === "rebase"
-      ? "Resolve conflicts, stage only the resolved conflict files, then continue/abort/skip the rebase."
-      : state.phase === "merge"
-        ? "Resolve conflicts, stage only the resolved conflict files, then finish or abort the merge."
-        : `Finish or abort the ${phase} operation before starting another Git workflow.`;
+    state.status === "conflicted" && state.phase === "normal"
+      ? "Resolve conflicts, stage only the resolved conflict files, then choose the next safe Git action. If this happened during stash pop, Git keeps the stash entry until the conflict is resolved."
+      : state.phase === "rebase"
+        ? "Resolve conflicts, stage only the resolved conflict files, then continue/abort/skip the rebase."
+        : state.phase === "merge"
+          ? "Resolve conflicts, stage only the resolved conflict files, then finish or abort the merge."
+          : `Finish or abort the ${phase} operation before starting another Git workflow.`;
   return {
     workflowPhase,
     summary: `${state.summary} ${recovery}`,

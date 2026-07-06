@@ -37,7 +37,7 @@ export interface ProjectLinkStoreAdapter {
 function isCloudProjectLinkStoreUnavailable(err: unknown): boolean {
   if (isAzureAuthenticationRequiredError(err)) return true;
   const message = err instanceof Error ? err.message : String(err ?? "");
-  return /Automatic authentication has been disabled|CredentialUnavailable|InteractiveBrowserCredential|No cached account|requires? authentication|login required|network error|getaddrinfo|ENOTFOUND|ECONNREFUSED|ETIMEDOUT/i.test(
+  return /AADSTS65001|consent|Automatic authentication has been disabled|CredentialUnavailable|InteractiveBrowserCredential|No cached account|requires? authentication|login required|network error|getaddrinfo|ENOTFOUND|ECONNREFUSED|ETIMEDOUT/i.test(
     message,
   );
 }
@@ -65,6 +65,7 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
 
   let kvCache: { url: string; kv: KeyVaultSecrets } | null = null;
   const getKvSecrets = (): KeyVaultSecrets | null => {
+    if (settings.secretSource === "local_env") return null;
     const url = settings.azureKeyVaultUrl;
     if (!url) return null;
     if (kvCache?.url !== url) kvCache = { url, kv: new KeyVaultSecrets(url) };

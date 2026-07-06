@@ -120,6 +120,55 @@ describe("ChatPlanner agent_final tool finalization", () => {
     }
   });
 
+  it("drops binary media entries from structured final sources", async () => {
+    const planner = new ChatPlanner(
+      fakeToolCallLlm(CHAT_FINAL_TOOL_NAME, {
+        response: "The project context is grounded in README.md.",
+        risk_level: "low",
+        actions_taken: [],
+        suggestions: [],
+        sources: [
+          {
+            type: "source_document",
+            title: "README.md",
+            file: "README.md",
+            line: 1,
+            snippet: "# ClaimBot API",
+          },
+          {
+            type: "source_document",
+            title: "otherClaims.png",
+            file: "BotToSharePoint/images/icons/otherClaims.png",
+            line: 1,
+            snippet: "Static asset",
+          },
+        ],
+      }),
+      createToolExecutor(),
+      { maxSteps: 1 },
+    );
+    const events = [];
+
+    for await (const event of planner.run("explain architecture", [], ".", async () => true)) {
+      events.push(event);
+    }
+
+    const done = events.find((event) => event.type === "done");
+    expect(done?.type).toBe("done");
+    if (done?.type === "done") {
+      expect(done.result.sources).toEqual([
+        {
+          type: "source_document",
+          sourceId: "document-0",
+          title: "README.md",
+          file: "README.md",
+          line: 1,
+          snippet: "# ClaimBot API",
+        },
+      ]);
+    }
+  });
+
   it("nudges unfinished text turns toward agent_final before legacy fallback", async () => {
     const calls: Array<{ messages?: unknown[] }> = [];
     const planner = new ChatPlanner(

@@ -6,6 +6,7 @@ import type { Database as DbType } from "better-sqlite3";
 import { openRepoDb, transaction, type RepoDatabase } from "../db/database.js";
 import { getSettings } from "../settings.js";
 import type { ProjectTemplate } from "../projectTemplates.js";
+import { decodeTextIfLikelyText } from "../repoFileGuards.js";
 import { chunksForFile } from "./chunks.js";
 import { detectLanguage, isTestPath, parseFile } from "./parsers.js";
 import type { IndexStats, ParsedSymbol } from "./types.js";
@@ -122,7 +123,11 @@ export class RepoIndexer {
       if (existing && existing.content_hash === hash) continue;
 
       const lang = detectLanguage(rel) ?? "text";
-      const text = buf.toString("utf8");
+      const text = decodeTextIfLikelyText(buf);
+      if (text === null) {
+        stats.filesSkipped++;
+        continue;
+      }
       const parsed = parseFile(text, lang);
       const isTest = isTestPath(rel, lang) ? 1 : 0;
       const now = Math.floor(Date.now() / 1000);

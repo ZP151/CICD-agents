@@ -1,7 +1,7 @@
 import { ToolError } from "../tools/executor.js";
 import { getAzureDevOpsAuth, type AdoAuth } from "./auth.js";
 import { adoBase, adoFetch } from "./client.js";
-import { API_VERSION_BUILD } from "./constants.js";
+import { API_VERSION_BUILD, API_VERSION_BUILD_DIAGNOSTICS } from "./constants.js";
 import { normalizeBranchRef, stripRef } from "./refs.js";
 import { listAzureRepositories } from "./repositories.js";
 import { parseAdoJson } from "./response.js";
@@ -179,7 +179,7 @@ export async function getAzureBuildTimeline(args: {
     throw new ToolError("ADO organization, project, and build ID are required to read the build timeline.");
   }
   const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
-  const params = new URLSearchParams({ "api-version": API_VERSION_BUILD });
+  const params = new URLSearchParams({ "api-version": API_VERSION_BUILD_DIAGNOSTICS });
   const url = `${adoBase(org)}/${encodeURIComponent(project)}/_apis/build/builds/${buildId}/timeline?${params.toString()}`;
   const resp = await adoFetch(url, auth);
   const data = await parseAdoJson(resp, "get build timeline") as {

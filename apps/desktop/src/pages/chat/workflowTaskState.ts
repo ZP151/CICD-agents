@@ -24,6 +24,7 @@ export function workflowStepActionState(
   step: WorkflowStep,
   context: WorkflowStepActionStateContext,
 ): WorkflowStepActionState {
+  if (context.workflowStatus === "blocked" && step.action && isGitRecoveryAction(step.action.type)) return "idle";
   if (context.workflowStatus === "blocked") return "blocked";
   const workflowBusy = Boolean(
     context.busy
@@ -34,6 +35,20 @@ export function workflowStepActionState(
   if (workflowBusy) return "waiting";
   if (step.done) return "done";
   return "idle";
+}
+
+function isGitRecoveryAction(type: string): boolean {
+  return type === "continue_rebase"
+    || type === "abort_rebase"
+    || type === "skip_rebase"
+    || type === "continue_merge"
+    || type === "abort_merge"
+    || type === "continue_cherry_pick"
+    || type === "abort_cherry_pick"
+    || type === "skip_cherry_pick"
+    || type === "continue_revert"
+    || type === "abort_revert"
+    || type === "skip_revert";
 }
 
 export function gitRecoveryPanelState(workflowState: WorkflowEventState | null): {

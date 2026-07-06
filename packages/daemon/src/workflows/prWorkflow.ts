@@ -1,6 +1,7 @@
 import {
   getAzureDevOpsAuth,
   getAzurePullRequestById,
+  listAzureBuilds,
   listAzurePullRequests,
   listAzurePullRequestChanges,
   listAzurePullRequestPolicyEvaluations,
@@ -117,7 +118,7 @@ export async function runAdoPullRequestWorkflowAction(
     auth,
     includeWorkItemRefs: true,
   });
-  const [threads, changes, workItems, policies] = await Promise.all([
+  const [threads, changes, workItems, policies, builds] = await Promise.all([
     listAzurePullRequestThreads({
       organization: projectLink.adoOrgUrl,
       project: projectLink.adoProject,
@@ -148,10 +149,18 @@ export async function runAdoPullRequestWorkflowAction(
       pullRequestId,
       auth,
     }).catch(() => []),
+    listAzureBuilds({
+      organization: projectLink.adoOrgUrl,
+      project: projectLink.adoProject,
+      auth,
+      branchName: pullRequest.sourceBranch,
+      repositoryId: projectLink.adoRepoName,
+      repositoryType: "TfsGit",
+      top: 20,
+    }).catch(() => []),
   ]);
-  const builds: [] = [];
   const insight = buildWorkflowPrInsight({ pullRequest, threads, changes, builds, workItems, policies });
-  return adoWorkflowDoneResult({
+  const result = adoWorkflowDoneResult({
     action,
     repoPath,
     sessionId: payload.sessionId,
@@ -167,6 +176,8 @@ export async function runAdoPullRequestWorkflowAction(
       adoWorkflowTool("ado_list_pull_request_policy_evaluations", { policies, count: policies.length }),
     ],
   });
+  await appendWorkflowActionAssistantBubble(chatSessions, payload.sessionId, result.summary);
+  return result;
 }
 
 function adoProjectLinkFromWorkflowPayload(payload: ChatWorkflowActionPayload): WorkflowProjectLink {
@@ -236,4 +247,17 @@ function adoWorkflowDoneResult(args: {
     },
     tools: args.tools,
   };
+}
+
+async function appendWorkflowActionAssistantBubble(
+  chatSessions: ChatSessionManager,
+  sessionId: string | undefined,
+  content: string,
+): Promise<void> {
+  if (!sessionId) return;
+  await chatSessions.appendBubble(sessionId, {
+    role: "assistant",
+    content,
+    timestamp: Math.floor(Date.now() / 1000),
+  });
 }

@@ -103,7 +103,7 @@ export function registerHealthRoutes(
       azureDeploymentError: azureDeployment.error,
       keyVaultSecretError: keyVaultSecretError(),
       cloudProjectLinkStore,
-      cloudSecrets:      !!(settings.azureKeyVaultUrl),
+      cloudSecrets:      settings.secretSource !== "local_env" && !!(settings.azureKeyVaultUrl),
       cloudSessions:     !!(settings.azureCosmosEndpoint),
     };
   });

@@ -20,6 +20,36 @@ describe("redact", () => {
     const out = redact("api_key='supersecretvalue1234'");
     expect(out).not.toContain("supersecretvalue1234");
   });
+
+  it("masks common token and client secret assignments", () => {
+    const out = redact([
+      "AZURE_OPENAI_API_KEY=aoai_secret_1234567890",
+      "ADO_PAT=pat_secret_1234567890abcdef",
+      "access_token=access.secret.1234567890",
+      "client_secret=client-secret-1234567890",
+      "password=P@ssw0rd!",
+    ].join("\n"));
+
+    expect(out).toContain("AZURE_OPENAI_API_KEY=***REDACTED***");
+    expect(out).toContain("ADO_PAT=***REDACTED***");
+    expect(out).toContain("access_token=***REDACTED***");
+    expect(out).toContain("client_secret=***REDACTED***");
+    expect(out).toContain("password=***REDACTED***");
+    expect(out).not.toContain("aoai_secret_1234567890");
+    expect(out).not.toContain("pat_secret_1234567890abcdef");
+    expect(out).not.toContain("access.secret.1234567890");
+    expect(out).not.toContain("client-secret-1234567890");
+    expect(out).not.toContain("P@ssw0rd!");
+  });
+
+  it("masks credentials embedded in remote URLs", () => {
+    const out = redact(
+      "origin https://mergepilot:supersecrettoken@example.visualstudio.com/Claims/_git/Repo (push)",
+    );
+    expect(out).toContain("https://***REDACTED***@example.visualstudio.com/Claims/_git/Repo");
+    expect(out).not.toContain("mergepilot");
+    expect(out).not.toContain("supersecrettoken");
+  });
 });
 
 describe("runCommand", () => {
@@ -27,6 +57,31 @@ describe("runCommand", () => {
     await expect(
       runCommand(["echo", "hi"], { cwd: os.tmpdir(), allowed: ["git"] }),
     ).rejects.toBeInstanceOf(ToolError);
+  });
+
+  it("redacts secret-like stdout and stderr in streamed and final command output", async () => {
+    const streamed: string[] = [];
+    const result = await runCommand(
+      [
+        process.execPath,
+        "-e",
+        [
+          "console.log('AZURE_OPENAI_API_KEY=aoai_secret_1234567890')",
+          "console.error('client_secret=client-secret-1234567890')",
+        ].join(";"),
+      ],
+      {
+        cwd: os.tmpdir(),
+        allowed: [process.execPath],
+        onOutput: (chunk) => streamed.push(`${chunk.stream}:${chunk.text}`),
+      },
+    );
+
+    const combined = [result.stdout, result.stderr, ...streamed].join("\n");
+    expect(combined).toContain("AZURE_OPENAI_API_KEY=***REDACTED***");
+    expect(combined).toContain("client_secret=***REDACTED***");
+    expect(combined).not.toContain("aoai_secret_1234567890");
+    expect(combined).not.toContain("client-secret-1234567890");
   });
 });
 

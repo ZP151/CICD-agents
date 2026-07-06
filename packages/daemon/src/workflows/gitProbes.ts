@@ -215,10 +215,17 @@ async function runGitProbe(repoPath: string, command: GitProbeCommand): Promise<
   return {
     command: `git ${command.args.join(" ")}`,
     ok: result.returncode === 0,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
+    stdout: redactGitProbeOutput(result.stdout ?? ""),
+    stderr: redactGitProbeOutput(result.stderr ?? ""),
     returncode: result.returncode,
   };
+}
+
+function redactGitProbeOutput(text: string): string {
+  return text.replace(/(?<lead>https?:\/\/)[^@\s/]+:[^@\s/]+@/gi, (_match, ...args) => {
+    const groups = args[args.length - 1] as { lead?: string };
+    return `${groups.lead ?? ""}***REDACTED***@`;
+  });
 }
 
 function nonBlockingGitProbeNames(action: string): Set<string> {

@@ -7,6 +7,7 @@ import {
 } from "react";
 import type {
   ChatHistoryEntry,
+  ProjectLink,
 } from "../../api.js";
 import type { ComposerInputState } from "../../components/conversation/SuggestionReplyBar.js";
 import type {
@@ -29,6 +30,7 @@ interface UseChatTurnRuntimeArgs {
   activeCustomModel: CustomConversationModel | null;
   activeModel: ConversationModelChoice;
   activeProjectLinkId: string | null;
+  activeProjectLink: ProjectLink | null;
   bubbles: Bubble[];
   busy: boolean;
   cancelRef: MutableRefObject<(() => void) | null>;
@@ -78,6 +80,7 @@ export function useChatTurnRuntime({
   activeCustomModel,
   activeModel,
   activeProjectLinkId,
+  activeProjectLink,
   bubbles,
   busy,
   cancelRef,
@@ -204,6 +207,7 @@ export function useChatTurnRuntime({
     sessionId,
     repoPath,
     activeProjectLinkId,
+    activeProjectLink,
     activeModel,
     activeCustomModel,
     mini,

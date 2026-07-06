@@ -90,6 +90,18 @@ describe("gitOperation", () => {
     expect(gitOperationBlockForAction("inspect_changes", state)).toBeUndefined();
   });
 
+  it("gives stash-safe guidance for ordinary index conflicts", () => {
+    const gitDir = makeRepoGitDir();
+    const state = gitOperationStateFromTools(nodePath.dirname(gitDir), "## main\nUU README.md", [
+      probe("git_dir", ".git"),
+    ]);
+
+    expect(gitOperationBlockForAction("prepare_commit", state)).toMatchObject({
+      workflowPhase: "git_conflict",
+      summary: expect.stringContaining("Git keeps the stash entry"),
+    });
+  });
+
   it("summarizes dirty working tree status", () => {
     expect(dirtyWorkingTreeSummary("## main\n M src/app.ts\n?? note.md")).toContain("2 pending changes");
     expect(dirtyWorkingTreeSummary("## main")).toBe("");

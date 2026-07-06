@@ -18,6 +18,136 @@ describe("chat session workflow action derivation", () => {
     expect(derived.approvalProposal?.args).toEqual({ action: "push" });
   });
 
+  it("derives explicit stash apply requests without dropping the stash", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      plannerResult("Shall I apply the latest stash without dropping it?"),
+      [],
+    );
+    expect(derived.approvalProposal?.tool).toBe("git_stash");
+    expect(derived.approvalProposal?.args).toEqual({ action: "apply" });
+  });
+
+  it("keeps user stash apply intent even if the planner proposes pop wording", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      plannerResult("Shall I run git stash pop to restore the latest stash?"),
+      [
+        {
+          role: "user",
+          content: "Apply the latest stash without dropping it.",
+          timestamp: 0,
+        },
+      ],
+    );
+    expect(derived.approvalProposal?.tool).toBe("git_stash");
+    expect(derived.approvalProposal?.args).toEqual({ action: "apply" });
+  });
+
+  it("corrects explicit planner stash pop proposals when the user asked to apply without dropping", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      {
+        ...plannerResult("Ready to restore the latest stash."),
+        approvalProposal: {
+          tool: "git_stash",
+          args: { action: "pop" },
+          description: "Restore latest stash",
+          nextHint: "continue workflow",
+        },
+      },
+      [
+        {
+          role: "user",
+          content: "Apply the latest stash without dropping it.",
+          timestamp: 0,
+        },
+      ],
+    );
+    expect(derived.approvalProposal?.tool).toBe("git_stash");
+    expect(derived.approvalProposal?.args).toEqual({ action: "apply" });
+  });
+
+  it("derives explicit stash pop requests as dropping restores", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      plannerResult("Shall I run git stash pop to restore and drop the latest stash?"),
+      [
+        {
+          role: "user",
+          content: "Pop the latest stash. It is OK to drop it after a successful restore.",
+          timestamp: 0,
+        },
+      ],
+    );
+    expect(derived.approvalProposal?.tool).toBe("git_stash");
+    expect(derived.approvalProposal?.args).toEqual({ action: "pop" });
+  });
+
+  it("does not rewrite explicit user pop intent to apply", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      {
+        ...plannerResult("Ready to restore the latest stash."),
+        approvalProposal: {
+          tool: "git_stash",
+          args: { action: "pop" },
+          description: "Pop latest stash",
+          nextHint: "continue workflow",
+        },
+      },
+      [
+        {
+          role: "user",
+          content: "Pop the latest stash and drop it if the restore succeeds.",
+          timestamp: 0,
+        },
+      ],
+    );
+    expect(derived.approvalProposal?.tool).toBe("git_stash");
+    expect(derived.approvalProposal?.args).toEqual({ action: "pop" });
+  });
+
+  it("derives release tag requests as high-risk Git tag actions", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      plannerResult("Shall I create git tag v1.2.3-test on HEAD with message: \"Test release\"?"),
+      [],
+    );
+    expect(derived.approvalProposal?.tool).toBe("git_tag");
+    expect(derived.approvalProposal?.args).toEqual({
+      name: "v1.2.3-test",
+      ref: "HEAD",
+      message: "Test release",
+      annotated: true,
+    });
+  });
+
+  it("derives explicit tag push requests without treating them as branch pushes", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      plannerResult("Shall I push release tag v1.2.3-test to origin now?"),
+      [
+        { role: "user", content: "Push release tag v1.2.3-test to origin only", timestamp: 0 },
+      ],
+    );
+    expect(derived.approvalProposal?.tool).toBe("git_push_tag");
+    expect(derived.approvalProposal?.args).toEqual({
+      name: "v1.2.3-test",
+      remote: "origin",
+    });
+  });
+
+  it("does not treat pull request label wording as a Git tag push", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      plannerResult("Shall I add the ready-for-review tag to the pull request?"),
+      [],
+    );
+    expect(derived.approvalProposal?.tool).not.toBe("git_push_tag");
+    expect(derived.approvalProposal?.tool).not.toBe("git_tag");
+  });
+
   it("derives explicit branch creation requests", () => {
     const derived = deriveWorkflowPendingAction(
       "s1",
@@ -182,7 +312,33 @@ describe("chat session workflow action derivation", () => {
         { role: "tool", content: "failed", timestamp: 1, toolName: "git_push", toolOk: false },
       ],
     );
-    expect(derived.approvalProposal?.tool).toBe("git_rebase");
+    expect(derived.approvalProposal?.tool).toBe("git_pull");
+    expect(derived.approvalProposal?.args).toMatchObject({
+      remote: "origin",
+      rebase: true,
+    });
+  });
+
+  it("keeps an explicit origin branch on natural-language pull approvals", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      plannerResult("I can pull the latest changes with rebase before any push. Shall I proceed?"),
+      [
+        {
+          role: "user",
+          content: "Pull latest from origin main with rebase. Do not push, stage, commit, or create a PR.",
+          timestamp: 0,
+        },
+      ],
+    );
+
+    expect(derived.approvalProposal?.tool).toBe("git_pull");
+    expect(derived.approvalProposal?.args).toEqual({
+      remote: "origin",
+      branch: "main",
+      rebase: true,
+      ffOnly: false,
+    });
   });
 
   it("blocks pull/rebase recovery when push was outside the user's requested scope", () => {

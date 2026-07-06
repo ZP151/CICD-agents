@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   AzureTableProjectLinkStore,
   createProjectLink,
+  KeyVaultSecrets,
   resetSettingsForTests,
 } from "@mergepilot/core";
 import { buildApp } from "../src/server.js";
@@ -23,6 +24,7 @@ beforeAll(() => {
   process.env.AZURE_COSMOS_ENDPOINT = "";
   process.env.AZURE_STORAGE_ACCOUNT = "";
   process.env.AZURE_KEYVAULT_URL = "";
+  process.env.MERGEPILOT_SECRET_SOURCE = "";
   resetSettingsForTests();
 });
 
@@ -30,6 +32,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
   process.env.AZURE_STORAGE_ACCOUNT = "";
   process.env.AZURE_KEYVAULT_URL = "";
+  process.env.MERGEPILOT_SECRET_SOURCE = "";
   resetSettingsForTests();
   if (app) {
     await app.close();
@@ -52,14 +55,27 @@ describe("daemon Project Link routes", () => {
         adoOrgUrl: "https://dev.azure.com/demo-org",
         adoProject: "Agents",
         adoRepoName: "mergepilot",
+        adoPipelineId: "12",
+        adoPipelineName: "MergePilot CI",
       },
     });
     expect(created.statusCode).toBe(201);
-    const body = created.json() as { id: string; name: string; adoRepoName: string };
-    expect(body).toMatchObject({ name: "Official Project Link", adoRepoName: "mergepilot" });
+    const body = created.json() as {
+      id: string;
+      name: string;
+      adoRepoName: string;
+      adoPipelineId: string;
+      adoPipelineName: string;
+    };
+    expect(body).toMatchObject({
+      name: "Official Project Link",
+      adoRepoName: "mergepilot",
+      adoPipelineId: "12",
+      adoPipelineName: "MergePilot CI",
+    });
 
     const listed = await app.inject({ method: "GET", url: "/project-links" });
-    expect(listed.statusCode).toBe(200);
+    expect(listed.statusCode, listed.body).toBe(200);
     expect(listed.json()).toEqual(expect.arrayContaining([expect.objectContaining({ id: body.id })]));
 
     const legacyRead = await app.inject({ method: "GET", url: `/project-links/${body.id}` });
@@ -69,10 +85,19 @@ describe("daemon Project Link routes", () => {
     const updated = await app.inject({
       method: "PUT",
       url: `/project-links/${body.id}`,
-      payload: { adoRepoName: "mergepilot-renamed" },
+      payload: {
+        adoRepoName: "mergepilot-renamed",
+        adoPipelineId: "34",
+        adoPipelineName: "MergePilot Release",
+      },
     });
     expect(updated.statusCode).toBe(200);
-    expect(updated.json()).toMatchObject({ id: body.id, adoRepoName: "mergepilot-renamed" });
+    expect(updated.json()).toMatchObject({
+      id: body.id,
+      adoRepoName: "mergepilot-renamed",
+      adoPipelineId: "34",
+      adoPipelineName: "MergePilot Release",
+    });
 
     const deleted = await app.inject({ method: "DELETE", url: `/project-links/${body.id}` });
     expect(deleted.statusCode).toBe(200);
@@ -108,8 +133,86 @@ describe("daemon Project Link routes", () => {
     app = await buildApp();
     const listed = await app.inject({ method: "GET", url: "/project-links" });
 
-    expect(listed.statusCode).toBe(200);
+    expect(listed.statusCode, listed.body).toBe(200);
     expect(listed.json()).toEqual(expect.arrayContaining([expect.objectContaining({ id: local.id })]));
+  });
+
+  it("falls back to local Project Links when Azure Table consent is missing", async () => {
+    const local = createProjectLink(tmpDataDir, {
+      name: "Local Consent Fallback Link",
+      repoPath: process.cwd(),
+      defaultBranch: "main",
+      targetBranch: "main",
+      adoOrgUrl: "https://dev.azure.com/demo-org",
+      adoProject: "Agents",
+      adoRepoName: "mergepilot",
+      adoPat: "",
+      adoPipelineId: "",
+      adoPipelineName: "",
+      adoMcpEnabled: false,
+      adoMcpCommand: "",
+      adoMcpAuthentication: "",
+      adoMcpDomains: "repositories,pipelines,work-items",
+      projectTemplate: "",
+      buildCommand: "",
+      testCommand: "",
+    });
+    process.env.AZURE_STORAGE_ACCOUNT = "demoaccount";
+    resetSettingsForTests();
+    vi.spyOn(AzureTableProjectLinkStore.prototype, "list").mockRejectedValue(
+      new Error(
+        "invalid_grant: AADSTS65001: The user or administrator has not consented to use the application named 'DevCICDAgent'.",
+      ),
+    );
+
+    app = await buildApp();
+    const listed = await app.inject({ method: "GET", url: "/project-links" });
+
+    expect(listed.statusCode, listed.body).toBe(200);
+    expect(listed.json()).toEqual(expect.arrayContaining([expect.objectContaining({ id: local.id })]));
+  });
+
+  it("does not require Key Vault PAT lookup when local env secrets are selected", async () => {
+    process.env.AZURE_STORAGE_ACCOUNT = "demoaccount";
+    process.env.AZURE_KEYVAULT_URL = "https://devagentkv001.vault.azure.net/";
+    process.env.MERGEPILOT_SECRET_SOURCE = "local_env";
+    resetSettingsForTests();
+    vi.spyOn(AzureTableProjectLinkStore.prototype, "list").mockResolvedValue([
+      {
+        id: "cloud-link",
+        name: "Cloud Project Link",
+        createdAt: 1,
+        updatedAt: 2,
+        repoPath: process.cwd(),
+        defaultBranch: "main",
+        targetBranch: "main",
+        adoOrgUrl: "https://dev.azure.com/demo-org",
+        adoProject: "Agents",
+        adoRepoName: "mergepilot",
+        adoPat: "",
+        adoPipelineId: "",
+        adoPipelineName: "",
+        adoMcpEnabled: false,
+        adoMcpCommand: "",
+        adoMcpAuthentication: "",
+        adoMcpDomains: "repositories,pipelines,work-items",
+        projectTemplate: "",
+        buildCommand: "",
+        testCommand: "",
+      },
+    ]);
+    const getPat = vi.spyOn(KeyVaultSecrets.prototype, "getAdoPat").mockRejectedValue(
+      new Error("Key Vault should not be called in local_env mode"),
+    );
+
+    app = await buildApp();
+    const listed = await app.inject({ method: "GET", url: "/project-links" });
+
+    expect(listed.statusCode, listed.body).toBe(200);
+    expect(listed.json()).toEqual([
+      expect.objectContaining({ id: "cloud-link", name: "Cloud Project Link" }),
+    ]);
+    expect(getPat).not.toHaveBeenCalled();
   });
 
   it("discovers Project Link Azure DevOps options through internal ADO logic", async () => {

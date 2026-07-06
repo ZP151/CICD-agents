@@ -12,6 +12,12 @@ describe("SuggestionReplyBar", () => {
     message: "Rerun relevant validation.",
     action: { kind: "workspace_action" as const, action: "run_tests" as const },
   };
+  const recoverySuggestion = {
+    id: "git-abort-rebase",
+    label: "Abort rebase",
+    message: "Abort the in-progress rebase.",
+    action: { kind: "workspace_action" as const, action: "abort_rebase" as const },
+  };
 
   it("renders suggestion buttons", () => {
     const html = renderToStaticMarkup(
@@ -100,5 +106,20 @@ describe("SuggestionReplyBar", () => {
     expect(blockedHtml).toContain("Blocked");
     expect(blockedHtml).toContain("Resolve git conflicts first.");
     expect(blockedHtml).toContain("disabled");
+  });
+
+  it("keeps Git recovery suggestions enabled while workflow is blocked", () => {
+    const html = renderToStaticMarkup(
+      <SuggestionReplyBar
+        suggestions={[recoverySuggestion]}
+        onPick={() => undefined}
+        state={{ blocked: true, blockedReason: "Resolve git conflicts first." }}
+      />,
+    );
+
+    expect(suggestionReplyButtonState(recoverySuggestion, { blocked: true })).toBe("idle");
+    expect(html).toContain('data-suggestion-state="idle"');
+    expect(html).not.toContain("Blocked");
+    expect(html).not.toContain('disabled=""');
   });
 });

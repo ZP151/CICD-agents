@@ -12,6 +12,8 @@ export const BLANK_PROJECT_LINK: ProjectLinkInput = {
   adoOrgUrl: DEFAULT_ADO_ORG_URL,
   adoProject: "",
   adoRepoName: "",
+  adoPipelineId: "",
+  adoPipelineName: "",
   adoPat: "",
   adoMcpEnabled: false,
   adoMcpCommand: "",
@@ -86,6 +88,7 @@ export function ProjectLinkForm({
           onApplyDiscovery={runtime.applyDiscovery}
           onManualProjectChange={runtime.setManualProject}
           onManualRepositoryChange={runtime.setManualRepository}
+          onManualPipelineChange={runtime.setManualPipeline}
         />
 
         <div className="flex items-center gap-3 pb-4">

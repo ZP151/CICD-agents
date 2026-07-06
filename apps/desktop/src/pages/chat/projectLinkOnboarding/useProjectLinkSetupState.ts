@@ -9,10 +9,13 @@ import {
 import {
   DEFAULT_ADO_ORG_URL,
   adoDiscoverySignature,
+  applyAzureDevOpsRemoteSuggestion,
   applyAdoDiscoveryToProjectLinkInput,
   fetchAzureDevOpsRemoteSuggestion,
   fetchGitBranches,
+  pickRecommendedPipeline,
   projectLinkNameFromRepo,
+  shouldRefreshGeneratedProjectLinkName,
   withoutProjectLinkFallbacks,
 } from "../../../projectLinks.js";
 
@@ -24,6 +27,8 @@ export const EMPTY_PROJECT_LINK: ProjectLinkInput = {
   adoOrgUrl: DEFAULT_ADO_ORG_URL,
   adoProject: "",
   adoRepoName: "",
+  adoPipelineId: "",
+  adoPipelineName: "",
   adoPat: "",
   adoMcpEnabled: false,
   adoMcpCommand: "",
@@ -75,7 +80,18 @@ export function useProjectLinkSetupState({
   }, [repoPath]);
 
   const setField = <K extends keyof ProjectLinkInput>(key: K) => (value: ProjectLinkInput[K]) => {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => {
+      if (key === "repoPath" && typeof value === "string") {
+        return {
+          ...current,
+          repoPath: value,
+          name: shouldRefreshGeneratedProjectLinkName(current.name, current.repoPath)
+            ? projectLinkNameFromRepo(value)
+            : current.name,
+        };
+      }
+      return { ...current, [key]: value };
+    });
   };
 
   const loadBranches = useCallback(async (path: string) => {
@@ -103,12 +119,7 @@ export function useProjectLinkSetupState({
       });
     }
     if (remote) {
-      setForm((current) => ({
-        ...current,
-        adoOrgUrl: current.adoOrgUrl || remote.adoOrgUrl,
-        adoProject: current.adoProject || remote.adoProject,
-        adoRepoName: current.adoRepoName || remote.adoRepoName,
-      }));
+      setForm((current) => applyAzureDevOpsRemoteSuggestion(current, remote));
     }
   }, []);
 
@@ -138,6 +149,8 @@ export function useProjectLinkSetupState({
     } else if (kind === "repositories") {
       setDiscovered((current) => ({ ...current, pipelines: [] }));
       setForm((current) => applyAdoDiscoveryToProjectLinkInput(current, kind, option));
+    } else if (kind === "pipelines") {
+      setForm((current) => applyAdoDiscoveryToProjectLinkInput(current, kind, option));
     }
   }, []);
 
@@ -153,6 +166,14 @@ export function useProjectLinkSetupState({
       });
       setDiscovered((current) => ({ ...current, [kind]: result.items }));
       if (result.items.length === 1) applyDiscovery(kind, result.items[0]!);
+      if (kind === "pipelines" && result.items.length > 1) {
+        const recommended = pickRecommendedPipeline(result.items, {
+          repoPath: form.repoPath,
+          adoRepoName: form.adoRepoName,
+          adoProject: form.adoProject,
+        });
+        if (recommended) applyDiscovery(kind, recommended);
+      }
     } catch (err) {
       setDiscoveryError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -175,6 +196,14 @@ export function useProjectLinkSetupState({
     }, 650);
     return () => clearTimeout(timer);
   }, [advanced, form.adoOrgUrl, form.adoProject, runDiscovery]);
+
+  useEffect(() => {
+    if (!advanced || !form.adoOrgUrl.trim() || !form.adoProject.trim() || !form.adoRepoName.trim()) return;
+    const timer = setTimeout(() => {
+      void runDiscovery("pipelines", "auto");
+    }, 650);
+    return () => clearTimeout(timer);
+  }, [advanced, form.adoOrgUrl, form.adoProject, form.adoRepoName, runDiscovery]);
 
   const canSave = form.name.trim().length > 0 && form.repoPath.trim().length > 0;
 

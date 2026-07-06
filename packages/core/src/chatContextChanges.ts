@@ -75,10 +75,13 @@ export function inferChangeSummary(files: ChangedFile[], diffExcerpt = ""): stri
   const signals: string[] = [];
   const lowerDiff = diffExcerpt.toLowerCase();
   if (/\b(auth|token|permission|credential|oauth|pat)\b/.test(lowerDiff)) signals.push("authentication/permission handling");
+  if (/(secret|api[_-]?key|apikey|password|connectionstring|connection string|client[_-]?secret)/.test(lowerDiff)) {
+    signals.push("secret/configuration risk");
+  }
   if (/\b(error|exception|catch|retry|fallback|diagnostic)\b/.test(lowerDiff)) signals.push("error handling or diagnostics");
   if (/\b(validate|validation|required|schema)\b/.test(lowerDiff)) signals.push("validation");
   if (/\b(stream|delta|event|sse)\b/.test(lowerDiff)) signals.push("streaming/event flow");
-  if (/\b(add|stage|commit|push|branch|diff|status)\b/.test(lowerDiff)) signals.push("Git workflow behavior");
+  if (/\b(stage|commit|push|branch|status)\b/.test(lowerDiff)) signals.push("Git workflow behavior");
 
   const areaText = areas.length > 0 ? areas.slice(0, 4).join(", ") : "general code";
   const signalText = signals.length > 0 ? ` Signals in the diff suggest ${signals.slice(0, 4).join(", ")}.` : "";

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <Property Id="OLD_CICD_AGENT_PRODUCTS" Secure="yes" />
+    <Upgrade Id="FAD92C43-A438-5354-9454-9D75AC5AF4DA">
+      <UpgradeVersion
+        Minimum="0.0.0"
+        IncludeMinimum="yes"
+        Maximum="0.5.10"
+        IncludeMaximum="no"
+        MigrateFeatures="yes"
+        Property="OLD_CICD_AGENT_PRODUCTS" />
+    </Upgrade>
+
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="LegacyInstallCleanup" Guid="0F5310F4-9F39-4E99-A8A9-82B71FC50DD2" Win64="yes">
+        <RemoveFile Id="RemoveLegacyDesktopExe" Name="cicd-agent-desktop.exe" On="install" />
+        <RemoveFile Id="RemoveLegacyDaemonExe" Name="cicd-daemon.exe" On="install" />
+        <RemoveFile Id="RemoveLegacyNsisUninstaller" Name="uninstall.exe" On="install" />
+        <RemoveFile Id="RemoveLegacyNsisLog" Name="install.log" On="install" />
+        <RemoveFolder Id="RemoveEmptyLegacyInstallDir" On="install" />
+
+        <RemoveRegistryKey
+          Id="RemoveLegacyNsisUninstallKey"
+          Root="HKLM"
+          Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\MergePilot"
+          Action="removeOnInstall" />
+
+        <RemoveRegistryKey
+          Id="RemoveLegacyNsisWowUninstallKey"
+          Root="HKLM"
+          Key="Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\MergePilot"
+          Action="removeOnInstall" />
+
+        <RegistryValue
+          Root="HKLM"
+          Key="Software\Total eBiz Solutions Pte Ltd\MergePilot"
+          Name="LegacyCleanup"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="ProgramFiles64Folder">
+      <Directory Id="LegacyCicdAgentInstallDir" Name="CICD-Agent">
+        <Component Id="LegacyCicdAgentInstallDirCleanup" Guid="7B19B428-9E0B-40D1-B5B8-F980F27B2AFB" Win64="yes">
+          <RemoveFile Id="RemoveLegacyCicdAgentUninstallShortcut" Name="Uninstall CICD-Agent.lnk" On="install" />
+          <RemoveFile Id="RemoveLegacyCicdAgentDesktopExe" Name="cicd-agent-desktop.exe" On="install" />
+          <RemoveFile Id="RemoveLegacyCicdAgentDaemonExe" Name="cicd-daemon.exe" On="install" />
+          <RemoveFile Id="RemoveLegacyCicdAgentNsisUninstaller" Name="uninstall.exe" On="install" />
+          <RemoveFile Id="RemoveLegacyCicdAgentNsisLog" Name="install.log" On="install" />
+          <RemoveFolder Id="RemoveEmptyLegacyCicdAgentInstallDir" On="install" />
+          <RegistryValue
+            Root="HKLM"
+            Key="Software\Total eBiz Solutions Pte Ltd\MergePilot"
+            Name="LegacyCicdAgentInstallDirCleanup"
+            Type="integer"
+            Value="1"
+            KeyPath="yes" />
+        </Component>
+      </Directory>
+    </DirectoryRef>
+
+    <DirectoryRef Id="ProgramMenuFolder">
+      <Directory Id="LegacyPublisherProgramsFolder" Name="Total eBiz Solutions">
+        <Component Id="LegacyStartMenuCleanup" Guid="5F0389C9-86CE-4579-8B5B-14A3FE5B3EF2" Win64="yes">
+          <RemoveFile Id="RemoveLegacyPublisherStartMenuShortcut" Name="MergePilot.lnk" On="install" />
+          <RemoveFolder Id="RemoveEmptyLegacyPublisherProgramsFolder" On="install" />
+          <RegistryValue
+            Root="HKCU"
+            Key="Software\Total eBiz Solutions Pte Ltd\MergePilot"
+            Name="LegacyStartMenuCleanup"
+            Type="integer"
+            Value="1"
+            KeyPath="yes" />
+        </Component>
+      </Directory>
+    </DirectoryRef>
+  </Fragment>
+</Wix>

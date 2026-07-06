@@ -85,13 +85,14 @@ export class ChatPlanner {
     const capabilitiesByName = buildToolCapabilitiesByName(registeredTools);
     const toolCallsMade: ChatPlannerResult["toolCallsMade"] = [];
     let lastText = "";
+    let streamedVisibleResponse = "";
     let confirmedOnce = false;
     // Track consecutive failures of the same tool to prevent infinite retry loops.
     let toolFailureTracker = { lastFailedTool: "", consecutiveFailCount: 0 };
 
     for (let step = 0; step < this.maxSteps; step++) {
       try {
-        var streamResult = yield* collectPlannerStepStream(this.llm, messages, tools);
+        var streamResult = yield* collectPlannerStepStream(this.llm, messages, tools, streamedVisibleResponse);
       } catch (err) {
         if (err instanceof LLMUnavailableError) {
           yield { type: "error", message: "LLM became unavailable mid-stream." };
@@ -100,6 +101,7 @@ export class ChatPlanner {
         throw err;
       }
       const { accumulated, emittedVisibleResponse, toolFromStream } = streamResult;
+      streamedVisibleResponse = emittedVisibleResponse;
 
       // ── Tool calls ──────────────────────────────────────────────────────────
       if (toolFromStream.length > 0) {

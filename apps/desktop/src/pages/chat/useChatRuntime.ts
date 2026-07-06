@@ -6,6 +6,7 @@ import {
   type ChatEventPayload,
   type ChatHistoryEntry,
   type ChatUiChunk,
+  type ProjectLink,
 } from "../../api.js";
 import type { ComposerImageAttachment } from "./chatAttachments.js";
 import type { ToolCallPartSnapshot } from "../../chatBubbles.js";
@@ -102,6 +103,7 @@ export interface UseChatRuntimeActionsArgs {
   sessionId: string | null;
   repoPath: string;
   activeProjectLinkId: string | null;
+  activeProjectLink: ProjectLink | null;
   activeModel: ConversationModelChoice;
   activeCustomModel: CustomConversationModel | null;
   mini: boolean;
@@ -174,11 +176,13 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
         mimeType: attachment.mimeType,
         dataUrl: attachment.dataUrl,
       })),
+      args.activeProjectLink,
     );
     args.cancelRef.current = cancel;
   }, [
     args.activeCustomModel,
     args.activeModel,
+    args.activeProjectLink,
     args.activeProjectLinkId,
     args.addBubble,
     args.busy,

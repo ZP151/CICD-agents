@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -14,9 +14,22 @@ import {
   shouldInspectGit,
 } from "../src/chatContext.js";
 
+let tempPaths: string[] = [];
+
+function makeTempDir(prefix: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  tempPaths.push(dir);
+  return dir;
+}
+
 function write(file: string, text: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text, "utf8");
+}
+
+function writeBinary(file: string, bytes: number[]): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, Buffer.from(bytes));
 }
 
 function git(repo: string, args: string[]): void {
@@ -28,8 +41,15 @@ describe("chat context", () => {
   beforeEach(() => {
     process.env.AZURE_OPENAI_ENDPOINT = "";
     process.env.AZURE_OPENAI_API_KEY = "";
-    process.env.RUNTIME_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-context-data-"));
+    process.env.RUNTIME_DATA_DIR = makeTempDir("cicd-chat-context-data-");
     resetSettingsForTests();
+  });
+
+  afterEach(() => {
+    for (const tempPath of tempPaths) {
+      fs.rmSync(tempPath, { recursive: true, force: true });
+    }
+    tempPaths = [];
   });
 
   it("does not treat general project understanding as a Git-state request", () => {
@@ -38,7 +58,7 @@ describe("chat context", () => {
   });
 
   it("adds interpretation and diff context for Git-state questions", async () => {
-    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-context-git-repo-"));
+    const repo = makeTempDir("cicd-chat-context-git-repo-");
     git(repo, ["init"]);
     git(repo, ["config", "user.email", "test@example.com"]);
     git(repo, ["config", "user.name", "Test User"]);
@@ -76,8 +96,132 @@ describe("chat context", () => {
     expect(sources[0]?.type === "source_document" ? sources[0].snippet : "").toContain("Retry");
   });
 
+  it("builds a seeded change-review context with risk, test, and security evidence", async () => {
+    const repo = makeTempDir("cicd-chat-context-risk-golden-");
+    git(repo, ["init"]);
+    git(repo, ["config", "user.email", "test@example.com"]);
+    git(repo, ["config", "user.name", "Test User"]);
+    write(
+      path.join(repo, "BotToSharePoint", "Controllers", "ClaimController.cs"),
+      [
+        "public class ClaimController",
+        "{",
+        "  public string SubmitClaim(Claim request)",
+        "  {",
+        "    if (!ModelState.IsValid) return \"invalid\";",
+        "    return SaveClaim(request);",
+        "  }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    write(
+      path.join(repo, "BotToSharePoint", "Common", "CommonFunctions.cs"),
+      [
+        "public static class CommonFunctions",
+        "{",
+        "  public static string ConnectToSharePoint() => \"ok\";",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    write(
+      path.join(repo, "BotToSharePoint", "Web.config"),
+      [
+        "<configuration>",
+        "  <appSettings>",
+        "    <add key=\"SharePointSite\" value=\"https://example\" />",
+        "  </appSettings>",
+        "</configuration>",
+        "",
+      ].join("\n"),
+    );
+    git(repo, ["add", "."]);
+    git(repo, ["commit", "-m", "initial"]);
+
+    write(
+      path.join(repo, "BotToSharePoint", "Controllers", "ClaimController.cs"),
+      [
+        "public class ClaimController",
+        "{",
+        "  public string SubmitClaim(Claim request)",
+        "  {",
+        "    try",
+        "    {",
+        "      return SaveClaim(request);",
+        "    }",
+        "    catch (Exception ex)",
+        "    {",
+        "      throw ex;",
+        "    }",
+        "  }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    write(
+      path.join(repo, "BotToSharePoint", "Web.config"),
+      [
+        "<configuration>",
+        "  <appSettings>",
+        "    <add key=\"SharePointSite\" value=\"https://example\" />",
+        "    <add key=\"AzureOpenAIApiKey\" value=\"TODO_SET_IN_KEY_VAULT\" />",
+        "  </appSettings>",
+        "</configuration>",
+        "",
+      ].join("\n"),
+    );
+
+    const llm = new LLMClient();
+    const bundle = await buildChatContext({
+      repoPath: repo,
+      message: "Review my current changes for correctness, security, and test risk. Read-only only.",
+      llm,
+      projectLink: {
+        buildCommand: "msbuild BotToSharePoint.sln",
+        testCommand: "vstest.console.exe BotToSharePoint.Tests.dll",
+        pipelineName: "ClaimBot_API",
+        targetBranch: "main",
+      },
+      maxChunks: 8,
+    });
+
+    expect(bundle.changedFiles.map((file) => file.path).sort()).toEqual([
+      "BotToSharePoint/Controllers/ClaimController.cs",
+      "BotToSharePoint/Web.config",
+    ]);
+    expect(bundle.changeSummary).toContain("API/controller behavior");
+    expect(bundle.changeSummary).toContain("configuration or CI/CD");
+    expect(bundle.changeSummary).toContain("error handling or diagnostics");
+    expect(bundle.changeSummary).toContain("secret/configuration risk");
+    expect(bundle.changeDiffExcerpt).toContain("throw ex");
+    expect(bundle.changeDiffExcerpt).toContain("AzureOpenAIApiKey");
+
+    const prompt = chatContextToPrompt(bundle, 20000);
+    expect(prompt).toContain("Change interpretation");
+    expect(prompt).toContain("Changed files");
+    expect(prompt).toContain("Diff excerpt for understanding the change");
+    expect(prompt).toContain("Build command: msbuild BotToSharePoint.sln");
+    expect(prompt).toContain("Test command: vstest.console.exe BotToSharePoint.Tests.dll");
+    expect(prompt).toContain("if (!ModelState.IsValid)");
+    expect(prompt).toContain("throw ex");
+    expect(prompt).toContain("AzureOpenAIApiKey");
+
+    const sources = chatContextSources(bundle, 12);
+    expect(sources.some((source) =>
+      source.type === "source_document" &&
+      source.file === "BotToSharePoint/Controllers/ClaimController.cs" &&
+      source.snippet?.includes("throw ex"),
+    )).toBe(true);
+    expect(sources.some((source) =>
+      source.type === "source_document" &&
+      source.file === "BotToSharePoint/Web.config" &&
+      source.snippet?.includes("AzureOpenAIApiKey"),
+    )).toBe(true);
+  });
+
   it("builds repository context without embeddings", async () => {
-    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-context-repo-"));
+    const repo = makeTempDir("cicd-chat-context-repo-");
     write(path.join(repo, "README.md"), "# Demo Agent\n\nThis project streams chat events.");
     write(path.join(repo, "package.json"), JSON.stringify({ name: "demo", scripts: { test: "vitest" } }, null, 2));
     write(
@@ -120,8 +264,124 @@ describe("chat context", () => {
     )).toBe(true);
   });
 
+  it("excludes binary media files from quick-scan source evidence", async () => {
+    const repo = makeTempDir("cicd-chat-context-binary-repo-");
+    write(path.join(repo, "README.md"), "# ClaimBot API\n\nClaim handling runs through BotToSharePoint controllers.");
+    write(
+      path.join(repo, "BotToSharePoint", "Controllers", "OtherClaimsController.cs"),
+      "public class ClaimController { public string ListClaims() => \"claims\"; }\n",
+    );
+    writeBinary(path.join(repo, "BotToSharePoint", "images", "icons", "otherClaims.png"), [
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+      0x49, 0x48, 0x44, 0x52,
+    ]);
+    write(
+      path.join(repo, "BotToSharePoint", "Scripts", "otherClaims.min.js"),
+      "function otherClaims(){return 'minified vendor bundle should not ground architecture answers';}\n",
+    );
+
+    const llm = new LLMClient();
+    const bundle = await buildChatContext({
+      repoPath: repo,
+      message: "Explain the otherClaims ClaimBot project architecture.",
+      llm,
+    });
+
+    expect(bundle.relevantChunks.some((chunk) => chunk.path.endsWith(".png"))).toBe(false);
+    expect(bundle.relevantChunks.some((chunk) => chunk.path.endsWith(".min.js"))).toBe(false);
+    expect(bundle.relevantChunks.some((chunk) => chunk.path.includes("OtherClaimsController.cs"))).toBe(true);
+    const sources = chatContextSources(bundle, 12);
+    expect(sources.some((source) => source.type === "source_document" && source.file?.endsWith(".png"))).toBe(false);
+
+    const prompt = chatContextToPrompt(bundle);
+    expect(prompt).toContain("OtherClaimsController.cs");
+    expect(prompt).not.toContain("otherClaims.png");
+    expect(prompt).not.toContain("otherClaims.min.js");
+    expect(prompt).not.toContain("\uFFFD");
+  });
+
+  it("builds a golden architecture context from concrete project evidence", async () => {
+    const repo = makeTempDir("cicd-chat-context-architecture-golden-");
+    write(
+      path.join(repo, "README.md"),
+      [
+        "# ClaimBot SharePoint API",
+        "",
+        "A .NET Framework Web API for claim submission, OCR extraction, and SharePoint integration.",
+        "Claims enter through BotToSharePoint controllers and are rendered through ASP.NET views.",
+      ].join("\n"),
+    );
+    write(
+      path.join(repo, "azure-pipelines.yml"),
+      [
+        "trigger:",
+        "- main",
+        "steps:",
+        "- task: VSBuild@1",
+        "  inputs:",
+        "    solution: BotToSharePoint.sln",
+      ].join("\n"),
+    );
+    write(
+      path.join(repo, "Web.config"),
+      "<configuration><appSettings><add key=\"SharePointSite\" value=\"https://example\" /></appSettings></configuration>\n",
+    );
+    write(
+      path.join(repo, "BotToSharePoint", "Controllers", "ClaimController.cs"),
+      "public class ClaimController { public string SubmitClaim() => \"claim request accepted\"; }\n",
+    );
+    write(
+      path.join(repo, "BotToSharePoint", "Models", "Project.cs"),
+      "public class Project { public string ClaimNumber { get; set; } = string.Empty; }\n",
+    );
+    write(
+      path.join(repo, "BotToSharePoint", "Views", "Home", "Index.cshtml"),
+      "@model Project\n<h1>Claim intake</h1>\n",
+    );
+    write(
+      path.join(repo, "legacy", "InvoiceClaimsChatbot", "server.py"),
+      "print('stale invoice chatbot context should not explain ClaimBot architecture')\n",
+    );
+
+    const llm = new LLMClient();
+    const bundle = await buildChatContext({
+      repoPath: repo,
+      message: "Explain the ClaimBot claim request flow, views, configuration, pipeline, and project architecture.",
+      llm,
+      projectLink: {
+        buildCommand: "msbuild BotToSharePoint.sln",
+        testCommand: "vstest.console.exe BotToSharePoint.Tests.dll",
+        pipelineName: "ClaimBot_API",
+        targetBranch: "main",
+      },
+      maxChunks: 10,
+    });
+
+    const prompt = chatContextToPrompt(bundle, 20000);
+    expect(prompt).toContain("ClaimBot SharePoint API");
+    expect(prompt).toContain("BotToSharePoint/Controllers/ClaimController.cs");
+    expect(prompt).toContain("BotToSharePoint/Models/Project.cs");
+    expect(prompt).toContain("BotToSharePoint/Views/Home/Index.cshtml");
+    expect(prompt).toContain("Web.config");
+    expect(prompt).toContain("azure-pipelines.yml");
+    expect(prompt).toContain("Pipeline: ClaimBot_API");
+    expect(prompt).toContain("Build command: msbuild BotToSharePoint.sln");
+    expect(prompt).not.toContain("InvoiceClaimsChatbot");
+    expect(prompt).not.toContain("stale invoice chatbot");
+
+    const sourceFiles = chatContextSources(bundle, 16)
+      .filter((source) => source.type === "source_document")
+      .map((source) => source.file);
+    expect(sourceFiles).toContain("README.md");
+    expect(sourceFiles).toContain("BotToSharePoint/Controllers/ClaimController.cs");
+    expect(sourceFiles).toContain("BotToSharePoint/Models/Project.cs");
+    expect(sourceFiles).toContain("BotToSharePoint/Views/Home/Index.cshtml");
+    expect(sourceFiles).toContain("Web.config");
+    expect(sourceFiles).not.toContain("legacy/InvoiceClaimsChatbot/server.py");
+  });
+
   it("reports when a repository index is available", async () => {
-    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-context-indexed-repo-"));
+    const repo = makeTempDir("cicd-chat-context-indexed-repo-");
     write(path.join(repo, "src", "chatSession.ts"), "export function runChat() { return 'indexed chat'; }\n");
 
     const llm = new LLMClient();
@@ -154,7 +414,7 @@ describe("chat context", () => {
   });
 
   it("keeps the file index usable when embedding generation fails", async () => {
-    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-context-embedding-fallback-"));
+    const repo = makeTempDir("cicd-chat-context-embedding-fallback-");
     write(path.join(repo, "src", "server.ts"), "export function startServer() { return 'api'; }\n");
 
     const llm = {

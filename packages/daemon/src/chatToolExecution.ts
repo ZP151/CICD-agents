@@ -2,6 +2,7 @@ import {
   type ChatEvent,
   type PendingToolAction,
   type ToolExecutor,
+  toolResultIndicatesSuccess,
 } from "@mergepilot/core";
 
 export interface ConfirmedToolExecutionResult {
@@ -45,6 +46,7 @@ export async function* streamConfirmedToolExecution(args: {
     toolResult = { error: err instanceof Error ? err.message : String(err) };
   }
 
+  ok = toolResultIndicatesSuccess(toolResult, ok);
   const summary = truncateStr(JSON.stringify(toolResult) ?? "", 300);
   yield { type: "tool_end", name: pending.tool, ok, summary, result: toolResult, toolCallId };
   return { ok, result: toolResult, summary };

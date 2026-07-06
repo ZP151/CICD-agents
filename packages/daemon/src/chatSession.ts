@@ -133,6 +133,11 @@ export class ChatSessionManager {
     return appendBubble(sessionId, bubble);
   }
 
+  async appendUserTurn(sessionId: string, content: string, repoPath: string): Promise<void> {
+    await this.appendBubble(sessionId, { role: "user", content, timestamp: now(), repoPath });
+    await this.appendMessage(sessionId, "user", content);
+  }
+
   private plannerPersistenceAdapters(): PlannerPersistenceAdapters {
     return {
       appendBubble: this.appendBubble.bind(this),

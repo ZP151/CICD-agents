@@ -7,6 +7,12 @@ export function workflowStateMetadata(
   approvalProposal: PendingToolAction | undefined,
   status: ChatWorkflowState["status"],
 ): Pick<ChatWorkflowState, "workflowKind" | "workflowPhase"> {
+  if (status === "running" && approvalProposal?.workflow?.kind) {
+    return {
+      workflowKind: approvalProposal.workflow.kind,
+      workflowPhase: `running_${approvalProposal.workflow.phase}`,
+    };
+  }
   if (approvalProposal?.workflow?.kind === "commit") {
     return {
       workflowKind: "commit",

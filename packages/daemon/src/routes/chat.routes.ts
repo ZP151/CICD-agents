@@ -2,6 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   LLMClient,
+  type ChatEvent,
+  type ChatPlannerResult,
+  type ChatWorkflowState,
   type Settings,
 } from "@mergepilot/core";
 import {
@@ -9,7 +12,9 @@ import {
   refreshChatIndex,
 } from "@mergepilot/core/chatContext";
 import type { ChatSessionManager, InlineLlmConfig, InlineProjectLink } from "../chatSession.js";
+import type { ProjectLinkStoreAdapter } from "../projectLinkStore.js";
 import { createChatSseWriter, isTerminalChatEvent } from "./chatSse.js";
+import type { ChatWorkflowActionPayload } from "./chat-workflow.routes.js";
 
 const MAX_CHAT_IMAGE_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 const CHAT_IMAGE_DATA_URL_PATTERN = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([a-zA-Z0-9+/=\s]+)$/;
@@ -24,7 +29,7 @@ const LlmConfigSchema = z.object({
   openaiModel: z.string().optional(),
 }).optional();
 
-const InlineProjectLinkSchema = z.object({
+const InlineProjectLinkObjectSchema = z.object({
   id: z.string().optional(),
   name: z.string().optional(),
   repoPath: z.string().default(""),
@@ -34,6 +39,8 @@ const InlineProjectLinkSchema = z.object({
   adoProject: z.string().default(""),
   adoRepoName: z.string().default(""),
   adoPat: z.string().default(""),
+  adoPipelineId: z.string().default(""),
+  adoPipelineName: z.string().default(""),
   adoMcpEnabled: z.coerce.boolean().default(false),
   adoMcpCommand: z.string().default(""),
   adoMcpAuthentication: z.string().default(""),
@@ -42,7 +49,12 @@ const InlineProjectLinkSchema = z.object({
   buildCommand: z.string().default(""),
   testCommand: z.string().default(""),
   ignoredGlobs: z.array(z.string()).default([]),
-}).optional();
+});
+
+const InlineProjectLinkSchema = InlineProjectLinkObjectSchema
+  .nullable()
+  .optional()
+  .transform((value) => value ?? undefined);
 
 const ChatImageAttachmentSchema = z.object({
   name: z.string().min(1).max(160),
@@ -111,6 +123,24 @@ interface ChatRouteDependencies {
   chatSessions: ChatSessionManager;
   buildInlineLlmSettings: (override?: InlineLlmConfig) => Settings;
   envSourceLabel: () => string;
+  projectLinkStore?: Pick<ProjectLinkStoreAdapter, "getProjectLinkForRequest">;
+  runWorkflowAction?: (payload: ChatWorkflowActionPayload) => Promise<unknown>;
+}
+
+interface WorkflowToolResult {
+  name: string;
+  command?: string;
+  ok?: boolean;
+  stdout?: string;
+  stderr?: string;
+  returncode?: number;
+}
+
+interface WorkflowActionResult {
+  summary?: string;
+  workflowState?: ChatWorkflowState;
+  tools?: WorkflowToolResult[];
+  artifacts?: ChatPlannerResult["artifacts"];
 }
 
 function inlineProjectLinkToIndexProjectLink(projectLink?: InlineProjectLink) {
@@ -127,6 +157,19 @@ function inlineProjectLinkFromPayload(payload: {
   projectLink?: InlineProjectLink;
 }): InlineProjectLink | undefined {
   return payload.projectLink;
+}
+
+async function resolveProjectLinkForChat(
+  projectLinkId: string | undefined,
+  inlineProjectLink: InlineProjectLink | undefined,
+  projectLinkStore: Pick<ProjectLinkStoreAdapter, "getProjectLinkForRequest"> | undefined,
+): Promise<InlineProjectLink | undefined> {
+  if (!projectLinkId || !projectLinkStore) return inlineProjectLink;
+  const storedProjectLink = await projectLinkStore.getProjectLinkForRequest(
+    projectLinkId,
+    inlineProjectLink,
+  );
+  return storedProjectLink ?? inlineProjectLink;
 }
 
 export function projectLinkIdFromChatPayload(payload: {
@@ -152,9 +195,136 @@ function explainChatSseError(
   return message;
 }
 
+function readonlyWorkflowFromMessage(
+  message: string,
+  projectLink?: InlineProjectLink,
+): Pick<ChatWorkflowActionPayload, "action" | "pullRequestId" | "pipelineId"> | undefined {
+  const text = message.trim();
+  if (!text) return undefined;
+
+  const lower = text.toLowerCase();
+  const lowerWithoutNegativeClauses = lower.replace(/\bdo not\b[^.?!;]*/g, "");
+  const hasReadIntent = /\b(analy[sz]e|inspect|review|summari[sz]e|check|explain|show|status|readiness|why|what'?s)\b/.test(lower);
+  const hasExplicitReadOnly = /\bread[-\s]?only\b|do not (modify|write|request approval)/.test(lower);
+  const hasWriteIntent = /\b(trigger|rerun|queue|start|create|update|push|commit|stage|merge|approve|link)\b/.test(lowerWithoutNegativeClauses) &&
+    !hasExplicitReadOnly;
+  if ((!hasReadIntent && !hasExplicitReadOnly) || hasWriteIntent) return undefined;
+
+  const prMatch = text.match(/\b(?:pr|pull\s+request)\s*#?\s*(\d+)\b/i);
+  if (prMatch?.[1]) {
+    return {
+      action: "inspect_pr_insight",
+      pullRequestId: Number(prMatch[1]),
+    };
+  }
+
+  const localGitAction = readonlyLocalGitWorkflowFromMessage(lower);
+  if (localGitAction) return { action: localGitAction };
+
+  if (!projectLinkHasAdoMapping(projectLink)) return undefined;
+  const pipelineMentioned = /\b(pipeline|build|ci)\b/i.test(text);
+  if (!pipelineMentioned) return undefined;
+  const pipelineMatch = text.match(/\b(?:pipeline|build|ci)(?:\s*(?:#|id)?)?\s*(\d+)?\b/i);
+  const pipelineId = Number(pipelineMatch?.[1] ?? projectLink?.adoPipelineId ?? 0);
+  if (!Number.isFinite(pipelineId) || pipelineId <= 0) return undefined;
+  return {
+    action: "inspect_pipeline",
+    pipelineId,
+  };
+}
+
+function readonlyLocalGitWorkflowFromMessage(
+  lower: string,
+): ChatWorkflowActionPayload["action"] | undefined {
+  const mentionsStagedChanges = /\b(what(?:'s| is)? (?:staged|in the index|will be committed)|staged changes|staged diff|cached diff|commit scope|what will be committed|what would be committed)\b/.test(lower);
+  if (mentionsStagedChanges) return "inspect_staged_changes";
+
+  const mentionsCurrentBranch = /\b(what'?s on this branch|current branch|branch status|branch state|where am i|working tree status)\b/.test(lower);
+  if (mentionsCurrentBranch) return "refresh_branch";
+
+  const mentionsRemoteTarget = /\b(where will (?:this|my|the)?\s*push go|push target|remote target|show remote|configured remotes|where would (?:this|my|the)?\s*push go)\b/.test(lower);
+  if (mentionsRemoteTarget) return "inspect_remote_target";
+
+  const mentionsCurrentChanges = /\b(review my changes|review changes|what changed|current changes|inspect diff|working tree changes|workspace changes|unstaged changes)\b/.test(lower);
+  if (mentionsCurrentChanges) return "inspect_changes";
+
+  return undefined;
+}
+
+function projectLinkHasAdoMapping(projectLink?: InlineProjectLink): boolean {
+  return Boolean(
+    projectLink?.adoOrgUrl?.trim() &&
+    projectLink.adoProject?.trim() &&
+    projectLink.adoRepoName?.trim(),
+  );
+}
+
+function workflowPlannerResult(summary: string, result: WorkflowActionResult): ChatPlannerResult {
+  return {
+    response: summary,
+    riskLevel: "low",
+    actionsTaken: result.workflowState?.completedTools ?? [],
+    suggestions: [],
+    sources: [],
+    artifacts: result.artifacts,
+    toolCallsMade: (result.tools ?? []).map((tool) => ({
+      name: tool.name,
+      args: { command: tool.command ?? tool.name },
+      ok: tool.ok !== false,
+    })),
+    usedLlm: false,
+  };
+}
+
+function workflowToolSummary(tool: WorkflowToolResult): string {
+  if (tool.returncode !== undefined) return tool.returncode === 0 ? "Success" : `Exit code ${tool.returncode}`;
+  return tool.ok === false ? "Failed" : "Success";
+}
+
+function directWorkflowRunningState(
+  directWorkflow: Pick<ChatWorkflowActionPayload, "action" | "pullRequestId" | "pipelineId">,
+): ChatWorkflowState {
+  if (directWorkflow.action === "inspect_pr_insight") {
+    return {
+      status: "running",
+      currentStep: `Inspecting PR #${directWorkflow.pullRequestId}`,
+      completedTools: [],
+      workflowKind: "pr",
+      workflowPhase: "inspecting",
+    };
+  }
+  if (directWorkflow.action === "inspect_pipeline") {
+    return {
+      status: "running",
+      currentStep: `Inspecting pipeline #${directWorkflow.pipelineId}`,
+      completedTools: [],
+      workflowKind: "ci",
+      workflowPhase: "pipeline_inspecting",
+    };
+  }
+  return {
+    status: "running",
+    currentStep: directWorkflow.action === "refresh_branch"
+      ? "Inspecting current branch"
+      : directWorkflow.action === "inspect_staged_changes"
+        ? "Inspecting staged changes"
+        : "Inspecting current changes",
+    completedTools: [],
+    workflowKind: "git",
+    workflowPhase: directWorkflow.action,
+  };
+}
+
 export function registerChatRoutes(
   app: FastifyInstance,
-  { settings, chatSessions, buildInlineLlmSettings, envSourceLabel }: ChatRouteDependencies,
+  {
+    settings,
+    chatSessions,
+    buildInlineLlmSettings,
+    envSourceLabel,
+    projectLinkStore,
+    runWorkflowAction,
+  }: ChatRouteDependencies,
 ): void {
   app.post("/chat/index-status", async (req, reply) => {
     const parsed = ChatIndexSchema.safeParse(req.body);
@@ -190,13 +360,54 @@ export function registerChatRoutes(
 
     const { imageAttachments, message, repoPath, sessionId: existingId, llmConfig } = parsed.data;
     const projectLinkId = projectLinkIdFromChatPayload(parsed.data);
-    const projectLink = inlineProjectLinkFromPayload(parsed.data);
+    const inlineProjectLink = inlineProjectLinkFromPayload(parsed.data);
+    const projectLink = await resolveProjectLinkForChat(projectLinkId, inlineProjectLink, projectLinkStore);
     const sessionId = existingId ?? chatSessions.createSession(repoPath, projectLinkId);
     const sseWriter = createChatSseWriter(reply, sessionId);
+    const directWorkflow = runWorkflowAction
+      ? readonlyWorkflowFromMessage(message, projectLink)
+      : undefined;
 
     return new Promise<void>((resolve) => {
       (async () => {
         try {
+          if (directWorkflow) {
+            const workflowRunner = runWorkflowAction;
+            if (!workflowRunner) return;
+            const storedMessage = imageAttachments.length
+              ? `${message}\n\nAttached images: ${imageAttachments.map((item) => item.name).join(", ")}`.trim()
+              : message;
+            await chatSessions.appendUserTurn(sessionId, storedMessage, repoPath);
+            sseWriter.sendChatEvent({ type: "workflow_state", state: directWorkflowRunningState(directWorkflow) });
+            const result = await workflowRunner({
+              ...directWorkflow,
+              repoPath,
+              sessionId,
+              projectLinkId,
+              projectLink,
+            } as ChatWorkflowActionPayload) as WorkflowActionResult;
+            for (const tool of result.tools ?? []) {
+              const args = { command: tool.command ?? tool.name };
+              sseWriter.sendChatEvent({ type: "tool_start", name: tool.name, args });
+              sseWriter.sendChatEvent({
+                type: "tool_end",
+                name: tool.name,
+                ok: tool.ok !== false,
+                summary: workflowToolSummary(tool),
+                result: tool,
+              });
+            }
+            const summary = result.summary?.trim() || "Workflow inspection completed.";
+            sseWriter.sendChatEvent({ type: "assistant_delta", delta: summary });
+            if (result.workflowState) {
+              sseWriter.sendChatEvent({ type: "workflow_state", state: result.workflowState });
+            }
+            sseWriter.sendChatEvent({ type: "done", result: workflowPlannerResult(summary, result) });
+            sseWriter.end();
+            resolve();
+            return;
+          }
+
           for await (const event of chatSessions.run(sessionId, message, repoPath, projectLinkId, llmConfig, projectLink, imageAttachments)) {
             sseWriter.sendChatEvent(event);
             if (isTerminalChatEvent(event)) {

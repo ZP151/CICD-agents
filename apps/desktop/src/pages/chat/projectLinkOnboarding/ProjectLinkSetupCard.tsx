@@ -58,6 +58,7 @@ export function ProjectLinkSetupCard({
             setDiscoveryError={state.setDiscoveryError}
             setField={state.setField}
             setForm={state.setForm}
+            runDiscovery={state.runDiscovery}
           />
         )}
 

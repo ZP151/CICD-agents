@@ -8,10 +8,12 @@ import {
   listLocalReviewHistory,
   listLocalReviewOperations,
   listReviewQueueItems,
+  compareReviewQueueItems,
   summarizePrInsightArtifactHistory,
   upsertLocalPrInsightArtifact,
   upsertLocalReviewHistory,
   type ReviewOperationKind,
+  type ReviewQueueItem,
 } from "@mergepilot/core";
 import {
   PrInsightArtifactSchema,
@@ -59,16 +61,26 @@ function registerReviewRouteSet(
       });
       return { items, configured: false, storage: "local" as const };
     }
+    const localItems = listLocalReviewHistory({
+      dataDir: settings.dataDir,
+      repository: projectLink.adoRepoName,
+      limit: 100,
+    });
     try {
-      const items = await listReviewQueueItems({
+      const cloudItems = await listReviewQueueItems({
         storageAccount: settings.azureStorageAccount,
         repository: projectLink.adoRepoName,
         limit: 100,
       });
+      const items = mergeReviewQueueItems(cloudItems, localItems);
       return { items, configured: true };
     } catch (err) {
       if (isAzureAuthenticationRequiredError(err)) throw err;
-      return { items: [], configured: true, error: "Azure storage unavailable. Try again later." };
+      return {
+        items: localItems,
+        configured: true,
+        error: "Azure storage unavailable. Showing local review history from this device.",
+      };
     }
   });
 
@@ -207,6 +219,23 @@ function registerReviewRouteSet(
   });
 
   registerReviewDispositionRoutes(app, prefix, { settings, projectLinkStore });
+}
+
+function mergeReviewQueueItems(cloudItems: ReviewQueueItem[], localItems: ReviewQueueItem[]): ReviewQueueItem[] {
+  const merged = new Map<string, ReviewQueueItem>();
+  for (const item of cloudItems) merged.set(reviewQueueKey(item), item);
+  for (const item of localItems) {
+    const key = reviewQueueKey(item);
+    const current = merged.get(key);
+    if (!current || Date.parse(item.lastRunAt || "0") >= Date.parse(current.lastRunAt || "0")) {
+      merged.set(key, item);
+    }
+  }
+  return [...merged.values()].sort(compareReviewQueueItems);
+}
+
+function reviewQueueKey(item: Pick<ReviewQueueItem, "repository" | "pullRequestId">): string {
+  return `${item.repository}/${item.pullRequestId}`;
 }
 
 export function registerReviewRoutes(

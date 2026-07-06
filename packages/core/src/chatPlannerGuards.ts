@@ -69,9 +69,20 @@ export function guardReviewOnlyFinalResult(
 
 export function isReviewOnlyChangeRequest(message: string): boolean {
   const lower = message.toLowerCase();
-  const asksForReview = /\b(review my changes|what changed|inspect diff|review changes|diff|risk before commit|current changes)\b/.test(lower);
+  const asksForReview = /\b(review my changes|what changed|inspect diff|review changes|assess changed files|analy[sz]e changed files|changed files|diff|risk before commit|current changes)\b/.test(lower);
   if (!asksForReview) return false;
-  return !/\b(stage|stage all|stage selected|git add|commit these|commit all|commit my|make a commit|prepare commit|push|publish|create pr|open pull request|pull request|run tests?|build)\b/.test(lower);
+  const writeIntentText = stripNegatedWriteIntents(lower);
+  return !/\b(stage|stage all|stage selected|git add|commit|commit these|commit all|commit my|make a commit|prepare commit|push|publish|create pr|create a pr|open pull request|pull request|run tests?|build)\b/.test(writeIntentText);
+}
+
+function stripNegatedWriteIntents(text: string): string {
+  const writePhrase =
+    "(?:stage|staging|stage all|stage selected|git add|commit|committing|commit these|commit all|commit my|make a commit|prepare commit|push|pushing|publish|publishing|create pr|create a pr|open pull request|pull request|run tests?|build)";
+  const negatedWriteList = new RegExp(
+    `\\b(?:do not|don't|dont|without|no)\\s+${writePhrase}(?:\\s*,\\s*${writePhrase})*(?:\\s*,?\\s*(?:or|and)\\s*${writePhrase})?`,
+    "gi",
+  );
+  return text.replace(negatedWriteList, "");
 }
 
 function reviewOnlyWriteMessage(toolName: string, message: string): string {

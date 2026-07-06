@@ -1,5 +1,5 @@
 import type { ChatToolCall } from "./llm.js";
-import { summarizeToolResult } from "./chatPlannerControl.js";
+import { summarizeToolResult, toolResultIndicatesSuccess } from "./chatPlannerControl.js";
 import type { ToolExecutor } from "./tools/executor.js";
 import type { ChatEvent, ChatPlannerResult } from "./chatPlannerTypes.js";
 
@@ -41,6 +41,7 @@ export async function* executePlannerToolCall(
     toolResult = { error: err instanceof Error ? err.message : String(err) };
   }
 
+  ok = toolResultIndicatesSuccess(toolResult, ok);
   const summary = summarizeToolResult(toolResult, ok);
   yield {
     type: "tool_end",

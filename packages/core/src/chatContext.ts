@@ -22,6 +22,7 @@ import type {
   ChatContextChunk,
   ChatContextProjectLink,
 } from "./chatContextTypes.js";
+import { isTextContextPath } from "./repoFileGuards.js";
 
 export type {
   ChatContextBundle,
@@ -68,14 +69,16 @@ export async function buildChatContext(args: {
       if (args.llm.configured && indexStats.chunksEmbedded > 0) {
         try {
           const hits = await vectors.searchText(args.llm, args.message, maxChunks);
-          relevantChunks = hits.map((hit) => ({
-            path: hit.filePath,
-            startLine: hit.startLine,
-            endLine: hit.endLine,
-            text: hit.text,
-            score: hit.score,
-            reason: "semantic-search",
-          }));
+          relevantChunks = hits
+            .filter((hit) => isTextContextPath(hit.filePath))
+            .map((hit) => ({
+              path: hit.filePath,
+              startLine: hit.startLine,
+              endLine: hit.endLine,
+              text: hit.text,
+              score: hit.score,
+              reason: "semantic-search",
+            }));
           semanticUsed = relevantChunks.length > 0;
         } catch {
           semanticUsed = false;
@@ -103,7 +106,9 @@ export async function buildChatContext(args: {
   return {
     repoSummary: summarizeRepo(repoFiles, 0, repoFiles.length),
     projectStructure,
-    relevantChunks: dedupeChunks([...importantChunks, ...relevantChunks]).slice(0, maxChunks + importantChunks.length),
+    relevantChunks: dedupeChunks([...importantChunks, ...relevantChunks])
+      .filter((chunk) => isTextContextPath(chunk.path))
+      .slice(0, maxChunks + importantChunks.length),
     changedFiles,
     changeSummary: changedFiles.length > 0 ? inferChangeSummary(changedFiles, changeDiffExcerpt) : undefined,
     changeDiffExcerpt,

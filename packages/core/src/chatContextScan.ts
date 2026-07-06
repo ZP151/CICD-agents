@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import fastGlob from "fast-glob";
 import { RepoIndexer } from "./indexer/repoIndexer.js";
+import { decodeTextIfLikelyText, isTextContextPath } from "./repoFileGuards.js";
 import type {
   ChatContextBundle,
   ChatContextChunk,
@@ -36,7 +37,7 @@ const DEFAULT_IGNORED = [
 ];
 
 export async function listQuickRepoFiles(repoPath: string, ignoredGlobs: string[]): Promise<string[]> {
-  return fastGlob("**/*", {
+  const files = await fastGlob("**/*", {
     cwd: repoPath,
     ignore: [...DEFAULT_IGNORED, ...ignoredGlobs],
     onlyFiles: true,
@@ -44,6 +45,7 @@ export async function listQuickRepoFiles(repoPath: string, ignoredGlobs: string[
     followSymbolicLinks: false,
     caseSensitiveMatch: false,
   });
+  return files.filter(isTextContextPath);
 }
 
 export function summarizeRepo(files: string[], indexed: number, seen: number): string {
@@ -100,12 +102,17 @@ export function summarizeProjectStructure(files: string[]): ChatContextBundle["p
 
 export function readImportantFiles(repoPath: string): ChatContextChunk[] {
   const out: ChatContextChunk[] = [];
+  const seenRealPaths = new Set<string>();
   for (const rel of IMPORTANT_FILES) {
     const full = path.join(repoPath, rel);
     try {
       const stat = fs.statSync(full);
       if (!stat.isFile() || stat.size > 16000) continue;
-      const text = fs.readFileSync(full, "utf8");
+      const realPath = fs.realpathSync.native(full).toLowerCase();
+      if (seenRealPaths.has(realPath)) continue;
+      seenRealPaths.add(realPath);
+      const text = decodeTextIfLikelyText(fs.readFileSync(full));
+      if (text === null) continue;
       out.push({
         path: rel,
         startLine: 1,
@@ -140,6 +147,9 @@ export function heuristicChunks(
         if (lower.includes(term)) score += 3;
       }
       if (/readme|package\.json|architecture|chat|planner|agent|server|index/i.test(file)) score += 1;
+      if (/(config|settings|configuration)/i.test(message) && /\.(config|json|ya?ml|toml|props|targets|csproj)$/i.test(file)) score += 2;
+      if (/(architecture|request|flow|entry|controller|model|view)/i.test(message) && /(^|\/)(controllers?|models?|views?|routes?|services?)\//i.test(file)) score += 2;
+      if (/(^|\/)(legacy|archive|archives|backup|deprecated|old)\//i.test(lower)) score -= 4;
       return { file, score };
     })
     .filter((x) => x.score > 0)
@@ -152,7 +162,8 @@ export function heuristicChunks(
     try {
       const stat = fs.statSync(full);
       if (!stat.isFile() || stat.size > 24000) continue;
-      const text = fs.readFileSync(full, "utf8");
+      const text = decodeTextIfLikelyText(fs.readFileSync(full));
+      if (text === null) continue;
       out.push({
         path: file,
         startLine: 1,

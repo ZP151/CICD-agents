@@ -251,6 +251,12 @@ describe("workflow task state", () => {
     expect(workflowStepActionState({ label: "Commit", done: false, active: false }, { busy: true })).toBe("waiting");
     expect(workflowStepActionState({ label: "Done", done: true, active: false }, {})).toBe("done");
     expect(workflowStepActionState({ label: "Blocked", done: false, active: true }, { workflowStatus: "blocked" })).toBe("blocked");
+    expect(workflowStepActionState({
+      label: "Abort rebase",
+      done: false,
+      active: false,
+      action: { type: "abort_rebase" },
+    }, { workflowStatus: "blocked" })).toBe("idle");
 
     expect(gitRecoveryPanelState({
       status: "blocked",

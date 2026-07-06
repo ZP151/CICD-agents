@@ -139,6 +139,7 @@ export function dispatchChatStreamEvent(
         const statusText = statusTextForWorkflowState(ev.state);
         if (statusText !== undefined) adapter.setStatusText(statusText);
       }
+      if (ev.state?.pendingApproval) pauseForApproval(adapter);
       break;
 
     case "approval_required":
@@ -147,6 +148,7 @@ export function dispatchChatStreamEvent(
         adapter.showApprovalRequest(ev.approval);
       }
       adapter.setStatusText("Waiting for approval");
+      pauseForApproval(adapter);
       break;
 
     case "approval_resolved":
@@ -187,6 +189,11 @@ export function dispatchChatStreamEvent(
   }
 
   adapter.setUiChunkStreamAvailable(eventReduction.nextState.uiChunkStreamAvailable);
+}
+
+function pauseForApproval(adapter: ChatStreamDispatcherAdapter): void {
+  adapter.setBusy(false);
+  adapter.clearCancel();
 }
 
 export function uid(): string {

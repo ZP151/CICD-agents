@@ -36,6 +36,12 @@ const ACTION_DERIVERS: Array<{
     buildArgs: (_response, bubbles) => ({ branch: currentBranchFromBubbles(bubbles) }),
   },
   {
+    tool: "git_push_tag",
+    description: "Push Git tag to remote",
+    nextHint: "done",
+    buildArgs: (response) => ({ name: extractTagName(response) ?? "v0.0.0", remote: "origin" }),
+  },
+  {
     tool: "git_create_branch",
     description: "Create branch",
     nextHint: "continue workflow",
@@ -51,8 +57,8 @@ const ACTION_DERIVERS: Array<{
     tool: "git_pull",
     description: "Pull changes from remote",
     nextHint: "continue workflow",
-    buildArgs: (response) => {
-      const ref = extractGitRef(response);
+    buildArgs: (response, bubbles) => {
+      const ref = extractPullBranch(response, bubbles) ?? extractGitRef(response);
       const lower = response.toLowerCase();
       return {
         remote: "origin",
@@ -96,11 +102,30 @@ const ACTION_DERIVERS: Array<{
     tool: "git_stash",
     description: "Stash working-tree changes",
     nextHint: "continue workflow",
-    buildArgs: (response) => {
+    buildArgs: (response, bubbles) => {
+      const userLower = latestUserContent(bubbles).toLowerCase();
       const lower = response.toLowerCase();
+      if (isStashApplyIntent(userLower) || isStashApplyIntent(lower)) {
+        return { action: "apply" };
+      }
       if (lower.includes("pop") || lower.includes("restore")) return { action: "pop" };
       const msg = response.match(/stash(?: message)?:\s*["'`]?([^"'`\n]{4,80})["'`]?/i)?.[1];
       return msg ? { action: "push", message: msg.trim() } : { action: "push" };
+    },
+  },
+  {
+    tool: "git_tag",
+    description: "Create local Git tag",
+    nextHint: "push tag only if requested",
+    buildArgs: (response) => {
+      const name = extractTagName(response) ?? "v0.0.0";
+      const ref = extractGitRef(response) ?? "HEAD";
+      const message = response.match(/\b(?:message|annotation)[:\s]+["'`]([^"'`\n]{3,120})["'`]/i)?.[1];
+      return {
+        name,
+        ref,
+        ...(message ? { message: message.trim(), annotated: true } : {}),
+      };
     },
   },
   {
@@ -135,9 +160,11 @@ export function buildPendingAction(
 
 export function inferWriteToolFromResponse(response: string): string | undefined {
   if (/\b(create|open|raise).{0,20}\b(pull request|pr)\b/.test(response)) return "ado_create_pr";
+  if (isGitTagPushRequest(response)) return "git_push_tag";
+  if (isGitTagRequest(response)) return "git_tag";
+  if (/\bpull\b/.test(response) && !/\bpull request\b/.test(response)) return "git_pull";
   if (/\b(rebase)\b/.test(response)) return "git_rebase";
   if (/\bmerge\b/.test(response)) return "git_merge";
-  if (/\bpull\b/.test(response) && !/\bpull request\b/.test(response)) return "git_pull";
   if (/\b(restore|discard|revert file|unstage)\b/.test(response) && extractMentionedPaths(response).length > 0) return "git_restore";
   if (/\b(stash|shelve)\b/.test(response)) return "git_stash";
   if (/\b(create).{0,20}\bbranch\b|\bnew branch\b/.test(response)) return "git_create_branch";
@@ -175,6 +202,14 @@ function currentBranchFromBubbles(bubbles: StoredBubble[]): string {
   return "HEAD";
 }
 
+function latestUserContent(bubbles: StoredBubble[]): string {
+  return [...bubbles].reverse().find((bubble) => bubble.role === "user")?.content ?? "";
+}
+
+function isStashApplyIntent(text: string): boolean {
+  return /\bapply\b/.test(text) || text.includes("without dropping") || text.includes("keep the stash");
+}
+
 function extractBranchName(response: string): string | undefined {
   return response.match(/\b(?:branch\s+(?:named|called)?|named|called)\s+["'`]?([A-Za-z0-9._/-]{3,80})["'`]?/i)?.[1];
 }
@@ -187,6 +222,55 @@ function extractGitRef(response: string): string | undefined {
     /\bpull\s+["'`]?([A-Za-z0-9._/-]{2,100})["'`]?/i,
     /\b(?:onto|into|from|to|branch|ref)\s+["'`]?([A-Za-z0-9._/-]{2,100})["'`]?/i,
     /\b(origin\/[A-Za-z0-9._/-]{2,100})\b/i,
+  ];
+  for (const pattern of patterns) {
+    const match = response.match(pattern)?.[1];
+    if (match) return match.replace(/[.,;:)]+$/, "");
+  }
+  return undefined;
+}
+
+function extractPullBranch(response: string, bubbles: StoredBubble[]): string | undefined {
+  const texts = [response, latestUserContent(bubbles)];
+  for (const text of texts) {
+    const commandMatch = text.match(/\bgit\s+pull\b(?:\s+--[A-Za-z0-9-]+)*\s+origin\s+([A-Za-z0-9._/-]{2,100})\b/i)?.[1];
+    if (commandMatch) return cleanGitRef(commandMatch);
+
+    const originSlashMatch = text.match(/\borigin\/([A-Za-z0-9._/-]{2,100})\b/i)?.[1];
+    if (originSlashMatch) return cleanGitRef(originSlashMatch);
+
+    const fromOriginMatch = text.match(/\bfrom\s+origin\s+([A-Za-z0-9._/-]{2,100})\b/i)?.[1];
+    if (fromOriginMatch) return cleanGitRef(fromOriginMatch);
+
+    const pullOriginMatch = text.match(/\bpull\b.{0,80}\borigin\s+([A-Za-z0-9._/-]{2,100})\b/i)?.[1];
+    if (pullOriginMatch) return cleanGitRef(pullOriginMatch);
+  }
+  return undefined;
+}
+
+function cleanGitRef(ref: string): string {
+  return ref.replace(/[.,;:)]+$/, "");
+}
+
+function isGitTagRequest(response: string): boolean {
+  if (/\b(pr|pull request)\b.{0,30}\b(tag|label)\b|\b(tag|label)\b.{0,30}\b(pr|pull request)\b/i.test(response)) {
+    return false;
+  }
+  return /\b(?:git\s+tag|release\s+tag|version\s+tag|create\s+(?:a\s+)?tag|add\s+(?:a\s+)?tag|tag\s+(?:the\s+)?(?:release|commit|head))\b/i.test(response);
+}
+
+function isGitTagPushRequest(response: string): boolean {
+  if (/\b(pr|pull request)\b.{0,30}\b(tag|label)\b|\b(tag|label)\b.{0,30}\b(pr|pull request)\b/i.test(response)) {
+    return false;
+  }
+  if (!/\b(push|publish)\b/i.test(response)) return false;
+  return /\b(?:git\s+tag|release\s+tag|version\s+tag|tag)\b/i.test(response) || Boolean(extractTagName(response));
+}
+
+function extractTagName(response: string): string | undefined {
+  const patterns = [
+    /\b(?:git\s+tag|release\s+tag|version\s+tag|create\s+(?:a\s+)?tag|add\s+(?:a\s+)?tag|tag)\s+["'`]?([A-Za-z0-9][A-Za-z0-9._/-]{0,79})["'`]?/i,
+    /\b(v\d+(?:\.\d+){1,3}(?:[-+][A-Za-z0-9._-]+)?)\b/i,
   ];
   for (const pattern of patterns) {
     const match = response.match(pattern)?.[1];

@@ -322,6 +322,7 @@ describe("workspace action Modules", () => {
     expect(workspaceActionFromWelcomeSuggestion("What's on this branch?")).toEqual({ type: "refresh_branch" });
     expect(workspaceActionFromWelcomeSuggestion("Analyze PR insight for this repo")).toEqual({ type: "inspect_pr_insight" });
     expect(workspaceActionFromWelcomeSuggestion("Check the CI/CD pipeline state")).toEqual({ type: "inspect_pipeline" });
+    expect(workspaceActionFromWelcomeSuggestion("Open Pipelines workspace")).toEqual({ type: "inspect_pipeline" });
     expect(workspaceActionFromWelcomeSuggestion("Find the build and test commands")).toEqual({ type: "inspect_architecture_context" });
     expect(workspaceActionFromWelcomeSuggestion("Stage and commit")).toEqual({ type: "prepare_commit", includeUnstaged: true });
     expect(workspaceActionFromWelcomeSuggestion("Run tests")).toEqual({ type: "run_tests" });

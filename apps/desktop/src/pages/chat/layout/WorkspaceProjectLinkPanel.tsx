@@ -30,6 +30,7 @@ export function WorkspaceProjectLinkPanel({
     <div className="mt-2 border-t border-[rgb(var(--app-border))] pt-2">
       {projectLinks.length > 0 ? (
         <select
+          aria-label="Workspace Project Link"
           className="w-full bg-transparent text-xs text-[rgb(var(--app-text-muted))] outline-none"
           value={activeProjectLinkId ?? ""}
           onChange={(event) => onProjectLinkSelect(event.target.value)}

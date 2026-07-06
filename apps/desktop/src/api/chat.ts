@@ -1,6 +1,7 @@
 import { readLlmConfig, readProjectLinkData, type ConversationModelChoice } from "./localSettings.js";
 import { RUNTIME_URL, explainRuntimeError, messageFromErrorBody } from "./runtime.js";
 import { readSseJsonStream } from "./sse.js";
+import type { ProjectLink } from "./projectLinkTypes.js";
 import type {
   ChatCheckpointActivity,
   ChatCheckpointPreview,
@@ -36,6 +37,7 @@ export function chatStream(
   projectLinkId?: string,
   conversationModelChoice: ConversationModelChoice = "built_in",
   imageAttachments: ChatImageAttachmentPayload[] = [],
+  projectLinkData?: ProjectLink | null,
 ): { cancel: () => void } {
   const controller = new AbortController();
 
@@ -47,7 +49,7 @@ export function chatStream(
 
   const llmConfig = readLlmConfig(conversationModelChoice);
   if (llmConfig) body["llmConfig"] = llmConfig;
-  const projectLink = readProjectLinkData(projectLinkId);
+  const projectLink = projectLinkData ?? readProjectLinkData(projectLinkId);
   if (projectLink) body["projectLink"] = projectLink;
   if (imageAttachments.length > 0) body["imageAttachments"] = imageAttachments;
 
@@ -83,6 +85,8 @@ export function confirmAction(
 
   fetch(`${RUNTIME_URL}/chat/${sessionId}/confirm-action`, {
     method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
     signal: controller.signal,
   })
     .then(async (r) => {

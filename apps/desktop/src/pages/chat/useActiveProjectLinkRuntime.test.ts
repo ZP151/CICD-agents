@@ -21,6 +21,8 @@ function projectLink(id: string, repoPath = ""): ProjectLink {
     adoOrgUrl: "",
     adoProject: "",
     adoRepoName: "",
+    adoPipelineId: "",
+    adoPipelineName: "",
     adoPat: "",
     adoMcpEnabled: false,
     adoMcpCommand: "",

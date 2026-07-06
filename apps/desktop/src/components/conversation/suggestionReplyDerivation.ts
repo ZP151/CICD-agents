@@ -82,12 +82,13 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
     }
   };
 
-  const text = [
+  const rawText = [
     context.lastUserText,
     context.lastAssistantText,
     ...(context.metadataSuggestions ?? []),
     ...(context.metadataActions ?? []),
-  ].filter(Boolean).join("\n").toLowerCase();
+  ].filter(Boolean).join("\n");
+  const text = rawText.toLowerCase();
   const actions = new Set((context.metadataActions ?? []).map((action) => action.toLowerCase()));
   const sourceTypes = new Set(context.sourceTypes ?? []);
   const phase = (context.workflowPhase ?? "").toLowerCase();
@@ -119,7 +120,7 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
     });
   }
 
-  addCiSuggestions(context, text, phase, add);
+  addCiSuggestions(context, text, phase, add, rawText);
   addCommitSuggestions(context, phase, add);
   addGitSuggestions(context, phase, add);
   addPrSuggestions(context, text, add);
@@ -176,7 +177,11 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
     });
   }
 
-  if (context.workflowKind !== "commit" && /\b(pr|pull request|policy|work item|pipeline|build|review queue|insight)\b/.test(text)) {
+  if (
+    context.workflowKind !== "commit" &&
+    !phase.includes("pipeline_setup_required") &&
+    /\b(pr|pull request|policy|work item|pipeline|build|review queue|insight)\b/.test(text)
+  ) {
     add("pr-risks", "Check PR risks", "Summarize the main PR risks and what evidence supports them.", {
       kind: "workspace_action",
       action: "inspect_pr_insight",

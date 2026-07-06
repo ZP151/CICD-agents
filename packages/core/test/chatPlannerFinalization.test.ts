@@ -4,6 +4,7 @@ import {
   createToolExecutor,
   fakeChunkedLlm,
   fakeLlm,
+  fakeSequenceLlm,
   fakeStreamingToolCallLlm,
   runPlanner,
 } from "./chatPlannerTestDoubles.js";
@@ -116,6 +117,131 @@ describe("ChatPlanner finalization and visible streaming", () => {
     expect(done.result.finalizationMode).toBe("agent_final");
   });
 
+  it("stops finalization tool-call streaming before malformed duplicate control text", async () => {
+    const response = "The large text is \"MP VISION TEST,\" and the two colored shapes are a blue square and a red circle.";
+    const escapedResponse = JSON.stringify(response).slice(1, -1);
+    const chunks = [
+      `{"response":"${escapedResponse}`,
+      `{\\"response`,
+      `text is \\"MP VISION TEST,\\" and the two colored shapes are a blue square and a red circle.`,
+      "\",\"risk_level\":\"low\",\"actions_taken\":[],\"suggestions\":[]}",
+    ];
+    const planner = new ChatPlanner(fakeStreamingToolCallLlm(CHAT_FINAL_TOOL_NAME, chunks), createToolExecutor(), {
+      maxSteps: 1,
+    });
+    const events = [];
+
+    for await (const event of planner.run("describe image", [], ".", async () => true)) {
+      events.push(event);
+    }
+
+    const deltas = events
+      .filter((event): event is Extract<typeof event, { type: "assistant_delta" }> => event.type === "assistant_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(deltas).toBe(response);
+    expect(deltas).not.toContain("{\"response");
+    expect(deltas).not.toContain("responsetext");
+  });
+
+  it("does not duplicate visible text when prose and agent_final tool deltas arrive together", async () => {
+    const response = "The large text is \"MP VISION TEST,\" and the shapes are a blue square and a red circle.";
+    const finalArgs = JSON.stringify({
+      response,
+      risk_level: "low",
+      actions_taken: [],
+      suggestions: [],
+    });
+    const planner = new ChatPlanner(
+      fakeSequenceLlm([
+        [
+          { type: "delta", delta: response },
+          {
+            type: "tool_call_delta",
+            toolCalls: [{ id: "call_1", name: CHAT_FINAL_TOOL_NAME, arguments: finalArgs }],
+          },
+          {
+            type: "tool_call",
+            toolCalls: [{ id: "call_1", name: CHAT_FINAL_TOOL_NAME, arguments: finalArgs }],
+          },
+          { type: "done", finishReason: "tool_calls" },
+        ],
+      ]),
+      createToolExecutor(),
+      { maxSteps: 1 },
+    );
+    const events = [];
+
+    for await (const event of planner.run("describe image", [], ".", async () => true)) {
+      events.push(event);
+    }
+
+    const deltas = events
+      .filter((event): event is Extract<typeof event, { type: "assistant_delta" }> => event.type === "assistant_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(deltas).toBe(response);
+    expect(deltas).not.toContain("{\"response");
+
+    const done = events.find((event) => event.type === "done");
+    expect(done?.type).toBe("done");
+    if (done?.type === "done") {
+      expect(done.result.response).toBe(response);
+      expect(done.result.streamedResponse).toBe(response);
+      expect(done.result.finalizationMode).toBe("agent_final");
+    }
+  });
+
+  it("does not restream prior prose when a nudged second step returns agent_final", async () => {
+    const response = "The large text is \"MP VISION TEST,\" and the shapes are a blue square and a red circle.";
+    const finalArgs = JSON.stringify({
+      response,
+      risk_level: "low",
+      actions_taken: [],
+      suggestions: [],
+    });
+    const planner = new ChatPlanner(
+      fakeSequenceLlm([
+        [
+          { type: "delta", delta: response },
+          { type: "done", finishReason: "stop" },
+        ],
+        [
+          {
+            type: "tool_call_delta",
+            toolCalls: [{ id: "call_1", name: CHAT_FINAL_TOOL_NAME, arguments: finalArgs }],
+          },
+          {
+            type: "tool_call",
+            toolCalls: [{ id: "call_1", name: CHAT_FINAL_TOOL_NAME, arguments: finalArgs }],
+          },
+          { type: "done", finishReason: "tool_calls" },
+        ],
+      ]),
+      createToolExecutor(),
+      { maxSteps: 2 },
+    );
+    const events = [];
+
+    for await (const event of planner.run("describe image", [], ".", async () => true)) {
+      events.push(event);
+    }
+
+    const deltas = events
+      .filter((event): event is Extract<typeof event, { type: "assistant_delta" }> => event.type === "assistant_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(deltas).toBe(response);
+
+    const done = events.find((event) => event.type === "done");
+    expect(done?.type).toBe("done");
+    if (done?.type === "done") {
+      expect(done.result.response).toBe(response);
+      expect(done.result.streamedResponse).toBe(response);
+      expect(done.result.finalizationMode).toBe("agent_final");
+    }
+  });
+
   it("streams visible prose before the control JSON marker", async () => {
     const chunks = [
       "I checked ",
@@ -144,6 +270,44 @@ describe("ChatPlanner finalization and visible streaming", () => {
       expect(done.result.response).toBe("I checked the project.");
       expect(done.result.actionsTaken).toEqual(["repo_refresh_index"]);
       expect(done.result.finalizationMode).toBe("control_marker");
+    }
+  });
+
+  it("stops visible streaming before unmarked compatibility control JSON", async () => {
+    const chunks = [
+      "The large text is \"MP VISION TEST,\"",
+      " and the two colored shapes are a blue square and a red circle.",
+      "{\"",
+      "response\":\"The large text is \\\"MP VISION TEST,\\\" and the two colored shapes are a blue square and a red circle.\",",
+      "\"risk_level\":\"low\",\"actions_taken\":[],\"suggestions\":[]}",
+    ];
+    const planner = new ChatPlanner(fakeChunkedLlm(chunks), createToolExecutor(), { maxSteps: 1 });
+    const events = [];
+
+    for await (const event of planner.run("describe image", [], ".", async () => true)) {
+      events.push(event);
+    }
+
+    const deltas = events
+      .filter((event): event is Extract<typeof event, { type: "assistant_delta" }> => event.type === "assistant_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(deltas).toBe(
+      "The large text is \"MP VISION TEST,\" and the two colored shapes are a blue square and a red circle.",
+    );
+    expect(deltas).not.toContain("{\"response\"");
+    expect(deltas).not.toContain("risk_level");
+
+    const done = events.find((event) => event.type === "done");
+    expect(done?.type).toBe("done");
+    if (done?.type === "done") {
+      expect(done.result.response).toBe(
+        "The large text is \"MP VISION TEST,\" and the two colored shapes are a blue square and a red circle.",
+      );
+      expect(done.result.streamedResponse).toBe(
+        "The large text is \"MP VISION TEST,\" and the two colored shapes are a blue square and a red circle.",
+      );
+      expect(done.result.finalizationMode).toBe("plain_json");
     }
   });
 

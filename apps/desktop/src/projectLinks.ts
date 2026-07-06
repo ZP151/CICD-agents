@@ -84,11 +84,41 @@ export function projectLinkNameFromRepo(repoPath: string): string {
   return repoName ? `${repoName} link` : "Project link";
 }
 
+export function shouldRefreshGeneratedProjectLinkName(currentName: string, previousRepoPath: string): boolean {
+  const previousGeneratedName = projectLinkNameFromRepo(previousRepoPath);
+  return !currentName.trim() || currentName === "Project link" || currentName === previousGeneratedName;
+}
+
+export function applyAzureDevOpsRemoteSuggestion(
+  form: ProjectLinkInput,
+  remote: AzureDevOpsRemoteSuggestion,
+): ProjectLinkInput {
+  return {
+    ...form,
+    adoOrgUrl:
+      !form.adoOrgUrl.trim() || form.adoOrgUrl.trim() === DEFAULT_ADO_ORG_URL
+        ? remote.adoOrgUrl
+        : form.adoOrgUrl,
+    adoProject: form.adoProject.trim() ? form.adoProject : remote.adoProject,
+    adoRepoName: form.adoRepoName.trim() ? form.adoRepoName : remote.adoRepoName,
+  };
+}
+
 function normalizeToken(value: string): string {
   return value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+function exactRepositoryMatchScore(pipeline: AdoDiscoveryOption, repo: string): number {
+  if (!repo) return 0;
+  const expectedRepo = normalizeToken(repo);
+  const fields = [
+    pipeline.description.match(/\brepo:([^·|\n\r]+)/i)?.[1] ?? "",
+    pipeline.name,
+  ];
+  return fields.some((field) => normalizeToken(field) === expectedRepo) ? 12 : 0;
 }
 
 export function pickRecommendedPipeline(
@@ -105,7 +135,7 @@ export function pickRecommendedPipeline(
   const scored = pipelines
     .map((pipeline) => {
       const haystack = normalizeToken(`${pipeline.name} ${pipeline.description} ${pipeline.url}`);
-      let score = 0;
+      let score = exactRepositoryMatchScore(pipeline, repo);
       if (repo && haystack.includes(repo)) score += 6;
       if (project && haystack.includes(project)) score += 2;
       if (/\b(ci|build|pr|pull request|validation|verify)\b/.test(haystack)) score += 3;
@@ -146,6 +176,13 @@ export function applyAdoDiscoveryToProjectLinkInput(
       adoRepoName: option.name,
     };
   }
+  if (kind === "pipelines") {
+    return {
+      ...form,
+      adoPipelineId: option.id,
+      adoPipelineName: option.name,
+    };
+  }
   return form;
 }
 
@@ -161,6 +198,8 @@ export function withProjectLinkInputDefaults<T extends Partial<ProjectLinkInput>
     adoProject: "",
     adoRepoName: "",
     adoPat: "",
+    adoPipelineId: "",
+    adoPipelineName: "",
     adoMcpEnabled: false,
     adoMcpCommand: "",
     adoMcpAuthentication: "",

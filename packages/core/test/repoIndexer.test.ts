@@ -1,4 +1,6 @@
 import { describe, expect, it, afterEach } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import { detectLanguage, isTestPath } from "../src/indexer/parsers.js";
 import { RepoIndexer } from "../src/indexer/repoIndexer.js";
 import type { ProjectTemplate } from "../src/projectTemplates.js";
@@ -62,6 +64,21 @@ describe("RepoIndexer", () => {
     const files = await idx.listRepoFiles();
     expect(files).toContain("app.py");
     expect(files).not.toContain("test_app.py");
+    idx.close();
+  });
+
+  it("skips binary content even when the extension looks indexable", async () => {
+    env = makeFixtureRepo();
+    fs.writeFileSync(
+      path.join(env.repoPath, "BinaryController.cs"),
+      Buffer.from([0x00, 0x01, 0x02, 0x03, 0xff, 0xfe, 0xfd]),
+    );
+
+    const idx = new RepoIndexer(env.repoPath);
+    const stats = await idx.update();
+
+    expect(stats.filesSkipped).toBeGreaterThan(0);
+    expect(idx.symbolsInFile("BinaryController.cs")).toEqual([]);
     idx.close();
   });
 });

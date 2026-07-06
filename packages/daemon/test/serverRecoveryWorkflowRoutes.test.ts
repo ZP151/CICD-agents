@@ -57,6 +57,42 @@ function createDivergedAppConfig(repo: string, git: ReturnType<typeof initRepo>[
   git(["commit", "-am", "feat: main change"]);
 }
 
+function initRemoteRebaseConflictRepo(prefix: string) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const origin = path.join(root, "origin.git");
+  const repo = path.join(root, "work");
+  const other = path.join(root, "other");
+  fs.mkdirSync(repo);
+  fs.mkdirSync(other);
+  const run = (cwd: string, args: string[], expectedStatus = 0) => {
+    const result = spawnSync("git", args, { cwd, encoding: "utf8" });
+    expect(result.status, `${cwd}\n${args.join(" ")}\n${result.stdout}\n${result.stderr}`).toBe(expectedStatus);
+    return result;
+  };
+  run(root, ["init", "--bare", origin]);
+  run(repo, ["init", "-b", "main"]);
+  run(repo, ["config", "user.email", "mergepilot@example.test"]);
+  run(repo, ["config", "user.name", "MergePilot"]);
+  fs.writeFileSync(path.join(repo, "app.config"), "mode=base\nshared=base\n", "utf8");
+  run(repo, ["add", "app.config"]);
+  run(repo, ["commit", "-m", "chore: base"]);
+  run(repo, ["remote", "add", "origin", origin]);
+  run(repo, ["push", "-u", "origin", "main"]);
+
+  run(root, ["clone", origin, other]);
+  run(other, ["checkout", "main"]);
+  run(other, ["config", "user.email", "mergepilot@example.test"]);
+  run(other, ["config", "user.name", "MergePilot"]);
+
+  fs.writeFileSync(path.join(repo, "app.config"), "mode=base\nshared=local\n", "utf8");
+  run(repo, ["commit", "-am", "feat: local change"]);
+  fs.writeFileSync(path.join(other, "app.config"), "mode=base\nshared=remote\n", "utf8");
+  run(other, ["commit", "-am", "feat: remote change"]);
+  run(other, ["push", "origin", "main"]);
+  run(repo, ["fetch", "origin"]);
+  return { repo, git: (args: string[], expectedStatus = 0) => run(repo, args, expectedStatus) };
+}
+
 describe("daemon recovery workflow routes", () => {
   it("blocks normal commit workflow actions while a merge conflict is unresolved", async () => {
     app = await buildApp();
@@ -275,6 +311,55 @@ describe("daemon recovery workflow routes", () => {
     expect(done?.result?.usedLlm).toBe(false);
     expect(done?.result?.response).toContain("conflict file");
     expect(git(["status", "--porcelain=v1"]).stdout).toContain("M  app.config");
+  });
+
+  it("marks a failed approved pull rebase as blocked recovery state", async () => {
+    app = await buildApp();
+    const { repo, git } = initRemoteRebaseConflictRepo("cicd-chat-workflow-pull-rebase-conflict-");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: { action: "sync_branch_rebase", repoPath: repo, branch: "main" },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as {
+      sessionId: string;
+      workflowState: {
+        status: string;
+        pendingApproval?: { action: { tool: string; args: Record<string, unknown> } };
+      };
+    };
+    expect(body.workflowState.status).toBe("waiting_for_approval");
+    expect(body.workflowState.pendingApproval?.action.tool).toBe("git_pull");
+    expect(body.workflowState.pendingApproval?.action.args).toMatchObject({
+      remote: "origin",
+      branch: "main",
+      rebase: true,
+    });
+
+    const confirmed = await app.inject({
+      method: "POST",
+      url: `/chat/${body.sessionId}/confirm-action`,
+    });
+    expect(confirmed.statusCode, confirmed.body).toBe(200);
+    const events = parseSse(confirmed.body);
+    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
+      | { state?: { status?: string; workflowKind?: string; workflowPhase?: string; currentStep?: string } }
+      | undefined;
+    const done = events.find((entry) => entry.event === "done")?.data as
+      | { result?: { usedLlm?: boolean; response?: string; toolCallsMade?: Array<{ ok?: boolean }> } }
+      | undefined;
+    expect(workflowEvent?.state?.status).toBe("blocked");
+    expect(workflowEvent?.state?.workflowKind).toBe("git");
+    expect(workflowEvent?.state?.workflowPhase).toBe("rebase_conflict");
+    expect(workflowEvent?.state?.currentStep).toContain("unresolved conflicts");
+    expect(done?.result?.usedLlm).toBe(false);
+    expect(done?.result?.response).toContain("unresolved conflicts");
+    expect(done?.result?.toolCallsMade?.[0]?.ok).toBe(false);
+    expect(git(["status", "--porcelain=v1"]).stdout).toContain("UU app.config");
+    git(["rebase", "--abort"]);
   });
 });
 

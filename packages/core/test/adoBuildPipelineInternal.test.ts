@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   getAzureBuildLogExcerpt,
+  getAzureBuildTimeline,
   getAzurePipelineRun,
   listAzureBuildDefinitions,
   listAzureBuilds,
@@ -158,7 +159,7 @@ describe("internal Azure DevOps build and pipeline ports", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://dev.azure.com/demo-org/Agents/_apis/build/builds/77/logs/9?api-version=7.1-preview.7",
+      "https://dev.azure.com/demo-org/Agents/_apis/build/builds/77/logs/9?api-version=7.1",
       expect.objectContaining({
         redirect: "manual",
         headers: expect.objectContaining({ Accept: "text/plain" }),
@@ -173,5 +174,68 @@ describe("internal Azure DevOps build and pipeline ports", () => {
     expect(excerpt.startLine).toBeGreaterThan(1);
     expect(excerpt.excerpt).toContain("AssertionError: expected true to be false");
     expect(excerpt.excerpt.split("\n")).not.toContain("noise line 1");
+  });
+
+  it("redacts secret-like values from diagnostic build log excerpts", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        [
+          "Starting build",
+          "AZURE_OPENAI_API_KEY=raw-aoai-secret-1234567890",
+          "client_secret=raw-client-secret-1234567890",
+          "Authorization: Bearer raw-pipeline-token-1234567890",
+          "##[error]Build failed",
+        ].join("\n"),
+        {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        },
+      ),
+    );
+
+    const excerpt = await getAzureBuildLogExcerpt({
+      organization: "demo-org",
+      project: "Agents",
+      buildId: 77,
+      logId: 9,
+      pat: "pat",
+    });
+
+    expect(excerpt.excerpt).not.toContain("raw-aoai-secret-1234567890");
+    expect(excerpt.excerpt).not.toContain("raw-client-secret-1234567890");
+    expect(excerpt.excerpt).not.toContain("raw-pipeline-token-1234567890");
+    expect(excerpt.excerpt).toContain("***REDACTED***");
+  });
+
+  it("uses the stable Build API version for timeline diagnostics", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
+      records: [
+        {
+          id: "task-1",
+          type: "Task",
+          name: "VSBuild",
+          state: "completed",
+          result: "failed",
+          log: { id: 9, url: "https://ado/log/9" },
+          issues: [{ type: "error", category: "General", message: "MSBuild failed" }],
+        },
+      ],
+    }));
+
+    const timeline = await getAzureBuildTimeline({
+      organization: "demo-org",
+      project: "Agents",
+      buildId: 77,
+      auth: { mode: "oauth", header: "Bearer desktop-token" },
+    });
+
+    expect(timeline.failedRecords).toHaveLength(1);
+    expect(timeline.errorIssues[0]?.message).toBe("MSBuild failed");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://dev.azure.com/demo-org/Agents/_apis/build/builds/77/timeline?api-version=7.1",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer desktop-token" }),
+      }),
+    );
   });
 });

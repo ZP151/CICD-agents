@@ -24,7 +24,7 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
   const location = useLocation();
   const pageState = useChatPageState(location.search);
   const panelRuntime = useResizableChatPanels({ mini });
-  const { projectLinks: availableProjectLinks, createProjectLink } = useAppData();
+  const { projectLinks: availableProjectLinks, createProjectLink, updateProjectLink } = useAppData();
   const scrollRuntime = useChatScrollFollow(pageState.bubbles);
 
   const focusComposer = useCallback(() => {
@@ -85,6 +85,7 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
     activeCustomModel: readModel.activeCustomModel,
     activeModel: readModel.activeModel,
     activeProjectLinkId: activeProjectLinkRuntime.activeProjectLinkId,
+    activeProjectLink: activeProjectLinkRuntime.activeProjectLink,
     bubbles: pageState.bubbles,
     busy: pageState.busy,
     cancelRef: pageState.cancelRef,
@@ -137,6 +138,7 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
   });
 
   const suggestionRuntime = useChatSuggestionRuntime({
+    activeProjectLinkId: activeProjectLinkRuntime.activeProjectLinkId,
     busy: pageState.busy,
     focusComposer,
     queuedSuggestion: pageState.queuedSuggestion,
@@ -144,6 +146,7 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
     setInput: pageState.setInput,
     setQueuedSuggestion: pageState.setQueuedSuggestion,
     setStatusText: pageState.setStatusText,
+    updateProjectLink,
     workflowStatus: pageState.workflowState?.status,
   });
 

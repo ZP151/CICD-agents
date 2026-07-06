@@ -295,6 +295,7 @@ export function summarizeWorkspaceWorkflow(action: string, args: {
     lines.push("Git status: clean");
   }
   if (args.changedFiles.length > 0) lines.push(`Changed files: ${args.changedFiles.slice(0, 12).join(", ")}${args.changedFiles.length > 12 ? ", ..." : ""}`);
+  if (action === "inspect_changes") lines.push(...changeReviewRiskLines(args.changedFiles));
   if (args.diffStat) lines.push(args.diffStat);
   if (action === "run_tests") lines.push("Validation: waiting to run tests after approval.");
   if (action === "run_build") lines.push("Validation: waiting to run build after approval.");
@@ -358,6 +359,19 @@ function changeScopeSummaryLines(files: string[]): string[] {
     lines.push(`- ${scope}: ${preview}${scopedFiles.length > 5 ? ", ..." : ""}`);
   }
   return lines;
+}
+
+function changeReviewRiskLines(files: string[]): string[] {
+  const normalized = files.map((file) => file.replace(/\\/g, "/")).filter(Boolean);
+  const sensitiveConfigFiles = normalized.filter((file) =>
+    /(^|\/)(\.env[^/]*|appsettings[^/]*\.json|web\.config|.*config\.(json|ya?ml|toml|xml)|.*secret.*|.*credential.*|.*key.*)$/i.test(file) ||
+    /(^|\/)(config|settings|secrets?)\//i.test(file)
+  );
+  if (sensitiveConfigFiles.length === 0) return [];
+  const preview = sensitiveConfigFiles.slice(0, 5).join(", ");
+  return [
+    `Security/config risk: ${preview}${sensitiveConfigFiles.length > 5 ? ", ..." : ""} may contain secret, credential, API key, token, or environment configuration changes. Review the detailed diff before committing.`,
+  ];
 }
 
 function changeScopeForFile(file: string): string {

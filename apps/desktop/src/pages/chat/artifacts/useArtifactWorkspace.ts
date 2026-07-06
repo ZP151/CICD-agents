@@ -187,9 +187,6 @@ export function useArtifactWorkspace({
           [artifactId]: { status: "error", message },
         }));
       });
-    return () => {
-      if (artifactLookupRequestRef.current === requestId) artifactLookupRequestRef.current += 1;
-    };
   }, [activeProjectLinkId, artifactLookupState, persistedPrInsightArtifactIds, selectedArtifact, selectedArtifactId]);
 
   return {

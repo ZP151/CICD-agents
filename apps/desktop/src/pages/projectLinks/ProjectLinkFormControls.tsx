@@ -145,7 +145,7 @@ export function ProjectDiscoveryField({
   onApply,
   onManualChange,
 }: {
-  kind: "projects" | "repositories";
+  kind: AdoDiscoveryKind;
   label: string;
   options: AdoDiscoveryOption[];
   value: string;

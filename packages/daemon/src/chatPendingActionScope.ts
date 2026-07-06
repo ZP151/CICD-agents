@@ -9,7 +9,7 @@ export function isProposalWithinUserScope(
   args: Record<string, unknown> = {},
 ): boolean {
   if (isGitWriteBlockedByConflict(tool, args, bubbles)) return false;
-  if (tool === "git_push") return userScopeAllowsGitStep(bubbles, "push");
+  if (tool === "git_push" || tool === "git_push_tag") return userScopeAllowsGitStep(bubbles, "push");
   if (tool === "git_pull") return userScopeAllowsGitStep(bubbles, "pull") || hasInScopeFailedPush(bubbles);
   if (tool === "git_rebase") return userScopeAllowsGitStep(bubbles, "rebase") || hasInScopeFailedPush(bubbles);
   if (tool === "ado_create_pr") return userScopeAllowsAdoStep(bubbles, "pr");
@@ -24,7 +24,7 @@ export function isToolWithinChatMessageScope(tool: string, messages: ChatMessage
     .map((message) => message.content)
     .join("\n")
     .toLowerCase();
-  if (tool === "git_push") return /\b(push|publish|remote|pr|pull request)\b/.test(userText);
+  if (tool === "git_push" || tool === "git_push_tag") return /\b(push|publish|remote|pr|pull request)\b/.test(userText);
   if (tool === "git_pull") return /\b(pull|sync|latest|update|behind|rebase|push|publish|remote)\b/.test(userText);
   if (tool === "git_rebase") return /\b(rebase|sync|latest|update|behind|push|publish|remote)\b/.test(userText);
   if (!["ado_create_pr", "ado_trigger_pipeline"].includes(tool) && !/work_item|workitem/.test(tool)) return true;

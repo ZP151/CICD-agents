@@ -20,6 +20,8 @@ export interface ProjectLink {
   adoProject: string;
   adoRepoName: string;
   adoPat: string;
+  adoPipelineId: string;
+  adoPipelineName: string;
 
   // Optional Azure DevOps MCP bridge. Disabled by default.
   adoMcpEnabled: boolean;
@@ -38,6 +40,14 @@ export interface ProjectLink {
 export type ProjectLinkInput = Omit<ProjectLink, "id" | "createdAt" | "updatedAt">;
 
 type ProjectLinkStore = Record<string, ProjectLink>;
+
+function normalizeProjectLink(projectLink: ProjectLink): ProjectLink {
+  return {
+    ...projectLink,
+    adoPipelineId: projectLink.adoPipelineId ?? "",
+    adoPipelineName: projectLink.adoPipelineName ?? "",
+  };
+}
 
 function projectLinkStorePath(dataDir: string): string {
   return path.join(dataDir, "project-links.json");
@@ -66,12 +76,14 @@ function nowSec(): number {
 /** List all Project Links, newest-updated first. */
 export function listProjectLinks(dataDir: string): ProjectLink[] {
   return Object.values(loadProjectLinkStore(dataDir))
+    .map(normalizeProjectLink)
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 /** Get a single Project Link by id, or null if not found. */
 export function getProjectLink(dataDir: string, id: string): ProjectLink | null {
-  return loadProjectLinkStore(dataDir)[id] ?? null;
+  const projectLink = loadProjectLinkStore(dataDir)[id];
+  return projectLink ? normalizeProjectLink(projectLink) : null;
 }
 
 /** Create a new Project Link and persist it. */
@@ -120,5 +132,7 @@ export function projectLinkToToolExtra(projectLink: ProjectLink): Record<string,
     ado_project: projectLink.adoProject,
     ado_repository: projectLink.adoRepoName,
     ado_target_branch: projectLink.targetBranch,
+    ado_pipeline_id: projectLink.adoPipelineId,
+    ado_pipeline_name: projectLink.adoPipelineName,
   };
 }

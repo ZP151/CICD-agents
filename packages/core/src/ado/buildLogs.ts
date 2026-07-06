@@ -1,7 +1,7 @@
-import { ToolError } from "../tools/executor.js";
+import { redact, ToolError } from "../tools/executor.js";
 import { getAzureDevOpsAuth, type AdoAuth } from "./auth.js";
 import { adoBase, adoFetch } from "./client.js";
-import { API_VERSION_BUILD } from "./constants.js";
+import { API_VERSION_BUILD_DIAGNOSTICS } from "./constants.js";
 
 export interface AzureBuildLogExcerpt {
   buildId: number;
@@ -31,7 +31,7 @@ export async function getAzureBuildLogExcerpt(args: {
     throw new ToolError("ADO organization, project, build ID, and log ID are required to read a build log.");
   }
   const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
-  const params = new URLSearchParams({ "api-version": API_VERSION_BUILD });
+  const params = new URLSearchParams({ "api-version": API_VERSION_BUILD_DIAGNOSTICS });
   const url =
     `${adoBase(org)}/${encodeURIComponent(project)}/_apis/build/builds/${buildId}/logs/${logId}` +
     `?${params.toString()}`;
@@ -63,7 +63,7 @@ function selectBuildLogExcerpt(text: string, maxChars: number): Omit<AzureBuildL
   let start = Math.max(0, anchor - before);
   let end = Math.min(lines.length, anchor + after + 1);
   if (end - start > targetLineCount) start = Math.max(0, end - targetLineCount);
-  let excerpt = lines.slice(start, end).join("\n").trim();
+  let excerpt = redact(lines.slice(start, end).join("\n").trim());
   let charTruncated = false;
   if (excerpt.length > maxChars) {
     excerpt = excerpt.slice(Math.max(0, excerpt.length - maxChars)).trimStart();

@@ -131,6 +131,13 @@ describe("daemon checkpoint and index routes", () => {
   it("returns 400 for malformed chat index request payload", async () => {
     app = await buildApp();
 
+    const noLink = await app.inject({
+      method: "POST",
+      url: "/chat/index-status",
+      payload: { repoPath: process.cwd(), projectLink: null },
+    });
+    expect(noLink.statusCode, noLink.body).toBe(200);
+
     const status = await app.inject({
       method: "POST",
       url: "/chat/index-status",

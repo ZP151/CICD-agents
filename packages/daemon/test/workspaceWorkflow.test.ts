@@ -190,6 +190,19 @@ describe("workspaceWorkflow", () => {
     expect(summary).toContain("Changed files: packages/daemon/src/server.ts");
     expect(summary).toContain("2 files changed");
   });
+
+  it("flags sensitive config files in change review summaries", () => {
+    const summary = summarizeWorkspaceWorkflow("inspect_changes", {
+      currentBranch: "main",
+      statusText: "?? .env.sample",
+      diffStat: "1 file changed, 3 insertions(+)",
+      changedFiles: [".env.sample"],
+    });
+
+    expect(summary).toContain("Changed files: .env.sample");
+    expect(summary).toContain("Security/config risk: .env.sample");
+    expect(summary).toContain("secret, credential, API key, token, or environment configuration");
+  });
 });
 
 function payload(overrides: Partial<ChatWorkflowActionPayload>): ChatWorkflowActionPayload {

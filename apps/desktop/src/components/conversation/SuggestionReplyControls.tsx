@@ -79,7 +79,7 @@ function suggestionButtonClass(action: SuggestionReplyAction, state: SuggestionR
   if (action.kind === "requires_approval") {
     return `${base} border-amber-500/30 bg-amber-500/10 text-[rgb(var(--app-warning))] hover:bg-amber-500/15`;
   }
-  if (action.kind === "workspace_action") {
+  if (action.kind === "workspace_action" || action.kind === "project_link_update") {
     return `${base} border-blue-500/30 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text))] hover:border-blue-500/50 hover:bg-[rgb(var(--app-surface-raised))]`;
   }
   return `${base} border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text-muted))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]`;
@@ -98,7 +98,7 @@ function suggestionActionDotClass(action: SuggestionReplyAction, state: Suggesti
   if (state === "blocked") return "h-1.5 w-1.5 shrink-0 rounded-full bg-[rgb(var(--app-danger))]";
   if (state === "running") return "h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[rgb(var(--app-accent))]";
   if (action.kind === "requires_approval") return "h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500";
-  if (action.kind === "workspace_action") return "h-1.5 w-1.5 shrink-0 rounded-full bg-[rgb(var(--app-accent))]";
+  if (action.kind === "workspace_action" || action.kind === "project_link_update") return "h-1.5 w-1.5 shrink-0 rounded-full bg-[rgb(var(--app-accent))]";
   return "h-1.5 w-1.5 shrink-0 rounded-full bg-[rgb(var(--app-text-faint))]";
 }
 
@@ -112,5 +112,6 @@ function suggestionStateLabel(state: SuggestionReplyButtonState): string {
 function commandActionGlyph(action: SuggestionReplyAction): string {
   if (action.kind === "workspace_action") return "->";
   if (action.kind === "requires_approval") return "!";
+  if (action.kind === "project_link_update") return "+";
   return ">";
 }

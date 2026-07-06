@@ -13,6 +13,7 @@ import {
   existsSync,
   readdirSync,
   readFileSync,
+  writeFileSync,
   statSync,
   rmSync,
 } from "fs";
@@ -26,6 +27,7 @@ const repoRoot = resolve(desktopRoot, "../..");
 const daemonRoot = resolve(repoRoot, "packages/daemon");
 const binariesDir = resolve(desktopRoot, "src-tauri/binaries");
 const coreSchemaPath = resolve(repoRoot, "packages/core/src/db/schema.sql");
+const daemonPackagePath = resolve(daemonRoot, "package.json");
 
 // --------------------------------------------------------------------------
 // Resolve the current platform's Rust target triple (same one Tauri uses)
@@ -227,6 +229,7 @@ const pkgTarget = pkgTargetFor(triple);
 const ext = process.platform === "win32" ? ".exe" : "";
 const sidecarName = `mergepilot-daemon-${triple}${ext}`;
 const outputPath = resolve(binariesDir, sidecarName);
+const targetReleaseSidecarPath = resolve(desktopRoot, "src-tauri/target/release", `mergepilot-daemon${ext}`);
 
 console.log(`\nBuilding sidecar for ${triple} (pkg target: ${pkgTarget})`);
 console.log(`Output: ${outputPath}\n`);
@@ -255,11 +258,20 @@ const stagedDirs = stageNativeModules();
 console.log("\n--- 4/4  pkg package ---");
 const pkgBin = resolve(daemonRoot, "node_modules/.bin/pkg");
 const pkgBinCmd = existsSync(pkgBin + ".cmd") ? `"${pkgBin}.cmd"` : `"${pkgBin}"`;
+const daemonPackage = JSON.parse(readFileSync(daemonPackagePath, "utf8"));
+const pkgConfigPath = resolve(daemonRoot, "pkg.config.json");
+
+// Passing the full daemon package.json to pkg makes it inspect package metadata
+// beyond the asset list and can hang on Windows. Keep the pkg config minimal.
+writeFileSync(
+  pkgConfigPath,
+  JSON.stringify({ pkg: { assets: daemonPackage.pkg?.assets ?? [] } }, null, 2),
+);
 
 try {
   run(
     `${pkgBinCmd} dist/bundle.cjs` +
-      ` --config package.json` +
+      ` --config "${pkgConfigPath}"` +
       ` --target ${pkgTarget}` +
       ` --output "${outputPath}"` +
       ` --compress GZip`,
@@ -268,6 +280,16 @@ try {
 } finally {
   // Remove the staged copies so the working tree stays clean
   cleanupStagedDirs(stagedDirs);
+  try {
+    rmSync(pkgConfigPath, { force: true });
+  } catch {
+    /* ignore */
+  }
+}
+
+if (existsSync(dirname(targetReleaseSidecarPath))) {
+  copyFileSync(outputPath, targetReleaseSidecarPath);
+  console.log(`Synced release sidecar: ${targetReleaseSidecarPath}`);
 }
 
 console.log(`\nSidecar ready: ${outputPath}`);

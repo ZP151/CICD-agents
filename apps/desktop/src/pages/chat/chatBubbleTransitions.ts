@@ -58,7 +58,8 @@ export function showApprovalRequestTransition(
     (bubble) =>
       bubble.kind === "pending_confirm" &&
       bubble.pendingStatus === "waiting" &&
-      bubble.pendingTool === approval.action.tool,
+      bubble.pendingTool === approval.action.tool &&
+      stableJson(bubble.pendingArgs ?? {}) === stableJson(approval.action.args ?? {}),
   );
   if (alreadyWaiting) return prev;
   return [
@@ -74,6 +75,7 @@ export function showApprovalRequestTransition(
       pendingReadiness: approval.action.readiness,
       pendingPreflight: approval.action.preflight,
       pendingStatus: "waiting",
+      riskLevel: approval.riskLevel,
       parts: [
         toolApprovalPartFromSnapshot({
           approvalId: approval.id,
@@ -85,6 +87,20 @@ export function showApprovalRequestTransition(
       ],
     },
   ];
+}
+
+function stableJson(value: unknown): string {
+  return JSON.stringify(sortJsonValue(value));
+}
+
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortJsonValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, sortJsonValue(entry)]),
+  );
 }
 
 export function appendVisibleAssistantDeltaTransition(

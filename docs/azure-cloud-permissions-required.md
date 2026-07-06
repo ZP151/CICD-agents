@@ -53,7 +53,7 @@ The app registration must include these delegated API permissions. After adding 
 
 ### Current App Consent Finding
 
-The app-side permission probe failed with:
+The app-side runtime probe failed cloud Project Link access before the fallback fix with:
 
 ```text
 AADSTS65001: The user or administrator has not consented to use the application with ID '03da33ef-7161-4b27-ae80-3079313f131d' named 'DevCICDAgent'.
@@ -64,7 +64,13 @@ At the time of checking, the app registration only showed:
 - Microsoft Graph `User.Read`
 - Azure DevOps delegated scope
 
-It still needs Azure Storage, Azure Key Vault, and Azure Cosmos DB delegated permissions plus admin consent.
+It still needs Azure Storage, Azure Key Vault, and Azure Cosmos DB delegated permissions plus admin consent before app-side cloud persistence can work directly.
+
+Runtime behavior after the latest fix:
+
+- If cloud Project Link storage fails because DevCICDAgent lacks resource consent, MergePilot falls back to local Project Links instead of returning HTTP 500.
+- If `[secrets].source = "local_env"`, MergePilot does not attempt Key Vault PAT/model-secret lookup for Project Link listing.
+- Key Vault remains optional while local `.env` model secrets are selected.
 
 ## Required User / Group Azure RBAC
 
@@ -89,16 +95,27 @@ Contributor on /subscriptions/a99512b0-3dc5-476f-8f43-d7db40fbc923/resourceGroup
 
 This allows resource visibility and ARM management, but not all required data-plane operations.
 
+Latest live probe: 2026-07-06 05:07 +08:00, run with
+`MERGEPILOT_E2E_LIVE_AZURE=1 .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAzurePermissions.test.ts`.
+
+Azure CLI is signed in as `Zhou.Ping@totalebizsolutions.com`. The default CLI
+subscription is currently `TeBS-Internal Azure Bot`
+(`9e1bd067-1e30-4e20-b29a-f2343141a25e`), but the probe explicitly targets
+subscription `a99512b0-3dc5-476f-8f43-d7db40fbc923` and resource group
+`developmentagent`.
+
 Observed checks:
 
 | Check | Result | Meaning |
 |---|---|---|
 | Storage account ARM read | Passed | User can see `devagentstorage001`. |
-| Storage table list | Passed | User can list table names. |
+| Storage table list | Passed | User can list table `CicdAgentProfiles`. |
 | Storage table entity query | Failed | User needs `Storage Table Data Reader` or `Storage Table Data Contributor`; MergePilot needs Contributor. |
 | Key Vault secret list | Failed with `ForbiddenByRbac` | User needs Key Vault secret data-plane role. |
 | Cosmos DB ARM database list | Passed | User can see Cosmos DB metadata. |
 | Cosmos SQL role assignment list | No assignments found | User still needs Cosmos SQL data-plane role for runtime session reads/writes. |
+| Azure DevOps project/repo/PR/pipeline read | Passed | User can read `tebssg` / `TeBS-ClaimBot` / `ClaimBot_API` metadata with an Azure DevOps token. |
+| Runtime `/project-links` | Passed with local fallback | App returns local Project Links when cloud Table access fails due to missing consent. |
 
 ## Validation Commands
 

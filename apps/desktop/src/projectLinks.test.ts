@@ -3,11 +3,13 @@ import type { ProjectLink } from "./api";
 import {
   ACTIVE_PROJECT_LINK_LS_KEY,
   adoDiscoverySignature,
+  applyAzureDevOpsRemoteSuggestion,
   applyAdoDiscoveryToProjectLinkInput,
   loadStoredActiveProjectLinkId,
   pickRecommendedPipeline,
   resolveActiveProjectLinkId,
   saveStoredActiveProjectLinkId,
+  shouldRefreshGeneratedProjectLinkName,
 } from "./projectLinks";
 
 function installLocalStorage(): void {
@@ -71,9 +73,78 @@ describe("pickRecommendedPipeline", () => {
 
     expect(selected).toMatchObject({ id: "42" });
   });
+
+  it("prefers the pipeline whose discovery metadata matches the selected repository", () => {
+    const selected = pickRecommendedPipeline([
+      {
+        id: "108",
+        name: "TeBS-ClaimBot",
+        description: "\\ · repo:TeBS-ClaimBot · type:TfsGit · yaml:/azure-pipelines.yml",
+        url: "",
+      },
+      {
+        id: "117",
+        name: "ClaimBot_API",
+        description: "\\ · repo:ClaimBot_API · type:TfsGit · yaml:/azure-pipelines.yml",
+        url: "",
+      },
+    ], {
+      repoPath: "C:\\work\\ClaimBot_API",
+      adoRepoName: "ClaimBot_API",
+      adoProject: "TeBS-ClaimBot",
+    });
+
+    expect(selected).toMatchObject({ id: "117", name: "ClaimBot_API" });
+  });
 });
 
 describe("ADO Project Link discovery state", () => {
+  it("refreshes generated Project Link names but preserves user names", () => {
+    expect(shouldRefreshGeneratedProjectLinkName("Project link", "")).toBe(true);
+    expect(shouldRefreshGeneratedProjectLinkName("OldRepo link", "C:\\work\\OldRepo")).toBe(true);
+    expect(shouldRefreshGeneratedProjectLinkName("My custom link", "C:\\work\\OldRepo")).toBe(false);
+  });
+
+  it("applies an ADO remote suggestion over the default organization URL", () => {
+    const next = applyAzureDevOpsRemoteSuggestion({
+      adoOrgUrl: "https://tebssg.visualstudio.com/",
+      adoProject: "",
+      adoRepoName: "",
+    } as ProjectLink, {
+      remoteName: "origin",
+      remoteUrl: "https://dev.azure.com/example/Claims/_git/claimbot_api",
+      adoOrgUrl: "https://dev.azure.com/example/",
+      adoProject: "Claims",
+      adoRepoName: "claimbot_api",
+    });
+
+    expect(next).toMatchObject({
+      adoOrgUrl: "https://dev.azure.com/example/",
+      adoProject: "Claims",
+      adoRepoName: "claimbot_api",
+    });
+  });
+
+  it("keeps user-entered ADO fields when applying a remote suggestion", () => {
+    const next = applyAzureDevOpsRemoteSuggestion({
+      adoOrgUrl: "https://custom.visualstudio.com/",
+      adoProject: "ManualProject",
+      adoRepoName: "ManualRepo",
+    } as ProjectLink, {
+      remoteName: "origin",
+      remoteUrl: "https://dev.azure.com/example/Claims/_git/claimbot_api",
+      adoOrgUrl: "https://dev.azure.com/example/",
+      adoProject: "Claims",
+      adoRepoName: "claimbot_api",
+    });
+
+    expect(next).toMatchObject({
+      adoOrgUrl: "https://custom.visualstudio.com/",
+      adoProject: "ManualProject",
+      adoRepoName: "ManualRepo",
+    });
+  });
+
   it("builds a stable trimmed discovery signature", () => {
     expect(adoDiscoverySignature("repositories", {
       adoOrgUrl: " https://dev.azure.com/demo ",
@@ -101,6 +172,20 @@ describe("ADO Project Link discovery state", () => {
     expect(next).toMatchObject({
       adoProject: "New",
       adoRepoName: "",
+    });
+  });
+
+  it("applies a discovered pipeline id and name", () => {
+    const next = applyAdoDiscoveryToProjectLinkInput({} as ProjectLink, "pipelines", {
+      id: "117",
+      name: "ClaimBot_API",
+      description: "",
+      url: "https://dev.azure.com/example/Claims/_build?definitionId=117",
+    });
+
+    expect(next).toMatchObject({
+      adoPipelineId: "117",
+      adoPipelineName: "ClaimBot_API",
     });
   });
 });

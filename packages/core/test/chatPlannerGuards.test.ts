@@ -38,4 +38,57 @@ describe("chatPlannerGuards", () => {
     expect(guarded.response).not.toContain("› Update");
     expect(guarded.suggestions).toEqual(["Review exception handling"]);
   });
+
+  it("treats explicit do-not-write clauses as review-only scope", () => {
+    const result: ChatPlannerResult = {
+      response: "I reviewed the changes. Would you like me to stage these changes for a commit?",
+      riskLevel: "medium",
+      actionsTaken: ["git_status", "git_diff"],
+      suggestions: ["Stage selected files", "Review exception handling"],
+      toolCallsMade: [
+        { name: "git_status", args: { short: true }, ok: true },
+        { name: "git_diff", args: { context: 5 }, ok: true },
+      ],
+      usedLlm: true,
+      approvalProposal: {
+        tool: "git_add",
+        args: {},
+        description: "Stage all changes",
+      },
+    };
+
+    const guarded = guardReviewOnlyFinalResult(
+      result,
+      "Review my changes. Do not stage, commit, or push.",
+    );
+
+    expect(guarded.approvalProposal).toBeUndefined();
+    expect(guarded.response).not.toContain("Would you like me to stage");
+    expect(guarded.suggestions).toEqual(["Review exception handling"]);
+  });
+
+  it("treats changed-file assessment as review-only scope", () => {
+    const result: ChatPlannerResult = {
+      response: "I assessed the changed files. Would you like me to stage these changes for a commit?",
+      riskLevel: "medium",
+      actionsTaken: ["git_status", "git_diff"],
+      suggestions: ["Stage selected files", "Review exception handling"],
+      toolCallsMade: [],
+      usedLlm: true,
+      approvalProposal: {
+        tool: "git_add",
+        args: {},
+        description: "Stage all changes",
+      },
+    };
+
+    const guarded = guardReviewOnlyFinalResult(
+      result,
+      "Assess changed files for correctness, security, config, tests, and deployment risk. Read-only only.",
+    );
+
+    expect(guarded.approvalProposal).toBeUndefined();
+    expect(guarded.response).not.toContain("Would you like me to stage");
+    expect(guarded.suggestions).toEqual(["Review exception handling"]);
+  });
 });

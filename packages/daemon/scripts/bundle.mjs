@@ -4,6 +4,7 @@
  * so they can be picked up as assets by @yao-pkg/pkg.
  */
 import { build } from "esbuild";
+import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -13,6 +14,8 @@ const root = resolve(__dirname, "..");
 // Match the esbuild target to the running Node version so the bundle is
 // compatible with the Node runtime embedded by pkg.
 const nodeMajor = process.versions.node.split(".")[0];
+const packageJson = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
+const daemonVersion = packageJson.version ?? "0.1.0";
 
 await build({
   entryPoints: [resolve(root, "src/bin.ts")],
@@ -28,6 +31,7 @@ await build({
   // expression as a top-level variable via banner and reference it by name.
   define: {
     "import.meta.url": "__importMetaUrl",
+    "process.env.npm_package_version": JSON.stringify(daemonVersion),
   },
   // Native addons/packages must stay external; pkg embeds their binaries as assets
   // and several of them resolve files relative to their package directory.

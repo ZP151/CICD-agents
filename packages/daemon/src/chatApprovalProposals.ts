@@ -15,6 +15,7 @@ import {
   setStoredApprovalProposal,
   storedApprovalProposal,
 } from "./chatWorkflowState.js";
+import { workflowStateMetadata } from "./chatWorkflowMetadata.js";
 import { saveSession } from "./chatSessionRecords.js";
 
 export interface CreateStoredApprovalProposalInput {
@@ -89,6 +90,9 @@ export async function markStoredApprovalProposalRunning(
     undefined,
     "running",
     pending.tool,
+    "medium",
+    "",
+    workflowStateMetadata(pending, "running"),
   );
   storedSession.workflowState = workflowState;
   await saveSession(storedSession);

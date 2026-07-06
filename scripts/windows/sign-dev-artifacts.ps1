@@ -29,10 +29,11 @@ if (-not $signtool) {
   throw "signtool.exe was not found. Install the Windows SDK with Visual Studio Build Tools."
 }
 
+$version = (Get-Content -LiteralPath (Join-Path $Root "apps\desktop\package.json") -Raw | ConvertFrom-Json).version
 $paths = @(
   "apps\desktop\src-tauri\target\release\mergepilot-desktop.exe",
-  "apps\desktop\src-tauri\target\release\bundle\nsis\CICD-Agent_0.3.0_x64-setup.exe",
-  "apps\desktop\src-tauri\target\release\bundle\msi\CICD-Agent_0.3.0_x64_en-US.msi"
+  "apps\desktop\src-tauri\target\release\bundle\nsis\MergePilot_$($version)_x64-setup.exe",
+  "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_$($version)_x64_en-US.msi"
 ) | ForEach-Object { Join-Path $Root $_ } | Where-Object { Test-Path $_ }
 
 if (-not $paths) {

@@ -40,6 +40,7 @@ export function buildWorkflowState(
   currentStep: string,
   riskLevel = "medium",
   explanation = "",
+  metadata: Pick<ChatWorkflowState, "workflowKind" | "workflowPhase"> = {},
 ): ChatWorkflowState {
   const completedTools = bubbles
     .filter((b) => b.role === "tool" && b.toolName && b.toolOk !== false)
@@ -49,6 +50,7 @@ export function buildWorkflowState(
     currentStep,
     completedTools,
     ...workflowStateMetadata(approvalProposal, status),
+    ...metadata,
     pendingApproval: approvalProposal
       ? {
           id: approvalIdFor(approvalProposal),

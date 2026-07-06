@@ -157,12 +157,36 @@ export function toolCommandPreview(toolName?: string, args?: Record<string, unkn
     ].filter(Boolean);
     return ["git", "push", ...flags, remote, branch].join(" ");
   }
+  if (toolName === "git_push_tag") {
+    const remote = String(args?.["remote"] ?? "origin");
+    const name = String(args?.["name"] ?? "<tag>");
+    const flags = [
+      args?.["dryRun"] ? "--dry-run" : "",
+    ].filter(Boolean);
+    return ["git", "push", ...flags, remote, `refs/tags/${name}:refs/tags/${name}`].join(" ");
+  }
   if (toolName === "git_fetch") {
     const remote = String(args?.["remote"] ?? "origin");
     const flags = [
       args?.["prune"] ? "--prune" : "",
     ].filter(Boolean);
     return ["git", "fetch", ...flags, remote].join(" ");
+  }
+  if (toolName === "git_pull") {
+    const remote = String(args?.["remote"] ?? "origin");
+    const branch = String(args?.["branch"] ?? "").trim();
+    const flags = [
+      args?.["rebase"] ? "--rebase" : "",
+      args?.["ffOnly"] ? "--ff-only" : "",
+    ].filter(Boolean);
+    return ["git", "pull", ...flags, remote, ...(branch ? [branch] : [])].join(" ");
+  }
+  if (toolName === "git_stash") {
+    const action = String(args?.["action"] ?? "push");
+    if (action === "apply") return "git stash apply";
+    if (action === "pop") return "git stash pop";
+    const message = String(args?.["message"] ?? "").trim();
+    return ["git", "stash", "push", ...(message ? ["-m", quoteShell(message)] : [])].join(" ");
   }
   if (toolName === "ado_create_pr") {
     const source = String(args?.["source_branch"] ?? args?.["sourceBranch"] ?? "<source>");

@@ -4,6 +4,7 @@ import type {
   ChatPlannerSource,
   PendingToolAction,
 } from "./chatPlannerTypes.js";
+import { isTextContextPath } from "./repoFileGuards.js";
 
 export const CHAT_CONTROL_JSON_MARKER = "__CONTROL_JSON__";
 export const CHAT_FINAL_TOOL_NAME = "agent_final";
@@ -62,9 +63,16 @@ export function parseControlResponse(text: string): {
 export function extractVisibleStreamingResponse(text: string): string {
   const markerIndex = text.indexOf(CHAT_CONTROL_JSON_MARKER);
   if (markerIndex !== -1) return text.slice(0, markerIndex);
+  const startsWithStructuredJson = looksLikePotentialStructuredJsonPrefix(text);
+  if (!startsWithStructuredJson) {
+    const embeddedControlIndex = findEmbeddedStructuredJsonStart(text);
+    if (embeddedControlIndex > 0) {
+      return trimPotentialControlMarkerPrefix(text.slice(0, embeddedControlIndex));
+    }
+  }
   const responseField = extractStreamingJsonStringField(text, "response");
   if (responseField) return responseField;
-  if (looksLikeStructuredJsonPrefix(text)) return "";
+  if (startsWithStructuredJson || looksLikeStructuredJsonPrefix(text)) return "";
   return trimPotentialControlMarkerPrefix(text);
 }
 
@@ -80,6 +88,16 @@ export function summarizeToolResult(result: unknown, ok: boolean): string {
       : JSON.stringify(result);
   const readable = summarizeKnownRuntimeError(text);
   return ok ? truncate(readable, 200) : `error: ${truncate(readable, 220)}`;
+}
+
+export function toolResultIndicatesSuccess(result: unknown, fallbackOk: boolean): boolean {
+  if (!fallbackOk) return false;
+  if (typeof result !== "object" || result === null) return fallbackOk;
+  const record = result as Record<string, unknown>;
+  if (record["ok"] === false) return false;
+  const returncode = record["returncode"];
+  if (typeof returncode === "number" && returncode !== 0) return false;
+  return fallbackOk;
 }
 
 export function approvalDescription(description: string, fallbackName: string): string {
@@ -129,6 +147,8 @@ function normalizeSources(raw: unknown): ChatPlannerSource[] | undefined {
       }
 
       if (source["type"] !== "source_document") return null;
+      const file = stringValue(source["file"]);
+      if (file && !isTextContextPath(file)) return null;
       const line = typeof source["line"] === "number" && Number.isFinite(source["line"])
         ? source["line"]
         : undefined;
@@ -136,7 +156,7 @@ function normalizeSources(raw: unknown): ChatPlannerSource[] | undefined {
         type: "source_document",
         sourceId: stringValue(source["sourceId"]) || `document-${index}`,
         title,
-        file: stringValue(source["file"]),
+        file,
         line,
         snippet: stringValue(source["snippet"]),
       };
@@ -209,6 +229,37 @@ function looksLikeStructuredJsonPrefix(text: string): boolean {
   );
 }
 
+function findEmbeddedStructuredJsonStart(text: string): number {
+  for (let i = 1; i < text.length; i++) {
+    if (text[i] !== "{") continue;
+    const prefix = text.slice(i);
+    if (looksLikePotentialStructuredJsonPrefix(prefix)) return i;
+  }
+  return -1;
+}
+
+function looksLikePotentialStructuredJsonPrefix(text: string): boolean {
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith("{")) return false;
+  if (looksLikeStructuredJsonPrefix(trimmed)) return true;
+
+  const compact = trimmed.replace(/\s/g, "");
+  const normalizedCompact = compact.replace(/\\"/g, "\"");
+  return (
+    compact === "{" ||
+    "{\"response\"".startsWith(normalizedCompact) ||
+    normalizedCompact.startsWith("{\"response") ||
+    "{\"risk_level\"".startsWith(normalizedCompact) ||
+    normalizedCompact.startsWith("{\"risk_level") ||
+    "{\"actions_taken\"".startsWith(normalizedCompact) ||
+    normalizedCompact.startsWith("{\"actions_taken") ||
+    "{\"suggestions\"".startsWith(normalizedCompact) ||
+    normalizedCompact.startsWith("{\"suggestions") ||
+    "{\"approval_proposal\"".startsWith(normalizedCompact) ||
+    normalizedCompact.startsWith("{\"approval_proposal")
+  );
+}
+
 function trimPotentialControlMarkerPrefix(text: string): string {
   const max = Math.min(text.length, CHAT_CONTROL_JSON_MARKER.length - 1);
   for (let len = max; len > 0; len--) {
@@ -240,6 +291,7 @@ function extractStreamingJsonStringField(text: string, field: string): string {
   for (let i = quoteIndex + 1; i < text.length; i++) {
     const ch = text[i]!;
     if (ch === "\"") return out;
+    if (ch === "{" && looksLikePotentialStructuredJsonPrefix(text.slice(i))) return out;
     if (ch !== "\\") {
       out += ch;
       continue;
