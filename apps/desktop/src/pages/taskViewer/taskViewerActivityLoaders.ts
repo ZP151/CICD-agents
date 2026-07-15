@@ -16,7 +16,9 @@ export async function loadReviewActivity(
 ): Promise<ReviewActivityItem[]> {
   const nested = await Promise.all(
     projectLinks.map(async (projectLink) => {
-      const items = await fetchProjectLinkReviewOperations(projectLink.id);
+      const items = await fetchProjectLinkReviewOperations(projectLink.id, {
+        includeLegacyFallback: false,
+      });
       return items.map((item) => ({
         ...item,
         projectLinkId: projectLink.id,

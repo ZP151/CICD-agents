@@ -1,17 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   fetchProjectLinkReviewQueue,
   type ReviewFinding,
   type ReviewQueueItem,
   type ProjectLink,
 } from "../../api.js";
-import {
-  loadFindingsLocal,
-} from "../../reviewHistoryLocal.js";
-import {
-  replaceReviewQueueItem,
-  replaceSelectedReviewQueueItem,
-} from "./reviewQueueRuntime.js";
+import { loadFindingsLocal } from "../../reviewHistoryLocal.js";
+import { replaceReviewQueueItem, replaceSelectedReviewQueueItem } from "./reviewQueueRuntime.js";
 import { useReviewQueueActions } from "./useReviewQueueActions.js";
 import { useReviewQueueBatchRerun } from "./useReviewQueueBatchRerun.js";
 import { useReviewOperationActivity } from "./useReviewOperationActivity.js";
@@ -23,14 +19,18 @@ export interface ReviewQueueRuntimeInput {
   selectedProjectLink: ProjectLink | null;
 }
 
-export function useReviewQueueRuntime({ projectLinkId, selectedProjectLink }: ReviewQueueRuntimeInput) {
+export function useReviewQueueRuntime({
+  projectLinkId,
+  selectedProjectLink,
+}: ReviewQueueRuntimeInput) {
   const [items, setItems] = useState<ReviewQueueItem[]>([]);
+  const [itemsProjectLinkId, setItemsProjectLinkId] = useState(projectLinkId);
   const [configured, setConfigured] = useState(true);
   const [storage, setStorage] = useState<"azure" | "local" | "browser" | undefined>();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<ReviewQueueItem | null>(null);
   const [panelFindings, setPanelFindings] = useState<ReviewFinding[]>([]);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [queueFilter, setQueueFilter] = useState<ReviewQueueItem["decisionQueue"] | "all">("all");
   const [sortMode, setSortMode] = useState<"attention" | "recent">("attention");
   const [page, setPage] = useState(1);
@@ -38,34 +38,47 @@ export function useReviewQueueRuntime({ projectLinkId, selectedProjectLink }: Re
   const settings = useReviewQueueSettings();
   const activity = useReviewOperationActivity(projectLinkId);
 
-  const load = useCallback(async () => {
-    if (!projectLinkId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchProjectLinkReviewQueue(projectLinkId);
-      setItems(result.items);
-      setConfigured(result.configured);
-      setStorage(result.storage);
-    } catch (err) {
-      setItems([]);
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    setSelectedItem(null);
+    setPanelFindings([]);
+    setActionError(null);
+    setConfigured(true);
+    setStorage(undefined);
+    setStorageWarning(null);
   }, [projectLinkId]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const reviewQueueQuery = useQuery({
+    queryKey: ["reviewQueue", projectLinkId],
+    enabled: Boolean(projectLinkId),
+    staleTime: 45_000,
+    gcTime: 10 * 60_000,
+    retry: false,
+    retryOnMount: false,
+    queryFn: () => fetchProjectLinkReviewQueue(projectLinkId),
+  });
 
-  const {
-    counts,
-    displayedItems,
-    staleDisplayedItems,
-    paginatedItems,
-  } = useReviewQueueView({
-    items,
+  useEffect(() => {
+    if (!reviewQueueQuery.data) return;
+    setItems(reviewQueueQuery.data.items);
+    setItemsProjectLinkId(projectLinkId);
+    setConfigured(reviewQueueQuery.data.configured);
+    setStorage(reviewQueueQuery.data.storage);
+    setStorageWarning(reviewQueueQuery.data.warning ?? null);
+  }, [projectLinkId, reviewQueueQuery.data]);
+
+  const load = useCallback(async () => {
+    await reviewQueueQuery.refetch();
+  }, [reviewQueueQuery]);
+
+  const scopedItems = itemsProjectLinkId === projectLinkId ? items : [];
+  const loading = reviewQueueQuery.isLoading && scopedItems.length === 0;
+  const refreshing = reviewQueueQuery.isFetching && scopedItems.length > 0;
+  const queryError =
+    reviewQueueQuery.error instanceof Error ? reviewQueueQuery.error.message : null;
+  const error = actionError ?? queryError;
+
+  const { counts, displayedItems, staleDisplayedItems, paginatedItems } = useReviewQueueView({
+    items: scopedItems,
     projectLinkId,
     queueFilter,
     sortMode,
@@ -76,7 +89,7 @@ export function useReviewQueueRuntime({ projectLinkId, selectedProjectLink }: Re
   });
 
   function openFindings(item: ReviewQueueItem): void {
-    setPanelFindings(loadFindingsLocal(item.repository, item.pullRequestId));
+    setPanelFindings(loadFindingsLocal(item.repository, item.pullRequestId, projectLinkId));
     setSelectedItem(item);
   }
 
@@ -94,7 +107,7 @@ export function useReviewQueueRuntime({ projectLinkId, selectedProjectLink }: Re
     projectLinkId,
     selectedProjectLink,
     selectedItem,
-    setError,
+    setError: setActionError,
     load,
     replaceItem,
     setPanelFindings,
@@ -110,10 +123,12 @@ export function useReviewQueueRuntime({ projectLinkId, selectedProjectLink }: Re
   });
 
   return {
-    items,
+    items: scopedItems,
     configured,
     storage,
+    storageWarning,
     loading,
+    refreshing,
     error,
     selectedItem,
     panelFindings,

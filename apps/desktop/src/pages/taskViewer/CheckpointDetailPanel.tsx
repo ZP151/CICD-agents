@@ -23,8 +23,8 @@ function formatTime(ts?: number | null): string {
 
 function checkpointStatusClass(ok: boolean): string {
   return ok
-    ? "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20"
-    : "bg-yellow-500/10 text-yellow-400 ring-yellow-500/20";
+    ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+    : "bg-amber-50 text-amber-700 ring-amber-200";
 }
 
 export function CheckpointDetailPanel({
@@ -37,7 +37,7 @@ export function CheckpointDetailPanel({
 }: CheckpointDetailPanelProps): JSX.Element {
   return (
     <div className="space-y-5">
-      <header className="border-b border-zinc-800/70 pb-4">
+      <header className="border-b border-zinc-200 pb-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${checkpointStatusClass(checkpoint.toolOk !== false)}`}
@@ -47,7 +47,7 @@ export function CheckpointDetailPanel({
           <span className="text-xs text-zinc-600">{checkpoint.toolName}</span>
           <span className="text-xs text-zinc-600">{formatTime(checkpoint.at)}</span>
         </div>
-        <h2 className="text-lg font-semibold text-zinc-100">
+        <h2 className="text-lg font-semibold text-zinc-950">
           {checkpoint.targetCheckpointId
             ? "Checkpoint apply safety snapshot"
             : "Git checkpoint before confirmed action"}
@@ -56,21 +56,21 @@ export function CheckpointDetailPanel({
       </header>
 
       <section className="grid gap-3 text-sm sm:grid-cols-2">
-        <div className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
+        <div className="rounded-lg border border-zinc-200 bg-white p-3">
           <p className="text-xs text-zinc-600">Repository</p>
-          <p className="mt-1 break-words font-mono text-zinc-300">{checkpoint.repoPath}</p>
+          <p className="mt-1 break-words font-mono text-zinc-800">{checkpoint.repoPath}</p>
         </div>
-        <div className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
+        <div className="rounded-lg border border-zinc-200 bg-white p-3">
           <p className="text-xs text-zinc-600">Session</p>
-          <p className="mt-1 break-words font-mono text-zinc-300">{checkpoint.sessionId}</p>
+          <p className="mt-1 break-words font-mono text-zinc-800">{checkpoint.sessionId}</p>
         </div>
       </section>
 
-      <section className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
+      <section className="rounded-lg border border-zinc-200 bg-white p-3">
         <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-600">
           {checkpoint.targetCheckpointId ? "Safety Snapshot Path" : "Snapshot Path"}
         </h3>
-        <p className="break-words font-mono text-xs text-zinc-300">{checkpoint.checkpointPath}</p>
+        <p className="break-words font-mono text-xs text-zinc-800">{checkpoint.checkpointPath}</p>
       </section>
 
       {checkpoint.targetCheckpointId && <CheckpointApplySummary checkpoint={checkpoint} />}
@@ -82,12 +82,12 @@ export function CheckpointDetailPanel({
       <CheckpointPreviewSection preview={preview} previewLoading={previewLoading} />
 
       {checkpoint.toolSummary && (
-        <section className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
-          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-600">
-            Tool Result
-          </h3>
-          <p className="break-words font-mono text-xs text-zinc-300">{checkpoint.toolSummary}</p>
-        </section>
+        <details className="rounded-lg border border-zinc-200 bg-white p-3">
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-zinc-600">
+            Raw output
+          </summary>
+          <p className="mt-2 break-words font-mono text-xs text-zinc-800">{checkpoint.toolSummary}</p>
+        </details>
       )}
     </div>
   );
@@ -99,20 +99,20 @@ function CheckpointApplySummary({
   checkpoint: ChatCheckpointActivity;
 }): JSX.Element {
   return (
-    <section className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
+    <section className="rounded-lg border border-zinc-200 bg-white p-3">
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-600">
         Checkpoint Apply
       </h3>
       <div className="grid gap-3 text-sm sm:grid-cols-2">
         <div>
           <p className="text-xs text-zinc-600">Restored Checkpoint</p>
-          <p className="mt-1 break-words font-mono text-zinc-300">
+          <p className="mt-1 break-words font-mono text-zinc-800">
             {checkpoint.targetCheckpointId}
           </p>
         </div>
         <div>
           <p className="text-xs text-zinc-600">Apply Mode</p>
-          <p className="mt-1 break-words font-mono text-zinc-300">
+          <p className="mt-1 break-words font-mono text-zinc-800">
             {checkpoint.applyMode ?? "unknown"}
           </p>
         </div>

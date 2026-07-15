@@ -19,6 +19,7 @@ interface HistorySidebarProps {
   activeSessionId: string | null;
   historyError: string | null;
   expanded: boolean;
+  loading: boolean;
   page: number;
   menu: HistoryMenuState | null;
   renamingHistoryId: string | null;
@@ -42,6 +43,7 @@ export function HistorySidebar({
   activeSessionId,
   historyError,
   expanded,
+  loading,
   page,
   menu,
   renamingHistoryId,
@@ -81,7 +83,17 @@ export function HistorySidebar({
       <p className="shrink-0 px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-zinc-600">
         History
       </p>
-      {history.length === 0 && (
+      {loading && history.length === 0 ? (
+        <div className="space-y-2 px-3 py-2" aria-label="Loading chat history">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <span
+              // eslint-disable-next-line react/no-array-index-key
+              key={index}
+              className="block h-9 animate-pulse rounded-md bg-[rgb(var(--app-surface-raised))]"
+            />
+          ))}
+        </div>
+      ) : history.length === 0 && (
         <p className="px-3 py-2 text-xs text-zinc-700">No sessions yet.</p>
       )}
       {historyError && (

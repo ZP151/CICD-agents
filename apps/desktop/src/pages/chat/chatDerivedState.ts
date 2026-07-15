@@ -32,6 +32,7 @@ export interface ChatDerivedState {
   branchList: string[];
   diffStats: DiffStats | null;
   welcomeSuggestions: string[];
+  welcomeSuggestionsReady: boolean;
   taskState: TaskState | null;
 }
 
@@ -164,6 +165,7 @@ export function useChatDerivedState({
   bubbles,
   busy,
   indexStatus,
+  indexStatusReady,
   input,
   queuedSuggestionLabel,
   statusText,
@@ -173,6 +175,7 @@ export function useChatDerivedState({
   bubbles: Bubble[];
   busy: boolean;
   indexStatus: ChatIndexStatus | null;
+  indexStatusReady: boolean;
   input: string;
   queuedSuggestionLabel?: string;
   statusText: string | null;
@@ -233,9 +236,10 @@ export function useChatDerivedState({
       branchList: branchListFromBubbles(bubbles),
       diffStats: diffStatsFromBubbles(bubbles),
       welcomeSuggestions: welcomeSuggestionsForProjectLink(activeProjectLink, indexStatus),
+      welcomeSuggestionsReady: indexStatusReady,
       taskState: taskStateFromWorkflow(workflowState, conversationTitle),
     };
-  }, [activeProjectLink, bubbles, busy, indexStatus, input, queuedSuggestionLabel, statusText, workflowState]);
+  }, [activeProjectLink, bubbles, busy, indexStatus, indexStatusReady, input, queuedSuggestionLabel, statusText, workflowState]);
 }
 
 function stableJson(value: unknown): string {

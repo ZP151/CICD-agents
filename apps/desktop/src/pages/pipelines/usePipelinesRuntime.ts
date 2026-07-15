@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   analyzePipelineEvidence,
   createPipelineConnection,
@@ -13,11 +21,7 @@ import {
 } from "../../api.js";
 import { paginateItems } from "../../components/PaginationControls.js";
 import { extractPipelineRuns } from "./pipelineActions.js";
-import {
-  buildPipelineRows,
-  countPipelineRows,
-  rowMatchesFilter,
-} from "./pipelineModel.js";
+import { buildPipelineRows, countPipelineRows, rowMatchesFilter } from "./pipelineModel.js";
 import type { PipelineInspectState, PipelineRow, PipelineStatusFilter } from "./pipelineTypes.js";
 
 const ALL_PROJECTS = "";
@@ -27,19 +31,12 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
   const [filter, setFilter] = useState<PipelineStatusFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [connections, setConnections] = useState<PipelineConnection[]>([]);
-  const [discovered, setDiscovered] = useState<Record<string, AdoDiscoveryOption[]>>({});
-  const [relatedPrs, setRelatedPrs] = useState<Record<string, PullRequestSummary[]>>({});
-  const [loading, setLoading] = useState(false);
-  const [discovering, setDiscovering] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
   const [inspectState, setInspectState] = useState<Record<string, PipelineInspectState>>({});
+  const queryClient = useQueryClient();
 
   const projectOptions = useMemo(() => {
-    const names = projectLinks
-      .map((projectLink) => projectLink.adoProject.trim())
-      .filter(Boolean);
+    const names = projectLinks.map((projectLink) => projectLink.adoProject.trim()).filter(Boolean);
     return [...new Set(names)].sort((a, b) => a.localeCompare(b));
   }, [projectLinks]);
 
@@ -48,88 +45,127 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
   }, [projectFilter, projectOptions]);
 
   const selectedProjectLinks = useMemo(
-    () => projectFilter
-      ? projectLinks.filter((projectLink) => projectLink.adoProject === projectFilter)
-      : projectLinks,
+    () =>
+      projectFilter
+        ? projectLinks.filter((projectLink) => projectLink.adoProject === projectFilter)
+        : projectLinks,
     [projectFilter, projectLinks],
   );
 
+  const selectedProjectLinkKey = useMemo(
+    () =>
+      selectedProjectLinks
+        .map((projectLink) =>
+          [
+            projectLink.id,
+            projectLink.adoOrgUrl,
+            projectLink.adoProject,
+            projectLink.adoRepoName,
+          ].join(":"),
+        )
+        .join("|"),
+    [selectedProjectLinks],
+  );
+
+  const connectionsQuery = useQuery<PipelineConnection[]>({
+    queryKey: ["pipelineConnections"],
+    staleTime: 60_000,
+    gcTime: 10 * 60_000,
+    queryFn: () => listPipelineConnections(),
+  });
+
+  const relatedPrsQuery = useQuery({
+    queryKey: ["pipelineRelatedPrs", selectedProjectLinkKey],
+    enabled: selectedProjectLinks.length > 0,
+    staleTime: 45_000,
+    gcTime: 10 * 60_000,
+    queryFn: async () => {
+      const entries = await Promise.all(
+        selectedProjectLinks.map(async (projectLink) => {
+          const active = await fetchProjectLinkPullRequests(projectLink.id, "active").catch(
+            () => [],
+          );
+          return [projectLink.id, active] as const;
+        }),
+      );
+      return Object.fromEntries(entries) as Record<string, PullRequestSummary[]>;
+    },
+  });
+
+  const discoverableProjectLinks = useMemo(
+    () =>
+      selectedProjectLinks.filter(
+        (projectLink) =>
+          projectLink.adoOrgUrl.trim() &&
+          projectLink.adoProject.trim() &&
+          projectLink.adoRepoName.trim(),
+      ),
+    [selectedProjectLinks],
+  );
+
+  const discoveryQuery = useQuery({
+    queryKey: ["pipelineDiscovery", selectedProjectLinkKey],
+    enabled: discoverableProjectLinks.length > 0,
+    staleTime: 60_000,
+    gcTime: 10 * 60_000,
+    queryFn: async () => {
+      const entries = await Promise.all(
+        discoverableProjectLinks.map(async (projectLink) => {
+          const result = await discoverAdoProjectLinkOptions("pipelines", projectLink);
+          return [projectLink.id, result.items] as const;
+        }),
+      );
+      return Object.fromEntries(entries) as Record<string, AdoDiscoveryOption[]>;
+    },
+    retry: false,
+  });
+
   const loadConnections = useCallback(async () => {
-    setError(null);
-    setNotice(null);
-    try {
-      setConnections(await listPipelineConnections());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }, []);
+    setLocalError(null);
+    await connectionsQuery.refetch();
+  }, [connectionsQuery]);
 
   const loadRelatedPullRequests = useCallback(async () => {
-    if (selectedProjectLinks.length === 0) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const entries = await Promise.all(selectedProjectLinks.map(async (projectLink) => {
-        const active = await fetchProjectLinkPullRequests(projectLink.id, "active").catch(() => []);
-        return [projectLink.id, active] as const;
-      }));
-      setRelatedPrs(Object.fromEntries(entries));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedProjectLinks]);
+    setLocalError(null);
+    await relatedPrsQuery.refetch();
+  }, [relatedPrsQuery]);
 
   const discoverPipelines = useCallback(async () => {
-    const discoverable = selectedProjectLinks.filter((projectLink) =>
-      projectLink.adoOrgUrl.trim() && projectLink.adoProject.trim() && projectLink.adoRepoName.trim()
-    );
-    if (discoverable.length === 0) return;
-    setDiscovering(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const entries = await Promise.all(discoverable.map(async (projectLink) => {
-        const result = await discoverAdoProjectLinkOptions("pipelines", projectLink);
-        return [projectLink.id, result.items] as const;
-      }));
-      setDiscovered((current) => ({ ...current, ...Object.fromEntries(entries) }));
-    } catch (err) {
-      setNotice(discoveryNoticeFromError(err));
-    } finally {
-      setDiscovering(false);
-    }
-  }, [selectedProjectLinks]);
+    setLocalError(null);
+    await discoveryQuery.refetch();
+  }, [discoveryQuery]);
 
-  useEffect(() => {
-    void loadConnections();
-  }, [loadConnections]);
+  const connections = connectionsQuery.data ?? [];
+  const relatedPrs = relatedPrsQuery.data ?? {};
+  const discovered = discoveryQuery.data ?? {};
+  const loading = relatedPrsQuery.isLoading && !relatedPrsQuery.data;
+  const discovering = discoveryQuery.isFetching;
+  const error =
+    localError ??
+    (connectionsQuery.error instanceof Error ? connectionsQuery.error.message : null) ??
+    (relatedPrsQuery.error instanceof Error ? relatedPrsQuery.error.message : null);
+  const notice = discoveryQuery.error ? discoveryNoticeFromError(discoveryQuery.error) : null;
 
-  useEffect(() => {
-    void loadRelatedPullRequests();
-  }, [loadRelatedPullRequests]);
-
-  useEffect(() => {
-    void discoverPipelines();
-  }, [discoverPipelines]);
-
-  const rows = useMemo(() => buildPipelineRows(selectedProjectLinks, connections, discovered, relatedPrs), [
-    connections,
-    discovered,
-    relatedPrs,
-    selectedProjectLinks,
-  ]);
+  const rows = useMemo(
+    () => buildPipelineRows(selectedProjectLinks, connections, discovered, relatedPrs),
+    [connections, discovered, relatedPrs, selectedProjectLinks],
+  );
+  const firstDiscoveryLoading =
+    rows.length === 0 &&
+    !notice &&
+    (loading ||
+      connectionsQuery.isLoading ||
+      discoveryQuery.isLoading ||
+      (discovering && !discoveryQuery.data));
   const counts = useMemo(() => countPipelineRows(rows), [rows]);
-  const filteredRows = useMemo(() => rows.filter((row) => rowMatchesFilter(row, filter)), [
-    filter,
-    rows,
-  ]);
-  const paginatedRows = useMemo(() => paginateItems(filteredRows, page, pageSize), [
-    filteredRows,
-    page,
-    pageSize,
-  ]);
+  const filteredRows = useMemo(
+    () => rows.filter((row) => rowMatchesFilter(row, filter)),
+    [filter, rows],
+  );
+  const paginatedRows = useMemo(
+    () => paginateItems(filteredRows, page, pageSize),
+    [filteredRows, page, pageSize],
+  );
 
   useEffect(() => {
     setPage(1);
@@ -139,36 +175,50 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
     if (page > paginatedRows.pageCount) setPage(paginatedRows.pageCount);
   }, [page, paginatedRows.pageCount]);
 
-  const savePipeline = useCallback(async (row: PipelineRow) => {
-    setError(null);
-    try {
-      await createPipelineConnection({
-        projectLinkId: row.projectLinkId,
-        pipelineId: row.pipelineId,
-        pipelineName: row.pipelineName,
-        purpose: "ci",
-        isDefault: true,
-      });
-      await loadConnections();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }, [loadConnections]);
+  const savePipeline = useCallback(
+    async (row: PipelineRow) => {
+      setLocalError(null);
+      try {
+        await createPipelineConnection({
+          projectLinkId: row.projectLinkId,
+          pipelineId: row.pipelineId,
+          pipelineName: row.pipelineName,
+          purpose: "ci",
+          isDefault: true,
+        });
+        await queryClient.invalidateQueries({ queryKey: ["pipelineConnections"] });
+      } catch (err) {
+        setLocalError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [queryClient],
+  );
 
-  const inspectPipeline = useCallback(async (row: PipelineRow) => inspectPipelineRow(row, setInspectState), []);
+  const inspectPipeline = useCallback(
+    async (row: PipelineRow) => inspectPipelineRow(row, setInspectState),
+    [],
+  );
 
   const triggerPipeline = useCallback(async (row: PipelineRow) => {
     setInspectState((current) => ({ ...current, [rowKey(row)]: { phase: "loading" } }));
     try {
-      const result = await runChatWorkflowAction("trigger_pipeline", row.repoPath, row.projectLinkId, {
-        pipelineId: Number(row.pipelineId),
-        branch: row.defaultBranch,
-      });
+      const result = await runChatWorkflowAction(
+        "trigger_pipeline",
+        row.repoPath,
+        row.projectLinkId,
+        {
+          pipelineId: Number(row.pipelineId),
+          branch: row.defaultBranch,
+        },
+      );
       setInspectState((current) => ({ ...current, [rowKey(row)]: { phase: "approval", result } }));
     } catch (err) {
       setInspectState((current) => ({
         ...current,
-        [rowKey(row)]: { phase: "error", message: err instanceof Error ? err.message : String(err) },
+        [rowKey(row)]: {
+          phase: "error",
+          message: err instanceof Error ? err.message : String(err),
+        },
       }));
     }
   }, []);
@@ -194,7 +244,12 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
       });
       setInspectState((current) => ({
         ...current,
-        [rowKey(row)]: { phase: "analysis_done", result, runs, analysis: analysis.analysis || localAnalysis },
+        [rowKey(row)]: {
+          phase: "analysis_done",
+          result,
+          runs,
+          analysis: analysis.analysis || localAnalysis,
+        },
       }));
     } catch {
       setInspectState((current) => ({
@@ -219,6 +274,7 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
     filteredRows,
     paginatedRows,
     loading,
+    firstDiscoveryLoading,
     discovering,
     error,
     notice,
@@ -235,7 +291,9 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
 
 function discoveryNoticeFromError(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
-  if (/CrossPlatformLockError|IdentityService|lockfile|oauth|authentication|credential/i.test(message)) {
+  if (
+    /CrossPlatformLockError|IdentityService|lockfile|oauth|authentication|credential/i.test(message)
+  ) {
     return "Pipeline discovery could not refresh Azure DevOps credentials right now. Existing saved connections remain usable; sign in again or retry discovery after the credential lock clears.";
   }
   return message;
@@ -247,9 +305,14 @@ async function inspectPipelineRow(
 ) {
   setInspectState((current) => ({ ...current, [rowKey(row)]: { phase: "loading" } }));
   try {
-    const result = await runChatWorkflowAction("inspect_pipeline", row.repoPath, row.projectLinkId, {
-      pipelineId: Number(row.pipelineId),
-    });
+    const result = await runChatWorkflowAction(
+      "inspect_pipeline",
+      row.repoPath,
+      row.projectLinkId,
+      {
+        pipelineId: Number(row.pipelineId),
+      },
+    );
     const runs = extractPipelineRuns(result);
     setInspectState((current) => ({
       ...current,
@@ -284,7 +347,9 @@ function summarizePipelineInspection(
     `Status: ${result.summary || `Pipeline #${row.pipelineId} inspected.`}`,
     `Risk: ${risk}`,
     `Runs inspected: ${runs.length || "none returned"} (${succeeded.length} succeeded, ${failed.length} failed/canceled, ${running.length} running)`,
-    latest ? `Latest run: ${latest.name || latest.id} - ${latest.state || "unknown"} / ${latest.result || "unknown"}` : "Latest run: unavailable",
+    latest
+      ? `Latest run: ${latest.name || latest.id} - ${latest.state || "unknown"} / ${latest.result || "unknown"}`
+      : "Latest run: unavailable",
     artifactCount > 0
       ? `Evidence: ${artifactCount} failure artifact(s) or log/timeline excerpts captured.`
       : "Evidence: no failure artifacts captured from the latest inspected runs.",

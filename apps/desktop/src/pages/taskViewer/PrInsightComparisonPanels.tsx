@@ -16,14 +16,14 @@ export function PrInsightComparisonCard({
   comparison: PrInsightArtifactComparison;
 }): JSX.Element {
   return (
-    <section className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
+    <section className="rounded-lg border border-zinc-200 bg-white p-3">
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-600">
         Preview vs Full Review
       </h3>
       <div className="grid gap-3 text-sm sm:grid-cols-3">
         <div>
           <p className="text-xs text-zinc-600">Readiness</p>
-          <p className="mt-1 text-zinc-300">
+          <p className="mt-1 text-zinc-800">
             {comparison.readinessChanged
               ? `${comparison.previewReadiness ?? "unknown"} -> ${comparison.reviewReadiness ?? "unknown"}`
               : (comparison.reviewReadiness ?? comparison.previewReadiness ?? "unchanged")}
@@ -31,11 +31,11 @@ export function PrInsightComparisonCard({
         </div>
         <div>
           <p className="text-xs text-zinc-600">Token delta</p>
-          <p className="mt-1 font-mono text-zinc-300">{signedDelta(comparison.tokenDelta)}</p>
+          <p className="mt-1 font-mono text-zinc-800">{signedDelta(comparison.tokenDelta)}</p>
         </div>
         <div>
           <p className="text-xs text-zinc-600">Finding delta</p>
-          <p className="mt-1 font-mono text-zinc-300">
+          <p className="mt-1 font-mono text-zinc-800">
             {comparison.findingCountDelta === null
               ? "n/a"
               : signedDelta(comparison.findingCountDelta)}
@@ -60,7 +60,7 @@ export function PrInsightRefreshComparisonCard({
   comparison: PrInsightRefreshComparison;
 }): JSX.Element {
   return (
-    <section className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
+    <section className="rounded-lg border border-zinc-200 bg-white p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
           Previous {item.kind === "review_run" ? "Full Review" : "Preview"} Comparison
@@ -72,7 +72,7 @@ export function PrInsightRefreshComparisonCard({
       <div className="grid gap-3 text-sm sm:grid-cols-3">
         <div>
           <p className="text-xs text-zinc-600">Readiness</p>
-          <p className="mt-1 text-zinc-300">
+          <p className="mt-1 text-zinc-800">
             {comparison.readinessChanged
               ? `${comparison.previousReadiness ?? "unknown"} -> ${comparison.currentReadiness ?? "unknown"}`
               : (comparison.currentReadiness ?? "unchanged")}
@@ -80,11 +80,11 @@ export function PrInsightRefreshComparisonCard({
         </div>
         <div>
           <p className="text-xs text-zinc-600">Token delta</p>
-          <p className="mt-1 font-mono text-zinc-300">{signedDelta(comparison.tokenDelta)}</p>
+          <p className="mt-1 font-mono text-zinc-800">{signedDelta(comparison.tokenDelta)}</p>
         </div>
         <div>
           <p className="text-xs text-zinc-600">Finding delta</p>
-          <p className="mt-1 font-mono text-zinc-300">
+          <p className="mt-1 font-mono text-zinc-800">
             {comparison.findingCountDelta === null
               ? "n/a"
               : signedDelta(comparison.findingCountDelta)}
@@ -122,7 +122,7 @@ function RiskDeltaGrid({
           {addedRisks.map((risk) => (
             <span
               key={`added-${risk}`}
-              className="rounded border border-yellow-900/50 px-2 py-1 text-yellow-300/80"
+              className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-amber-700"
             >
               {risk}
             </span>
@@ -136,7 +136,7 @@ function RiskDeltaGrid({
           {resolvedRisks.map((risk) => (
             <span
               key={`resolved-${risk}`}
-              className="rounded border border-emerald-900/50 px-2 py-1 text-emerald-300/80"
+              className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700"
             >
               {risk}
             </span>

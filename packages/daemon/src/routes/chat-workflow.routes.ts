@@ -23,8 +23,7 @@ const InlineProjectLinkObjectSchema = z.object({
   ignoredGlobs: z.array(z.string()).default([]),
 });
 
-export const InlineProjectLinkSchema = InlineProjectLinkObjectSchema
-  .nullable()
+export const InlineProjectLinkSchema = InlineProjectLinkObjectSchema.nullable()
   .optional()
   .transform((value) => value ?? undefined);
 
@@ -86,7 +85,9 @@ export const ChatWorkflowActionSchema = z.object({
   paths: z.array(z.string()).default([]),
   includeUnstaged: z.coerce.boolean().default(true),
   commitMode: z.enum(["commit", "commit-push"]).optional(),
-  validationTool: z.enum(["npm_test", "npm_build", "pytest_run", "dotnet_test", "dotnet_build"]).optional(),
+  validationTool: z
+    .enum(["npm_test", "npm_build", "pytest_run", "dotnet_test", "dotnet_build"])
+    .optional(),
   validationScript: z.string().optional(),
   validationArgs: z.array(z.string()).default([]),
   pipelineId: z.coerce.number().int().positive().optional(),
@@ -124,7 +125,6 @@ export function registerChatWorkflowRoutes(
   app.post("/chat/workflow-action", async (req, reply) => {
     const parsed = ChatWorkflowActionSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const projectLinkId = projectLinkIdFromWorkflowActionPayload(parsed.data);
     const projectLink = projectLinkFromWorkflowActionPayload(parsed.data);
     const payload = {
       ...parsed.data,

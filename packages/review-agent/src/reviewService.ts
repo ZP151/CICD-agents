@@ -1,5 +1,4 @@
 import {
-  AdoClient,
   COMMENT_TYPE_TEXT,
   THREAD_STATUS_ACTIVE,
   buildCloudContext,
@@ -8,6 +7,7 @@ import {
   emitReviewMetrics,
   LLMClient,
   runReviewPlanner,
+  type AdoClient,
   type AutoApprovalPolicy,
   type ReviewDecision,
   type StateStore,
@@ -20,7 +20,11 @@ export interface ReviewServiceOptions {
   llm?: LLMClient;
   maxFilesPerPr?: number;
   autoApprovalPolicy?: Partial<AutoApprovalPolicy>;
-  log?: { info: (o: object, m?: string) => void; warn: (o: object, m?: string) => void; error: (o: object, m?: string) => void };
+  log?: {
+    info: (o: object, m?: string) => void;
+    warn: (o: object, m?: string) => void;
+    error: (o: object, m?: string) => void;
+  };
 }
 
 export class ReviewService {
@@ -159,7 +163,10 @@ export class ReviewService {
       changedHunkLines: review.coverage.changedHunkLines,
     });
 
-    log?.info({ prId, findings: review.findings.length, decision: decision.queue }, "review posted");
+    log?.info(
+      { prId, findings: review.findings.length, decision: decision.queue },
+      "review posted",
+    );
     void emitReviewMetrics({
       prId,
       repository: repoName,

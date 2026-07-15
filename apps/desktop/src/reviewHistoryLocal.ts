@@ -5,6 +5,12 @@ export const FINDINGS_LS_KEY = "mergepilot_pr_findings_v1";
 
 type FindingsStore = Record<string, Record<string, ReviewFinding[]>>;
 
+function scopedRepositoryKey(repository: string, projectLinkId?: string): string {
+  const repo = repository.trim();
+  const scope = projectLinkId?.trim();
+  return scope ? `${scope}::${repo}` : repo;
+}
+
 function loadFindingsStore(): FindingsStore {
   try {
     const raw = localStorage.getItem(FINDINGS_LS_KEY);
@@ -19,24 +25,40 @@ function saveFindingsStore(store: FindingsStore): void {
   localStorage.setItem(FINDINGS_LS_KEY, JSON.stringify(store));
 }
 
-export function saveFindingsLocal(repository: string, pullRequestId: number, findings: ReviewFinding[]): void {
+export function saveFindingsLocal(
+  repository: string,
+  pullRequestId: number,
+  findings: ReviewFinding[],
+  projectLinkId?: string,
+): void {
   const repo = repository.trim();
   if (!repo || !Number.isFinite(pullRequestId)) return;
+  const storeKey = scopedRepositoryKey(repo, projectLinkId);
   const store = loadFindingsStore();
-  const bucket = store[repo] ?? {};
+  const bucket = store[storeKey] ?? {};
   bucket[String(pullRequestId)] = findings;
-  store[repo] = bucket;
+  store[storeKey] = bucket;
   saveFindingsStore(store);
 }
 
-export function loadFindingsLocal(repository: string, pullRequestId: number): ReviewFinding[] {
+export function loadFindingsLocal(
+  repository: string,
+  pullRequestId: number,
+  projectLinkId?: string,
+): ReviewFinding[] {
   const repo = repository.trim();
   if (!repo || !Number.isFinite(pullRequestId)) return [];
   const store = loadFindingsStore();
+  if (projectLinkId) {
+    const scopedBucket = store[scopedRepositoryKey(repo, projectLinkId)];
+    const pullRequestKey = String(pullRequestId);
+    if (scopedBucket && pullRequestKey in scopedBucket) return scopedBucket[pullRequestKey] ?? [];
+  }
   return store[repo]?.[String(pullRequestId)] ?? [];
 }
 
 export interface ReviewHistoryRecord {
+  projectLinkId?: string;
   repository: string;
   pullRequestId: number;
   lastIterationId: number;
@@ -160,28 +182,33 @@ export function reviewQueuePriorityReasons(item: ReviewQueueItem): string[] {
   return reasons;
 }
 
-export function listReviewHistoryLocal(repository: string): ReviewQueueItem[] {
+export function listReviewHistoryLocal(repository: string, projectLinkId?: string): ReviewQueueItem[] {
   const repo = repository.trim();
   if (!repo) return [];
   const store = loadStore();
-  return Object.values(store[repo] ?? {})
+  const legacyBucket = store[repo] ?? {};
+  const scopedBucket = projectLinkId ? (store[scopedRepositoryKey(repo, projectLinkId)] ?? {}) : {};
+  const bucket = projectLinkId ? { ...legacyBucket, ...scopedBucket } : legacyBucket;
+  return Object.values(bucket)
     .map(recordToItem)
     .sort(compareReviewQueueItems);
 }
 
-export function upsertReviewHistoryLocal(record: ReviewHistoryRecord): void {
+export function upsertReviewHistoryLocal(record: ReviewHistoryRecord, projectLinkId = record.projectLinkId): void {
   const repository = record.repository.trim();
   if (!repository || !Number.isFinite(record.pullRequestId)) return;
+  const storeKey = scopedRepositoryKey(repository, projectLinkId);
   const store = loadStore();
-  const repoBucket = store[repository] ?? {};
-  repoBucket[String(record.pullRequestId)] = { ...record, repository };
-  store[repository] = repoBucket;
+  const repoBucket = store[storeKey] ?? {};
+  repoBucket[String(record.pullRequestId)] = { ...record, projectLinkId, repository };
+  store[storeKey] = repoBucket;
   saveStore(store);
 }
 
-export function syncReviewHistoryLocal(items: ReviewQueueItem[]): void {
+export function syncReviewHistoryLocal(items: ReviewQueueItem[], projectLinkId?: string): void {
   for (const item of items) {
     upsertReviewHistoryLocal({
+      projectLinkId,
       repository: item.repository,
       pullRequestId: item.pullRequestId,
       lastIterationId: item.lastIterationId,

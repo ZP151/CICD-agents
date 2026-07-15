@@ -23,13 +23,18 @@ export async function fetchProjectLinkReviewQueue(projectLinkId: string): Promis
   configured: boolean;
   items: ReviewQueueItem[];
   storage?: "azure" | "local" | "browser";
+  warning?: string;
 }> {
   const projectLink = readProjectLinkData(projectLinkId);
-  const repoName = typeof projectLink?.["adoRepoName"] === "string" ? projectLink["adoRepoName"] : "";
+  const repoName =
+    typeof projectLink?.["adoRepoName"] === "string" ? projectLink["adoRepoName"] : "";
 
   try {
     const r = await fetch(`${RUNTIME_URL}${PROJECT_LINKS_PATH}/${projectLinkId}/review-queue`);
-    if (!r.ok) throw new Error(`${PROJECT_LINKS_PATH}/${projectLinkId}/review-queue HTTP ${r.status}: ${await r.text()}`);
+    if (!r.ok)
+      throw new Error(
+        `${PROJECT_LINKS_PATH}/${projectLinkId}/review-queue HTTP ${r.status}: ${await r.text()}`,
+      );
     const body = (await r.json()) as {
       configured: boolean;
       items: ReviewQueueItem[];
@@ -40,20 +45,31 @@ export async function fetchProjectLinkReviewQueue(projectLinkId: string): Promis
       return { configured: true, items: body.items, storage: body.storage ?? "azure" };
     }
 
-    if (body.items.length > 0) syncReviewHistoryLocal(body.items);
-    const browserItems = listReviewHistoryLocal(repoName);
+    if (body.items.length > 0) syncReviewHistoryLocal(body.items, projectLinkId);
+    const browserItems = listReviewHistoryLocal(repoName, projectLinkId);
     return {
       configured: false,
       items: mergeReviewQueueItems(body.items, browserItems),
       storage: body.items.length > 0 ? "local" : browserItems.length > 0 ? "browser" : "local",
     };
-  } catch {
+  } catch (error) {
     return {
       configured: false,
-      items: listReviewHistoryLocal(repoName),
+      items: listReviewHistoryLocal(repoName, projectLinkId),
       storage: "browser",
+      warning: reviewQueueFallbackWarning(error),
     };
   }
+}
+
+function reviewQueueFallbackWarning(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const match = message.match(/HTTP\s+\d+:\s*(.*)$/s);
+  const body = match?.[1]?.trim();
+  if (body) {
+    return messageFromErrorBody("Review history cloud storage is unavailable.", body);
+  }
+  return messageFromErrorBody("Review history cloud storage is unavailable.", message);
 }
 
 export async function recordProjectLinkReviewHistory(
@@ -63,7 +79,7 @@ export async function recordProjectLinkReviewHistory(
   },
 ): Promise<void> {
   const full = buildReviewHistoryRecord(projectLinkId, record);
-  upsertReviewHistoryLocal(full);
+  upsertReviewHistoryLocal(full, projectLinkId);
 
   try {
     const r = await fetch(`${RUNTIME_URL}${PROJECT_LINKS_PATH}/${projectLinkId}/review-history`, {
@@ -72,7 +88,9 @@ export async function recordProjectLinkReviewHistory(
       body: JSON.stringify(toReviewHistoryPayload(full)),
     });
     if (!r.ok && r.status !== 400) {
-      throw new Error(`${PROJECT_LINKS_PATH}/${projectLinkId}/review-history HTTP ${r.status}: ${await r.text()}`);
+      throw new Error(
+        `${PROJECT_LINKS_PATH}/${projectLinkId}/review-history HTTP ${r.status}: ${await r.text()}`,
+      );
     }
   } catch {
     // Daemon unreachable: browser copy is enough for this session.
@@ -87,23 +105,30 @@ export async function recordProjectLinkReviewDisposition(
   options: { writeBackToAdo?: boolean } = {},
 ): Promise<ReviewQueueItem | null> {
   const full = buildReviewHistoryRecord(projectLinkId, record);
-  upsertReviewHistoryLocal(full);
+  upsertReviewHistoryLocal(full, projectLinkId);
 
   try {
-    const r = await fetch(`${RUNTIME_URL}${PROJECT_LINKS_PATH}/${projectLinkId}/review-disposition`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(toReviewHistoryPayload(full, {
-        writeBackToAdo: options.writeBackToAdo ?? true,
-      })),
-    });
+    const r = await fetch(
+      `${RUNTIME_URL}${PROJECT_LINKS_PATH}/${projectLinkId}/review-disposition`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(
+          toReviewHistoryPayload(full, {
+            writeBackToAdo: options.writeBackToAdo ?? true,
+          }),
+        ),
+      },
+    );
     if (!r.ok && r.status !== 400) {
-      throw new Error(`${PROJECT_LINKS_PATH}/${projectLinkId}/review-disposition HTTP ${r.status}: ${await r.text()}`);
+      throw new Error(
+        `${PROJECT_LINKS_PATH}/${projectLinkId}/review-disposition HTTP ${r.status}: ${await r.text()}`,
+      );
     }
     if (r.ok) {
       const body = (await r.json()) as { record?: ReviewQueueItem };
       if (body.record) {
-        upsertReviewHistoryLocal(body.record);
+        upsertReviewHistoryLocal(body.record, projectLinkId);
         return body.record;
       }
     }
@@ -113,14 +138,22 @@ export async function recordProjectLinkReviewDisposition(
   return null;
 }
 
-export async function fetchProjectLinkReviewOperations(projectLinkId: string): Promise<ReviewOperationEvent[]> {
+export async function fetchProjectLinkReviewOperations(
+  projectLinkId: string,
+  options: { includeLegacyFallback?: boolean } = {},
+): Promise<ReviewOperationEvent[]> {
   try {
     const r = await fetch(`${RUNTIME_URL}${PROJECT_LINKS_PATH}/${projectLinkId}/review-operations`);
-    if (!r.ok) throw new Error(`${PROJECT_LINKS_PATH}/${projectLinkId}/review-operations HTTP ${r.status}: ${await r.text()}`);
+    if (!r.ok)
+      throw new Error(
+        `${PROJECT_LINKS_PATH}/${projectLinkId}/review-operations HTTP ${r.status}: ${await r.text()}`,
+      );
     const body = (await r.json()) as { items?: ReviewOperationEvent[] };
     return body.items ?? [];
   } catch {
-    return listReviewOperations();
+    return listReviewOperations(projectLinkId, {
+      includeLegacyFallback: options.includeLegacyFallback,
+    });
   }
 }
 
@@ -131,21 +164,24 @@ export async function recordProjectLinkReviewOperation(
     actor?: string;
   },
 ): Promise<ReviewOperationEvent> {
-  const local = appendReviewOperation(event);
+  const local = appendReviewOperation(event, projectLinkId);
   try {
-    const r = await fetch(`${RUNTIME_URL}${PROJECT_LINKS_PATH}/${projectLinkId}/review-operations`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        kind: local.kind,
-        at: local.at,
-        pullRequestId: local.pullRequestId,
-        actor: local.actor,
-        label: local.label,
-        ok: local.ok,
-        details: local.details,
-      }),
-    });
+    const r = await fetch(
+      `${RUNTIME_URL}${PROJECT_LINKS_PATH}/${projectLinkId}/review-operations`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: local.kind,
+          at: local.at,
+          pullRequestId: local.pullRequestId,
+          actor: local.actor,
+          label: local.label,
+          ok: local.ok,
+          details: local.details,
+        }),
+      },
+    );
     if (!r.ok) return local;
     const body = (await r.json()) as { record?: ReviewOperationEvent };
     return body.record ?? local;
@@ -190,7 +226,7 @@ function buildReviewHistoryRecord(
     record.repository ??
     (typeof projectLink?.["adoRepoName"] === "string" ? projectLink["adoRepoName"] : "");
   if (!repository.trim()) throw new Error("Project Link has no adoRepoName");
-  return { ...record, repository: repository.trim() };
+  return { ...record, projectLinkId, repository: repository.trim() };
 }
 
 function toReviewHistoryPayload(

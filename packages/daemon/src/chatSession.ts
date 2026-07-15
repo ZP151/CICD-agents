@@ -15,22 +15,11 @@ import {
   type StoredBubble,
   type StoredSession,
 } from "./chatHistoryStore.js";
-import {
-  buildPrInsightContextBundle,
-  buildPrInsightContextPrompt,
-  extractPrInsightArtifactIdFromMessage,
-  extractPullRequestIdFromMessage,
-  formatPrInsightArtifactsForChat,
-} from "./chatArtifactContext.js";
-import {
-  type ConfirmedActionPersistenceAdapters,
-} from "./chatConfirmedActions.js";
+import { type ConfirmedActionPersistenceAdapters } from "./chatConfirmedActions.js";
 import type { PlannerPersistenceAdapters } from "./chatPlannerPersistence.js";
 import type { PlannerContinuationAdapters } from "./chatPlannerContinuation.js";
 import { ActiveChatSessions } from "./chatActiveSessions.js";
-import {
-  createStoredApprovalProposal,
-} from "./chatApprovalProposals.js";
+import { createStoredApprovalProposal } from "./chatApprovalProposals.js";
 import { runConfirmedChatAction } from "./chatConfirmActionRun.js";
 import { runChatSessionTurn } from "./chatSessionRun.js";
 import {
@@ -45,14 +34,10 @@ import {
   updateMetadata,
   type ChatCheckpointActivity,
 } from "./chatSessionRecords.js";
-import type { ValidationFailureSignals } from "./validationFailureSignals.js";
 
 export type { InlineLlmConfig } from "./llmSettings.js";
 export type { ChatHistoryEntry, InlineProjectLink } from "./chatHistoryStore.js";
-export {
-  deriveWorkflowPendingAction,
-  inferPendingAction,
-} from "./chatPendingActions.js";
+export { deriveWorkflowPendingAction, inferPendingAction } from "./chatPendingActions.js";
 export { structuredDoneAfterConfirmedAction } from "./chatWorkflowState.js";
 export {
   buildPrInsightContextBundle,
@@ -125,7 +110,11 @@ export class ChatSessionManager {
     });
   }
 
-  private async appendMessage(sessionId: string, role: "user" | "assistant", content: string): Promise<void> {
+  private async appendMessage(
+    sessionId: string,
+    role: "user" | "assistant",
+    content: string,
+  ): Promise<void> {
     return appendMessage(sessionId, role, content);
   }
 
@@ -226,7 +215,6 @@ export class ChatSessionManager {
       persistenceAdapters: this.confirmedActionPersistenceAdapters(),
     });
   }
-
 }
 
 function now(): number {

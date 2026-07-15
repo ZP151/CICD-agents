@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import type { Command } from "commander";
 import chalk from "chalk";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

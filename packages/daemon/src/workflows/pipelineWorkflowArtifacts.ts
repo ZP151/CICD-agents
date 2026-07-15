@@ -1,9 +1,9 @@
-import {
+import type {
   getAzureBuildLogExcerpt,
   getAzureBuildTimeline,
   listAzurePipelineRuns,
-  redact,
 } from "@mergepilot/core";
+import { redact } from "@mergepilot/core";
 
 export interface WorkflowActionArtifact {
   type: "artifact";
@@ -19,8 +19,10 @@ export type PipelineLogExcerpt = Awaited<ReturnType<typeof getAzureBuildLogExcer
 export function preferredPipelineFailureRun(
   runs: Awaited<ReturnType<typeof listAzurePipelineRuns>>,
 ): Awaited<ReturnType<typeof listAzurePipelineRuns>>[number] | undefined {
-  return runs.find((run) => run.id && /failed/i.test(`${run.result} ${run.state}`))
-    ?? runs.find((run) => run.id && /failed|canceled/i.test(`${run.result} ${run.state}`));
+  return (
+    runs.find((run) => run.id && /failed/i.test(`${run.result} ${run.state}`)) ??
+    runs.find((run) => run.id && /failed|canceled/i.test(`${run.result} ${run.state}`))
+  );
 }
 
 export function summarizePipelineRuns(
@@ -30,20 +32,29 @@ export function summarizePipelineRuns(
   logExcerpts?: PipelineLogExcerpt[],
   timelineError?: string,
 ): string {
-  if (runs.length === 0) return `Pipeline #${pipelineId} has no recent runs returned by Azure DevOps.`;
+  if (runs.length === 0)
+    return `Pipeline #${pipelineId} has no recent runs returned by Azure DevOps.`;
   const latest = runs[0]!;
   const failed = runs.filter((run) => /failed|canceled/i.test(`${run.result} ${run.state}`));
   const evidenceRun = preferredPipelineFailureRun(runs);
-  const classification = evidenceRun ? classifyPipelineFailure(timeline, logExcerpts, timelineError) : undefined;
+  const classification = evidenceRun
+    ? classifyPipelineFailure(timeline, logExcerpts, timelineError)
+    : undefined;
   const lines = [
     `Pipeline #${pipelineId} latest run #${latest.id || "unknown"} ${safeText(latest.name || "")}: ${latest.state || "unknown"}${latest.result ? `/${latest.result}` : ""}.`,
     `Recent runs: ${runs.length}. Failed or canceled: ${failed.length}.`,
-    ...runs.slice(0, 5).map((run) =>
-      `- #${run.id || "unknown"} ${safeText(run.name || "run")} ${safeText(run.sourceBranch || "unknown branch")}: ${run.state || "unknown"}${run.result ? `/${run.result}` : ""}${run.url ? ` (${safeText(run.url)})` : ""}`,
-    ),
+    ...runs
+      .slice(0, 5)
+      .map(
+        (run) =>
+          `- #${run.id || "unknown"} ${safeText(run.name || "run")} ${safeText(run.sourceBranch || "unknown branch")}: ${run.state || "unknown"}${run.result ? `/${run.result}` : ""}${run.url ? ` (${safeText(run.url)})` : ""}`,
+      ),
   ];
   if (evidenceRun) {
-    lines.push("", ...pipelineFailureEvidenceSummary(evidenceRun, timeline, logExcerpts, timelineError));
+    lines.push(
+      "",
+      ...pipelineFailureEvidenceSummary(evidenceRun, timeline, logExcerpts, timelineError),
+    );
     if (classification) {
       lines.push(`Failure classification: ${classification.label}. ${classification.summary}`);
     }
@@ -69,17 +80,22 @@ export function pipelineFailureArtifacts(
     const issueText = issue?.message ? ` - ${compactInlineText(issue.message, 180)}` : "";
     return `- ${record.name || record.id || "record"} (${record.type || "unknown"}): ${record.state || "unknown"}${record.result ? `/${record.result}` : ""}${issueText}`;
   });
-  const errorIssueLines = (timeline?.errorIssues ?? []).slice(0, 8).map((issue) =>
-    `- ${issue.category || issue.type || "error"}: ${compactInlineText(issue.message || "No message returned.", 220)}`,
-  );
-  const logExcerptLines = (logExcerpts ?? []).slice(0, 3).flatMap((log) => [
-    `### Log #${log.logId} lines ${log.startLine}-${log.endLine}${log.truncated ? " (excerpt)" : ""}`,
-    "",
-    "```text",
-    safeText(log.excerpt || "(empty log excerpt)"),
-    "```",
-    "",
-  ]);
+  const errorIssueLines = (timeline?.errorIssues ?? [])
+    .slice(0, 8)
+    .map(
+      (issue) =>
+        `- ${issue.category || issue.type || "error"}: ${compactInlineText(issue.message || "No message returned.", 220)}`,
+    );
+  const logExcerptLines = (logExcerpts ?? [])
+    .slice(0, 3)
+    .flatMap((log) => [
+      `### Log #${log.logId} lines ${log.startLine}-${log.endLine}${log.truncated ? " (excerpt)" : ""}`,
+      "",
+      "```text",
+      safeText(log.excerpt || "(empty log excerpt)"),
+      "```",
+      "",
+    ]);
   const classification = classifyPipelineFailure(timeline, logExcerpts, timelineError);
   const lines = [
     `# Pipeline #${pipelineId} failure`,
@@ -98,36 +114,42 @@ export function pipelineFailureArtifacts(
     "",
     "## Recent failed or canceled runs",
     "",
-    ...failedRuns.slice(0, 5).map((run) =>
-      `- #${run.id || "unknown"} ${safeText(run.name || "run")} ${safeText(run.sourceBranch || "unknown branch")}: ${run.state || "unknown"}${run.result ? `/${run.result}` : ""}${run.url ? ` (${safeText(run.url)})` : ""}`,
-    ),
+    ...failedRuns
+      .slice(0, 5)
+      .map(
+        (run) =>
+          `- #${run.id || "unknown"} ${safeText(run.name || "run")} ${safeText(run.sourceBranch || "unknown branch")}: ${run.state || "unknown"}${run.result ? `/${run.result}` : ""}${run.url ? ` (${safeText(run.url)})` : ""}`,
+      ),
     "",
     "## Failed timeline records",
     "",
     ...(failedRecordLines.length > 0
       ? failedRecordLines
-      : [timelineError
-          ? `- Timeline unavailable: ${compactInlineText(timelineError, 220)}`
-          : "- No failed timeline records were returned."]
-    ),
+      : [
+          timelineError
+            ? `- Timeline unavailable: ${compactInlineText(timelineError, 220)}`
+            : "- No failed timeline records were returned.",
+        ]),
     "",
     "## Error issues",
     "",
     ...(errorIssueLines.length > 0
       ? errorIssueLines
-      : [timelineError
-          ? "- Error issue details were not available because the timeline request failed."
-          : "- No timeline error issues were returned."]
-    ),
+      : [
+          timelineError
+            ? "- Error issue details were not available because the timeline request failed."
+            : "- No timeline error issues were returned.",
+        ]),
     "",
     "## Log excerpts",
     "",
     ...(logExcerptLines.length > 0
       ? logExcerptLines
-      : [timeline?.failedRecords?.some((record) => record.logId)
-          ? "- Failed task logs were not available."
-          : "- No failed timeline record returned a log ID."]
-    ),
+      : [
+          timeline?.failedRecords?.some((record) => record.logId)
+            ? "- Failed task logs were not available."
+            : "- No failed timeline record returned a log ID.",
+        ]),
     "",
     "## Failure classification",
     "",
@@ -149,14 +171,16 @@ export function pipelineFailureArtifacts(
     "- Trigger pipeline rerun",
     "- Run focused local validation",
   ];
-  return [{
-    type: "artifact",
-    artifactId,
-    title: `Pipeline #${pipelineId} run #${runId} failure`,
-    artifactType: "markdown",
-    status: "error",
-    content: safeText(lines.join("\n")),
-  }];
+  return [
+    {
+      type: "artifact",
+      artifactId,
+      title: `Pipeline #${pipelineId} run #${runId} failure`,
+      artifactType: "markdown",
+      status: "error",
+      content: safeText(lines.join("\n")),
+    },
+  ];
 }
 
 function safeText(value: string): string {
@@ -190,15 +214,18 @@ function pipelineFailureEvidenceSummary(
     lines.push(`Failed timeline records: unavailable (${compactInlineText(timelineError, 180)}).`);
   }
 
-  const issueLines = (timeline?.errorIssues ?? []).slice(0, 3).map((issue) =>
-    `- ${issue.category || issue.type || "error"}: ${compactInlineText(issue.message || "No message returned.", 180)}`,
-  );
+  const issueLines = (timeline?.errorIssues ?? [])
+    .slice(0, 3)
+    .map(
+      (issue) =>
+        `- ${issue.category || issue.type || "error"}: ${compactInlineText(issue.message || "No message returned.", 180)}`,
+    );
   if (issueLines.length > 0) lines.push("Error issues:", ...issueLines);
 
   const excerptLines = (logExcerpts ?? []).slice(0, 2).flatMap((log) =>
-    diagnosticLinesFromExcerpt(log.excerpt).slice(0, 4).map((line) =>
-      `- Log #${log.logId}: ${compactInlineText(line, 180)}`,
-    ),
+    diagnosticLinesFromExcerpt(log.excerpt)
+      .slice(0, 4)
+      .map((line) => `- Log #${log.logId}: ${compactInlineText(line, 180)}`),
   );
   if (excerptLines.length > 0) lines.push("Log evidence:", ...excerptLines);
   return lines;
@@ -210,16 +237,22 @@ function diagnosticLinesFromExcerpt(excerpt: string): string[] {
     .replace(/\r/g, "\n")
     .split("\n")
     .map((line) => line.trim())
-    .filter((line) =>
-      line &&
-      (/##\[error\]|\b(error|failed|failure|exception|assertionerror|traceback)\b|npm ERR!|\bFAIL\b/i.test(line) ||
-        /MSBuild|VSBuild|Publishing\.targets|\.DS_Store/i.test(line)),
+    .filter(
+      (line) =>
+        line &&
+        (/##\[error\]|\b(error|failed|failure|exception|assertionerror|traceback)\b|npm ERR!|\bFAIL\b/i.test(
+          line,
+        ) ||
+          /MSBuild|VSBuild|Publishing\.targets|\.DS_Store/i.test(line)),
     );
   return Array.from(new Set(diagnosticLines));
 }
 
 interface PipelineFailureClassification {
-  label: "Likely source/configuration failure" | "Likely infrastructure/transient failure" | "Unknown failure class";
+  label:
+    | "Likely source/configuration failure"
+    | "Likely infrastructure/transient failure"
+    | "Unknown failure class";
   confidence: "high" | "medium" | "low";
   summary: string;
   recommendedResponse: string;
@@ -238,8 +271,10 @@ function classifyPipelineFailure(
     return {
       label: "Likely infrastructure/transient failure",
       confidence: infraScore >= 3 ? "high" : "medium",
-      summary: "The strongest evidence points to agent, network, service availability, or transient dependency failure rather than a deterministic source change.",
-      recommendedResponse: "Prefer inspecting service health and preparing a rerun approval before proposing code changes.",
+      summary:
+        "The strongest evidence points to agent, network, service availability, or transient dependency failure rather than a deterministic source change.",
+      recommendedResponse:
+        "Prefer inspecting service health and preparing a rerun approval before proposing code changes.",
     };
   }
 
@@ -247,16 +282,20 @@ function classifyPipelineFailure(
     return {
       label: "Likely source/configuration failure",
       confidence: sourceScore >= 3 ? "high" : "medium",
-      summary: "The strongest evidence points to build, test, publish, missing-file, or project configuration failure that should be investigated in the repository.",
-      recommendedResponse: "Inspect the referenced files/configuration and run focused local validation before committing a fix.",
+      summary:
+        "The strongest evidence points to build, test, publish, missing-file, or project configuration failure that should be investigated in the repository.",
+      recommendedResponse:
+        "Inspect the referenced files/configuration and run focused local validation before committing a fix.",
     };
   }
 
   return {
     label: "Unknown failure class",
     confidence: "low",
-    summary: "The available timeline/log evidence is not specific enough to distinguish code/configuration failure from infrastructure failure.",
-    recommendedResponse: "Inspect the full failed task logs before deciding whether to rerun the pipeline or change code.",
+    summary:
+      "The available timeline/log evidence is not specific enough to distinguish code/configuration failure from infrastructure failure.",
+    recommendedResponse:
+      "Inspect the full failed task logs before deciding whether to rerun the pipeline or change code.",
   };
 }
 
@@ -271,11 +310,18 @@ function pipelineFailureEvidenceText(
       record.name,
       record.type,
       record.result,
-      ...record.issues.map((issue) => `${issue.category ?? ""} ${issue.type ?? ""} ${issue.message ?? ""}`),
+      ...record.issues.map(
+        (issue) => `${issue.category ?? ""} ${issue.type ?? ""} ${issue.message ?? ""}`,
+      ),
     ]),
-    ...(timeline?.errorIssues ?? []).map((issue) => `${issue.category ?? ""} ${issue.type ?? ""} ${issue.message ?? ""}`),
+    ...(timeline?.errorIssues ?? []).map(
+      (issue) => `${issue.category ?? ""} ${issue.type ?? ""} ${issue.message ?? ""}`,
+    ),
     ...(logExcerpts ?? []).map((log) => log.excerpt),
-  ].filter(Boolean).join("\n").toLowerCase();
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
 }
 
 function scorePatterns(evidence: string, patterns: RegExp[]): number {

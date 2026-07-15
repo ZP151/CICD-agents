@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import type { Command } from "commander";
 import chalk from "chalk";
 import { createInterface } from "node:readline/promises";
 import { PAT_KEYRING_SERVICE, PAT_KEYRING_USER } from "./cliRuntime.js";

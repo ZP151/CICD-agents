@@ -30,9 +30,11 @@ interface ChatMessageListProps {
   statusText: string | null;
   repoPath: string;
   availableProjectLinks: ProjectLink[];
+  projectLinksLoading: boolean;
   activeProjectLinkId: string | null;
   selectedArtifactId: string | null;
   welcomeSuggestions: string[];
+  welcomeSuggestionsReady: boolean;
   createProjectLink: (data: ProjectLinkInput) => Promise<ProjectLink>;
   selectProjectLink: (projectLink: ProjectLink) => void;
   queuePrompt: (prompt: string) => void;
@@ -52,9 +54,11 @@ export function ChatMessageList({
   renderItems,
   repoPath,
   availableProjectLinks,
+  projectLinksLoading,
   activeProjectLinkId,
   selectedArtifactId,
   welcomeSuggestions,
+  welcomeSuggestionsReady,
   createProjectLink,
   selectProjectLink,
   queuePrompt,
@@ -74,8 +78,10 @@ export function ChatMessageList({
         <ChatEmptyState
           repoPath={repoPath}
           availableProjectLinks={availableProjectLinks}
+          projectLinksLoading={projectLinksLoading}
           activeProjectLinkId={activeProjectLinkId}
           welcomeSuggestions={welcomeSuggestions}
+          welcomeSuggestionsReady={welcomeSuggestionsReady}
           createProjectLink={createProjectLink}
           selectProjectLink={selectProjectLink}
           runWorkspaceAction={runWorkspaceAction}

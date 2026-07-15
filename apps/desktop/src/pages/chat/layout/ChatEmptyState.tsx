@@ -9,8 +9,10 @@ import { workspaceActionFromWelcomeSuggestion } from "../workspaceActionSuggesti
 interface ChatEmptyStateProps {
   repoPath: string;
   availableProjectLinks: ProjectLink[];
+  projectLinksLoading: boolean;
   activeProjectLinkId: string | null;
   welcomeSuggestions: string[];
+  welcomeSuggestionsReady: boolean;
   createProjectLink: (data: ProjectLinkInput) => Promise<ProjectLink>;
   selectProjectLink: (projectLink: ProjectLink) => void;
   queuePrompt: (prompt: string) => void;
@@ -20,8 +22,10 @@ interface ChatEmptyStateProps {
 export function ChatEmptyState({
   repoPath,
   availableProjectLinks,
+  projectLinksLoading,
   activeProjectLinkId,
   welcomeSuggestions,
+  welcomeSuggestionsReady,
   createProjectLink,
   selectProjectLink,
   runWorkspaceAction,
@@ -29,7 +33,14 @@ export function ChatEmptyState({
 }: ChatEmptyStateProps) {
   return (
     <div className="flex w-full flex-1 flex-col items-center justify-center gap-6 px-8">
-      {availableProjectLinks.length === 0 ? (
+      {projectLinksLoading && availableProjectLinks.length === 0 ? (
+        <WelcomeSuggestions
+          suggestions={[]}
+          ready={false}
+          queuePrompt={queuePrompt}
+          runWorkspaceAction={runWorkspaceAction}
+        />
+      ) : availableProjectLinks.length === 0 ? (
         <ProjectLinkSetupCard
           repoPath={repoPath}
           createProjectLink={createProjectLink}
@@ -45,6 +56,7 @@ export function ChatEmptyState({
       ) : (
         <WelcomeSuggestions
           suggestions={welcomeSuggestions}
+          ready={welcomeSuggestionsReady}
           queuePrompt={queuePrompt}
           runWorkspaceAction={runWorkspaceAction}
         />
@@ -109,10 +121,12 @@ function ProjectLinkChooser({
 
 function WelcomeSuggestions({
   suggestions,
+  ready,
   queuePrompt,
   runWorkspaceAction,
 }: {
   suggestions: string[];
+  ready: boolean;
   queuePrompt: (prompt: string) => void;
   runWorkspaceAction: (action: WorkspaceAction) => void;
 }) {
@@ -130,20 +144,32 @@ function WelcomeSuggestions({
           "what's changed since main?" &nbsp;·&nbsp; "run tests" &nbsp;·&nbsp; "create PR"
         </p>
       </div>
-      <div className="flex max-w-md flex-wrap justify-center gap-2">
-        {suggestions.map((suggestion) => (
-          <button
-            key={suggestion}
-            onClick={() => {
-              const action = workspaceActionFromWelcomeSuggestion(suggestion);
-              if (action) runWorkspaceAction(action);
-              else queuePrompt(suggestion);
-            }}
-            className="rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs text-zinc-500 transition-colors hover:border-zinc-700 hover:text-zinc-300"
-          >
-            {suggestion}
-          </button>
-        ))}
+      <div className="flex min-h-20 max-w-md flex-wrap justify-center gap-2">
+        {!ready ? (
+          <>
+            {Array.from({ length: 5 }).map((_, index) => (
+              <span
+                // eslint-disable-next-line react/no-array-index-key
+                key={index}
+                className="h-8 w-32 animate-pulse rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]"
+              />
+            ))}
+          </>
+        ) : (
+          suggestions.map((suggestion) => (
+            <button
+              key={suggestion}
+              onClick={() => {
+                const action = workspaceActionFromWelcomeSuggestion(suggestion);
+                if (action) runWorkspaceAction(action);
+                else queuePrompt(suggestion);
+              }}
+              className="rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs text-zinc-500 transition-colors hover:border-zinc-700 hover:text-zinc-300"
+            >
+              {suggestion}
+            </button>
+          ))
+        )}
       </div>
     </>
   );

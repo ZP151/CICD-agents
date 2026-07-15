@@ -13,6 +13,7 @@ import {
 
 export interface ReviewQueueCardProps {
   item: ReviewQueueItem;
+  projectLinkId: string;
   staleAgeHours: number;
   writeBackRetrying: Record<string, boolean>;
   rerunning: Record<string, boolean>;
@@ -25,6 +26,7 @@ export interface ReviewQueueCardProps {
 
 export function ReviewQueueCard({
   item,
+  projectLinkId,
   staleAgeHours,
   writeBackRetrying,
   rerunning,
@@ -34,7 +36,7 @@ export function ReviewQueueCard({
   onRetryDispositionWriteBack,
   onApplyDisposition,
 }: ReviewQueueCardProps): JSX.Element {
-  const storedFindings = loadFindingsLocal(item.repository, item.pullRequestId);
+  const storedFindings = loadFindingsLocal(item.repository, item.pullRequestId, projectLinkId);
   const hasFindings = item.findingCount > 0 || storedFindings.length > 0;
   const attentionReasons = reviewQueuePriorityReasons(item);
   const itemKey = reviewQueueItemKey(item);

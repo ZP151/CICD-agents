@@ -5,7 +5,12 @@ import {
   type PullRequestsHandoffDraft,
 } from "../../checkpointHandoff.js";
 import { fetchProjectLinkPullRequestContext } from "../../api.js";
-import type { ContextState, DisplayPullRequest, PullRequestCategory } from "./pullRequestTypes.js";
+import {
+  pullRequestRuntimeKey,
+  type ContextState,
+  type DisplayPullRequest,
+  type PullRequestCategory,
+} from "./pullRequestTypes.js";
 
 function readPullRequestsHandoffDraft(): PullRequestsHandoffDraft | null {
   const raw = sessionStorage.getItem(PULL_REQUESTS_HANDOFF_KEY);
@@ -25,14 +30,14 @@ export interface UsePullRequestHandoffInput {
   prs: DisplayPullRequest[];
   filteredPrs: DisplayPullRequest[];
   pageSize: number;
-  contexts: Record<number, ContextState>;
+  contexts: Record<string, ContextState>;
   setProjectLinkId: Dispatch<SetStateAction<string>>;
   setStatus: Dispatch<SetStateAction<string>>;
   setCategory: Dispatch<SetStateAction<PullRequestCategory>>;
-  setExpandedPrId: Dispatch<SetStateAction<number | null>>;
-  setHighlightedPrId: Dispatch<SetStateAction<number | null>>;
+  setExpandedPrKey: Dispatch<SetStateAction<string | null>>;
+  setHighlightedPrKey: Dispatch<SetStateAction<string | null>>;
   setPage: Dispatch<SetStateAction<number>>;
-  setContexts: Dispatch<SetStateAction<Record<number, ContextState>>>;
+  setContexts: Dispatch<SetStateAction<Record<string, ContextState>>>;
 }
 
 export function usePullRequestHandoff({
@@ -46,8 +51,8 @@ export function usePullRequestHandoff({
   setProjectLinkId,
   setStatus,
   setCategory,
-  setExpandedPrId,
-  setHighlightedPrId,
+  setExpandedPrKey,
+  setHighlightedPrKey,
   setPage,
   setContexts,
 }: UsePullRequestHandoffInput): void {
@@ -76,8 +81,9 @@ export function usePullRequestHandoff({
     ));
     if (!target) return;
 
-    setExpandedPrId(target.id);
-    setHighlightedPrId(target.id);
+    const targetKey = pullRequestRuntimeKey(target);
+    setExpandedPrKey(targetKey);
+    setHighlightedPrKey(targetKey);
     const targetIndex = filteredPrs.findIndex((pr) => (
       pr.id === target.id &&
       (!draft.repository || pr.repository === draft.repository)
@@ -85,14 +91,14 @@ export function usePullRequestHandoff({
     if (targetIndex >= 0) {
       setPage(Math.floor(targetIndex / pageSize) + 1);
     }
-    const currentContext = contexts[target.id];
+    const currentContext = contexts[targetKey];
     if (!currentContext || currentContext.phase === "idle") {
-      setContexts((prev) => ({ ...prev, [target.id]: { phase: "loading" } }));
+      setContexts((prev) => ({ ...prev, [targetKey]: { phase: "loading" } }));
       void fetchProjectLinkPullRequestContext(projectLinkId, target.id)
-        .then((data) => setContexts((prev) => ({ ...prev, [target.id]: { phase: "loaded", data } })))
+        .then((data) => setContexts((prev) => ({ ...prev, [targetKey]: { phase: "loaded", data } })))
         .catch((err: unknown) => setContexts((prev) => ({
           ...prev,
-          [target.id]: { phase: "error", message: err instanceof Error ? err.message : String(err) },
+          [targetKey]: { phase: "error", message: err instanceof Error ? err.message : String(err) },
         })));
     }
     sessionStorage.removeItem(PULL_REQUESTS_HANDOFF_KEY);
@@ -103,8 +109,8 @@ export function usePullRequestHandoff({
     projectLinkId,
     prs,
     setContexts,
-    setExpandedPrId,
-    setHighlightedPrId,
+    setExpandedPrKey,
+    setHighlightedPrKey,
     setPage,
   ]);
 }

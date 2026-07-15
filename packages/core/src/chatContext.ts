@@ -90,18 +90,17 @@ export async function buildChatContext(args: {
     }
   }
 
-  let fallbackUsed = !semanticUsed;
+  const fallbackUsed = !semanticUsed;
   if (relevantChunks.length === 0) {
     relevantChunks = heuristicChunks(repoPath, repoFiles, args.message, maxChunks);
   }
 
   const inspectGit = shouldInspectGit(args.message);
-  const changedFiles = inspectGit
-    ? await getChangedFiles(repoPath, projectLink?.targetBranch)
-    : [];
-  const changeDiffExcerpt = inspectGit && changedFiles.length > 0
-    ? await getChangeDiffExcerpt(repoPath, projectLink?.targetBranch)
-    : "";
+  const changedFiles = inspectGit ? await getChangedFiles(repoPath, projectLink?.targetBranch) : [];
+  const changeDiffExcerpt =
+    inspectGit && changedFiles.length > 0
+      ? await getChangeDiffExcerpt(repoPath, projectLink?.targetBranch)
+      : "";
 
   return {
     repoSummary: summarizeRepo(repoFiles, 0, repoFiles.length),
@@ -110,7 +109,8 @@ export async function buildChatContext(args: {
       .filter((chunk) => isTextContextPath(chunk.path))
       .slice(0, maxChunks + importantChunks.length),
     changedFiles,
-    changeSummary: changedFiles.length > 0 ? inferChangeSummary(changedFiles, changeDiffExcerpt) : undefined,
+    changeSummary:
+      changedFiles.length > 0 ? inferChangeSummary(changedFiles, changeDiffExcerpt) : undefined,
     changeDiffExcerpt,
     memories: [],
     projectLink,
@@ -125,7 +125,12 @@ export async function refreshChatIndex(args: {
   repoPath: string;
   llm: LLMClient;
   projectLink?: ChatContextProjectLink;
-}): Promise<{ filesSeen: number; filesIndexed: number; embedded: number; embeddingError?: string }> {
+}): Promise<{
+  filesSeen: number;
+  filesIndexed: number;
+  embedded: number;
+  embeddingError?: string;
+}> {
   const repoPath = path.resolve(args.repoPath);
   const projectLink = args.projectLink;
   const indexer = new RepoIndexer(repoPath, projectLinkToIndexerProjectTemplate(projectLink));

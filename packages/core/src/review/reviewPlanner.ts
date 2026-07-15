@@ -1,4 +1,4 @@
-import { LLMClient } from "../llm.js";
+import type { LLMClient } from "../llm.js";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import type { CloudContextBundle } from "./cloudContext.js";
 import { postProcessReviewFindings } from "./findingPostProcess.js";
@@ -11,15 +11,7 @@ import {
   summarizeContextCoverage,
 } from "./prompt.js";
 import { parseReviewResponse } from "./responseParsing.js";
-import {
-  DEFAULT_REVIEW_METADATA,
-  type ReviewCompressionSummary,
-  type ReviewContextCoverage,
-  type ReviewDiscardedFinding,
-  type ReviewFinding,
-  type ReviewMetadata,
-  type ReviewResult,
-} from "./types.js";
+import { DEFAULT_REVIEW_METADATA, type ReviewResult } from "./types.js";
 
 export {
   postProcessReviewFindings,

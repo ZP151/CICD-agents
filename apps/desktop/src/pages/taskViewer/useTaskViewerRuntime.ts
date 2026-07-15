@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ACTIVITY_HANDOFF_KEY, handoffProjectLinkId, type ActivityHandoffDraft } from "../../checkpointHandoff.js";
 import { prInsightArtifactProjectLinkId } from "../../prInsightArtifacts.js";
 import {
   fetchChatCheckpointActivity,
-  type ChatCheckpointActivity,
-  type PrInsightArtifactHistoryMeta,
   type PrInsightArtifactRecord,
   type ProjectLink,
 } from "../../api.js";
@@ -27,10 +26,6 @@ import { useTaskRuns } from "./useTaskRuns.js";
 export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
   const taskRuns = useTaskRuns();
   const { setSelected: setTaskSelected, setSelectedId: setTaskSelectedId } = taskRuns;
-  const [reviewActivity, setReviewActivity] = useState<ReviewActivityItem[]>([]);
-  const [prInsightActivity, setPrInsightActivity] = useState<PrInsightActivityItem[]>([]);
-  const [prInsightHistory, setPrInsightHistory] = useState<PrInsightArtifactHistoryMeta[]>([]);
-  const [checkpointActivity, setCheckpointActivity] = useState<ChatCheckpointActivity[]>([]);
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [selectedPrInsightId, setSelectedPrInsightId] = useState<string | null>(null);
   const [selectedCheckpointId, setSelectedCheckpointId] = useState<string | null>(null);
@@ -42,54 +37,60 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
   const [prInsightKindFilter, setPrInsightKindFilter] = useState<
     PrInsightArtifactRecord["kind"] | "all"
   >("all");
-  const [reviewLoading, setReviewLoading] = useState(false);
-  const [prInsightLoading, setPrInsightLoading] = useState(false);
-  const [checkpointLoading, setCheckpointLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const projectLinkCacheKey = useMemo(
+    () => projectLinks.map((projectLink) => projectLink.id).join("|"),
+    [projectLinks],
+  );
+
+  const reviewActivityQuery = useQuery({
+    queryKey: ["activityReviewOperations", projectLinkCacheKey],
+    enabled: projectLinks.length > 0,
+    staleTime: 45_000,
+    gcTime: 10 * 60_000,
+    placeholderData: (previous) => previous,
+    queryFn: () => loadReviewActivity(projectLinks),
+  });
+
+  const prInsightActivityQuery = useQuery({
+    queryKey: ["activityPrInsights", projectLinkCacheKey],
+    enabled: projectLinks.length > 0,
+    staleTime: 45_000,
+    gcTime: 10 * 60_000,
+    placeholderData: (previous) => previous,
+    queryFn: () => loadPrInsightActivity(projectLinks),
+  });
+
+  const checkpointActivityQuery = useQuery({
+    queryKey: ["activityCheckpoints"],
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
+    placeholderData: (previous) => previous,
+    queryFn: fetchChatCheckpointActivity,
+  });
+  const { refetch: refetchReviewActivity } = reviewActivityQuery;
+  const { refetch: refetchPrInsightActivity } = prInsightActivityQuery;
+  const { refetch: refetchCheckpointActivity } = checkpointActivityQuery;
+
+  const reviewActivity = reviewActivityQuery.data ?? [];
+  const prInsightActivity = prInsightActivityQuery.data?.items ?? [];
+  const prInsightHistory = prInsightActivityQuery.data?.history ?? [];
+  const checkpointActivity = checkpointActivityQuery.data ?? [];
+  const reviewLoading = reviewActivityQuery.isLoading && reviewActivity.length === 0;
+  const prInsightLoading = prInsightActivityQuery.isLoading && prInsightActivity.length === 0;
+  const checkpointLoading = checkpointActivityQuery.isLoading && checkpointActivity.length === 0;
 
   const refreshReviewActivity = useCallback(async () => {
-    setReviewLoading(true);
-    try {
-      setReviewActivity(await loadReviewActivity(projectLinks));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setReviewLoading(false);
-    }
-  }, [projectLinks]);
+    await refetchReviewActivity();
+  }, [refetchReviewActivity]);
 
   const refreshPrInsightActivity = useCallback(async () => {
-    setPrInsightLoading(true);
-    try {
-      const next = await loadPrInsightActivity(projectLinks);
-      setPrInsightHistory(next.history);
-      setPrInsightActivity(next.items);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setPrInsightLoading(false);
-    }
-  }, [projectLinks]);
+    await refetchPrInsightActivity();
+  }, [refetchPrInsightActivity]);
 
   const refreshCheckpointActivity = useCallback(async () => {
-    setCheckpointLoading(true);
-    try {
-      const next = await fetchChatCheckpointActivity();
-      setCheckpointActivity(next);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setCheckpointLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refreshReviewActivity();
-  }, [refreshReviewActivity]);
-
-  useEffect(() => {
-    void refreshPrInsightActivity();
-  }, [refreshPrInsightActivity]);
+    await refetchCheckpointActivity();
+  }, [refetchCheckpointActivity]);
 
   useEffect(() => {
     const raw = sessionStorage.getItem(ACTIVITY_HANDOFF_KEY);
@@ -120,10 +121,6 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     setTaskSelected(null);
     sessionStorage.removeItem(ACTIVITY_HANDOFF_KEY);
   }, [prInsightActivity, setTaskSelected, setTaskSelectedId]);
-
-  useEffect(() => {
-    void refreshCheckpointActivity();
-  }, [refreshCheckpointActivity]);
 
   const selectedReview = useMemo(
     () => reviewActivity.find((event) => event.id === selectedReviewId) ?? null,

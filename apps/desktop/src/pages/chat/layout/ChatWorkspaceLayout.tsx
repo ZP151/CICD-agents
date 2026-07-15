@@ -38,6 +38,7 @@ export function ChatWorkspaceLayout({
   history,
   historyError,
   historyExpanded,
+  historyLoading,
   historyMenu,
   historyOpen,
   historyPage,
@@ -50,6 +51,7 @@ export function ChatWorkspaceLayout({
   openPrInsightSourceInActivity,
   openPrInsightSourceInWorkspace,
   openSources,
+  projectLinksLoading,
   queuePrompt,
   queuedSuggestionId,
   renamingHistoryId,
@@ -91,6 +93,7 @@ export function ChatWorkspaceLayout({
   toggleHistoryPin,
   toggleTool,
   welcomeSuggestions,
+  welcomeSuggestionsReady,
   workflowState,
   workspaceRef,
 }: ChatShellProps) {
@@ -108,6 +111,7 @@ export function ChatWorkspaceLayout({
             activeSessionId={sessionId}
             historyError={historyError}
             expanded={historyExpanded}
+            loading={historyLoading}
             page={historyPage}
             menu={historyMenu}
             renamingHistoryId={renamingHistoryId}
@@ -147,9 +151,11 @@ export function ChatWorkspaceLayout({
               statusText={statusText}
               repoPath={repoPath}
               availableProjectLinks={availableProjectLinks}
+              projectLinksLoading={projectLinksLoading}
               activeProjectLinkId={activeProjectLinkId}
               selectedArtifactId={selectedArtifactId}
               welcomeSuggestions={welcomeSuggestions}
+              welcomeSuggestionsReady={welcomeSuggestionsReady}
               createProjectLink={createProjectLink}
               selectProjectLink={(projectLink) => selectProjectLink(projectLink.id)}
               queuePrompt={queuePrompt}
@@ -176,6 +182,7 @@ export function ChatWorkspaceLayout({
             activeCustomModel={activeCustomModel}
             customModels={customModels}
             availableProjectLinks={availableProjectLinks}
+            projectLinksLoading={projectLinksLoading}
             activeProjectLinkId={activeProjectLinkId}
             composerStateNotice={composerStateNotice}
             composerInputState={composerInputState}

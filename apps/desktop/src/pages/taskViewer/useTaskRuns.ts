@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchTask,
   fetchTasks,
@@ -7,63 +8,74 @@ import {
 } from "../../api.js";
 
 export function useTaskRuns() {
-  const [tasks, setTasks] = useState<TaskView[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selected, setSelected] = useState<TaskView | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const tasksQuery = useQuery({
+    queryKey: ["activityRuns"],
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
+    placeholderData: (previous) => previous,
+    queryFn: fetchTasks,
+  });
+  const { refetch: refetchTasks } = tasksQuery;
 
   const refresh = useCallback(async () => {
     setError(null);
     try {
-      const next = await fetchTasks();
-      setTasks(next);
+      const result = await refetchTasks();
+      const next = result.data ?? [];
       setSelectedId((current) => current ?? next[0]?.id ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
     }
-  }, []);
+  }, [refetchTasks]);
 
   useEffect(() => {
-    void refresh();
-    const timer = setInterval(() => void refresh(), 10000);
-    return () => clearInterval(timer);
-  }, [refresh]);
+    const next = tasksQuery.data ?? [];
+    if (selectedId || next.length === 0) return;
+    setSelectedId(next[0]?.id ?? null);
+  }, [selectedId, tasksQuery.data]);
 
   useEffect(() => {
-    if (!selectedId) {
-      setSelected(null);
-      return;
-    }
-    let cancelled = false;
-    void fetchTask(selectedId)
-      .then((task) => {
-        if (!cancelled) setSelected(task);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedId]);
+    const timer = window.setInterval(() => {
+      void refetchTasks();
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [refetchTasks]);
+
+  const selectedTaskQuery = useQuery({
+    queryKey: ["activityRun", selectedId],
+    enabled: Boolean(selectedId),
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
+    placeholderData: (previous) => previous,
+    queryFn: () => fetchTask(selectedId!),
+  });
+
+  const tasks = tasksQuery.data ?? [];
+  const selected = selectedId
+    ? selectedTaskQuery.data ?? tasks.find((task) => task.id === selectedId) ?? null
+    : null;
+  const loading = tasksQuery.isLoading && tasks.length === 0;
+  const queryError = tasksQuery.error ?? selectedTaskQuery.error;
+  const selectedStatus = selected?.status;
 
   useEffect(() => {
-    if (!selectedId || !selected || !["queued", "running"].includes(selected.status)) return;
+    if (!selectedId || !selectedStatus || !["queued", "running"].includes(selectedStatus)) return;
     const close = streamTask(selectedId, (type, data) => {
       if (type === "step") {
-        setSelected((current) =>
-          current
-            ? { ...current, steps: [...current.steps, data as TaskView["steps"][number]] }
-            : current,
+        queryClient.setQueryData<TaskView>(["activityRun", selectedId], (current) =>
+          current ? { ...current, steps: [...current.steps, data as TaskView["steps"][number]] } : current,
         );
       } else if (type === "status") {
-        setSelected((current) => (current ? { ...current, status: String(data) } : current));
+        queryClient.setQueryData<TaskView>(["activityRun", selectedId], (current) =>
+          current ? { ...current, status: String(data) } : current,
+        );
       } else if (type === "done") {
         const done = data as { status?: string; result?: unknown; error?: string };
-        setSelected((current) =>
+        queryClient.setQueryData<TaskView>(["activityRun", selectedId], (current) =>
           current
             ? {
                 ...current,
@@ -74,16 +86,21 @@ export function useTaskRuns() {
               }
             : current,
         );
-        void refresh();
+        void queryClient.invalidateQueries({ queryKey: ["activityRuns"] });
       }
     });
     return close;
-  }, [selectedId, selected, refresh]);
+  }, [queryClient, selectedId, selectedStatus]);
 
   const activeCount = useMemo(
     () => tasks.filter((task) => task.status === "queued" || task.status === "running").length,
     [tasks],
   );
+
+  const setSelected = useCallback((task: TaskView | null) => {
+    setSelectedId(task?.id ?? null);
+    if (task) queryClient.setQueryData(["activityRun", task.id], task);
+  }, [queryClient]);
 
   return {
     tasks,
@@ -91,7 +108,7 @@ export function useTaskRuns() {
     selectedId,
     loading,
     activeCount,
-    error,
+    error: error ?? (queryError instanceof Error ? queryError.message : null),
     refresh,
     setSelected,
     setSelectedId,

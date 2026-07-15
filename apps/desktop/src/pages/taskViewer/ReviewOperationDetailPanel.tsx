@@ -12,7 +12,7 @@ export function ReviewOperationDetailPanel({
 }): JSX.Element {
   return (
     <div className="space-y-5">
-      <header className="border-b border-zinc-800/70 pb-4">
+      <header className="border-b border-zinc-200 pb-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${reviewOperationStatusClass(operation.ok)}`}
@@ -24,7 +24,7 @@ export function ReviewOperationDetailPanel({
             {formatTime(Date.parse(operation.at || "0") / 1000)}
           </span>
         </div>
-        <h2 className="text-lg font-semibold text-zinc-100">{operation.label}</h2>
+        <h2 className="text-lg font-semibold text-zinc-950">{operation.label}</h2>
         <p className="mt-1 font-mono text-xs text-zinc-600">{operation.id}</p>
       </header>
 
@@ -41,11 +41,11 @@ export function ReviewOperationDetailPanel({
         <ReviewOperationFact label="Actor" value={operation.actor || "unknown actor"} />
       </section>
 
-      <section className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
+      <section className="rounded-lg border border-zinc-200 bg-white p-3">
         <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-600">
           Details
         </h3>
-        <p className="break-words text-sm text-zinc-300">
+        <p className="break-words text-sm text-zinc-800">
           {operation.details || "No details recorded."}
         </p>
       </section>
@@ -63,9 +63,9 @@ function ReviewOperationFact({
   mono?: boolean;
 }): JSX.Element {
   return (
-    <div className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
+    <div className="rounded-lg border border-zinc-200 bg-white p-3">
       <p className="text-xs text-zinc-600">{label}</p>
-      <p className={`mt-1 text-zinc-300 ${mono ? "font-mono" : ""}`}>{value}</p>
+      <p className={`mt-1 text-zinc-800 ${mono ? "font-mono" : ""}`}>{value}</p>
     </div>
   );
 }

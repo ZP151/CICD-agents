@@ -24,7 +24,12 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
   const location = useLocation();
   const pageState = useChatPageState(location.search);
   const panelRuntime = useResizableChatPanels({ mini });
-  const { projectLinks: availableProjectLinks, createProjectLink, updateProjectLink } = useAppData();
+  const {
+    projectLinks: availableProjectLinks,
+    projectLinksLoading,
+    createProjectLink,
+    updateProjectLink,
+  } = useAppData();
   const scrollRuntime = useChatScrollFollow(pageState.bubbles);
 
   const focusComposer = useCallback(() => {
@@ -165,5 +170,6 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
     suggestionRuntime,
     turnRuntime,
     workspaceRuntime,
+    projectLinksLoading,
   });
 }

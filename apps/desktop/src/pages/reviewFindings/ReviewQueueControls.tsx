@@ -66,7 +66,7 @@ export function ReviewQueueControls({
             aria-pressed={queueFilter === lane.key}
             className={`cursor-pointer rounded-lg border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 ${
               queueFilter === lane.key
-                ? "border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-surface-raised))] ring-1 ring-[rgb(var(--app-border))]"
+                ? `${lane.tone} ring-2 ring-[rgb(var(--app-accent))]/35`
                 : lane.tone
             }`}
           >

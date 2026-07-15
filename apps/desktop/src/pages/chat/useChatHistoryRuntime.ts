@@ -31,6 +31,7 @@ export interface ChatHistoryRuntime {
   renamingHistoryValue: string;
   setRenamingHistoryValue: Dispatch<SetStateAction<string>>;
   historyError: string | null;
+  historyLoading: boolean;
   historyExpanded: boolean;
   setHistoryExpanded: Dispatch<SetStateAction<boolean>>;
   historyPage: number;
@@ -58,12 +59,18 @@ export function useChatHistoryRuntime({
   const [renamingHistoryId, setRenamingHistoryId] = useState<string | null>(null);
   const [renamingHistoryValue, setRenamingHistoryValue] = useState("");
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(!mini);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
 
   const refreshHistory = useCallback(async () => {
-    const items = await fetchChatHistory();
-    setHistory(sortChatHistory(items));
+    setHistoryLoading(true);
+    try {
+      const items = await fetchChatHistory();
+      setHistory(sortChatHistory(items));
+    } finally {
+      setHistoryLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -164,6 +171,7 @@ export function useChatHistoryRuntime({
     renamingHistoryValue,
     setRenamingHistoryValue,
     historyError,
+    historyLoading,
     historyExpanded,
     setHistoryExpanded,
     historyPage,

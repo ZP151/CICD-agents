@@ -86,28 +86,28 @@ export function ActivitySidebar({
   onReviewKindFilterChange,
 }: ActivitySidebarProps): JSX.Element {
   return (
-    <section className="flex w-[360px] shrink-0 flex-col border-r border-zinc-800/70 pr-4">
+    <section className="flex w-[360px] shrink-0 flex-col border-r border-zinc-200 pr-4">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-zinc-100">Activity</h2>
-          <p className="mt-1 text-sm text-zinc-500">Agent runs and background jobs.</p>
+          <h2 className="text-xl font-semibold text-zinc-950">Operations</h2>
+          <p className="mt-1 text-sm text-zinc-500">Runs, checkpoints, insights, and review actions.</p>
         </div>
         <button
           onClick={onRefreshAll}
-          className="rounded-md border border-zinc-800 px-2 py-1 text-xs text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300"
+          className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-600 transition hover:border-zinc-300 hover:text-zinc-900"
         >
           Refresh
         </button>
       </div>
 
       {activeCount > 0 && (
-        <div className="mb-3 rounded-md border border-blue-900/50 bg-blue-950/20 px-3 py-2 text-xs text-blue-300">
+        <div className="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
           {activeCount} active run{activeCount === 1 ? "" : "s"}
         </div>
       )}
 
       {error && (
-        <div className="mb-3 rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">
+        <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           {error}
         </div>
       )}
@@ -166,7 +166,7 @@ function TaskRunList({
     <div className="min-h-0 flex-1 overflow-y-auto space-y-1.5">
       {loading && <p className="px-1 text-sm text-zinc-600">Loading activity...</p>}
       {!loading && tasks.length === 0 && (
-        <p className="px-1 text-sm text-zinc-600">No agent runs yet.</p>
+        <p className="px-1 text-sm text-zinc-600">No operations recorded yet.</p>
       )}
       {tasks.map((task) => {
         const selectedTask = task.id === selectedTaskId;
@@ -176,8 +176,8 @@ function TaskRunList({
             onClick={() => onSelectTask(task.id)}
             className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
               selectedTask
-                ? "border-zinc-700 bg-zinc-900"
-                : "border-transparent hover:border-zinc-800 hover:bg-zinc-900/50"
+                ? "border-blue-300 bg-blue-50"
+                : "border-transparent hover:border-zinc-200 hover:bg-zinc-50"
             }`}
           >
             <div className="mb-1 flex items-center gap-2">
@@ -188,7 +188,7 @@ function TaskRunList({
               </span>
               <span className="truncate text-xs text-zinc-600">{formatTime(task.createdAt)}</span>
             </div>
-            <p className="truncate text-sm font-medium text-zinc-200">{taskTitle(task)}</p>
+            <p className="truncate text-sm font-medium text-zinc-950">{taskTitle(task)}</p>
             <p className="mt-1 truncate text-xs text-zinc-600">{latestDetail(task)}</p>
           </button>
         );
@@ -209,7 +209,7 @@ function CheckpointActivityList({
   onSelectCheckpoint: (eventId: string) => void;
 }): JSX.Element {
   return (
-    <div className="mt-5 border-t border-zinc-800/70 pt-4">
+    <div className="mt-5 border-t border-zinc-200 pt-4">
       <div className="mb-2 flex items-center justify-between gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
           Checkpoint Activity
@@ -228,8 +228,8 @@ function CheckpointActivityList({
               onClick={() => onSelectCheckpoint(event.id)}
               className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
                 selectedEvent
-                  ? "border-zinc-700 bg-zinc-900"
-                  : "border-transparent hover:border-zinc-800 hover:bg-zinc-900/50"
+                  ? "border-blue-300 bg-blue-50"
+                  : "border-transparent hover:border-zinc-200 hover:bg-zinc-50"
               }`}
             >
               <div className="mb-1 flex items-center gap-2">
@@ -240,7 +240,7 @@ function CheckpointActivityList({
                 </span>
                 <span className="truncate text-xs text-zinc-600">{formatTime(event.at)}</span>
               </div>
-              <p className="truncate text-sm font-medium text-zinc-200">{event.toolName}</p>
+              <p className="truncate text-sm font-medium text-zinc-950">{event.toolName}</p>
               <p className="mt-1 truncate font-mono text-xs text-zinc-600">
                 {checkpointActivityDetail(event)}
               </p>

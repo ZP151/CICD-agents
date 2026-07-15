@@ -13,7 +13,6 @@ import {
   type ProjectLink,
 } from "../../api.js";
 import {
-  listPrInsightArtifacts,
   savePrInsightPreviewArtifact,
   savePrReviewRunArtifact,
   type PrInsightArtifact,
@@ -23,16 +22,21 @@ import {
   previewOperationDetails,
   reviewRunOperationDetails,
 } from "./pullRequestViewModel.js";
-import type { DisplayPullRequest, PreviewState, QueueState } from "./pullRequestTypes.js";
+import {
+  pullRequestRuntimeKey,
+  type DisplayPullRequest,
+  type PreviewState,
+  type QueueState,
+} from "./pullRequestTypes.js";
 
 export interface UsePullRequestActionsInput {
   projectLinkId: string;
   projectLinks: ProjectLink[];
   selectedProjectLink: ProjectLink | null;
   projectLinkForPullRequest: (pr: DisplayPullRequest) => string;
-  setQueueing: Dispatch<SetStateAction<Record<number, QueueState>>>;
-  setPreviews: Dispatch<SetStateAction<Record<number, PreviewState>>>;
-  setInsightArtifacts: Dispatch<SetStateAction<PrInsightArtifact[]>>;
+  setQueueing: Dispatch<SetStateAction<Record<string, QueueState>>>;
+  setPreviews: Dispatch<SetStateAction<Record<string, PreviewState>>>;
+  onInsightArtifactSaved: (artifact: PrInsightArtifact, projectLinkId: string) => void;
 }
 
 export interface PullRequestActions {
@@ -48,18 +52,16 @@ export function usePullRequestActions({
   projectLinkForPullRequest,
   setQueueing,
   setPreviews,
-  setInsightArtifacts,
+  onInsightArtifactSaved,
 }: UsePullRequestActionsInput): PullRequestActions {
   const navigate = useNavigate();
-  const refreshLocalArtifacts = useCallback(() => {
-    setInsightArtifacts(projectLinkId ? listPrInsightArtifacts(projectLinkId) : listPrInsightArtifacts());
-  }, [projectLinkId, setInsightArtifacts]);
 
   const handleQueueForReview = useCallback(async (pr: DisplayPullRequest) => {
     const actionProjectLinkId = projectLinkForPullRequest(pr);
     if (!actionProjectLinkId) return;
+    const prKey = pullRequestRuntimeKey(pr);
 
-    setQueueing((prev) => ({ ...prev, [pr.id]: { phase: "watching" } }));
+    setQueueing((prev) => ({ ...prev, [prKey]: { phase: "watching" } }));
     try {
       await recordProjectLinkReviewHistory(actionProjectLinkId, {
         pullRequestId: pr.id,
@@ -95,7 +97,7 @@ export function usePullRequestActions({
       // Non-fatal; the actual review can still run.
     }
 
-    setQueueing((prev) => ({ ...prev, [pr.id]: { phase: "reviewing" } }));
+    setQueueing((prev) => ({ ...prev, [prKey]: { phase: "reviewing" } }));
     try {
       const result = await runProjectLinkReviewRun(actionProjectLinkId, pr.id, pr.targetBranch);
       await recordProjectLinkReviewHistory(actionProjectLinkId, {
@@ -129,7 +131,7 @@ export function usePullRequestActions({
         manualDispositionWriteBackEvents: [],
       });
       if (result.findings && result.findings.length > 0) {
-        saveFindingsLocal(result.repository, result.pullRequestId, result.findings);
+        saveFindingsLocal(result.repository, result.pullRequestId, result.findings, actionProjectLinkId);
       }
       const artifact = savePrReviewRunArtifact({
         projectLinkId: actionProjectLinkId,
@@ -138,8 +140,10 @@ export function usePullRequestActions({
         title: pr.title,
         result,
       });
-      refreshLocalArtifacts();
-      void saveProjectLinkPrInsightArtifact(actionProjectLinkId, artifact);
+      onInsightArtifactSaved(artifact, actionProjectLinkId);
+      void saveProjectLinkPrInsightArtifact(actionProjectLinkId, artifact).finally(() => {
+        onInsightArtifactSaved(artifact, actionProjectLinkId);
+      });
       void recordProjectLinkReviewOperation(actionProjectLinkId, {
         kind: "review_run",
         repository: result.repository,
@@ -148,7 +152,7 @@ export function usePullRequestActions({
         ok: true,
         details: reviewRunOperationDetails(result),
       });
-      setQueueing((prev) => ({ ...prev, [pr.id]: { phase: "done", result } }));
+      setQueueing((prev) => ({ ...prev, [prKey]: { phase: "done", result } }));
     } catch (err) {
       void recordProjectLinkReviewOperation(actionProjectLinkId, {
         kind: "review_run",
@@ -160,15 +164,16 @@ export function usePullRequestActions({
       });
       setQueueing((prev) => ({
         ...prev,
-        [pr.id]: { phase: "error", message: err instanceof Error ? err.message : String(err) },
+        [prKey]: { phase: "error", message: err instanceof Error ? err.message : String(err) },
       }));
     }
-  }, [projectLinkForPullRequest, refreshLocalArtifacts, setQueueing]);
+  }, [onInsightArtifactSaved, projectLinkForPullRequest, setQueueing]);
 
   const handlePreviewInsight = useCallback(async (pr: DisplayPullRequest) => {
     const actionProjectLinkId = projectLinkForPullRequest(pr);
     if (!actionProjectLinkId) return;
-    setPreviews((prev) => ({ ...prev, [pr.id]: { phase: "loading" } }));
+    const prKey = pullRequestRuntimeKey(pr);
+    setPreviews((prev) => ({ ...prev, [prKey]: { phase: "loading" } }));
     try {
       const result = await fetchProjectLinkPullRequestInsightPreview(actionProjectLinkId, pr.id);
       const artifact = savePrInsightPreviewArtifact({
@@ -178,8 +183,10 @@ export function usePullRequestActions({
         title: pr.title,
         result,
       });
-      refreshLocalArtifacts();
-      void saveProjectLinkPrInsightArtifact(actionProjectLinkId, artifact);
+      onInsightArtifactSaved(artifact, actionProjectLinkId);
+      void saveProjectLinkPrInsightArtifact(actionProjectLinkId, artifact).finally(() => {
+        onInsightArtifactSaved(artifact, actionProjectLinkId);
+      });
       void recordProjectLinkReviewOperation(actionProjectLinkId, {
         kind: "insight_preview",
         repository: pr.repository,
@@ -188,7 +195,7 @@ export function usePullRequestActions({
         ok: true,
         details: previewOperationDetails(result),
       });
-      setPreviews((prev) => ({ ...prev, [pr.id]: { phase: "done", result } }));
+      setPreviews((prev) => ({ ...prev, [prKey]: { phase: "done", result } }));
     } catch (err) {
       void recordProjectLinkReviewOperation(actionProjectLinkId, {
         kind: "insight_preview",
@@ -200,10 +207,10 @@ export function usePullRequestActions({
       });
       setPreviews((prev) => ({
         ...prev,
-        [pr.id]: { phase: "error", message: err instanceof Error ? err.message : String(err) },
+        [prKey]: { phase: "error", message: err instanceof Error ? err.message : String(err) },
       }));
     }
-  }, [projectLinkForPullRequest, refreshLocalArtifacts, setPreviews]);
+  }, [onInsightArtifactSaved, projectLinkForPullRequest, setPreviews]);
 
   const openSavedInsightInChat = useCallback((pr: DisplayPullRequest, artifact: PrInsightArtifact) => {
     const actionProjectLinkId = projectLinkForPullRequest(pr);

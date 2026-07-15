@@ -1,26 +1,15 @@
 import type { PendingToolAction } from "@mergepilot/core";
 import type { ChatSessionManager } from "../chatSession.js";
 import type { ChatWorkflowActionPayload } from "../routes/chat-workflow.routes.js";
-import {
-  branchPreflightFromTools,
-} from "./workspaceBranchPreflight.js";
-import {
-  dirtyWorkingTreeSummary,
-  type GitOperationState,
-} from "./gitOperation.js";
+import { branchPreflightFromTools } from "./workspaceBranchPreflight.js";
+import { dirtyWorkingTreeSummary, type GitOperationState } from "./gitOperation.js";
 import type { GitWorkflowProbeResult } from "./gitProbes.js";
 import {
   buildGitRecoveryProposal,
   buildStageResolvedConflictsProposal,
   isGitRecoveryWorkflowAction,
-  type GitRecoveryWorkflowAction,
 } from "./workspaceRecoveryActions.js";
-import {
-  prPreflightFromPayload,
-  prPreflightFromTools,
-  type PrPreflight,
-} from "./workspacePrPreflight.js";
-import { pushReadinessFromTools } from "./workspacePushReadiness.js";
+import { prPreflightFromPayload, prPreflightFromTools } from "./workspacePrPreflight.js";
 import {
   changedFilesFromGitOutputs,
   focusedValidationPreflightFromSession,
@@ -54,13 +43,22 @@ export function buildWorkspaceWorkflowProposal(
   if (action === "checkout_branch") {
     if (!branch) throw new Error("Branch is required to switch branches.");
     const branchPreflight = preflight?.kind === "branch" ? preflight : undefined;
-    if (branchPreflight?.status === "current" || branchPreflight?.status === "missing" || branchPreflight?.status === "invalid") {
+    if (
+      branchPreflight?.status === "current" ||
+      branchPreflight?.status === "missing" ||
+      branchPreflight?.status === "invalid"
+    ) {
       return undefined;
     }
     if (branchPreflight?.status === "remote_only" && branchPreflight.remoteBranch) {
       return {
         tool: "git_switch",
-        args: { branch: branchPreflight.branch, create: true, startPoint: branchPreflight.remoteBranch, track: true },
+        args: {
+          branch: branchPreflight.branch,
+          create: true,
+          startPoint: branchPreflight.remoteBranch,
+          track: true,
+        },
         description: `${branchPreflight.summary}${dirtySuffix ? ` ${dirtySuffix}` : ""}`,
         nextHint: "inspect branch status",
         preflight: branchPreflight,
@@ -92,7 +90,8 @@ export function buildWorkspaceWorkflowProposal(
     return {
       tool: "git_fetch",
       args: { remote: "origin", prune: true },
-      description: "Fetch latest remote refs from origin and prune deleted remote-tracking branches.",
+      description:
+        "Fetch latest remote refs from origin and prune deleted remote-tracking branches.",
       nextHint: "refresh branch status",
       workflow: {
         kind: "git",
@@ -129,14 +128,18 @@ export function buildWorkspaceWorkflowProposal(
     };
   }
   if (action === "create_pr") {
-    const prPreflight = preflight?.kind === "pr" ? preflight : prPreflightFromPayload(payload, currentBranch, statusText, "");
+    const prPreflight =
+      preflight?.kind === "pr"
+        ? preflight
+        : prPreflightFromPayload(payload, currentBranch, statusText, "");
     if (prPreflight.status !== "ready" && prPreflight.status !== "dirty_worktree") {
       throw new Error(prPreflight.summary);
     }
     const sourceBranch = prPreflight.sourceBranch;
     const targetBranch = prPreflight.targetBranch ?? "main";
     const title = prPreflight.title || `Update from ${sourceBranch}`;
-    if (!sourceBranch) throw new Error("Current branch is required before creating a pull request.");
+    if (!sourceBranch)
+      throw new Error("Current branch is required before creating a pull request.");
     const dirtyPrSuffix = prPreflight.status === "dirty_worktree" ? ` ${prPreflight.summary}` : "";
     return {
       tool: "ado_create_pr",
@@ -163,9 +166,10 @@ export function buildWorkspaceWorkflowProposal(
   }
   if (action === "run_tests" || action === "run_build") {
     const kind = action === "run_build" ? "build" : "test";
-    const validationPreflight: ValidationPreflight = preflight?.kind === "validation"
-      ? preflight
-      : validationPreflightFromPayload(payload, kind, []);
+    const validationPreflight: ValidationPreflight =
+      preflight?.kind === "validation"
+        ? preflight
+        : validationPreflightFromPayload(payload, kind, []);
     return {
       tool: "validation_command",
       args: { command: validationPreflight.command, kind },
@@ -227,7 +231,8 @@ export async function preflightFromTools(
   tools: GitWorkflowProbeResult["tools"],
   statusText: string,
 ): Promise<PendingToolAction["preflight"] | undefined> {
-  if (action === "checkout_branch" || action === "create_branch") return branchPreflightFromTools(action, payload, tools);
+  if (action === "checkout_branch" || action === "create_branch")
+    return branchPreflightFromTools(action, payload, tools);
   if (action === "create_pr") {
     return prPreflightFromTools({ payload, tools, statusText });
   }
@@ -238,8 +243,10 @@ export async function preflightFromTools(
       statusText,
     );
     const kind = action === "run_build" ? "build" : "test";
-    return await focusedValidationPreflightFromSession(chatSessions, payload, kind, changedFiles)
-      ?? validationPreflightFromPayload(payload, kind, changedFiles);
+    return (
+      (await focusedValidationPreflightFromSession(chatSessions, payload, kind, changedFiles)) ??
+      validationPreflightFromPayload(payload, kind, changedFiles)
+    );
   }
   return undefined;
 }
@@ -255,24 +262,33 @@ export function workflowRiskForAction(
   if (isGitRecoveryWorkflowAction(action)) return "high";
   if (action === "stage_resolved_conflicts") return "high";
   if (action === "run_tests" || action === "run_build") return "medium";
-  if ((action === "checkout_branch" || action === "create_branch") && dirtyWorkingTreeSummary(statusText)) return "high";
+  if (
+    (action === "checkout_branch" || action === "create_branch") &&
+    dirtyWorkingTreeSummary(statusText)
+  )
+    return "high";
   if (preflight?.status === "remote_only") return "medium";
   return "medium";
 }
 
-export function summarizeWorkspaceWorkflow(action: string, args: {
-  currentBranch: string;
-  statusText: string;
-  diffStat: string;
-  changedFiles: string[];
-  operationState?: GitOperationState;
-  pushReadiness?: PendingToolAction["readiness"];
-  latestCommitSubject?: string;
-  latestCommitStat?: string;
-}): string {
+export function summarizeWorkspaceWorkflow(
+  action: string,
+  args: {
+    currentBranch: string;
+    statusText: string;
+    diffStat: string;
+    changedFiles: string[];
+    operationState?: GitOperationState;
+    pushReadiness?: PendingToolAction["readiness"];
+    latestCommitSubject?: string;
+    latestCommitStat?: string;
+  },
+): string {
   const lines: string[] = [];
   if (action === "draft_commit_message") {
-    lines.push(`Suggested commit message: \`${draftCommitMessageFromChangedFiles(args.changedFiles)}\``);
+    lines.push(
+      `Suggested commit message: \`${draftCommitMessageFromChangedFiles(args.changedFiles)}\``,
+    );
     if (args.changedFiles.length > 0) {
       lines.push(`Basis: ${args.changedFiles.length} changed file(s).`);
     }
@@ -284,17 +300,27 @@ export function summarizeWorkspaceWorkflow(action: string, args: {
     lines.push(...remoteTargetSummaryLines(args.currentBranch, args.pushReadiness));
   }
   if (action === "inspect_latest_commit") {
-    lines.push(...latestCommitSummaryLines(args.latestCommitSubject ?? "", args.latestCommitStat ?? "", args.pushReadiness));
+    lines.push(
+      ...latestCommitSummaryLines(
+        args.latestCommitSubject ?? "",
+        args.latestCommitStat ?? "",
+        args.pushReadiness,
+      ),
+    );
   }
   if (args.currentBranch) lines.push(`Branch: ${args.currentBranch}`);
-  if (args.operationState && args.operationState.status !== "normal") lines.push(args.operationState.summary);
+  if (args.operationState && args.operationState.status !== "normal")
+    lines.push(args.operationState.summary);
   if (args.statusText) {
     const statusLines = args.statusText.split(/\r?\n/).filter(Boolean);
     lines.push(`Git status: ${statusLines.length} line(s)`);
   } else if (action !== "refresh_branch") {
     lines.push("Git status: clean");
   }
-  if (args.changedFiles.length > 0) lines.push(`Changed files: ${args.changedFiles.slice(0, 12).join(", ")}${args.changedFiles.length > 12 ? ", ..." : ""}`);
+  if (args.changedFiles.length > 0)
+    lines.push(
+      `Changed files: ${args.changedFiles.slice(0, 12).join(", ")}${args.changedFiles.length > 12 ? ", ..." : ""}`,
+    );
   if (action === "inspect_changes") lines.push(...changeReviewRiskLines(args.changedFiles));
   if (args.diffStat) lines.push(args.diffStat);
   if (action === "run_tests") lines.push("Validation: waiting to run tests after approval.");
@@ -312,10 +338,18 @@ export function draftCommitMessageFromChangedFiles(files: string[]): string {
 }
 
 function commitTypeFromFiles(files: string[]): string {
-  if (files.every((file) => /\.(md|mdx|txt|adoc)$/i.test(file) || file.startsWith("docs/"))) return "docs";
-  if (files.every((file) => /\b(test|spec)\.[a-z0-9]+$/i.test(file) || file.includes("__tests__/"))) return "test";
-  if (files.some((file) => file.startsWith(".github/") || file.includes("/workflows/"))) return "ci";
-  if (files.some((file) => /(^|\/)(package.json|pnpm-lock.yaml|tsconfig[^/]*\.json|vite\.config\.)/i.test(file))) return "chore";
+  if (files.every((file) => /\.(md|mdx|txt|adoc)$/i.test(file) || file.startsWith("docs/")))
+    return "docs";
+  if (files.every((file) => /\b(test|spec)\.[a-z0-9]+$/i.test(file) || file.includes("__tests__/")))
+    return "test";
+  if (files.some((file) => file.startsWith(".github/") || file.includes("/workflows/")))
+    return "ci";
+  if (
+    files.some((file) =>
+      /(^|\/)(package.json|pnpm-lock.yaml|tsconfig[^/]*\.json|vite\.config\.)/i.test(file),
+    )
+  )
+    return "chore";
   return "chore";
 }
 
@@ -338,7 +372,9 @@ function commitSubjectFromFiles(files: string[], scope: string, type: string): s
   if (scope === "daemon") return "update daemon workflow";
   if (scope === "core") return "update core workflow";
   if (scope === "docs") return "update documentation";
-  return files.length === 1 ? `update ${basenameWithoutExtension(files[0] ?? "workspace")}` : "update workspace changes";
+  return files.length === 1
+    ? `update ${basenameWithoutExtension(files[0] ?? "workspace")}`
+    : "update workspace changes";
 }
 
 function basenameWithoutExtension(file: string): string {
@@ -363,9 +399,11 @@ function changeScopeSummaryLines(files: string[]): string[] {
 
 function changeReviewRiskLines(files: string[]): string[] {
   const normalized = files.map((file) => file.replace(/\\/g, "/")).filter(Boolean);
-  const sensitiveConfigFiles = normalized.filter((file) =>
-    /(^|\/)(\.env[^/]*|appsettings[^/]*\.json|web\.config|.*config\.(json|ya?ml|toml|xml)|.*secret.*|.*credential.*|.*key.*)$/i.test(file) ||
-    /(^|\/)(config|settings|secrets?)\//i.test(file)
+  const sensitiveConfigFiles = normalized.filter(
+    (file) =>
+      /(^|\/)(\.env[^/]*|appsettings[^/]*\.json|web\.config|.*config\.(json|ya?ml|toml|xml)|.*secret.*|.*credential.*|.*key.*)$/i.test(
+        file,
+      ) || /(^|\/)(config|settings|secrets?)\//i.test(file),
   );
   if (sensitiveConfigFiles.length === 0) return [];
   const preview = sensitiveConfigFiles.slice(0, 5).join(", ");
@@ -400,10 +438,7 @@ function remoteTargetSummaryLines(
     ];
   }
   const upstream = readiness.upstream || `origin/${branch}`;
-  const lines = [
-    `Remote target: ${upstream}`,
-    `Readiness: ${readiness.summary}`,
-  ];
+  const lines = [`Remote target: ${upstream}`, `Readiness: ${readiness.summary}`];
   if (typeof readiness.ahead === "number" || typeof readiness.behind === "number") {
     lines.push(`Divergence: ahead ${readiness.ahead ?? 0}, behind ${readiness.behind ?? 0}.`);
   }
@@ -419,11 +454,16 @@ function latestCommitSummaryLines(
   if (readiness?.kind === "push") {
     lines.push(`Remote status: ${readiness.summary}`);
   }
-  const statLines = stat.split(/\r?\n/).map((line) => line.trimEnd()).filter(Boolean);
+  const statLines = stat
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter(Boolean);
   const fileLines = statLines.filter((line) => /\|\s+\d+/.test(line));
   const summaryLine = statLines.find((line) => /\bfiles? changed\b/.test(line));
   if (fileLines.length > 0) {
-    lines.push(`Commit files: ${fileLines.slice(0, 8).join("; ")}${fileLines.length > 8 ? "; ..." : ""}`);
+    lines.push(
+      `Commit files: ${fileLines.slice(0, 8).join("; ")}${fileLines.length > 8 ? "; ..." : ""}`,
+    );
   }
   if (summaryLine) lines.push(`Commit stat: ${summaryLine.trim()}`);
   return lines;

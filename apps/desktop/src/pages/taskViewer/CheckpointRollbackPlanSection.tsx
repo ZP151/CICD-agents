@@ -12,7 +12,7 @@ export function CheckpointRollbackPlanSection({
   onOpenRollbackPlanInChat,
 }: CheckpointRollbackPlanSectionProps): JSX.Element {
   return (
-    <section className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
+    <section className="rounded-lg border border-zinc-200 bg-white p-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
           Rollback Plan
@@ -28,27 +28,27 @@ export function CheckpointRollbackPlanSection({
             <span
               className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${
                 rollbackPlan.supported
-                  ? "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20"
-                  : "bg-yellow-500/10 text-yellow-400 ring-yellow-500/20"
+                  ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                  : "bg-amber-50 text-amber-700 ring-amber-200"
               }`}
             >
               {rollbackPlan.supported ? "proposal ready" : "planning only"}
             </span>
             <span className="font-mono text-xs text-zinc-600">{rollbackPlan.mode}</span>
           </div>
-          <p className="text-sm text-zinc-300">{rollbackPlan.reason}</p>
+          <p className="text-sm text-zinc-800">{rollbackPlan.reason}</p>
           {rollbackPlan.proposal && (
-            <div className="rounded-md border border-zinc-800 bg-zinc-950/70 p-2">
+            <div className="rounded-md border border-zinc-200 bg-zinc-50 p-2">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <p className="text-xs text-zinc-600">Confirmed Action Proposal</p>
                 <button
                   onClick={onOpenRollbackPlanInChat}
-                  className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-800"
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-100"
                 >
                   Open in Chat for approval
                 </button>
               </div>
-              <p className="text-sm text-zinc-300">{rollbackPlan.proposal.description}</p>
+              <p className="text-sm text-zinc-800">{rollbackPlan.proposal.description}</p>
               <pre className="mt-2 overflow-auto text-xs text-zinc-500">
                 {JSON.stringify(
                   {
@@ -77,7 +77,7 @@ export function CheckpointRollbackPlanSection({
           {rollbackPlan.warnings.length > 0 && (
             <div className="space-y-1">
               {rollbackPlan.warnings.map((warning) => (
-                <p key={warning} className="text-xs text-yellow-300">
+                <p key={warning} className="text-xs text-amber-700">
                   {warning}
                 </p>
               ))}

@@ -1,9 +1,19 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { ProjectLink } from "../../../api.js";
 import type { Bubble } from "../chat.types.js";
 import { ChatMessageList } from "./ChatMessageList.js";
 
-function renderMessages(bubbles: Bubble[]): string {
+function renderMessages(
+  bubbles: Bubble[],
+  options: {
+    availableProjectLinks?: ProjectLink[];
+    projectLinksLoading?: boolean;
+    activeProjectLinkId?: string | null;
+    welcomeSuggestions?: string[];
+    welcomeSuggestionsReady?: boolean;
+  } = {},
+): string {
   return renderToStaticMarkup(
     <ChatMessageList
       bubbles={bubbles}
@@ -11,10 +21,12 @@ function renderMessages(bubbles: Bubble[]): string {
       busy={false}
       statusText={null}
       repoPath="C:\\repo"
-      availableProjectLinks={[]}
-      activeProjectLinkId={null}
+      availableProjectLinks={options.availableProjectLinks ?? []}
+      projectLinksLoading={options.projectLinksLoading ?? false}
+      activeProjectLinkId={options.activeProjectLinkId ?? null}
       selectedArtifactId={null}
-      welcomeSuggestions={[]}
+      welcomeSuggestions={options.welcomeSuggestions ?? []}
+      welcomeSuggestionsReady={options.welcomeSuggestionsReady ?? true}
       createProjectLink={async () => {
         throw new Error("unused");
       }}
@@ -77,5 +89,52 @@ describe("ChatMessageList", () => {
     expect(html).not.toContain("Approved action finished");
     expect(html).not.toContain("Action not run");
     expect(html).not.toContain("Approval required");
+  });
+
+  it("holds welcome suggestions until project index status is resolved", () => {
+    const html = renderMessages([], {
+      activeProjectLinkId: "pl-1",
+      availableProjectLinks: [{
+        id: "pl-1",
+        name: "Project Link",
+        repoPath: "C:\\repo",
+        defaultBranch: "main",
+        targetBranch: "main",
+        adoOrgUrl: "https://dev.azure.com/example",
+        adoProject: "Project",
+        adoRepoName: "Repo",
+        adoPat: "",
+        adoPipelineId: "",
+        adoPipelineName: "",
+        adoMcpEnabled: false,
+        adoMcpCommand: "",
+        adoMcpAuthentication: "",
+        adoMcpDomains: "",
+        projectTemplate: "",
+        buildCommand: "",
+        testCommand: "",
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+      welcomeSuggestions: ["Review my changes"],
+      welcomeSuggestionsReady: false,
+    });
+
+    expect(html).toContain("Ask MergePilot anything");
+    expect(html).not.toContain("Review my changes");
+    expect(html).toContain("animate-pulse");
+  });
+
+  it("does not flash Project Link setup while links are still loading", () => {
+    const html = renderMessages([], {
+      availableProjectLinks: [],
+      projectLinksLoading: true,
+      activeProjectLinkId: null,
+      welcomeSuggestionsReady: false,
+    });
+
+    expect(html).toContain("Ask MergePilot anything");
+    expect(html).toContain("animate-pulse");
+    expect(html).not.toContain("Create a Project Link");
   });
 });

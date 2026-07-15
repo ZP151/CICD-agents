@@ -1,5 +1,6 @@
 import { formatDate, runTone } from "./pipelineModel.js";
 import type { PipelineInspectState, PipelineRow } from "./pipelineTypes.js";
+import { MarkdownContent } from "../../components/conversation/ConversationPartRenderer.js";
 
 interface PipelineRowCardProps {
   row: PipelineRow;
@@ -8,6 +9,7 @@ interface PipelineRowCardProps {
   onTrigger: (row: PipelineRow) => void;
   onAnalyze: (row: PipelineRow) => void;
   onSave: (row: PipelineRow) => void;
+  onOpenDetails: (row: PipelineRow) => void;
 }
 
 export function PipelineRowCard({
@@ -17,8 +19,10 @@ export function PipelineRowCard({
   onTrigger,
   onAnalyze,
   onSave,
+  onOpenDetails,
 }: PipelineRowCardProps): JSX.Element {
   const tone = runTone(row.latestRun);
+  const dateLabel = formatDate(row.latestRun?.finishedDate || row.latestRun?.createdDate);
   const inspectedRuns = state.phase === "done" || state.phase === "analyzing" || state.phase === "analysis_done"
     ? state.runs
     : [];
@@ -48,9 +52,11 @@ export function PipelineRowCard({
             {row.project || "No project"} / {row.repository || "No repository"}
           </p>
         </div>
-        <p className="text-xs text-[rgb(var(--app-text-subtle))]">
-          {formatDate(row.latestRun?.finishedDate || row.latestRun?.createdDate)}
-        </p>
+        {dateLabel && (
+          <p className="text-xs text-[rgb(var(--app-text-subtle))]">
+            {dateLabel}
+          </p>
+        )}
       </div>
 
       <div className="mt-3 grid gap-2 text-xs text-[rgb(var(--app-text-muted))] sm:grid-cols-2 2xl:grid-cols-4">
@@ -80,13 +86,25 @@ export function PipelineRowCard({
       )}
 
       {(state.phase === "analyzing" || state.phase === "analysis_done") && (
-        <div className="mt-3 rounded-md border border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-accent-soft))] p-3">
-          <p className="mb-2 text-[10px] font-semibold uppercase text-[rgb(var(--app-text-muted))]">
-            {state.phase === "analyzing" ? "AI analysis streaming" : "AI analysis"}
-          </p>
-          <p className="whitespace-pre-wrap text-xs leading-relaxed text-[rgb(var(--app-text))]">
-            {state.analysis || "Starting analysis..."}
-          </p>
+        <div className="mt-3 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[10px] font-semibold uppercase text-[rgb(var(--app-text-muted))]">
+              AI analysis
+            </p>
+            <span className="rounded-full border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
+              {state.phase === "analyzing" ? "Analyzing" : "Ready"}
+            </span>
+          </div>
+          <div className="max-h-36 overflow-hidden text-xs">
+            <MarkdownContent markdown={state.analysis || "Starting analysis..."} />
+          </div>
+          <button
+            type="button"
+            onClick={() => onOpenDetails(row)}
+            className="mt-2 text-xs text-[rgb(var(--app-accent))] hover:underline"
+          >
+            Open analysis
+          </button>
         </div>
       )}
 
@@ -111,6 +129,15 @@ export function PipelineRowCard({
             className="rounded-md border border-emerald-500/40 px-2.5 py-1.5 text-xs text-emerald-700 transition hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-300"
           >
             Save connection
+          </button>
+        )}
+        {(state.phase === "done" || state.phase === "analyzing" || state.phase === "analysis_done" || state.phase === "error") && (
+          <button
+            type="button"
+            onClick={() => onOpenDetails(row)}
+            className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+          >
+            Details
           </button>
         )}
         <button

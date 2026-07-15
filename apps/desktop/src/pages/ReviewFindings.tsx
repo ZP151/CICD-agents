@@ -16,6 +16,9 @@ import { useReviewQueueRuntime } from "./reviewFindings/useReviewQueueRuntime.js
 export default function ReviewFindings(): JSX.Element {
   const { projectLinks, projectLinksLoading } = useAppData();
   const [projectLinkId, setProjectLinkId] = useState(() => loadStoredActiveProjectLinkId());
+  const [activityRailOpen, setActivityRailOpen] = useState(
+    () => localStorage.getItem("mergepilot_review_activity_panel_open") !== "false",
+  );
 
   useEffect(() => {
     if (projectLinks.length === 0) return;
@@ -26,17 +29,24 @@ export default function ReviewFindings(): JSX.Element {
     saveStoredActiveProjectLinkId(projectLinkId);
   }, [projectLinkId]);
 
+  useEffect(() => {
+    localStorage.setItem("mergepilot_review_activity_panel_open", String(activityRailOpen));
+  }, [activityRailOpen]);
+
   const selectedProjectLink = useMemo(
     () => projectLinks.find((projectLink) => projectLink.id === projectLinkId) ?? null,
     [projectLinks, projectLinkId],
   );
 
   const reviewQueue = useReviewQueueRuntime({ projectLinkId, selectedProjectLink });
+  const projectLinkResolving = projectLinksLoading && projectLinks.length === 0 && !projectLinkId;
   const {
     items,
     configured,
     storage,
+    storageWarning,
     loading,
+    refreshing,
     error,
     selectedItem,
     panelFindings,
@@ -107,6 +117,12 @@ export default function ReviewFindings(): JSX.Element {
         </div>
       )}
 
+      {storageWarning && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {storageWarning} Local review history remains available on this device.
+        </div>
+      )}
+
       {error && (
         <div className="rounded-lg border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">
           {error}
@@ -119,7 +135,9 @@ export default function ReviewFindings(): JSX.Element {
         </div>
       )}
 
-      <div className="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_19rem]">
+      <div
+        className={`grid flex-1 gap-4 ${activityRailOpen ? "xl:grid-cols-[minmax(0,1fr)_19rem]" : "xl:grid-cols-[minmax(0,1fr)_auto]"}`}
+      >
         <div className="flex min-w-0 flex-col gap-4">
           <ReviewQueueControls
             counts={counts}
@@ -145,9 +163,16 @@ export default function ReviewFindings(): JSX.Element {
             onRerunStale={() => void rerunStaleReviews()}
           />
 
-          {loading && <p className="text-sm text-zinc-600">Loading review decisions...</p>}
+          {(projectLinkResolving || loading) && (
+            <p className="text-sm text-zinc-600">Loading review decisions...</p>
+          )}
+          {!projectLinkResolving && !loading && refreshing && (
+            <p className="text-xs text-[rgb(var(--app-text-subtle))]">
+              Refreshing review decisions...
+            </p>
+          )}
 
-          {!loading && items.length === 0 && (
+          {!projectLinkResolving && !loading && items.length === 0 && (
             <div className="rounded-lg border border-zinc-800/70 bg-zinc-900/20 p-8 text-center">
               <p className="text-sm font-medium text-zinc-400">No review decisions found</p>
               <p className="mt-1 text-sm text-zinc-600">
@@ -162,6 +187,7 @@ export default function ReviewFindings(): JSX.Element {
                 <ReviewQueueCard
                   key={`${item.repository}-${item.pullRequestId}`}
                   item={item}
+                  projectLinkId={projectLinkId}
                   staleAgeHours={staleAgeHours}
                   writeBackRetrying={writeBackRetrying}
                   rerunning={rerunning}
@@ -201,7 +227,9 @@ export default function ReviewFindings(): JSX.Element {
           events={filteredOperationEvents}
           totalCount={operationEvents.length}
           filter={activityFilter}
+          open={activityRailOpen}
           onFilterChange={setActivityFilter}
+          onOpenChange={setActivityRailOpen}
         />
       </div>
     </div>

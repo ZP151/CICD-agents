@@ -8,6 +8,7 @@ import type {
   DisplayPullRequest,
   PullRequestCategory,
 } from "./pullRequestTypes.js";
+import { pullRequestRuntimeKey } from "./pullRequestTypes.js";
 
 export const prCategories: Array<{ key: PullRequestCategory; label: string }> = [
   { key: "all", label: "All" },
@@ -78,7 +79,7 @@ export function matchesProjectLinkBranch(pr: PullRequestSummary, projectLink: { 
 export function dedupePullRequests(items: DisplayPullRequest[]): DisplayPullRequest[] {
   const byKey = new Map<string, DisplayPullRequest>();
   for (const item of items) {
-    const key = `${item.repository}:${item.id}`;
+    const key = pullRequestRuntimeKey(item);
     if (!byKey.has(key)) byKey.set(key, item);
   }
   return [...byKey.values()];

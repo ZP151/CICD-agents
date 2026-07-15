@@ -11,15 +11,7 @@ import {
 } from "./azureAuthConfig.js";
 import { decodeUserFromJwt, fetchGraphAvatar } from "./azureAuthIdentity.js";
 import { createMsalClient, withMsalCacheAccess } from "./azureAuthMsal.js";
-import {
-  clearPersistedUser,
-  getCachedUser,
-  hydrateCachedUser,
-  loadPersistedUser,
-  persistUserCache,
-  resetUserCache,
-  setCachedUser,
-} from "./azureAuthSessionCache.js";
+import { getCachedUser, hydrateCachedUser, setCachedUser } from "./azureAuthSessionCache.js";
 import {
   AzureAuthenticationRequiredError,
   type AzureCachedAccount,
@@ -50,7 +42,7 @@ export async function getCurrentUser(opts: { refreshProfile?: boolean } = {}): P
       return setCachedUser({
         ...cached,
         ...decoded,
-        avatarDataUrl: await fetchGraphAvatar(token.token) ?? cached?.avatarDataUrl,
+        avatarDataUrl: (await fetchGraphAvatar(token.token)) ?? cached?.avatarDataUrl,
       })!;
     }
   } catch {
@@ -108,26 +100,30 @@ export async function getCachedAzureAccounts(): Promise<AzureCachedAccount[]> {
   return withMsalCacheAccess(async () => {
     const client = await createMsalClient();
     const accounts = await client.getTokenCache().getAllAccounts();
-    return Promise.all(accounts.map(async (account) => {
-      let avatarDataUrl: string | undefined;
-      try {
-        const result = await client.acquireTokenSilent({
-          scopes: [IDENTITY_SCOPE],
-          account,
-        });
-        avatarDataUrl = result?.accessToken ? await fetchGraphAvatar(result.accessToken) : undefined;
-      } catch {
-        avatarDataUrl = undefined;
-      }
-      return {
-        homeAccountId: account.homeAccountId,
-        localAccountId: account.localAccountId,
-        tenantId: account.tenantId,
-        username: account.username,
-        name: account.name,
-        avatarDataUrl,
-      };
-    }));
+    return Promise.all(
+      accounts.map(async (account) => {
+        let avatarDataUrl: string | undefined;
+        try {
+          const result = await client.acquireTokenSilent({
+            scopes: [IDENTITY_SCOPE],
+            account,
+          });
+          avatarDataUrl = result?.accessToken
+            ? await fetchGraphAvatar(result.accessToken)
+            : undefined;
+        } catch {
+          avatarDataUrl = undefined;
+        }
+        return {
+          homeAccountId: account.homeAccountId,
+          localAccountId: account.localAccountId,
+          tenantId: account.tenantId,
+          username: account.username,
+          name: account.name,
+          avatarDataUrl,
+        };
+      }),
+    );
   });
 }
 
@@ -184,7 +180,8 @@ async function ensureInteractiveCloudResourceConsent(opts: {
       openBrowser: (url) => openBrowser(url, opts.browser),
       successTemplate: browserCompletionTemplate({
         title: "Cloud resource access is enabled",
-        message: "MergePilot can now access configured Azure resources. Return to the app to continue.",
+        message:
+          "MergePilot can now access configured Azure resources. Return to the app to continue.",
       }),
       errorTemplate: browserCompletionTemplate({
         title: "Cloud resource consent did not complete",
@@ -195,12 +192,14 @@ async function ensureInteractiveCloudResourceConsent(opts: {
   }
 }
 
-export async function getAzureDevOpsToken(opts: {
-  interactive?: boolean;
-  browser?: BrowserLoginChoice;
-  loginHint?: string;
-  homeAccountId?: string;
-} = {}): Promise<string> {
+export async function getAzureDevOpsToken(
+  opts: {
+    interactive?: boolean;
+    browser?: BrowserLoginChoice;
+    loginHint?: string;
+    homeAccountId?: string;
+  } = {},
+): Promise<string> {
   const clientId = desktopClientId();
   if (clientId) {
     const silentToken = await withMsalCacheAccess(async () => {
@@ -234,7 +233,9 @@ export async function getAzureDevOpsToken(opts: {
 
     if (opts.interactive) {
       const client = await createMsalClient();
-      const accounts = await withMsalCacheAccess(async () => client.getTokenCache().getAllAccounts());
+      const accounts = await withMsalCacheAccess(async () =>
+        client.getTokenCache().getAllAccounts(),
+      );
       const account = selectMsalAccount(accounts, opts.homeAccountId, getCachedUser());
       for (const scope of AZURE_DEVOPS_SCOPES) {
         try {
@@ -337,8 +338,10 @@ export async function requireCurrentUser(): Promise<AzureUser> {
 }
 
 export function isAzureAuthenticationRequiredError(err: unknown): boolean {
-  return err instanceof AzureAuthenticationRequiredError
-    || (err as { code?: string })?.code === "azure_auth_required"
-    || (err as { statusCode?: number; status?: number })?.statusCode === 401
-    || (err as { statusCode?: number; status?: number })?.status === 401;
+  return (
+    err instanceof AzureAuthenticationRequiredError ||
+    (err as { code?: string })?.code === "azure_auth_required" ||
+    (err as { statusCode?: number; status?: number })?.statusCode === 401 ||
+    (err as { statusCode?: number; status?: number })?.status === 401
+  );
 }

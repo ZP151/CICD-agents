@@ -42,6 +42,7 @@ interface ComposerShellProps {
   activeCustomModel: CustomConversationModel | null;
   customModels: CustomConversationModel[];
   availableProjectLinks: ProjectLink[];
+  projectLinksLoading: boolean;
   activeProjectLinkId: string | null;
   composerStateNotice: ComposerStateNotice | null;
   composerInputState: ComposerInputState;
@@ -85,6 +86,7 @@ export function ComposerShell({
   activeCustomModel,
   customModels,
   availableProjectLinks,
+  projectLinksLoading,
   activeProjectLinkId,
   composerStateNotice,
   composerInputState,
@@ -122,15 +124,22 @@ export function ComposerShell({
   const visibleComposerNotice = composerStateNotice?.tone === "queued" ? composerStateNotice : null;
   const showSuggestionReplies = !activeWorkflow && !composerStateNotice;
   const projectLinkRequired = !mini && !activeProjectLinkId;
+  const projectLinkResolving = projectLinkRequired && projectLinksLoading;
   const effectiveComposerInputState = projectLinkRequired
     ? {
         ...composerInputState,
         controlsDisabled: true,
         inputDisabled: true,
-        inputTitle: "Create or select a Project Link before starting a project workflow.",
-        placeholder: "Create or select a Project Link first...",
+        inputTitle: projectLinkResolving
+          ? "Loading Project Link..."
+          : "Create or select a Project Link before starting a project workflow.",
+        placeholder: projectLinkResolving
+          ? "Loading Project Link..."
+          : "Create or select a Project Link first...",
         sendDisabled: true,
-        sendTitle: "Create or select a Project Link first.",
+        sendTitle: projectLinkResolving
+          ? "Loading Project Link..."
+          : "Create or select a Project Link first.",
       }
     : composerInputState;
   const sendDisabled = !canSendComposerTurn({
@@ -195,7 +204,9 @@ export function ComposerShell({
       {!mini && (
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-1 pb-1.5">
           <div className="flex min-w-[180px] flex-1 items-center gap-1.5">
-            {availableProjectLinks.length > 0 ? (
+            {projectLinksLoading && availableProjectLinks.length === 0 ? (
+              <span className="text-[11px] text-zinc-700">Loading Project Link...</span>
+            ) : availableProjectLinks.length > 0 ? (
               <>
                 <svg className="h-3 w-3 shrink-0 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />

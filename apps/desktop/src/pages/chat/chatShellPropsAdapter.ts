@@ -29,6 +29,7 @@ interface BuildChatShellPropsOptions {
   suggestionRuntime: ReturnType<typeof useChatSuggestionRuntime>;
   turnRuntime: ReturnType<typeof useChatTurnRuntime>;
   workspaceRuntime: ReturnType<typeof useWorkspaceActionRuntime>;
+  projectLinksLoading: boolean;
 }
 
 export function buildChatShellProps({
@@ -46,6 +47,7 @@ export function buildChatShellProps({
   suggestionRuntime,
   turnRuntime,
   workspaceRuntime,
+  projectLinksLoading,
 }: BuildChatShellPropsOptions): ChatShellProps {
   return {
     activeCustomModel: readModel.activeCustomModel,
@@ -81,6 +83,7 @@ export function buildChatShellProps({
     history: historyRuntime.history,
     historyError: historyRuntime.historyError,
     historyExpanded: historyRuntime.historyExpanded,
+    historyLoading: historyRuntime.historyLoading,
     historyMenu: historyRuntime.historyMenu,
     historyOpen: panelRuntime.historyOpen,
     historyPage: historyRuntime.historyPage,
@@ -93,6 +96,7 @@ export function buildChatShellProps({
     openPrInsightSourceInActivity,
     openPrInsightSourceInWorkspace: artifactRuntime.openPrInsightSourceInWorkspace,
     queuePrompt: suggestionRuntime.queuePrompt,
+    projectLinksLoading,
     queuedSuggestionId: pageState.queuedSuggestion?.id ?? null,
     renameCurrentSession: historyRuntime.renameCurrentSession,
     renamingHistoryId: historyRuntime.renamingHistoryId,
@@ -143,6 +147,7 @@ export function buildChatShellProps({
     toggleHistoryPin: historyRuntime.toggleHistoryPin,
     toggleTool: turnRuntime.toggleTool,
     welcomeSuggestions: readModel.welcomeSuggestions,
+    welcomeSuggestionsReady: readModel.welcomeSuggestionsReady,
     workflowState: pageState.workflowState,
     workspaceRef: panelRuntime.workspaceRef,
   };

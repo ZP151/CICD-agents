@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReviewQueueItem } from "./api";
+import type { ReviewFinding, ReviewQueueItem } from "./api";
 import {
+  FINDINGS_LS_KEY,
   listReviewHistoryLocal,
+  loadFindingsLocal,
   mergeReviewQueueItems,
   REVIEW_HISTORY_LS_KEY,
+  saveFindingsLocal,
   syncReviewHistoryLocal,
   upsertReviewHistoryLocal,
 } from "./reviewHistoryLocal";
@@ -70,6 +73,16 @@ function queueItem(overrides: Partial<ReviewQueueItem> = {}): ReviewQueueItem {
       url: "",
     }],
     ...overrides,
+  };
+}
+
+function finding(message: string): ReviewFinding {
+  return {
+    file: "src/demo.ts",
+    line: 12,
+    severity: "warning",
+    category: "bug",
+    message,
   };
 }
 
@@ -157,5 +170,74 @@ describe("reviewHistoryLocal", () => {
     localStorage.setItem(REVIEW_HISTORY_LS_KEY, "{not-json");
 
     expect(listReviewHistoryLocal("demo-repo")).toEqual([]);
+  });
+
+  it("scopes browser review history by Project Link to avoid same PR id collisions", () => {
+    upsertReviewHistoryLocal(queueItem({
+      decisionReason: "Primary Project Link decision.",
+      lastRunAt: "2026-06-11T00:00:00.000Z",
+    }), "project-link-a");
+    upsertReviewHistoryLocal(queueItem({
+      decisionReason: "Secondary Project Link decision.",
+      lastRunAt: "2026-06-11T00:10:00.000Z",
+    }), "project-link-b");
+
+    expect(listReviewHistoryLocal("demo-repo", "project-link-a")).toEqual([
+      expect.objectContaining({ decisionReason: "Primary Project Link decision." }),
+    ]);
+    expect(listReviewHistoryLocal("demo-repo", "project-link-b")).toEqual([
+      expect.objectContaining({ decisionReason: "Secondary Project Link decision." }),
+    ]);
+  });
+
+  it("falls back to legacy unscoped review history when no Project Link scoped history exists", () => {
+    upsertReviewHistoryLocal(queueItem({
+      decisionReason: "Legacy local decision.",
+    }));
+
+    expect(listReviewHistoryLocal("demo-repo", "project-link-a")).toEqual([
+      expect.objectContaining({ decisionReason: "Legacy local decision." }),
+    ]);
+  });
+
+  it("prefers scoped review history over legacy history for the same PR", () => {
+    upsertReviewHistoryLocal(queueItem({
+      decisionReason: "Legacy local decision.",
+      lastRunAt: "2026-06-11T00:00:00.000Z",
+    }));
+    upsertReviewHistoryLocal(queueItem({
+      decisionReason: "Scoped local decision.",
+      lastRunAt: "2026-06-11T00:10:00.000Z",
+    }), "project-link-a");
+
+    expect(listReviewHistoryLocal("demo-repo", "project-link-a")).toEqual([
+      expect.objectContaining({ decisionReason: "Scoped local decision." }),
+    ]);
+  });
+
+  it("scopes stored findings by Project Link to avoid same PR id collisions", () => {
+    saveFindingsLocal("ClaimBot_API", 2670, [finding("primary finding")], "project-link-a");
+    saveFindingsLocal("ClaimBot_API", 2670, [finding("secondary finding")], "project-link-b");
+
+    expect(loadFindingsLocal("ClaimBot_API", 2670, "project-link-a")).toEqual([
+      expect.objectContaining({ message: "primary finding" }),
+    ]);
+    expect(loadFindingsLocal("ClaimBot_API", 2670, "project-link-b")).toEqual([
+      expect.objectContaining({ message: "secondary finding" }),
+    ]);
+  });
+
+  it("falls back to legacy unscoped findings when no Project Link scoped findings exist", () => {
+    saveFindingsLocal("ClaimBot_API", 2670, [finding("legacy finding")]);
+
+    expect(loadFindingsLocal("ClaimBot_API", 2670, "project-link-a")).toEqual([
+      expect.objectContaining({ message: "legacy finding" }),
+    ]);
+  });
+
+  it("ignores corrupt browser findings instead of throwing", () => {
+    localStorage.setItem(FINDINGS_LS_KEY, "{not-json");
+
+    expect(loadFindingsLocal("ClaimBot_API", 2670, "project-link-a")).toEqual([]);
   });
 });

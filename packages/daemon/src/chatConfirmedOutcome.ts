@@ -1,6 +1,7 @@
 import {
   type ChatEvent,
   type ChatPlanner,
+  type ChatPlannerResult,
   type LLMClient,
   type PendingToolAction,
 } from "@mergepilot/core";
@@ -35,7 +36,9 @@ export interface ConfirmedActionOutcomeArgs {
   adapters: PlannerContinuationAdapters;
 }
 
-export async function* streamConfirmedActionOutcome(args: ConfirmedActionOutcomeArgs): AsyncGenerator<ChatEvent> {
+export async function* streamConfirmedActionOutcome(
+  args: ConfirmedActionOutcomeArgs,
+): AsyncGenerator<ChatEvent> {
   const {
     adapters,
     inlineProjectLink,
@@ -49,7 +52,9 @@ export async function* streamConfirmedActionOutcome(args: ConfirmedActionOutcome
     toolResult,
   } = args;
 
-  const structuredNext = ok ? await nextStructuredApprovalAfterConfirmedAction(pending, repoPath) : undefined;
+  const structuredNext = ok
+    ? await nextStructuredApprovalAfterConfirmedAction(pending, repoPath)
+    : undefined;
   if (structuredNext) {
     const sessionForNext = await adapters.loadSession(sessionId);
     if (sessionForNext) {
@@ -107,7 +112,9 @@ export async function* streamConfirmedActionOutcome(args: ConfirmedActionOutcome
     }
   }
 
-  const gitRecovery = !ok ? await gitRecoveryAfterFailedConfirmedAction(pending, repoPath, summary) : undefined;
+  const gitRecovery = !ok
+    ? await gitRecoveryAfterFailedConfirmedAction(pending, repoPath, summary)
+    : undefined;
   if (gitRecovery) {
     const sessionForRecovery = await adapters.loadSession(sessionId);
     if (sessionForRecovery) {
@@ -162,25 +169,30 @@ async function gitRecoveryAfterFailedConfirmedAction(
   pending: PendingToolAction,
   repoPath: string,
   failureSummary: string,
-): Promise<{
-  currentStep: string;
-  workflowPhase: string;
-  result: import("@mergepilot/core").ChatPlannerResult;
-} | undefined> {
+): Promise<
+  | {
+      currentStep: string;
+      workflowPhase: string;
+      result: ChatPlannerResult;
+    }
+  | undefined
+> {
   if (pending.workflow?.kind !== "git" && !pending.tool.startsWith("git_")) return undefined;
   const probes = await runGitWorkflowProbes(repoPath, "stage_resolved_conflicts");
   const statusText = probes.tools.find((tool) => tool.name === "git_status")?.stdout ?? "";
   const operationState = gitOperationStateFromTools(repoPath, statusText, probes.tools);
   const block = gitOperationBlockForAction("prepare_commit", operationState);
   if (!block) {
-    if (pending.tool === "git_commit") return failedCommitValidationRecovery(pending, statusText, failureSummary);
+    if (pending.tool === "git_commit")
+      return failedCommitValidationRecovery(pending, statusText, failureSummary);
     return undefined;
   }
-  const suggestions = operationState.phase === "rebase"
-    ? ["Resolve conflicts", "Stage resolved conflict files", "Continue rebase", "Abort rebase"]
-    : operationState.phase === "merge"
-      ? ["Resolve conflicts", "Stage resolved conflict files", "Continue merge", "Abort merge"]
-    : ["Inspect Git status", "Resolve conflicted files", "Stage resolved conflict files"];
+  const suggestions =
+    operationState.phase === "rebase"
+      ? ["Resolve conflicts", "Stage resolved conflict files", "Continue rebase", "Abort rebase"]
+      : operationState.phase === "merge"
+        ? ["Resolve conflicts", "Stage resolved conflict files", "Continue merge", "Abort merge"]
+        : ["Inspect Git status", "Resolve conflicted files", "Stage resolved conflict files"];
   return {
     currentStep: block.summary,
     workflowPhase: block.workflowPhase,
@@ -203,19 +215,22 @@ function failedCommitValidationRecovery(
 ): {
   currentStep: string;
   workflowPhase: string;
-  result: import("@mergepilot/core").ChatPlannerResult;
+  result: ChatPlannerResult;
 } {
   const staged = stagedPathsFromStatus(statusText);
-  const stagedText = staged.length > 0
-    ? `Staged changes are still staged: ${staged.slice(0, 8).join(", ")}${staged.length > 8 ? ", ..." : ""}.`
-    : "No staged paths were detected after the failed commit.";
+  const stagedText =
+    staged.length > 0
+      ? `Staged changes are still staged: ${staged.slice(0, 8).join(", ")}${staged.length > 8 ? ", ..." : ""}.`
+      : "No staged paths were detected after the failed commit.";
   const reason = firstMeaningfulLine(failureSummary);
   const response = [
     "Commit failed before a new commit was created.",
     stagedText,
     reason ? `Failure evidence: ${reason}` : "",
     "Fix the validation error, then retry the commit. Use bypass flags only if you explicitly decide that is safe for this repository.",
-  ].filter(Boolean).join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
   return {
     currentStep: "Commit failed; staged changes were preserved.",
     workflowPhase: "commit_failed",
@@ -253,21 +268,23 @@ function firstMeaningfulLine(text: string): string {
   } catch {
     // Fall through to plain-text extraction.
   }
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find((line) => line && !/^\{.*\}$/.test(line)) ?? "";
+  return (
+    text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line && !/^\{.*\}$/.test(line)) ?? ""
+  );
 }
 
 function continuationMessage(pending: PendingToolAction, ok: boolean, summary: string): string {
   const nextHint = pending.nextHint ?? "continue workflow";
   return ok
     ? `WORKFLOW STEP COMPLETED: ${pending.tool} executed successfully. Result: ${summary}. ` +
-      `Next workflow step is: "${nextHint}". ` +
-      `CRITICAL: Do NOT call git_status, git_diff, git_log, git_branch_list, git_current_branch, or git_remote again. ` +
-      `The working tree state is already known. ` +
-      `Proceed DIRECTLY to: ${nextHint}. ` +
-      `If the next step requires user confirmation, propose it with approval_proposal in your JSON.`
+        `Next workflow step is: "${nextHint}". ` +
+        `CRITICAL: Do NOT call git_status, git_diff, git_log, git_branch_list, git_current_branch, or git_remote again. ` +
+        `The working tree state is already known. ` +
+        `Proceed DIRECTLY to: ${nextHint}. ` +
+        `If the next step requires user confirmation, propose it with approval_proposal in your JSON.`
     : `WORKFLOW STEP FAILED: ${pending.tool} failed with error: ${summary}. Explain what went wrong and propose a recovery action.`;
 }
 

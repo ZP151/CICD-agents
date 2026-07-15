@@ -143,7 +143,7 @@ export function useReviewQueueActions({
       );
       const next = applyReviewRunToQueueItem(item, result);
       await recordProjectLinkReviewHistory(projectLinkId, next);
-      saveFindingsLocal(result.repository, result.pullRequestId, result.findings ?? []);
+      saveFindingsLocal(result.repository, result.pullRequestId, result.findings ?? [], projectLinkId);
       recordOperation({
         kind: "rerun",
         repository: result.repository,

@@ -36,7 +36,7 @@ export function PrInsightActivitySection({
   onPrInsightKindFilterChange,
 }: PrInsightActivitySectionProps): JSX.Element {
   return (
-    <div className="mt-5 border-t border-zinc-800/70 pt-4">
+    <div className="mt-5 border-t border-zinc-200 pt-4">
       <div className="mb-2 flex items-center justify-between gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
           Saved PR Insights
@@ -51,7 +51,7 @@ export function PrInsightActivitySection({
           label="Filter saved PR insights by Project Link"
         />
         <select
-          className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs text-zinc-400 outline-none"
+          className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 outline-none focus:border-blue-400"
           value={prInsightKindFilter}
           onChange={(e) =>
             onPrInsightKindFilterChange(e.target.value as PrInsightArtifactRecord["kind"] | "all")
@@ -98,8 +98,8 @@ function PrInsightActivityButton({
       onClick={() => onSelectPrInsight(event.id)}
       className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
         selected
-          ? "border-zinc-700 bg-zinc-900"
-          : "border-transparent hover:border-zinc-800 hover:bg-zinc-900/50"
+          ? "border-blue-300 bg-blue-50"
+          : "border-transparent hover:border-zinc-200 hover:bg-zinc-50"
       }`}
     >
       <div className="mb-1 flex items-center gap-2">
@@ -111,7 +111,7 @@ function PrInsightActivityButton({
             className={`rounded-full px-2 py-0.5 text-[10px] ring-1 ${
               historyMeta.latest
                 ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/20"
-                : "bg-zinc-800/70 text-zinc-500 ring-zinc-700"
+                : "bg-zinc-100 text-zinc-600 ring-zinc-200"
             }`}
           >
             {historyMeta.latest
@@ -123,7 +123,7 @@ function PrInsightActivityButton({
           {formatTime(Date.parse(event.at || "0") / 1000)}
         </span>
       </div>
-      <p className="truncate text-sm font-medium text-zinc-200">
+      <p className="truncate text-sm font-medium text-zinc-950">
         #{event.pullRequestId} · {event.title || "(untitled)"}
       </p>
       <p className="mt-1 truncate text-xs text-zinc-600">

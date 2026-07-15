@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import fastGlob from "fast-glob";
-import { RepoIndexer } from "./indexer/repoIndexer.js";
+import type { RepoIndexer } from "./indexer/repoIndexer.js";
 import { decodeTextIfLikelyText, isTextContextPath } from "./repoFileGuards.js";
 import type {
   ChatContextBundle,
@@ -36,7 +36,10 @@ const DEFAULT_IGNORED = [
   "**/coverage/**",
 ];
 
-export async function listQuickRepoFiles(repoPath: string, ignoredGlobs: string[]): Promise<string[]> {
+export async function listQuickRepoFiles(
+  repoPath: string,
+  ignoredGlobs: string[],
+): Promise<string[]> {
   const files = await fastGlob("**/*", {
     cwd: repoPath,
     ignore: [...DEFAULT_IGNORED, ...ignoredGlobs],
@@ -95,7 +98,11 @@ export function summarizeProjectStructure(files: string[]): ChatContextBundle["p
   addIf((f) => /^apps\//i.test(f), "app", "application workspace");
   addIf((f) => /^packages\//i.test(f), "package", "library or service package");
   addIf((f) => /^docs\//i.test(f), "docs", "project documentation");
-  addIf((f) => /(^|\/)(src|lib)\/(index|main|server|app)\./i.test(f), "entrypoint", "likely runtime entrypoint");
+  addIf(
+    (f) => /(^|\/)(src|lib)\/(index|main|server|app)\./i.test(f),
+    "entrypoint",
+    "likely runtime entrypoint",
+  );
   addIf((f) => /test|spec/i.test(f), "test", "test file");
   return dedupeStructure(signals);
 }
@@ -146,9 +153,18 @@ export function heuristicChunks(
       for (const term of terms) {
         if (lower.includes(term)) score += 3;
       }
-      if (/readme|package\.json|architecture|chat|planner|agent|server|index/i.test(file)) score += 1;
-      if (/(config|settings|configuration)/i.test(message) && /\.(config|json|ya?ml|toml|props|targets|csproj)$/i.test(file)) score += 2;
-      if (/(architecture|request|flow|entry|controller|model|view)/i.test(message) && /(^|\/)(controllers?|models?|views?|routes?|services?)\//i.test(file)) score += 2;
+      if (/readme|package\.json|architecture|chat|planner|agent|server|index/i.test(file))
+        score += 1;
+      if (
+        /(config|settings|configuration)/i.test(message) &&
+        /\.(config|json|ya?ml|toml|props|targets|csproj)$/i.test(file)
+      )
+        score += 2;
+      if (
+        /(architecture|request|flow|entry|controller|model|view)/i.test(message) &&
+        /(^|\/)(controllers?|models?|views?|routes?|services?)\//i.test(file)
+      )
+        score += 2;
       if (/(^|\/)(legacy|archive|archives|backup|deprecated|old)\//i.test(lower)) score -= 4;
       return { file, score };
     })
@@ -190,7 +206,9 @@ export function dedupeChunks(chunks: ChatContextChunk[]): ChatContextChunk[] {
   return out;
 }
 
-function dedupeStructure(items: ChatContextBundle["projectStructure"]): ChatContextBundle["projectStructure"] {
+function dedupeStructure(
+  items: ChatContextBundle["projectStructure"],
+): ChatContextBundle["projectStructure"] {
   const seen = new Set<string>();
   return items.filter((item) => {
     if (seen.has(item.path)) return false;

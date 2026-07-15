@@ -4,7 +4,7 @@ import { duration, formatTime, statusClass, taskTitle } from "./activityPresenta
 export function TaskRunDetailPanel({ task }: { task: TaskView }): JSX.Element {
   return (
     <div className="space-y-5">
-      <header className="border-b border-zinc-800/70 pb-4">
+      <header className="border-b border-zinc-200 pb-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${statusClass(task.status)}`}
@@ -14,7 +14,7 @@ export function TaskRunDetailPanel({ task }: { task: TaskView }): JSX.Element {
           <span className="text-xs text-zinc-600">{task.kind}</span>
           {duration(task) && <span className="text-xs text-zinc-600">{duration(task)}</span>}
         </div>
-        <h2 className="text-lg font-semibold text-zinc-100">{taskTitle(task)}</h2>
+        <h2 className="text-lg font-semibold text-zinc-950">{taskTitle(task)}</h2>
         <p className="mt-1 font-mono text-xs text-zinc-600">{task.id}</p>
       </header>
 
@@ -27,7 +27,7 @@ export function TaskRunDetailPanel({ task }: { task: TaskView }): JSX.Element {
             {task.steps.map((step) => (
               <li
                 key={step.seq}
-                className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 px-3 py-2"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2"
               >
                 <div className="flex items-start gap-3">
                   <span className="mt-0.5 w-8 shrink-0 font-mono text-xs text-zinc-600">
@@ -40,7 +40,7 @@ export function TaskRunDetailPanel({ task }: { task: TaskView }): JSX.Element {
                       >
                         {step.status}
                       </span>
-                      <span className="text-sm font-medium text-zinc-200">{step.name}</span>
+                      <span className="text-sm font-medium text-zinc-950">{step.name}</span>
                       <span className="text-xs text-zinc-600">{formatTime(step.createdAt)}</span>
                     </div>
                     {step.detail && (
@@ -57,9 +57,9 @@ export function TaskRunDetailPanel({ task }: { task: TaskView }): JSX.Element {
       </section>
 
       {task.error && (
-        <section className="rounded-lg border border-red-900/50 bg-red-950/20 p-3">
-          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-400">Error</h3>
-          <p className="break-words font-mono text-xs text-red-300">{task.error}</p>
+        <section className="rounded-lg border border-red-200 bg-red-50 p-3">
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-700">Error</h3>
+          <p className="break-words font-mono text-xs text-red-700">{task.error}</p>
         </section>
       )}
     </div>

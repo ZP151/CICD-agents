@@ -11,14 +11,12 @@ import {
   plannerResultFromControl,
   truncate,
 } from "./chatPlannerControl.js";
-import { isConfirmationMessage, isDenialMessage } from "./chatPlannerAffirmation.js";
 import {
   guardReviewOnlyFinalResult,
   outOfScopeWriteMessage,
   requiredChangeInspectionGuidance,
 } from "./chatPlannerGuards.js";
 import { offlineFallbackEvents } from "./chatPlannerOffline.js";
-import { CHAT_SYSTEM_PROMPT } from "./chatPlannerPrompt.js";
 import {
   buildPlannerMessages,
   buildPlannerToolSchemas,
@@ -30,7 +28,12 @@ import {
   repeatedToolFailureResult,
   updateToolFailureTracker,
 } from "./chatPlannerToolExecution.js";
-import type { ChatEvent, ChatImageAttachment, ChatMessage, ChatPlannerResult } from "./chatPlannerTypes.js";
+import type {
+  ChatEvent,
+  ChatImageAttachment,
+  ChatMessage,
+  ChatPlannerResult,
+} from "./chatPlannerTypes.js";
 
 export type {
   ChatApprovalRequest,
@@ -91,8 +94,14 @@ export class ChatPlanner {
     let toolFailureTracker = { lastFailedTool: "", consecutiveFailCount: 0 };
 
     for (let step = 0; step < this.maxSteps; step++) {
+      let streamResult;
       try {
-        var streamResult = yield* collectPlannerStepStream(this.llm, messages, tools, streamedVisibleResponse);
+        streamResult = yield* collectPlannerStepStream(
+          this.llm,
+          messages,
+          tools,
+          streamedVisibleResponse,
+        );
       } catch (err) {
         if (err instanceof LLMUnavailableError) {
           yield { type: "error", message: "LLM became unavailable mid-stream." };
@@ -111,14 +120,17 @@ export class ChatPlanner {
         if (finalizationCalls.length > 0 && executableToolCalls.length === 0) {
           const finalCall = finalizationCalls[finalizationCalls.length - 1]!;
           const args = parseToolArguments(finalCall.arguments);
-          const result = guardReviewOnlyFinalResult(plannerResultFromControl(args, {
-            visibleText: accumulated,
-            fallbackText: accumulated,
-            finalizationMode: "agent_final",
-            streamedResponse: emittedVisibleResponse || undefined,
-            toolCallsMade,
-            usedLlm: true,
-          }), message);
+          const result = guardReviewOnlyFinalResult(
+            plannerResultFromControl(args, {
+              visibleText: accumulated,
+              fallbackText: accumulated,
+              finalizationMode: "agent_final",
+              streamedResponse: emittedVisibleResponse || undefined,
+              toolCallsMade,
+              usedLlm: true,
+            }),
+            message,
+          );
           yield { type: "assistant_control", control: result };
           yield { type: "done", result };
           return;
@@ -231,14 +243,17 @@ export class ChatPlanner {
       const control = parseControlResponse(lastText);
       const parsed = control.control;
       if (parsed) {
-        const result = guardReviewOnlyFinalResult(plannerResultFromControl(parsed, {
-          visibleText: control.visibleText,
-          fallbackText: lastText,
-          finalizationMode: control.mode,
-          streamedResponse: emittedVisibleResponse || undefined,
-          toolCallsMade,
-          usedLlm: true,
-        }), message);
+        const result = guardReviewOnlyFinalResult(
+          plannerResultFromControl(parsed, {
+            visibleText: control.visibleText,
+            fallbackText: lastText,
+            finalizationMode: control.mode,
+            streamedResponse: emittedVisibleResponse || undefined,
+            toolCallsMade,
+            usedLlm: true,
+          }),
+          message,
+        );
         const riskLevel = result.riskLevel;
         const response = result.response;
         const approvalProposal = result.approvalProposal;
@@ -277,8 +292,7 @@ export class ChatPlanner {
       // No structured JSON yet — nudge the model
       messages.push({
         role: "user",
-        content:
-          `Call the ${CHAT_FINAL_TOOL_NAME} tool now with response, risk_level, actions_taken, suggestions, and any approval_proposal. If you are proposing a write action, approval_proposal is required. Only if tool calling is unavailable, use the compatibility fallback line starting with ${CHAT_CONTROL_JSON_MARKER}.`,
+        content: `Call the ${CHAT_FINAL_TOOL_NAME} tool now with response, risk_level, actions_taken, suggestions, and any approval_proposal. If you are proposing a write action, approval_proposal is required. Only if tool calling is unavailable, use the compatibility fallback line starting with ${CHAT_CONTROL_JSON_MARKER}.`,
       });
     }
 
@@ -298,5 +312,4 @@ export class ChatPlanner {
       },
     };
   }
-
 }

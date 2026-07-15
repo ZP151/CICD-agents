@@ -2,15 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   LLMClient,
-  type ChatEvent,
   type ChatPlannerResult,
   type ChatWorkflowState,
   type Settings,
 } from "@mergepilot/core";
-import {
-  getChatIndexStatus,
-  refreshChatIndex,
-} from "@mergepilot/core/chatContext";
+import { getChatIndexStatus, refreshChatIndex } from "@mergepilot/core/chatContext";
 import type { ChatSessionManager, InlineLlmConfig, InlineProjectLink } from "../chatSession.js";
 import type { ProjectLinkStoreAdapter } from "../projectLinkStore.js";
 import { createChatSseWriter, isTerminalChatEvent } from "./chatSse.js";
@@ -19,15 +15,17 @@ import type { ChatWorkflowActionPayload } from "./chat-workflow.routes.js";
 const MAX_CHAT_IMAGE_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 const CHAT_IMAGE_DATA_URL_PATTERN = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([a-zA-Z0-9+/=\s]+)$/;
 
-const LlmConfigSchema = z.object({
-  llmProvider: z.enum(["azure", "openai"]).optional(),
-  azureEndpoint: z.string().optional(),
-  azureApiKey: z.string().optional(),
-  azureDeployment: z.string().optional(),
-  azureApiVersion: z.string().optional(),
-  openaiApiKey: z.string().optional(),
-  openaiModel: z.string().optional(),
-}).optional();
+const LlmConfigSchema = z
+  .object({
+    llmProvider: z.enum(["azure", "openai"]).optional(),
+    azureEndpoint: z.string().optional(),
+    azureApiKey: z.string().optional(),
+    azureDeployment: z.string().optional(),
+    azureApiVersion: z.string().optional(),
+    openaiApiKey: z.string().optional(),
+    openaiModel: z.string().optional(),
+  })
+  .optional();
 
 const InlineProjectLinkObjectSchema = z.object({
   id: z.string().optional(),
@@ -51,59 +49,62 @@ const InlineProjectLinkObjectSchema = z.object({
   ignoredGlobs: z.array(z.string()).default([]),
 });
 
-const InlineProjectLinkSchema = InlineProjectLinkObjectSchema
-  .nullable()
+const InlineProjectLinkSchema = InlineProjectLinkObjectSchema.nullable()
   .optional()
   .transform((value) => value ?? undefined);
 
-const ChatImageAttachmentSchema = z.object({
-  name: z.string().min(1).max(160),
-  mimeType: z.string().regex(/^image\//),
-  dataUrl: z.string().regex(/^data:image\/[a-zA-Z0-9.+-]+;base64,/),
-}).superRefine((value, ctx) => {
-  const match = value.dataUrl.match(CHAT_IMAGE_DATA_URL_PATTERN);
-  if (!match) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "image attachment must be a base64 image data URL",
-      path: ["dataUrl"],
-    });
-    return;
-  }
+const ChatImageAttachmentSchema = z
+  .object({
+    name: z.string().min(1).max(160),
+    mimeType: z.string().regex(/^image\//),
+    dataUrl: z.string().regex(/^data:image\/[a-zA-Z0-9.+-]+;base64,/),
+  })
+  .superRefine((value, ctx) => {
+    const match = value.dataUrl.match(CHAT_IMAGE_DATA_URL_PATTERN);
+    if (!match) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "image attachment must be a base64 image data URL",
+        path: ["dataUrl"],
+      });
+      return;
+    }
 
-  const dataUrlMimeType = match[1] ?? "";
-  const base64Payload = match[2] ?? "";
-  if (dataUrlMimeType.toLowerCase() !== value.mimeType.toLowerCase()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "image attachment MIME type must match data URL",
-      path: ["mimeType"],
-    });
-  }
+    const dataUrlMimeType = match[1] ?? "";
+    const base64Payload = match[2] ?? "";
+    if (dataUrlMimeType.toLowerCase() !== value.mimeType.toLowerCase()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "image attachment MIME type must match data URL",
+        path: ["mimeType"],
+      });
+    }
 
-  const normalizedPayload = base64Payload.replace(/\s/g, "");
-  const padding = normalizedPayload.endsWith("==") ? 2 : normalizedPayload.endsWith("=") ? 1 : 0;
-  const decodedBytes = Math.max(0, Math.floor((normalizedPayload.length * 3) / 4) - padding);
-  if (decodedBytes > MAX_CHAT_IMAGE_ATTACHMENT_BYTES) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "image attachment must be 4 MB or smaller",
-      path: ["dataUrl"],
-    });
-  }
-});
+    const normalizedPayload = base64Payload.replace(/\s/g, "");
+    const padding = normalizedPayload.endsWith("==") ? 2 : normalizedPayload.endsWith("=") ? 1 : 0;
+    const decodedBytes = Math.max(0, Math.floor((normalizedPayload.length * 3) / 4) - padding);
+    if (decodedBytes > MAX_CHAT_IMAGE_ATTACHMENT_BYTES) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "image attachment must be 4 MB or smaller",
+        path: ["dataUrl"],
+      });
+    }
+  });
 
-const ChatStartSchema = z.object({
-  message: z.string().default(""),
-  repoPath: z.string().default(process.cwd()),
-  sessionId: z.string().optional(),
-  projectLinkId: z.string().optional(),
-  llmConfig: LlmConfigSchema,
-  projectLink: InlineProjectLinkSchema,
-  imageAttachments: z.array(ChatImageAttachmentSchema).max(3).default([]),
-}).refine((value) => value.message.trim().length > 0 || value.imageAttachments.length > 0, {
-  message: "message or image attachment is required",
-});
+const ChatStartSchema = z
+  .object({
+    message: z.string().default(""),
+    repoPath: z.string().default(process.cwd()),
+    sessionId: z.string().optional(),
+    projectLinkId: z.string().optional(),
+    llmConfig: LlmConfigSchema,
+    projectLink: InlineProjectLinkSchema,
+    imageAttachments: z.array(ChatImageAttachmentSchema).max(3).default([]),
+  })
+  .refine((value) => value.message.trim().length > 0 || value.imageAttachments.length > 0, {
+    message: "message or image attachment is required",
+  });
 
 const ChatIndexSchema = z.object({
   repoPath: z.string().default(process.cwd()),
@@ -112,12 +113,14 @@ const ChatIndexSchema = z.object({
 });
 
 const SessionIdParam = z.object({ sessionId: z.string().min(1) });
-const ChatSessionMetadataSchema = z.object({
-  title: z.string().max(140).nullable().optional(),
-  pinned: z.boolean().optional(),
-}).refine((value) => "title" in value || "pinned" in value, {
-  message: "At least one metadata field is required",
-});
+const ChatSessionMetadataSchema = z
+  .object({
+    title: z.string().max(140).nullable().optional(),
+    pinned: z.boolean().optional(),
+  })
+  .refine((value) => "title" in value || "pinned" in value, {
+    message: "At least one metadata field is required",
+  });
 interface ChatRouteDependencies {
   settings: Settings;
   chatSessions: ChatSessionManager;
@@ -204,10 +207,17 @@ function readonlyWorkflowFromMessage(
 
   const lower = text.toLowerCase();
   const lowerWithoutNegativeClauses = lower.replace(/\bdo not\b[^.?!;]*/g, "");
-  const hasReadIntent = /\b(analy[sz]e|inspect|review|summari[sz]e|check|explain|show|status|readiness|why|what'?s)\b/.test(lower);
-  const hasExplicitReadOnly = /\bread[-\s]?only\b|do not (modify|write|request approval)/.test(lower);
-  const hasWriteIntent = /\b(trigger|rerun|queue|start|create|update|push|commit|stage|merge|approve|link)\b/.test(lowerWithoutNegativeClauses) &&
-    !hasExplicitReadOnly;
+  const hasReadIntent =
+    /\b(analy[sz]e|inspect|review|summari[sz]e|check|explain|show|status|readiness|why|what'?s)\b/.test(
+      lower,
+    );
+  const hasExplicitReadOnly = /\bread[-\s]?only\b|do not (modify|write|request approval)/.test(
+    lower,
+  );
+  const hasWriteIntent =
+    /\b(trigger|rerun|queue|start|create|update|push|commit|stage|merge|approve|link)\b/.test(
+      lowerWithoutNegativeClauses,
+    ) && !hasExplicitReadOnly;
   if ((!hasReadIntent && !hasExplicitReadOnly) || hasWriteIntent) return undefined;
 
   const prMatch = text.match(/\b(?:pr|pull\s+request)\s*#?\s*(\d+)\b/i);
@@ -236,16 +246,28 @@ function readonlyWorkflowFromMessage(
 function readonlyLocalGitWorkflowFromMessage(
   lower: string,
 ): ChatWorkflowActionPayload["action"] | undefined {
-  const mentionsStagedChanges = /\b(what(?:'s| is)? (?:staged|in the index|will be committed)|staged changes|staged diff|cached diff|commit scope|what will be committed|what would be committed)\b/.test(lower);
+  const mentionsStagedChanges =
+    /\b(what(?:'s| is)? (?:staged|in the index|will be committed)|staged changes|staged diff|cached diff|commit scope|what will be committed|what would be committed)\b/.test(
+      lower,
+    );
   if (mentionsStagedChanges) return "inspect_staged_changes";
 
-  const mentionsCurrentBranch = /\b(what'?s on this branch|current branch|branch status|branch state|where am i|working tree status)\b/.test(lower);
+  const mentionsCurrentBranch =
+    /\b(what'?s on this branch|current branch|branch status|branch state|where am i|working tree status)\b/.test(
+      lower,
+    );
   if (mentionsCurrentBranch) return "refresh_branch";
 
-  const mentionsRemoteTarget = /\b(where will (?:this|my|the)?\s*push go|push target|remote target|show remote|configured remotes|where would (?:this|my|the)?\s*push go)\b/.test(lower);
+  const mentionsRemoteTarget =
+    /\b(where will (?:this|my|the)?\s*push go|push target|remote target|show remote|configured remotes|where would (?:this|my|the)?\s*push go)\b/.test(
+      lower,
+    );
   if (mentionsRemoteTarget) return "inspect_remote_target";
 
-  const mentionsCurrentChanges = /\b(review my changes|review changes|what changed|current changes|inspect diff|working tree changes|workspace changes|unstaged changes)\b/.test(lower);
+  const mentionsCurrentChanges =
+    /\b(review my changes|review changes|what changed|current changes|inspect diff|working tree changes|workspace changes|unstaged changes)\b/.test(
+      lower,
+    );
   if (mentionsCurrentChanges) return "inspect_changes";
 
   return undefined;
@@ -277,7 +299,8 @@ function workflowPlannerResult(summary: string, result: WorkflowActionResult): C
 }
 
 function workflowToolSummary(tool: WorkflowToolResult): string {
-  if (tool.returncode !== undefined) return tool.returncode === 0 ? "Success" : `Exit code ${tool.returncode}`;
+  if (tool.returncode !== undefined)
+    return tool.returncode === 0 ? "Success" : `Exit code ${tool.returncode}`;
   return tool.ok === false ? "Failed" : "Success";
 }
 
@@ -304,11 +327,12 @@ function directWorkflowRunningState(
   }
   return {
     status: "running",
-    currentStep: directWorkflow.action === "refresh_branch"
-      ? "Inspecting current branch"
-      : directWorkflow.action === "inspect_staged_changes"
-        ? "Inspecting staged changes"
-        : "Inspecting current changes",
+    currentStep:
+      directWorkflow.action === "refresh_branch"
+        ? "Inspecting current branch"
+        : directWorkflow.action === "inspect_staged_changes"
+          ? "Inspecting staged changes"
+          : "Inspecting current changes",
     completedTools: [],
     workflowKind: "git",
     workflowPhase: directWorkflow.action,
@@ -361,7 +385,11 @@ export function registerChatRoutes(
     const { imageAttachments, message, repoPath, sessionId: existingId, llmConfig } = parsed.data;
     const projectLinkId = projectLinkIdFromChatPayload(parsed.data);
     const inlineProjectLink = inlineProjectLinkFromPayload(parsed.data);
-    const projectLink = await resolveProjectLinkForChat(projectLinkId, inlineProjectLink, projectLinkStore);
+    const projectLink = await resolveProjectLinkForChat(
+      projectLinkId,
+      inlineProjectLink,
+      projectLinkStore,
+    );
     const sessionId = existingId ?? chatSessions.createSession(repoPath, projectLinkId);
     const sseWriter = createChatSseWriter(reply, sessionId);
     const directWorkflow = runWorkflowAction
@@ -378,14 +406,17 @@ export function registerChatRoutes(
               ? `${message}\n\nAttached images: ${imageAttachments.map((item) => item.name).join(", ")}`.trim()
               : message;
             await chatSessions.appendUserTurn(sessionId, storedMessage, repoPath);
-            sseWriter.sendChatEvent({ type: "workflow_state", state: directWorkflowRunningState(directWorkflow) });
-            const result = await workflowRunner({
+            sseWriter.sendChatEvent({
+              type: "workflow_state",
+              state: directWorkflowRunningState(directWorkflow),
+            });
+            const result = (await workflowRunner({
               ...directWorkflow,
               repoPath,
               sessionId,
               projectLinkId,
               projectLink,
-            } as ChatWorkflowActionPayload) as WorkflowActionResult;
+            } as ChatWorkflowActionPayload)) as WorkflowActionResult;
             for (const tool of result.tools ?? []) {
               const args = { command: tool.command ?? tool.name };
               sseWriter.sendChatEvent({ type: "tool_start", name: tool.name, args });
@@ -402,13 +433,24 @@ export function registerChatRoutes(
             if (result.workflowState) {
               sseWriter.sendChatEvent({ type: "workflow_state", state: result.workflowState });
             }
-            sseWriter.sendChatEvent({ type: "done", result: workflowPlannerResult(summary, result) });
+            sseWriter.sendChatEvent({
+              type: "done",
+              result: workflowPlannerResult(summary, result),
+            });
             sseWriter.end();
             resolve();
             return;
           }
 
-          for await (const event of chatSessions.run(sessionId, message, repoPath, projectLinkId, llmConfig, projectLink, imageAttachments)) {
+          for await (const event of chatSessions.run(
+            sessionId,
+            message,
+            repoPath,
+            projectLinkId,
+            llmConfig,
+            projectLink,
+            imageAttachments,
+          )) {
             sseWriter.sendChatEvent(event);
             if (isTerminalChatEvent(event)) {
               sseWriter.end();

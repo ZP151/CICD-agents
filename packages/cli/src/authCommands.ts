@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import type { Command } from "commander";
 import chalk from "chalk";
 import { createRuntimeClient } from "./cliRuntime.js";
 
@@ -83,9 +83,7 @@ export function registerAuthCommands(program: Command): void {
     });
 }
 
-async function renderLoginStream(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-): Promise<void> {
+async function renderLoginStream(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> {
   const dec = new TextDecoder();
   let buf = "";
   let currentEvent = "output";

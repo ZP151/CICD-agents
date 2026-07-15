@@ -10,18 +10,45 @@ export function ReviewActivityRail({
   events,
   totalCount,
   filter,
+  open,
   onFilterChange,
+  onOpenChange,
 }: {
   events: ReviewOperationEvent[];
   totalCount: number;
   filter: ActivityCategory;
+  open: boolean;
   onFilterChange: (filter: ActivityCategory) => void;
+  onOpenChange: (open: boolean) => void;
 }): JSX.Element {
+  if (!open) {
+    return (
+      <aside className="flex justify-end xl:sticky xl:top-4 xl:self-start">
+        <button
+          type="button"
+          onClick={() => onOpenChange(true)}
+          className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:text-[rgb(var(--app-text))]"
+        >
+          Show activity
+        </button>
+      </aside>
+    );
+  }
+
   return (
     <aside className="min-w-0 rounded-lg border border-zinc-800/70 bg-zinc-900/20 p-3 xl:sticky xl:top-4 xl:self-start">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-medium text-zinc-400">Recent activity</p>
-        <span className="text-[11px] text-zinc-700">{totalCount} latest</span>
+        <div>
+          <p className="text-xs font-medium text-zinc-400">Recent activity</p>
+          <span className="text-[11px] text-zinc-700">{totalCount} latest</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          className="rounded-md border border-zinc-800 px-2 py-1 text-[11px] text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300"
+        >
+          Hide
+        </button>
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5">
         {activityCategories.map((category) => (

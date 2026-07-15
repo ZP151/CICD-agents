@@ -1,8 +1,8 @@
 import type { FastifyReply } from "fastify";
 import { z } from "zod";
+import type { buildCloudContext } from "@mergepilot/core";
 import {
   adoAuthDiagnosticFromError,
-  buildCloudContext,
   getAzureDevOpsAuth,
   getAzurePullRequestById,
   listAzurePullRequestThreads,
@@ -14,23 +14,28 @@ import type { ProjectLinkStoreAdapter } from "../projectLinkStore.js";
 
 export const ProjectLinkIdParam = z.object({ id: z.string().min(1) });
 
-const LlmConfigSchema = z.object({
-  llmProvider: z.enum(["azure", "openai"]).optional(),
-  azureEndpoint: z.string().optional(),
-  azureApiKey: z.string().optional(),
-  azureDeployment: z.string().optional(),
-  azureApiVersion: z.string().optional(),
-  openaiApiKey: z.string().optional(),
-  openaiModel: z.string().optional(),
-}).optional();
+const LlmConfigSchema = z
+  .object({
+    llmProvider: z.enum(["azure", "openai"]).optional(),
+    azureEndpoint: z.string().optional(),
+    azureApiKey: z.string().optional(),
+    azureDeployment: z.string().optional(),
+    azureApiVersion: z.string().optional(),
+    openaiApiKey: z.string().optional(),
+    openaiModel: z.string().optional(),
+  })
+  .optional();
 
-const InlineProjectLinkSchema = z.object({
-  adoOrgUrl: z.string().default(""),
-  adoProject: z.string().default(""),
-  adoRepoName: z.string().default(""),
-  adoPat: z.string().default(""),
-  targetBranch: z.string().default("main"),
-}).passthrough().optional();
+const InlineProjectLinkSchema = z
+  .object({
+    adoOrgUrl: z.string().default(""),
+    adoProject: z.string().default(""),
+    adoRepoName: z.string().default(""),
+    adoPat: z.string().default(""),
+    targetBranch: z.string().default("main"),
+  })
+  .passthrough()
+  .optional();
 
 export const ReviewRunSchema = z.object({
   pullRequestId: z.coerce.number().int().positive(),
@@ -53,11 +58,7 @@ export interface ReviewRunProjectLink {
   targetBranch: string;
 }
 
-export function sendAdoDiagnostic(
-  reply: FastifyReply,
-  err: unknown,
-  authMode?: "oauth" | "pat",
-) {
+export function sendAdoDiagnostic(reply: FastifyReply, err: unknown, authMode?: "oauth" | "pat") {
   const diagnostic = adoAuthDiagnosticFromError(err, authMode);
   return reply.code(diagnostic.status === "oauth_unavailable" ? 401 : 400).send({
     source: "internal" as const,
@@ -69,7 +70,9 @@ export function sendAdoDiagnostic(
   });
 }
 
-export function readinessFromDecision(queue: "auto_approved" | "needs_human_review" | "blocked" | "watching") {
+export function readinessFromDecision(
+  queue: "auto_approved" | "needs_human_review" | "blocked" | "watching",
+) {
   if (queue === "auto_approved") return "ready" as const;
   if (queue === "blocked") return "blocked" as const;
   return "needs_attention" as const;
@@ -149,8 +152,12 @@ export async function enrichBundleWithPrSignals(args: {
       reviewerCount: pullRequest.reviewerCount,
       voteSummary: pullRequest.voteSummary,
       threadCount: threads.filter((thread) => thread.comments.length > 0).length,
-      activeThreadCount: threads.filter((thread) => thread.comments.length > 0 && String(thread.status) !== "2").length,
-      failedBuildCount: builds.filter((build) => build.result === "failed" || build.result === "canceled").length,
+      activeThreadCount: threads.filter(
+        (thread) => thread.comments.length > 0 && String(thread.status) !== "2",
+      ).length,
+      failedBuildCount: builds.filter(
+        (build) => build.result === "failed" || build.result === "canceled",
+      ).length,
       latestBuildResult: latestBuild?.result ?? "",
       latestBuildStatus: latestBuild?.status ?? "",
     },

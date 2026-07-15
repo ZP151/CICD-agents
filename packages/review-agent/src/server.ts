@@ -4,13 +4,7 @@ import { loadConfig, type ReviewAgentConfig } from "./config.js";
 import { AdoPrEventSchema, eventKey } from "./webhook.js";
 import { verifyBasicSecret, verifyHmacSha256 } from "./signature.js";
 import { IdempotentQueue } from "./queue.js";
-import {
-  AdoClient,
-  FileStateStore,
-  InMemoryStateStore,
-  TableStateStore,
-  type StateStore,
-} from "@mergepilot/core";
+import { AdoClient, FileStateStore, TableStateStore, type StateStore } from "@mergepilot/core";
 import { ReviewService } from "./reviewService.js";
 import nodeOs from "node:os";
 import nodePath from "node:path";
@@ -70,7 +64,15 @@ export async function buildApp(opts: BuildOptions = {}): Promise<FastifyInstance
     }
     try {
       const result = await service!.handle(parsed.data);
-      app.log.info({ key: job.key, status: result.status, findings: result.findings, decision: result.decision }, "review handled");
+      app.log.info(
+        {
+          key: job.key,
+          status: result.status,
+          findings: result.findings,
+          decision: result.decision,
+        },
+        "review handled",
+      );
     } catch (err) {
       app.log.error({ err, key: job.key }, "review handler failed");
     }

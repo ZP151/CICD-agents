@@ -73,6 +73,7 @@ export interface ChatShellProps {
   history: ChatHistoryEntry[];
   historyError: string | null;
   historyExpanded: boolean;
+  historyLoading: boolean;
   historyMenu: HistoryMenuState | null;
   historyOpen: boolean;
   historyPage: number;
@@ -84,6 +85,7 @@ export interface ChatShellProps {
   modelMenuRef: RefObject<HTMLDivElement>;
   openPrInsightSourceInActivity: (source: { artifactId: string }) => void;
   openPrInsightSourceInWorkspace: (source: SavedPrInsightSource) => void;
+  projectLinksLoading: boolean;
   queuePrompt: (prompt: string) => void;
   queuedSuggestionId: string | null;
   renameCurrentSession: (value: string) => void;
@@ -135,6 +137,7 @@ export interface ChatShellProps {
   toggleHistoryPin: (entry: ChatHistoryEntry) => void;
   toggleTool: (id: string) => void;
   welcomeSuggestions: string[];
+  welcomeSuggestionsReady: boolean;
   workflowState: WorkflowEventState | null;
   workspaceRef: RefObject<HTMLDivElement>;
 }

@@ -31,12 +31,13 @@ function pr(overrides: Partial<DisplayPullRequest> = {}): DisplayPullRequest {
 }
 
 describe("pullRequestViewModel", () => {
-  it("deduplicates pull requests by repository and id", () => {
+  it("deduplicates pull requests by Project Link, repository, and id", () => {
     expect(dedupePullRequests([
-      pr({ id: 1, repository: "repo", title: "first" }),
-      pr({ id: 1, repository: "repo", title: "duplicate" }),
-      pr({ id: 1, repository: "other", title: "other repo" }),
-    ])).toHaveLength(2);
+      pr({ id: 1, repository: "repo", sourceProjectLinkId: "a", title: "first" }),
+      pr({ id: 1, repository: "repo", sourceProjectLinkId: "a", title: "duplicate" }),
+      pr({ id: 1, repository: "repo", sourceProjectLinkId: "b", title: "same repo in another Project Link" }),
+      pr({ id: 1, repository: "other", sourceProjectLinkId: "a", title: "other repo" }),
+    ])).toHaveLength(3);
   });
 
   it("filters pull requests by product categories", () => {

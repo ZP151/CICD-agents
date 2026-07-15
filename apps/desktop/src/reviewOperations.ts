@@ -15,6 +15,7 @@ export type ReviewOperationKind =
 
 export interface ReviewOperationEvent {
   id: string;
+  projectLinkId?: string;
   kind: ReviewOperationKind;
   at: string;
   repository: string;
@@ -50,8 +51,21 @@ function saveStore(store: ReviewOperationStore): void {
   target.setItem(REVIEW_OPERATIONS_LS_KEY, JSON.stringify(store.slice(0, MAX_REVIEW_OPERATIONS)));
 }
 
-export function listReviewOperations(): ReviewOperationEvent[] {
-  return loadStore().slice().sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"));
+function sortOperations(items: ReviewOperationEvent[]): ReviewOperationEvent[] {
+  return items.slice().sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"));
+}
+
+export function listReviewOperations(
+  projectLinkId?: string,
+  options: { includeLegacyFallback?: boolean } = {},
+): ReviewOperationEvent[] {
+  const items = loadStore();
+  const scope = projectLinkId?.trim();
+  if (!scope) return sortOperations(items);
+  const scoped = items.filter((event) => event.projectLinkId === scope);
+  if (scoped.length > 0) return sortOperations(scoped);
+  if (options.includeLegacyFallback === false) return [];
+  return sortOperations(items.filter((event) => !event.projectLinkId));
 }
 
 export function appendReviewOperation(
@@ -59,12 +73,15 @@ export function appendReviewOperation(
     at?: string;
     actor?: string;
   },
+  projectLinkId = event.projectLinkId,
 ): ReviewOperationEvent {
   const at = event.at ?? new Date().toISOString();
   const actor = event.actor ?? "desktop-user";
+  const scope = projectLinkId?.trim();
   const saved: ReviewOperationEvent = {
     ...event,
-    id: `${at}-${event.kind}-${event.repository}-${event.pullRequestId}`,
+    ...(scope ? { projectLinkId: scope } : {}),
+    id: `${at}-${scope || "legacy"}-${event.kind}-${event.repository}-${event.pullRequestId}`,
     at,
     actor,
   };

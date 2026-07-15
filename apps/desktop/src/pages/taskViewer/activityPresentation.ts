@@ -2,11 +2,11 @@ import type { TaskView } from "../../api.js";
 import type { ReviewOperationEvent } from "../../reviewOperations.js";
 
 export function statusClass(status: string): string {
-  if (status === "succeeded") return "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20";
-  if (status === "failed") return "bg-red-500/10 text-red-400 ring-red-500/20";
-  if (status === "running") return "bg-blue-500/10 text-blue-400 ring-blue-500/20";
-  if (status === "queued") return "bg-yellow-500/10 text-yellow-400 ring-yellow-500/20";
-  return "bg-zinc-800 text-zinc-400 ring-zinc-700";
+  if (status === "succeeded") return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  if (status === "failed") return "bg-red-50 text-red-700 ring-red-200";
+  if (status === "running") return "bg-blue-50 text-blue-700 ring-blue-200";
+  if (status === "queued") return "bg-amber-50 text-amber-700 ring-amber-200";
+  return "bg-zinc-100 text-zinc-600 ring-zinc-200";
 }
 
 export function formatTime(ts?: number | null): string {
@@ -55,6 +55,6 @@ export function reviewOperationKindLabel(kind: ReviewOperationEvent["kind"]): st
 
 export function reviewOperationStatusClass(ok: boolean): string {
   return ok
-    ? "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20"
-    : "bg-yellow-500/10 text-yellow-400 ring-yellow-500/20";
+    ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+    : "bg-amber-50 text-amber-700 ring-amber-200";
 }

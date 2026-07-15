@@ -1,9 +1,5 @@
-import {
-  getSettings,
-  LLMClient,
-  runCommand,
-  type ChatPlannerResult,
-} from "@mergepilot/core";
+import type { LLMClient } from "@mergepilot/core";
+import { getSettings, runCommand, type ChatPlannerResult } from "@mergepilot/core";
 import {
   buildChatContext,
   chatContextSources,
@@ -38,10 +34,16 @@ export class ChatContextPromptBuilder {
     getBubbles?: (sessionId: string) => Promise<StoredBubble[]>;
   }): Promise<BuiltContextPrompt> {
     try {
-      const { repoPath, message, llm, sessionId, getBubbles, inlineProjectLink, projectLinkId } = args;
+      const { repoPath, message, llm, sessionId, getBubbles, inlineProjectLink, projectLinkId } =
+        args;
       const notes: string[] = [];
       const projectLinkContext = inlineProjectLinkToChatContextProjectLink(inlineProjectLink);
-      const bundle = await buildChatContext({ repoPath, message, llm, projectLink: projectLinkContext });
+      const bundle = await buildChatContext({
+        repoPath,
+        message,
+        llm,
+        projectLink: projectLinkContext,
+      });
       this.refreshContextIndexInBackground(repoPath, llm, projectLinkContext);
       notes.push(describeChatContext(bundle));
       const sources = chatContextSources(bundle);
@@ -96,7 +98,9 @@ export class ChatContextPromptBuilder {
   }
 }
 
-export function inlineProjectLinkToChatContextProjectLink(projectLink?: InlineProjectLink): ChatContextProjectLink | undefined {
+export function inlineProjectLinkToChatContextProjectLink(
+  projectLink?: InlineProjectLink,
+): ChatContextProjectLink | undefined {
   if (!projectLink) return undefined;
   return {
     buildCommand: projectLink.buildCommand,
@@ -105,7 +109,10 @@ export function inlineProjectLinkToChatContextProjectLink(projectLink?: InlinePr
   };
 }
 
-async function currentBranchContext(repoPath: string, inlineProjectLink?: InlineProjectLink): Promise<string> {
+async function currentBranchContext(
+  repoPath: string,
+  inlineProjectLink?: InlineProjectLink,
+): Promise<string> {
   try {
     const branchResult = await runCommand(["git", "rev-parse", "--abbrev-ref", "HEAD"], {
       cwd: repoPath,
@@ -114,7 +121,8 @@ async function currentBranchContext(repoPath: string, inlineProjectLink?: Inline
     });
     const currentBranch = branchResult.stdout.trim();
     if (!currentBranch || currentBranch === "HEAD") return "";
-    const targetBranch = inlineProjectLink?.targetBranch || inlineProjectLink?.defaultBranch || "main";
+    const targetBranch =
+      inlineProjectLink?.targetBranch || inlineProjectLink?.defaultBranch || "main";
     return [
       "\n## Current Git State",
       `- Current branch: ${currentBranch}`,
@@ -122,7 +130,9 @@ async function currentBranchContext(repoPath: string, inlineProjectLink?: Inline
       currentBranch === targetBranch
         ? "- WARNING: You are on the PR target branch. Create a feature branch before committing and pushing."
         : "",
-    ].filter(Boolean).join("\n");
+    ]
+      .filter(Boolean)
+      .join("\n");
   } catch {
     return "";
   }

@@ -1,4 +1,4 @@
-import {
+import type {
   listAzureBuilds,
   listAzurePullRequestPolicyEvaluations,
   listAzurePullRequestThreads,
@@ -42,15 +42,13 @@ export function buildPrReadinessSignalMetadata(args: {
       author: thread.comments[0]?.author?.displayName ?? "",
       firstComment: compactInlineText(thread.comments[0]?.content ?? "", 160),
     }));
-  const linkedWorkItems = args.workItems
-    .slice(0, 20)
-    .map((item) => ({
-      id: item.id,
-      type: item.type,
-      title: item.title,
-      state: item.state,
-      url: item.url,
-    }));
+  const linkedWorkItems = args.workItems.slice(0, 20).map((item) => ({
+    id: item.id,
+    type: item.type,
+    title: item.title,
+    state: item.state,
+    url: item.url,
+  }));
   return {
     failedPolicyCount: policyBlockers.length,
     buildBlockers,
@@ -70,11 +68,21 @@ export function heuristicPrInsight(args: {
   changedPaths: string[];
 }): string {
   const lines: string[] = [];
-  lines.push(`PR insight for "${args.title || "untitled PR"}": ${args.fileCount} changed file(s), ${args.threadCount} thread(s), and ${args.failedBuildCount} failed build(s).`);
-  if (args.unresolvedThreadCount > 0) lines.push(`${args.unresolvedThreadCount} thread(s) may need attention before merge.`);
-  if (args.failedBuildCount > 0) lines.push("Pipeline history includes failed or canceled builds; inspect the latest run before approving.");
-  if (args.changedPaths.length > 0) lines.push(`Touched areas: ${args.changedPaths.slice(0, 8).join(", ")}${args.changedPaths.length > 8 ? ", ..." : ""}.`);
-  if (args.description) lines.push("The PR description is available and should be checked against the changed files.");
+  lines.push(
+    `PR insight for "${args.title || "untitled PR"}": ${args.fileCount} changed file(s), ${args.threadCount} thread(s), and ${args.failedBuildCount} failed build(s).`,
+  );
+  if (args.unresolvedThreadCount > 0)
+    lines.push(`${args.unresolvedThreadCount} thread(s) may need attention before merge.`);
+  if (args.failedBuildCount > 0)
+    lines.push(
+      "Pipeline history includes failed or canceled builds; inspect the latest run before approving.",
+    );
+  if (args.changedPaths.length > 0)
+    lines.push(
+      `Touched areas: ${args.changedPaths.slice(0, 8).join(", ")}${args.changedPaths.length > 8 ? ", ..." : ""}.`,
+    );
+  if (args.description)
+    lines.push("The PR description is available and should be checked against the changed files.");
   return lines.join("\n");
 }
 
@@ -91,7 +99,8 @@ export function buildPrInsightSignals(args: {
   const warnings: string[] = [];
   const info: string[] = [];
   if (args.failedBuildCount > 0) blocking.push(`${args.failedBuildCount} failed/canceled build(s)`);
-  if (args.unresolvedThreadCount > 0) warnings.push(`${args.unresolvedThreadCount} active thread(s)`);
+  if (args.unresolvedThreadCount > 0)
+    warnings.push(`${args.unresolvedThreadCount} active thread(s)`);
   if (args.fileCount >= 20) {
     warnings.push(`large PR: ${args.fileCount} changed file(s)`);
   } else if (args.fileCount >= 10) {
@@ -100,13 +109,22 @@ export function buildPrInsightSignals(args: {
   if (!args.description.trim()) warnings.push("missing PR description");
   if (args.workItemCount === 0) info.push("no linked work items");
   const touched = args.changedPaths.map((path) => path.toLowerCase());
-  if (touched.some((path) => path.includes("auth") || path.includes("security") || path.includes("permission"))) {
+  if (
+    touched.some(
+      (path) => path.includes("auth") || path.includes("security") || path.includes("permission"),
+    )
+  ) {
     warnings.push("security/auth-sensitive files changed");
   }
-  if (touched.some((path) => path.includes("migration") || path.includes("schema") || path.endsWith(".sql"))) {
+  if (
+    touched.some(
+      (path) => path.includes("migration") || path.includes("schema") || path.endsWith(".sql"),
+    )
+  ) {
     warnings.push("database/schema files changed");
   }
-  const readiness = blocking.length > 0 ? "blocked" : warnings.length > 0 ? "needs_attention" : "ready";
+  const readiness =
+    blocking.length > 0 ? "blocked" : warnings.length > 0 ? "needs_attention" : "ready";
   return {
     readiness,
     risks: [...blocking, ...warnings],

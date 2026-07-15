@@ -10,6 +10,10 @@ export type DisplayPullRequest = PullRequestSummary & {
   sourceProjectLinkName?: string;
 };
 
+export function pullRequestRuntimeKey(pr: Pick<DisplayPullRequest, "id" | "repository" | "sourceProjectLinkId">): string {
+  return `${pr.sourceProjectLinkId || "project-link"}:${pr.repository}:${pr.id}`;
+}
+
 export type PullRequestCategory = "all" | "attention" | "draft" | "reviewed";
 
 export type ContextState =

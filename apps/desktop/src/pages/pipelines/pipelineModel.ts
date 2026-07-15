@@ -17,7 +17,7 @@ export const pipelineFilters: PipelineFilterOption[] = [
 ];
 
 export function formatDate(value: string | undefined): string {
-  if (!value) return "Unknown";
+  if (!value) return "";
   return new Date(value).toLocaleString();
 }
 
@@ -32,7 +32,7 @@ export function runTone(run: PipelineRunSummary | undefined): RunTone {
   if (run.result === "failed" || run.result === "canceled") {
     return { label: run.result, tone: "text-red-400 bg-red-950/30 ring-red-900/60" };
   }
-  return { label: run.result || run.state || "Unknown", tone: "text-zinc-400 bg-zinc-800/60 ring-zinc-700/50" };
+  return { label: run.result || run.state || "Run recorded", tone: "text-zinc-400 bg-zinc-800/60 ring-zinc-700/50" };
 }
 
 export function rowMatchesFilter(row: PipelineRow, filter: PipelineStatusFilter): boolean {
@@ -119,6 +119,8 @@ function compareRunsNewestFirst(a: PipelineRunSummary, b: PipelineRunSummary): n
 }
 
 function latestRunForPipeline(runs: PipelineRunSummary[], pipelineId: string): PipelineRunSummary | undefined {
-  const filtered = runs.filter((run) => !run.url || run.url.includes(`definitionId=${pipelineId}`) || run.url.includes(`pipelineId=${pipelineId}`));
-  return [...(filtered.length > 0 ? filtered : runs)].sort(compareRunsNewestFirst)[0];
+  const filtered = runs.filter((run) =>
+    run.url.includes(`definitionId=${pipelineId}`) || run.url.includes(`pipelineId=${pipelineId}`)
+  );
+  return [...filtered].sort(compareRunsNewestFirst)[0];
 }

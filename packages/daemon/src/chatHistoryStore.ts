@@ -12,14 +12,9 @@ import {
   normalizeSession,
   normalizeStore,
   sortChatHistoryEntries,
-  storedSessionProjectLinkId,
   storedToCosmos,
 } from "./chatHistorySerialization.js";
-import type {
-  ChatHistoryEntry,
-  HistoryStore,
-  StoredSession,
-} from "./chatHistoryTypes.js";
+import type { ChatHistoryEntry, HistoryStore, StoredSession } from "./chatHistoryTypes.js";
 
 export type {
   ChatHistoryEntry,

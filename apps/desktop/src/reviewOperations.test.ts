@@ -98,6 +98,64 @@ describe("review operations", () => {
     expect(events.at(-1)?.pullRequestId).toBe(6);
   });
 
+  it("scopes operation history by Project Link when scoped events exist", () => {
+    appendReviewOperation({
+      kind: "review_run",
+      at: "2026-06-11T00:00:00.000Z",
+      repository: "demo",
+      pullRequestId: 42,
+      label: "Primary review",
+      ok: true,
+      details: "Primary details.",
+    }, "project-link-a");
+    appendReviewOperation({
+      kind: "review_run",
+      at: "2026-06-11T00:01:00.000Z",
+      repository: "demo",
+      pullRequestId: 42,
+      label: "Secondary review",
+      ok: true,
+      details: "Secondary details.",
+    }, "project-link-b");
+
+    expect(listReviewOperations("project-link-a")).toEqual([
+      expect.objectContaining({ label: "Primary review", projectLinkId: "project-link-a" }),
+    ]);
+    expect(listReviewOperations("project-link-b")).toEqual([
+      expect.objectContaining({ label: "Secondary review", projectLinkId: "project-link-b" }),
+    ]);
+  });
+
+  it("falls back to legacy unscoped operations when no scoped events exist", () => {
+    appendReviewOperation({
+      kind: "review_run",
+      at: "2026-06-11T00:00:00.000Z",
+      repository: "demo",
+      pullRequestId: 42,
+      label: "Legacy review",
+      ok: true,
+      details: "Legacy details.",
+    });
+
+    expect(listReviewOperations("project-link-a")).toEqual([
+      expect.objectContaining({ label: "Legacy review" }),
+    ]);
+  });
+
+  it("can suppress legacy fallback for all-Project-Link aggregation", () => {
+    appendReviewOperation({
+      kind: "review_run",
+      at: "2026-06-11T00:00:00.000Z",
+      repository: "demo",
+      pullRequestId: 42,
+      label: "Legacy review",
+      ok: true,
+      details: "Legacy details.",
+    });
+
+    expect(listReviewOperations("project-link-a", { includeLegacyFallback: false })).toEqual([]);
+  });
+
   it("falls back to an empty list when local storage is corrupt", () => {
     localStorage.setItem(REVIEW_OPERATIONS_LS_KEY, "{not-json");
 

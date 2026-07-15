@@ -1,6 +1,6 @@
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { bundleToPrompt, type ContextBundle } from "./contextBuilder.js";
-import { LLMUnavailableError, type LLMClient } from "./llm.js";
+import { LLMUnavailableError, type ChatToolCall, type LLMClient } from "./llm.js";
 import { logger } from "./logger.js";
 import {
   buildPlannerOfflineSummary,
@@ -166,7 +166,7 @@ export class Planner {
 
     for (let step = 0; step < this.maxSteps; step++) {
       let accumulated = "";
-      let toolFromStream: import("./llm.js").ChatToolCall[] = [];
+      let toolFromStream: ChatToolCall[] = [];
       try {
         for await (const ev of this.llm.chatStream({ messages, tools, maxTokens: 1200 })) {
           if (ev.type === "delta" && ev.delta) {
@@ -260,10 +260,7 @@ export class Planner {
   private offlineResult(bundle: ContextBundle): PlannerResult {
     const { title, summary } = Planner.buildOfflineSummary(bundle);
     let risk = "low";
-    if (
-      bundle.changedFiles.length > 10 ||
-      bundle.changedFiles.some((cf) => cf.deletions > 100)
-    ) {
+    if (bundle.changedFiles.length > 10 || bundle.changedFiles.some((cf) => cf.deletions > 100)) {
       risk = "medium";
     }
     return {

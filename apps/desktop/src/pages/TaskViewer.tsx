@@ -162,8 +162,11 @@ export default function TaskViewer(): JSX.Element {
 
       <section className="min-w-0 flex-1">
         {!selected && !selectedReview && !selectedPrInsight && !selectedCheckpoint && (
-          <div className="flex h-full items-center justify-center text-sm text-zinc-600">
-            Select a run, checkpoint, or review operation to inspect details.
+          <div className="flex h-full items-center justify-center text-center text-sm text-zinc-600">
+            <div>
+              <p className="font-medium text-zinc-500">No operation selected</p>
+              <p className="mt-1">Choose a run, checkpoint, PR insight, or review action to inspect what happened.</p>
+            </div>
           </div>
         )}
 

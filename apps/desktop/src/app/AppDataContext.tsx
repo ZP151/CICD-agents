@@ -76,7 +76,9 @@ export function AppDataProvider({
   daemonReady: boolean;
 }) {
   const [projectLinks, setProjectLinks] = useState<ProjectLink[]>(() => lsProjectLinks());
-  const [projectLinksLoading, setProjectLinksLoading] = useState(false);
+  const [projectLinksLoading, setProjectLinksLoading] = useState(
+    () => lsProjectLinks().length === 0,
+  );
   const [cloudProjectLinkStore, setCloudProjectLinkStore] = useState(false);
   const [usingDaemon, setUsingDaemon] = useState(false);
   const loadedRef = useRef(false);

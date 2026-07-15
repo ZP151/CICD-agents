@@ -1,6 +1,7 @@
 import { InsightRiskBadges } from "./InsightRiskBadges.js";
 import { insightReadinessTone } from "./pullRequestViewModel.js";
 import type { QueueState } from "./pullRequestTypes.js";
+import { MarkdownContent } from "../../components/conversation/ConversationPartRenderer.js";
 
 type ReviewRunResult = Extract<QueueState, { phase: "done" }>["result"];
 
@@ -26,9 +27,9 @@ export function ReviewRunPanel({
           tokens: {result.tokensIn}/{result.tokensOut}
         </span>
       </div>
-      <p className="whitespace-pre-wrap text-xs leading-relaxed text-zinc-400">
-        {result.summary || "No summary returned."}
-      </p>
+      <div className="text-xs">
+        <MarkdownContent markdown={result.summary || "No summary returned."} />
+      </div>
       {(result.contextConfidence || (result.decisionReasonCodes?.length ?? 0) > 0) && (
         <DecisionBadges result={result} />
       )}
