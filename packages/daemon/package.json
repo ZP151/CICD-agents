@@ -1,7 +1,15 @@
 {
   "name": "@mergepilot/daemon",
   "version": "0.5.21",
+  "description": "MergePilot local daemon HTTP and SSE API.",
   "private": true,
+  "author": "ZP151 <zhouping151140@gmail.com>",
+  "homepage": "https://github.com/ZP151/MergePilot#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZP151/MergePilot.git",
+    "directory": "packages/daemon"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "bin": {

@@ -1,7 +1,15 @@
 {
   "name": "@mergepilot/review-agent",
   "version": "0.5.21",
+  "description": "MergePilot pull request review service.",
   "private": true,
+  "author": "ZP151 <zhouping151140@gmail.com>",
+  "homepage": "https://github.com/ZP151/MergePilot#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZP151/MergePilot.git",
+    "directory": "packages/review-agent"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
