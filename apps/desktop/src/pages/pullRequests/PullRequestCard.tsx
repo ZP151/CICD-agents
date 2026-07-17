@@ -8,6 +8,7 @@ import {
   insightReadinessTone,
   readiness,
 } from "./pullRequestViewModel.js";
+import { MarkdownContent } from "../../components/conversation/ConversationPartRenderer.js";
 import type {
   ContextState,
   DisplayPullRequest,
@@ -76,43 +77,43 @@ export function PullRequestCard({
     : "";
 
   const decisionTone = isDone
-    ? qState.result.decisionQueue === "auto_approved" ? "border-emerald-800/60 bg-emerald-950/20 text-emerald-400"
-    : qState.result.decisionQueue === "needs_human_review" ? "border-yellow-800/60 bg-yellow-950/20 text-yellow-400"
-    : qState.result.decisionQueue === "blocked" ? "border-red-800/60 bg-red-950/20 text-red-400"
-    : "border-blue-800/60 bg-blue-950/20 text-blue-400"
+    ? qState.result.decisionQueue === "auto_approved" ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    : qState.result.decisionQueue === "needs_human_review" ? "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+    : qState.result.decisionQueue === "blocked" ? "border-red-500/35 bg-red-500/10 text-red-700 dark:text-red-300"
+    : "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300"
     : "";
 
   const buttonClass = `rounded-md border px-3 py-1.5 text-xs transition disabled:opacity-60 ${
     isDone ? `${decisionTone} cursor-default`
-    : isError ? "border-red-800/60 text-red-400 hover:border-red-700 hover:text-red-300"
-    : isRunning ? "border-zinc-700 text-zinc-500 cursor-wait"
-    : "border-zinc-700 text-zinc-400 hover:border-blue-700 hover:text-blue-300"
+    : isError ? "border-red-500/35 text-red-700 hover:bg-red-500/10 dark:text-red-300"
+    : isRunning ? "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-subtle))] cursor-wait"
+    : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
   }`;
 
   return (
     <article
       className={`rounded-lg border p-4 transition ${
         highlighted
-          ? "border-blue-700/70 bg-blue-950/20 shadow-[0_0_0_1px_rgba(29,78,216,0.25)]"
-          : "border-zinc-800/70 bg-zinc-900/30"
+          ? "border-[rgb(var(--app-accent))]/60 bg-[rgb(var(--app-accent-soft))] shadow-[0_0_0_1px_rgba(var(--app-accent),0.22)]"
+          : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]"
       }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-blue-400">#{pr.id}</span>
+            <span className="font-mono text-xs text-[rgb(var(--app-accent))]">#{pr.id}</span>
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${state.tone}`}>
               {state.label}
             </span>
-            <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400">{pr.status}</span>
+            <span className="rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">{pr.status}</span>
             {!projectLinkId && pr.sourceProjectLinkName && (
-              <span className="rounded-full border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-500">
+              <span className="rounded-full border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
                 {pr.sourceProjectLinkName}
               </span>
             )}
           </div>
-          <h3 className="truncate text-sm font-semibold text-zinc-100">{pr.title || "(untitled)"}</h3>
-          <p className="mt-1 truncate font-mono text-xs text-zinc-600">
+          <h3 className="truncate text-sm font-semibold text-[rgb(var(--app-text))]">{pr.title || "(untitled)"}</h3>
+          <p className="mt-1 truncate font-mono text-xs text-[rgb(var(--app-text-subtle))]">
             {pr.sourceBranch} {"->"} {pr.targetBranch}
           </p>
         </div>
@@ -120,7 +121,7 @@ export function PullRequestCard({
           <div className="flex items-center gap-2">
             <button
               onClick={() => onToggleContext(pr)}
-              className="rounded-md border border-zinc-800 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-200"
+              className="rounded-md border border-[rgb(var(--app-border))] px-3 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
             >
               {isExpanded ? "Hide details" : contextState?.phase === "loaded" ? "Show details" : "Load details"}
             </button>
@@ -134,7 +135,7 @@ export function PullRequestCard({
                 onPreviewInsight(pr);
               }}
               disabled={previewState.phase === "loading"}
-              className="rounded-md border border-zinc-800 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-200 disabled:cursor-wait disabled:opacity-60"
+              className="rounded-md border border-[rgb(var(--app-border))] px-3 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60"
             >
               {previewState.phase === "loading" ? "Generating..." : hasInsight ? "Open insight" : "Generate insight"}
             </button>
@@ -154,14 +155,14 @@ export function PullRequestCard({
                 href={pr.url}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-md border border-zinc-800 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-200"
+                className="rounded-md border border-[rgb(var(--app-border))] px-3 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
               >
                 Open in ADO
               </a>
             )}
           </div>
           {isDone && (
-            <p className="max-w-xs truncate text-right text-[10px] leading-relaxed text-zinc-500" title={qState.result.decisionReason}>
+            <p className="max-w-xs truncate text-right text-[10px] leading-relaxed text-[rgb(var(--app-text-subtle))]" title={qState.result.decisionReason}>
               {qState.result.findingCount} finding{qState.result.findingCount === 1 ? "" : "s"} · {qState.result.decisionReason}
             </p>
           )}
@@ -173,18 +174,22 @@ export function PullRequestCard({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2 text-xs text-zinc-500 sm:grid-cols-3">
+      <div className="mt-4 grid gap-2 text-xs text-[rgb(var(--app-text-muted))] sm:grid-cols-3">
         <div>
-          <p className="text-zinc-700">Author</p>
-          <p className="mt-1 truncate text-zinc-400">{pr.createdBy || "Unknown"}</p>
+          <p className="text-[rgb(var(--app-text-subtle))]">Author</p>
+          <p className="mt-1 truncate text-[rgb(var(--app-text))]">
+            {pr.createdBy || "Not available"}
+          </p>
         </div>
         <div>
-          <p className="text-zinc-700">Created</p>
-          <p className="mt-1 truncate text-zinc-400">{formatDate(pr.creationDate) || "Unknown"}</p>
+          <p className="text-[rgb(var(--app-text-subtle))]">Created</p>
+          <p className="mt-1 truncate text-[rgb(var(--app-text))]">
+            {formatDate(pr.creationDate) || "Not available"}
+          </p>
         </div>
         <div>
-          <p className="text-zinc-700">Reviewers</p>
-          <p className="mt-1 text-zinc-400">
+          <p className="text-[rgb(var(--app-text-subtle))]">Reviewers</p>
+          <p className="mt-1 text-[rgb(var(--app-text))]">
             {pr.voteSummary.approved} approved / {pr.reviewerCount} total
           </p>
         </div>
@@ -204,18 +209,22 @@ export function PullRequestCard({
               </span>
             )}
           </div>
-          <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
-            {isDone
-              ? qState.result.summary || "Review completed."
-              : previewState.phase === "done"
-                ? previewState.result.summary || "Insight preview generated."
-                : storedInsight?.summary || "Saved insight available."}
-          </p>
+          <div className="mt-2 line-clamp-3 text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
+            <MarkdownContent
+              markdown={
+                isDone
+                  ? qState.result.summary || "Review completed."
+                  : previewState.phase === "done"
+                    ? previewState.result.summary || "Insight preview generated."
+                    : storedInsight?.summary || "Saved insight available."
+              }
+            />
+          </div>
         </button>
       )}
 
       {previewState.phase === "error" && (
-        <p className="mt-3 rounded-md border border-red-900/40 bg-red-950/20 px-3 py-2 text-xs text-red-300">
+        <p className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
           {previewState.message}
         </p>
       )}

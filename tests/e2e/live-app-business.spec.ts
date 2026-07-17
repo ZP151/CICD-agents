@@ -628,6 +628,25 @@ function liveEnvironmentPanel(page: Page) {
     .first();
 }
 
+async function openPipelineWorkspaceAction(page: Page): Promise<void> {
+  const legacyWelcomeAction = page.getByRole("button", { name: "Open Pipelines workspace" });
+  if (await legacyWelcomeAction.isVisible().catch(() => false)) {
+    await legacyWelcomeAction.click();
+    return;
+  }
+
+  const environmentPanel = liveEnvironmentPanel(page);
+  const panelPipelineAction = environmentPanel.getByRole("button", { name: /^Pipeline$/ });
+  if (await panelPipelineAction.isVisible().catch(() => false)) {
+    await panelPipelineAction.click();
+    return;
+  }
+
+  const pinnedPipelineAction = page.getByRole("button", { name: /^Pipeline$/ }).first();
+  await expect(pinnedPipelineAction).toBeVisible({ timeout: 30_000 });
+  await pinnedPipelineAction.click();
+}
+
 test.describe("Live app business workflows", () => {
   test.skip(!liveAppEnabled, "Set MERGEPILOT_E2E_LIVE_APP=1 to run against the live frontend and daemon.");
 
@@ -1911,7 +1930,7 @@ test.describe("Live app business workflows", () => {
       await expect(page.getByText("Environment")).toBeVisible();
       await expect(page.getByText("ClaimBot_API")).toBeVisible();
 
-      await page.getByRole("button", { name: "Open Pipelines workspace" }).click();
+      await openPipelineWorkspaceAction(page);
       await expect(page.getByText("No Azure Pipeline is configured on this Project Link yet.")).toBeVisible({
         timeout: 120_000,
       });
@@ -2074,7 +2093,7 @@ test.describe("Live app business workflows", () => {
       await expect(page.getByText("Environment")).toBeVisible();
       await expect(page.getByText("ClaimBot_API")).toBeVisible();
 
-      await page.getByRole("button", { name: "Open Pipelines workspace" }).click();
+      await openPipelineWorkspaceAction(page);
       await expect(page.getByText(/Pipeline #117/i).first()).toBeVisible({ timeout: 120_000 });
       await expect(page.getByText("Pipeline #108")).toHaveCount(0);
 

@@ -36,6 +36,7 @@ export type PipelineInspectState =
   | { phase: "done"; result: ChatWorkflowActionResult; runs: PipelineRunSummary[] }
   | { phase: "analyzing"; result: ChatWorkflowActionResult; runs: PipelineRunSummary[]; analysis: string }
   | { phase: "analysis_done"; result: ChatWorkflowActionResult; runs: PipelineRunSummary[]; analysis: string }
+  | { phase: "analysis_error"; result: ChatWorkflowActionResult; runs: PipelineRunSummary[]; analysis: string; message: string }
   | { phase: "approval"; result: ChatWorkflowActionResult }
   | { phase: "error"; message: string };
 

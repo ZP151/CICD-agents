@@ -71,4 +71,38 @@ describe("prInsightArtifactRecordToMarkdown", () => {
     expect(markdown).toContain("### Linked work items");
     expect(markdown).toContain("- #123 User Story [Active]: Improve agent insight (https://ado/workItems/123)");
   });
+
+  it("uses readable unavailable labels for missing saved insight metadata", () => {
+    const markdown = prInsightArtifactRecordToMarkdown({
+      ...artifact(),
+      readiness: undefined,
+      decisionQueue: undefined,
+      decisionRiskLevel: undefined,
+      contextConfidence: "",
+      signals: {
+        fileCount: 1,
+        threadCount: 0,
+        failedBuildCount: 1,
+        failedPolicyCount: 0,
+        workItemCount: 0,
+        buildBlockers: [
+          {
+            id: 88,
+            buildNumber: "",
+            definitionName: "CI",
+            status: "",
+            result: "",
+            url: "",
+          },
+        ],
+      },
+    });
+
+    expect(markdown).toContain("| Readiness | Not available |");
+    expect(markdown).toContain("| Decision queue | Not available |");
+    expect(markdown).toContain("| Risk | Not available |");
+    expect(markdown).toContain("| Confidence | Not available |");
+    expect(markdown).toContain("- #88 CI: Not available");
+    expect(markdown).not.toContain("unknown");
+  });
 });

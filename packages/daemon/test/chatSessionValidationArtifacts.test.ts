@@ -56,6 +56,24 @@ describe("chat session validation artifact recovery", () => {
     expect(done?.result.artifacts?.[0]?.content).toContain("Expected true to be false");
   });
 
+  it("uses readable command fallback wording in failed validation artifacts", () => {
+    const action: PendingToolAction = {
+      tool: "validation_command",
+      args: { kind: "test" },
+      description: "Run tests",
+      workflow: { kind: "ci", phase: "test" },
+    };
+
+    const done = structuredDoneAfterConfirmedAction(action, {
+      returncode: 1,
+      failure_excerpt: "FAIL src/app.test.ts",
+    });
+    const content = done?.result.artifacts?.[0]?.content ?? "";
+
+    expect(content).toContain("- Command: `not available`");
+    expect(content).not.toContain("(unknown)");
+  });
+
   it("extracts Vitest failure files and focused rerun commands", () => {
     const signals = extractValidationFailureSignals(
       [

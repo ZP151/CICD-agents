@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   fetchProjectLinkReviewQueue,
@@ -13,6 +13,7 @@ import { useReviewQueueBatchRerun } from "./useReviewQueueBatchRerun.js";
 import { useReviewOperationActivity } from "./useReviewOperationActivity.js";
 import { useReviewQueueSettings } from "./useReviewQueueSettings.js";
 import { useReviewQueueView } from "./useReviewQueueView.js";
+import { projectLinkReviewQueueCacheKey } from "./reviewQueueViewModel.js";
 
 export interface ReviewQueueRuntimeInput {
   projectLinkId: string;
@@ -25,6 +26,7 @@ export function useReviewQueueRuntime({
 }: ReviewQueueRuntimeInput) {
   const [items, setItems] = useState<ReviewQueueItem[]>([]);
   const [itemsProjectLinkId, setItemsProjectLinkId] = useState(projectLinkId);
+  const [itemsScopeKey, setItemsScopeKey] = useState("");
   const [configured, setConfigured] = useState(true);
   const [storage, setStorage] = useState<"azure" | "local" | "browser" | undefined>();
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
@@ -36,7 +38,11 @@ export function useReviewQueueRuntime({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const settings = useReviewQueueSettings();
-  const activity = useReviewOperationActivity(projectLinkId);
+  const reviewQueueScopeKey = useMemo(
+    () => projectLinkReviewQueueCacheKey(selectedProjectLink, projectLinkId),
+    [projectLinkId, selectedProjectLink],
+  );
+  const activity = useReviewOperationActivity(projectLinkId, reviewQueueScopeKey);
 
   useEffect(() => {
     setSelectedItem(null);
@@ -45,13 +51,20 @@ export function useReviewQueueRuntime({
     setConfigured(true);
     setStorage(undefined);
     setStorageWarning(null);
-  }, [projectLinkId]);
+  }, [projectLinkId, reviewQueueScopeKey]);
 
   const reviewQueueQuery = useQuery({
-    queryKey: ["reviewQueue", projectLinkId],
+    queryKey: ["reviewQueue", projectLinkId, reviewQueueScopeKey],
     enabled: Boolean(projectLinkId),
     staleTime: 45_000,
     gcTime: 10 * 60_000,
+    placeholderData: (previous, previousQuery) => {
+      const previousKey = previousQuery?.queryKey;
+      if (!Array.isArray(previousKey)) return undefined;
+      return previousKey[1] === projectLinkId && previousKey[2] === reviewQueueScopeKey
+        ? previous
+        : undefined;
+    },
     retry: false,
     retryOnMount: false,
     queryFn: () => fetchProjectLinkReviewQueue(projectLinkId),
@@ -61,16 +74,20 @@ export function useReviewQueueRuntime({
     if (!reviewQueueQuery.data) return;
     setItems(reviewQueueQuery.data.items);
     setItemsProjectLinkId(projectLinkId);
+    setItemsScopeKey(reviewQueueScopeKey);
     setConfigured(reviewQueueQuery.data.configured);
     setStorage(reviewQueueQuery.data.storage);
     setStorageWarning(reviewQueueQuery.data.warning ?? null);
-  }, [projectLinkId, reviewQueueQuery.data]);
+  }, [projectLinkId, reviewQueueQuery.data, reviewQueueScopeKey]);
 
   const load = useCallback(async () => {
     await reviewQueueQuery.refetch();
   }, [reviewQueueQuery]);
 
-  const scopedItems = itemsProjectLinkId === projectLinkId ? items : [];
+  const scopedItems =
+    itemsProjectLinkId === projectLinkId && itemsScopeKey === reviewQueueScopeKey && items.length > 0
+      ? items
+      : reviewQueueQuery.data?.items ?? [];
   const loading = reviewQueueQuery.isLoading && scopedItems.length === 0;
   const refreshing = reviewQueueQuery.isFetching && scopedItems.length > 0;
   const queryError =
@@ -122,11 +139,13 @@ export function useReviewQueueRuntime({
     recordOperation: activity.recordOperation,
   });
 
+  const cachedQueue = reviewQueueQuery.data;
+
   return {
     items: scopedItems,
-    configured,
-    storage,
-    storageWarning,
+    configured: cachedQueue ? cachedQueue.configured : configured,
+    storage: cachedQueue?.storage ?? storage,
+    storageWarning: cachedQueue?.warning ?? storageWarning,
     loading,
     refreshing,
     error,

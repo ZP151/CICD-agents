@@ -22,6 +22,25 @@ The goal is not only to check whether buttons work. The goal is to verify whethe
 | Fail | The case is broken, misleading, unsafe, or blocks the workflow. |
 | N/A | The case cannot be tested in the current environment. |
 
+## Current Coverage Snapshot
+
+Last audited: 2026-07-17.
+
+| Coverage group | Status | Evidence |
+|---|---|---|
+| Chat workflow, approvals, streaming transcript, source preview, image attachments, and route-cache UI | Pass | Covered by full desktop tests, mocked Chromium gates, packaged vision smoke, stale-template release scans, and live source-app workflow gates. |
+| Local Git read/write/recovery workflows | Pass | Covered by live source-app tests using isolated temp repos and local bare remotes: status/diff review, selected staging, commit, push, branch switch, merge/rebase conflict recovery, stash/apply/pop, restore, revert, and tag workflows. |
+| Azure DevOps discovery and read-only PR/pipeline insight | Pass | Covered by live ADO read-only gates for ClaimBot_API project/repo discovery, pipeline `#117` evidence, and real PR insight without mutation. |
+| Pipeline trigger/rerun and PR mutation workflows | Pass, destructive-gated | Historical destructive gates have created and cleaned up real PR branches, reviewers, labels, work items, and ClaimBot_API pipeline `#117` runs. Current reruns require explicit `MERGEPILOT_E2E_DESTRUCTIVE=1`. |
+| Review Queue and PR review presentation | Pass locally, partial for cloud persistence | Local/daemon/component/browser coverage passes for queue rows, findings, disposition states, stale review behavior, and ADO write-back states. True Azure Table ReviewHistory persistence still needs Azure data-plane RBAC. |
+| Settings, identity, local model config, and Key Vault fallback behavior | Pass with Key Vault success path external | Current source proves Microsoft sign-in uses Graph identity scope only, local `.env` model secrets work, and Key Vault permission failures are actionable. Key Vault secret success remains blocked until the account has secret permissions. |
+| Packaged app runtime | Pass for local `0.5.22` package payload | MSI payload, packaged sidecar, metadata, removed-template scan, and packaged Chat/image smoke pass. |
+| Installed native app parity | Open external state | Current Program Files install is still older than local source/package in recent records. Strict native `0.5.22` proof requires elevated MSI installation and then installed/native smoke. |
+| Windows trusted publisher | Open external state | Local Windows artifacts are unsigned. A trusted Authenticode certificate is required before the installer avoids unknown-publisher prompts. |
+| Future RAG/project memory targets | Target future | Semantic retrieval and durable cross-session project memory are listed target capabilities; they are not release-blocking for the current Git/ADO/PR/pipeline workflow baseline. |
+
+Detailed run records live in `docs/business-test-execution-report.md` and `docs/live-e2e-test-records.md`. The row-level Result column below remains useful for focused manual or release-candidate passes; the snapshot above is the current project-wide status.
+
 ## Test Environment Checklist
 
 | Area | Required setup | Notes |

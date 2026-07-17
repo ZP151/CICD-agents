@@ -21,7 +21,12 @@ import {
 } from "../../api.js";
 import { paginateItems } from "../../components/PaginationControls.js";
 import { extractPipelineRuns } from "./pipelineActions.js";
-import { buildPipelineRows, countPipelineRows, rowMatchesFilter } from "./pipelineModel.js";
+import {
+  buildPipelineRows,
+  countPipelineRows,
+  pipelineProjectLinksCacheKey,
+  rowMatchesFilter,
+} from "./pipelineModel.js";
 import type { PipelineInspectState, PipelineRow, PipelineStatusFilter } from "./pipelineTypes.js";
 
 const ALL_PROJECTS = "";
@@ -53,17 +58,7 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
   );
 
   const selectedProjectLinkKey = useMemo(
-    () =>
-      selectedProjectLinks
-        .map((projectLink) =>
-          [
-            projectLink.id,
-            projectLink.adoOrgUrl,
-            projectLink.adoProject,
-            projectLink.adoRepoName,
-          ].join(":"),
-        )
-        .join("|"),
+    () => pipelineProjectLinksCacheKey(selectedProjectLinks),
     [selectedProjectLinks],
   );
 
@@ -71,6 +66,7 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
     queryKey: ["pipelineConnections"],
     staleTime: 60_000,
     gcTime: 10 * 60_000,
+    placeholderData: (previous) => previous,
     queryFn: () => listPipelineConnections(),
   });
 
@@ -79,6 +75,11 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
     enabled: selectedProjectLinks.length > 0,
     staleTime: 45_000,
     gcTime: 10 * 60_000,
+    placeholderData: (previous, previousQuery) => {
+      const previousKey = previousQuery?.queryKey;
+      if (!Array.isArray(previousKey)) return undefined;
+      return previousKey[1] === selectedProjectLinkKey ? previous : undefined;
+    },
     queryFn: async () => {
       const entries = await Promise.all(
         selectedProjectLinks.map(async (projectLink) => {
@@ -108,6 +109,11 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
     enabled: discoverableProjectLinks.length > 0,
     staleTime: 60_000,
     gcTime: 10 * 60_000,
+    placeholderData: (previous, previousQuery) => {
+      const previousKey = previousQuery?.queryKey;
+      if (!Array.isArray(previousKey)) return undefined;
+      return previousKey[1] === selectedProjectLinkKey ? previous : undefined;
+    },
     queryFn: async () => {
       const entries = await Promise.all(
         discoverableProjectLinks.map(async (projectLink) => {
@@ -140,6 +146,10 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
   const discovered = discoveryQuery.data ?? {};
   const loading = relatedPrsQuery.isLoading && !relatedPrsQuery.data;
   const discovering = discoveryQuery.isFetching;
+  const hasAnyPipelineQueryData =
+    hasCachedQueryData(queryClient, ["pipelineConnections"]) ||
+    hasCachedQueryData(queryClient, ["pipelineRelatedPrs", selectedProjectLinkKey]) ||
+    hasCachedQueryData(queryClient, ["pipelineDiscovery", selectedProjectLinkKey]);
   const error =
     localError ??
     (connectionsQuery.error instanceof Error ? connectionsQuery.error.message : null) ??
@@ -153,6 +163,7 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
   const firstDiscoveryLoading =
     rows.length === 0 &&
     !notice &&
+    !hasAnyPipelineQueryData &&
     (loading ||
       connectionsQuery.isLoading ||
       discoveryQuery.isLoading ||
@@ -251,10 +262,16 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
           analysis: analysis.analysis || localAnalysis,
         },
       }));
-    } catch {
+    } catch (err) {
       setInspectState((current) => ({
         ...current,
-        [rowKey(row)]: { phase: "analysis_done", result, runs, analysis: localAnalysis },
+        [rowKey(row)]: {
+          phase: "analysis_error",
+          result,
+          runs,
+          analysis: localAnalysis,
+          message: err instanceof Error ? err.message : String(err),
+        },
       }));
     }
   }, []);
@@ -328,8 +345,27 @@ async function inspectPipelineRow(
   }
 }
 
-export function rowKey(row: Pick<PipelineRow, "projectLinkId" | "pipelineId">): string {
-  return `${row.projectLinkId}:${row.pipelineId}`;
+export function rowKey(row: Pick<PipelineRow, "projectLinkId" | "pipelineId" | "repoPath" | "orgUrl" | "project" | "repository" | "defaultBranch" | "targetBranch">): string {
+  return [
+    row.projectLinkId,
+    row.pipelineId,
+    row.repoPath,
+    row.orgUrl,
+    row.project,
+    row.repository,
+    row.defaultBranch,
+    row.targetBranch,
+  ].join("\u001f");
+}
+
+function hasCachedQueryData(
+  queryClient: ReturnType<typeof useQueryClient>,
+  queryKey: unknown[],
+): boolean {
+  return queryClient
+    .getQueryCache()
+    .findAll({ queryKey })
+    .some((query) => query.state.data !== undefined);
 }
 
 function summarizePipelineInspection(
@@ -348,7 +384,7 @@ function summarizePipelineInspection(
     `Risk: ${risk}`,
     `Runs inspected: ${runs.length || "none returned"} (${succeeded.length} succeeded, ${failed.length} failed/canceled, ${running.length} running)`,
     latest
-      ? `Latest run: ${latest.name || latest.id} - ${latest.state || "unknown"} / ${latest.result || "unknown"}`
+      ? `Latest run: ${latest.name || latest.id} - ${latest.state || "state not available"} / ${latest.result || "result not available"}`
       : "Latest run: unavailable",
     artifactCount > 0
       ? `Evidence: ${artifactCount} failure artifact(s) or log/timeline excerpts captured.`

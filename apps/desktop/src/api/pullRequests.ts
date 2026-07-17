@@ -1,5 +1,5 @@
 import { readLlmConfig, readProjectLinkData } from "./localSettings.js";
-import { RUNTIME_URL, messageFromErrorBody } from "./runtime.js";
+import { RUNTIME_URL, messageFromErrorResponse } from "./runtime.js";
 import type {
   PrInsightArtifactHistoryMeta,
   PrInsightArtifactRecord,
@@ -22,7 +22,9 @@ export async function fetchProjectLinkPullRequests(
       ...(projectLink ? { projectLink } : {}),
     }),
   });
-  if (!r.ok) throw new Error(`${PROJECT_LINKS_PATH}/${projectLinkId}/pull-requests HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) {
+    throw new Error(await messageFromErrorResponse(`Pull Requests HTTP ${r.status}`, r));
+  }
   const body = (await r.json()) as { pullRequests: PullRequestSummary[] };
   return body.pullRequests;
 }
@@ -40,8 +42,7 @@ export async function fetchProjectLinkPullRequestContext(
     }),
   });
   if (!r.ok) {
-    const fallback = `${PROJECT_LINKS_PATH}/${projectLinkId}/pull-requests/${pullRequestId}/context HTTP ${r.status}`;
-    throw new Error(messageFromErrorBody(fallback, await r.text()));
+    throw new Error(await messageFromErrorResponse(`Pull Request context HTTP ${r.status}`, r));
   }
   return (await r.json()) as PullRequestContext;
 }
@@ -61,8 +62,7 @@ export async function fetchProjectLinkPullRequestInsightPreview(
     }),
   });
   if (!r.ok) {
-    const fallback = `${PROJECT_LINKS_PATH}/${projectLinkId}/pull-requests/${pullRequestId}/insight-preview HTTP ${r.status}`;
-    throw new Error(messageFromErrorBody(fallback, await r.text()));
+    throw new Error(await messageFromErrorResponse(`Pull Request insight preview HTTP ${r.status}`, r));
   }
   return (await r.json()) as PullRequestInsightPreview;
 }
@@ -80,7 +80,9 @@ export async function fetchProjectLinkPrInsightArtifactsWithHistory(
 ): Promise<{ items: PrInsightArtifactRecord[]; history: PrInsightArtifactHistoryMeta[] }> {
   const suffix = pullRequestId === undefined ? "" : `?pullRequestId=${encodeURIComponent(String(pullRequestId))}`;
   const r = await fetch(`${RUNTIME_URL}${PROJECT_LINKS_PATH}/${projectLinkId}/pr-insights${suffix}`);
-  if (!r.ok) throw new Error(`${PROJECT_LINKS_PATH}/${projectLinkId}/pr-insights HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) {
+    throw new Error(await messageFromErrorResponse(`PR insight artifacts HTTP ${r.status}`, r));
+  }
   const body = (await r.json()) as {
     items?: PrInsightArtifactRecord[];
     history?: PrInsightArtifactHistoryMeta[];
@@ -97,7 +99,9 @@ export async function fetchProjectLinkPrInsightArtifactById(
 ): Promise<PrInsightArtifactRecord> {
   const suffix = `?artifactId=${encodeURIComponent(artifactId)}`;
   const r = await fetch(`${RUNTIME_URL}${PROJECT_LINKS_PATH}/${projectLinkId}/pr-insights/artifact${suffix}`);
-  if (!r.ok) throw new Error(`${PROJECT_LINKS_PATH}/${projectLinkId}/pr-insights/artifact HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) {
+    throw new Error(await messageFromErrorResponse(`PR insight artifact HTTP ${r.status}`, r));
+  }
   const body = (await r.json()) as { record?: PrInsightArtifactRecord };
   if (!body.record) throw new Error("PR insight artifact lookup response did not include a record");
   return body.record;
@@ -115,7 +119,9 @@ export async function saveProjectLinkPrInsightArtifact(
     headers: { "content-type": "application/json" },
     body: JSON.stringify(artifact),
   });
-  if (!r.ok) throw new Error(`${PROJECT_LINKS_PATH}/${projectLinkId}/pr-insights HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) {
+    throw new Error(await messageFromErrorResponse(`Save PR insight artifact HTTP ${r.status}`, r));
+  }
   const body = (await r.json()) as { record?: PrInsightArtifactRecord };
   if (!body.record) throw new Error("PR insight artifact response did not include a record");
   return body.record;

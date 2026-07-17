@@ -19,7 +19,6 @@ import type {
   SavedPrInsightSource,
 } from "../chat.types.js";
 import { imageAttachmentLabel } from "../chatAttachments.js";
-import type { WorkspaceAction } from "../workflowTaskState.js";
 import { ChatAssistantMetaPanel } from "./ChatAssistantMetaPanel.js";
 import { ChatEmptyState } from "./ChatEmptyState.js";
 
@@ -33,12 +32,8 @@ interface ChatMessageListProps {
   projectLinksLoading: boolean;
   activeProjectLinkId: string | null;
   selectedArtifactId: string | null;
-  welcomeSuggestions: string[];
-  welcomeSuggestionsReady: boolean;
   createProjectLink: (data: ProjectLinkInput) => Promise<ProjectLink>;
   selectProjectLink: (projectLink: ProjectLink) => void;
-  queuePrompt: (prompt: string) => void;
-  runWorkspaceAction: (action: WorkspaceAction) => void;
   toggleTool: (id: string) => void;
   confirmPendingAction: (id: string) => void;
   cancelPendingAction: (id: string, feedback?: string) => void;
@@ -57,12 +52,8 @@ export function ChatMessageList({
   projectLinksLoading,
   activeProjectLinkId,
   selectedArtifactId,
-  welcomeSuggestions,
-  welcomeSuggestionsReady,
   createProjectLink,
   selectProjectLink,
-  queuePrompt,
-  runWorkspaceAction,
   toggleTool,
   confirmPendingAction,
   cancelPendingAction,
@@ -80,12 +71,8 @@ export function ChatMessageList({
           availableProjectLinks={availableProjectLinks}
           projectLinksLoading={projectLinksLoading}
           activeProjectLinkId={activeProjectLinkId}
-          welcomeSuggestions={welcomeSuggestions}
-          welcomeSuggestionsReady={welcomeSuggestionsReady}
           createProjectLink={createProjectLink}
           selectProjectLink={selectProjectLink}
-          runWorkspaceAction={runWorkspaceAction}
-          queuePrompt={queuePrompt}
         />
       )}
 

@@ -1,65 +1,106 @@
 import type { TaskView } from "../../api.js";
 import { duration, formatTime, statusClass, taskTitle } from "./activityPresentation.js";
+import { operationDetailSummary } from "./operationDetailSummary.js";
+
+function shouldFoldStepDetail(detail: string): boolean {
+  const trimmed = detail.trim();
+  if (trimmed.length > 180) return true;
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return true;
+  return /"?(returncode|stdout|stderr|execution_metadata)"?\s*:/.test(trimmed);
+}
 
 export function TaskRunDetailPanel({ task }: { task: TaskView }): JSX.Element {
   return (
     <div className="space-y-5">
-      <header className="border-b border-zinc-200 pb-4">
+      <header className="border-b border-[rgb(var(--app-border))] pb-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${statusClass(task.status)}`}
           >
             {task.status}
           </span>
-          <span className="text-xs text-zinc-600">{task.kind}</span>
-          {duration(task) && <span className="text-xs text-zinc-600">{duration(task)}</span>}
+          <span className="text-xs text-[rgb(var(--app-text-muted))]">{task.kind}</span>
+          {duration(task) && (
+            <span className="text-xs text-[rgb(var(--app-text-muted))]">{duration(task)}</span>
+          )}
         </div>
-        <h2 className="text-lg font-semibold text-zinc-950">{taskTitle(task)}</h2>
-        <p className="mt-1 font-mono text-xs text-zinc-600">{task.id}</p>
+        <h2 className="text-lg font-semibold text-[rgb(var(--app-text))]">{taskTitle(task)}</h2>
+        <p className="mt-1 font-mono text-xs text-[rgb(var(--app-text-muted))]">{task.id}</p>
       </header>
 
       <section>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-600">Steps</h3>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">
+          Steps
+        </h3>
         {task.steps.length === 0 ? (
-          <p className="text-sm text-zinc-600">No steps recorded yet.</p>
+          <p className="text-sm text-[rgb(var(--app-text-muted))]">No steps recorded yet.</p>
         ) : (
           <ol className="space-y-2">
-            {task.steps.map((step) => (
-              <li
-                key={step.seq}
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2"
-              >
-                <div className="flex items-start gap-3">
-                  <span className="mt-0.5 w-8 shrink-0 font-mono text-xs text-zinc-600">
-                    {step.seq}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${statusClass(step.status)}`}
-                      >
-                        {step.status}
-                      </span>
-                      <span className="text-sm font-medium text-zinc-950">{step.name}</span>
-                      <span className="text-xs text-zinc-600">{formatTime(step.createdAt)}</span>
+            {task.steps.map((step) => {
+              const detailShouldFold = step.detail ? shouldFoldStepDetail(step.detail) : false;
+              const detailSummary = step.detail && detailShouldFold
+                ? operationDetailSummary(step.detail)
+                : null;
+              return (
+                <li
+                  key={step.seq}
+                  className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 w-8 shrink-0 font-mono text-xs text-[rgb(var(--app-text-muted))]">
+                      {step.seq}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${statusClass(step.status)}`}
+                        >
+                          {step.status}
+                        </span>
+                        <span className="text-sm font-medium text-[rgb(var(--app-text))]">
+                          {step.name}
+                        </span>
+                        <span className="text-xs text-[rgb(var(--app-text-muted))]">
+                          {formatTime(step.createdAt)}
+                        </span>
+                      </div>
+                      {step.detail && detailShouldFold && (
+                        <>
+                          <p className="mt-1 break-words text-xs text-[rgb(var(--app-text-subtle))]">
+                            {detailSummary ?? "Structured step output is available."}
+                          </p>
+                          <details className="mt-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-2">
+                            <summary className="cursor-pointer text-xs font-medium text-[rgb(var(--app-text-muted))]">
+                              Raw output
+                            </summary>
+                            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-[rgb(var(--app-text-subtle))]">
+                              {step.detail}
+                            </pre>
+                          </details>
+                        </>
+                      )}
+                      {step.detail && !detailShouldFold && (
+                        <p className="mt-1 break-words font-mono text-xs text-[rgb(var(--app-text-subtle))]">
+                          {step.detail}
+                        </p>
+                      )}
                     </div>
-                    {step.detail && (
-                      <p className="mt-1 break-words font-mono text-xs text-zinc-500">
-                        {step.detail}
-                      </p>
-                    )}
                   </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ol>
         )}
       </section>
 
       {task.error && (
-        <section className="rounded-lg border border-red-200 bg-red-50 p-3">
-          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-700">Error</h3>
-          <p className="break-words font-mono text-xs text-red-700">{task.error}</p>
+        <section className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">
+            Error
+          </h3>
+          <p className="break-words font-mono text-xs text-red-700 dark:text-red-300">
+            {task.error}
+          </p>
         </section>
       )}
     </div>

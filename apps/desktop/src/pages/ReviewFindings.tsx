@@ -106,7 +106,7 @@ export default function ReviewFindings(): JSX.Element {
       />
 
       {!configured && (
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-4 text-sm text-zinc-500">
+        <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4 text-sm text-[rgb(var(--app-text-muted))]">
           Azure Table Storage is not configured. Review history is stored on this device
           {storage === "browser"
             ? " (browser)"
@@ -124,13 +124,13 @@ export default function ReviewFindings(): JSX.Element {
       )}
 
       {error && (
-        <div className="rounded-lg border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">
           {error}
         </div>
       )}
 
       {autoApproveError && (
-        <div className="rounded-lg border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">
           {autoApproveError}
         </div>
       )}
@@ -163,9 +163,7 @@ export default function ReviewFindings(): JSX.Element {
             onRerunStale={() => void rerunStaleReviews()}
           />
 
-          {(projectLinkResolving || loading) && (
-            <p className="text-sm text-zinc-600">Loading review decisions...</p>
-          )}
+          {(projectLinkResolving || loading) && <ReviewQueueLoadingSkeleton />}
           {!projectLinkResolving && !loading && refreshing && (
             <p className="text-xs text-[rgb(var(--app-text-subtle))]">
               Refreshing review decisions...
@@ -173,9 +171,9 @@ export default function ReviewFindings(): JSX.Element {
           )}
 
           {!projectLinkResolving && !loading && items.length === 0 && (
-            <div className="rounded-lg border border-zinc-800/70 bg-zinc-900/20 p-8 text-center">
-              <p className="text-sm font-medium text-zinc-400">No review decisions found</p>
-              <p className="mt-1 text-sm text-zinc-600">
+            <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-8 text-center">
+              <p className="text-sm font-medium text-[rgb(var(--app-text))]">No review decisions found</p>
+              <p className="mt-1 text-sm text-[rgb(var(--app-text-muted))]">
                 The Review Agent has not written history for this repository yet.
               </p>
             </div>
@@ -201,8 +199,8 @@ export default function ReviewFindings(): JSX.Element {
                 />
               ))}
               {displayedItems.length === 0 && (
-                <div className="rounded-lg border border-zinc-800/70 bg-zinc-900/20 p-6 text-center">
-                  <p className="text-sm text-zinc-500">
+                <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-6 text-center">
+                  <p className="text-sm text-[rgb(var(--app-text-muted))]">
                     No review decisions match this queue filter.
                   </p>
                 </div>
@@ -232,6 +230,24 @@ export default function ReviewFindings(): JSX.Element {
           onOpenChange={setActivityRailOpen}
         />
       </div>
+    </div>
+  );
+}
+
+function ReviewQueueLoadingSkeleton(): JSX.Element {
+  return (
+    <div className="grid gap-3" aria-label="Preparing review queue">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div
+            // eslint-disable-next-line react/no-array-index-key
+            key={index}
+            className="h-36 animate-pulse rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]"
+          />
+        ))}
+      </div>
+      <div className="h-28 animate-pulse rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]" />
+      <div className="h-28 animate-pulse rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]" />
     </div>
   );
 }

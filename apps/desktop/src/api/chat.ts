@@ -1,5 +1,10 @@
 import { readLlmConfig, readProjectLinkData, type ConversationModelChoice } from "./localSettings.js";
-import { RUNTIME_URL, explainRuntimeError, messageFromErrorBody } from "./runtime.js";
+import {
+  RUNTIME_URL,
+  explainRuntimeError,
+  messageFromErrorBody,
+  messageFromErrorResponse,
+} from "./runtime.js";
 import { readSseJsonStream } from "./sse.js";
 import type { ProjectLink } from "./projectLinkTypes.js";
 import type {
@@ -10,7 +15,6 @@ import type {
   ChatEventType,
   ChatHistoryEntry,
   ChatIndexRefreshResult,
-  ChatIndexStatus,
   ChatMessageEntry,
   ChatUiChunk,
   ChatWorkflowAction,
@@ -106,29 +110,19 @@ export function confirmAction(
   return { cancel: () => controller.abort() };
 }
 
-export async function fetchChatIndexStatus(repoPath: string, projectLinkId?: string): Promise<ChatIndexStatus> {
-  const r = await fetch(`${RUNTIME_URL}/chat/index-status`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(chatIndexBody(repoPath, projectLinkId)),
-  });
-  if (!r.ok) throw new Error(`/chat/index-status HTTP ${r.status}: ${await r.text()}`);
-  return (await r.json()) as ChatIndexStatus;
-}
-
 export async function refreshChatIndexStatus(repoPath: string, projectLinkId?: string): Promise<ChatIndexRefreshResult> {
   const r = await fetch(`${RUNTIME_URL}/chat/index-refresh`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(chatIndexBody(repoPath, projectLinkId)),
   });
-  if (!r.ok) throw new Error(`/chat/index-refresh HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Chat index refresh HTTP ${r.status}`, r));
   return (await r.json()) as ChatIndexRefreshResult;
 }
 
 export async function confirmPlan(sessionId: string): Promise<void> {
   const r = await fetch(`${RUNTIME_URL}/chat/${sessionId}/confirm`, { method: "POST" });
-  if (!r.ok) throw new Error(`confirm failed: HTTP ${r.status}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Confirm action HTTP ${r.status}`, r));
 }
 
 export async function cancelPlan(sessionId: string): Promise<void> {
@@ -137,7 +131,7 @@ export async function cancelPlan(sessionId: string): Promise<void> {
 
 export async function fetchChatHistory(): Promise<ChatHistoryEntry[]> {
   const r = await fetch(`${RUNTIME_URL}/chat/history`);
-  if (!r.ok) throw new Error(`/chat/history HTTP ${r.status}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Chat history HTTP ${r.status}`, r));
   return (await r.json()) as ChatHistoryEntry[];
 }
 
@@ -150,18 +144,18 @@ export async function updateChatSessionMetadata(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  if (!r.ok) throw new Error(`/chat/${sessionId}/metadata HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Update chat metadata HTTP ${r.status}`, r));
   return (await r.json()) as ChatHistoryEntry;
 }
 
 export async function deleteChatSession(sessionId: string): Promise<void> {
   const r = await fetch(`${RUNTIME_URL}/chat/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
-  if (!r.ok) throw new Error(`/chat/${sessionId} HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Delete chat HTTP ${r.status}`, r));
 }
 
 export async function fetchChatCheckpointActivity(): Promise<ChatCheckpointActivity[]> {
   const r = await fetch(`${RUNTIME_URL}/chat/checkpoints`);
-  if (!r.ok) throw new Error(`/chat/checkpoints HTTP ${r.status}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Checkpoints HTTP ${r.status}`, r));
   return (await r.json()) as ChatCheckpointActivity[];
 }
 
@@ -170,7 +164,7 @@ export async function fetchChatCheckpointPreview(
   maxDiffChars = 12000,
 ): Promise<ChatCheckpointPreview> {
   const r = await fetch(`${RUNTIME_URL}/chat/checkpoints/${encodeURIComponent(checkpointId)}/preview?maxDiffChars=${maxDiffChars}`);
-  if (!r.ok) throw new Error(`/chat/checkpoints/${checkpointId}/preview HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Checkpoint preview HTTP ${r.status}`, r));
   return (await r.json()) as ChatCheckpointPreview;
 }
 
@@ -178,19 +172,19 @@ export async function fetchChatCheckpointRollbackPlan(
   checkpointId: string,
 ): Promise<ChatCheckpointRollbackPlan> {
   const r = await fetch(`${RUNTIME_URL}/chat/checkpoints/${encodeURIComponent(checkpointId)}/rollback-plan`);
-  if (!r.ok) throw new Error(`/chat/checkpoints/${checkpointId}/rollback-plan HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Checkpoint rollback plan HTTP ${r.status}`, r));
   return (await r.json()) as ChatCheckpointRollbackPlan;
 }
 
 export async function fetchChatMessages(sessionId: string): Promise<ChatMessageEntry[]> {
   const r = await fetch(`${RUNTIME_URL}/chat/${sessionId}/messages`);
-  if (!r.ok) throw new Error(`/chat/messages HTTP ${r.status}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Chat messages HTTP ${r.status}`, r));
   return (await r.json()) as ChatMessageEntry[];
 }
 
 export async function fetchChatState(sessionId: string): Promise<{ workflowState?: ChatWorkflowState }> {
   const r = await fetch(`${RUNTIME_URL}/chat/${sessionId}/state`);
-  if (!r.ok) throw new Error(`/chat/state HTTP ${r.status}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Chat state HTTP ${r.status}`, r));
   return (await r.json()) as { workflowState?: ChatWorkflowState };
 }
 
@@ -216,7 +210,7 @@ export async function runChatWorkflowAction(
       ...(projectLink ? { projectLink } : {}),
     }),
   });
-  if (!r.ok) throw new Error(`/chat/workflow-action HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Workflow action HTTP ${r.status}`, r));
   return (await r.json()) as ChatWorkflowActionResult;
 }
 

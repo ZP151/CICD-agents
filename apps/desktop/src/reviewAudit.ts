@@ -1,5 +1,7 @@
 import type { ReviewQueueItem } from "./api";
 
+const ACTOR_NOT_AVAILABLE = "actor not available";
+
 export interface ReviewAuditDispositionEventView {
   label: string;
   at: string;
@@ -67,7 +69,7 @@ export function buildReviewAuditViewModel(item: ReviewQueueItem): ReviewAuditVie
     .map((event) => ({
       label: dispositionLabel(event.disposition),
       at: event.at,
-      actor: event.actor || "unknown actor",
+      actor: event.actor || ACTOR_NOT_AVAILABLE,
       note: event.note,
     }));
 
@@ -90,7 +92,7 @@ export function buildReviewAuditViewModel(item: ReviewQueueItem): ReviewAuditVie
       dispositionLabel: dispositionLabel(event.disposition),
       ok: event.ok,
       at: event.at,
-      actor: event.actor || "unknown actor",
+      actor: event.actor || ACTOR_NOT_AVAILABLE,
       note: event.note,
       error: event.error,
       threadId: event.threadId,
@@ -98,7 +100,7 @@ export function buildReviewAuditViewModel(item: ReviewQueueItem): ReviewAuditVie
     }));
 
   const dispositionSummary = item.manualDisposition
-    ? `${dispositionLabel(item.manualDisposition)} by ${item.manualDispositionActor || "unknown actor"}`
+    ? `${dispositionLabel(item.manualDisposition)} by ${item.manualDispositionActor || ACTOR_NOT_AVAILABLE}`
     : "No manual disposition recorded";
 
   return {

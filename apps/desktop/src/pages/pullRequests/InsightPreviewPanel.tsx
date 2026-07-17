@@ -14,7 +14,7 @@ export function InsightPreviewPanel({
     <div className="mt-4 space-y-3 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h4 className="text-xs font-semibold text-[rgb(var(--app-text-muted))]">Insight Preview</h4>
+          <h4 className="text-xs font-semibold text-[rgb(var(--app-text-muted))]">AI insight</h4>
           {insightTone && (
             <span className={`rounded border px-2 py-0.5 text-[10px] ${insightTone.tone}`}>
               {insightTone.label}

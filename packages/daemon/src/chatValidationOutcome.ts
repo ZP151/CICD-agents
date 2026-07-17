@@ -74,7 +74,7 @@ function validationResultArtifact(
   const content = [
     `# ${kind === "build" ? "Build" : "Test"} Failure Report`,
     "",
-    `- Command: \`${command || "(unknown)"}\``,
+    `- Command: \`${command || "not available"}\``,
     `- Exit code: ${Number.isFinite(returncode) ? returncode : 1}`,
     durationMs > 0 ? `- Duration: ${durationMs} ms` : "",
     preflight?.commandSource ? `- Command source: ${preflight.commandSource}` : "",

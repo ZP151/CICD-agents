@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ChatIndexStatus, ProjectLink } from "../../api.js";
+import type { ProjectLink } from "../../api.js";
 import {
   branchListFromBubbles,
   bubblesWithWorkflowApprovalFallback,
@@ -7,7 +7,6 @@ import {
   currentBranchFromBubbles,
   diffStatsFromBubbles,
   pendingApprovalFromBubbles,
-  welcomeSuggestionsForProjectLink,
 } from "./chatDerivedState.js";
 import type { Bubble, WorkflowEventState } from "./chat.types.js";
 
@@ -81,20 +80,7 @@ describe("chat derived state", () => {
     expect(diffStatsFromBubbles(bubbles)).toEqual({ files: 1, added: 2, removed: 1 });
   });
 
-  it("derives welcome suggestions and pending approval priority", () => {
-    const indexed: ChatIndexStatus = {
-      repoPath: "C:\\repo",
-      indexed: false,
-      semanticReady: false,
-      retrievalMode: "quick-scan",
-      stats: {
-        filesIndexed: 0,
-        chunksIndexed: 0,
-        chunksEmbedded: 0,
-        chunksPendingEmbedding: 0,
-      },
-      summary: "",
-    };
+  it("prioritizes workflow approval over legacy pending bubbles", () => {
     const workflowState: WorkflowEventState = {
       status: "waiting_for_approval",
       currentStep: "Approve push",
@@ -111,16 +97,6 @@ describe("chat derived state", () => {
       },
     };
 
-    expect(welcomeSuggestionsForProjectLink(projectLink({
-      adoOrgUrl: "https://dev.azure.com/org",
-      adoProject: "Project",
-      adoRepoName: "Repo",
-    }), indexed)).toEqual(expect.arrayContaining([
-      "Understand this project",
-      "Analyze PR insight for this repo",
-      "Open Pipelines workspace",
-      "Push and create PR",
-    ]));
     expect(pendingApprovalFromBubbles([
       { id: "pending", kind: "pending_confirm", pendingStatus: "waiting", pendingTool: "git_add" },
     ], workflowState)).toBe(workflowState.pendingApproval);

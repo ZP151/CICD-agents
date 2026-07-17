@@ -5,6 +5,8 @@ import {
 } from "./PrInsightComparisonPanels.js";
 import { PrInsightReadinessBlockers } from "./PrInsightReadinessBlockers.js";
 import type { PrInsightActivityItem, PrInsightRefreshComparison } from "./prInsightActivity.js";
+import { MarkdownContent } from "../../components/conversation/ConversationPartRenderer.js";
+import { formatIsoTime } from "./activityPresentation.js";
 
 interface PrInsightDetailPanelProps {
   item: PrInsightActivityItem;
@@ -14,11 +16,6 @@ interface PrInsightDetailPanelProps {
   onCopyArtifactId: (item: PrInsightActivityItem) => void;
   onOpenInChat: (item: PrInsightActivityItem) => void;
   onOpenInPullRequests: (item: PrInsightActivityItem) => void;
-}
-
-function formatTime(ts?: number | null): string {
-  if (!ts) return "";
-  return new Date(ts * 1000).toLocaleString();
 }
 
 export function PrInsightDetailPanel({
@@ -32,33 +29,35 @@ export function PrInsightDetailPanel({
 }: PrInsightDetailPanelProps): JSX.Element {
   return (
     <div className="space-y-5">
-      <header className="border-b border-zinc-200 pb-4">
+      <header className="border-b border-[rgb(var(--app-border))] pb-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-200">
+          <span className="rounded-full bg-[rgb(var(--app-accent-soft))] px-2 py-0.5 text-xs font-medium text-[rgb(var(--app-accent))] ring-1 ring-[rgb(var(--app-accent))]/30">
             {item.kind === "review_run" ? "full review" : "preview"}
           </span>
-          {item.readiness && <span className="text-xs text-zinc-600">{item.readiness}</span>}
-          <span className="text-xs text-zinc-600">
-            {formatTime(Date.parse(item.at || "0") / 1000)}
+          {item.readiness && (
+            <span className="text-xs text-[rgb(var(--app-text-muted))]">{item.readiness}</span>
+          )}
+          <span className="text-xs text-[rgb(var(--app-text-muted))]">
+            {formatIsoTime(item.at)}
           </span>
         </div>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-zinc-950">
+            <h2 className="text-lg font-semibold text-[rgb(var(--app-text))]">
               #{item.pullRequestId} · {item.title || "(untitled)"}
             </h2>
-            <p className="mt-1 font-mono text-xs text-zinc-600">{item.id}</p>
+            <p className="mt-1 font-mono text-xs text-[rgb(var(--app-text-muted))]">{item.id}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => onOpenInPullRequests(item)}
-              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50"
+              className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))]"
             >
               Open in Pull Requests
             </button>
             <button
               onClick={() => onOpenInChat(item)}
-              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50"
+              className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))]"
             >
               Ask in Chat
             </button>
@@ -66,40 +65,30 @@ export function PrInsightDetailPanel({
         </div>
       </header>
 
-      <section className="rounded-lg border border-blue-100 bg-blue-50/60 p-3">
+      <section className="rounded-lg border border-[rgb(var(--app-accent))]/20 bg-[rgb(var(--app-accent-soft))]/60 p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-accent))]">
             Provenance
           </h3>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => onCopyArtifactId(item)}
-              className="rounded-md border border-blue-200 bg-white px-2 py-1 text-xs text-blue-700 transition hover:border-blue-300"
+              className="rounded-md border border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-accent))] transition hover:border-[rgb(var(--app-accent))]"
             >
               {copiedArtifactId === item.id ? "Copied" : "Copy artifact id"}
-            </button>
-            <button
-              onClick={() => onOpenInPullRequests(item)}
-              className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50"
-            >
-              Pull Requests
-            </button>
-            <button
-              onClick={() => onOpenInChat(item)}
-              className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50"
-            >
-              Chat
             </button>
           </div>
         </div>
         <div className="grid gap-2 text-xs sm:grid-cols-2">
-          <p className="break-words font-mono text-zinc-500 sm:col-span-2">{item.id}</p>
-          <p className="text-zinc-600">
-            Saved at: <span className="text-zinc-800">{item.at}</span>
+          <p className="break-words font-mono text-[rgb(var(--app-text-subtle))] sm:col-span-2">
+            {item.id}
           </p>
-          <p className="text-zinc-600">
+          <p className="text-[rgb(var(--app-text-muted))]">
+            Saved at: <span className="text-[rgb(var(--app-text))]">{item.at}</span>
+          </p>
+          <p className="text-[rgb(var(--app-text-muted))]">
             Source:{" "}
-            <span className="text-zinc-800">
+            <span className="text-[rgb(var(--app-text))]">
               PR #{item.pullRequestId} · {item.kind}
             </span>
           </p>
@@ -107,32 +96,32 @@ export function PrInsightDetailPanel({
       </section>
 
       <section className="grid gap-3 text-sm sm:grid-cols-2">
-        <div className="rounded-lg border border-zinc-200 bg-white p-3">
-          <p className="text-xs text-zinc-600">Project Link</p>
-          <p className="mt-1 text-zinc-800">{item.projectLinkName}</p>
+        <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
+          <p className="text-xs text-[rgb(var(--app-text-muted))]">Project Link</p>
+          <p className="mt-1 text-[rgb(var(--app-text))]">{item.projectLinkName}</p>
         </div>
-        <div className="rounded-lg border border-zinc-200 bg-white p-3">
-          <p className="text-xs text-zinc-600">Repository</p>
-          <p className="mt-1 font-mono text-zinc-800">{item.repository}</p>
+        <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
+          <p className="text-xs text-[rgb(var(--app-text-muted))]">Repository</p>
+          <p className="mt-1 font-mono text-[rgb(var(--app-text))]">{item.repository}</p>
         </div>
-        <div className="rounded-lg border border-zinc-200 bg-white p-3">
-          <p className="text-xs text-zinc-600">Tokens</p>
-          <p className="mt-1 font-mono text-zinc-800">
+        <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
+          <p className="text-xs text-[rgb(var(--app-text-muted))]">Tokens</p>
+          <p className="mt-1 font-mono text-[rgb(var(--app-text))]">
             {item.tokensIn}/{item.tokensOut}
           </p>
         </div>
-        <div className="rounded-lg border border-zinc-200 bg-white p-3">
-          <p className="text-xs text-zinc-600">Decision</p>
-          <p className="mt-1 text-zinc-800">
+        <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
+          <p className="text-xs text-[rgb(var(--app-text-muted))]">Decision</p>
+          <p className="mt-1 text-[rgb(var(--app-text))]">
             {[item.decisionQueue, item.decisionRiskLevel, item.contextConfidence]
               .filter(Boolean)
               .join(" · ") || "n/a"}
           </p>
         </div>
         {(item.iterationId || item.sourceCommit) && (
-          <div className="rounded-lg border border-zinc-200 bg-white p-3 sm:col-span-2">
-            <p className="text-xs text-zinc-600">Analysis baseline</p>
-            <p className="mt-1 break-words font-mono text-zinc-800">
+          <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 sm:col-span-2">
+            <p className="text-xs text-[rgb(var(--app-text-muted))]">Analysis baseline</p>
+            <p className="mt-1 break-words font-mono text-[rgb(var(--app-text))]">
               {item.iterationId ? `iteration ${item.iterationId}` : "iteration n/a"}
               {item.sourceCommit ? ` · ${item.sourceCommit}` : ""}
             </p>
@@ -140,13 +129,13 @@ export function PrInsightDetailPanel({
         )}
       </section>
 
-      <section className="rounded-lg border border-zinc-200 bg-white p-3">
-        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-600">
+      <section className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
+        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">
           Saved Summary
         </h3>
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-800">
-          {item.summary || "No summary saved."}
-        </p>
+        <div className="text-sm leading-relaxed text-[rgb(var(--app-text))]">
+          <MarkdownContent markdown={item.summary || "No summary saved."} />
+        </div>
       </section>
 
       {comparison && <PrInsightComparisonCard comparison={comparison} />}
@@ -182,9 +171,9 @@ function PrInsightSignalGrid({ item }: { item: PrInsightActivityItem }): JSX.Ele
 
 function SignalMetric({ label, value }: { label: string; value: number }): JSX.Element {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-3">
-      <p className="text-xs text-zinc-600">{label}</p>
-      <p className="mt-1 font-mono text-zinc-800">{value}</p>
+    <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
+      <p className="text-xs text-[rgb(var(--app-text-muted))]">{label}</p>
+      <p className="mt-1 font-mono text-[rgb(var(--app-text))]">{value}</p>
     </div>
   );
 }
@@ -192,13 +181,15 @@ function SignalMetric({ label, value }: { label: string; value: number }): JSX.E
 function PrInsightRisks({ item }: { item: PrInsightActivityItem }): JSX.Element | null {
   if (item.risks.length === 0) return null;
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-3">
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-600">Risks</h3>
+    <section className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">
+        Risks
+      </h3>
       <div className="flex flex-wrap gap-1.5">
         {item.risks.map((risk) => (
           <span
             key={risk}
-            className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-700"
+            className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:text-amber-300"
           >
             {risk}
           </span>

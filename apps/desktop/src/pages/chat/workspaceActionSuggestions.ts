@@ -79,18 +79,3 @@ export function workspaceActionFromSuggestion(suggestion: SuggestionReply): Work
   }
   return null;
 }
-
-export function workspaceActionFromWelcomeSuggestion(suggestion: string): WorkspaceAction | null {
-  if (/^(understand this project|explain this project architecture)$/i.test(suggestion)) {
-    return { type: "inspect_architecture_context" };
-  }
-  if (/^review my changes$/i.test(suggestion)) return { type: "inspect_changes" };
-  if (/^what'?s on this branch\??$/i.test(suggestion)) return { type: "refresh_branch" };
-  if (/^analyze pr insight for this repo$/i.test(suggestion)) return { type: "inspect_pr_insight" };
-  if (/^(check the ci\/cd pipeline state|open pipelines workspace)$/i.test(suggestion)) return { type: "inspect_pipeline" };
-  if (/^find the build and test commands$/i.test(suggestion)) return { type: "inspect_architecture_context" };
-  if (/^stage and commit$/i.test(suggestion)) return { type: "prepare_commit", includeUnstaged: true };
-  if (/^(prepare a pr plan|push and create pr)$/i.test(suggestion)) return { type: "inspect_pr_plan_context" };
-  if (/^run tests$/i.test(suggestion)) return { type: "run_tests" };
-  return null;
-}

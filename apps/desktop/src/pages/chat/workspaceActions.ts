@@ -6,5 +6,4 @@ export {
 export { workspaceActionToDirectWorkflow } from "./workspaceActionWorkflow.js";
 export {
   workspaceActionFromSuggestion,
-  workspaceActionFromWelcomeSuggestion,
 } from "./workspaceActionSuggestions.js";

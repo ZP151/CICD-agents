@@ -32,6 +32,12 @@ function setHistoryHoverCardPosition(element: HTMLElement) {
   element.style.setProperty("--history-card-top", `${top}px`);
 }
 
+function formatHistoryTimestamp(value: number): string {
+  const date = new Date(value * 1000);
+  if (!Number.isFinite(value) || Number.isNaN(date.getTime())) return "Time not available";
+  return date.toLocaleString();
+}
+
 export function HistorySidebarItem({
   active,
   entry,
@@ -46,6 +52,7 @@ export function HistorySidebarItem({
 }: HistorySidebarItemProps) {
   const title = chatHistoryTitle(entry);
   const preview = chatHistoryPreview(entry);
+  const createdAtLabel = formatHistoryTimestamp(entry.createdAt);
 
   return (
     <div
@@ -68,12 +75,12 @@ export function HistorySidebarItem({
           <span className="truncate">{title}</span>
         </span>
         <span className="block text-[10px] text-zinc-600">
-          {new Date(entry.createdAt * 1000).toLocaleString()}
+          {createdAtLabel}
         </span>
         <span className="history-hover-card">
           <span className="block text-[11px] font-medium leading-snug text-zinc-200">{title}</span>
           {preview && <span className="mt-1.5 block text-[11px] leading-relaxed text-zinc-400">{preview}</span>}
-          <span className="mt-2 block text-[10px] text-zinc-600">{new Date(entry.createdAt * 1000).toLocaleString()}</span>
+          <span className="mt-2 block text-[10px] text-zinc-600">{createdAtLabel}</span>
         </span>
       </button>
       {renamingHistoryId === entry.sessionId ? (

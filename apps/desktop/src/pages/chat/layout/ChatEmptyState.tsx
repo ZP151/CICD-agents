@@ -3,20 +3,14 @@ import type {
   ProjectLinkInput,
 } from "../../../api.js";
 import { ProjectLinkSetupCard } from "../projectLinkOnboarding/ProjectLinkSetupCard.js";
-import type { WorkspaceAction } from "../workflowTaskState.js";
-import { workspaceActionFromWelcomeSuggestion } from "../workspaceActionSuggestions.js";
 
 interface ChatEmptyStateProps {
   repoPath: string;
   availableProjectLinks: ProjectLink[];
   projectLinksLoading: boolean;
   activeProjectLinkId: string | null;
-  welcomeSuggestions: string[];
-  welcomeSuggestionsReady: boolean;
   createProjectLink: (data: ProjectLinkInput) => Promise<ProjectLink>;
   selectProjectLink: (projectLink: ProjectLink) => void;
-  queuePrompt: (prompt: string) => void;
-  runWorkspaceAction: (action: WorkspaceAction) => void;
 }
 
 export function ChatEmptyState({
@@ -24,22 +18,13 @@ export function ChatEmptyState({
   availableProjectLinks,
   projectLinksLoading,
   activeProjectLinkId,
-  welcomeSuggestions,
-  welcomeSuggestionsReady,
   createProjectLink,
   selectProjectLink,
-  runWorkspaceAction,
-  queuePrompt,
 }: ChatEmptyStateProps) {
   return (
     <div className="flex w-full flex-1 flex-col items-center justify-center gap-6 px-8">
       {projectLinksLoading && availableProjectLinks.length === 0 ? (
-        <WelcomeSuggestions
-          suggestions={[]}
-          ready={false}
-          queuePrompt={queuePrompt}
-          runWorkspaceAction={runWorkspaceAction}
-        />
+        <div className="min-h-48" aria-label="Loading project links" />
       ) : availableProjectLinks.length === 0 ? (
         <ProjectLinkSetupCard
           repoPath={repoPath}
@@ -54,12 +39,7 @@ export function ChatEmptyState({
           selectProjectLink={selectProjectLink}
         />
       ) : (
-        <WelcomeSuggestions
-          suggestions={welcomeSuggestions}
-          ready={welcomeSuggestionsReady}
-          queuePrompt={queuePrompt}
-          runWorkspaceAction={runWorkspaceAction}
-        />
+        <div className="min-h-48" aria-label="Empty conversation" />
       )}
     </div>
   );
@@ -116,61 +96,5 @@ function ProjectLinkChooser({
         </div>
       </details>
     </div>
-  );
-}
-
-function WelcomeSuggestions({
-  suggestions,
-  ready,
-  queuePrompt,
-  runWorkspaceAction,
-}: {
-  suggestions: string[];
-  ready: boolean;
-  queuePrompt: (prompt: string) => void;
-  runWorkspaceAction: (action: WorkspaceAction) => void;
-}) {
-  return (
-    <>
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-800/60">
-        <svg className="h-6 w-6 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-        </svg>
-      </div>
-      <div className="text-center">
-        <p className="text-base font-medium text-zinc-400">Ask MergePilot anything</p>
-        <p className="mt-2 text-xs leading-relaxed text-zinc-600">
-          "help me review changes and go all the way to PR"<br />
-          "what's changed since main?" &nbsp;·&nbsp; "run tests" &nbsp;·&nbsp; "create PR"
-        </p>
-      </div>
-      <div className="flex min-h-20 max-w-md flex-wrap justify-center gap-2">
-        {!ready ? (
-          <>
-            {Array.from({ length: 5 }).map((_, index) => (
-              <span
-                // eslint-disable-next-line react/no-array-index-key
-                key={index}
-                className="h-8 w-32 animate-pulse rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]"
-              />
-            ))}
-          </>
-        ) : (
-          suggestions.map((suggestion) => (
-            <button
-              key={suggestion}
-              onClick={() => {
-                const action = workspaceActionFromWelcomeSuggestion(suggestion);
-                if (action) runWorkspaceAction(action);
-                else queuePrompt(suggestion);
-              }}
-              className="rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs text-zinc-500 transition-colors hover:border-zinc-700 hover:text-zinc-300"
-            >
-              {suggestion}
-            </button>
-          ))
-        )}
-      </div>
-    </>
   );
 }

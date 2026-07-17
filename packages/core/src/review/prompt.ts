@@ -214,14 +214,14 @@ function renderPullRequestSignals(bundle: CloudContextBundle): string {
   const lines = [
     "\n## Azure DevOps PR signals",
     `- Title: ${pr.title || "(none)"}`,
-    `- Status: ${pr.status || "(unknown)"}${pr.isDraft ? " (draft)" : ""}`,
-    `- Branches: ${pr.sourceBranch || "(unknown)"} -> ${pr.targetBranch || "(unknown)"}`,
-    `- Author: ${pr.createdBy || "(unknown)"}`,
+    `- Status: ${pr.status || "not available"}${pr.isDraft ? " (draft)" : ""}`,
+    `- Branches: ${pr.sourceBranch || "branch not available"} -> ${pr.targetBranch || "branch not available"}`,
+    `- Author: ${pr.createdBy || "not available"}`,
     `- Description: ${pr.description.trim() ? pr.description.trim().slice(0, 1200) : "(missing)"}`,
     `- Work items: ${pr.workItemIds.length ? pr.workItemIds.slice(0, 12).join(", ") : "(none)"}`,
     `- Reviewers: ${pr.reviewerCount}; votes approved=${pr.voteSummary.approved}, waiting=${pr.voteSummary.waiting}, rejected=${pr.voteSummary.rejected}`,
     `- Threads: ${pr.threadCount}; active=${pr.activeThreadCount}`,
-    `- Builds: failed/canceled=${pr.failedBuildCount}; latest status=${pr.latestBuildStatus || "(unknown)"}, latest result=${pr.latestBuildResult || "(unknown)"}`,
+    `- Builds: failed/canceled=${pr.failedBuildCount}; latest status=${pr.latestBuildStatus || "not available"}, latest result=${pr.latestBuildResult || "not available"}`,
   ];
   return lines.join("\n");
 }

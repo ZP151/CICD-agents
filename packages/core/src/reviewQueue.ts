@@ -3,6 +3,7 @@ import { entityToQueueItem, type ReviewHistoryEntity } from "./reviewQueueEntity
 import type { ReviewQueueItem, ReviewQueuePriority } from "./reviewQueueTypes.js";
 import { STORAGE_SCOPE } from "./store/azureAuthConfig.js";
 import { getAzureCachedScopeCredential } from "./store/azureAuthCredential.js";
+import { parseSortableDate } from "./safeDate.js";
 
 export type {
   ReviewDispositionEvent,
@@ -86,5 +87,5 @@ export function getReviewQueuePriority(item: ReviewQueueItem): ReviewQueuePriori
 export function compareReviewQueueItems(a: ReviewQueueItem, b: ReviewQueueItem): number {
   const priorityDelta = reviewQueuePriorityScore(b) - reviewQueuePriorityScore(a);
   if (priorityDelta !== 0) return priorityDelta;
-  return Date.parse(b.lastRunAt || "0") - Date.parse(a.lastRunAt || "0");
+  return parseSortableDate(b.lastRunAt) - parseSortableDate(a.lastRunAt);
 }

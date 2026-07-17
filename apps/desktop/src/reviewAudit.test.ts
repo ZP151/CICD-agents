@@ -119,9 +119,9 @@ describe("review audit view model", () => {
       }],
     }));
 
-    expect(view.dispositionSummary).toBe("Changes requested by unknown actor");
-    expect(view.dispositionEvents[0]?.actor).toBe("unknown actor");
-    expect(view.writeBackAttempts[0]?.actor).toBe("unknown actor");
+    expect(view.dispositionSummary).toBe("Changes requested by actor not available");
+    expect(view.dispositionEvents[0]?.actor).toBe("actor not available");
+    expect(view.writeBackAttempts[0]?.actor).toBe("actor not available");
   });
 
   it("reports no audit when no disposition or write-back data exists", () => {

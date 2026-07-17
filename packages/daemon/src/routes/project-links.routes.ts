@@ -5,9 +5,11 @@ import {
   listAzureBuildDefinitions,
   listAzureProjects,
   listAzureRepositories,
+  runCommand,
   type ProjectLinkInput,
 } from "@mergepilot/core";
 import type { ProjectLinkStoreAdapter } from "../projectLinkStore.js";
+import fs from "node:fs/promises";
 import { z } from "zod";
 
 type AdoDiscoveryKind = "projects" | "repositories" | "pipelines";
@@ -92,6 +94,51 @@ function projectLinkFromDiscoveryBody(
   return data.projectLink ?? {};
 }
 
+async function validateRepoPath(repoPath: string, reply: FastifyReply): Promise<boolean> {
+  const trimmed = repoPath.trim();
+  if (!trimmed) {
+    reply.code(400).send({
+      error: "repo_path_required",
+      message: "Local repository path is required.",
+    });
+    return false;
+  }
+
+  try {
+    const stat = await fs.stat(trimmed);
+    if (!stat.isDirectory()) {
+      reply.code(400).send({
+        error: "repo_path_not_directory",
+        message: "Local repository path must point to a folder.",
+      });
+      return false;
+    }
+  } catch {
+    reply.code(400).send({
+      error: "repo_path_not_found",
+      message: "Local repository path was not found.",
+    });
+    return false;
+  }
+
+  try {
+    const result = await runCommand(["git", "rev-parse", "--is-inside-work-tree"], {
+      cwd: trimmed,
+      allowed: ["git"],
+      timeoutSec: 8,
+    });
+    if (result.returncode === 0 && result.stdout.trim() === "true") return true;
+  } catch {
+    // Normalize all git probe failures below.
+  }
+
+  reply.code(400).send({
+    error: "repo_path_not_git_repository",
+    message: "Local repository path must be a valid Git repository.",
+  });
+  return false;
+}
+
 function registerProjectLinkRouteSet(
   app: FastifyInstance,
   prefix: "/project-links",
@@ -110,7 +157,11 @@ function registerProjectLinkRouteSet(
   app.post(prefix, async (req, reply) => {
     const parsed = ProjectLinkBodySchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const projectLink = await projectLinkStore.createProjectLink(parsed.data as ProjectLinkInput);
+    if (!(await validateRepoPath(parsed.data.repoPath, reply))) return reply;
+    const projectLink = await projectLinkStore.createProjectLink({
+      ...parsed.data,
+      repoPath: parsed.data.repoPath.trim(),
+    } as ProjectLinkInput);
     return reply.code(201).send(projectLink);
   });
 
@@ -119,6 +170,11 @@ function registerProjectLinkRouteSet(
     if (!paramParsed.success) return reply.code(400).send({ error: "invalid id" });
     const bodyParsed = ProjectLinkBodySchema.partial().safeParse(req.body);
     if (!bodyParsed.success) return reply.code(400).send({ error: bodyParsed.error.flatten() });
+    const rawBody = req.body && typeof req.body === "object" ? req.body as Record<string, unknown> : {};
+    if (Object.prototype.hasOwnProperty.call(rawBody, "repoPath")) {
+      if (!(await validateRepoPath(bodyParsed.data.repoPath ?? "", reply))) return reply;
+      bodyParsed.data.repoPath = bodyParsed.data.repoPath?.trim();
+    }
     const updated = await projectLinkStore.updateProjectLink(paramParsed.data.id, bodyParsed.data);
     if (!updated) return reply.code(404).send({ error: "Project Link not found" });
     return updated;

@@ -1,15 +1,52 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import type { ReactNode } from "react";
-import Dashboard from "../pages/Dashboard.js";
-import Repos from "../pages/Repos.js";
-import TaskViewer from "../pages/TaskViewer.js";
-import ReviewFindings from "../pages/ReviewFindings.js";
-import PullRequests from "../pages/PullRequests.js";
-import Pipelines from "../pages/Pipelines.js";
-import Settings from "../pages/Settings.js";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import Chat from "../pages/Chat.js";
-import ProjectLinks from "../pages/ProjectLinks.js";
 import { UserFooter } from "./UserFooter.js";
+
+type RouteModuleLoader = () => Promise<unknown>;
+
+const loadDashboard = () => import("../pages/Dashboard.js");
+const loadRepos = () => import("../pages/Repos.js");
+const loadTaskViewer = () => import("../pages/TaskViewer.js");
+const loadReviewFindings = () => import("../pages/ReviewFindings.js");
+const loadPullRequests = () => import("../pages/PullRequests.js");
+const loadPipelines = () => import("../pages/Pipelines.js");
+const loadSettings = () => import("../pages/Settings.js");
+const loadProjectLinks = () => import("../pages/ProjectLinks.js");
+
+const routeModuleLoaders: RouteModuleLoader[] = [
+  loadDashboard,
+  loadRepos,
+  loadTaskViewer,
+  loadReviewFindings,
+  loadPullRequests,
+  loadPipelines,
+  loadSettings,
+  loadProjectLinks,
+];
+
+const Dashboard = lazy(loadDashboard);
+const Repos = lazy(loadRepos);
+const TaskViewer = lazy(loadTaskViewer);
+const ReviewFindings = lazy(loadReviewFindings);
+const PullRequests = lazy(loadPullRequests);
+const Pipelines = lazy(loadPipelines);
+const Settings = lazy(loadSettings);
+const ProjectLinks = lazy(loadProjectLinks);
+
+export async function preloadWorkspaceRouteModules(
+  loaders: RouteModuleLoader[] = routeModuleLoaders,
+): Promise<void> {
+  await Promise.all(
+    loaders.map(async (load) => {
+      try {
+        await load();
+      } catch {
+        // Keep Suspense fallback as the recovery path if a chunk fails to preload.
+      }
+    }),
+  );
+}
 
 function IconChat() {
   return (
@@ -167,8 +204,32 @@ function PageShell({ children, scroll = true }: { children: ReactNode; scroll?: 
   );
 }
 
+function PageLoadingFallback() {
+  return (
+    <div
+      aria-label="Preparing page"
+      className="flex min-h-24 items-center justify-center text-xs text-[rgb(var(--app-text-subtle))]"
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--app-text-subtle))]/60" />
+    </div>
+  );
+}
+
+function LazyPageShell({ children, scroll = true }: { children: ReactNode; scroll?: boolean }) {
+  return (
+    <PageShell scroll={scroll}>
+      <Suspense fallback={<PageLoadingFallback />}>{children}</Suspense>
+    </PageShell>
+  );
+}
+
 export function FullLayout() {
   const location = useLocation();
+
+  useEffect(() => {
+    void preloadWorkspaceRouteModules();
+  }, []);
+
   return (
     <div className="flex h-screen w-screen bg-zinc-950 text-zinc-100">
       <aside className="flex w-48 shrink-0 flex-col overflow-hidden border-r border-zinc-800/80">
@@ -207,66 +268,66 @@ export function FullLayout() {
           <Route
             path="/dashboard"
             element={
-              <PageShell>
+              <LazyPageShell>
                 <Dashboard />
-              </PageShell>
+              </LazyPageShell>
             }
           />
           <Route
             path="/repos"
             element={
-              <PageShell>
+              <LazyPageShell>
                 <Repos />
-              </PageShell>
+              </LazyPageShell>
             }
           />
           <Route path="/tasks" element={<Navigate to="/activity" replace />} />
           <Route
             path="/activity"
             element={
-              <PageShell scroll={false}>
+              <LazyPageShell scroll={false}>
                 <TaskViewer />
-              </PageShell>
+              </LazyPageShell>
             }
           />
           <Route
             path="/pulls"
             element={
-              <PageShell>
+              <LazyPageShell>
                 <PullRequests />
-              </PageShell>
+              </LazyPageShell>
             }
           />
           <Route
             path="/findings"
             element={
-              <PageShell>
+              <LazyPageShell>
                 <ReviewFindings />
-              </PageShell>
+              </LazyPageShell>
             }
           />
           <Route
             path="/pipelines"
             element={
-              <PageShell>
+              <LazyPageShell>
                 <Pipelines />
-              </PageShell>
+              </LazyPageShell>
             }
           />
           <Route
             path="/project-links"
             element={
-              <PageShell>
+              <LazyPageShell>
                 <ProjectLinks />
-              </PageShell>
+              </LazyPageShell>
             }
           />
           <Route
             path="/settings"
             element={
-              <PageShell>
+              <LazyPageShell>
                 <Settings />
-              </PageShell>
+              </LazyPageShell>
             }
           />
         </Routes>

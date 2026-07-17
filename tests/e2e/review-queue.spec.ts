@@ -346,13 +346,53 @@ async function mockReviewQueueRuntime(
   );
 
   await page.addInitScript((seedProjectLink) => {
+    const reviewActivityPanelOpen = localStorage.getItem("mergepilot_review_activity_panel_open");
     localStorage.clear();
     localStorage.setItem("mergepilot_project_links_v1", JSON.stringify([seedProjectLink]));
     localStorage.setItem("mergepilot_active_project_link_id", seedProjectLink.id);
+    if (reviewActivityPanelOpen !== null) {
+      localStorage.setItem("mergepilot_review_activity_panel_open", reviewActivityPanelOpen);
+    }
   }, projectLink);
 }
 
 test.describe("Review Queue", () => {
+  test("@smoke @mocked persists the Recent activity panel collapsed state", async ({ page }) => {
+    const dispositionPayloads: unknown[] = [];
+    await mockReviewQueueRuntime(page, dispositionPayloads);
+
+    await page.goto("/#/findings");
+
+    await expect(page.getByRole("heading", { name: "Review Queue" })).toBeVisible();
+    await expect(page.getByText("Recent activity")).toBeVisible();
+    await page.getByRole("button", { name: "Hide" }).click();
+    await expect(page.getByText("Recent activity")).toBeHidden();
+    await expect(page.getByRole("button", { name: "Show activity" })).toBeVisible();
+
+    await page.reload();
+
+    await expect(page.getByRole("heading", { name: "Review Queue" })).toBeVisible();
+    await expect(page.getByText("Recent activity")).toBeHidden();
+    await expect(page.getByRole("button", { name: "Show activity" })).toBeVisible();
+    await expect(page.evaluate(() => localStorage.getItem("mergepilot_review_activity_panel_open"))).resolves.toBe("false");
+  });
+
+  test("@smoke @mocked keeps selected queue lane semantic instead of gray", async ({ page }) => {
+    const dispositionPayloads: unknown[] = [];
+    await mockReviewQueueRuntime(page, dispositionPayloads);
+
+    await page.goto("/#/findings");
+
+    const needsHumanReviewLane = page.getByRole("button", { name: /Needs human review/ });
+    await expect(needsHumanReviewLane).toBeVisible();
+    await needsHumanReviewLane.click();
+
+    await expect(needsHumanReviewLane).toHaveAttribute("aria-pressed", "true");
+    await expect(needsHumanReviewLane).toHaveClass(/bg-amber-500\/10/);
+    await expect(needsHumanReviewLane).toHaveClass(/border-\[rgb\(var\(--app-accent\)\)\]/);
+    await expect(needsHumanReviewLane).not.toHaveClass(/bg-(?:gray|slate|zinc)-/);
+  });
+
   test("@smoke @mocked renders review-run queue evidence and records an acknowledged disposition", async ({ page }) => {
     const dispositionPayloads: unknown[] = [];
     await mockReviewQueueRuntime(page, dispositionPayloads);

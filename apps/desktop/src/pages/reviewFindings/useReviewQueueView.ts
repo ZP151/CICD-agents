@@ -3,6 +3,7 @@ import { paginateItems } from "../../components/PaginationControls.js";
 import type { ReviewQueueItem } from "../../api.js";
 import { compareReviewQueueItems } from "../../reviewHistoryLocal.js";
 import { staleReviewQueueItems } from "../../reviewRunHistory.js";
+import { parseSortableDate } from "../../safeDate.js";
 
 export interface ReviewQueueViewArgs {
   items: ReviewQueueItem[];
@@ -40,7 +41,7 @@ export function useReviewQueueView({
       queueFilter === "all" ? items : items.filter((item) => item.decisionQueue === queueFilter);
     return [...filtered].sort((a, b) => {
       if (sortMode === "recent") {
-        return Date.parse(b.lastRunAt || "0") - Date.parse(a.lastRunAt || "0");
+        return parseSortableDate(b.lastRunAt) - parseSortableDate(a.lastRunAt);
       }
       return compareReviewQueueItems(a, b);
     });

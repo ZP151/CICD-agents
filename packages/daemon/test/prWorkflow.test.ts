@@ -77,4 +77,41 @@ describe("prWorkflow", () => {
     expect(insight.summary).toContain("Readiness: ready");
     expect(insight.summary).toContain("Linked work items: #1234 Task [Active]: Improve agent workflow structure.");
   });
+
+  it("uses readable build fallback wording when build status is missing", () => {
+    const insight = buildWorkflowPrInsight({
+      pullRequest: {
+        id: 88,
+        title: "Investigate failed pipeline",
+        description: "Pipeline failed without a detailed result.",
+      },
+      changes: {
+        fileCount: 1,
+        changes: [{ path: "/azure-pipelines.yml" }],
+      },
+      builds: [
+        {
+          id: 101,
+          buildNumber: "",
+          definitionName: "",
+          result: "failed",
+          status: "",
+        },
+        {
+          id: 102,
+          buildNumber: "",
+          definitionName: "",
+          result: "",
+          status: "failed",
+        },
+      ],
+      policies: [],
+      threads: [],
+      workItems: [],
+    } as unknown as PrInsightInput);
+
+    expect(insight.summary).toContain("Blocking builds: #101: failed; #102: failed.");
+    expect(insight.summary).toContain("#102: failed");
+    expect(insight.summary).not.toContain("unknown");
+  });
 });

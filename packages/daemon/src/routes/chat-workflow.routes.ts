@@ -27,6 +27,12 @@ export const InlineProjectLinkSchema = InlineProjectLinkObjectSchema.nullable()
   .optional()
   .transform((value) => value ?? undefined);
 
+const OptionalSessionIdSchema = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((value) => value ?? undefined);
+
 export const ChatWorkflowActionSchema = z.object({
   action: z.enum([
     "inspect_environment",
@@ -72,7 +78,7 @@ export const ChatWorkflowActionSchema = z.object({
     "trigger_pipeline",
   ]),
   repoPath: z.string().min(1),
-  sessionId: z.string().optional(),
+  sessionId: OptionalSessionIdSchema,
   projectLinkId: z.string().optional(),
   pullRequestId: z.coerce.number().int().positive().optional(),
   workItemId: z.coerce.number().int().positive().optional(),

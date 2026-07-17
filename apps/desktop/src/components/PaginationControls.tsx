@@ -62,20 +62,20 @@ export function PaginationControls({
   const end = Math.min(start + visibleItems - 1, totalItems);
 
   return (
-    <div className="mt-auto flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800/70 bg-zinc-900/20 px-3 py-2">
-      <p className="text-xs text-zinc-500">
-        Showing <span className="text-zinc-300">{start}-{end}</span> of{" "}
-        <span className="text-zinc-300">{totalItems}</span> {itemLabel}
+    <div className="mt-auto flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
+      <p className="text-xs text-[rgb(var(--app-text-muted))]">
+        Showing <span className="text-[rgb(var(--app-text))]">{start}-{end}</span> of{" "}
+        <span className="text-[rgb(var(--app-text))]">{totalItems}</span> {itemLabel}
       </p>
       {(showPageSize || showPageStepper) && (
       <div className="flex flex-wrap items-center gap-2">
         {showPageSize && (
-        <label className="inline-flex items-center gap-1.5 text-xs text-zinc-600">
+        <label className="inline-flex items-center gap-1.5 text-xs text-[rgb(var(--app-text-subtle))]">
           Page size
           <select
             value={displayedPageSize}
             onChange={(event) => onPageSizeChange(Number(event.target.value))}
-            className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs text-zinc-400 outline-none transition focus:border-zinc-600"
+            className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))] outline-none transition focus:border-[rgb(var(--app-border-strong))]"
             aria-label={`${itemLabel} page size`}
           >
             {normalizedOptions.map((option) => (
@@ -90,20 +90,28 @@ export function PaginationControls({
             type="button"
             disabled={currentPage <= 1}
             onClick={() => onPageChange(currentPage - 1)}
-            className="rounded-md border border-zinc-800 px-2 py-1 text-xs text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40"
+            title={`Previous ${itemLabel} page`}
+            aria-label={`Previous ${itemLabel} page`}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Previous
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 6l-6 6 6 6" />
+            </svg>
           </button>
-          <span className="min-w-16 text-center text-xs text-zinc-600">
+          <span className="min-w-16 text-center text-xs text-[rgb(var(--app-text-subtle))]">
             {currentPage} / {pageCount}
           </span>
           <button
             type="button"
             disabled={currentPage >= pageCount}
             onClick={() => onPageChange(currentPage + 1)}
-            className="rounded-md border border-zinc-800 px-2 py-1 text-xs text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40"
+            title={`Next ${itemLabel} page`}
+            aria-label={`Next ${itemLabel} page`}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Next
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 6l6 6-6 6" />
+            </svg>
           </button>
         </div>
         )}

@@ -1,8 +1,5 @@
 import { useMemo } from "react";
-import type {
-  ChatIndexStatus,
-  ProjectLink,
-} from "../../api.js";
+import type { ProjectLink } from "../../api.js";
 import { groupChatRenderItems } from "../../chatRenderItems.js";
 import {
   deriveComposerInputState,
@@ -31,20 +28,30 @@ export interface ChatDerivedState {
   conversationTitle: string | null;
   branchList: string[];
   diffStats: DiffStats | null;
-  welcomeSuggestions: string[];
-  welcomeSuggestionsReady: boolean;
   taskState: TaskState | null;
 }
 
 export function currentBranchFromBubbles(bubbles: Bubble[]): string | null {
   for (let i = bubbles.length - 1; i >= 0; i--) {
     const bubble = bubbles[i]!;
-    if (bubble.kind !== "tool" || !bubble.toolOk || !bubble.toolResult || typeof bubble.toolResult !== "object") {
+    if (
+      bubble.kind !== "tool" ||
+      !bubble.toolOk ||
+      !bubble.toolResult ||
+      typeof bubble.toolResult !== "object"
+    ) {
       continue;
     }
     const result = bubble.toolResult as Record<string, unknown>;
     if (bubble.toolName === "git_current_branch") {
-      return String(result["branch"] ?? String(result["stdout"] ?? "").trim().split("\n")[0]).trim().slice(0, 45);
+      return String(
+        result["branch"] ??
+          String(result["stdout"] ?? "")
+            .trim()
+            .split("\n")[0],
+      )
+        .trim()
+        .slice(0, 45);
     }
     if (bubble.toolName === "git_status") {
       const match = String(result["stdout"] ?? "").match(/^## ([^\s.]+)/m);
@@ -57,7 +64,12 @@ export function currentBranchFromBubbles(bubbles: Bubble[]): string | null {
 export function gitStatusFromBubbles(bubbles: Bubble[]): GitStatusData | null {
   for (let i = bubbles.length - 1; i >= 0; i--) {
     const bubble = bubbles[i]!;
-    if (bubble.kind === "tool" && bubble.toolOk && bubble.toolName === "git_status" && bubble.toolResult) {
+    if (
+      bubble.kind === "tool" &&
+      bubble.toolOk &&
+      bubble.toolName === "git_status" &&
+      bubble.toolResult
+    ) {
       const stdout = String((bubble.toolResult as Record<string, unknown>)["stdout"] ?? "");
       return parseGitStatus(stdout);
     }
@@ -75,9 +87,18 @@ export function conversationTitleFromBubbles(bubbles: Bubble[]): string | null {
 export function branchListFromBubbles(bubbles: Bubble[]): string[] {
   for (let i = bubbles.length - 1; i >= 0; i--) {
     const bubble = bubbles[i]!;
-    if (bubble.kind === "tool" && bubble.toolOk && bubble.toolName === "git_branch_list" && bubble.toolResult) {
+    if (
+      bubble.kind === "tool" &&
+      bubble.toolOk &&
+      bubble.toolName === "git_branch_list" &&
+      bubble.toolResult
+    ) {
       const stdout = String((bubble.toolResult as Record<string, unknown>)["stdout"] ?? "");
-      return stdout.split("\n").filter(Boolean).map((line) => line.replace(/^\*\s*/, "").trim()).filter(Boolean);
+      return stdout
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => line.replace(/^\*\s*/, "").trim())
+        .filter(Boolean);
     }
   }
   return [];
@@ -86,7 +107,12 @@ export function branchListFromBubbles(bubbles: Bubble[]): string[] {
 export function diffStatsFromBubbles(bubbles: Bubble[]): DiffStats | null {
   for (let i = bubbles.length - 1; i >= 0; i--) {
     const bubble = bubbles[i]!;
-    if (bubble.kind === "tool" && bubble.toolOk && bubble.toolName === "git_diff" && bubble.toolResult) {
+    if (
+      bubble.kind === "tool" &&
+      bubble.toolOk &&
+      bubble.toolName === "git_diff" &&
+      bubble.toolResult
+    ) {
       const stdout = String((bubble.toolResult as Record<string, unknown>)["stdout"] ?? "");
       const files = parseGitDiff(stdout);
       if (files.length === 0) return { files: 0, added: 0, removed: 0 };
@@ -105,9 +131,11 @@ export function pendingApprovalFromBubbles(
   workflowState: WorkflowEventState | null,
 ): ComposerPendingApproval {
   return (
-    workflowState?.pendingApproval
-    ?? [...bubbles].reverse().find((bubble) => bubble.kind === "pending_confirm" && bubble.pendingStatus === "waiting")
-    ?? null
+    workflowState?.pendingApproval ??
+    [...bubbles]
+      .reverse()
+      .find((bubble) => bubble.kind === "pending_confirm" && bubble.pendingStatus === "waiting") ??
+    null
   );
 }
 
@@ -117,11 +145,12 @@ export function bubblesWithWorkflowApprovalFallback(
 ): Bubble[] {
   const approval = workflowState?.pendingApproval;
   if (!approval) return bubbles;
-  const existing = bubbles.some((bubble) =>
-    bubble.kind === "pending_confirm" &&
-    bubble.pendingStatus === "waiting" &&
-    bubble.pendingTool === approval.action.tool &&
-    stableJson(bubble.pendingArgs ?? {}) === stableJson(approval.action.args ?? {}),
+  const existing = bubbles.some(
+    (bubble) =>
+      bubble.kind === "pending_confirm" &&
+      bubble.pendingStatus === "waiting" &&
+      bubble.pendingTool === approval.action.tool &&
+      stableJson(bubble.pendingArgs ?? {}) === stableJson(approval.action.args ?? {}),
   );
   if (existing) return bubbles;
   return [
@@ -142,30 +171,10 @@ export function bubblesWithWorkflowApprovalFallback(
   ];
 }
 
-export function welcomeSuggestionsForProjectLink(
-  activeProjectLink: ProjectLink | null,
-  indexStatus: ChatIndexStatus | null,
-): string[] {
-  const hasAdoMapping = Boolean(activeProjectLink?.adoOrgUrl && activeProjectLink.adoProject && activeProjectLink.adoRepoName);
-  const needsProjectUnderstanding = indexStatus ? (!indexStatus.indexed || !indexStatus.semanticReady) : false;
-  const suggestions = [
-    needsProjectUnderstanding ? "Understand this project" : "Explain this project architecture",
-    "Review my changes",
-    "What's on this branch?",
-    hasAdoMapping ? "Analyze PR insight for this repo" : "Run tests",
-    hasAdoMapping ? "Open Pipelines workspace" : "Find the build and test commands",
-    "Stage and commit",
-    hasAdoMapping ? "Push and create PR" : "Prepare a PR plan",
-  ];
-  return Array.from(new Set(suggestions)).slice(0, 7);
-}
-
 export function useChatDerivedState({
   activeProjectLink,
   bubbles,
   busy,
-  indexStatus,
-  indexStatusReady,
   input,
   queuedSuggestionLabel,
   statusText,
@@ -174,8 +183,6 @@ export function useChatDerivedState({
   activeProjectLink: ProjectLink | null;
   bubbles: Bubble[];
   busy: boolean;
-  indexStatus: ChatIndexStatus | null;
-  indexStatusReady: boolean;
   input: string;
   queuedSuggestionLabel?: string;
   statusText: string | null;
@@ -183,20 +190,29 @@ export function useChatDerivedState({
 }): ChatDerivedState {
   return useMemo(() => {
     const lastAssistant = [...bubbles].reverse().find((bubble) => bubble.kind === "assistant");
-    const lastNarrative = [...bubbles].reverse().find((bubble) => bubble.kind === "assistant" || bubble.kind === "system");
+    const lastNarrative = [...bubbles]
+      .reverse()
+      .find((bubble) => bubble.kind === "assistant" || bubble.kind === "system");
     const lastUser = [...bubbles].reverse().find((bubble) => bubble.kind === "user");
     const lastError = [...bubbles].reverse().find((bubble) => bubble.kind === "error");
     const composerPendingApproval = pendingApprovalFromBubbles(bubbles, workflowState);
     const pendingTool =
       workflowState?.pendingApproval?.action.tool ??
-      [...bubbles].reverse().find((bubble) => bubble.kind === "pending_confirm" && bubble.pendingStatus === "waiting")?.pendingTool;
-    const sourceTypes = Array.from(new Set((lastAssistant?.meta?.sources ?? []).map((source) => source.type)));
+      [...bubbles]
+        .reverse()
+        .find((bubble) => bubble.kind === "pending_confirm" && bubble.pendingStatus === "waiting")
+        ?.pendingTool;
+    const sourceTypes = Array.from(
+      new Set((lastAssistant?.meta?.sources ?? []).map((source) => source.type)),
+    );
     const conversationTitle = conversationTitleFromBubbles(bubbles);
 
     return {
       currentBranch: currentBranchFromBubbles(bubbles),
       gitStatus: gitStatusFromBubbles(bubbles),
-      renderItems: groupChatRenderItems(bubblesWithWorkflowApprovalFallback(bubbles, workflowState)),
+      renderItems: groupChatRenderItems(
+        bubblesWithWorkflowApprovalFallback(bubbles, workflowState),
+      ),
       suggestionReplies: deriveSuggestionReplies({
         metadataSuggestions: lastAssistant?.meta?.suggestions,
         metadataActions: lastAssistant?.meta?.actionsTaken,
@@ -210,7 +226,10 @@ export function useChatDerivedState({
         pendingTool,
         pendingApprovalTool: workflowState?.pendingApproval?.action.tool,
         pendingApprovalDescription: workflowState?.pendingApproval?.action.description,
-        hasAuthError: Boolean(lastError?.text && /\b(auth|oauth|pat|token|credential|sign in|permission)\b/i.test(lastError.text)),
+        hasAuthError: Boolean(
+          lastError?.text &&
+          /\b(auth|oauth|pat|token|credential|sign in|permission)\b/i.test(lastError.text),
+        ),
         inputValue: input,
         busy,
       }),
@@ -235,11 +254,17 @@ export function useChatDerivedState({
       conversationTitle,
       branchList: branchListFromBubbles(bubbles),
       diffStats: diffStatsFromBubbles(bubbles),
-      welcomeSuggestions: welcomeSuggestionsForProjectLink(activeProjectLink, indexStatus),
-      welcomeSuggestionsReady: indexStatusReady,
       taskState: taskStateFromWorkflow(workflowState, conversationTitle),
     };
-  }, [activeProjectLink, bubbles, busy, indexStatus, indexStatusReady, input, queuedSuggestionLabel, statusText, workflowState]);
+  }, [
+    activeProjectLink,
+    bubbles,
+    busy,
+    input,
+    queuedSuggestionLabel,
+    statusText,
+    workflowState,
+  ]);
 }
 
 function stableJson(value: unknown): string {

@@ -56,12 +56,47 @@ jobs:
       - name: Build daemon sidecar
         run: pnpm --filter @mergepilot/desktop build:sidecar
 
+      - name: Clean stale installer artifacts
+        shell: bash
+        run: rm -rf apps/desktop/src-tauri/target/release/bundle
+
       # Build the Tauri installer (skips the sidecar step since it was done above)
       - name: Build Tauri installer
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: pnpm --filter @mergepilot/desktop tauri build
+
+      - name: Verify removed chat templates
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: .\scripts\windows\verify-no-stale-chat-template.ps1
+
+      - name: Verify Windows installer metadata
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: .\scripts\windows\verify-windows-installer-metadata.ps1
+
+      - name: Verify Windows signing readiness
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          WINDOWS_CODESIGN_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_CERT_PFX_BASE64 }}
+          WINDOWS_CODESIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_CERT_PASSWORD }}
+        run: .\scripts\windows\verify-windows-signing-readiness.ps1
+
+      - name: Sign Windows installers
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          WINDOWS_CODESIGN_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_CERT_PFX_BASE64 }}
+          WINDOWS_CODESIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_CERT_PASSWORD }}
+        run: .\scripts\windows\sign-windows-release-artifacts.ps1
+
+      - name: Verify Windows installer signatures
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: .\scripts\windows\verify-windows-artifact-signatures.ps1
 
       # Collect the produced installers as a workflow artifact and as a release asset
       - name: Upload installer artifacts
@@ -72,7 +107,7 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/**/*.msi
             apps/desktop/src-tauri/target/release/bundle/**/*.exe
             apps/desktop/src-tauri/target/release/bundle/**/*.dmg
-          if-no-files-found: warn
+          if-no-files-found: error
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Create a GitHub Release and attach all installers

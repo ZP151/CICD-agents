@@ -101,6 +101,7 @@ describe("PendingActionCard", () => {
     );
 
     expect(executing).toContain("Executing approved action");
+    expect(executing).not.toContain("animate-bounce");
     expect(executing).not.toContain("Yes, run this action");
     expect(done).toBe("");
     expect(cancelled).toBe("");

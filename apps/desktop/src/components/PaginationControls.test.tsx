@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { clampPage, paginateItems } from "./PaginationControls.js";
+import { renderToStaticMarkup } from "react-dom/server";
+import { clampPage, paginateItems, PaginationControls } from "./PaginationControls.js";
 
 describe("pagination helpers", () => {
   it("clamps pages into the available range", () => {
@@ -25,5 +26,25 @@ describe("pagination helpers", () => {
     expect(result.pageCount).toBe(1);
     expect(result.pageStart).toBe(0);
     expect(result.pageEnd).toBe(0);
+  });
+
+  it("uses icon-only stepper buttons with accessible labels", () => {
+    const html = renderToStaticMarkup(
+      <PaginationControls
+        page={2}
+        pageCount={3}
+        pageSize={10}
+        totalItems={30}
+        visibleItems={10}
+        itemLabel="pipelines"
+        onPageChange={() => undefined}
+        onPageSizeChange={() => undefined}
+      />,
+    );
+
+    expect(html).toContain('aria-label="Previous pipelines page"');
+    expect(html).toContain('aria-label="Next pipelines page"');
+    expect(html).not.toContain(">Previous<");
+    expect(html).not.toContain(">Next<");
   });
 });

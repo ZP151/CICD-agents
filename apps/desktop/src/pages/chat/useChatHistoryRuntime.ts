@@ -5,13 +5,11 @@ import {
   updateChatSessionMetadata,
   type ChatHistoryEntry,
 } from "../../api.js";
-import {
-  clampHistoryPage,
-  removeHistoryEntry,
-  upsertHistoryEntry,
-} from "./chatSessionHistory.js";
+import { clampHistoryPage, removeHistoryEntry, upsertHistoryEntry } from "./chatSessionHistory.js";
 import { sortChatHistory } from "./chatHistory.js";
 import type { HistoryMenuState } from "./layout/HistorySidebar.js";
+
+let cachedChatHistory: ChatHistoryEntry[] | null = null;
 
 interface UseChatHistoryRuntimeArgs {
   mini: boolean;
@@ -54,14 +52,25 @@ export function useChatHistoryRuntime({
   onCurrentTitleUpdated,
   onTitleEditCancelled,
 }: UseChatHistoryRuntimeArgs): ChatHistoryRuntime {
-  const [history, setHistory] = useState<ChatHistoryEntry[]>([]);
+  const [history, setHistoryState] = useState<ChatHistoryEntry[]>(() => cachedChatHistory ?? []);
   const [historyMenu, setHistoryMenu] = useState<HistoryMenuState | null>(null);
   const [renamingHistoryId, setRenamingHistoryId] = useState<string | null>(null);
   const [renamingHistoryValue, setRenamingHistoryValue] = useState("");
   const [historyError, setHistoryError] = useState<string | null>(null);
-  const [historyLoading, setHistoryLoading] = useState(!mini);
+  const [historyLoading, setHistoryLoading] = useState(!mini && !cachedChatHistory);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
+
+  const setHistory = useCallback<Dispatch<SetStateAction<ChatHistoryEntry[]>>>((value) => {
+    setHistoryState((current) => {
+      const next =
+        typeof value === "function"
+          ? (value as (items: ChatHistoryEntry[]) => ChatHistoryEntry[])(current)
+          : value;
+      cachedChatHistory = next;
+      return next;
+    });
+  }, []);
 
   const refreshHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -71,7 +80,7 @@ export function useChatHistoryRuntime({
     } finally {
       setHistoryLoading(false);
     }
-  }, []);
+  }, [setHistory]);
 
   useEffect(() => {
     if (!mini) void refreshHistory().catch(() => undefined);
@@ -99,15 +108,18 @@ export function useChatHistoryRuntime({
     setHistory((items) => upsertHistoryEntry(items, entry));
   }, []);
 
-  const toggleHistoryPin = useCallback(async (entry: ChatHistoryEntry) => {
-    setHistoryError(null);
-    try {
-      const updated = await updateChatSessionMetadata(entry.sessionId, { pinned: !entry.pinned });
-      updateHistoryEntry(updated);
-    } catch (err) {
-      setHistoryError(err instanceof Error ? err.message : "Failed to update pinned state.");
-    }
-  }, [updateHistoryEntry]);
+  const toggleHistoryPin = useCallback(
+    async (entry: ChatHistoryEntry) => {
+      setHistoryError(null);
+      try {
+        const updated = await updateChatSessionMetadata(entry.sessionId, { pinned: !entry.pinned });
+        updateHistoryEntry(updated);
+      } catch (err) {
+        setHistoryError(err instanceof Error ? err.message : "Failed to update pinned state.");
+      }
+    },
+    [updateHistoryEntry],
+  );
 
   const beginRenameHistory = useCallback((entry: ChatHistoryEntry) => {
     setHistoryMenu(null);
@@ -120,47 +132,56 @@ export function useChatHistoryRuntime({
     setRenamingHistoryValue("");
   }, []);
 
-  const commitHistoryRename = useCallback(async (entry: ChatHistoryEntry, value: string) => {
-    const title = value.trim();
-    cancelHistoryRename();
-    setHistoryError(null);
-    try {
-      const updated = await updateChatSessionMetadata(entry.sessionId, { title: title || null });
-      updateHistoryEntry(updated);
-      if (entry.sessionId === sessionId) onCurrentTitleUpdated(updated.title ?? null);
-    } catch (err) {
-      setHistoryError(err instanceof Error ? err.message : "Failed to rename chat.");
-    }
-  }, [cancelHistoryRename, onCurrentTitleUpdated, sessionId, updateHistoryEntry]);
-
-  const deleteHistoryEntry = useCallback(async (entry: ChatHistoryEntry) => {
-    setHistoryMenu(null);
-    if (!window.confirm("Delete this chat?")) return;
-    setHistoryError(null);
-    try {
-      await deleteChatSession(entry.sessionId);
-      setHistory((items) => removeHistoryEntry(items, entry.sessionId));
-      if (entry.sessionId === sessionId) {
-        onActiveSessionDeleted();
-        onTitleEditCancelled();
+  const commitHistoryRename = useCallback(
+    async (entry: ChatHistoryEntry, value: string) => {
+      const title = value.trim();
+      cancelHistoryRename();
+      setHistoryError(null);
+      try {
+        const updated = await updateChatSessionMetadata(entry.sessionId, { title: title || null });
+        updateHistoryEntry(updated);
+        if (entry.sessionId === sessionId) onCurrentTitleUpdated(updated.title ?? null);
+      } catch (err) {
+        setHistoryError(err instanceof Error ? err.message : "Failed to rename chat.");
       }
-    } catch (err) {
-      setHistoryError(err instanceof Error ? err.message : "Failed to delete chat.");
-    }
-  }, [onActiveSessionDeleted, onTitleEditCancelled, sessionId]);
+    },
+    [cancelHistoryRename, onCurrentTitleUpdated, sessionId, updateHistoryEntry],
+  );
 
-  const renameCurrentSession = useCallback(async (value: string) => {
-    const title = value.trim();
-    onCurrentTitleUpdated(title || null);
-    onTitleEditCancelled();
-    if (!sessionId) return;
-    try {
-      const updated = await updateChatSessionMetadata(sessionId, { title: title || null });
-      updateHistoryEntry(updated);
-    } catch {
-      void refreshHistory().catch(() => undefined);
-    }
-  }, [onCurrentTitleUpdated, onTitleEditCancelled, refreshHistory, sessionId, updateHistoryEntry]);
+  const deleteHistoryEntry = useCallback(
+    async (entry: ChatHistoryEntry) => {
+      setHistoryMenu(null);
+      if (!window.confirm("Delete this chat?")) return;
+      setHistoryError(null);
+      try {
+        await deleteChatSession(entry.sessionId);
+        setHistory((items) => removeHistoryEntry(items, entry.sessionId));
+        if (entry.sessionId === sessionId) {
+          onActiveSessionDeleted();
+          onTitleEditCancelled();
+        }
+      } catch (err) {
+        setHistoryError(err instanceof Error ? err.message : "Failed to delete chat.");
+      }
+    },
+    [onActiveSessionDeleted, onTitleEditCancelled, sessionId],
+  );
+
+  const renameCurrentSession = useCallback(
+    async (value: string) => {
+      const title = value.trim();
+      onCurrentTitleUpdated(title || null);
+      onTitleEditCancelled();
+      if (!sessionId) return;
+      try {
+        const updated = await updateChatSessionMetadata(sessionId, { title: title || null });
+        updateHistoryEntry(updated);
+      } catch {
+        void refreshHistory().catch(() => undefined);
+      }
+    },
+    [onCurrentTitleUpdated, onTitleEditCancelled, refreshHistory, sessionId, updateHistoryEntry],
+  );
 
   return {
     history,

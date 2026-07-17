@@ -69,8 +69,9 @@ Run targeted tests:
 Releases are created by pushing a semantic version tag.
 
 ```powershell
-git tag v0.5.21
-git push origin v0.5.21
+$version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+git tag "v$version"
+git push origin "v$version"
 ```
 
 The release workflow builds Windows and macOS installers and publishes them to GitHub Releases.
@@ -79,6 +80,6 @@ The release workflow builds Windows and macOS installers and publishes them to G
 
 - `PRODUCT.md`
 - `docs/architecture.md`
-- `docs/mergepilot-product-roadmap-and-reuse-plan.md`
-- `docs/mergepilot-progress-tracker.md`
+- `docs/dev-agent-product-roadmap-and-reuse-plan.md`
+- `docs/dev-agent-progress-tracker.md`
 - `docs/third-party-source-reuse.md`

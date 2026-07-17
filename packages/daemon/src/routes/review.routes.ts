@@ -9,6 +9,7 @@ import {
   listLocalReviewOperations,
   listReviewQueueItems,
   compareReviewQueueItems,
+  parseSortableDate,
   summarizePrInsightArtifactHistory,
   upsertLocalPrInsightArtifact,
   upsertLocalReviewHistory,
@@ -227,7 +228,7 @@ function mergeReviewQueueItems(cloudItems: ReviewQueueItem[], localItems: Review
   for (const item of localItems) {
     const key = reviewQueueKey(item);
     const current = merged.get(key);
-    if (!current || Date.parse(item.lastRunAt || "0") >= Date.parse(current.lastRunAt || "0")) {
+    if (!current || parseSortableDate(item.lastRunAt) >= parseSortableDate(current.lastRunAt)) {
       merged.set(key, item);
     }
   }

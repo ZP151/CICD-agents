@@ -136,8 +136,6 @@ export interface ChatShellProps {
   titleInputRef: RefObject<HTMLInputElement>;
   toggleHistoryPin: (entry: ChatHistoryEntry) => void;
   toggleTool: (id: string) => void;
-  welcomeSuggestions: string[];
-  welcomeSuggestionsReady: boolean;
   workflowState: WorkflowEventState | null;
   workspaceRef: RefObject<HTMLDivElement>;
 }

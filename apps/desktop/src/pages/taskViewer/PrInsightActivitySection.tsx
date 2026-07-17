@@ -3,7 +3,7 @@ import type {
   PrInsightArtifactRecord,
   ProjectLink,
 } from "../../api.js";
-import { formatTime } from "./activityPresentation.js";
+import { formatIsoTime } from "./activityPresentation.js";
 import { ProjectLinkFilter } from "./ProjectLinkFilter.js";
 import type { PrInsightActivityItem } from "./prInsightActivity.js";
 
@@ -36,12 +36,14 @@ export function PrInsightActivitySection({
   onPrInsightKindFilterChange,
 }: PrInsightActivitySectionProps): JSX.Element {
   return (
-    <div className="mt-5 border-t border-zinc-200 pt-4">
+    <div>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
-          Saved PR Insights
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">
+          PR Insights
         </h3>
-        {prInsightLoading && <span className="text-[11px] text-zinc-700">Loading</span>}
+        <span className="rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-0.5 text-[11px] text-[rgb(var(--app-text-subtle))]">
+          {prInsightLoading ? "Loading" : prInsightActivity.length}
+        </span>
       </div>
       <div className="mb-2 grid gap-1.5">
         <ProjectLinkFilter
@@ -51,7 +53,7 @@ export function PrInsightActivitySection({
           label="Filter saved PR insights by Project Link"
         />
         <select
-          className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 outline-none focus:border-blue-400"
+          className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))] outline-none focus:border-[rgb(var(--app-accent))]"
           value={prInsightKindFilter}
           onChange={(e) =>
             onPrInsightKindFilterChange(e.target.value as PrInsightArtifactRecord["kind"] | "all")
@@ -65,7 +67,9 @@ export function PrInsightActivitySection({
       </div>
       <div className="max-h-[260px] overflow-y-auto space-y-1.5">
         {!prInsightLoading && prInsightActivity.length === 0 && (
-          <p className="px-1 text-xs text-zinc-600">No saved PR insights yet.</p>
+          <p className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text-muted))]">
+            No saved PR insights yet.
+          </p>
         )}
         {prInsightActivity.slice(0, 10).map((event) => (
           <PrInsightActivityButton
@@ -98,20 +102,20 @@ function PrInsightActivityButton({
       onClick={() => onSelectPrInsight(event.id)}
       className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
         selected
-          ? "border-blue-300 bg-blue-50"
-          : "border-transparent hover:border-zinc-200 hover:bg-zinc-50"
+          ? "border-[rgb(var(--app-accent))]/50 bg-[rgb(var(--app-accent-soft))]"
+          : "border-transparent hover:border-[rgb(var(--app-border))] hover:bg-[rgb(var(--app-surface-raised))]"
       }`}
     >
       <div className="mb-1 flex items-center gap-2">
-        <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-300 ring-1 ring-blue-500/20">
+        <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-700 ring-1 ring-sky-500/20">
           {event.kind === "review_run" ? "full review" : "preview"}
         </span>
         {historyMeta && historyMeta.total > 1 && (
           <span
             className={`rounded-full px-2 py-0.5 text-[10px] ring-1 ${
               historyMeta.latest
-                ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/20"
-                : "bg-zinc-100 text-zinc-600 ring-zinc-200"
+                ? "bg-emerald-500/10 text-emerald-700 ring-emerald-500/20"
+                : "bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))] ring-[rgb(var(--app-border))]"
             }`}
           >
             {historyMeta.latest
@@ -119,14 +123,14 @@ function PrInsightActivityButton({
               : `older ${historyMeta.index + 1}/${historyMeta.total}`}
           </span>
         )}
-        <span className="truncate text-xs text-zinc-600">
-          {formatTime(Date.parse(event.at || "0") / 1000)}
+        <span className="truncate text-xs text-[rgb(var(--app-text-muted))]">
+          {formatIsoTime(event.at)}
         </span>
       </div>
-      <p className="truncate text-sm font-medium text-zinc-950">
+      <p className="truncate text-sm font-medium text-[rgb(var(--app-text))]">
         #{event.pullRequestId} · {event.title || "(untitled)"}
       </p>
-      <p className="mt-1 truncate text-xs text-zinc-600">
+      <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-muted))]">
         {event.projectLinkName} · {event.repository}
       </p>
     </button>

@@ -1,0 +1,253 @@
+<#
+.SYNOPSIS
+Runs live-app Playwright tests against a source daemon that matches this
+workspace.
+
+.DESCRIPTION
+This wrapper prevents misleading live-app failures caused by a missing or stale
+daemon on 127.0.0.1:8787. It starts the source @mergepilot/daemon when needed,
+requires the daemon version to match packages/daemon/package.json by default,
+writes Playwright and daemon logs under output/live-e2e, and cleans up the
+daemon port if it started the daemon.
+
+.EXAMPLE
+.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -Grep "ClaimBot_API pipeline #117"
+
+.EXAMPLE
+.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -Destructive -Grep "rerun approval"
+
+.EXAMPLE
+.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon
+#>
+
+param(
+  [string]$TestPath = "tests/e2e/live-app-business.spec.ts",
+  [string]$Project = "chromium",
+  [string]$Grep = "",
+  [int]$Workers = 1,
+  [string]$LogDir = "",
+  [switch]$LiveAdo,
+  [switch]$Destructive,
+  [switch]$AllowExistingMismatchedDaemon,
+  [switch]$RestartMismatchedDaemon
+)
+
+$ErrorActionPreference = "Stop"
+
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+$pnpmProject = Join-Path $PSScriptRoot "pnpm-project.ps1"
+$daemonPackageJson = Join-Path $repoRoot "packages\daemon\package.json"
+$expectedVersion = (Get-Content -LiteralPath $daemonPackageJson -Raw | ConvertFrom-Json).version
+$daemonUrl = "http://127.0.0.1:8787"
+
+if ([string]::IsNullOrWhiteSpace($LogDir)) {
+  $LogDir = Join-Path $repoRoot "output\live-e2e"
+}
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$daemonOut = Join-Path $LogDir "live-app-source-daemon-$stamp.log"
+$daemonErr = Join-Path $LogDir "live-app-source-daemon-$stamp.err.log"
+$playwrightLog = Join-Path $LogDir "live-app-e2e-$stamp.log"
+
+function Get-DaemonHealth {
+  try {
+    return Invoke-RestMethod -Uri "$daemonUrl/healthz" -Method Get -TimeoutSec 2
+  } catch {
+    return $null
+  }
+}
+
+function Stop-DaemonPortOwner {
+  param(
+    [switch]$OnlyRepoOwned
+  )
+
+  $owners = @(
+    Get-NetTCPConnection -ErrorAction SilentlyContinue |
+    Where-Object { $_.LocalAddress -in @("127.0.0.1", "0.0.0.0", "::", "::1") -and $_.LocalPort -eq 8787 } |
+    Select-Object -ExpandProperty OwningProcess -Unique
+  )
+  foreach ($owner in $owners) {
+    if ($owner -and $owner -ne $PID) {
+      $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId = $owner" -ErrorAction SilentlyContinue
+      $commandLine = [string]$processInfo.CommandLine
+      $executablePath = [string]$processInfo.ExecutablePath
+      $processName = [string]$processInfo.Name
+      $isRepoOwned = $commandLine.Contains([string]$repoRoot) -or $executablePath.Contains([string]$repoRoot)
+      $isMergePilotDaemon = $processName -eq "mergepilot-daemon.exe" -or $executablePath.EndsWith("\mergepilot-daemon.exe")
+
+      if ($OnlyRepoOwned -and -not $isRepoOwned) {
+        continue
+      }
+      if (-not $OnlyRepoOwned -and -not $isRepoOwned -and -not $isMergePilotDaemon) {
+        throw "Refusing to stop unexpected process on $daemonUrl. PID $owner, path '$executablePath', command '$commandLine'."
+      }
+      Stop-Process -Id $owner -Force -ErrorAction SilentlyContinue
+    }
+  }
+}
+
+function Start-SourceDaemon {
+  $process = Start-Process -FilePath "powershell.exe" -ArgumentList @(
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    $pnpmProject,
+    "--filter",
+    "@mergepilot/daemon",
+    "dev"
+  ) -WorkingDirectory $repoRoot -RedirectStandardOutput $daemonOut -RedirectStandardError $daemonErr -WindowStyle Hidden -PassThru
+
+  for ($i = 0; $i -lt 60; $i++) {
+    $health = Get-DaemonHealth
+    if ($health) {
+      return [pscustomobject]@{
+        process = $process
+        health = $health
+      }
+    }
+    if ($process.HasExited) {
+      break
+    }
+    Start-Sleep -Milliseconds 500
+  }
+
+  $stdoutTail = @(Get-Content -LiteralPath $daemonOut -Tail 80 -ErrorAction SilentlyContinue)
+  $stderrTail = @(Get-Content -LiteralPath $daemonErr -Tail 80 -ErrorAction SilentlyContinue)
+  throw "Source daemon did not become healthy on $daemonUrl. stdout: $($stdoutTail -join ' ') stderr: $($stderrTail -join ' ')"
+}
+
+$startedDaemon = $null
+$existingHealth = $null
+
+try {
+  $existingHealth = Get-DaemonHealth
+
+  if ($existingHealth) {
+    if ($existingHealth.version -ne $expectedVersion) {
+      if ($RestartMismatchedDaemon) {
+        Stop-DaemonPortOwner
+        Start-Sleep -Milliseconds 500
+        $startedDaemon = Start-SourceDaemon
+        $existingHealth = $startedDaemon.health
+      } elseif (-not $AllowExistingMismatchedDaemon) {
+        throw "Daemon on $daemonUrl is version $($existingHealth.version), but this workspace expects $expectedVersion. Rerun with -RestartMismatchedDaemon to replace it for this test, or -AllowExistingMismatchedDaemon if that is intentional."
+      }
+    }
+  } else {
+    $startedDaemon = Start-SourceDaemon
+    $existingHealth = $startedDaemon.health
+  }
+
+  if (-not $existingHealth) {
+    throw "Daemon health check failed on $daemonUrl."
+  }
+
+  if ($existingHealth.version -ne $expectedVersion -and -not $AllowExistingMismatchedDaemon) {
+    throw "Daemon on $daemonUrl is version $($existingHealth.version), but this workspace expects $expectedVersion."
+  }
+} catch {
+  $setupError = $_.Exception.Message
+  if ($startedDaemon -and $startedDaemon.process -and -not $startedDaemon.process.HasExited) {
+    Stop-Process -Id $startedDaemon.process.Id -Force -ErrorAction SilentlyContinue
+  }
+  if ($startedDaemon) {
+    Stop-DaemonPortOwner -OnlyRepoOwned
+  }
+  [pscustomobject]@{
+    ok = $false
+    setupFailed = $true
+    error = $setupError
+    daemonUrl = $daemonUrl
+    daemonVersion = if ($existingHealth) { $existingHealth.version } else { $null }
+    expectedVersion = $expectedVersion
+    startedDaemon = ($null -ne $startedDaemon)
+    liveAdo = [bool]$LiveAdo
+    destructive = [bool]$Destructive
+    testPath = $TestPath
+    project = $Project
+    grep = $Grep
+    playwrightLog = $playwrightLog
+    daemonLog = $daemonOut
+    daemonErrorLog = $daemonErr
+  } | ConvertTo-Json -Depth 6
+  exit 1
+}
+
+$previousLiveApp = $env:MERGEPILOT_E2E_LIVE_APP
+$previousLiveAdo = $env:MERGEPILOT_E2E_LIVE_ADO
+$previousDestructive = $env:MERGEPILOT_E2E_DESTRUCTIVE
+
+try {
+  $env:MERGEPILOT_E2E_LIVE_APP = "1"
+  if ($LiveAdo) {
+    $env:MERGEPILOT_E2E_LIVE_ADO = "1"
+  } else {
+    Remove-Item Env:\MERGEPILOT_E2E_LIVE_ADO -ErrorAction SilentlyContinue
+  }
+  if ($Destructive) {
+    $env:MERGEPILOT_E2E_DESTRUCTIVE = "1"
+  } else {
+    Remove-Item Env:\MERGEPILOT_E2E_DESTRUCTIVE -ErrorAction SilentlyContinue
+  }
+
+  $args = @(
+    "exec",
+    "playwright",
+    "test",
+    $TestPath,
+    "--project=$Project",
+    "--workers=$Workers"
+  )
+  if (-not [string]::IsNullOrWhiteSpace($Grep)) {
+    $args += @("--grep", $Grep)
+  }
+
+  & $pnpmProject @args *> $playwrightLog
+  $exitCode = $LASTEXITCODE
+
+  $resultJson = [pscustomobject]@{
+    ok = ($exitCode -eq 0)
+    exitCode = $exitCode
+    daemonUrl = $daemonUrl
+    daemonVersion = $existingHealth.version
+    expectedVersion = $expectedVersion
+    startedDaemon = ($null -ne $startedDaemon)
+    liveAdo = [bool]$LiveAdo
+    destructive = [bool]$Destructive
+    testPath = $TestPath
+    project = $Project
+    grep = $Grep
+    playwrightLog = $playwrightLog
+    daemonLog = $daemonOut
+    daemonErrorLog = $daemonErr
+  } | ConvertTo-Json -Depth 6
+  Write-Output $resultJson
+
+  exit $exitCode
+} finally {
+  if ($null -eq $previousLiveApp) {
+    Remove-Item Env:\MERGEPILOT_E2E_LIVE_APP -ErrorAction SilentlyContinue
+  } else {
+    $env:MERGEPILOT_E2E_LIVE_APP = $previousLiveApp
+  }
+  if ($null -eq $previousLiveAdo) {
+    Remove-Item Env:\MERGEPILOT_E2E_LIVE_ADO -ErrorAction SilentlyContinue
+  } else {
+    $env:MERGEPILOT_E2E_LIVE_ADO = $previousLiveAdo
+  }
+  if ($null -eq $previousDestructive) {
+    Remove-Item Env:\MERGEPILOT_E2E_DESTRUCTIVE -ErrorAction SilentlyContinue
+  } else {
+    $env:MERGEPILOT_E2E_DESTRUCTIVE = $previousDestructive
+  }
+
+  if ($startedDaemon -and $startedDaemon.process -and -not $startedDaemon.process.HasExited) {
+    Stop-Process -Id $startedDaemon.process.Id -Force -ErrorAction SilentlyContinue
+  }
+  if ($startedDaemon) {
+    Stop-DaemonPortOwner -OnlyRepoOwned
+  }
+}

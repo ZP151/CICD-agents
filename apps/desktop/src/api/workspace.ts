@@ -1,4 +1,4 @@
-import { RUNTIME_URL } from "./runtime.js";
+import { RUNTIME_URL, messageFromErrorBody } from "./runtime.js";
 
 export interface WorkspaceFilePreview {
   path: string;
@@ -37,12 +37,12 @@ export async function fetchWorkspaceFile(
 function workspaceFilePreviewError(status: number, bodyText: string): WorkspaceFilePreviewError {
   const parsed = parseJsonBody(bodyText);
   const errorText = typeof parsed === "object" && parsed && "error" in parsed
-    ? String((parsed as { error?: unknown }).error)
-    : bodyText;
+    ? messageFromErrorBody("Workspace file preview failed.", JSON.stringify({ error: (parsed as { error?: unknown }).error }))
+    : messageFromErrorBody("Workspace file preview failed.", bodyText);
   if (status === 413) return new WorkspaceFilePreviewError("File is too large to preview.", status, parsed);
   if (status === 415) return new WorkspaceFilePreviewError("Binary file preview is not supported.", status, parsed);
   if (status === 404) return new WorkspaceFilePreviewError("File not found.", status, parsed);
-  return new WorkspaceFilePreviewError(errorText || `Workspace file preview failed with HTTP ${status}.`, status, parsed);
+  return new WorkspaceFilePreviewError(errorText, status, parsed);
 }
 
 function parseJsonBody(bodyText: string): unknown {

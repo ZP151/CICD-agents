@@ -17,7 +17,7 @@ function prInsightArtifactSignalDetails(record: PrInsightArtifactRecord): string
         const id = build.id ? `#${build.id}` : "build";
         const buildNumber = build.buildNumber && build.buildNumber !== String(build.id) ? ` ${build.buildNumber}` : "";
         const definition = build.definitionName ? ` ${build.definitionName}` : "";
-        const result = build.result || build.status || "unknown";
+        const result = build.result || build.status || "Not available";
         return `- ${id}${buildNumber}${definition}: ${result}${build.url ? ` (${build.url})` : ""}`;
       }),
       "",
@@ -68,10 +68,10 @@ export function prInsightArtifactRecordToMarkdown(record: PrInsightArtifactRecor
     `| Pull request | #${record.pullRequestId} |`,
     `| Kind | ${record.kind.replace(/_/g, " ")} |`,
     `| Saved | ${record.at} |`,
-    `| Readiness | ${record.readiness ?? "unknown"} |`,
-    `| Decision queue | ${record.decisionQueue ?? "unknown"} |`,
-    `| Risk | ${record.decisionRiskLevel ?? "unknown"} |`,
-    `| Confidence | ${record.contextConfidence || "unknown"} |`,
+    `| Readiness | ${record.readiness ?? "Not available"} |`,
+    `| Decision queue | ${record.decisionQueue ?? "Not available"} |`,
+    `| Risk | ${record.decisionRiskLevel ?? "Not available"} |`,
+    `| Confidence | ${record.contextConfidence || "Not available"} |`,
   ];
 
   if (record.signals) {

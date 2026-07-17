@@ -76,12 +76,10 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
 
   const readModel = useChatPageReadModel({
     activeProjectLink: activeProjectLinkRuntime.activeProjectLink,
-    activeProjectLinkId: activeProjectLinkRuntime.activeProjectLinkId,
     bubbles: pageState.bubbles,
     busy: pageState.busy,
     input: pageState.input,
     queuedSuggestionLabel: pageState.queuedSuggestion?.label,
-    repoPath: pageState.repoPath,
     statusText: pageState.statusText,
     workflowState: pageState.workflowState,
   });

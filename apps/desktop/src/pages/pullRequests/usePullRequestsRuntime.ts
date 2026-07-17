@@ -20,8 +20,10 @@ import {
   dedupePullRequests,
   matchesProjectLinkBranch,
   mergeInsightArtifacts,
+  prInsightArtifactsCacheKey,
   prCategories,
   prMatchesCategory,
+  projectLinkPullRequestCacheKey,
   projectLinkBranchScope,
 } from "./pullRequestViewModel.js";
 import {
@@ -83,15 +85,35 @@ export function usePullRequestsRuntime() {
     [projectLinks, projectLinkId],
   );
   const branchScope = projectLinkBranchScope(selectedProjectLink);
+  const projectLinksKey = useMemo(
+    () =>
+      projectLinkPullRequestCacheKey(
+        projectLinkId
+          ? projectLinks.filter((item) => item.id === projectLinkId)
+          : projectLinks,
+      ),
+    [projectLinkId, projectLinks],
+  );
+  const insightArtifactsQueryKey = useMemo(
+    () => prInsightArtifactsCacheKey(projectLinkId, projectLinksKey),
+    [projectLinkId, projectLinksKey],
+  );
   const projectLinkForPullRequest = useCallback((pr: DisplayPullRequest) => {
     return pr.sourceProjectLinkId || projectLinkId;
   }, [projectLinkId]);
 
   const pullRequestsQuery = useQuery<PullRequestsQueryData>({
-    queryKey: ["pullRequests", projectLinkId || "all", status, projectLinks.map((item) => item.id).join("|")],
+    queryKey: ["pullRequests", projectLinkId || "all", status, projectLinksKey],
     enabled: Boolean(projectLinkId || projectLinks.length > 0),
     staleTime: 45_000,
     gcTime: 10 * 60_000,
+    placeholderData: (previous, previousQuery) => {
+      const previousKey = previousQuery?.queryKey;
+      if (!Array.isArray(previousKey)) return undefined;
+      return previousKey[1] === (projectLinkId || "all") && previousKey[3] === projectLinksKey
+        ? previous
+        : undefined;
+    },
     retry: false,
     retryOnMount: false,
     queryFn: async () => {
@@ -152,9 +174,16 @@ export function usePullRequestsRuntime() {
   const error = pullRequestsQuery.error instanceof Error ? pullRequestsQuery.error.message : null;
 
   const insightArtifactsQuery = useQuery<PrInsightArtifact[]>({
-    queryKey: ["prInsightArtifacts", projectLinkId || "all"],
+    queryKey: insightArtifactsQueryKey,
     staleTime: 45_000,
     gcTime: 10 * 60_000,
+    placeholderData: (previous, previousQuery) => {
+      const previousKey = previousQuery?.queryKey;
+      if (!Array.isArray(previousKey)) return undefined;
+      return previousKey[1] === (projectLinkId || "all") && previousKey[2] === projectLinksKey
+        ? previous
+        : undefined;
+    },
     queryFn: async () => {
       if (!projectLinkId) return listPrInsightArtifacts();
       const local = listPrInsightArtifacts(projectLinkId);
@@ -168,18 +197,21 @@ export function usePullRequestsRuntime() {
     const mergeArtifact = (current: PrInsightArtifact[] | undefined, fallbackProjectLinkId?: string) => (
       mergeInsightArtifacts([artifact, ...(current ?? listPrInsightArtifacts(fallbackProjectLinkId))])
     );
+    const actionProjectLinkKey = projectLinkPullRequestCacheKey(
+      projectLinks.filter((item) => item.id === actionProjectLinkId),
+    );
     queryClient.setQueryData<PrInsightArtifact[]>(
-      ["prInsightArtifacts", actionProjectLinkId || "all"],
+      prInsightArtifactsCacheKey(actionProjectLinkId, actionProjectLinkKey),
       (current) => mergeArtifact(current, actionProjectLinkId),
     );
     if (!projectLinkId || projectLinkId === actionProjectLinkId) {
       queryClient.setQueryData<PrInsightArtifact[]>(
-        ["prInsightArtifacts", projectLinkId || "all"],
+        insightArtifactsQueryKey,
         (current) => mergeArtifact(current, projectLinkId || undefined),
       );
     }
-    void queryClient.invalidateQueries({ queryKey: ["prInsightArtifacts", actionProjectLinkId || "all"] });
-  }, [projectLinkId, queryClient]);
+    void queryClient.invalidateQueries({ queryKey: ["prInsightArtifacts"] });
+  }, [insightArtifactsQueryKey, projectLinkId, projectLinks, queryClient]);
 
   const categoryCounts = useMemo(() => {
     return prCategories.reduce<Record<PullRequestCategory, number>>((acc, item) => {

@@ -1152,7 +1152,8 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
 
-    await expect(page.getByText(/Ask (MergePilot|MergePilot) anything/)).toBeVisible();
+    await expect(page.getByText("Ask MergePilot anything")).toHaveCount(0);
+    await expect(page.getByPlaceholder(/Ask MergePilot/)).toBeVisible();
     await expect(page.getByTitle("Conversation model")).toContainText("GPT-4o");
     await expectNoVisibleHorizontalOverflow(page);
 
@@ -1172,14 +1173,14 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 836, height: 768 });
     await page.goto("/chat?new=1");
 
-    await expect(page.getByText(/Ask (MergePilot|MergePilot) anything/)).toBeVisible();
-    await expect(page.getByPlaceholder(/Ask (MergePilot|MergePilot)/)).toBeVisible();
+    await expect(page.getByText("Ask MergePilot anything")).toHaveCount(0);
+    await expect(page.getByPlaceholder(/Ask MergePilot/)).toBeVisible();
     await page.getByTitle("Conversation model").click();
     await expect(page.getByText("Model", { exact: true })).toBeVisible();
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("keeps command chips compact and routes structured validation commands", async ({
+  test("keeps empty New Chat free of preloaded command templates", async ({
     page,
   }) => {
     const workflowPayloads: Array<Record<string, unknown>> = [];
@@ -1219,18 +1220,13 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1100, height: 780 });
     await page.goto("/chat?new=1");
 
-    await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Explain this project architecture" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Analyze PR insight for this repo" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Open Pipelines workspace" })).toBeVisible();
-    await expectNoVisibleHorizontalOverflow(page);
-
-    await page.getByRole("button", { name: "Review my changes" }).click();
-    await expect.poll(() => workflowPayloads.length).toBe(1);
-    expect(workflowPayloads[0]).toMatchObject({ action: "inspect_changes" });
-    await expect(page.getByPlaceholder(/Approve or cancel/)).toHaveValue("");
-    await expect(page.getByText("npm test")).toBeVisible();
     await expect(page.getByRole("button", { name: "Review my changes" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Explain this project architecture" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Analyze PR insight for this repo" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Open Pipelines workspace" })).toHaveCount(0);
+    await expect(page.getByText("Ask MergePilot anything")).toHaveCount(0);
+    await expect(page.getByPlaceholder(/Ask MergePilot/)).toBeVisible();
+    await expect.poll(() => workflowPayloads.length).toBe(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
 
@@ -1956,7 +1952,7 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
 
-    await page.getByRole("button", { name: "Analyze PR insight for this repo" }).click();
+    await page.getByRole("button", { name: "PR insight" }).click();
     await expect.poll(() => workflowPayloads.length).toBe(1);
     expect(workflowPayloads[0]).toMatchObject({ action: "inspect_pr_insight" });
     expect(workflowPayloads[0]).not.toHaveProperty("pullRequestId");
@@ -2085,7 +2081,7 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
 
-    await page.getByRole("button", { name: "Open Pipelines workspace" }).click();
+    await page.getByRole("button", { name: "Pipeline" }).click();
     await expect.poll(() => workflowPayloads.length).toBe(1);
     expect(workflowPayloads[0]).toMatchObject({
       action: "inspect_pipeline",
@@ -2206,7 +2202,7 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
 
-    await page.getByRole("button", { name: "Open Pipelines workspace" }).click();
+    await page.getByRole("button", { name: "Pipeline" }).click();
     await expect.poll(() => workflowPayloads.length).toBe(1);
     expect(workflowPayloads[0]).toMatchObject({
       action: "inspect_pipeline",
@@ -3931,9 +3927,12 @@ test.describe("Chat layout", () => {
     ).toBe(true);
     expect(previewRequests.some((request) => request.filePath === "apps/desktop/src/pages/Chat.tsx")).toBe(false);
     await expect(rightPanel.locator('button[aria-pressed="true"]').filter({ hasText: "chatContext.ts" })).toHaveCount(1);
+    await expect(rightPanel.locator('button[aria-pressed="true"]').filter({ hasText: "TS" })).toHaveCount(1);
     await expect(rightPanel.getByRole("button", { name: /Chat\.tsx/ })).toHaveCount(0);
     await expect(rightPanel.getByText("300 lines")).toBeVisible();
     await expect(rightPanel.getByText("line 291")).toBeVisible();
+    await expect(rightPanel.locator(".cm-gutters")).toBeVisible();
+    await expect(rightPanel.locator(".cm-lineNumbers .cm-gutterElement").filter({ hasText: "291" })).toBeVisible();
     await expect(rightPanel.locator(".cm-sourceTargetLine")).toContainText("previewLine291");
     await expectNoVisibleHorizontalOverflow(page);
   });
@@ -4042,7 +4041,7 @@ test.describe("Chat layout", () => {
     await seedSavedPrInsightSourceDraft(page);
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat");
-    await page.locator("select").first().selectOption("");
+    await page.getByLabel("Composer Project Link").selectOption("");
 
     await page.getByRole("button", { name: "Open workspace" }).click();
 

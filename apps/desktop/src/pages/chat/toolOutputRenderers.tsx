@@ -156,7 +156,7 @@ function GitStatusRenderer({ result }: { result: Record<string, unknown> }) {
   return (
     <div className="space-y-1 text-xs">
       <div className="flex items-center gap-2">
-        <span className="text-blue-300 font-mono">{data.branch || "unknown"}</span>
+        <span className="text-blue-300 font-mono">{data.branch || "Branch not available"}</span>
         {data.ahead > 0 && <span className="text-green-400">&uarr;{data.ahead}</span>}
         {data.behind > 0 && <span className="text-yellow-400">&darr;{data.behind}</span>}
       </div>
@@ -281,4 +281,3 @@ function isMachineReadableJsonText(value: string): boolean {
     return false;
   }
 }
-

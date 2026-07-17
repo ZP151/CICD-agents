@@ -87,7 +87,6 @@ function ApprovalStateCard({ status, label }: ApprovalStateCardProps) {
     <div className="my-2 flex items-center gap-2 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2 text-xs text-[rgb(var(--app-text-muted))]">
       <span className={`h-2 w-2 shrink-0 rounded-full ${approvalStatusDotClass(status)}`} />
       <span className="font-medium text-[rgb(var(--app-text-subtle))]">{label}</span>
-      <ApprovalBusyDots />
     </div>
   );
 }
@@ -100,18 +99,4 @@ function approvalRiskClass(level?: string): string {
 
 function approvalStatusDotClass(status: "executing"): string {
   return "bg-blue-500";
-}
-
-function ApprovalBusyDots() {
-  return (
-    <span className="inline-flex items-center gap-0.5 ml-1">
-      {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          className="inline-block h-1.5 w-1.5 rounded-full bg-zinc-400 animate-bounce"
-          style={{ animationDelay: `${i * 0.15}s` }}
-        />
-      ))}
-    </span>
-  );
 }

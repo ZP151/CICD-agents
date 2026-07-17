@@ -1,4 +1,4 @@
-import { RUNTIME_URL } from "./runtime.js";
+import { RUNTIME_URL, messageFromErrorResponse } from "./runtime.js";
 import { readLlmConfig } from "./localSettings.js";
 
 export type PipelineConnectionPurpose = "ci" | "pr-validation" | "release" | "deployment" | "other";
@@ -22,14 +22,14 @@ export async function submitPipeline(payload: Record<string, unknown>): Promise<
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!r.ok) throw new Error(`/tasks/submit-pipeline HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Submit pipeline HTTP ${r.status}`, r));
   return (await r.json()) as { taskId: string };
 }
 
 export async function listPipelineConnections(projectLinkId?: string): Promise<PipelineConnection[]> {
   const query = projectLinkId ? `?projectLinkId=${encodeURIComponent(projectLinkId)}` : "";
   const r = await fetch(`${RUNTIME_URL}/pipeline-connections${query}`);
-  if (!r.ok) throw new Error(`/pipeline-connections HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Pipeline connections HTTP ${r.status}`, r));
   return (await r.json()) as PipelineConnection[];
 }
 
@@ -39,7 +39,7 @@ export async function createPipelineConnection(data: PipelineConnectionInput): P
     headers: { "content-type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!r.ok) throw new Error(`/pipeline-connections HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Create pipeline connection HTTP ${r.status}`, r));
   return (await r.json()) as PipelineConnection;
 }
 
@@ -52,13 +52,13 @@ export async function updatePipelineConnection(
     headers: { "content-type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!r.ok) throw new Error(`/pipeline-connections/${id} HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Update pipeline connection HTTP ${r.status}`, r));
   return (await r.json()) as PipelineConnection;
 }
 
 export async function deletePipelineConnection(id: string): Promise<void> {
   const r = await fetch(`${RUNTIME_URL}/pipeline-connections/${encodeURIComponent(id)}`, { method: "DELETE" });
-  if (!r.ok) throw new Error(`/pipeline-connections/${id} HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Delete pipeline connection HTTP ${r.status}`, r));
 }
 
 export async function analyzePipelineEvidence(data: {
@@ -79,6 +79,6 @@ export async function analyzePipelineEvidence(data: {
       llmConfig: readLlmConfig(),
     }),
   });
-  if (!r.ok) throw new Error(`/pipelines/analyze HTTP ${r.status}: ${await r.text()}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Analyze pipeline HTTP ${r.status}`, r));
   return (await r.json()) as { source: "llm" | "heuristic"; analysis: string; warning?: string };
 }

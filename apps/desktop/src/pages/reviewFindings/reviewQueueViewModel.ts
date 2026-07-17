@@ -16,25 +16,25 @@ export const lanes: Array<{
     key: "auto_approved",
     title: "Auto-approved",
     description: "Low-risk PRs approved by the Review Agent with an audit record.",
-    tone: "text-emerald-400 border-emerald-900/50 bg-emerald-950/10",
+    tone: "text-emerald-800 border-emerald-500/30 bg-emerald-500/10 dark:text-emerald-300",
   },
   {
     key: "needs_human_review",
     title: "Needs human review",
     description: "Warnings, sensitive paths, or approval guardrails that need judgment.",
-    tone: "review-lane-human text-yellow-400 border-yellow-900/50 bg-yellow-950/10",
+    tone: "review-lane-human text-amber-800 border-amber-500/35 bg-amber-500/10 dark:text-amber-300",
   },
   {
     key: "blocked",
     title: "Blocked",
     description: "High-risk findings, failed pipeline checks, or merge conflicts.",
-    tone: "text-red-400 border-red-900/50 bg-red-950/10",
+    tone: "text-red-800 border-red-500/30 bg-red-500/10 dark:text-red-300",
   },
   {
     key: "watching",
     title: "Watching",
     description: "PRs waiting for commits, pipeline results, or approval configuration.",
-    tone: "text-blue-400 border-blue-900/50 bg-blue-950/10",
+    tone: "text-sky-800 border-sky-500/30 bg-sky-500/10 dark:text-sky-300",
   },
 ];
 
@@ -47,20 +47,22 @@ export const activityCategories: Array<{ key: ActivityCategory; label: string }>
 ];
 
 export function formatDate(value: string): string {
-  if (!value) return "Unknown";
-  return new Date(value).toLocaleString();
+  if (!value) return "Not available";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not available";
+  return date.toLocaleString();
 }
 
 export function riskTone(risk: ReviewQueueItem["decisionRiskLevel"]): string {
-  if (risk === "high") return "bg-red-950/30 text-red-400 ring-red-900/60";
-  if (risk === "medium") return "bg-yellow-950/30 text-yellow-400 ring-yellow-900/60";
-  return "bg-emerald-950/30 text-emerald-400 ring-emerald-900/60";
+  if (risk === "high") return "bg-red-500/10 text-red-700 ring-red-500/30 dark:text-red-300";
+  if (risk === "medium") return "bg-amber-500/10 text-amber-800 ring-amber-500/30 dark:text-amber-300";
+  return "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300";
 }
 
 export function severityTone(severity: ReviewFinding["severity"]): string {
-  if (severity === "blocking") return "text-red-400 bg-red-950/30 ring-red-900/60";
-  if (severity === "warning") return "text-yellow-400 bg-yellow-950/30 ring-yellow-900/60";
-  return "text-zinc-400 bg-zinc-800/50 ring-zinc-700/50";
+  if (severity === "blocking") return "text-red-700 bg-red-500/10 ring-red-500/30 dark:text-red-300";
+  if (severity === "warning") return "text-amber-800 bg-amber-500/10 ring-amber-500/30 dark:text-amber-300";
+  return "text-[rgb(var(--app-text-muted))] bg-[rgb(var(--app-surface-raised))] ring-[rgb(var(--app-border))]";
 }
 
 export function categoryLabel(category: ReviewFinding["category"]): string {
@@ -92,6 +94,33 @@ export function operationActivityCategory(event: ReviewOperationEvent): Activity
   if (event.kind === "disposition") return "disposition";
   if (event.kind === "ado_retry") return "ado";
   return "review";
+}
+
+export function projectLinkReviewQueueCacheKey(
+  projectLink: {
+    id?: string;
+    repoPath?: string;
+    defaultBranch?: string;
+    targetBranch?: string;
+    adoOrgUrl?: string;
+    adoProject?: string;
+    adoRepoName?: string;
+    updatedAt?: number;
+  } | null,
+  fallbackProjectLinkId = "",
+): string {
+  const normalize = (value: string | undefined) =>
+    (value ?? "").trim().replace(/^refs\/heads\//, "").toLowerCase();
+  return [
+    projectLink?.id ?? fallbackProjectLinkId,
+    projectLink?.repoPath ?? "",
+    projectLink?.adoOrgUrl ?? "",
+    projectLink?.adoProject ?? "",
+    projectLink?.adoRepoName ?? "",
+    normalize(projectLink?.defaultBranch),
+    normalize(projectLink?.targetBranch),
+    String(projectLink?.updatedAt ?? ""),
+  ].join("\u001f");
 }
 
 export function shortCommit(value: string): string {

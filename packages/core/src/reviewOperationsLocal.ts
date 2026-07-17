@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { parseSortableDate } from "./safeDate.js";
 
 export type ReviewOperationKind =
   | "rerun"
@@ -76,7 +77,7 @@ export function listLocalReviewOperations(args: {
   const repository = args.repository?.trim() ?? "";
   const events = loadStore(args.dataDir)
     .filter((event) => !repository || event.repository === repository)
-    .sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"));
+    .sort((a, b) => parseSortableDate(b.at) - parseSortableDate(a.at));
   if (args.limit && args.limit > 0) return events.slice(0, args.limit);
   return events;
 }

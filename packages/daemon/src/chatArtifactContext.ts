@@ -198,7 +198,7 @@ function prReadinessContextLines(artifacts: PrInsightArtifactRecord[]): string[]
       .map((line) => line.replace(/^[^:]+:\s*/, ""))
       .slice(0, 4);
     return [
-      `- PR #${artifact.pullRequestId}: readiness=${artifact.readiness ?? "unknown"}`,
+      `- PR #${artifact.pullRequestId}: readiness=${artifact.readiness ?? "not available"}`,
       decision ? `; ${decision}` : "",
       `; ${signals}`,
       blockers.length ? `; blockers/risks=${blockers.join(" | ")}` : "",
@@ -217,7 +217,7 @@ function prArtifactStructuredSignalLines(artifact: PrInsightArtifactRecord): str
       const id = build.id ? `#${build.id}` : "build";
       const number = build.buildNumber && build.buildNumber !== String(build.id) ? ` ${build.buildNumber}` : "";
       const definition = build.definitionName ? ` ${truncateStr(build.definitionName, 48)}` : "";
-      const result = build.result || build.status || "unknown";
+      const result = build.result || build.status || "not available";
       return `${id}${number}${definition}: ${result}`;
     }).join("; ")}`);
   }

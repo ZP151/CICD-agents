@@ -4,6 +4,7 @@ import {
   comparePrInsightRefresh,
   type PrInsightActivityItem,
 } from "./prInsightActivity.js";
+import { parseIsoTimestamp } from "./activityPresentation.js";
 
 export function buildPrInsightHistoryMeta(
   prInsightActivity: PrInsightActivityItem[],
@@ -27,7 +28,9 @@ export function buildPrInsightHistoryMeta(
   }
   const meta = new Map<string, { index: number; total: number; latest: boolean }>();
   for (const events of groups.values()) {
-    const sorted = [...events].sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"));
+    const sorted = [...events].sort(
+      (a, b) => parseIsoTimestamp(b.at) - parseIsoTimestamp(a.at),
+    );
     sorted.forEach((event, index) => {
       meta.set(event.id, { index, total: sorted.length, latest: index === 0 });
     });
@@ -57,7 +60,7 @@ export function buildSelectedPrInsightRefreshComparison(
   selectedPrInsight: PrInsightActivityItem | null,
 ) {
   if (!selectedPrInsight) return null;
-  const selectedAt = Date.parse(selectedPrInsight.at || "0");
+  const selectedAt = parseIsoTimestamp(selectedPrInsight.at);
   const selectedProjectLinkId = prInsightArtifactProjectLinkId(selectedPrInsight);
   const previous =
     prInsightActivity
@@ -68,9 +71,9 @@ export function buildSelectedPrInsightRefreshComparison(
           event.repository === selectedPrInsight.repository &&
           event.pullRequestId === selectedPrInsight.pullRequestId &&
           event.kind === selectedPrInsight.kind &&
-          Date.parse(event.at || "0") < selectedAt,
+          parseIsoTimestamp(event.at) < selectedAt,
       )
-      .sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"))[0] ?? null;
+      .sort((a, b) => parseIsoTimestamp(b.at) - parseIsoTimestamp(a.at))[0] ?? null;
   return comparePrInsightRefresh(selectedPrInsight, previous);
 }
 

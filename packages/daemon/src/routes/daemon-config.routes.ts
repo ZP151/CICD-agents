@@ -70,8 +70,8 @@ function configValueFromEnv(): Record<string, unknown> {
     azureApiVersion:          process.env["AZURE_OPENAI_API_VERSION"] ?? "",
     azureEndpoint:            process.env["AZURE_OPENAI_ENDPOINT"] ?? "",
     openaiModel:              process.env["OPENAI_MODEL"] ?? "",
-    secretSource:    userConfig.secretSource ?? KEY_VAULT_SECRET_SOURCE,
-    aoaiKeyInVault:   (userConfig.azureApiKeyRef ?? "").startsWith("kv://"),
+    secretSource:    userConfig.secretSource ?? LOCAL_ENV_SECRET_SOURCE,
+    aoaiKeyInVault:   (userConfig.secretSource === KEY_VAULT_SECRET_SOURCE) && (userConfig.azureApiKeyRef ?? "").startsWith("kv://"),
     azureTenantId:       azureAuthConfig.tenantId ?? "",
     azureClientId:       azureAuthConfig.clientId ?? "",
     azureAuthUsesDefaultTenant: azureAuthConfig.usesDefaultTenant,
@@ -125,7 +125,10 @@ async function persistModelSecretRefs(
   | { ok: true; refs: { openaiApiKeyRef?: string; azureApiKeyRef?: string } }
   | { ok: false; statusCode: number; message: string }
 > {
-  if (cfg.secretSource === LOCAL_ENV_SECRET_SOURCE) {
+  const existing = readMergePilotUserConfig();
+  const effectiveSecretSource =
+    cfg.secretSource ?? existing.secretSource ?? settings.secretSource ?? LOCAL_ENV_SECRET_SOURCE;
+  if (effectiveSecretSource === LOCAL_ENV_SECRET_SOURCE) {
     return { ok: true, refs: {} };
   }
   const storedInKeyVault = await persistAoaiKeyIfPossible(cfg, settings);
@@ -148,7 +151,7 @@ function mergeUserConfig(
   writeMergePilotUserConfig({
     ...existing,
     llmProvider: cfg.llmProvider ?? existing.llmProvider,
-    secretSource: cfg.secretSource ?? existing.secretSource,
+    secretSource: cfg.secretSource ?? existing.secretSource ?? LOCAL_ENV_SECRET_SOURCE,
     openaiModel: cfg.openaiModel ?? existing.openaiModel,
     openaiApiKeyRef: secretRefs.openaiApiKeyRef ?? existing.openaiApiKeyRef,
     azureEndpoint: cfg.azureEndpoint ?? existing.azureEndpoint,

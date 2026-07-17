@@ -1,17 +1,33 @@
 import type { TaskView } from "../../api.js";
 import type { ReviewOperationEvent } from "../../reviewOperations.js";
+import { parseSortableDate } from "../../safeDate.js";
 
 export function statusClass(status: string): string {
-  if (status === "succeeded") return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-  if (status === "failed") return "bg-red-50 text-red-700 ring-red-200";
-  if (status === "running") return "bg-blue-50 text-blue-700 ring-blue-200";
-  if (status === "queued") return "bg-amber-50 text-amber-700 ring-amber-200";
-  return "bg-zinc-100 text-zinc-600 ring-zinc-200";
+  if (status === "succeeded")
+    return "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300";
+  if (status === "failed") return "bg-red-500/10 text-red-700 ring-red-500/30 dark:text-red-300";
+  if (status === "running")
+    return "bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent))] ring-[rgb(var(--app-accent))]/30";
+  if (status === "queued")
+    return "bg-amber-500/10 text-amber-800 ring-amber-500/30 dark:text-amber-300";
+  return "bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))] ring-[rgb(var(--app-border))]";
 }
 
 export function formatTime(ts?: number | null): string {
-  if (!ts) return "";
-  return new Date(ts * 1000).toLocaleString();
+  if (!ts || !Number.isFinite(ts)) return "";
+  const date = new Date(ts * 1000);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString();
+}
+
+export function parseIsoTimestamp(value?: string | null): number {
+  return parseSortableDate(value);
+}
+
+export function formatIsoTime(value?: string | null): string {
+  const timestamp = parseIsoTimestamp(value);
+  if (!timestamp) return "";
+  return formatTime(timestamp / 1000);
 }
 
 export function duration(task: TaskView): string {
@@ -55,6 +71,6 @@ export function reviewOperationKindLabel(kind: ReviewOperationEvent["kind"]): st
 
 export function reviewOperationStatusClass(ok: boolean): string {
   return ok
-    ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-    : "bg-amber-50 text-amber-700 ring-amber-200";
+    ? "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300"
+    : "bg-amber-500/10 text-amber-800 ring-amber-500/30 dark:text-amber-300";
 }

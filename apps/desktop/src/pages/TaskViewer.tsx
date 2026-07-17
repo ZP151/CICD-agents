@@ -32,6 +32,7 @@ export default function TaskViewer(): JSX.Element {
     selectedPrInsight,
     selectedCheckpoint,
     loading,
+    refreshing,
     activeCount,
     error,
     checkpointActivity,
@@ -59,6 +60,7 @@ export default function TaskViewer(): JSX.Element {
     selectCheckpointActivity,
     selectPrInsightActivity,
     selectReviewActivity,
+    clearSelection,
     setPrInsightProjectLinkFilter,
     setPrInsightKindFilter,
     setReviewProjectLinkFilter,
@@ -154,6 +156,7 @@ export default function TaskViewer(): JSX.Element {
         onSelectCheckpoint={selectCheckpointActivity}
         onSelectPrInsight={selectPrInsightActivity}
         onSelectReview={selectReviewActivity}
+        onClearSelection={clearSelection}
         onPrInsightProjectLinkFilterChange={setPrInsightProjectLinkFilter}
         onPrInsightKindFilterChange={setPrInsightKindFilter}
         onReviewProjectLinkFilterChange={setReviewProjectLinkFilter}
@@ -161,11 +164,21 @@ export default function TaskViewer(): JSX.Element {
       />
 
       <section className="min-w-0 flex-1">
+        {refreshing && (
+          <p className="mb-3 text-xs text-[rgb(var(--app-text-subtle))]">
+            Refreshing activity...
+          </p>
+        )}
+
         {!selected && !selectedReview && !selectedPrInsight && !selectedCheckpoint && (
-          <div className="flex h-full items-center justify-center text-center text-sm text-zinc-600">
+          <div className="flex h-full items-center justify-center text-center text-sm text-[rgb(var(--app-text-muted))]">
             <div>
-              <p className="font-medium text-zinc-500">No operation selected</p>
-              <p className="mt-1">Choose a run, checkpoint, PR insight, or review action to inspect what happened.</p>
+              <p className="font-medium text-[rgb(var(--app-text-subtle))]">
+                No operation selected
+              </p>
+              <p className="mt-1">
+                Choose a run, checkpoint, PR insight, or review action to inspect what happened.
+              </p>
             </div>
           </div>
         )}

@@ -5,7 +5,13 @@ import type {
   ProjectLink,
   PullRequestSummary,
 } from "../../api.js";
-import type { PipelineFilterOption, PipelineRow, PipelineStatusFilter, RunTone } from "./pipelineTypes.js";
+import type {
+  PipelineFilterOption,
+  PipelineRow,
+  PipelineStatusFilter,
+  RunTone,
+} from "./pipelineTypes.js";
+import { formatSortableDate, parseSortableDate } from "../../safeDate.js";
 
 export const pipelineFilters: PipelineFilterOption[] = [
   { key: "all", label: "All" },
@@ -17,22 +23,38 @@ export const pipelineFilters: PipelineFilterOption[] = [
 ];
 
 export function formatDate(value: string | undefined): string {
-  if (!value) return "";
-  return new Date(value).toLocaleString();
+  return formatSortableDate(value);
 }
 
 export function runTone(run: PipelineRunSummary | undefined): RunTone {
-  if (!run) return { label: "No recent run", tone: "text-zinc-500 bg-zinc-800/60 ring-zinc-700/50" };
+  if (!run) {
+    return {
+      label: "No recent run",
+      tone: "text-[rgb(var(--app-text-muted))] bg-[rgb(var(--app-surface-raised))] ring-[rgb(var(--app-border))]",
+    };
+  }
   if (run.state && run.state !== "completed") {
-    return { label: run.state, tone: "text-blue-400 bg-blue-950/20 ring-blue-900/50" };
+    return {
+      label: run.state,
+      tone: "text-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent-soft))] ring-[rgb(var(--app-accent))]/25",
+    };
   }
   if (run.result === "succeeded") {
-    return { label: "Succeeded", tone: "text-emerald-400 bg-emerald-950/20 ring-emerald-900/50" };
+    return {
+      label: "Succeeded",
+      tone: "text-emerald-700 bg-emerald-500/10 ring-emerald-500/30 dark:text-emerald-300",
+    };
   }
   if (run.result === "failed" || run.result === "canceled") {
-    return { label: run.result, tone: "text-red-400 bg-red-950/30 ring-red-900/60" };
+    return {
+      label: run.result,
+      tone: "text-red-700 bg-red-500/10 ring-red-500/30 dark:text-red-300",
+    };
   }
-  return { label: run.result || run.state || "Run recorded", tone: "text-zinc-400 bg-zinc-800/60 ring-zinc-700/50" };
+  return {
+    label: run.result || run.state || "Run recorded",
+    tone: "text-[rgb(var(--app-text-muted))] bg-[rgb(var(--app-surface-raised))] ring-[rgb(var(--app-border))]",
+  };
 }
 
 export function rowMatchesFilter(row: PipelineRow, filter: PipelineStatusFilter): boolean {
@@ -40,9 +62,44 @@ export function rowMatchesFilter(row: PipelineRow, filter: PipelineStatusFilter)
   if (filter === "saved") return row.source === "saved";
   if (filter === "discovered") return row.source === "discovered";
   if (!row.latestRun) return false;
-  if (filter === "running") return Boolean(row.latestRun.state && row.latestRun.state !== "completed");
-  if (filter === "failed") return row.latestRun.result === "failed" || row.latestRun.result === "canceled";
+  if (filter === "running")
+    return Boolean(row.latestRun.state && row.latestRun.state !== "completed");
+  if (filter === "failed")
+    return row.latestRun.result === "failed" || row.latestRun.result === "canceled";
   return row.latestRun.result === "succeeded";
+}
+
+export function pipelineProjectLinksCacheKey(
+  projectLinks: Array<{
+    id: string;
+    repoPath?: string;
+    defaultBranch?: string;
+    targetBranch?: string;
+    adoOrgUrl?: string;
+    adoProject?: string;
+    adoRepoName?: string;
+    adoPipelineId?: string;
+    adoPipelineName?: string;
+    updatedAt?: number;
+  }>,
+): string {
+  const normalizeBranch = (value: string | undefined) =>
+    (value ?? "").trim().replace(/^refs\/heads\//, "").toLowerCase();
+  return projectLinks
+    .map((projectLink) => [
+      projectLink.id,
+      projectLink.repoPath ?? "",
+      projectLink.adoOrgUrl ?? "",
+      projectLink.adoProject ?? "",
+      projectLink.adoRepoName ?? "",
+      projectLink.adoPipelineId ?? "",
+      projectLink.adoPipelineName ?? "",
+      normalizeBranch(projectLink.defaultBranch),
+      normalizeBranch(projectLink.targetBranch),
+      String(projectLink.updatedAt ?? ""),
+    ].join("\u001f"))
+    .sort((a, b) => a.localeCompare(b))
+    .join("\u001e");
 }
 
 export function buildPipelineRows(
@@ -54,8 +111,12 @@ export function buildPipelineRows(
   const rows: PipelineRow[] = [];
   for (const projectLink of projectLinks) {
     const prs = relatedPrs[projectLink.id] ?? [];
-    const runs = prs.map((pr) => pr.pipelineRun).filter((run): run is PipelineRunSummary => Boolean(run));
-    const savedConnections = connections.filter((connection) => connection.projectLinkId === projectLink.id);
+    const runs = prs
+      .map((pr) => pr.pipelineRun)
+      .filter((run): run is PipelineRunSummary => Boolean(run));
+    const savedConnections = connections.filter(
+      (connection) => connection.projectLinkId === projectLink.id,
+    );
     for (const connection of savedConnections) {
       const latestRun = latestRunForPipeline(runs, connection.pipelineId);
       rows.push({
@@ -97,30 +158,39 @@ export function buildPipelineRows(
       });
     }
   }
-  return rows.sort((a, b) =>
-    a.project.localeCompare(b.project) ||
-    a.repository.localeCompare(b.repository) ||
-    Number(b.source === "saved") - Number(a.source === "saved") ||
-    a.pipelineName.localeCompare(b.pipelineName)
+  return rows.sort(
+    (a, b) =>
+      a.project.localeCompare(b.project) ||
+      a.repository.localeCompare(b.repository) ||
+      Number(b.source === "saved") - Number(a.source === "saved") ||
+      a.pipelineName.localeCompare(b.pipelineName),
   );
 }
 
 export function countPipelineRows(rows: PipelineRow[]): Record<PipelineStatusFilter, number> {
-  return pipelineFilters.reduce<Record<PipelineStatusFilter, number>>((acc, item) => {
-    acc[item.key] = rows.filter((row) => rowMatchesFilter(row, item.key)).length;
-    return acc;
-  }, { all: 0, failed: 0, running: 0, succeeded: 0, saved: 0, discovered: 0 });
+  return pipelineFilters.reduce<Record<PipelineStatusFilter, number>>(
+    (acc, item) => {
+      acc[item.key] = rows.filter((row) => rowMatchesFilter(row, item.key)).length;
+      return acc;
+    },
+    { all: 0, failed: 0, running: 0, succeeded: 0, saved: 0, discovered: 0 },
+  );
 }
 
 function compareRunsNewestFirst(a: PipelineRunSummary, b: PipelineRunSummary): number {
-  const left = Date.parse(b.finishedDate || b.createdDate || "0");
-  const right = Date.parse(a.finishedDate || a.createdDate || "0");
+  const left = parseSortableDate(b.finishedDate || b.createdDate);
+  const right = parseSortableDate(a.finishedDate || a.createdDate);
   return left - right;
 }
 
-function latestRunForPipeline(runs: PipelineRunSummary[], pipelineId: string): PipelineRunSummary | undefined {
-  const filtered = runs.filter((run) =>
-    run.url.includes(`definitionId=${pipelineId}`) || run.url.includes(`pipelineId=${pipelineId}`)
+function latestRunForPipeline(
+  runs: PipelineRunSummary[],
+  pipelineId: string,
+): PipelineRunSummary | undefined {
+  const filtered = runs.filter(
+    (run) =>
+      run.url.includes(`definitionId=${pipelineId}`) ||
+      run.url.includes(`pipelineId=${pipelineId}`),
   );
   return [...filtered].sort(compareRunsNewestFirst)[0];
 }

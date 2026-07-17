@@ -15,7 +15,7 @@ export function ProjectLinkFilter({
 }: ProjectLinkFilterProps): JSX.Element {
   return (
     <select
-      className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 outline-none focus:border-blue-400"
+      className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))] outline-none focus:border-[rgb(var(--app-accent))]"
       value={value}
       onChange={(e) => onChange(e.target.value)}
       aria-label={label}

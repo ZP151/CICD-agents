@@ -20,6 +20,7 @@ $fixtureRepo = Join-Path $env:TEMP ("mergepilot-packaged-sidecar-repo-" + [guid]
 
 New-Item -ItemType Directory -Path $dataDir, $fixtureRepo | Out-Null
 git -C $fixtureRepo init -b main | Out-Null
+git -C $fixtureRepo config core.autocrlf false
 git -C $fixtureRepo config user.email mergepilot-e2e@example.local
 git -C $fixtureRepo config user.name "MergePilot E2E"
 Set-Content -LiteralPath (Join-Path $fixtureRepo "README.md") -Value "# Packaged sidecar fixture`n" -Encoding UTF8
@@ -29,8 +30,7 @@ git -C $fixtureRepo commit -m "Initial commit" | Out-Null
 
 $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
 $startInfo.FileName = $SidecarPath
-$startInfo.ArgumentList.Add("--port")
-$startInfo.ArgumentList.Add([string]$Port)
+$startInfo.Arguments = "--port $Port"
 $startInfo.WorkingDirectory = Split-Path $SidecarPath -Parent
 $startInfo.UseShellExecute = $false
 $startInfo.CreateNoWindow = $true
@@ -66,12 +66,14 @@ try {
   $workflow = Invoke-RestMethod -Uri "$baseUrl/chat/workflow-action" -Method Post -ContentType "application/json" -Body (@{
       action = "inspect_environment"
       repoPath = $fixtureRepo
+      sessionId = $null
       projectLink = $null
     } | ConvertTo-Json -Depth 8) -TimeoutSec 30
 
   $chat = Invoke-WebRequest -UseBasicParsing -Uri "$baseUrl/chat" -Method Post -ContentType "application/json" -Body (@{
       message = "Briefly say what this repository contains. Do not modify anything."
       repoPath = $fixtureRepo
+      sessionId = $null
       projectLink = $null
     } | ConvertTo-Json -Depth 8) -TimeoutSec 90
 
@@ -94,8 +96,10 @@ try {
   } | ConvertTo-Json -Depth 12
 } finally {
   if ($process -and -not $process.HasExited) {
-    $process.Kill($true)
-    $process.WaitForExit(5000) | Out-Null
+    try {
+      $process.Kill()
+      $process.WaitForExit(5000) | Out-Null
+    } catch {}
   }
   Remove-Item -LiteralPath $fixtureRepo -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $dataDir -Recurse -Force -ErrorAction SilentlyContinue

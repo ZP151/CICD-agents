@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   categoryLabel,
+  formatDate,
   operationActivityCategory,
   operationKindLabel,
+  projectLinkReviewQueueCacheKey,
   riskTone,
   severityTone,
   shortCommit,
@@ -39,14 +41,40 @@ describe("reviewQueueViewModel", () => {
 
   it("maps risk and severity to semantic tones", () => {
     expect(riskTone("high")).toContain("red");
-    expect(riskTone("medium")).toContain("yellow");
+    expect(riskTone("medium")).toContain("amber");
     expect(riskTone("low")).toContain("emerald");
     expect(severityTone("blocking")).toContain("red");
-    expect(severityTone("warning")).toContain("yellow");
+    expect(severityTone("warning")).toContain("amber");
   });
 
   it("formats short commits with fallback", () => {
     expect(shortCommit("abcdef1234567890")).toBe("abcdef123456");
     expect(shortCommit("   ")).toBe("commit unavailable");
+  });
+
+  it("does not surface invalid date strings", () => {
+    expect(formatDate("")).toBe("Not available");
+    expect(formatDate("not-a-date")).toBe("Not available");
+  });
+
+  it("keys Review Queue cache by Project Link mapping fields", () => {
+    const base = {
+      id: "pl-1",
+      repoPath: "C:\\repo",
+      adoOrgUrl: "https://tebssg.visualstudio.com/",
+      adoProject: "TeBS-ClaimBot",
+      adoRepoName: "ClaimBot_API",
+      defaultBranch: "feature/a",
+      targetBranch: "main",
+      updatedAt: 1,
+    };
+
+    expect(projectLinkReviewQueueCacheKey(base)).not.toBe(
+      projectLinkReviewQueueCacheKey({ ...base, defaultBranch: "feature/b" }),
+    );
+    expect(projectLinkReviewQueueCacheKey(base)).not.toBe(
+      projectLinkReviewQueueCacheKey({ ...base, adoRepoName: "OtherRepo" }),
+    );
+    expect(projectLinkReviewQueueCacheKey(null, "pl-1")).toContain("pl-1");
   });
 });

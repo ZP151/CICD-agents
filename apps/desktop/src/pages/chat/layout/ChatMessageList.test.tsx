@@ -10,8 +10,6 @@ function renderMessages(
     availableProjectLinks?: ProjectLink[];
     projectLinksLoading?: boolean;
     activeProjectLinkId?: string | null;
-    welcomeSuggestions?: string[];
-    welcomeSuggestionsReady?: boolean;
   } = {},
 ): string {
   return renderToStaticMarkup(
@@ -25,14 +23,10 @@ function renderMessages(
       projectLinksLoading={options.projectLinksLoading ?? false}
       activeProjectLinkId={options.activeProjectLinkId ?? null}
       selectedArtifactId={null}
-      welcomeSuggestions={options.welcomeSuggestions ?? []}
-      welcomeSuggestionsReady={options.welcomeSuggestionsReady ?? true}
       createProjectLink={async () => {
         throw new Error("unused");
       }}
       selectProjectLink={() => undefined}
-      queuePrompt={() => undefined}
-      runWorkspaceAction={() => undefined}
       toggleTool={() => undefined}
       confirmPendingAction={() => undefined}
       cancelPendingAction={() => undefined}
@@ -91,7 +85,24 @@ describe("ChatMessageList", () => {
     expect(html).not.toContain("Approval required");
   });
 
-  it("holds welcome suggestions until project index status is resolved", () => {
+  it("keeps legacy confirmation cards action-only without duplicated plan text", () => {
+    const html = renderMessages([
+      {
+        id: "confirm-legacy",
+        kind: "confirm",
+        plan: "This detailed explanation is already rendered in the assistant response.",
+        confirmed: null,
+        riskLevel: "medium",
+      },
+    ]);
+
+    expect(html).toContain("Approval required");
+    expect(html).toContain("Yes, run this action");
+    expect(html).toContain("No, don&#x27;t run it");
+    expect(html).not.toContain("This detailed explanation is already rendered");
+  });
+
+  it("does not render welcome templates for an active Project Link empty chat", () => {
     const html = renderMessages([], {
       activeProjectLinkId: "pl-1",
       availableProjectLinks: [{
@@ -116,13 +127,12 @@ describe("ChatMessageList", () => {
         createdAt: 1,
         updatedAt: 1,
       }],
-      welcomeSuggestions: ["Review my changes"],
-      welcomeSuggestionsReady: false,
     });
 
-    expect(html).toContain("Ask MergePilot anything");
+    expect(html).toContain("Empty conversation");
+    expect(html).not.toContain("Ask MergePilot anything");
     expect(html).not.toContain("Review my changes");
-    expect(html).toContain("animate-pulse");
+    expect(html).not.toContain("animate-pulse");
   });
 
   it("does not flash Project Link setup while links are still loading", () => {
@@ -130,11 +140,11 @@ describe("ChatMessageList", () => {
       availableProjectLinks: [],
       projectLinksLoading: true,
       activeProjectLinkId: null,
-      welcomeSuggestionsReady: false,
     });
 
-    expect(html).toContain("Ask MergePilot anything");
-    expect(html).toContain("animate-pulse");
+    expect(html).toContain("Loading project links");
+    expect(html).not.toContain("Ask MergePilot anything");
+    expect(html).not.toContain("animate-pulse");
     expect(html).not.toContain("Create a Project Link");
   });
 });

@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chatStream, confirmAction, runChatWorkflowAction, type ChatEventPayload } from "./api.js";
+import * as api from "./api.js";
+import {
+  chatStream,
+  confirmAction,
+  refreshChatIndexStatus,
+  runChatWorkflowAction,
+  type ChatEventPayload,
+} from "./api.js";
 
 function sse(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -238,6 +245,49 @@ describe("chatStream", () => {
       },
     });
     streamControllerRef.current?.close();
+  });
+});
+
+describe("chat index API surface", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("does not expose the removed preloading index-status fetch helper", () => {
+    expect(api).not.toHaveProperty("fetchChatIndexStatus");
+    expect(api).toHaveProperty("refreshChatIndexStatus");
+  });
+
+  it("keeps index refresh as an explicit user-driven API", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      status: {
+        repoPath: "C:\\repo",
+        indexed: true,
+        semanticReady: true,
+        retrievalMode: "semantic-index",
+        stats: {
+          filesIndexed: 1,
+          chunksIndexed: 2,
+          chunksEmbedded: 2,
+          chunksPendingEmbedding: 0,
+        },
+        summary: "Ready",
+      },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await refreshChatIndexStatus("C:\\repo");
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const calls = fetchMock.mock.calls as unknown as Array<[RequestInfo | URL, RequestInit?]>;
+    expect(String(calls[0]?.[0])).toContain("/chat/index-refresh");
+    expect(firstRequestBody(fetchMock)).toMatchObject({ repoPath: "C:\\repo" });
+    expect(result.status.semanticReady).toBe(true);
   });
 });
 

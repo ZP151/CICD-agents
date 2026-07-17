@@ -62,7 +62,7 @@ export function summarizeRepo(files: string[], indexed: number, seen: number): s
     .slice(0, 6)
     .map(([ext, count]) => `${ext}:${count}`)
     .join(", ");
-  return `Files seen in quick scan: ${seen}; files indexed synchronously this turn: ${indexed}; file types: ${top || "unknown"}.`;
+  return `Files seen in quick scan: ${seen}; files indexed synchronously this turn: ${indexed}; file types: ${top || "not available"}.`;
 }
 
 export function projectLinkToIndexerProjectTemplate(

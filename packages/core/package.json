@@ -1,6 +1,6 @@
 {
   "name": "@mergepilot/core",
-  "version": "0.5.21",
+  "version": "0.5.22",
   "description": "MergePilot core planner, tool, repository context, and Azure DevOps runtime.",
   "private": true,
   "author": "ZP151 <zhouping151140@gmail.com>",

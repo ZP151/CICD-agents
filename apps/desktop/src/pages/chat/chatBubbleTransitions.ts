@@ -20,7 +20,7 @@ export function addErrorBubbleOnceTransition(
   message: string,
   makeId: IdFactory,
 ): Bubble[] {
-  const text = message || "Unknown error";
+  const text = message || "Something went wrong.";
   const last = prev[prev.length - 1];
   if (last?.kind === "error" && last.text === text) return prev;
   return [...prev, { id: makeId(), kind: "error", text }];

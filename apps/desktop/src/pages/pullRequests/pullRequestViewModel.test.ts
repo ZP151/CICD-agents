@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   dedupePullRequests,
+  formatDate,
   matchesProjectLinkBranch,
   mergeInsightArtifacts,
+  previewOperationDetails,
+  prInsightArtifactsCacheKey,
+  projectLinkPullRequestCacheKey,
   prMatchesCategory,
   readiness,
+  reviewRunOperationDetails,
 } from "./pullRequestViewModel.js";
+import type { PullRequestInsightPreview, ReviewRunResult } from "../../api.js";
 import type { DisplayPullRequest } from "./pullRequestTypes.js";
 
 function pr(overrides: Partial<DisplayPullRequest> = {}): DisplayPullRequest {
@@ -31,6 +37,51 @@ function pr(overrides: Partial<DisplayPullRequest> = {}): DisplayPullRequest {
 }
 
 describe("pullRequestViewModel", () => {
+  it("does not surface invalid date strings", () => {
+    expect(formatDate("")).toBe("");
+    expect(formatDate("not-a-date")).toBe("");
+  });
+
+  it("uses explicit unavailable wording for missing preview operation fields", () => {
+    const details = previewOperationDetails({
+      source: "heuristic",
+      summary: "No model response.",
+      risks: [],
+      signals: {
+        fileCount: 2,
+        threadCount: 0,
+        failedBuildCount: 0,
+        workItemCount: 0,
+      },
+      tokensIn: 12,
+      tokensOut: 8,
+    } satisfies PullRequestInsightPreview);
+
+    expect(details).toContain("readiness=not available");
+    expect(details).not.toContain("unknown");
+  });
+
+  it("uses explicit unavailable wording for missing review-run confidence", () => {
+    const details = reviewRunOperationDetails({
+      ok: true,
+      pullRequestId: 2670,
+      repository: "ClaimBot_API",
+      iterationId: 4,
+      findingCount: 0,
+      decisionQueue: "watching",
+      decisionRiskLevel: "low",
+      decisionReason: "No action required.",
+      lastRunAt: "2026-07-16T00:00:00.000Z",
+      autoApprovalActor: "Review Agent",
+      tokensIn: 24,
+      tokensOut: 10,
+      summary: "Ready.",
+    } satisfies ReviewRunResult);
+
+    expect(details).toContain("confidence=not available");
+    expect(details).not.toContain("unknown");
+  });
+
   it("deduplicates pull requests by Project Link, repository, and id", () => {
     expect(dedupePullRequests([
       pr({ id: 1, repository: "repo", sourceProjectLinkId: "a", title: "first" }),
@@ -50,6 +101,56 @@ describe("pullRequestViewModel", () => {
     expect(matchesProjectLinkBranch(pr({ sourceBranch: "refs/heads/feature/a" }), { defaultBranch: "feature/a" })).toBe(true);
     expect(matchesProjectLinkBranch(pr({ sourceBranch: "feature/b" }), { defaultBranch: "feature/a" })).toBe(false);
     expect(matchesProjectLinkBranch(pr({ sourceBranch: "feature/b" }), { defaultBranch: "main" })).toBe(true);
+  });
+
+  it("keys pull request cache by Project Link mapping fields, not only id", () => {
+    const base = {
+      id: "pl-1",
+      repoPath: "C:\\repo",
+      adoOrgUrl: "https://tebssg.visualstudio.com/",
+      adoProject: "TeBS-ClaimBot",
+      adoRepoName: "ClaimBot_API",
+      defaultBranch: "feature/a",
+      targetBranch: "main",
+      updatedAt: 1,
+    };
+
+    expect(projectLinkPullRequestCacheKey([base])).not.toBe(
+      projectLinkPullRequestCacheKey([{ ...base, defaultBranch: "feature/b" }]),
+    );
+    expect(projectLinkPullRequestCacheKey([base])).not.toBe(
+      projectLinkPullRequestCacheKey([{ ...base, adoRepoName: "OtherRepo" }]),
+    );
+    expect(projectLinkPullRequestCacheKey([base, { ...base, id: "pl-2" }])).toBe(
+      projectLinkPullRequestCacheKey([{ ...base, id: "pl-2" }, base]),
+    );
+  });
+
+  it("keys PR insight artifacts by the same Project Link mapping scope", () => {
+    const base = {
+      id: "pl-1",
+      repoPath: "C:\\repo",
+      adoOrgUrl: "https://tebssg.visualstudio.com/",
+      adoProject: "TeBS-ClaimBot",
+      adoRepoName: "ClaimBot_API",
+      defaultBranch: "feature/a",
+      targetBranch: "main",
+      updatedAt: 1,
+    };
+    const originalScope = projectLinkPullRequestCacheKey([base]);
+    const changedRepoScope = projectLinkPullRequestCacheKey([
+      { ...base, adoRepoName: "OtherRepo" },
+    ]);
+    const changedBranchScope = projectLinkPullRequestCacheKey([
+      { ...base, defaultBranch: "feature/b" },
+    ]);
+
+    expect(prInsightArtifactsCacheKey(base.id, originalScope)).not.toEqual(
+      prInsightArtifactsCacheKey(base.id, changedRepoScope),
+    );
+    expect(prInsightArtifactsCacheKey(base.id, originalScope)).not.toEqual(
+      prInsightArtifactsCacheKey(base.id, changedBranchScope),
+    );
   });
 
   it("maps readiness from draft, rejected, approved, and waiting votes", () => {

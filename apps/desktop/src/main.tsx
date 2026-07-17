@@ -12,7 +12,17 @@ import "./styles/settings.css";
 import "./styles/chat-workspace.css";
 import "./styles/conversation-markdown.css";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      gcTime: 10 * 60_000,
+      refetchOnReconnect: "always",
+      refetchOnWindowFocus: false,
+      retry: false,
+      staleTime: 30_000,
+    },
+  },
+});
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

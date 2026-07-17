@@ -53,6 +53,12 @@ const InlineProjectLinkSchema = InlineProjectLinkObjectSchema.nullable()
   .optional()
   .transform((value) => value ?? undefined);
 
+const OptionalSessionIdSchema = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((value) => value ?? undefined);
+
 const ChatImageAttachmentSchema = z
   .object({
     name: z.string().min(1).max(160),
@@ -96,7 +102,7 @@ const ChatStartSchema = z
   .object({
     message: z.string().default(""),
     repoPath: z.string().default(process.cwd()),
-    sessionId: z.string().optional(),
+    sessionId: OptionalSessionIdSchema,
     projectLinkId: z.string().optional(),
     llmConfig: LlmConfigSchema,
     projectLink: InlineProjectLinkSchema,

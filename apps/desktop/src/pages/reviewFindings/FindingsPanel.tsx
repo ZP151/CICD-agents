@@ -23,18 +23,18 @@ export function FindingsPanel({ item, findings, onClose }: FindingsPanelProps): 
         className="absolute inset-0 bg-black/50"
         onClick={onClose}
       />
-      <aside className="relative z-10 flex h-full w-full max-w-xl flex-col border-l border-zinc-800 bg-zinc-950 shadow-2xl">
-        <div className="flex items-start justify-between gap-3 border-b border-zinc-800 p-4">
+      <aside className="relative z-10 flex h-full w-full max-w-xl flex-col border-l border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-[rgb(var(--app-border))] p-4">
           <div className="min-w-0">
-            <p className="font-mono text-xs text-blue-400">#{item.pullRequestId}</p>
-            <h3 className="mt-1 truncate text-sm font-semibold text-zinc-100">
+            <p className="font-mono text-xs text-[rgb(var(--app-accent))]">#{item.pullRequestId}</p>
+            <h3 className="mt-1 truncate text-sm font-semibold text-[rgb(var(--app-text))]">
               Review Findings ({findings.length})
             </h3>
-            <p className="mt-0.5 truncate text-xs text-zinc-500">{item.decisionReason}</p>
+            <p className="mt-0.5 truncate text-xs text-[rgb(var(--app-text-muted))]">{item.decisionReason}</p>
           </div>
           <button
             onClick={onClose}
-            className="shrink-0 rounded-md border border-zinc-800 px-2 py-1 text-xs text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300"
+            className="shrink-0 rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
           >
             Close
           </button>
@@ -45,8 +45,8 @@ export function FindingsPanel({ item, findings, onClose }: FindingsPanelProps): 
           {findings.length === 0 ? (
             <div className="flex h-full items-center justify-center">
               <div className="text-center">
-                <p className="text-sm font-medium text-zinc-400">No findings stored</p>
-                <p className="mt-1 text-xs text-zinc-600">
+                <p className="text-sm font-medium text-[rgb(var(--app-text))]">No findings stored</p>
+                <p className="mt-1 text-xs text-[rgb(var(--app-text-muted))]">
                   Run a new review from the Pull Requests page to capture findings.
                 </p>
               </div>
@@ -56,21 +56,21 @@ export function FindingsPanel({ item, findings, onClose }: FindingsPanelProps): 
               {findings.map((finding, index) => (
                 <li
                   key={index}
-                  className="rounded-lg border border-zinc-800/70 bg-zinc-900/40 p-3"
+                  className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3"
                 >
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ${severityTone(finding.severity)}`}>
                       {finding.severity}
                     </span>
-                    <span className="rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                    <span className="rounded-full bg-[rgb(var(--app-surface))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
                       {categoryLabel(finding.category)}
                     </span>
                   </div>
-                  <p className="mt-2 truncate font-mono text-xs text-zinc-500">
+                  <p className="mt-2 truncate font-mono text-xs text-[rgb(var(--app-text-muted))]">
                     {finding.file}
-                    {finding.line > 0 && <span className="text-zinc-600">:{finding.line}</span>}
+                    {finding.line > 0 && <span className="text-[rgb(var(--app-text-subtle))]">:{finding.line}</span>}
                   </p>
-                  <p className="mt-1.5 text-sm leading-relaxed text-zinc-300">{finding.message}</p>
+                  <p className="mt-1.5 text-sm leading-relaxed text-[rgb(var(--app-text))]">{finding.message}</p>
                 </li>
               ))}
             </ul>
@@ -85,25 +85,25 @@ type AuditViewModel = ReturnType<typeof buildReviewAuditViewModel>;
 
 function DispositionAuditSection({ audit }: { audit: AuditViewModel }): JSX.Element {
   return (
-    <section className="mb-4 rounded-lg border border-zinc-800/70 bg-zinc-900/40 p-3">
+    <section className="mb-4 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="text-xs font-medium text-zinc-300">Disposition audit</p>
-          <p className="mt-1 text-xs text-zinc-600">{audit.dispositionSummary}</p>
+          <p className="text-xs font-medium text-[rgb(var(--app-text))]">Disposition audit</p>
+          <p className="mt-1 text-xs text-[rgb(var(--app-text-muted))]">{audit.dispositionSummary}</p>
         </div>
         {audit.dispositionAt && (
-          <span className="text-xs text-zinc-600">{formatDate(audit.dispositionAt)}</span>
+          <span className="text-xs text-[rgb(var(--app-text-subtle))]">{formatDate(audit.dispositionAt)}</span>
         )}
       </div>
       {audit.dispositionEvents.length > 0 && (
         <ol className="mt-3 space-y-2">
           {audit.dispositionEvents.map((event, index) => (
-            <li key={`${event.at}-${event.label}-${index}`} className="rounded-md bg-zinc-950/60 p-2">
+            <li key={`${event.at}-${event.label}-${index}`} className="rounded-md bg-[rgb(var(--app-surface))] p-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs text-zinc-300">{event.label}</span>
-                <span className="text-[11px] text-zinc-600">{event.at ? formatDate(event.at) : "Unknown time"}</span>
+                <span className="text-xs text-[rgb(var(--app-text))]">{event.label}</span>
+                <span className="text-[11px] text-[rgb(var(--app-text-subtle))]">{event.at ? formatDate(event.at) : "Time not available"}</span>
               </div>
-              <p className="mt-1 text-xs text-zinc-500">
+              <p className="mt-1 text-xs text-[rgb(var(--app-text-muted))]">
                 {event.actor}
                 {event.note ? ` · ${event.note}` : ""}
               </p>
@@ -121,21 +121,21 @@ function WriteBackSummary({ audit }: { audit: AuditViewModel }): JSX.Element {
   const summary = audit.writeBackSummary;
   if (!summary) return <></>;
   return (
-    <div className="mt-3 rounded-md border border-zinc-800 bg-zinc-950/50 p-2 text-xs">
-      <p className={summary.ok ? "text-emerald-400/80" : "text-yellow-400/80"}>
+    <div className="mt-3 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2 text-xs">
+      <p className={summary.ok ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-300"}>
         ADO write-back {summary.statusLabel}
         {summary.at ? ` · ${formatDate(summary.at)}` : ""}
         {summary.threadId ? ` · thread ${summary.threadId}` : ""}
       </p>
       {summary.error && (
-        <p className="mt-1 text-yellow-500/80">{summary.error}</p>
+        <p className="mt-1 text-amber-800 dark:text-amber-300">{summary.error}</p>
       )}
       {summary.url && (
         <a
           href={summary.url}
           target="_blank"
           rel="noreferrer"
-          className="mt-1 inline-flex text-blue-400/80 underline-offset-2 hover:text-blue-300 hover:underline"
+          className="mt-1 inline-flex text-[rgb(var(--app-accent))] underline-offset-2 hover:underline"
         >
           Open Azure DevOps thread
         </a>
@@ -147,28 +147,28 @@ function WriteBackSummary({ audit }: { audit: AuditViewModel }): JSX.Element {
 function WriteBackAttempts({ audit }: { audit: AuditViewModel }): JSX.Element {
   return (
     <div className="mt-3">
-      <p className="text-xs font-medium text-zinc-400">Write-back attempts</p>
+      <p className="text-xs font-medium text-[rgb(var(--app-text-muted))]">Write-back attempts</p>
       <ol className="mt-2 space-y-2">
         {audit.writeBackAttempts.map((event, index) => (
-          <li key={`${event.at}-${event.dispositionLabel}-${index}`} className="rounded-md bg-zinc-950/60 p-2 text-xs">
+          <li key={`${event.at}-${event.dispositionLabel}-${index}`} className="rounded-md bg-[rgb(var(--app-surface))] p-2 text-xs">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className={event.ok ? "text-emerald-400/80" : "text-yellow-400/80"}>
+              <span className={event.ok ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-300"}>
                 {event.statusLabel} · {event.dispositionLabel}
               </span>
-              <span className="text-[11px] text-zinc-600">{event.at ? formatDate(event.at) : "Unknown time"}</span>
+              <span className="text-[11px] text-[rgb(var(--app-text-subtle))]">{event.at ? formatDate(event.at) : "Time not available"}</span>
             </div>
-            <p className="mt-1 text-zinc-500">
+            <p className="mt-1 text-[rgb(var(--app-text-muted))]">
               {event.actor}
               {event.threadId ? ` · thread ${event.threadId}` : ""}
             </p>
-            {event.note && <p className="mt-1 text-zinc-600">{event.note}</p>}
-            {event.error && <p className="mt-1 text-yellow-500/80">{event.error}</p>}
+            {event.note && <p className="mt-1 text-[rgb(var(--app-text-subtle))]">{event.note}</p>}
+            {event.error && <p className="mt-1 text-amber-800 dark:text-amber-300">{event.error}</p>}
             {event.url && (
               <a
                 href={event.url}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-1 inline-flex text-blue-400/80 underline-offset-2 hover:text-blue-300 hover:underline"
+                className="mt-1 inline-flex text-[rgb(var(--app-accent))] underline-offset-2 hover:underline"
               >
                 Open attempt thread
               </a>

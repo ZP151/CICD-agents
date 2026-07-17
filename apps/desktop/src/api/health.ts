@@ -1,4 +1,4 @@
-import { RUNTIME_URL } from "./runtime.js";
+import { RUNTIME_URL, messageFromErrorResponse } from "./runtime.js";
 
 export interface HealthStatus {
   ok: boolean;
@@ -19,6 +19,6 @@ export interface HealthStatus {
 
 export async function fetchHealth(): Promise<HealthStatus> {
   const r = await fetch(`${RUNTIME_URL}/healthz`);
-  if (!r.ok) throw new Error(`/healthz HTTP ${r.status}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Daemon health HTTP ${r.status}`, r));
   return r.json() as Promise<HealthStatus>;
 }

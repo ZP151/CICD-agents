@@ -1,11 +1,10 @@
 import { getSettings } from "../settings.js";
-import type { AccountInfo } from "@azure/msal-node";
+import { DefaultAzureCredential } from "@azure/identity";
 import { selectMsalAccount } from "./azureAuthAccountSelection.js";
 import { browserCompletionTemplate, openBrowser } from "./azureAuthBrowser.js";
 import { getAzureCredential } from "./azureAuthCredential.js";
 import {
   AZURE_DEVOPS_SCOPES,
-  CLOUD_RESOURCE_SCOPES,
   IDENTITY_SCOPE,
   desktopClientId,
 } from "./azureAuthConfig.js";
@@ -130,66 +129,7 @@ export async function getCachedAzureAccounts(): Promise<AzureCachedAccount[]> {
 export async function loginWithCachedAccount(homeAccountId: string): Promise<AzureUser | null> {
   const user = await trySilentMsalLogin(homeAccountId);
   if (!user) return null;
-  try {
-    await trySilentCloudResourceConsent(homeAccountId);
-  } catch {
-    // Cloud resource consent can be requested during an interactive login.
-  }
-  try {
-    await getAzureDevOpsToken({ homeAccountId });
-  } catch {
-    // The caller can trigger interactive ADO consent explicitly when needed.
-  }
   return setCachedUser(user);
-}
-
-async function trySilentCloudResourceConsent(homeAccountId?: string): Promise<boolean> {
-  return withMsalCacheAccess(async () => {
-    const client = await createMsalClient();
-    const accounts = await client.getTokenCache().getAllAccounts();
-    const account = selectMsalAccount(accounts, homeAccountId, getCachedUser());
-    if (!account) return false;
-    for (const scope of CLOUD_RESOURCE_SCOPES) {
-      const result = await client.acquireTokenSilent({
-        scopes: [scope],
-        account,
-      });
-      if (!result?.accessToken) return false;
-    }
-    return true;
-  });
-}
-
-async function ensureInteractiveCloudResourceConsent(opts: {
-  account?: AccountInfo;
-  browser: BrowserLoginChoice;
-  loginHint?: string;
-}): Promise<void> {
-  try {
-    await trySilentCloudResourceConsent(opts.account?.homeAccountId);
-    return;
-  } catch {
-    // Consent may not exist yet; request it below.
-  }
-  const client = await createMsalClient();
-  for (const scope of CLOUD_RESOURCE_SCOPES) {
-    await client.acquireTokenInteractive({
-      scopes: [scope],
-      account: opts.account,
-      loginHint: opts.loginHint ?? opts.account?.username,
-      openBrowser: (url) => openBrowser(url, opts.browser),
-      successTemplate: browserCompletionTemplate({
-        title: "Cloud resource access is enabled",
-        message:
-          "MergePilot can now access configured Azure resources. Return to the app to continue.",
-      }),
-      errorTemplate: browserCompletionTemplate({
-        title: "Cloud resource consent did not complete",
-        message: "Return to the app and sign in again to enable Azure resource access.",
-        tone: "error",
-      }),
-    });
-  }
 }
 
 export async function getAzureDevOpsToken(
@@ -271,6 +211,18 @@ export async function getAzureDevOpsToken(
     }
   }
 
+  if (clientId) {
+    const fallbackCredential = new DefaultAzureCredential();
+    for (const scope of AZURE_DEVOPS_SCOPES) {
+      try {
+        const token = await fallbackCredential.getToken(scope);
+        if (token?.token) return token.token;
+      } catch {
+        // Normalize below after all non-interactive credential sources are exhausted.
+      }
+    }
+  }
+
   throw new AzureAuthenticationRequiredError(
     "Azure DevOps OAuth token is unavailable for the signed-in account. Sign in again with the account that has Azure DevOps access, then retry Azure DevOps consent.",
   );
@@ -312,17 +264,6 @@ export async function loginWithBrowser(
     username: result.account?.username,
     avatarDataUrl: await fetchGraphAvatar(result.accessToken),
   })!;
-  await ensureInteractiveCloudResourceConsent({
-    account: result.account ?? undefined,
-    browser,
-    loginHint: opts.loginHint,
-  });
-  await getAzureDevOpsToken({
-    interactive: true,
-    browser,
-    loginHint: opts.loginHint ?? result.account?.username,
-    homeAccountId: result.account?.homeAccountId,
-  });
   return user;
 }
 

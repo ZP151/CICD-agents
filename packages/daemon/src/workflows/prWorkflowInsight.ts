@@ -15,7 +15,9 @@ export function buildWorkflowPrInsight(args: {
   workItems: Awaited<ReturnType<typeof listAzurePullRequestWorkItems>>;
   policies: Awaited<ReturnType<typeof listAzurePullRequestPolicyEvaluations>>;
 }) {
-  const failedBuilds = args.builds.filter((build) => /failed|canceled/i.test(build.result));
+  const failedBuilds = args.builds.filter((build) =>
+    /failed|canceled/i.test(`${build.result} ${build.status}`),
+  );
   const activeThreads = args.threads.filter(
     (thread) => thread.comments.length > 0 && String(thread.status) !== "2",
   );
@@ -122,7 +124,7 @@ function formatBuildReadinessSignal(
   const buildNumber =
     build.buildNumber && build.buildNumber !== String(build.id) ? ` ${build.buildNumber}` : "";
   const definition = build.definitionName ? ` ${compactInlineText(build.definitionName, 48)}` : "";
-  const result = build.result || build.status || "unknown";
+  const result = build.result || build.status || "not available";
   return `${id}${buildNumber}${definition}: ${result}`;
 }
 

@@ -23,7 +23,7 @@ export function ExecutionCommandRow({
   renderOutput?: (item: ExecutionTimelineItem) => ReactNode;
   renderApproval?: (item: ExecutionTimelineItem) => ReactNode;
 }): JSX.Element {
-  const toolName = item.toolName ?? "unknown";
+  const toolName = item.toolName ?? "tool";
   const pending = isRunningState(item.state);
   const liveOutput = item.liveOutput?.trim() ?? "";
   const command = commandPreviewForItem(item);

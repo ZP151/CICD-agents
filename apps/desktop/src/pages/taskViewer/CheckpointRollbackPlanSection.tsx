@@ -12,15 +12,19 @@ export function CheckpointRollbackPlanSection({
   onOpenRollbackPlanInChat,
 }: CheckpointRollbackPlanSectionProps): JSX.Element {
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-3">
+    <section className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">
           Rollback Plan
         </h3>
-        {rollbackLoading && <span className="text-[11px] text-zinc-600">Loading</span>}
+        {rollbackLoading && (
+          <span className="text-[11px] text-[rgb(var(--app-text-muted))]">Loading</span>
+        )}
       </div>
       {!rollbackLoading && !rollbackPlan && (
-        <p className="text-sm text-zinc-600">No rollback plan available for this checkpoint.</p>
+        <p className="text-sm text-[rgb(var(--app-text-muted))]">
+          No rollback plan available for this checkpoint.
+        </p>
       )}
       {rollbackPlan && (
         <div className="space-y-3">
@@ -28,46 +32,57 @@ export function CheckpointRollbackPlanSection({
             <span
               className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${
                 rollbackPlan.supported
-                  ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                  : "bg-amber-50 text-amber-700 ring-amber-200"
+                  ? "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300"
+                  : "bg-amber-500/10 text-amber-800 ring-amber-500/30 dark:text-amber-300"
               }`}
             >
               {rollbackPlan.supported ? "proposal ready" : "planning only"}
             </span>
-            <span className="font-mono text-xs text-zinc-600">{rollbackPlan.mode}</span>
+            <span className="font-mono text-xs text-[rgb(var(--app-text-muted))]">
+              {rollbackPlan.mode}
+            </span>
           </div>
-          <p className="text-sm text-zinc-800">{rollbackPlan.reason}</p>
+          <p className="text-sm text-[rgb(var(--app-text))]">{rollbackPlan.reason}</p>
           {rollbackPlan.proposal && (
-            <div className="rounded-md border border-zinc-200 bg-zinc-50 p-2">
+            <div className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-2">
               <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="text-xs text-zinc-600">Confirmed Action Proposal</p>
+                <p className="text-xs text-[rgb(var(--app-text-muted))]">
+                  Confirmed Action Proposal
+                </p>
                 <button
                   onClick={onOpenRollbackPlanInChat}
-                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-100"
+                  className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))]"
                 >
                   Open in Chat for approval
                 </button>
               </div>
-              <p className="text-sm text-zinc-800">{rollbackPlan.proposal.description}</p>
-              <pre className="mt-2 overflow-auto text-xs text-zinc-500">
-                {JSON.stringify(
-                  {
-                    tool: rollbackPlan.proposal.tool,
-                    args: rollbackPlan.proposal.args,
-                  },
-                  null,
-                  2,
-                )}
-              </pre>
+              <p className="text-sm text-[rgb(var(--app-text))]">
+                {rollbackPlan.proposal.description}
+              </p>
+              <details className="mt-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2">
+                <summary className="cursor-pointer text-xs font-medium text-[rgb(var(--app-text-muted))]">
+                  Raw proposal
+                </summary>
+                <pre className="mt-2 max-h-48 overflow-auto text-xs text-[rgb(var(--app-text-subtle))]">
+                  {JSON.stringify(
+                    {
+                      tool: rollbackPlan.proposal.tool,
+                      args: rollbackPlan.proposal.args,
+                    },
+                    null,
+                    2,
+                  )}
+                </pre>
+              </details>
             </div>
           )}
           {rollbackPlan.requiredCapability && (
-            <p className="font-mono text-xs text-zinc-500">
+            <p className="font-mono text-xs text-[rgb(var(--app-text-subtle))]">
               Required capability: {rollbackPlan.requiredCapability}
             </p>
           )}
           {rollbackPlan.currentTrackedPaths.length > 0 && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-[rgb(var(--app-text-subtle))]">
               Tracked paths to restore: {rollbackPlan.currentTrackedPaths.slice(0, 8).join(", ")}
               {rollbackPlan.currentTrackedPaths.length > 8
                 ? `, +${rollbackPlan.currentTrackedPaths.length - 8} more`
@@ -77,7 +92,7 @@ export function CheckpointRollbackPlanSection({
           {rollbackPlan.warnings.length > 0 && (
             <div className="space-y-1">
               {rollbackPlan.warnings.map((warning) => (
-                <p key={warning} className="text-xs text-amber-700">
+                <p key={warning} className="text-xs text-amber-800 dark:text-amber-300">
                   {warning}
                 </p>
               ))}

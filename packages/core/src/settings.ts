@@ -16,7 +16,7 @@ const SettingsSchema = z.object({
   openAiApiKey: z.string().default(""),
   openAiModel: z.string().default(""),
   openAiEmbeddingModel: z.string().default("text-embedding-3-small"),
-  secretSource: z.enum(["key_vault", "local_env"]).default("key_vault"),
+  secretSource: z.enum(["key_vault", "local_env"]).default("local_env"),
   azureDevOpsOrg: z.string().default(""),
   azureDevOpsProject: z.string().default(""),
   runtimeHost: z.string().default("127.0.0.1"),

@@ -23,22 +23,28 @@ export function PipelineRowCard({
 }: PipelineRowCardProps): JSX.Element {
   const tone = runTone(row.latestRun);
   const dateLabel = formatDate(row.latestRun?.finishedDate || row.latestRun?.createdDate);
-  const inspectedRuns = state.phase === "done" || state.phase === "analyzing" || state.phase === "analysis_done"
-    ? state.runs
-    : [];
+  const inspectedRuns =
+    state.phase === "done" ||
+    state.phase === "analyzing" ||
+    state.phase === "analysis_done" ||
+    state.phase === "analysis_error"
+      ? state.runs
+      : [];
 
   return (
     <article className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
-            <span className="font-mono text-xs text-blue-400">
+            <span className="font-mono text-xs text-[rgb(var(--app-accent))]">
               #{row.pipelineId}
             </span>
             <span className="rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
               {row.source === "saved" ? "saved" : "discovered"}
             </span>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${tone.tone}`}>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${tone.tone}`}
+            >
               {tone.label}
             </span>
             <span className="rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
@@ -52,11 +58,7 @@ export function PipelineRowCard({
             {row.project || "No project"} / {row.repository || "No repository"}
           </p>
         </div>
-        {dateLabel && (
-          <p className="text-xs text-[rgb(var(--app-text-subtle))]">
-            {dateLabel}
-          </p>
-        )}
+        {dateLabel && <p className="text-xs text-[rgb(var(--app-text-subtle))]">{dateLabel}</p>}
       </div>
 
       <div className="mt-3 grid gap-2 text-xs text-[rgb(var(--app-text-muted))] sm:grid-cols-2 2xl:grid-cols-4">
@@ -74,9 +76,18 @@ export function PipelineRowCard({
               {inspectedRuns.slice(0, 5).map((run) => {
                 const inspectedTone = runTone(run);
                 return (
-                  <div key={run.id} className="grid gap-2 p-2 text-xs sm:grid-cols-[minmax(0,1fr)_auto]">
-                    <span className="min-w-0 truncate text-[rgb(var(--app-text-muted))]">{run.name || `Run ${run.id}`}</span>
-                    <span className={inspectedTone.tone.split(" ")[0]}>{inspectedTone.label}</span>
+                  <div
+                    key={run.id}
+                    className="grid gap-2 p-2 text-xs sm:grid-cols-[minmax(0,1fr)_auto]"
+                  >
+                    <span className="min-w-0 truncate text-[rgb(var(--app-text-muted))]">
+                      {run.name || `Run ${run.id}`}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${inspectedTone.tone}`}
+                    >
+                      {inspectedTone.label}
+                    </span>
                   </div>
                 );
               })}
@@ -85,14 +96,26 @@ export function PipelineRowCard({
         </div>
       )}
 
-      {(state.phase === "analyzing" || state.phase === "analysis_done") && (
+      {(state.phase === "analyzing" ||
+        state.phase === "analysis_done" ||
+        state.phase === "analysis_error") && (
         <div className="mt-3 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-[10px] font-semibold uppercase text-[rgb(var(--app-text-muted))]">
               AI analysis
             </p>
-            <span className="rounded-full border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
-              {state.phase === "analyzing" ? "Analyzing" : "Ready"}
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                state.phase === "analysis_error"
+                  ? "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+                  : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))]"
+              }`}
+            >
+              {state.phase === "analyzing"
+                ? "Analyzing"
+                : state.phase === "analysis_error"
+                  ? "Error"
+                  : "Ready"}
             </span>
           </div>
           <div className="max-h-36 overflow-hidden text-xs">
@@ -115,7 +138,7 @@ export function PipelineRowCard({
       )}
 
       {state.phase === "error" && (
-        <div className="mt-3 rounded-md border border-red-900/40 bg-red-950/20 p-3 text-xs text-red-300">
+        <div className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-300">
           {state.message}
         </div>
       )}
@@ -131,7 +154,11 @@ export function PipelineRowCard({
             Save connection
           </button>
         )}
-        {(state.phase === "done" || state.phase === "analyzing" || state.phase === "analysis_done" || state.phase === "error") && (
+        {(state.phase === "done" ||
+          state.phase === "analyzing" ||
+          state.phase === "analysis_done" ||
+          state.phase === "analysis_error" ||
+          state.phase === "error") && (
           <button
             type="button"
             onClick={() => onOpenDetails(row)}
@@ -152,7 +179,7 @@ export function PipelineRowCard({
           type="button"
           disabled={state.phase === "loading" || state.phase === "analyzing"}
           onClick={() => onAnalyze(row)}
-          className="rounded-md border border-purple-500/40 px-2.5 py-1.5 text-xs text-purple-700 transition hover:bg-purple-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-purple-300"
+          className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-accent))]/35 hover:bg-[rgb(var(--app-accent-soft))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-50"
         >
           AI analyze
         </button>
@@ -160,7 +187,7 @@ export function PipelineRowCard({
           type="button"
           disabled={state.phase === "loading" || state.phase === "analyzing"}
           onClick={() => onTrigger(row)}
-          className="rounded-md border border-blue-500/40 px-2.5 py-1.5 text-xs text-blue-700 transition hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-300"
+          className="rounded-md border border-[rgb(var(--app-accent))]/35 px-2.5 py-1.5 text-xs text-[rgb(var(--app-accent))] transition hover:bg-[rgb(var(--app-accent-soft))] disabled:cursor-not-allowed disabled:opacity-50"
         >
           Trigger pipeline
         </button>
@@ -187,7 +214,7 @@ function LatestRunLink({ row }: { row: PipelineRow }): JSX.Element {
           href={row.latestRun.url}
           target="_blank"
           rel="noreferrer"
-          className="mt-1 block truncate text-blue-700 hover:text-blue-600 dark:text-blue-300"
+          className="mt-1 block truncate text-[rgb(var(--app-accent))] hover:underline"
         >
           {row.latestRun.name || `Run ${row.latestRun.id}`}
         </a>

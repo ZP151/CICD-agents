@@ -1,4 +1,5 @@
 import type { PullRequestInsightPreview, ReviewRunResult } from "./api.js";
+import { parseSortableDate } from "./safeDate.js";
 
 export const PR_INSIGHT_ARTIFACTS_LS_KEY = "mergepilot_pr_insight_artifacts_v1";
 const MAX_PR_INSIGHT_ARTIFACTS = 100;
@@ -72,7 +73,7 @@ export function listPrInsightArtifacts(projectLinkId?: string): PrInsightArtifac
   const targetProjectLinkId = projectLinkId?.trim() ?? "";
   return loadStore()
     .filter((artifact) => !targetProjectLinkId || prInsightArtifactProjectLinkId(artifact) === targetProjectLinkId)
-    .sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"));
+    .sort((a, b) => parseSortableDate(b.at) - parseSortableDate(a.at));
 }
 
 export function latestPrInsightArtifact(args: {
@@ -218,14 +219,14 @@ export function prInsightArtifactFreshness(
     return {
       state: "unknown",
       reasons: ["missing_baseline"],
-      label: "freshness unknown: no saved PR baseline",
+      label: "freshness not available: no saved PR baseline",
     };
   }
   if (!current?.iterationId && !current?.sourceCommit) {
     return {
       state: "unknown",
       reasons: [],
-      label: "freshness unknown: current PR baseline unavailable",
+      label: "freshness not available: current PR baseline unavailable",
     };
   }
 

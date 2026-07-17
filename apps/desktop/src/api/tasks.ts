@@ -1,4 +1,4 @@
-import { RUNTIME_URL } from "./runtime.js";
+import { RUNTIME_URL, messageFromErrorResponse } from "./runtime.js";
 
 export interface TaskView {
   id: string;
@@ -15,13 +15,13 @@ export interface TaskView {
 
 export async function fetchTasks(): Promise<TaskView[]> {
   const r = await fetch(`${RUNTIME_URL}/tasks`);
-  if (!r.ok) throw new Error(`/tasks HTTP ${r.status}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Activity runs HTTP ${r.status}`, r));
   return (await r.json()) as TaskView[];
 }
 
 export async function fetchTask(taskId: string): Promise<TaskView> {
   const r = await fetch(`${RUNTIME_URL}/tasks/${taskId}`);
-  if (!r.ok) throw new Error(`/tasks/${taskId} HTTP ${r.status}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Activity run HTTP ${r.status}`, r));
   return (await r.json()) as TaskView;
 }
 

@@ -58,7 +58,7 @@ describe("ArtifactWorkspace", () => {
     expect(html).toContain("2 artifacts available in chat");
   });
 
-  it("renders selected markdown artifact content and actions", () => {
+  it("renders selected artifact shell with lazy content fallback", () => {
     const html = renderToStaticMarkup(
       <ArtifactWorkspaceShell
         artifact={markdownArtifact}
@@ -70,6 +70,17 @@ describe("ArtifactWorkspace", () => {
 
     expect(html).toContain("PR insight");
     expect(html).toContain("artifact-1");
+    expect(html).toContain("Loading result preview");
+  });
+
+  it("renders selected markdown artifact content and actions", () => {
+    const html = renderToStaticMarkup(
+      <ArtifactWorkspaceContent
+        artifact={markdownArtifact}
+        lookupState={null}
+      />,
+    );
+
     expect(html).toContain("Markdown report");
     expect(html).toContain("Copy content");
     expect(html).toContain("Download");

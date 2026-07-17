@@ -102,7 +102,7 @@ export function decideReviewOutcome(args: {
       riskLevel,
       autoApprove: false,
       contextConfidence: contextQuality.confidence,
-      reason: `Target branch ${args.targetBranch || "(unknown)"} is outside auto-approval policy.`,
+      reason: `Target branch ${args.targetBranch || "not available"} is outside auto-approval policy.`,
       reasonCodes: ["target_branch.not_allowed", ...contextQuality.reasonCodes],
     });
   }

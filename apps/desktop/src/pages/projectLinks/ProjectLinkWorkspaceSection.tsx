@@ -1,3 +1,4 @@
+import { useId } from "react";
 import type { ProjectLinkInput } from "../../api.js";
 import { BranchSelect, Field } from "./ProjectLinkFormControls.js";
 
@@ -20,6 +21,8 @@ export function ProjectLinkWorkspaceSection({
   repoInputClass,
   onReloadBranches,
 }: ProjectLinkWorkspaceSectionProps): JSX.Element {
+  const repoPathId = useId();
+
   return (
     <section className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
       <div>
@@ -33,7 +36,9 @@ export function ProjectLinkWorkspaceSection({
       />
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-zinc-400">Repo path</span>
+          <label htmlFor={repoPathId} className="text-xs font-medium text-zinc-400">
+            Repo path
+          </label>
           {form.repoPath && (
             <button
               type="button"
@@ -68,6 +73,7 @@ export function ProjectLinkWorkspaceSection({
           )}
         </div>
         <input
+          id={repoPathId}
           value={form.repoPath}
           onChange={(event) => set("repoPath")(event.target.value)}
           placeholder="C:\\projects\\my-app"

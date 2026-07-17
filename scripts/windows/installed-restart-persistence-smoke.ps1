@@ -3,6 +3,7 @@ param(
   [string]$InstalledDaemonPath = "C:\Program Files\MergePilot\mergepilot-daemon.exe",
   [string]$ExpectedVersion = "",
   [switch]$SkipAssistantCompletion,
+  [switch]$SkipNullSessionProbe,
   [int]$ChatTimeoutSec = 120
 )
 
@@ -18,10 +19,12 @@ $runId = "mp-installed-persist-" + (Get-Date -Format "yyyyMMdd-HHmmss")
 $tempRepo = Join-Path $env:TEMP $runId
 $projectLinkId = $null
 $sessionId = $null
+$daemonAutoStarted = $false
 $cleanup = [ordered]@{
   chatDeleted = $null
   projectLinkDeleted = $null
   tempRepoDeleted = $null
+  daemonStopped = $null
 }
 
 function Invoke-Json {
@@ -58,10 +61,10 @@ function Wait-Health {
 }
 
 function Get-ListeningDaemonProcess {
-  $connection = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop |
+  $connection = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
     Select-Object -First 1
   if (-not $connection) {
-    throw "No process is listening on port $Port."
+    return $null
   }
   $process = Get-Process -Id $connection.OwningProcess -ErrorAction Stop
   $path = [string]$process.Path
@@ -75,15 +78,66 @@ function Get-ListeningDaemonProcess {
   }
 }
 
-function Restart-InstalledDaemon {
-  $processInfo = Get-ListeningDaemonProcess
-  Stop-Process -Id $processInfo.Id -Force
-  Start-Sleep -Seconds 1
-  Start-Process -FilePath $InstalledDaemonPath -ArgumentList "--port", "$Port" -WindowStyle Hidden | Out-Null
+function Start-InstalledDaemon {
+  $process = Start-Process -FilePath $InstalledDaemonPath -ArgumentList "--port", "$Port" -WindowStyle Hidden -PassThru
   $health = Wait-Health 30
   return [pscustomobject]@{
-    process = $processInfo
+    process = [pscustomobject]@{
+      Id = $process.Id
+      Path = [string]$process.Path
+      StartTime = $process.StartTime
+    }
     health = $health
+  }
+}
+
+function Ensure-InstalledDaemon {
+  $processInfo = Get-ListeningDaemonProcess
+  if ($processInfo) {
+    return [pscustomobject]@{
+      autoStarted = $false
+      process = $processInfo
+      health = Wait-Health 10
+    }
+  }
+
+  $started = Start-InstalledDaemon
+  return [pscustomobject]@{
+    autoStarted = $true
+    process = $started.process
+    health = $started.health
+  }
+}
+
+function Restart-InstalledDaemon {
+  $processInfo = Get-ListeningDaemonProcess
+  if (-not $processInfo) {
+    throw "No installed daemon process is listening on port $Port."
+  }
+  Stop-Process -Id $processInfo.Id -Force
+  Start-Sleep -Seconds 1
+  $started = Start-InstalledDaemon
+  return [pscustomobject]@{
+    process = $processInfo
+    startedProcess = $started.process
+    health = $started.health
+  }
+}
+
+function Stop-OwnedInstalledDaemon {
+  if (-not $daemonAutoStarted) {
+    return $null
+  }
+
+  try {
+    $processInfo = Get-ListeningDaemonProcess
+    if (-not $processInfo) {
+      return $true
+    }
+    Stop-Process -Id $processInfo.Id -Force -ErrorAction Stop
+    return $true
+  } catch {
+    return "error: $($_.Exception.Message)"
   }
 }
 
@@ -141,7 +195,9 @@ try {
   Set-Content -LiteralPath (Join-Path $tempRepo "README.md") -Value "# $runId`nInstalled restart persistence smoke." -Encoding UTF8
   & git -C $tempRepo init -b main | Out-Null
 
-  $healthBefore = Wait-Health 10
+  $daemonState = Ensure-InstalledDaemon
+  $daemonAutoStarted = [bool]$daemonState.autoStarted
+  $healthBefore = $daemonState.health
   if ($healthBefore.version -ne $ExpectedVersion) {
     throw "Daemon version mismatch before restart. Expected $ExpectedVersion; got $($healthBefore.version)."
   }
@@ -173,14 +229,35 @@ try {
   $assistantAfterRestart = $null
   $chatTerminalDone = $null
   $chatHttpStatus = $null
+  $workflowHttpStatus = $null
+  $workflowPhase = $null
   $expectedCompletion = "persistence-ok-$runId"
   if (-not $SkipAssistantCompletion) {
-    $chatPayload = @{
+    if (-not $SkipNullSessionProbe) {
+      $workflow = Invoke-Json POST "/chat/workflow-action" @{
+        action = "inspect_environment"
+        repoPath = $tempRepo
+        sessionId = $null
+        projectLinkId = $projectLinkId
+        projectLink = $projectLink
+      }
+      $workflowHttpStatus = 200
+      $workflowPhase = [string]$workflow.workflowState.workflowPhase
+      if ($workflowPhase -ne "inspect_environment") {
+        throw "Null-session workflow action returned unexpected phase '$workflowPhase'."
+      }
+    }
+
+    $chatRequest = @{
       message = "Reply exactly: $expectedCompletion. Do not run tools."
       repoPath = $tempRepo
       projectLinkId = $projectLinkId
       projectLink = $projectLink
-    } | ConvertTo-Json -Depth 20
+    }
+    if (-not $SkipNullSessionProbe) {
+      $chatRequest.sessionId = $null
+    }
+    $chatPayload = $chatRequest | ConvertTo-Json -Depth 20
 
     $chatResponse = Invoke-WebRequest -UseBasicParsing -Method POST -Uri "$baseUrl/chat" -Body $chatPayload -ContentType "application/json" -TimeoutSec $ChatTimeoutSec
     $chatHttpStatus = [int]$chatResponse.StatusCode
@@ -249,6 +326,7 @@ try {
       $cleanup.tempRepoDeleted = "error: $($_.Exception.Message)"
     }
   }
+  $cleanup.daemonStopped = Stop-OwnedInstalledDaemon
 
   [pscustomobject]@{
     ok = $true
@@ -258,6 +336,7 @@ try {
     projectLinkId = $projectLinkId
     sessionId = $sessionId
     expectedCompletion = if ($SkipAssistantCompletion) { $null } else { $expectedCompletion }
+    nullSessionProbeEnabled = -not [bool]$SkipNullSessionProbe
     healthBefore = [pscustomobject]@{
       version = $healthBefore.version
       envSource = $healthBefore.envSource
@@ -275,9 +354,13 @@ try {
       cloudSessions = $healthAfter.cloudSessions
     }
     restartedProcess = $restart.process
+    startedProcessAfterRestart = $restart.startedProcess
+    daemonAutoStarted = $daemonAutoStarted
     projectLinkBeforeRestart = $projectLinkBeforeRestart
     projectLinkAfterRestart = $projectLinkAfterRestart
     chatHttpStatus = $chatHttpStatus
+    workflowHttpStatus = $workflowHttpStatus
+    workflowPhase = $workflowPhase
     chatTerminalDone = $chatTerminalDone
     chatBeforeRestartHasSession = $chatBeforeRestartHasSession
     chatAfterRestartHasSession = $chatAfterRestartHasSession
@@ -303,5 +386,8 @@ try {
     } catch {
       $cleanup.tempRepoDeleted = "error: $($_.Exception.Message)"
     }
+  }
+  if ($null -eq $cleanup.daemonStopped) {
+    $cleanup.daemonStopped = Stop-OwnedInstalledDaemon
   }
 }

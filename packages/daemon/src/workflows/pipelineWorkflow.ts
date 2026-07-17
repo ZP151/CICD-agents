@@ -1,4 +1,5 @@
 import {
+  adoAuthDiagnosticFromError,
   getAzureBuildLogExcerpt,
   getAzureBuildTimeline,
   getAzureDevOpsAuth,
@@ -27,12 +28,13 @@ export async function runAdoPipelineWorkflowAction(
 ) {
   const { action, repoPath } = payload;
   const projectLink = adoPipelineProjectLinkFromWorkflowPayload(payload);
-  const auth = await getAzureDevOpsAuth(projectLink.adoPat);
   const pipelineId = pipelineIdFromWorkflowPayload(payload, projectLink);
 
   if (!pipelineId) {
-    return await pipelineSetupRequiredResult(chatSessions, payload, projectLink, auth);
+    return await pipelineSetupRequiredResult(chatSessions, payload, projectLink);
   }
+
+  const auth = await getAzureDevOpsAuth(projectLink.adoPat);
 
   if (action === "trigger_pipeline") {
     const branch = String(payload.branch ?? projectLink.defaultBranch ?? "").trim();
@@ -153,16 +155,24 @@ async function pipelineSetupRequiredResult(
   chatSessions: ChatSessionManager,
   payload: ChatWorkflowActionPayload,
   projectLink: WorkflowProjectLink,
-  auth: Awaited<ReturnType<typeof getAzureDevOpsAuth>>,
 ) {
-  const definitions = await listAzureBuildDefinitions({
-    organization: projectLink.adoOrgUrl,
-    project: projectLink.adoProject,
-    repositoryId: projectLink.adoRepoName || undefined,
-    repositoryType: projectLink.adoRepoName ? "TfsGit" : undefined,
-    auth,
-    top: 20,
-  });
+  let definitions: Awaited<ReturnType<typeof listAzureBuildDefinitions>> = [];
+  let discoveryError = "";
+
+  try {
+    const auth = await getAzureDevOpsAuth(projectLink.adoPat);
+    definitions = await listAzureBuildDefinitions({
+      organization: projectLink.adoOrgUrl,
+      project: projectLink.adoProject,
+      repositoryId: projectLink.adoRepoName || undefined,
+      repositoryType: projectLink.adoRepoName ? "TfsGit" : undefined,
+      auth,
+      top: 20,
+    });
+  } catch (err) {
+    discoveryError = adoAuthDiagnosticFromError(err, projectLink.adoPat ? "pat" : "oauth").message;
+  }
+
   const visibleDefinitions = definitions.slice(0, 10);
   const lines = [
     "No Azure Pipeline is configured on this Project Link yet.",
@@ -170,7 +180,13 @@ async function pipelineSetupRequiredResult(
       ? "I did not trigger a pipeline. Select a pipeline first, then rerun the action."
       : "Select a pipeline for this Project Link before inspecting or running CI.",
   ];
-  if (visibleDefinitions.length > 0) {
+  if (discoveryError) {
+    lines.push(
+      "",
+      "Pipeline candidates could not be discovered yet.",
+      discoveryError,
+    );
+  } else if (visibleDefinitions.length > 0) {
     lines.push(
       "",
       "Available pipeline candidates:",
@@ -198,6 +214,7 @@ async function pipelineSetupRequiredResult(
         repository: projectLink.adoRepoName,
         candidates: visibleDefinitions,
         count: definitions.length,
+        discoveryError,
       }),
     ],
   });

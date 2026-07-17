@@ -1,4 +1,4 @@
-import { RUNTIME_URL } from "./runtime.js";
+import { RUNTIME_URL, messageFromErrorResponse } from "./runtime.js";
 
 export interface DaemonConfigPayload {
   llmProvider?: "azure" | "openai";
@@ -94,8 +94,7 @@ export async function configureDaemon(
     body: JSON.stringify(cfg),
   });
   if (!r.ok) {
-    const body = await r.json().catch(() => null) as { message?: string } | null;
-    throw new Error(body?.message ?? `/daemon/configure HTTP ${r.status}: ${await r.text()}`);
+    throw new Error(await messageFromErrorResponse(`Save settings HTTP ${r.status}`, r));
   }
   return (await r.json()) as { ok: boolean; llmConfigured: boolean; cloudProjectLinkStore?: boolean; cloudSecrets?: boolean; cloudSessions?: boolean };
 }
@@ -108,9 +107,12 @@ export async function testLlmConfig(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ llmConfig }),
   });
-  const body = await r.json().catch(() => ({})) as { ok?: boolean; message?: string; error?: unknown };
+  const body = await r.clone().json().catch(() => ({})) as { ok?: boolean; message?: string; error?: unknown };
   if (!r.ok || !body.ok) {
-    throw new Error(body.message ?? `/daemon/test-llm HTTP ${r.status}`);
+    throw new Error(
+      body.message ??
+        (body.error ? String(body.error) : await messageFromErrorResponse(`Test model HTTP ${r.status}`, r)),
+    );
   }
   return { ok: true, message: body.message ?? "Connection verified." };
 }

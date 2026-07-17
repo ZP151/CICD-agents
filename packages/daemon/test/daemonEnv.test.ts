@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   ensureMergePilotUserConfigFile,
+  ensureMergePilotLocalEnvFile,
   envSourceLabel,
   loadDaemonEnv,
   readMergePilotUserConfig,
@@ -56,11 +57,11 @@ describe("daemonEnv", () => {
     const content = fs.readFileSync(configFile, "utf8");
     expect(content).toContain("[llm]");
     expect(content).toContain("[secrets]");
-    expect(content).toContain("source = \"key_vault\"");
+    expect(content).toContain("source = \"local_env\"");
     expect(content).toContain("[azure_openai]");
     expect(content).toContain("embedding_deployment = \"text-embedding-3-small\"");
     expect(content).toContain("key_vault_url = \"https://devagentkv001.vault.azure.net/\"");
-    expect(content).toContain("api_key_ref = \"kv://secret/mergepilot-aoai-key\"");
+    expect(content).toContain("api_key_ref = \"\"");
   });
 
   it("round-trips user config without writing plaintext model secrets", () => {
@@ -148,7 +149,7 @@ describe("daemonEnv", () => {
     expect(envSourceLabel()).toBe(userConfig);
   });
 
-  it("loads the system Key Vault URL from the default template", () => {
+  it("defaults new installs to local .env secrets instead of Key Vault", () => {
     const userConfig = path.join(tmp, "user", "config.toml");
     process.env.MERGEPILOT_USER_CONFIG_FILE = userConfig;
     ensureMergePilotUserConfigFile(userConfig);
@@ -156,11 +157,20 @@ describe("daemonEnv", () => {
     loadDaemonEnv();
 
     expect(process.env.OPENAI_API_KEY).toBeUndefined();
-    expect(process.env.AZURE_OPENAI_API_KEY).toBe("kv://secret/mergepilot-aoai-key");
+    expect(process.env.AZURE_OPENAI_API_KEY).toBeUndefined();
+    expect(process.env.MERGEPILOT_SECRET_SOURCE).toBe("local_env");
     expect(process.env.AZURE_KEYVAULT_URL).toBe("https://devagentkv001.vault.azure.net/");
   });
 
-  it("does not override explicit process environment values", () => {
+  it("creates a local .env placeholder for local secret storage", () => {
+    const localEnvFile = path.join(tmp, "user", ".env");
+
+    ensureMergePilotLocalEnvFile(localEnvFile);
+
+    expect(fs.readFileSync(localEnvFile, "utf8")).toContain("AZURE_OPENAI_API_KEY=");
+  });
+
+  it("does not load Key Vault refs unless Key Vault source is selected", () => {
     const userConfig = path.join(tmp, "user", "config.toml");
     writeMergePilotUserConfig({
       llmProvider: "azure",
@@ -174,13 +184,14 @@ describe("daemonEnv", () => {
     loadDaemonEnv();
 
     expect(process.env.AZURE_OPENAI_ENDPOINT).toBe("https://explicit.openai.azure.com");
-    expect(process.env.AZURE_OPENAI_API_KEY).toBe("kv://secret/mergepilot-aoai-key");
+    expect(process.env.AZURE_OPENAI_API_KEY).toBeUndefined();
   });
 
   it("prefers configured Key Vault secret references over explicit plaintext secret environment values", () => {
     const userConfig = path.join(tmp, "user", "config.toml");
     writeMergePilotUserConfig({
       llmProvider: "azure",
+      secretSource: "key_vault",
       azureEndpoint: "https://example.openai.azure.com",
       azureDeployment: "mergepilot-chat",
       azureApiKeyRef: "kv://secret/mergepilot-aoai-key",

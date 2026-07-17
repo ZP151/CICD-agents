@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { parseSortableDate } from "./safeDate.js";
 
 export type PrInsightArtifactKind = "insight_preview" | "review_run";
 
@@ -139,7 +140,7 @@ export function listLocalPrInsightArtifacts(args: {
     .filter((artifact) => !projectLinkId || artifactProjectLinkId(artifact) === projectLinkId)
     .filter((artifact) => !repository || artifact.repository === repository)
     .filter((artifact) => args.pullRequestId === undefined || artifact.pullRequestId === args.pullRequestId)
-    .sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"));
+    .sort((a, b) => parseSortableDate(b.at) - parseSortableDate(a.at));
   if (args.limit && args.limit > 0) return events.slice(0, args.limit);
   return events;
 }
@@ -168,7 +169,7 @@ export function summarizePrInsightArtifactHistory(
   }
   const summary: PrInsightArtifactHistoryMeta[] = [];
   for (const group of groups.values()) {
-    const sorted = [...group].sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"));
+    const sorted = [...group].sort((a, b) => parseSortableDate(b.at) - parseSortableDate(a.at));
     sorted.forEach((artifact, index) => {
       summary.push({
         artifactId: artifact.id,

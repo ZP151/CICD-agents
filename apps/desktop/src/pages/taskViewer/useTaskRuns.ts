@@ -9,6 +9,7 @@ import {
 
 export function useTaskRuns() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [autoSelectRuns, setAutoSelectRuns] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -26,17 +27,17 @@ export function useTaskRuns() {
     try {
       const result = await refetchTasks();
       const next = result.data ?? [];
-      setSelectedId((current) => current ?? next[0]?.id ?? null);
+      setSelectedId((current) => current ?? (autoSelectRuns ? next[0]?.id ?? null : null));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [refetchTasks]);
+  }, [autoSelectRuns, refetchTasks]);
 
   useEffect(() => {
     const next = tasksQuery.data ?? [];
-    if (selectedId || next.length === 0) return;
+    if (!autoSelectRuns || selectedId || next.length === 0) return;
     setSelectedId(next[0]?.id ?? null);
-  }, [selectedId, tasksQuery.data]);
+  }, [autoSelectRuns, selectedId, tasksQuery.data]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -98,19 +99,26 @@ export function useTaskRuns() {
   );
 
   const setSelected = useCallback((task: TaskView | null) => {
+    setAutoSelectRuns(Boolean(task));
     setSelectedId(task?.id ?? null);
     if (task) queryClient.setQueryData(["activityRun", task.id], task);
   }, [queryClient]);
+
+  const selectById = useCallback((taskId: string | null) => {
+    setAutoSelectRuns(Boolean(taskId));
+    setSelectedId(taskId);
+  }, []);
 
   return {
     tasks,
     selected,
     selectedId,
     loading,
+    refreshing: tasksQuery.isFetching && tasks.length > 0,
     activeCount,
     error: error ?? (queryError instanceof Error ? queryError.message : null),
     refresh,
     setSelected,
-    setSelectedId,
+    setSelectedId: selectById,
   };
 }

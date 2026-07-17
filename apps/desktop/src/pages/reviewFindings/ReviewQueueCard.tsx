@@ -47,36 +47,36 @@ export function ReviewQueueCard({
   const auditSummary = buildReviewAuditCardSummary(item);
 
   return (
-    <article className="rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-4">
+    <article className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-blue-400">#{item.pullRequestId}</span>
+            <span className="font-mono text-xs text-[rgb(var(--app-accent))]">#{item.pullRequestId}</span>
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${riskTone(item.decisionRiskLevel)}`}>
               {item.decisionRiskLevel}
             </span>
-            <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400">
+            <span className="rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
               {item.decisionQueue.replace(/_/g, " ")}
             </span>
             <span className={`rounded-full px-2 py-0.5 text-[10px] ring-1 ${
               freshness.stale
-                ? "bg-yellow-950/30 text-yellow-400 ring-yellow-900/60"
-                : "bg-emerald-950/20 text-emerald-500/80 ring-emerald-900/40"
+                ? "bg-amber-500/10 text-amber-800 ring-amber-500/30 dark:text-amber-300"
+                : "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300"
             }`}>
               {freshness.label}
             </span>
           </div>
-          <p className="truncate text-sm font-medium text-zinc-200">{item.decisionReason || "No decision reason recorded."}</p>
-          <p className="mt-1 truncate font-mono text-xs text-zinc-600">
+          <p className="truncate text-sm font-medium text-[rgb(var(--app-text))]">{item.decisionReason || "No decision reason recorded."}</p>
+          <p className="mt-1 truncate font-mono text-xs text-[rgb(var(--app-text-subtle))]">
             iteration {item.lastIterationId} · {shortCommit(item.sourceCommit)}
           </p>
           {attentionReasons.length > 0 && (
-            <p className="mt-2 text-xs text-zinc-500">
+            <p className="mt-2 text-xs text-[rgb(var(--app-text-muted))]">
               Attention: {attentionReasons.slice(0, 4).join(" · ")}
             </p>
           )}
           {(item.autoApprovedAt || item.autoApprovalActor) && (
-            <p className="mt-1 text-xs text-zinc-600">
+            <p className="mt-1 text-xs text-[rgb(var(--app-text-subtle))]">
               Auto-approval: {item.autoApprovedAt ? formatDate(item.autoApprovedAt) : "not recorded"}
               {item.autoApprovalActor ? ` · ${item.autoApprovalActor}` : ""}
             </p>
@@ -84,10 +84,10 @@ export function ReviewQueueCard({
           {auditSummary.hasAudit && (
             <p className={`mt-1 text-xs ${
               auditSummary.tone === "success"
-                ? "text-emerald-500/75"
+                ? "text-emerald-700 dark:text-emerald-300"
                 : auditSummary.tone === "warning"
-                  ? "text-yellow-500/80"
-                  : "text-zinc-600"
+                  ? "text-amber-800 dark:text-amber-300"
+                  : "text-[rgb(var(--app-text-subtle))]"
             }`}>
               Audit: {auditSummary.label}
               {item.manualDispositionAt ? ` · ${formatDate(item.manualDispositionAt)}` : ""}
@@ -99,7 +99,7 @@ export function ReviewQueueCard({
                     href={auditSummary.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-blue-400/80 underline-offset-2 hover:text-blue-300 hover:underline"
+                    className="text-[rgb(var(--app-accent))] underline-offset-2 hover:underline"
                   >
                     open thread
                   </a>
@@ -108,37 +108,37 @@ export function ReviewQueueCard({
             </p>
           )}
         </div>
-        <p className="text-xs text-zinc-600">{formatDate(item.lastRunAt)}</p>
+        <p className="text-xs text-[rgb(var(--app-text-subtle))]">{formatDate(item.lastRunAt)}</p>
       </div>
       <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
-        <div className="grid gap-2 text-xs text-zinc-500 sm:grid-cols-4">
+        <div className="grid gap-2 text-xs text-[rgb(var(--app-text-muted))] sm:grid-cols-4">
           <div>
-            <p className="text-zinc-700">Findings</p>
-            <p className="mt-1 text-zinc-400">{item.findingCount}</p>
+            <p className="text-[rgb(var(--app-text-subtle))]">Findings</p>
+            <p className="mt-1 text-[rgb(var(--app-text))]">{item.findingCount}</p>
           </div>
           <div>
-            <p className="text-zinc-700">Discarded</p>
-            <p className="mt-1 text-zinc-400">{item.discardedFindingCount}</p>
+            <p className="text-[rgb(var(--app-text-subtle))]">Discarded</p>
+            <p className="mt-1 text-[rgb(var(--app-text))]">{item.discardedFindingCount}</p>
           </div>
           <div>
-            <p className="text-zinc-700">Hunk coverage</p>
-            <p className="mt-1 text-zinc-400">
+            <p className="text-[rgb(var(--app-text-subtle))]">Hunk coverage</p>
+            <p className="mt-1 text-[rgb(var(--app-text))]">
               {item.hunkCoverageFiles} files · {item.changedHunkLines} lines
             </p>
           </div>
           <div>
-            <p className="text-zinc-700">Fallback</p>
-            <p className="mt-1 text-zinc-400">{item.wholeFileFallbackFiles} files</p>
+            <p className="text-[rgb(var(--app-text-subtle))]">Fallback</p>
+            <p className="mt-1 text-[rgb(var(--app-text))]">{item.wholeFileFallbackFiles} files</p>
           </div>
         </div>
         {hasFindings && (
           <button
             onClick={() => onOpenFindings(item)}
-            className="shrink-0 rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-blue-700 hover:text-blue-300"
+            className="shrink-0 rounded-md border border-[rgb(var(--app-border))] px-3 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
           >
             View findings
             {storedFindings.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
+              <span className="ml-1.5 rounded-full bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
                 {storedFindings.length}
               </span>
             )}
@@ -181,7 +181,7 @@ function ReviewQueueCardActions({
         type="button"
         disabled={isRerunning}
         onClick={() => onRerunReview(item)}
-        className="rounded-md border border-blue-900/50 px-2.5 py-1 text-xs text-blue-400/80 transition hover:border-blue-700 hover:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-md border border-blue-500/30 px-2.5 py-1 text-xs text-blue-700 transition hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-300"
       >
         {isRerunning ? "Rerunning..." : "Rerun review"}
       </button>
@@ -192,7 +192,7 @@ function ReviewQueueCardActions({
             type="button"
             disabled={isRetryingWriteBack}
             onClick={() => onRetryDispositionWriteBack(item)}
-            className="rounded-md border border-blue-900/50 px-2.5 py-1 text-xs text-blue-400/80 transition hover:border-blue-700 hover:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md border border-blue-500/30 px-2.5 py-1 text-xs text-blue-700 transition hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-300"
           >
             {isRetryingWriteBack ? "Retrying..." : "Retry ADO"}
           </button>
@@ -201,7 +201,7 @@ function ReviewQueueCardActions({
         type="button"
         disabled={isDispositionSaving}
         onClick={() => onApplyDisposition(item, "acknowledged")}
-        className="rounded-md border border-zinc-800 px-2.5 py-1 text-xs text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isDispositionSaving ? "Saving..." : "Acknowledge"}
       </button>
@@ -209,7 +209,7 @@ function ReviewQueueCardActions({
         type="button"
         disabled={isDispositionSaving}
         onClick={() => onApplyDisposition(item, "marked_safe")}
-        className="rounded-md border border-emerald-900/50 px-2.5 py-1 text-xs text-emerald-400/80 transition hover:border-emerald-700 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-md border border-emerald-500/30 px-2.5 py-1 text-xs text-emerald-700 transition hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-300"
       >
         Mark safe
       </button>
@@ -217,7 +217,7 @@ function ReviewQueueCardActions({
         type="button"
         disabled={isDispositionSaving}
         onClick={() => onApplyDisposition(item, "marked_blocked")}
-        className="rounded-md border border-red-900/50 px-2.5 py-1 text-xs text-red-400/80 transition hover:border-red-700 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-md border border-red-500/30 px-2.5 py-1 text-xs text-red-700 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-300"
       >
         Block
       </button>
@@ -225,7 +225,7 @@ function ReviewQueueCardActions({
         type="button"
         disabled={isDispositionSaving}
         onClick={() => onApplyDisposition(item, "changes_requested")}
-        className="rounded-md border border-yellow-900/50 px-2.5 py-1 text-xs text-yellow-400/80 transition hover:border-yellow-700 hover:text-yellow-300 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-md border border-amber-500/35 px-2.5 py-1 text-xs text-amber-800 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-300"
       >
         Request changes
       </button>

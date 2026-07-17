@@ -9,6 +9,7 @@ import {
   buildPipelineRows,
   countPipelineRows,
   formatDate,
+  pipelineProjectLinksCacheKey,
   rowMatchesFilter,
 } from "./pipelineModel";
 
@@ -125,6 +126,21 @@ describe("pipeline model", () => {
 
   it("does not surface unknown as a synthetic missing run date", () => {
     expect(formatDate(undefined)).toBe("");
+    expect(formatDate("not-a-date")).toBe("");
+  });
+
+  it("keys pipeline cache by Project Link mapping fields, not only id", () => {
+    const base = projectLinks[0]!;
+
+    expect(pipelineProjectLinksCacheKey([base])).not.toBe(
+      pipelineProjectLinksCacheKey([{ ...base, defaultBranch: "feature/other" }]),
+    );
+    expect(pipelineProjectLinksCacheKey([base])).not.toBe(
+      pipelineProjectLinksCacheKey([{ ...base, adoRepoName: "ClaimBot_API" }]),
+    );
+    expect(pipelineProjectLinksCacheKey([base, projectLinks[1]!])).toBe(
+      pipelineProjectLinksCacheKey([projectLinks[1]!, base]),
+    );
   });
 
   it("attaches latest PR run only when it matches the pipeline id", () => {

@@ -41,13 +41,13 @@ export function summarizePipelineRuns(
     ? classifyPipelineFailure(timeline, logExcerpts, timelineError)
     : undefined;
   const lines = [
-    `Pipeline #${pipelineId} latest run #${latest.id || "unknown"} ${safeText(latest.name || "")}: ${latest.state || "unknown"}${latest.result ? `/${latest.result}` : ""}.`,
+    `Pipeline #${pipelineId} latest run #${displayRunId(latest.id)} ${displayText(latest.name, "run")}: ${displayRunStatus(latest)}.`,
     `Recent runs: ${runs.length}. Failed or canceled: ${failed.length}.`,
     ...runs
       .slice(0, 5)
       .map(
         (run) =>
-          `- #${run.id || "unknown"} ${safeText(run.name || "run")} ${safeText(run.sourceBranch || "unknown branch")}: ${run.state || "unknown"}${run.result ? `/${run.result}` : ""}${run.url ? ` (${safeText(run.url)})` : ""}`,
+          `- #${displayRunId(run.id)} ${displayText(run.name, "run")} ${displayBranch(run.sourceBranch)}: ${displayRunStatus(run)}${run.url ? ` (${safeText(run.url)})` : ""}`,
       ),
   ];
   if (evidenceRun) {
@@ -72,13 +72,13 @@ export function pipelineFailureArtifacts(
   const failedRuns = runs.filter((run) => /failed|canceled/i.test(`${run.result} ${run.state}`));
   if (failedRuns.length === 0) return [];
   const latest = preferredPipelineFailureRun(runs) ?? failedRuns[0]!;
-  const runId = latest.id || "unknown";
-  const status = `${latest.state || "unknown"}${latest.result ? `/${latest.result}` : ""}`;
+  const runId = displayRunId(latest.id);
+  const status = displayRunStatus(latest);
   const artifactId = `pipeline-${pipelineId}-run-${runId}-failed`;
   const failedRecordLines = (timeline?.failedRecords ?? []).slice(0, 8).map((record) => {
     const issue = record.issues.find((item) => /error/i.test(item.type)) ?? record.issues[0];
     const issueText = issue?.message ? ` - ${compactInlineText(issue.message, 180)}` : "";
-    return `- ${record.name || record.id || "record"} (${record.type || "unknown"}): ${record.state || "unknown"}${record.result ? `/${record.result}` : ""}${issueText}`;
+    return `- ${displayText(record.name || record.id, "record")} (${displayText(record.type, "not available")}): ${displayRecordStatus(record)}${issueText}`;
   });
   const errorIssueLines = (timeline?.errorIssues ?? [])
     .slice(0, 8)
@@ -100,16 +100,16 @@ export function pipelineFailureArtifacts(
   const lines = [
     `# Pipeline #${pipelineId} failure`,
     "",
-    `Latest failed/canceled run: #${runId}${latest.name ? ` ${latest.name}` : ""}`,
+    `Latest failed/canceled run: #${runId}${latest.name ? ` ${safeText(latest.name)}` : ""}`,
     "",
     "| Field | Value |",
     "| --- | --- |",
     `| Pipeline | #${pipelineId} |`,
     `| Run | #${runId} |`,
-    `| Branch | ${safeText(latest.sourceBranch || "unknown")} |`,
+    `| Branch | ${displayBranch(latest.sourceBranch)} |`,
     `| Status | ${status} |`,
-    `| Created | ${latest.createdDate || "unknown"} |`,
-    `| Finished | ${latest.finishedDate || "unknown"} |`,
+    `| Created | ${displayText(latest.createdDate, "not available")} |`,
+    `| Finished | ${displayText(latest.finishedDate, "not available")} |`,
     `| URL | ${safeText(latest.url || "not returned")} |`,
     "",
     "## Recent failed or canceled runs",
@@ -118,7 +118,7 @@ export function pipelineFailureArtifacts(
       .slice(0, 5)
       .map(
         (run) =>
-          `- #${run.id || "unknown"} ${safeText(run.name || "run")} ${safeText(run.sourceBranch || "unknown branch")}: ${run.state || "unknown"}${run.result ? `/${run.result}` : ""}${run.url ? ` (${safeText(run.url)})` : ""}`,
+          `- #${displayRunId(run.id)} ${displayText(run.name, "run")} ${displayBranch(run.sourceBranch)}: ${displayRunStatus(run)}${run.url ? ` (${safeText(run.url)})` : ""}`,
       ),
     "",
     "## Failed timeline records",
@@ -187,6 +187,31 @@ function safeText(value: string): string {
   return redact(value);
 }
 
+function displayText(value: string | number | undefined | null, fallback: string): string {
+  const text = safeText(String(value ?? "")).trim();
+  return text || fallback;
+}
+
+function displayRunId(value: string | number | undefined | null): string {
+  return displayText(value, "not available");
+}
+
+function displayBranch(value: string | undefined | null): string {
+  return displayText(value, "branch not available");
+}
+
+function displayRunStatus(run: { state?: string; result?: string }): string {
+  const state = displayText(run.state, "not available");
+  const result = displayText(run.result, "");
+  return result ? `${state}/${result}` : state;
+}
+
+function displayRecordStatus(record: { state?: string; result?: string }): string {
+  const state = displayText(record.state, "not available");
+  const result = displayText(record.result, "");
+  return result ? `${state}/${result}` : state;
+}
+
 function compactInlineText(value: string, maxLength = 96): string {
   const compact = safeText(value).replace(/\s+/g, " ").trim();
   if (compact.length <= maxLength) return compact;
@@ -199,14 +224,14 @@ function pipelineFailureEvidenceSummary(
   logExcerpts?: PipelineLogExcerpt[],
   timelineError?: string,
 ): string[] {
-  const runId = failedRun.id || "unknown";
+  const runId = displayRunId(failedRun.id);
   const lines = [
-    `Latest failed/canceled run evidence: #${runId} ${safeText(failedRun.name || "run")} ${safeText(failedRun.sourceBranch || "unknown branch")}.`,
+    `Latest failed/canceled run evidence: #${runId} ${displayText(failedRun.name, "run")} ${displayBranch(failedRun.sourceBranch)}.`,
   ];
   const recordLines = (timeline?.failedRecords ?? []).slice(0, 3).map((record) => {
     const issue = record.issues.find((item) => /error/i.test(item.type)) ?? record.issues[0];
     const issueText = issue?.message ? ` - ${compactInlineText(issue.message, 180)}` : "";
-    return `- ${record.name || record.id || "record"} (${record.type || "unknown"}): ${record.state || "unknown"}${record.result ? `/${record.result}` : ""}${issueText}`;
+    return `- ${displayText(record.name || record.id, "record")} (${displayText(record.type, "not available")}): ${displayRecordStatus(record)}${issueText}`;
   });
   if (recordLines.length > 0) {
     lines.push("Failed timeline records:", ...recordLines);
@@ -252,7 +277,7 @@ interface PipelineFailureClassification {
   label:
     | "Likely source/configuration failure"
     | "Likely infrastructure/transient failure"
-    | "Unknown failure class";
+    | "Unclassified failure";
   confidence: "high" | "medium" | "low";
   summary: string;
   recommendedResponse: string;
@@ -290,7 +315,7 @@ function classifyPipelineFailure(
   }
 
   return {
-    label: "Unknown failure class",
+    label: "Unclassified failure",
     confidence: "low",
     summary:
       "The available timeline/log evidence is not specific enough to distinguish code/configuration failure from infrastructure failure.",

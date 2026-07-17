@@ -92,8 +92,6 @@ export function ChatWorkspaceLayout({
   textareaRef,
   toggleHistoryPin,
   toggleTool,
-  welcomeSuggestions,
-  welcomeSuggestionsReady,
   workflowState,
   workspaceRef,
 }: ChatShellProps) {
@@ -154,12 +152,8 @@ export function ChatWorkspaceLayout({
               projectLinksLoading={projectLinksLoading}
               activeProjectLinkId={activeProjectLinkId}
               selectedArtifactId={selectedArtifactId}
-              welcomeSuggestions={welcomeSuggestions}
-              welcomeSuggestionsReady={welcomeSuggestionsReady}
               createProjectLink={createProjectLink}
               selectProjectLink={(projectLink) => selectProjectLink(projectLink.id)}
-              queuePrompt={queuePrompt}
-              runWorkspaceAction={runWorkspaceAction}
               toggleTool={toggleTool}
               confirmPendingAction={confirmPendingAction}
               cancelPendingAction={cancelPendingAction}

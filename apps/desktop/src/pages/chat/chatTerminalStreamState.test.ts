@@ -99,7 +99,7 @@ describe("chat terminal stream state", () => {
       kind: "system",
       text: "Action cancelled.",
     });
-    expect(errorMessageFromEvent({ type: "error" } as ChatEventPayload)).toBe("Unknown error");
+    expect(errorMessageFromEvent({ type: "error" } as ChatEventPayload)).toBe("Something went wrong.");
 
     const cancelAdapter = makeAdapter();
     handleCancelledEvent(cancelAdapter, { makeId: () => "cancel-1" });

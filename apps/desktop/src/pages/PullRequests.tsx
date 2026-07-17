@@ -72,6 +72,8 @@ export default function PullRequests(): JSX.Element {
     setSelectedInsightPrKey(null);
   }, [category, projectLinkId, status]);
 
+  const firstLoad = (projectLinksLoading && projectLinks.length === 0) || loading;
+
   return (
     <div className="flex min-h-full w-full flex-col gap-5">
       <PullRequestPageHeader
@@ -87,7 +89,7 @@ export default function PullRequests(): JSX.Element {
       />
 
       {error && (
-        <div className="rounded-lg border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">
           {error}
         </div>
       )}
@@ -102,18 +104,20 @@ export default function PullRequests(): JSX.Element {
         </div>
       )}
 
-      {(projectLinksLoading || loading) && (
-        <p className="text-sm text-zinc-600">Loading pull requests...</p>
-      )}
+      {firstLoad && <PullRequestLoadingSkeleton />}
       {!loading && refreshing && (
         <p className="text-xs text-[rgb(var(--app-text-subtle))]">Refreshing pull requests...</p>
       )}
 
-      {!projectLinksLoading && !loading && !error && prs.length === 0 && (
-        <div className="flex flex-1 items-center justify-center rounded-lg border border-zinc-800/70 bg-zinc-900/20 p-8 text-center">
+      {!firstLoad && !error && prs.length === 0 && (
+        <div className="flex flex-1 items-center justify-center rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-8 text-center">
           <div>
-            <p className="text-sm font-medium text-zinc-400">No pull requests found</p>
-            <p className="mt-1 text-sm text-zinc-600">Try another Project Link or status filter.</p>
+            <p className="text-sm font-medium text-[rgb(var(--app-text))]">
+              No pull requests found
+            </p>
+            <p className="mt-1 text-sm text-[rgb(var(--app-text-muted))]">
+              Try another Project Link or status filter.
+            </p>
           </div>
         </div>
       )}
@@ -127,7 +131,7 @@ export default function PullRequests(): JSX.Element {
           }
         >
           <div className="flex min-w-0 flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800/70 bg-zinc-900/20 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
               <div className="flex flex-wrap gap-1.5">
                 {prCategories.map((item) => (
                   <button
@@ -137,7 +141,7 @@ export default function PullRequests(): JSX.Element {
                     className={`rounded-md px-2.5 py-1 text-xs transition ${
                       category === item.key
                         ? "border border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text))] ring-1 ring-[rgb(var(--app-border))]"
-                        : "border border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:bg-zinc-900/40 hover:text-zinc-300"
+                        : "border border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
                     }`}
                   >
                     {item.label}
@@ -147,14 +151,16 @@ export default function PullRequests(): JSX.Element {
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-zinc-600">
+              <p className="text-xs text-[rgb(var(--app-text-subtle))]">
                 {filteredPrs.length} of {prs.length} PRs in view
               </p>
             </div>
 
             {filteredPrs.length === 0 && (
-              <div className="rounded-lg border border-zinc-800/70 bg-zinc-900/20 p-6 text-center">
-                <p className="text-sm text-zinc-500">No pull requests match this category.</p>
+              <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-6 text-center">
+                <p className="text-sm text-[rgb(var(--app-text-muted))]">
+                  No pull requests match this category.
+                </p>
               </div>
             )}
 
@@ -212,6 +218,32 @@ export default function PullRequests(): JSX.Element {
   );
 }
 
+function PullRequestLoadingSkeleton(): JSX.Element {
+  return (
+    <div className="grid gap-3" aria-label="Preparing pull requests">
+      <div className="h-14 animate-pulse rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]" />
+      {Array.from({ length: 2 }).map((_, index) => (
+        <div
+          // eslint-disable-next-line react/no-array-index-key
+          key={index}
+          className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4"
+        >
+          <div className="mb-3 flex items-center gap-2">
+            <span className="h-5 w-12 animate-pulse rounded-full bg-[rgb(var(--app-surface-raised))]" />
+            <span className="h-5 w-24 animate-pulse rounded-full bg-[rgb(var(--app-surface-raised))]" />
+          </div>
+          <div className="h-4 w-2/3 animate-pulse rounded bg-[rgb(var(--app-surface-raised))]" />
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <span className="h-8 animate-pulse rounded bg-[rgb(var(--app-surface-raised))]" />
+            <span className="h-8 animate-pulse rounded bg-[rgb(var(--app-surface-raised))]" />
+            <span className="h-8 animate-pulse rounded bg-[rgb(var(--app-surface-raised))]" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PullRequestInsightSidePanel({
   pr,
   queueState,
@@ -241,6 +273,8 @@ function PullRequestInsightSidePanel({
         prInsightArtifactProjectLinkId(artifact) === pr.sourceProjectLinkId),
   );
   const storedInsight = storedInsightHistory[0] ?? null;
+  const hasExistingInsight =
+    Boolean(storedInsight) || previewState.phase === "done" || queueState.phase === "done";
   const previousStoredInsights = storedInsightHistory.slice(1, 4);
   const storedInsightTone = storedInsight?.readiness
     ? insightReadinessTone(storedInsight.readiness)
@@ -292,7 +326,11 @@ function PullRequestInsightSidePanel({
           onClick={() => onPreviewInsight(pr)}
           className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60"
         >
-          {previewState.phase === "loading" ? "Generating..." : "Generate insight"}
+          {previewState.phase === "loading"
+            ? "Generating..."
+            : hasExistingInsight
+              ? "Refresh insight"
+              : "Generate insight"}
         </button>
         <button
           type="button"

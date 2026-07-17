@@ -190,6 +190,25 @@ describe("chat session PR insight context", () => {
     expect(prompt).toContain("Failed CI");
   });
 
+  it("uses readable fallback wording when saved PR readiness metadata is missing", () => {
+    const prompt = formatPrInsightArtifactsForChat([{
+      id: "profile-1/demo/42/review_run",
+      projectLinkId: "profile-1",
+      repository: "demo",
+      pullRequestId: 42,
+      title: "Improve pipeline",
+      kind: "review_run",
+      at: "2026-06-11T00:10:00.000Z",
+      summary: "Full review summary.",
+      risks: [],
+      tokensIn: 100,
+      tokensOut: 20,
+    }]);
+
+    expect(prompt).toContain("readiness=not available");
+    expect(prompt).not.toContain("readiness=unknown");
+  });
+
   it("returns precise saved PR insight artifact notes for chat metadata", () => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-pr-insight-notes-"));
     const saved = upsertLocalPrInsightArtifact(dataDir, {

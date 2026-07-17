@@ -146,8 +146,6 @@ export function buildChatShellProps({
     titleInputRef: pageState.titleInputRef,
     toggleHistoryPin: historyRuntime.toggleHistoryPin,
     toggleTool: turnRuntime.toggleTool,
-    welcomeSuggestions: readModel.welcomeSuggestions,
-    welcomeSuggestionsReady: readModel.welcomeSuggestionsReady,
     workflowState: pageState.workflowState,
     workspaceRef: panelRuntime.workspaceRef,
   };

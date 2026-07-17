@@ -2,6 +2,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import {
   AzureTableProjectLinkStore,
   createProjectLink,
@@ -12,6 +13,7 @@ import { buildApp } from "../src/server.js";
 
 let app: Awaited<ReturnType<typeof buildApp>> | null = null;
 let tmpDataDir = "";
+const tempProjectDirs: string[] = [];
 
 beforeAll(() => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "mergepilot-daemon-project-link-"));
@@ -38,26 +40,46 @@ afterEach(async () => {
     await app.close();
     app = null;
   }
+  for (const dir of tempProjectDirs.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 describe("daemon Project Link routes", () => {
+  function tempDir(prefix: string): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    tempProjectDirs.push(dir);
+    return dir;
+  }
+
+  function initGitRepo(prefix: string): string {
+    const repo = tempDir(prefix);
+    const init = spawnSync("git", ["init"], { cwd: repo, encoding: "utf8" });
+    expect(init.status, init.stderr).toBe(0);
+    return repo;
+  }
+
+  function projectLinkPayload(repoPath: string) {
+    return {
+      name: "Official Project Link",
+      repoPath,
+      defaultBranch: "main",
+      targetBranch: "main",
+      adoOrgUrl: "https://dev.azure.com/demo-org",
+      adoProject: "Agents",
+      adoRepoName: "mergepilot",
+      adoPipelineId: "12",
+      adoPipelineName: "MergePilot CI",
+    };
+  }
+
   it("exposes Project Link CRUD on /project-links while preserving /project-links compatibility", async () => {
     app = await buildApp();
 
     const created = await app.inject({
       method: "POST",
       url: "/project-links",
-      payload: {
-        name: "Official Project Link",
-        repoPath: process.cwd(),
-        defaultBranch: "main",
-        targetBranch: "main",
-        adoOrgUrl: "https://dev.azure.com/demo-org",
-        adoProject: "Agents",
-        adoRepoName: "mergepilot",
-        adoPipelineId: "12",
-        adoPipelineName: "MergePilot CI",
-      },
+      payload: projectLinkPayload(process.cwd()),
     });
     expect(created.statusCode).toBe(201);
     const body = created.json() as {
@@ -102,6 +124,48 @@ describe("daemon Project Link routes", () => {
     const deleted = await app.inject({ method: "DELETE", url: `/project-links/${body.id}` });
     expect(deleted.statusCode).toBe(200);
     expect(deleted.json()).toEqual({ ok: true });
+  });
+
+  it("rejects Project Link creation when the local path is not a Git repository", async () => {
+    app = await buildApp();
+    const nonGitDir = tempDir("mergepilot-project-link-non-git-");
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/project-links",
+      payload: projectLinkPayload(nonGitDir),
+    });
+
+    expect(created.statusCode).toBe(400);
+    expect(created.json()).toEqual({
+      error: "repo_path_not_git_repository",
+      message: "Local repository path must be a valid Git repository.",
+    });
+  });
+
+  it("rejects Project Link updates that replace a valid repo with a non-Git path", async () => {
+    app = await buildApp();
+    const repo = initGitRepo("mergepilot-project-link-valid-");
+    const nonGitDir = tempDir("mergepilot-project-link-update-non-git-");
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/project-links",
+      payload: projectLinkPayload(repo),
+    });
+    expect(created.statusCode, created.body).toBe(201);
+
+    const updated = await app.inject({
+      method: "PUT",
+      url: `/project-links/${(created.json() as { id: string }).id}`,
+      payload: { repoPath: nonGitDir },
+    });
+
+    expect(updated.statusCode).toBe(400);
+    expect(updated.json()).toEqual({
+      error: "repo_path_not_git_repository",
+      message: "Local repository path must be a valid Git repository.",
+    });
   });
 
   it("falls back to local Project Links when Azure Table authentication is unavailable", async () => {

@@ -19,17 +19,24 @@ $logPath = Join-Path $extractDir "msiexec.log"
 
 try {
   New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
-  $process = Start-Process -FilePath msiexec.exe -ArgumentList @(
-    "/a",
-    (Resolve-Path $MsiPath).Path,
-    "/qn",
-    "TARGETDIR=$extractDir",
-    "/L*v",
-    $logPath
-  ) -Wait -PassThru
-  if ($process.ExitCode -ne 0) {
+  $extract = $null
+  for ($attempt = 1; $attempt -le 4; $attempt++) {
+    $extract = Start-Process -FilePath msiexec.exe -ArgumentList @(
+      "/a",
+      (Resolve-Path $MsiPath).Path,
+      "/qn",
+      "TARGETDIR=$extractDir",
+      "/L*v",
+      $logPath
+    ) -Wait -PassThru
+    if ($extract.ExitCode -ne 1618) {
+      break
+    }
+    Start-Sleep -Seconds ([Math]::Min(8, 2 * $attempt))
+  }
+  if ($extract.ExitCode -ne 0) {
     Get-Content -LiteralPath $logPath -Tail 80 -ErrorAction SilentlyContinue
-    throw "MSI administrative extraction failed with exit code $($process.ExitCode)."
+    throw "MSI administrative extraction failed with exit code $($extract.ExitCode)."
   }
 
   $daemon = Get-ChildItem -LiteralPath $extractDir -Recurse -Filter mergepilot-daemon.exe |

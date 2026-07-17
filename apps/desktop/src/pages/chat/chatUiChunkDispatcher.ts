@@ -140,7 +140,7 @@ function finishUiChunk(adapter: ChatUiChunkDispatcherAdapter): void {
 function failUiChunk(errorText: string | undefined, adapter: ChatUiChunkDispatcherAdapter): void {
   adapter.stopStreaming();
   adapter.setUiChunkStreamAvailable(false);
-  adapter.addErrorBubbleOnce(errorText || "Unknown error");
+  adapter.addErrorBubbleOnce(errorText || "Something went wrong.");
   adapter.setBusy(false);
   adapter.setStatusText(null);
   adapter.clearCancel();

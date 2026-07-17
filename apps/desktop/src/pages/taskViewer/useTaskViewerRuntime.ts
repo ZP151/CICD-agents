@@ -13,6 +13,7 @@ import type { PrInsightActivityItem } from "./prInsightActivity.js";
 import {
   loadPrInsightActivity,
   loadReviewActivity,
+  taskViewerProjectLinksCacheKey,
 } from "./taskViewerActivityLoaders.js";
 import {
   buildPrInsightHistoryMeta,
@@ -39,7 +40,7 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
   >("all");
   const [error, setError] = useState<string | null>(null);
   const projectLinkCacheKey = useMemo(
-    () => projectLinks.map((projectLink) => projectLink.id).join("|"),
+    () => taskViewerProjectLinksCacheKey(projectLinks),
     [projectLinks],
   );
 
@@ -48,7 +49,11 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     enabled: projectLinks.length > 0,
     staleTime: 45_000,
     gcTime: 10 * 60_000,
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) => {
+      const previousKey = previousQuery?.queryKey;
+      if (!Array.isArray(previousKey)) return undefined;
+      return previousKey[1] === projectLinkCacheKey ? previous : undefined;
+    },
     queryFn: () => loadReviewActivity(projectLinks),
   });
 
@@ -57,7 +62,11 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     enabled: projectLinks.length > 0,
     staleTime: 45_000,
     gcTime: 10 * 60_000,
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) => {
+      const previousKey = previousQuery?.queryKey;
+      if (!Array.isArray(previousKey)) return undefined;
+      return previousKey[1] === projectLinkCacheKey ? previous : undefined;
+    },
     queryFn: () => loadPrInsightActivity(projectLinks),
   });
 
@@ -79,6 +88,11 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
   const reviewLoading = reviewActivityQuery.isLoading && reviewActivity.length === 0;
   const prInsightLoading = prInsightActivityQuery.isLoading && prInsightActivity.length === 0;
   const checkpointLoading = checkpointActivityQuery.isLoading && checkpointActivity.length === 0;
+  const activityRefreshing =
+    taskRuns.refreshing ||
+    (reviewActivityQuery.isFetching && reviewActivity.length > 0) ||
+    (prInsightActivityQuery.isFetching && prInsightActivity.length > 0) ||
+    (checkpointActivityQuery.isFetching && checkpointActivity.length > 0);
 
   const refreshReviewActivity = useCallback(async () => {
     await refetchReviewActivity();
@@ -205,6 +219,14 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     setTaskSelected(null);
   }
 
+  function clearSelection(): void {
+    setSelectedCheckpointId(null);
+    setSelectedReviewId(null);
+    setSelectedPrInsightId(null);
+    setTaskSelectedId(null);
+    setTaskSelected(null);
+  }
+
   async function refreshAll(): Promise<void> {
     await Promise.all([
       taskRuns.refresh(),
@@ -222,6 +244,7 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     selectedPrInsight,
     selectedCheckpoint,
     loading: taskRuns.loading,
+    refreshing: activityRefreshing,
     activeCount: taskRuns.activeCount,
     error: taskRuns.error ?? error,
     checkpointActivity,
@@ -249,6 +272,7 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     selectCheckpointActivity,
     selectPrInsightActivity,
     selectReviewActivity,
+    clearSelection,
     setPrInsightProjectLinkFilter,
     setPrInsightKindFilter,
     setReviewProjectLinkFilter,

@@ -351,6 +351,30 @@ describe("daemon HTTP", () => {
     ).toBe(true);
   });
 
+  it("treats null chat session and project link ids as a new no-link chat request", async () => {
+    app = await buildApp();
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-null-session-"));
+    fs.writeFileSync(path.join(repo, "README.md"), "# demo\n", "utf8");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat",
+      payload: {
+        message: "summarize current workspace",
+        repoPath: repo,
+        sessionId: null,
+        projectLink: null,
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    const events = parseSse(response.body);
+    const sessionId = (events.find((entry) => entry.event === "session")?.data as { sessionId?: string } | undefined)
+      ?.sessionId;
+    expect(sessionId).toBeTruthy();
+    expect(await loadSession(sessionId!)).toBeTruthy();
+  });
+
   it("accepts image-only chat requests without storing raw image data", async () => {
     app = await buildApp();
     const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-image-only-"));

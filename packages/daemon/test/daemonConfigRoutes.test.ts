@@ -1,0 +1,86 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { KeyVaultSecrets, resetSettingsForTests } from "@mergepilot/core";
+import { buildApp } from "../src/server.js";
+import {
+  resetDaemonEnvForTests,
+  writeMergePilotUserConfig,
+} from "../src/daemonEnv.js";
+
+const savedEnv = {
+  MERGEPILOT_USER_CONFIG_FILE: process.env.MERGEPILOT_USER_CONFIG_FILE,
+  MERGEPILOT_LOCAL_ENV_FILE: process.env.MERGEPILOT_LOCAL_ENV_FILE,
+  MERGEPILOT_SECRET_SOURCE: process.env.MERGEPILOT_SECRET_SOURCE,
+  RUNTIME_DATA_DIR: process.env.RUNTIME_DATA_DIR,
+  RUNTIME_HOST: process.env.RUNTIME_HOST,
+  RUNTIME_PORT: process.env.RUNTIME_PORT,
+  AZURE_OPENAI_API_KEY: process.env.AZURE_OPENAI_API_KEY,
+  AZURE_OPENAI_ENDPOINT: process.env.AZURE_OPENAI_ENDPOINT,
+  AZURE_KEYVAULT_URL: process.env.AZURE_KEYVAULT_URL,
+};
+
+describe("daemon config routes", () => {
+  let tmp = "";
+  let app: Awaited<ReturnType<typeof buildApp>> | null = null;
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "mergepilot-daemon-config-routes-"));
+    for (const key of Object.keys(savedEnv)) {
+      delete process.env[key];
+    }
+    process.env.MERGEPILOT_USER_CONFIG_FILE = path.join(tmp, "config.toml");
+    process.env.MERGEPILOT_LOCAL_ENV_FILE = path.join(tmp, ".env");
+    process.env.RUNTIME_DATA_DIR = tmp;
+    process.env.RUNTIME_HOST = "127.0.0.1";
+    process.env.RUNTIME_PORT = "0";
+    resetDaemonEnvForTests();
+    resetSettingsForTests();
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    if (app) {
+      await app.close();
+      app = null;
+    }
+    resetDaemonEnvForTests();
+    resetSettingsForTests();
+    for (const [key, value] of Object.entries(savedEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it("keeps Azure model key saves local unless Key Vault is explicitly enabled", async () => {
+    writeMergePilotUserConfig({
+      llmProvider: "azure",
+      secretSource: "local_env",
+      azureEndpoint: "https://example.openai.azure.com",
+      azureDeployment: "gpt-4o",
+      azureApiVersion: "2024-08-01-preview",
+    }, process.env.MERGEPILOT_USER_CONFIG_FILE!);
+    const setAoaiKey = vi.spyOn(KeyVaultSecrets.prototype, "setAoaiKey").mockRejectedValue(
+      new Error("Key Vault should not be called for local_env model secrets"),
+    );
+
+    app = await buildApp();
+    const response = await app.inject({
+      method: "POST",
+      url: "/daemon/configure",
+      payload: {
+        llmProvider: "azure",
+        azureEndpoint: "https://example.openai.azure.com",
+        azureDeployment: "gpt-4o",
+        azureApiVersion: "2024-08-01-preview",
+        azureApiKey: "local-model-key",
+      },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toMatchObject({ ok: true, llmConfigured: true });
+    expect(setAoaiKey).not.toHaveBeenCalled();
+  });
+});

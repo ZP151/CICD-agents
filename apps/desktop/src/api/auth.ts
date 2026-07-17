@@ -1,4 +1,4 @@
-import { RUNTIME_URL } from "./runtime.js";
+import { RUNTIME_URL, messageFromErrorResponse } from "./runtime.js";
 import { readSseJsonStream } from "./sse.js";
 
 export interface AuthUser {
@@ -87,7 +87,7 @@ export function authLoginStream(
   })
     .then(async (r) => {
       if (!r.ok || !r.body) {
-        onEvent({ type: "error", message: `HTTP ${r.status}` });
+        onEvent({ type: "error", message: await messageFromErrorResponse(`Sign in HTTP ${r.status}`, r) });
         return;
       }
       await readSseJsonStream<Record<string, unknown>>(r, ({ event, data }) => {
@@ -112,7 +112,7 @@ export async function enableAzureDevOpsOAuth(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ browser, loginHint: opts.loginHint, accountHomeId: opts.accountHomeId }),
   });
-  const body = await r.json().catch(() => ({})) as {
+  const body = await r.clone().json().catch(() => ({})) as {
     ok?: boolean;
     authMode?: "oauth";
     tokenAvailable?: boolean;
@@ -120,7 +120,13 @@ export async function enableAzureDevOpsOAuth(
     authMessage?: string;
     user?: AuthUser;
   };
-  if (!r.ok || !body.ok) throw new Error(body.authMessage ?? body.message ?? `ADO OAuth HTTP ${r.status}`);
+  if (!r.ok || !body.ok) {
+    throw new Error(
+      body.authMessage ??
+        body.message ??
+        (await messageFromErrorResponse(`Azure DevOps OAuth HTTP ${r.status}`, r)),
+    );
+  }
   return {
     ok: true,
     authMode: "oauth",

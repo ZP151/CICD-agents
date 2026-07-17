@@ -13,17 +13,17 @@ export function ReviewRunPanel({
   reviewTone: ReturnType<typeof insightReadinessTone> | null;
 }): JSX.Element {
   return (
-    <div className="mt-4 space-y-3 rounded-md border border-zinc-800/70 bg-zinc-950/30 p-3">
+    <div className="mt-4 space-y-3 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">AI Insight</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">AI Insight</h4>
           {reviewTone && (
             <span className={`rounded border px-2 py-0.5 text-[10px] ${reviewTone.tone}`}>
               {reviewTone.label}
             </span>
           )}
         </div>
-        <span className="text-[10px] text-zinc-700">
+        <span className="text-[10px] text-[rgb(var(--app-text-subtle))]">
           tokens: {result.tokensIn}/{result.tokensOut}
         </span>
       </div>
@@ -54,12 +54,12 @@ function DecisionBadges({ result }: { result: ReviewRunResult }): JSX.Element {
   return (
     <div className="flex flex-wrap gap-1.5">
       {result.contextConfidence && (
-        <span className="rounded border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400">
+        <span className="rounded border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
           context confidence {result.contextConfidence}
         </span>
       )}
       {result.decisionReasonCodes?.slice(0, 5).map((code) => (
-        <span key={`decision-code-${code}`} className="rounded border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-500">
+        <span key={`decision-code-${code}`} className="rounded border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
           {code.replace(/[._]/g, " ")}
         </span>
       ))}
@@ -72,27 +72,27 @@ function ReviewMetadata({ result }: { result: ReviewRunResult }): JSX.Element {
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-1.5">
-        <span className="rounded border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400">
+        <span className="rounded border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
           effort {result.metadata.estimatedEffort}/5
         </span>
         <span className={`rounded border px-2 py-0.5 text-[10px] ${
           result.metadata.testsRequired
-            ? "border-yellow-900/50 text-yellow-300/80"
-            : "border-zinc-800 text-zinc-500"
+            ? "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+            : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))]"
         }`}>
           tests {result.metadata.testsRequired ? "needed" : "not flagged"}
         </span>
         <span className={`rounded border px-2 py-0.5 text-[10px] ${
           result.metadata.securityConcern
-            ? "border-red-900/50 text-red-300/80"
-            : "border-zinc-800 text-zinc-500"
+            ? "border-red-500/35 bg-red-500/10 text-red-700 dark:text-red-300"
+            : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))]"
         }`}>
           security {result.metadata.securityConcern ? "concern" : "clear"}
         </span>
         <span className={`rounded border px-2 py-0.5 text-[10px] ${
           result.metadata.canBeSplit
-            ? "border-blue-900/50 text-blue-300/80"
-            : "border-zinc-800 text-zinc-500"
+            ? "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+            : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))]"
         }`}>
           split {result.metadata.canBeSplit ? "recommended" : "not flagged"}
         </span>
@@ -100,7 +100,7 @@ function ReviewMetadata({ result }: { result: ReviewRunResult }): JSX.Element {
       {result.metadata.keyIssues.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {result.metadata.keyIssues.map((issue) => (
-            <span key={`issue-${issue}`} className="rounded border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400">
+            <span key={`issue-${issue}`} className="rounded border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
               {issue}
             </span>
           ))}
@@ -113,7 +113,7 @@ function ReviewMetadata({ result }: { result: ReviewRunResult }): JSX.Element {
 function ReviewCompression({ result }: { result: ReviewRunResult }): JSX.Element {
   if (!result.compression) return <></>;
   return (
-    <div className="space-y-1 rounded-md border border-zinc-800/70 bg-zinc-950/40 p-2 text-[10px] text-zinc-500">
+    <div className="space-y-1 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2 text-[10px] text-[rgb(var(--app-text-muted))]">
       <div className="flex flex-wrap items-center gap-2">
         <span>
           context {result.compression.compressed ? "compressed" : "complete"}
@@ -148,25 +148,25 @@ function ReviewCompression({ result }: { result: ReviewRunResult }): JSX.Element
 
 function ReviewFindingsPreview({ result }: { result: ReviewRunResult }): JSX.Element {
   return (
-    <div className="divide-y divide-zinc-800/70 rounded-md border border-zinc-800/70">
+    <div className="divide-y divide-[rgb(var(--app-border))] rounded-md border border-[rgb(var(--app-border))]">
       {result.findings!.slice(0, 5).map((finding, index) => (
         <div key={`${finding.file}-${finding.line}-${index}`} className="grid gap-1 p-2 text-xs">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded px-1.5 py-0.5 text-[10px] ${
               finding.severity === "blocking"
-                ? "bg-red-950/40 text-red-400"
+                ? "bg-red-500/10 text-red-700 dark:text-red-300"
                 : finding.severity === "warning"
-                  ? "bg-yellow-950/40 text-yellow-400"
-                  : "bg-zinc-800 text-zinc-500"
+                  ? "bg-amber-500/10 text-amber-800 dark:text-amber-300"
+                  : "bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))]"
             }`}>
               {finding.severity}
             </span>
-            <span className="rounded bg-zinc-800/70 px-1.5 py-0.5 text-[10px] text-zinc-500">{finding.category}</span>
-            <span className="min-w-0 truncate font-mono text-zinc-500">
+            <span className="rounded bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">{finding.category}</span>
+            <span className="min-w-0 truncate font-mono text-[rgb(var(--app-text-muted))]">
               {finding.file}:{finding.line}
             </span>
           </div>
-          <p className="leading-relaxed text-zinc-400">{finding.message}</p>
+          <p className="leading-relaxed text-[rgb(var(--app-text-muted))]">{finding.message}</p>
         </div>
       ))}
     </div>

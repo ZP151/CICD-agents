@@ -4,6 +4,7 @@ import { PaginationControls } from "../components/PaginationControls.js";
 import { MarkdownContent } from "../components/conversation/ConversationPartRenderer.js";
 import { PipelineRowCard } from "./pipelines/PipelineRowCard.js";
 import { PipelineStatusFilters } from "./pipelines/PipelineStatusFilters.js";
+import { runTone } from "./pipelines/pipelineModel.js";
 import type { PipelineInspectState, PipelineRow } from "./pipelines/pipelineTypes.js";
 import { rowKey, usePipelinesRuntime } from "./pipelines/usePipelinesRuntime.js";
 
@@ -23,9 +24,12 @@ export default function Pipelines(): JSX.Element {
     if (selectedDetailKey && !selectedDetailRow) setSelectedDetailKey(null);
   }, [selectedDetailKey, selectedDetailRow]);
 
+  const firstLoad =
+    (projectLinksLoading && projectLinks.length === 0) || runtime.firstDiscoveryLoading;
+
   return (
     <div className="mx-auto flex min-h-full w-full max-w-[1320px] flex-col gap-4 px-4 py-2">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-800/70 pb-4">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[rgb(var(--app-border))] pb-4">
         <div>
           <h2 className="text-2xl font-semibold text-[rgb(var(--app-text))]">Pipelines</h2>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
@@ -35,6 +39,7 @@ export default function Pipelines(): JSX.Element {
         </div>
         <div className="flex items-center gap-2 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-1">
           <select
+            aria-label="Pipelines project filter"
             className="rounded-md border border-transparent bg-[rgb(var(--app-surface-raised))] px-3 py-1.5 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-[rgb(var(--app-accent))]"
             value={runtime.projectFilter}
             disabled={projectLinksLoading || runtime.projectOptions.length === 0}
@@ -62,7 +67,7 @@ export default function Pipelines(): JSX.Element {
       </header>
 
       {runtime.error && (
-        <div className="rounded-lg border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">
           {runtime.error}
         </div>
       )}
@@ -79,15 +84,15 @@ export default function Pipelines(): JSX.Element {
         onFilterChange={runtime.setFilter}
       />
 
-      {runtime.discovering && runtime.rows.length > 0 && (
+      {runtime.discovering && !runtime.firstDiscoveryLoading && (
         <p className="text-xs text-[rgb(var(--app-text-subtle))]">
           Refreshing pipeline discovery...
         </p>
       )}
 
-      {(projectLinksLoading || runtime.firstDiscoveryLoading) && <PipelineLoadingSkeleton />}
+      {firstLoad && <PipelineLoadingSkeleton />}
 
-      {!projectLinksLoading && !runtime.firstDiscoveryLoading && runtime.rows.length === 0 && (
+      {!firstLoad && runtime.rows.length === 0 && (
         <div className="flex flex-1 items-center justify-center rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-8 text-center">
           <div>
             <p className="text-sm font-medium text-[rgb(var(--app-text))]">
@@ -104,7 +109,7 @@ export default function Pipelines(): JSX.Element {
         </div>
       )}
 
-      {!runtime.firstDiscoveryLoading && runtime.rows.length > 0 && (
+      {!firstLoad && runtime.rows.length > 0 && (
         <div className="flex flex-1 flex-col gap-3">
           <div
             className={
@@ -117,7 +122,7 @@ export default function Pipelines(): JSX.Element {
                   key={`${row.projectLinkId}:${row.pipelineId}`}
                   row={row}
                   state={
-                    runtime.inspectState[`${row.projectLinkId}:${row.pipelineId}`] ?? {
+                    runtime.inspectState[rowKey(row)] ?? {
                       phase: "idle",
                     }
                   }
@@ -170,7 +175,7 @@ export default function Pipelines(): JSX.Element {
 
 function PipelineLoadingSkeleton(): JSX.Element {
   return (
-    <div className="grid gap-3 xl:grid-cols-2" aria-label="Checking pipelines">
+    <div className="grid gap-3 xl:grid-cols-2" aria-label="Pipeline loading placeholders">
       {Array.from({ length: 2 }).map((_, index) => (
         <div
           // eslint-disable-next-line react/no-array-index-key
@@ -192,7 +197,7 @@ function PipelineLoadingSkeleton(): JSX.Element {
   );
 }
 
-function PipelineDetailPanel({
+export function PipelineDetailPanel({
   row,
   state,
   onClose,
@@ -202,11 +207,18 @@ function PipelineDetailPanel({
   onClose: () => void;
 }): JSX.Element {
   const runs =
-    state.phase === "done" || state.phase === "analyzing" || state.phase === "analysis_done"
+    state.phase === "done" ||
+    state.phase === "analyzing" ||
+    state.phase === "analysis_done" ||
+    state.phase === "analysis_error"
       ? state.runs
       : [];
   const analysis =
-    state.phase === "analyzing" || state.phase === "analysis_done" ? state.analysis : "";
+    state.phase === "analyzing" ||
+    state.phase === "analysis_done" ||
+    state.phase === "analysis_error"
+      ? state.analysis
+      : "";
   const isWorking = state.phase === "loading";
   const isError = state.phase === "error";
   const isApproval = state.phase === "approval";
@@ -261,14 +273,31 @@ function PipelineDetailPanel({
         </section>
       )}
 
-      {(state.phase === "analyzing" || state.phase === "analysis_done") && (
+      {(state.phase === "analyzing" ||
+        state.phase === "analysis_done" ||
+        state.phase === "analysis_error") && (
         <section className="mb-4 border-t border-[rgb(var(--app-border))] pt-3">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-semibold text-[rgb(var(--app-text-muted))]">AI analysis</p>
-            <span className="rounded-full border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
-              {state.phase === "analyzing" ? "Analyzing" : "Ready"}
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                state.phase === "analysis_error"
+                  ? "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+                  : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))]"
+              }`}
+            >
+              {state.phase === "analyzing"
+                ? "Analyzing"
+                : state.phase === "analysis_error"
+                  ? "Error"
+                  : "Ready"}
             </span>
           </div>
+          {state.phase === "analysis_error" && (
+            <p className="mb-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs leading-relaxed text-amber-800 dark:text-amber-200">
+              AI analysis failed. Showing local run evidence summary instead. {state.message}
+            </p>
+          )}
           <MarkdownContent markdown={analysis || "Starting analysis..."} />
         </section>
       )}
@@ -281,31 +310,36 @@ function PipelineDetailPanel({
           </p>
         ) : (
           <ol className="space-y-2">
-            {runs.slice(0, 8).map((run) => (
-              <li
-                key={run.id}
-                className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-2 text-xs"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate font-medium text-[rgb(var(--app-text))]">
-                    {run.name || `Run ${run.id}`}
-                  </span>
-                  <span className="shrink-0 text-[rgb(var(--app-text-muted))]">
-                    {run.result || run.state || "unknown"}
-                  </span>
-                </div>
-                {run.url && (
-                  <a
-                    href={run.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-1 block truncate text-[rgb(var(--app-accent))]"
-                  >
-                    Open run
-                  </a>
-                )}
-              </li>
-            ))}
+            {runs.slice(0, 8).map((run) => {
+              const tone = runTone(run);
+              return (
+                <li
+                  key={run.id}
+                  className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-2 text-xs"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate font-medium text-[rgb(var(--app-text))]">
+                      {run.name || `Run ${run.id}`}
+                    </span>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${tone.tone}`}
+                    >
+                      {tone.label}
+                    </span>
+                  </div>
+                  {run.url && (
+                    <a
+                      href={run.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 block truncate text-[rgb(var(--app-accent))]"
+                    >
+                      Open run
+                    </a>
+                  )}
+                </li>
+              );
+            })}
           </ol>
         )}
       </section>

@@ -109,6 +109,53 @@ describe("pipelineWorkflow", () => {
     expect(content).toContain("- Run focused local validation");
   });
 
+  it("uses readable fallbacks when pipeline run metadata is incomplete", () => {
+    const runs = [
+      pipelineRun({
+        id: undefined as unknown as number,
+        name: "",
+        state: "",
+        result: "failed",
+        sourceBranch: "",
+        createdDate: "",
+        finishedDate: "",
+        url: "",
+      }),
+    ];
+    const timeline: AzureBuildTimelineSummary = {
+      buildId: 0,
+      failedRecords: [
+        {
+          id: "",
+          parentId: "",
+          type: "",
+          name: "",
+          state: "",
+          result: "failed",
+          startTime: "",
+          finishTime: "",
+          logId: 0,
+          logUrl: "",
+          issues: [],
+        },
+      ],
+      errorIssues: [],
+      warningIssues: [],
+    };
+
+    const summary = summarizePipelineRuns(117, runs, timeline, []);
+    const artifactContent = pipelineFailureArtifacts(117, runs, timeline, [])[0]?.content ?? "";
+    const combined = `${summary}\n${artifactContent}`;
+
+    expect(combined).toContain("Pipeline #117 latest run #not available run: not available/failed.");
+    expect(combined).toContain("branch not available");
+    expect(combined).toContain("not available");
+    expect(combined).toContain("Classification: Unclassified failure");
+    expect(combined).not.toContain("unknown branch");
+    expect(combined).not.toContain("Unknown failure class");
+    expect(combined).not.toMatch(/\bunknown\b/i);
+  });
+
   it("redacts secrets from pipeline summaries and failure artifacts", () => {
     const runs = [
       pipelineRun({

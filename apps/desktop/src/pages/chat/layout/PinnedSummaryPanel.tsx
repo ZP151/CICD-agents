@@ -75,6 +75,7 @@ export function PinnedSummaryPanel({
   const removed = diffStats?.removed ?? 0;
   const divergenceNotice = gitDivergenceNotice(gitStatus);
   const pushBlocked = Boolean(divergenceNotice?.blocksPush);
+  const adoReady = Boolean(activeProjectLink?.adoProject && activeProjectLink?.adoRepoName);
 
   const runAction = (action: WorkspaceAction) => {
     if (busy) return;
@@ -309,6 +310,28 @@ export function PinnedSummaryPanel({
             <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-subtle))]">
               {[activeProjectLink.adoProject, activeProjectLink.adoRepoName].filter(Boolean).join(" / ")}
             </p>
+          )}
+          {adoReady && (
+            <div className="mt-2 grid grid-cols-2 gap-1">
+              <button
+                type="button"
+                onClick={() => runAction({ type: "inspect_pr_insight" })}
+                disabled={busy}
+                className="truncate rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
+                title="Inspect the latest active pull request insight"
+              >
+                PR insight
+              </button>
+              <button
+                type="button"
+                onClick={() => runAction({ type: "inspect_pipeline" })}
+                disabled={busy}
+                className="truncate rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
+                title="Inspect Azure DevOps pipeline readiness"
+              >
+                Pipeline
+              </button>
+            </div>
           )}
         </div>
 

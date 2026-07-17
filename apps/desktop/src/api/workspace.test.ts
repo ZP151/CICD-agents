@@ -57,4 +57,15 @@ describe("fetchWorkspaceFile", () => {
       status: 415,
     } satisfies Partial<WorkspaceFilePreviewError>);
   });
+
+  it("maps unknown preview failures to a concise fallback without HTTP status text", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 500 })));
+
+    await expect(fetchWorkspaceFile("C:\\repo", "src/app.ts")).rejects.toMatchObject({
+      name: "WorkspaceFilePreviewError",
+      message: "Workspace file preview failed.",
+      status: 500,
+    } satisfies Partial<WorkspaceFilePreviewError>);
+    await expect(fetchWorkspaceFile("C:\\repo", "src/app.ts")).rejects.not.toThrow("HTTP 500");
+  });
 });

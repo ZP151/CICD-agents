@@ -1,5 +1,6 @@
 import type { ReviewQueueItem } from "./api.js";
 import { reviewQueueItemKey } from "./reviewRunHistory.js";
+import { parseSortableDate } from "./safeDate.js";
 
 export const REVIEW_OPERATIONS_LS_KEY = "mergepilot_review_operations_v1";
 const MAX_REVIEW_OPERATIONS = 50;
@@ -52,7 +53,7 @@ function saveStore(store: ReviewOperationStore): void {
 }
 
 function sortOperations(items: ReviewOperationEvent[]): ReviewOperationEvent[] {
-  return items.slice().sort((a, b) => Date.parse(b.at || "0") - Date.parse(a.at || "0"));
+  return items.slice().sort((a, b) => parseSortableDate(b.at) - parseSortableDate(a.at));
 }
 
 export function listReviewOperations(

@@ -11,7 +11,7 @@ import {
   type ReviewOperationEvent,
 } from "../reviewOperations.js";
 import { readLlmConfig, readProjectLinkData } from "./localSettings.js";
-import { RUNTIME_URL, messageFromErrorBody } from "./runtime.js";
+import { RUNTIME_URL, messageFromErrorBody, messageFromErrorResponse } from "./runtime.js";
 import type { ReviewQueueItem, ReviewRunResult } from "./pullRequestTypes.js";
 
 export type { ReviewHistoryRecord } from "../reviewHistoryLocal.js";
@@ -31,10 +31,7 @@ export async function fetchProjectLinkReviewQueue(projectLinkId: string): Promis
 
   try {
     const r = await fetch(`${RUNTIME_URL}${PROJECT_LINKS_PATH}/${projectLinkId}/review-queue`);
-    if (!r.ok)
-      throw new Error(
-        `${PROJECT_LINKS_PATH}/${projectLinkId}/review-queue HTTP ${r.status}: ${await r.text()}`,
-      );
+    if (!r.ok) throw new Error(await messageFromErrorResponse("Review history cloud storage is unavailable.", r));
     const body = (await r.json()) as {
       configured: boolean;
       items: ReviewQueueItem[];
@@ -68,6 +65,9 @@ function reviewQueueFallbackWarning(error: unknown): string {
   const body = match?.[1]?.trim();
   if (body) {
     return messageFromErrorBody("Review history cloud storage is unavailable.", body);
+  }
+  if (/\/project-links\/.+\/review-queue\s+HTTP\s+\d+/i.test(message)) {
+    return "Review history cloud storage is unavailable.";
   }
   return messageFromErrorBody("Review history cloud storage is unavailable.", message);
 }

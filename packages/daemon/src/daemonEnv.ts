@@ -15,21 +15,21 @@ export const KEY_VAULT_SECRET_SOURCE = "key_vault";
 let secretHydrationError: string | null = null;
 
 const CONFIG_TEMPLATE = `# MergePilot user configuration
-# Secrets are read from Azure Key Vault. This file keeps only non-secret model,
-# Azure auth, cloud storage, and review preferences.
+# Secrets default to the local .env file. Enable Key Vault in Settings only when
+# this Azure account has the required secrets/get and secrets/set permissions.
 
 [llm]
 provider = "azure"
 
 [secrets]
-source = "key_vault"
+source = "local_env"
 
 [azure_openai]
 endpoint = ""
 chat_deployment = "mergepilot-chat"
 embedding_deployment = "text-embedding-3-small"
 api_version = "2024-08-01-preview"
-api_key_ref = "kv://secret/mergepilot-aoai-key"
+api_key_ref = ""
 
 [azure_auth]
 tenant_id = ""
@@ -134,6 +134,9 @@ export function loadDaemonEnv(): void {
   }
   const config = readMergePilotUserConfig(configFile);
   if (config.secretSource === LOCAL_ENV_SECRET_SOURCE) {
+    if (!isTestRuntime) {
+      ensureMergePilotLocalEnvFile();
+    }
     loadLocalEnvSecrets(explicitProcessEnv);
   }
   applyUserConfigToEnv(config, explicitProcessEnv);
@@ -288,15 +291,20 @@ function configFromToml(content: string): MergePilotUserConfig {
 }
 
 function configToToml(config: MergePilotUserConfig): string {
+  const secretSource = config.secretSource ?? LOCAL_ENV_SECRET_SOURCE;
+  const azureApiKeyRef = secretSource === KEY_VAULT_SECRET_SOURCE
+    ? config.azureApiKeyRef ?? SYSTEM_AZURE_OPENAI_API_KEY_REF
+    : config.azureApiKeyRef ?? "";
   return [
     "# MergePilot user configuration",
-    "# Secrets are read from Azure Key Vault and referenced from this file.",
+    "# Secrets default to the local .env file. Enable Key Vault in Settings only when",
+    "# this Azure account has the required secrets/get and secrets/set permissions.",
     "",
     "[llm]",
     `provider = ${tomlString(config.llmProvider ?? "azure")}`,
     "",
     "[secrets]",
-    `source = ${tomlString(config.secretSource ?? KEY_VAULT_SECRET_SOURCE)}`,
+    `source = ${tomlString(secretSource)}`,
     "",
     "[openai]",
     `model = ${tomlString(config.openaiModel ?? "")}`,
@@ -307,7 +315,7 @@ function configToToml(config: MergePilotUserConfig): string {
     `chat_deployment = ${tomlString(config.azureDeployment ?? "mergepilot-chat")}`,
     `embedding_deployment = ${tomlString(config.azureEmbeddingDeployment ?? "text-embedding-3-small")}`,
     `api_version = ${tomlString(config.azureApiVersion ?? "2024-08-01-preview")}`,
-    `api_key_ref = ${tomlString(config.azureApiKeyRef ?? SYSTEM_AZURE_OPENAI_API_KEY_REF)}`,
+    `api_key_ref = ${tomlString(azureApiKeyRef)}`,
     "",
     "[azure_auth]",
     `tenant_id = ${tomlString(config.azureTenantId ?? "")}`,

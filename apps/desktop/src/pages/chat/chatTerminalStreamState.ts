@@ -107,7 +107,7 @@ export function cancelledSystemBubble(id: string): Bubble {
 }
 
 export function errorMessageFromEvent(ev: ChatEventPayload): string {
-  return ev.message ?? "Unknown error";
+  return ev.message ?? "Something went wrong.";
 }
 
 function noopId(): string {

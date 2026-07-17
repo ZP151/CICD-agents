@@ -76,6 +76,4592 @@ Copy this template for each live/destructive run.
 
 ## Records
 
+## Run: mp-0522-readiness-fast-handoff-smoke-20260717-2030
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 20:02-20:30 +08:00 |
+| Operator/account | Codex on local Windows workspace |
+| Machine | `C:\Users\15492\Develop\Agents\CICD-agents` |
+| Git commit | Working tree, not committed |
+| Test command | `.\scripts\windows\verify-current-release-readiness.ps1 -Version 0.5.22 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -StaleScanExtractionTimeoutSec 120 -SkipTimestampProbe`; `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -Version 0.5.22 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -SkipPackageSmokes -StaleScanExtractionTimeoutSec 120`; `.\scripts\windows\verify-windows-scripts-parse.ps1`; `.\scripts\windows\verify-active-doc-links.ps1`; `git diff --check -- scripts/windows/verify-current-release-readiness.ps1 scripts/windows/verify-current-release-readiness-smoke.ps1 docs/automated-business-test-suite-plan.md` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_LIVE_AZURE=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass with diagnostic timeout finding |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Full readiness smoke attempt | Diagnostic timeout | A full readiness smoke with package runtime checks on ports `19249/19250` timed out without structured output. Follow-up probes found a temporary extracted MSI daemon briefly owning port `19250`; it exited on its own and left no listener or temp extraction directories. |
+| Readiness handoff reprobe | Pass | Non-package readiness output now emits `Set-Location -LiteralPath ...; & <absolute script>` commands for signing readiness, signing, and signature verification, all with quoted supplied MSI/NSIS `-Paths`. |
+| Fast readiness smoke | Pass | Added and ran `verify-current-release-readiness-smoke.ps1 -SkipPackageSmokes` to validate grouped blockers, installed-MSI handoff, release-script tracking handoff, absolute signing handoff commands, signature paths, parser gate, and missing-MSI JSON without running expensive packaged runtime checks. |
+| Windows script parser | Pass | Parsed 32 Windows scripts with 0 failures. |
+| Active documentation links | Pass | Checked 91 references with 0 failures. |
+| Cleanup probe | Pass | Ports `19121`, `19122`, `19249`, `19250`, `8787`, and `1420` had no matching listeners; no current `mergepilot-msi-extract-*`, `mergepilot-packaged-sidecar-*`, or `mergepilot-readiness-smoke-*` temp directories remained. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Temporary package smoke process | cleaned | The temporary extracted MSI daemon on port `19250` exited after the timed-out full smoke. Follow-up port and temp-directory probes were clean. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None from this run |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Full readiness smoke can spend several minutes in packaged runtime checks and may timeout before returning structured JSON. | Medium | Added `-SkipPackageSmokes` for fast handoff/JSON regression checks while preserving the default full smoke for package runtime verification. |
+| Signing handoff commands were absolute-path incomplete compared with installed-MSI handoff commands. | Medium | Fixed. `verify-current-release-readiness.ps1` now emits `Set-Location -LiteralPath <repo>; & <absolute script>` for signing readiness, signing, and signature verification handoffs. |
+
+## Run: mp-0522-signing-doc-gate-alignment-20260717-1521
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 15:13-15:21 +08:00 |
+| Operator/account | Codex on local Windows workspace |
+| Machine | `C:\Users\15492\Develop\Agents\CICD-agents` |
+| Git commit | Working tree, not committed |
+| Test command | `.\scripts\windows\sign-windows-release-artifacts-smoke.ps1 -Version 0.5.22`; `.\scripts\windows\verify-release-workflow-static-smoke.ps1`; `.\scripts\windows\verify-active-doc-links.ps1`; `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -Version 0.5.22 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -FreshConfigPort 19247 -MsiPayloadPort 19248 -StaleScanExtractionTimeoutSec 120` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_LIVE_AZURE=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Signing docs and local gate alignment | Pass | `docs/windows-code-signing.md` now documents supplied-artifact `-Paths` usage for readiness, signing, and signature verification, plus the non-destructive signing smoke. |
+| Automated suite plan alignment | Pass | `docs/automated-business-test-suite-plan.md` now separates release workflow gates from local smoke gates and lists the readiness, signature-verifier, and signing-command path smokes before real signing. |
+| Signing path smoke | Pass | Confirmed `sign-windows-release-artifacts-smoke.ps1` still fails before signing and reports both supplied missing artifact paths. |
+| Release workflow static smoke | Pass | Release workflow structure and workflow-referenced script parsing remain green; strict tracking still reports only the five workflow-referenced scripts as untracked. |
+| Readiness smoke | Pass | Confirmed installed-MSI handoff, tracking handoff, signing handoff with `-Paths`, package runtime gates, and missing-MSI path fidelity. |
+| Active documentation links | Pass | Checked 91 references with 0 failures. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Package smoke ports | cleaned | Ports `19247` and `19248` were used by readiness package smokes and did not remain as listeners. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None from this run |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Windows signing docs did not yet explain the new supplied-artifact `-Paths` path or the non-destructive signing handoff smoke. | Low | Fixed in `docs/windows-code-signing.md` and `docs/automated-business-test-suite-plan.md`; active doc link verification passed. |
+
+## Run: mp-0522-sign-script-paths-smoke-20260717-1512
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 15:06-15:12 +08:00 |
+| Operator/account | Codex on local Windows workspace |
+| Machine | `C:\Users\15492\Develop\Agents\CICD-agents` |
+| Git commit | Working tree, not committed |
+| Test command | `.\scripts\windows\sign-windows-release-artifacts-smoke.ps1 -Version 0.5.22`; `.\scripts\windows\verify-windows-scripts-parse.ps1`; `.\scripts\windows\verify-release-workflow-static-smoke.ps1` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_LIVE_AZURE=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Signing script path smoke | Pass | New non-destructive smoke passes deliberately missing MSI and NSIS paths to `sign-windows-release-artifacts.ps1 -Paths`. The script fails before certificate import/signing and reports both supplied paths, proving copied signing handoff commands will not fall back to default local artifacts. |
+| Windows script parser | Pass | Parsed 32 Windows scripts with 0 failures after adding `sign-windows-release-artifacts-smoke.ps1`. |
+| Release workflow static smoke | Pass | Release workflow structure, workflow-referenced script parsing, strict tracking diagnostics, and TCP timestamp guard all passed. Strict tracking still reports the five workflow-referenced scripts as untracked until staging is requested. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| None | cleaned | The sign smoke uses missing paths and does not create, sign, or modify release artifacts. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None from this run |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| `sign-windows-release-artifacts.ps1 -Paths` needed its own non-destructive regression guard because the real command mutates artifacts when signing material exists. | Medium | Fixed with `sign-windows-release-artifacts-smoke.ps1`, which validates path-list parsing through the same `powershell.exe -File` boundary without signing. |
+
+## Run: mp-0522-readiness-signing-handoff-paths-20260717-1505
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 14:56-15:05 +08:00 |
+| Operator/account | Codex on local Windows workspace |
+| Machine | `C:\Users\15492\Develop\Agents\CICD-agents` |
+| Git commit | Working tree, not committed |
+| Test command | `.\scripts\windows\verify-windows-scripts-parse.ps1`; `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -Version 0.5.22 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -FreshConfigPort 19245 -MsiPayloadPort 19246 -StaleScanExtractionTimeoutSec 120`; `.\scripts\windows\verify-current-release-readiness.ps1 -Version 0.5.21 -MsiPath ".\.artifacts\github-run-29436222385\msi\MergePilot_0.5.21_x64_en-US.msi" -StaleScanExtractionTimeoutSec 120 -SkipTimestampProbe` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_LIVE_AZURE=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Windows script parser | Pass | Parsed 31 Windows scripts with 0 failures after adding `-Paths` support to `sign-windows-release-artifacts.ps1`. |
+| Readiness smoke | Pass | Confirmed `nextActions.configureWindowsSigning.artifactPaths` includes the supplied MSI and sibling NSIS, and that `verifyReadinessCommand`, `verifyReadinessWithoutTimestampCommand`, `signArtifactsCommand`, and `verifySignaturesCommand` all include quoted `-Paths` arguments for those artifacts. |
+| Downloaded GitHub run artifact handoff | Pass | The downloaded `0.5.21` artifact from Actions run `29436222385` now emits signing handoff commands pointing to `.artifacts\github-run-29436222385\msi\MergePilot_0.5.21_x64_en-US.msi` and `.artifacts\github-run-29436222385\nsis\MergePilot_0.5.21_x64-setup.exe`. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| None | cleaned | No live ADO/Azure resources were created. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None from this run |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The readiness checks themselves followed supplied artifact paths, but the generated signing handoff commands still used only `-Version`, which could send a user back to the local default build output when they copied the suggested command. | Medium | Fixed. `nextActions.configureWindowsSigning` now includes `artifactPaths`, and all signing/readiness/signature handoff commands include a quoted path-list `-Paths` argument. |
+| `sign-windows-release-artifacts.ps1` could only sign default local release output. | Medium | Fixed. The script now accepts `-Paths`, matching the readiness and signature-verification scripts. |
+
+## Run: mp-0522-readiness-signing-path-chain-20260717-1455
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 14:43-14:55 +08:00 |
+| Operator/account | Codex on local Windows workspace |
+| Machine | `C:\Users\15492\Develop\Agents\CICD-agents` |
+| Git commit | Working tree, not committed |
+| Test command | `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -Version 0.5.22 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -FreshConfigPort 19243 -MsiPayloadPort 19244 -StaleScanExtractionTimeoutSec 120`; `.\scripts\windows\verify-current-release-readiness.ps1 -Version 0.5.21 -MsiPath ".\.artifacts\github-run-29436222385\msi\MergePilot_0.5.21_x64_en-US.msi" -StaleScanExtractionTimeoutSec 120 -SkipTimestampProbe`; `.\scripts\windows\verify-windows-scripts-parse.ps1`; `.\scripts\windows\verify-active-doc-links.ps1`; `git diff --check -- scripts/windows/verify-current-release-readiness.ps1 scripts/windows/verify-windows-signing-readiness.ps1 scripts/windows/verify-current-release-readiness-smoke.ps1` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_LIVE_AZURE=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Readiness smoke | Pass | Confirmed normal blocker grouping, installed-MSI handoff, release-script tracking handoff, Windows signing handoff, parser gate, MSI+NSIS signature paths, package runtime gates, missing-MSI JSON, and missing-MSI signing readiness path fidelity. |
+| Downloaded GitHub run artifact readiness | Pass with expected blockers | The downloaded `0.5.21` MSI from Actions run `29436222385` was checked non-destructively. Readiness now uses the supplied `.artifacts\github-run-29436222385` MSI and sibling NSIS for signature diagnostics instead of falling back to local `0.5.22` build output. |
+| Windows script parser | Pass | Parsed 31 Windows scripts with 0 failures. |
+| Active documentation links | Pass | Checked 91 references with 0 failures. |
+| Diff whitespace check | Pass | No whitespace errors for the touched readiness/signing scripts. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Temporary smoke ports | cleaned | Package smoke ports `19243` and `19244` were used by the readiness smoke and did not remain as app listeners. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None from this run |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Readiness signing preflight previously accepted `-Paths` as `string[]` but did not split path-list strings passed through `powershell.exe -File`; the aggregator also did not pass supplied MSI/sibling NSIS paths into the signing preflight. | Medium | Fixed. `verify-windows-signing-readiness.ps1` now normalizes path-list input, `verify-current-release-readiness.ps1` passes supplied artifact paths to signing readiness, and the smoke asserts missing MSI/NSIS path fidelity. |
+| Release blockers remain unchanged: five workflow-referenced scripts are untracked, Windows signing certificate is not configured, local/downloaded Windows artifacts are unsigned, and Program Files is still stale at `0.5.20` NSIS shape. | External gate | Stage/commit only when requested; configure trusted signing certificate; install current MSI with elevation when ready. |
+
+## Run: mp-0522-readiness-nextactions-plan-sync-20260717-1439
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 14:34-14:39 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | working tree |
+| Test command | `.\scripts\windows\verify-current-release-readiness.ps1 -Version 0.5.22 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -StaleScanExtractionTimeoutSec 120 -SkipTimestampProbe`; `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -Version 0.5.22 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -FreshConfigPort 19231 -MsiPayloadPort 19232 -StaleScanExtractionTimeoutSec 120`; `.\scripts\windows\verify-active-doc-links.ps1` |
+| Environment flags | No live Azure DevOps or destructive flags |
+| Azure DevOps org | Not used |
+| Azure DevOps project | Not used |
+| Azure DevOps repo | Not used |
+| Azure subscription | Not used |
+| Azure resource group | Not used |
+| Result | Pass with expected release blockers |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Readiness nextActions reprobe | Pass as diagnostic | Readiness output still reports the expected blockers and exposes all three handoff groups: `installCurrentMsi`, `trackReleaseWorkflowScripts`, and `configureWindowsSigning`. |
+| Automated test plan sync | Pass | `docs/automated-business-test-suite-plan.md` now documents how to use all three readiness `nextActions` groups and when not to run staging/signing commands. |
+| Readiness smoke | Pass | Smoke passed with ports `19231/19232`, confirming installed-MSI handoff, release-script tracking handoff, Windows signing handoff, parser gate, MSI+NSIS signature paths, package runtime gates, and missing-MSI JSON. |
+| Documentation links | Pass | `verify-active-doc-links.ps1` passed with 91 checked references. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary package smoke data | Script-generated temp dirs | local filesystem | Readiness smoke package checks | Removed by scripts |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO/Azure resources | none created | This was local readiness/documentation verification only. |
+| Package smoke listeners | cleaned | Package smoke ports were scoped to `19231` and `19232`. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The automated test plan is now aligned with the readiness JSON handoff surface. | Fixed | Keep the plan updated when new `nextActions` are added. |
+| Release blockers remain expected. | High | Installed Program Files is still stale, workflow scripts are not staged, and Windows signing is not configured. |
+
+## Run: mp-0522-windows-signing-handoff-20260717-1432
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 14:27-14:32 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | working tree |
+| Test command | `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -Version 0.5.22 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -FreshConfigPort 19221 -MsiPayloadPort 19222 -StaleScanExtractionTimeoutSec 120`; `.\scripts\windows\verify-windows-scripts-parse.ps1` |
+| Environment flags | No live Azure DevOps or destructive flags |
+| Azure DevOps org | Not used |
+| Azure DevOps project | Not used |
+| Azure DevOps repo | Not used |
+| Azure subscription | Not used |
+| Azure resource group | Not used |
+| Result | Pass with expected signing blockers |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Windows signing handoff | Pass | Readiness now emits `nextActions.configureWindowsSigning` with required inputs, docs, readiness-check command, no-timestamp readiness command, signing command, and signature-verification command. |
+| Readiness smoke | Pass | Smoke confirmed grouped blockers, installed-MSI handoff, release-script tracking handoff, Windows signing handoff, parser gate, MSI+NSIS signature paths, package runtime gates, and missing-MSI structured JSON. |
+| Script parser sweep | Pass | `verify-windows-scripts-parse.ps1` parsed 31 Windows helper scripts with 0 failures. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary package smoke data | Script-generated temp dirs | local filesystem | Readiness smoke package checks | Removed by scripts |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO/Azure resources | none created | This was local readiness verification only. |
+| Package smoke listeners | cleaned | Package smoke ports were scoped to `19221` and `19222`. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Windows signing blocker is now actionable from readiness JSON. | Fixed | After trusted certificate configuration, run `verifyReadinessCommand`, `signArtifactsCommand`, then `verifySignaturesCommand`. |
+| Signing certificate configuration is still absent. | High | Configure `WINDOWS_CODESIGN_CERT_PFX_BASE64` or local `-PfxPath`, plus `WINDOWS_CODESIGN_CERT_PASSWORD`. |
+| Windows artifacts remain unsigned. | High | Do not publish release-grade Windows installers until signature verification is `ok: true`. |
+
+## Run: mp-0522-release-script-tracking-handoff-20260717-1426
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 14:22-14:26 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | working tree |
+| Test command | `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -Version 0.5.22 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -FreshConfigPort 19211 -MsiPayloadPort 19212 -StaleScanExtractionTimeoutSec 120`; `.\scripts\windows\verify-windows-scripts-parse.ps1` |
+| Environment flags | No live Azure DevOps or destructive flags |
+| Azure DevOps org | Not used |
+| Azure DevOps project | Not used |
+| Azure DevOps repo | Not used |
+| Azure subscription | Not used |
+| Azure resource group | Not used |
+| Result | Pass with expected release blockers |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Release script tracking handoff | Pass | Readiness now emits `nextActions.trackReleaseWorkflowScripts.scripts` with the exact workflow-referenced untracked scripts and `suggestedStageCommand` beginning with `git add --`. |
+| Untracked release scripts listed | Pass | Smoke confirmed the list includes `verify-no-stale-chat-template.ps1`, `verify-windows-installer-metadata.ps1`, `verify-windows-signing-readiness.ps1`, `sign-windows-release-artifacts.ps1`, and `verify-windows-artifact-signatures.ps1`. |
+| Readiness smoke | Pass | Smoke still confirmed grouped blockers, installed-MSI handoff, parser gate, MSI+NSIS signature paths, package runtime gates, and missing-MSI structured JSON. |
+| Script parser sweep | Pass | `verify-windows-scripts-parse.ps1` parsed 31 Windows helper scripts with 0 failures. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary package smoke data | Script-generated temp dirs | local filesystem | Readiness smoke package checks | Removed by scripts |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO/Azure resources | none created | This was local readiness verification only. |
+| Package smoke listeners | cleaned | Package smoke ports were scoped to `19211` and `19212`. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Release workflow tracking blocker is now actionable from readiness JSON. | Fixed | Use the suggested stage command only when the user asks to stage/commit release work. |
+| Release workflow scripts remain untracked in the current worktree. | High | Stage and commit the workflow-referenced scripts before creating a release tag. |
+| Windows artifacts remain unsigned and Program Files remains stale. | High | Signing and elevated current-MSI install are still separate blockers. |
+
+## Run: mp-0522-local-msi-package-runtime-smokes-20260717-1420
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 14:19-14:20 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | working tree |
+| Test command | `.\scripts\windows\packaged-fresh-config-smoke.ps1 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -Port 19201`; `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -Port 19202`; `.\scripts\windows\packaged-live-vision-smoke.ps1 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -Port 19203` |
+| Environment flags | No live Azure DevOps or destructive flags |
+| Azure DevOps org | Not used |
+| Azure DevOps project | Not used |
+| Azure DevOps repo | Not used |
+| Azure subscription | Not used |
+| Azure resource group | Not used |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Packaged fresh config smoke | Pass | Extracted MSI daemon reported health `0.5.22`; fresh user config defaulted to `secretSource: local_env`, `aoaiKeyInVault: false`, and `keyVaultSecretError: null`. |
+| Packaged MSI payload smoke | Pass | Extracted desktop and daemon from local MSI, validated legacy cleanup WiX metadata, daemon health `0.5.22`, index refresh saw/indexed 1 file, workflow phase `inspect_environment`, and `/chat` returned HTTP `200`. |
+| Packaged live vision smoke | Pass | Extracted MSI daemon handled an image prompt through SSE; final answer recognized `MP VISION TEST`, blue square, and red circle; `assistantDeltaCount` was 24; no control JSON leak, duplicate final sentence, or SSE errors. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary MSI extraction dirs | `%TEMP%\mergepilot-*` | local filesystem | Package smokes | Removed by scripts |
+| Temporary package daemon processes | `mergepilot-daemon` | `127.0.0.1:19201-19203` | Package smokes | Stopped by scripts |
+| Vision SSE log | `output\live-e2e\packaged-live-vision-sse-19203.log` | local filesystem | Vision smoke | Retained as test evidence |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO/Azure resources | none created | This was local package verification only. |
+| Package smoke ports | cleaned | Post-run probe found no listeners on `19201`, `19202`, or `19203`. |
+| Package daemon processes | cleaned | Post-run process probe found no `mergepilot-daemon` process. |
+| Temporary MSI/package dirs | cleaned | Post-run temp probe found no matching package smoke directories. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Local `0.5.22` MSI package runtime remains healthy without installation. | Info | This separates package correctness from the stale Program Files installation blocker. |
+| Installed Program Files state remains separate and stale. | High | Install current MSI from elevated PowerShell before installed-app proof. |
+| Windows artifacts remain unsigned. | High | Configure trusted Authenticode signing before release-grade distribution. |
+
+## Run: mp-0522-install-handoff-alignment-20260717-1418
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 14:12-14:18 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | working tree |
+| Test command | `.\scripts\windows\install-and-verify-msi-state-preflight-smoke.ps1 -ExpectedVersion 0.5.22 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi"`; `.\scripts\windows\verify-installed-windows-package-state.ps1 -ExpectedVersion 0.5.22 -ExpectedDesktopBundleKind msi -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi"`; `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -Version 0.5.22 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -FreshConfigPort 19171 -MsiPayloadPort 19172 -StaleScanExtractionTimeoutSec 120`; `.\scripts\windows\verify-windows-scripts-parse.ps1` |
+| Environment flags | No live Azure DevOps or destructive flags |
+| Azure DevOps org | Not used |
+| Azure DevOps project | Not used |
+| Azure DevOps repo | Not used |
+| Azure subscription | Not used |
+| Azure resource group | Not used |
+| Result | Pass with expected installed-state blocker |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Non-admin MSI install preflight smoke | Pass | Preflight returned parseable JSON with `requiresElevation: true`, current installed version `0.5.20`, running `mergepilot-desktop.exe` from Program Files, and MSI identity for local `0.5.22`. |
+| MSI metadata in preflight | Pass | MSI reported product `MergePilot`, version `0.5.22`, manufacturer `Total eBiz Solutions Pte Ltd`, `ALLUSERS=1`, and SHA-256 `9FEA9AD6FEAC5104E2E717078929BF0A058D86F48958907E281D000CD8AE5F75`. |
+| Installed package state probe | Expected fail | Probe still reports Program Files `0.5.20`, desktop bundle kind `nsis`, and `uninstall.exe` while MSI shape was expected. This confirms the installed-app blocker remains real. |
+| Readiness installed-MSI handoff | Pass | `verify-current-release-readiness.ps1` now emits both `recommendedElevatedCommand` for the full installed verification and `quickElevatedCommand` with `-SkipVision`, plus `verifyAfterManualInstall` with `-SkipInstall`. |
+| Readiness smoke | Pass | Smoke passed with ports `19171/19172`, including installed handoff assertions, parser gate, MSI+NSIS signature paths, package runtime gates, and missing-MSI structured JSON. |
+| Script parser sweep | Pass | `verify-windows-scripts-parse.ps1` parsed 31 Windows helper scripts with 0 failures. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary package smoke data | Script-generated temp dirs | local filesystem | Readiness smoke package checks | Removed by scripts |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO/Azure resources | none created | This was local install/readiness verification only. |
+| Package smoke listeners | cleaned | Package smoke ports were scoped to `19171` and `19172`. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Install handoff output is now aligned across preflight and readiness. | Fixed | Use `nextActions.installCurrentMsi.recommendedElevatedCommand` for full validation or `quickElevatedCommand` when skipping the vision gate is intentional. |
+| Installed Program Files remains stale. | High | Run the elevated current-MSI install command, then rerun installed parity. |
+| Windows artifacts remain unsigned. | High | Configure trusted Authenticode signing before release-grade distribution. |
+
+## Run: mp-0522-live-ado-readonly-reprobe-20260717-1410
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 14:07-14:10 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | working tree |
+| Test command | `.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon -LiveAdo -Grep "ClaimBot_API pipeline #117" -Project chromium -Workers 1`; `$env:MERGEPILOT_E2E_LIVE_ADO='1'; .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/prWorkflow.test.ts`; `$env:MERGEPILOT_E2E_LIVE_ADO='1'; .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAdoDiscovery.test.ts test/liveAdoPipeline.test.ts` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=1` for test child processes; `MERGEPILOT_E2E_DESTRUCTIVE` unset |
+| Azure DevOps org | `https://tebssg.visualstudio.com/` |
+| Azure DevOps project | `TeBS-ClaimBot` |
+| Azure DevOps repo | `ClaimBot_API` |
+| Azure subscription | Not used |
+| Azure resource group | Not used |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Live source-app ClaimBot_API pipeline UI gate | Pass | Source daemon `0.5.22` started through `run-live-app-e2e.ps1`; 4/4 Chromium tests passed for ClaimBot_API pipeline `#117`. |
+| Pipeline discovery and connection | Pass | Real Chat UI discovered and saved ClaimBot_API pipeline `#117` when the Project Link had no pipeline ID. |
+| Pipeline evidence inspection | Pass | Real Chat UI inspected ClaimBot_API pipeline failure evidence through normal chat input. |
+| Pipeline rerun approval preparation | Pass | Real Chat UI prepared rerun approval from failure evidence suggestions without confirming or queueing a run. |
+| Pipeline trigger approval preparation | Pass | Real Chat UI prepared pipeline approval through Chat without destructive execution. |
+| Daemon PR workflow regression | Pass | `@mergepilot/daemon` `test/prWorkflow.test.ts` passed 3/3. |
+| Core live ADO discovery/pipeline regression | Pass | `@mergepilot/core` live ADO tests passed 3/3 with 1 destructive queue test skipped. Discovery found the ClaimBot_API project/repository/pipeline; pipeline test listed recent runs and read timeline/log evidence. |
+| Post-run pipeline mutation check | Pass | Azure CLI readback showed latest pipeline run remained `4680 / 20260706.1 / completed / succeeded`, branch `refs/heads/main`, proving no new pipeline run was queued. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Source daemon process | `mergepilot-daemon` `0.5.22` | `http://127.0.0.1:8787` | Live source-app wrapper | Stopped by wrapper |
+| Playwright/Vite server | Vite test server | `http://127.0.0.1:1420` | Playwright | Stopped by Playwright |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO pipeline run | none queued | Latest ClaimBot_API pipeline run stayed at id `4680`. |
+| ADO PR / branch / work item | none created | Destructive mode was disabled. |
+| `%TEMP%\mergepilot-live-*` | cleaned | Post-run temp probe found no live-app temp directories. |
+| `MERGEPILOT_E2E_*` env vars | none present | Post-run environment probe found no live/destructive flags in the parent shell. |
+| Local ports | cleaned | Post-run probe found no `8787` or `1420` listeners. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Real ADO read-only pipeline discovery, evidence inspection, and approval-preparation flows remain green. | Info | Keep this gate separate from destructive pipeline rerun tests. |
+| Destructive ADO queue coverage remains intentionally skipped. | Info | Only run with `MERGEPILOT_E2E_DESTRUCTIVE=1` and a cleanup record when intentionally validating real run creation. |
+| Installed Program Files state remains separate from source-app health. | High | Current source daemon is `0.5.22`; installed Program Files parity still requires elevated current-MSI installation. |
+
+## Run: mp-0522-live-source-non-ado-business-reprobe-20260717-1406
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 13:56-14:06 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | working tree |
+| Test command | `.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon -Project chromium -Workers 1` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO` unset; `MERGEPILOT_E2E_DESTRUCTIVE` unset |
+| Azure DevOps org | Not used |
+| Azure DevOps project | Not used |
+| Azure DevOps repo | Not used |
+| Azure subscription | Not used |
+| Azure resource group | Not used |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Source daemon startup | Pass | Wrapper started source daemon `0.5.22` at `http://127.0.0.1:8787` and rejected stale installed-daemon reuse. |
+| Real Chat UI local Git workflows | Pass | Playwright ran 30 tests: 26 passed, 4 ClaimBot_API ADO tests skipped because Live ADO was disabled. |
+| Approval and staging | Pass | Covered targeted staging, approval persistence after reload, approval rejection, denial feedback as the next instruction, consecutive stage/commit approvals, commit validation failure, empty-commit prevention, staged-change summary, and commit-message drafting without mutation. |
+| Secret and remote safety | Pass | Covered remote push target redaction and secret-like value redaction during change review. |
+| Branch and merge workflows | Pass | Covered dirty branch switch approval, approved merge, merge conflict recovery, and branch creation approval. |
+| Push, pull, and rebase workflows | Pass | Covered pushing the current branch to a local bare remote, pulling a behind branch with rebase, and rebase conflict recovery. |
+| Stash, restore, revert, and tag workflows | Pass | Covered stash/apply/pop, stash pop conflict recovery, restore requested file, revert last commit, create local release tag without pushing, and push exactly one release tag without pushing branches or other tags. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary Git repositories/remotes | `%TEMP%\mergepilot-live-*` | local filesystem | Live source-app E2E | Removed by wrapper/tests |
+| Source daemon process | `mergepilot-daemon` `0.5.22` | `http://127.0.0.1:8787` | Live source-app wrapper | Stopped by wrapper |
+| Playwright/Vite server | Vite test server | `http://127.0.0.1:1420` | Playwright | Stopped by Playwright |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO/Azure resources | none created | Live ADO and destructive mode were disabled. |
+| `%TEMP%\mergepilot-live-*` | cleaned | Post-run temp probe found no live-app temp directories. |
+| `MERGEPILOT_E2E_*` env vars | none present | Post-run environment probe found no live/destructive flags. |
+| Local ports | cleaned | Post-run probe found no `8787` listener and no `1420` listener; only transient `1420` `TimeWait` sockets remained. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Real local Git workflows through the source app remain green after the latest readiness and UI stabilization work. | Info | Keep this as the standard non-ADO business gate alongside the mocked browser smoke. |
+| ClaimBot_API ADO tests were intentionally skipped. | Info | Run with `-LiveAdo` when validating real Azure DevOps discovery, pipeline evidence, and PR insight. |
+| Installed Program Files state remains separate from source-app health. | High | Current source daemon is `0.5.22`; installed Program Files parity still requires elevated current-MSI installation. |
+
+## Run: mp-0522-mocked-browser-business-smoke-20260717-1355
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 13:51-13:55 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | working tree |
+| Test command | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked" -Project chromium -Workers 1` |
+| Environment flags | No live Azure DevOps or destructive flags |
+| Azure DevOps org | Mocked only |
+| Azure DevOps project | Mocked only |
+| Azure DevOps repo | Mocked only |
+| Azure subscription | Not used |
+| Azure resource group | Not used |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Mocked browser business smoke | Pass | Playwright ran 40 Chromium tests with 1 worker; all 40 passed in about 2.3 minutes. |
+| Chat shell and structured actions | Pass | Covered project-linked Chat shell viewport, PR insight controls, pipeline controls, no-pipeline setup guidance, read-only PR/pipeline natural-language routing, and project-context source references. |
+| Review Queue UX | Pass | Covered Recent activity collapsed-state persistence, semantic selected queue lane styling, review-run evidence, and acknowledged disposition behavior. |
+| Route cache and New Chat stability | Pass | Covered avatar rendering, cached Project Links, quiet New Chat without index-status preload, no stale prompts after Project Link switch, and warm return without skeleton pulses. |
+| Pull Requests | Pass | Covered cached PRs during refresh/filter changes, no premature empty state before Project Links resolve, stale PR cleanup after Project Link switch, readable insight scope, Project Link edits, and duplicate PR ids across Project Links. |
+| Review Queue route behavior | Pass | Covered cached decisions during refresh, no premature empty state, warm-route failure persistence, warning cleanup, stale-decision cleanup, and findings-panel close on Project Link switch. |
+| Pipelines | Pass | Covered cached pipeline rows, no premature empty state, action errors in detail panel, AI analysis error handling, successful AI analysis rendered as Markdown with evidence, and detail panel close when filtered. |
+| Activity | Pass | Covered cached Activity during refresh, scoped operational history sections, collapsed checkpoint raw output, and structured review-operation summaries before raw JSON. |
+| Settings permissions | Pass | Covered missing Key Vault permission messaging and switching built-in model secrets back to local env. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Browser test server | Vite test server | `http://127.0.0.1:1420` | Playwright wrapper | Stopped by Playwright |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO/Azure resources | none created | All ADO responses were mocked. |
+| `MERGEPILOT_E2E_*` env vars | none present | Post-run environment probe found no live/destructive flags. |
+| `%TEMP%\mergepilot-live-*` | none present | Post-run temp probe found no live-app temp directories. |
+| Local test ports | cleaned | No `1420` listener remained. Port `8787` was still owned by the already-installed Program Files daemon, not this mocked browser test. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| No mocked browser regression found in the stabilized UI/business surfaces. | Info | Keep this smoke as the standard non-destructive gate before installed-app or release handoff work. |
+| Installed Program Files daemon is still `0.5.20`. | High | This is outside the mocked browser pass; install current `0.5.22` MSI from elevated PowerShell before installed-app proof. |
+
+## Run: mp-0522-readiness-installed-handoff-20260717-1350
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 13:44-13:50 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | working tree |
+| Test command | `.\scripts\windows\verify-current-release-readiness.ps1 -Version 0.5.22 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -StaleScanExtractionTimeoutSec 120 -SkipTimestampProbe`; `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -Version 0.5.22 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -FreshConfigPort 19161 -MsiPayloadPort 19162 -StaleScanExtractionTimeoutSec 120`; `.\scripts\windows\verify-windows-scripts-parse.ps1` |
+| Environment flags | No live Azure DevOps or destructive flags |
+| Azure DevOps org | Not used |
+| Azure DevOps project | Not used |
+| Azure DevOps repo | Not used |
+| Azure subscription | Not used |
+| Azure resource group | Not used |
+| Result | Pass with known release blockers |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Current readiness reprobe | Pass as diagnostic | Readiness JSON still reports four known blockers: untracked release workflow scripts, missing signing certificate configuration, unsigned MSI/NSIS artifacts, and installed Program Files still at `0.5.20` NSIS shape. |
+| Stale Chat template scan | Pass | Built desktop dist scan passed across 77 files with no old New Chat welcome/template strings or removed index-status preload helper names. |
+| Installed package state | Expected fail | Program Files still contains `0.5.20`, `uninstall.exe`, and NSIS-shaped install metadata; this explains stale installed-app screenshots independently from current source/dist state. |
+| Installed MSI handoff output | Pass | `verify-current-release-readiness.ps1` now emits `nextActions.installCurrentMsi` when installed state is stale, including the current `0.5.22` MSI path, the exact elevated install command, and a separate `-SkipInstall` verification command for manual installs. |
+| Readiness smoke | Pass | Smoke passed with ports `19161/19162`, confirming grouped blockers, parser gate, MSI+NSIS signature paths, package runtime gates, missing-MSI JSON, and the new installed-MSI handoff. |
+| Script parser sweep | Pass | `verify-windows-scripts-parse.ps1` parsed 31 Windows helper scripts with 0 failures. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary package smoke data | Script-generated temp dirs | local filesystem | Package/readiness smokes | Removed by scripts |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO/Azure resources | none created | This was local package/readiness verification only. |
+| Package smoke listeners | cleaned | Package smoke ports were scoped to `19161` and `19162`. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Readiness output now directly tells the operator how to install or verify the current MSI when Program Files is stale. | Fixed | Use `nextActions.installCurrentMsi.recommendedElevatedCommand` for the next administrator install handoff. |
+| Installed app is still not current. | High | Run the recommended elevated command for local `0.5.22`, then rerun readiness and installed parity. |
+| Windows artifacts remain unsigned. | High | Configure trusted Authenticode signing before release-grade distribution. |
+
+## Run: mp-0522-signature-verifier-path-list-smoke-20260717-1339
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 13:35-13:39 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | working tree |
+| Test command | `.\scripts\windows\verify-windows-artifact-signatures-smoke.ps1`; `.\scripts\windows\verify-windows-scripts-parse.ps1` |
+| Environment flags | No live Azure DevOps or destructive flags |
+| Azure DevOps org | Not used |
+| Azure DevOps project | Not used |
+| Azure DevOps repo | Not used |
+| Azure subscription | Not used |
+| Azure resource group | Not used |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Path-list signature verification | Pass | Smoke called `verify-windows-artifact-signatures.ps1` through `powershell.exe -File` with two paths joined by the platform path separator. Both MSI and NSIS-like paths were reported in `artifacts` and `failures`. |
+| Single-path compatibility | Pass | Smoke confirmed a single explicit path still works after adding path-list support. |
+| Script parser sweep | Pass | `verify-windows-scripts-parse.ps1` parsed 31 Windows helper scripts with 0 failures, including the new signature verifier smoke. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary signature smoke files | `%TEMP%\mergepilot-signature-verifier-smoke-*` | local filesystem | Signature verifier smoke | Removed by script |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO/Azure resources | none created | This was local script verification only. |
+| Signature smoke temp dirs | cleaned | Post-run temp scan found no `mergepilot-signature-verifier-smoke-*` directories. |
+| Package smoke listeners | cleaned | Post-run port scan found no listeners on `19151` or `19152`. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The signature verifier now preserves both artifact paths when invoked from another PowerShell script. | Fixed | Keep the path-list smoke in release readiness checks to avoid silently verifying only one Windows artifact. |
+| Windows artifacts remain unsigned. | High | Configure trusted Authenticode signing before release-grade distribution. |
+
+## Run: mp-0522-readiness-smoke-artifact-path-regression-20260717-1334
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 13:29-13:34 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | working tree |
+| Test command | `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -Version 0.5.22 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -FreshConfigPort 19141 -MsiPayloadPort 19142 -StaleScanExtractionTimeoutSec 120` |
+| Environment flags | No live Azure DevOps or destructive flags |
+| Azure DevOps org | Not used |
+| Azure DevOps project | Not used |
+| Azure DevOps repo | Not used |
+| Azure subscription | Not used |
+| Azure resource group | Not used |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Grouped readiness blockers | Pass | Smoke still confirmed normal readiness returns grouped blockers for strict tracking, signing readiness, artifact signatures, and installed package state. |
+| Parser gate | Pass | Smoke still requires the `windows script parser` check to be present and green. |
+| MSI + NSIS signature path regression | Pass | New smoke assertion confirmed the `windows artifact signatures` blocker contains both local `0.5.22` paths: `MergePilot_0.5.22_x64_en-US.msi` and `MergePilot_0.5.22_x64-setup.exe`. |
+| Package runtime gates | Pass | Package mode still confirmed `packaged fresh config` and `packaged MSI payload` were green using ports `19141` and `19142`. |
+| Missing MSI structured JSON | Pass | Missing-MSI path still returned machine-readable blockers including `windows installer metadata` and the expected `MSI not found` failure. |
+| Script parser sweep | Pass | `verify-windows-scripts-parse.ps1` parsed 30 Windows helper scripts with 0 failures. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary package smoke data | Script-generated temp dirs | local filesystem | Package/readiness smokes | Removed by scripts |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO/Azure resources | none created | This was local package/readiness verification only. |
+| Package smoke listeners | cleaned | No port bind failures were reported for `19141` or `19142`. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The readiness smoke now protects against silently checking only one Windows artifact path. | Info | Keep this assertion before future release/install handoffs. |
+| Release blockers are unchanged. | High | Installed Program Files still needs elevated current-MSI parity and Windows artifacts still need trusted Authenticode signing. |
+
+## Run: mp-0522-readiness-supplied-artifact-paths-20260717-1328
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 13:21-13:28 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | working tree |
+| Test command | `.\scripts\windows\verify-current-release-readiness.ps1 -Version 0.5.21 -MsiPath ".\.artifacts\github-run-29436222385\msi\MergePilot_0.5.21_x64_en-US.msi" -StaleScanExtractionTimeoutSec 120 -SkipTimestampProbe` |
+| Environment flags | No live Azure DevOps or destructive flags |
+| Azure DevOps org | Not used |
+| Azure DevOps project | Not used |
+| Azure DevOps repo | Not used |
+| Azure subscription | Not used |
+| Azure resource group | Not used |
+| Result | Pass for verifier fix; release blockers remain |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Supplied MSI stale-template scan | Pass | Readiness now passes the supplied `-MsiPath` into `verify-no-stale-chat-template.ps1`; downloaded `0.5.21` MSI scan passed with no removed New Chat template matches. |
+| Stale scan performance guard | Pass | `verify-no-stale-chat-template.ps1` now has `-ExtractionTimeoutSec`, structured JSON errors, and skips irrelevant large binaries such as the daemon, raw MSI, and uninstall payload. Direct downloaded-MSI scan completed in about 34 seconds and scanned one candidate runtime file. |
+| Supplied artifact signature paths | Pass | Readiness now checks the supplied MSI and sibling NSIS artifact instead of local Tauri output. The expected signature blocker listed both `.artifacts\github-run-29436222385\msi\MergePilot_0.5.21_x64_en-US.msi` and `.artifacts\github-run-29436222385\nsis\MergePilot_0.5.21_x64-setup.exe` as `NotSigned`. |
+| Signature verifier path-list handling | Pass | `verify-windows-artifact-signatures.ps1` now accepts a path-list string so cross-process `powershell.exe -File` calls do not silently drop the second artifact path. |
+| Verifier regressions | Pass | `verify-no-stale-chat-template-smoke.ps1` passed all clean/stale/source-map cases; `verify-windows-scripts-parse.ps1` parsed 30 Windows helper scripts with 0 failures. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary MSI extraction directories | `mergepilot-template-scan-*` | local filesystem | Stale-template verifier | Removed after validation |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO/Azure resources | none created | This was a local verifier run only. |
+| Stale template scan temp dirs | cleaned | Removed 3 stale `TEMP\mergepilot-template-scan-*` directories after verifying they were under `%TEMP%`. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Previous readiness output could mix a supplied historical MSI with signature checks against local Tauri output. | Medium | Fixed by deriving signature paths from the supplied MSI. |
+| Previous stale-template MSI scans could hang or scan irrelevant large binaries. | Medium | Fixed with extraction timeout, structured JSON errors, and narrower candidate file selection. |
+| Release blockers are unchanged. | High | Installed Program Files is still `0.5.20`, release workflow referenced scripts are not all tracked yet, and Windows artifacts remain unsigned. |
+
+## Run: mp-0522-readiness-smoke-port-params-20260717-1321
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 13:16-13:21 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | working tree |
+| Test command | `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -Version 0.5.22 -MsiPath ".\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -FreshConfigPort 19131 -MsiPayloadPort 19132` |
+| Environment flags | No live Azure DevOps or destructive flags |
+| Azure DevOps org | Not used |
+| Azure DevOps project | Not used |
+| Azure DevOps repo | Not used |
+| Azure subscription | Not used |
+| Azure resource group | Not used |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Readiness smoke port parameters | Pass | `verify-current-release-readiness-smoke.ps1` now accepts `-FreshConfigPort` and `-MsiPayloadPort`; JSON output reported `freshConfig: 19131` and `msiPayload: 19132`. |
+| Normal readiness output | Pass | The smoke still proved normal local `0.5.22` readiness returns grouped, machine-readable blockers. |
+| Parser gate presence | Pass | The smoke still requires `windows script parser` to be present and green in readiness output. |
+| Package runtime gates | Pass | Package smoke mode confirmed `packaged fresh config` and `packaged MSI payload` were green using the custom ports. |
+| Missing MSI JSON guard | Pass | A deliberate missing-MSI path still returned structured JSON with a `windows installer metadata` blocker and `MSI not found`. |
+| Windows script parser sweep | Pass | `verify-windows-scripts-parse.ps1` parsed 30 Windows helper scripts with 0 failures. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary MSI extraction/config directories | Script-generated temp paths | local filesystem | Package smoke subprocesses | Removed by smoke scripts |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO/Azure resources | none created | This was a local package/readiness verification only. |
+| Package smoke listeners | cleaned | Follow-up package smoke completion left no evidence of a failed port bind in the smoke output. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Readiness smoke no longer hardcodes package ports. | Info | Use custom ports when several local package smokes may run near each other. |
+| Release blockers are unchanged. | High | Current readiness still reports the expected blockers: workflow-referenced scripts not yet tracked, missing signing certificate, unsigned Windows artifacts, and installed Program Files still at `0.5.20`. |
+
+## Run: mp-0522-readiness-package-smokes-20260717-1315
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 13:09-13:15 +08:00 |
+| Runtime | Current local `0.5.22` readiness aggregator and package smokes |
+| Resource mode | Non-destructive package runtime readiness check |
+| Result | Pass for package checks; known release/install blockers unchanged |
+
+### Purpose
+
+Extend the single release readiness command with an optional mode that also runs the packaged fresh-config and MSI payload smokes. This keeps the first-run/local-env and `/chat` packaged-runtime gates close to the release/install readiness decision.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Aggregator option | Added | `verify-current-release-readiness.ps1` now supports `-IncludePackageSmokes`, `-FreshConfigPort`, and `-MsiPayloadPort`. |
+| Readiness smoke | Pass | `verify-current-release-readiness-smoke.ps1 -Version 0.5.22 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi` passed. |
+| Fresh-config package check | Pass | In package-smoke mode, readiness included `packaged fresh config` with `ok: true`. |
+| MSI payload package check | Pass | In package-smoke mode, readiness included `packaged MSI payload` with `ok: true`. |
+| Parser and whitespace | Pass | Parser checks passed for the readiness scripts; `git diff --check` passed for both scripts. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Readiness can now optionally include package runtime gates tied to the reported installed-app issues. | Pass | Use `-IncludePackageSmokes` before a release or elevated install when first-run config and packaged `/chat` behavior must be re-proven. |
+| Known blockers remain separate from package health. | Open | Strict tracking, signing, artifact signatures, and installed Program Files parity still need their own resolution before release-grade readiness. |
+
+## Run: mp-0522-readiness-parser-gate-wiring-20260717-1308
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 13:03-13:08 +08:00 |
+| Runtime | Current release readiness aggregator and Windows parser gate |
+| Resource mode | Non-destructive readiness aggregation check |
+| Result | Pass |
+
+### Purpose
+
+Wire the broad Windows script parser gate into the single release readiness summary so a syntax regression in release/install helper scripts appears in the same blocker report used before release or manual install handoff.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Readiness parser check | Pass | `verify-current-release-readiness.ps1` now includes a `windows script parser` check. Running it against local `0.5.22` returned 8 checks, `parserOk: true`, and the same 4 known blockers. |
+| Readiness smoke | Pass | `verify-current-release-readiness-smoke.ps1` now asserts the parser gate is present and green. The smoke passed. |
+| Parser sweep | Pass | `verify-windows-scripts-parse.ps1` parsed 30 Windows scripts with 0 failures. |
+| Whitespace | Pass | `git diff --check` passed for `verify-current-release-readiness.ps1`, `verify-current-release-readiness-smoke.ps1`, and `verify-windows-scripts-parse.ps1`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Release readiness now includes Windows helper script parse health. | Pass | Keep the parser gate inside readiness output so script syntax regressions cannot hide behind green package metadata checks. |
+
+## Run: mp-0522-windows-script-parser-gate-20260717-1300
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 12:55-13:00 +08:00 |
+| Runtime | Current Windows verification/helper scripts |
+| Resource mode | Non-destructive parser sweep |
+| Result | Pass |
+
+### Purpose
+
+Continue hidden-risk testing by making the growing Windows helper script surface parse-checked through one reusable command, instead of relying on ad hoc parser snippets inside separate smokes.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Broad parser sweep | Pass | Added and ran `verify-windows-scripts-parse.ps1`; it parsed 30 `scripts/windows/*.ps1` files with 0 failures. |
+| Script parser self-check | Pass | Direct AST parser check passed for `verify-windows-scripts-parse.ps1`. |
+| Whitespace | Pass | `git diff --check -- scripts/windows/verify-windows-scripts-parse.ps1` passed. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Windows helper script syntax now has a reusable local gate. | Pass | Run this gate with the release readiness smokes before staging a release. |
+
+## Run: mp-0522-current-release-readiness-smoke-20260717-1254
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 12:49-12:54 +08:00 |
+| Runtime | Current local `0.5.22` release readiness aggregator and smoke |
+| Resource mode | Non-destructive readiness smoke |
+| Result | Pass |
+
+### Purpose
+
+Make the release readiness aggregator behavior repeatable. The smoke proves that the aggregator can return machine-readable blocker groups for the current package and can still return structured JSON when the MSI path is missing.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Readiness smoke | Pass | `verify-current-release-readiness-smoke.ps1 -Version 0.5.22 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi` passed. |
+| Normal readiness blocker grouping | Pass | The smoke verified that the normal local MSI path returns grouped blockers for strict tracking, signing readiness, artifact signatures, and installed package state. |
+| Missing MSI blocker grouping | Pass | The smoke verified that a deliberately missing MSI path returns structured JSON with a `windows installer metadata` blocker and `MSI not found`. |
+| Parser and whitespace | Pass | Parser checks passed for `verify-current-release-readiness.ps1` and `verify-current-release-readiness-smoke.ps1`; `git diff --check` passed for both scripts. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Release readiness aggregation now has a reusable self-test. | Pass | Include this smoke in pre-release local verification after package build. |
+
+## Run: mp-0522-readiness-aggregator-missing-msi-20260717-1248
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 12:44-12:48 +08:00 |
+| Runtime | Current local `0.5.22` release readiness aggregator |
+| Resource mode | Non-destructive missing-artifact regression check |
+| Result | Fixed and pass |
+
+### Purpose
+
+Continue hardening the release readiness aggregator so it remains useful when artifacts are missing. A readiness summary should not crash before returning JSON just because the MSI path is wrong or the package has not been built yet.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Aggregator path handling | Fixed | `verify-current-release-readiness.ps1` now expands MSI paths for reporting without requiring the path to exist before invoking downstream verifiers. |
+| Normal MSI readiness output | Pass as expected fail | Running against the real local `0.5.22` MSI still returns JSON with `ok: false` and the same 4 known blocker groups: strict tracking, signing readiness, artifact signatures, and installed package state. |
+| Missing MSI readiness output | Pass as expected fail | Running against a deliberately missing MSI returns parseable JSON with `ok: false`, `blockerCount: 5`, and a `windows installer metadata` failure: `MSI not found: ...MergePilot_missing_0.5.22_x64_en-US.msi`. |
+| Script parser and whitespace | Pass | Parser check passed for `verify-current-release-readiness.ps1`; `git diff --check -- scripts/windows/verify-current-release-readiness.ps1` passed. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The readiness aggregator now handles missing MSI artifacts as structured blockers. | Pass | Keep this behavior so package-build omissions are diagnosable from one JSON output. |
+
+## Run: mp-0522-current-release-readiness-aggregator-20260717-1240
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 12:39-12:40 +08:00 |
+| Runtime | Current local `0.5.22` Windows package and current Program Files install |
+| Resource mode | Non-destructive local release readiness aggregation |
+| Result | Aggregator added; current blockers reported clearly |
+
+### Purpose
+
+Add one local command that summarizes release/install readiness without installing, signing, tagging, pushing, or calling Azure DevOps. This reduces the chance that release readiness is inferred from only one green package smoke while other known blockers remain.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Readiness aggregator | Added | `scripts/windows/verify-current-release-readiness.ps1` now aggregates release workflow static status, strict workflow script tracking, installer metadata, stale Chat template scan, signing readiness, Authenticode signature status, and installed Program Files parity. |
+| Aggregator run | Expected fail with blockers | `verify-current-release-readiness.ps1 -Version 0.5.22 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi -SkipTimestampProbe` returned structured JSON with `ok: false` and four blocker groups. |
+| Passing readiness checks | Pass | Release workflow static verification, Windows installer metadata, and stale Chat template scan all passed. |
+| Release tracking blocker | Open | Strict release tracking still reports five workflow-referenced Windows scripts not tracked by Git. |
+| Signing blockers | Open | Signing readiness fails because no Windows code-signing certificate is configured, and both NSIS/MSI artifacts are `NotSigned`. |
+| Installed parity blocker | Open | Installed Program Files remains `0.5.20`, NSIS shape, with `uninstall.exe` present while MSI shape was expected for `0.5.22` parity. |
+| Script parser and whitespace | Pass | Parser check passed for the new aggregator. `git diff --check -- scripts/windows/verify-current-release-readiness.ps1` passed. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Release readiness now has a single non-mutating status command. | Pass | Use this before staging a release or asking for an elevated install. |
+| The current readiness blockers are explicit and unchanged. | Open | Track scripts in Git, configure trusted Windows signing, and install local `0.5.22` MSI elevated before declaring release-grade readiness. |
+
+## Run: mp-0522-release-verifier-smoke-continuation-20260717-1241
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 12:37-12:41 +08:00 |
+| Runtime | Current local `0.5.22` release/install verification scripts |
+| Resource mode | Non-destructive release verifier self-checks |
+| Result | Verifier smoke pass; release-script tracking gap remains explicit |
+
+### Purpose
+
+Continue hidden-risk testing after the package/install reprobe by verifying that the release/install guard scripts themselves still work and still catch the known release-boundary risks.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Release workflow static smoke | Pass | `verify-release-workflow-static-smoke.ps1` passed. It confirmed default release workflow static verification, parser validity for workflow-referenced Windows scripts, and the TCP timestamp probe guard. |
+| Strict release script tracking | Expected fail detected by smoke | The smoke confirmed `verify-release-workflow-static.ps1 -RequireTrackedScripts` still reports the five workflow-referenced Windows scripts that exist locally but are not tracked by Git: stale-template verifier, installer-metadata verifier, signing-readiness verifier, signing script, and signature verifier. |
+| Stale Chat template verifier smoke | Pass | `verify-no-stale-chat-template-smoke.ps1` passed clean-runtime, stale welcome-copy negative, stale preload-helper negative, source-map ignored-by-default, and source-map included-on-request cases. |
+| Windows installer metadata smoke | Pass | `verify-windows-installer-metadata-smoke.ps1 -Version 0.5.22 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi` passed active default and explicit MSI metadata checks. |
+| Active documentation links | Pass | `verify-active-doc-links.ps1` passed with 91 references. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The release/install verifier layer is currently healthy. | Pass | Keep these self-checks in the pre-release sequence before tagging. |
+| The known release-boundary tracking gap is still present and visible. | Open release gate | Before pushing a release tag, stage/commit the workflow-referenced Windows release scripts so strict release verification can pass in a clean checkout. |
+| No new verifier regression was found in this continuation. | Pass | Continue installed/native proof after elevated `0.5.22` MSI installation. |
+
+## Run: mp-0522-install-package-continuation-reprobe-20260717-1236
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 12:32-12:36 +08:00 |
+| Runtime | Current local package `0.5.22`; Program Files install still `0.5.20`; GitHub latest release still `v0.5.21` |
+| Resource mode | Non-destructive installed-state/package/release reprobe |
+| Result | Local package pass; installed/release state unchanged |
+
+### Purpose
+
+Continue the active stabilization/test loop by checking whether the machine or release state changed after the latest preflight hardening, then rerun the local package gates that matter for the reported New Chat template and first-run auth/config issues.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Installed package-state probe | Expected fail | `verify-installed-windows-package-state.ps1 -ExpectedVersion 0.5.22 -ExpectedDesktopBundleKind msi -MsiPath ...MergePilot_0.5.22_x64_en-US.msi` still reports Program Files desktop `0.5.20`, `uninstall.exe`, NSIS bundle shape, and uninstall registry `DisplayVersion=0.5.20`. |
+| GitHub release state | Expected stale | `gh release list --repo ZP151/MergePilot --limit 5` still reports `MergePilot v0.5.21` as latest. |
+| GitHub Actions run `29436222385` | Expected stale | The run is successful but still tied to `v0.5.21`, title `feat: stabilize workspace route state for v0.5.21`, SHA `11796ff179e02cdc273a7d41617419a12a72cd4f`. |
+| Local MSI hash | Pass | `MergePilot_0.5.22_x64_en-US.msi` SHA-256 is `9FEA9AD6FEAC5104E2E717078929BF0A058D86F48958907E281D000CD8AE5F75`. |
+| Install preflight smoke | Pass | `install-and-verify-msi-state-preflight-smoke.ps1 -ExpectedVersion 0.5.22 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi` passed 5/5 checks and confirmed MSI identity plus absolute elevated install command. |
+| Windows installer metadata | Pass | `verify-windows-installer-metadata.ps1 -Version 0.5.22 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi` passed for MSI, NSIS, and desktop executable metadata. |
+| Built dist stale-template scan | Pass | `verify-no-stale-chat-template.ps1 -Version 0.5.22` scanned 77 built files and found no old New Chat welcome-template strings or removed preload helper names. |
+| Fresh installed-config smoke | Pass | `packaged-fresh-config-smoke.ps1 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi -Port 19101` passed with extracted daemon `0.5.22`, default `secretSource: local_env`, `aoaiKeyInVault: false`, and `keyVaultSecretError: null`. |
+| MSI payload smoke | Pass | `packaged-msi-payload-smoke.ps1 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi -Port 19102` passed with extracted daemon `0.5.22`, legacy cleanup WiX validation, one indexed file, workflow phase `inspect_environment`, and `/chat` HTTP `200`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| No new local `0.5.22` package regression was found in this continuation. | Pass | Keep using the local `0.5.22` MSI as the fix-bearing artifact until a new release is published. |
+| Installed-window proof is still blocked by unchanged Program Files state, not by current package health. | Open external state | Install the local `0.5.22` MSI from an elevated PowerShell using the preflight command, then rerun strict installed/native UI smoke. |
+| The linked GitHub Actions run is still not the fix-bearing artifact. | Open external state | Do not use run `29436222385` for this issue; it is a `v0.5.21` release run. |
+
+## Run: mp-0522-installed-stale-and-chat-auth-reprobe-20260717-1220
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 12:18-12:31 +08:00 |
+| Runtime | Current source/local package `0.5.22`; Program Files install still `0.5.20`; GitHub latest release still `v0.5.21` |
+| Resource mode | Non-destructive installed-state probe, mocked Chromium UI, focused source tests, static scans |
+| Result | Source/package pass; installed app remains stale |
+
+### Purpose
+
+Recheck the user's installed-app screenshots that still showed the removed New Chat welcome template and a Microsoft sign-in `invalid_resource` prompt. The run separates current source/package behavior from stale Program Files and published-release state before treating the screenshots as new regressions.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Strict installed `0.5.22` parity | Expected fail | `.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -ProbeDaemon -ProbeAuth -RequireAvatar -RequireLegacyCleanup` still reports Program Files desktop `0.5.20`, daemon health `0.5.20`, and an old uninstall entry. Installed auth/avatar data is healthy for `Zhou Ping` with `hasAvatar: true`, so backend avatar fetch is not the current blocker. |
+| Local Windows installer metadata | Pass | `.\scripts\windows\verify-windows-installer-metadata.ps1 -Version 0.5.22` passed for local MSI, NSIS, and desktop executable metadata. |
+| Local dist stale-template scan | Pass | `.\scripts\windows\verify-no-stale-chat-template.ps1 -Version 0.5.22` scanned 77 built files and found no removed New Chat welcome strings or removed preload helper names. |
+| Focused desktop Chat/avatar tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx src/app/avatar.test.tsx src/app/AppShell.test.ts` passed 4 files / 12 tests. |
+| Focused Microsoft auth tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/azureAuthSession.test.ts test/azureAuthCredential.test.ts` passed 2 files / 7 tests, covering identity-only sign-in and cached-scope credential behavior. |
+| Mocked Chromium Chat/cache/avatar gate | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "New Chat|stale prompts|avatar|route" -Project chromium -Workers 1` passed 42/42 tests, including quiet New Chat, stale-prompt prevention, avatar rendering, route cache, PR/Review Queue/Pipelines/Activity cache behavior, Pipeline Markdown, and Activity raw-output folding. |
+| Product-source stale string scan | Pass | `rg` over product source found no visible product-code matches for old New Chat welcome copy, removed Chat index preload helpers, old Pipeline/PR labels, raw `/chat/workflow-action HTTP`, or `Expected string, received null` leakage. |
+| GitHub release/run state | Stale relative to source | `gh release list` still reports `MergePilot v0.5.21` as latest, and the latest Release workflow run is `29436222385` for `v0.5.21`, not the current local `0.5.22` source/package. |
+| Native side-load attempt | Inconclusive, safely cleaned up | Computer Use saw one running MergePilot window from Program Files. Launching the local `apps\desktop\src-tauri\target\release\mergepilot-desktop.exe` produced a second `C:\Program Files\MergePilot\mergepilot-desktop.exe` process rather than a targetable local `0.5.22` process, so the side-load path cannot prove native `0.5.22` UI parity. The extra Program Files process was stopped, leaving the original user window running. |
+| Non-admin install preflight | Expected fail with actionable command | `.\scripts\windows\install-and-verify-msi-state.ps1 -ExpectedVersion 0.5.22 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi -SkipVision` returned `requiresElevation: true`, current installed version `0.5.20`, running old desktop/daemon process details, MSI SHA-256 `9FEA9AD6FEAC5104E2E717078929BF0A058D86F48958907E281D000CD8AE5F75`, and an absolute `recommendedElevatedCommand`. |
+| Install preflight MSI metadata | Pass | Hardened `install-and-verify-msi-state.ps1` so the non-admin preflight reads the MSI Property table instead of relying on file `VersionInfo`. A command-level assertion passed with exit code `1`, `requiresElevation: true`, `productName: MergePilot`, `productVersion: 0.5.22`, `manufacturer: Total eBiz Solutions Pte Ltd`, and `allUsers: 1`. |
+| Install preflight smoke | Pass | Added and ran `.\scripts\windows\install-and-verify-msi-state-preflight-smoke.ps1 -ExpectedVersion 0.5.22 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi`. The smoke passed 5/5 checks: expected non-admin exit code, parseable JSON, `requiresElevation`, MSI identity, and absolute elevated command. |
+| Test plan wiring | Pass | `docs/automated-business-test-suite-plan.md` now includes the preflight smoke in the packaged installed-app acceptance path, before the manual elevated install step. |
+| Local MSI payload smoke | Pass | `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi -Port 19042` passed with extracted daemon `healthVersion: 0.5.22`, legacy cleanup WiX validation, one indexed file, workflow phase `inspect_environment`, and `/chat` HTTP `200`. |
+| Fresh installed-config smoke | Pass | `.\scripts\windows\packaged-fresh-config-smoke.ps1 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi -Port 19043` passed with extracted daemon `healthVersion: 0.5.22`, default `secretSource: local_env`, `aoaiKeyInVault: false`, and `keyVaultSecretError: null`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The stale New Chat template and login prompt screenshots are still explained by installed `0.5.20` / published `v0.5.21` state, not by current source `0.5.22`. | Open external state | Install the local `0.5.22` MSI elevated, then rerun strict installed/native UI smoke. |
+| Current source and local package evidence for Chat empty state, avatar rendering, route-cache behavior, and Microsoft auth scope remains green. | Pass | Keep the focused source/browser gates as regression coverage. |
+| Installed backend avatar probe is healthy even on stale `0.5.20`. | Diagnostic pass | After installing `0.5.22`, verify actual native-window avatar rendering rather than only auth data. |
+| Side-loading the local release exe does not bypass the stale installed app. | Open external state | Use elevated MSI install or a published `v0.5.22` release for native-window proof. |
+| The local `0.5.22` MSI remains install-ready from a payload/config perspective. | Pass | The only current install blocker in this run is elevation/current Program Files replacement, not MSI payload health. |
+| The elevated install command is now easier to audit before running. | Pass | The preflight JSON exposes MSI identity and install scope directly, so a user can confirm the target installer before launching the administrator flow. |
+| The non-admin preflight behavior now has a reusable regression gate. | Pass | Keep `install-and-verify-msi-state-preflight-smoke.ps1` in local/release verification before asking a user to run the elevated install. |
+
+## Run: mp-0522-project-link-invalid-repo-negative-20260717-1144
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 11:44:00 +08:00 |
+| Operator/account | Local developer machine |
+| Machine | zhoulaptop |
+| Git commit | Working tree, uncommitted `0.5.22` source |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/serverProjectLinkRoutes.test.ts` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_LIVE_AZURE=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not used |
+| Azure DevOps project | Not used |
+| Azure DevOps repo | Not used |
+| Azure subscription | Not used |
+| Azure resource group | Not used |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Project Link route regression | Pass | 10/10 daemon route tests passed. Existing CRUD, Azure Table fallback, Key Vault local-env behavior, ADO discovery, pipeline discovery, and ADO tool diagnostics stayed green. |
+| Create Project Link with non-Git path | Pass | New negative test returns HTTP 400 with `repo_path_not_git_repository` and message `Local repository path must be a valid Git repository.` |
+| Update Project Link to non-Git path | Pass | New negative test creates a valid temporary Git-backed Project Link, then rejects replacing `repoPath` with a non-Git directory using the same structured error. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Local temp directory | `mergepilot-project-link-non-git-*` | local filesystem | Test harness | Removed in `afterEach` |
+| Local temp Git repo | `mergepilot-project-link-valid-*` | local filesystem | Test harness | Removed in `afterEach` |
+| Local temp directory | `mergepilot-project-link-update-non-git-*` | local filesystem | Test harness | Removed in `afterEach` |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Temporary Project Link test directories | cleaned | Removed by the focused route test after each case. |
+| Azure DevOps / Azure resources | N/A | No live Azure DevOps or Azure resources were touched. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Project Link creation previously relied on branch-detection warning only; backend create/update did not prove `repoPath` was a Git work tree. | Medium | Fixed with backend repo-path validation and focused route regression. |
+
+## Run: mp-0522-business-coverage-gap-audit-20260717-1132
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 11:32 +08:00 |
+| Runtime | Current dirty workspace, source/package baseline `0.5.22` from prior gates |
+| Resource mode | Documentation and test-suite audit only; no live resources mutated |
+| Result | Pass with explicit external boundaries |
+
+### Purpose
+
+Audit the current automated test coverage against `docs/agent-business-test-checklist.md` after the latest source, browser, package, live ADO read-only, and Review Queue gates. The goal is to confirm whether the active suite still matches MergePilot's product direction: a project-maintenance agent for Git, Azure DevOps, pipelines, PR review, and AI insight, not a generic code-quality test harness.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Skip/gate scan | Pass | The only product-test skips found in active test code are intentional gates: live app tests require `MERGEPILOT_E2E_LIVE_APP=1`; live ADO read-only tests require `MERGEPILOT_E2E_LIVE_ADO=1`; destructive PR/pipeline tests additionally require `MERGEPILOT_E2E_DESTRUCTIVE=1`. |
+| Local Git and Chat workflow coverage | Covered | Latest live source-app gate passed local Git workflows for approvals, denial/feedback, selected staging, commit, validation failure, empty commit guard, branch/merge/rebase recovery, stash, restore, revert, local tag, and one-tag push. |
+| Azure DevOps read-only coverage | Covered | Latest live ADO gates passed ClaimBot_API project/repo/pipeline discovery, pipeline `#117` failure evidence inspection, PR insight through `/chat/workflow-action`, and real UI approval preparation without queueing a run. |
+| Destructive ADO coverage | Covered historically, gated currently | PR branch/update/label/reviewer/work-item mutation cleanup and ClaimBot_API pipeline `#117` queue/read-back have historical passing records. Current continuation intentionally did not rerun destructive mutation because it requires explicit opt-in and creates real ADO history. |
+| Review Queue coverage | Covered locally and read-only live | Recent daemon/component additions cover queue item creation, Project Link isolation, sorting, card details, findings, disposition/write-back states, and in-progress labels. True Azure Table ReviewHistory persistence still waits on Azure data-plane RBAC. |
+| Packaged and installed app boundary | Package covered, installed parity open | Local `0.5.22` MSI payload, sidecar, metadata, and stale-template scans pass. Program Files parity remains external because the installed app is still `0.5.20`; native `0.5.22` installed UI proof needs elevated installation. |
+| Release trust boundary | Open external state | Windows signing readiness and signature checks fail only because no trusted Authenticode certificate is configured; local MSI/NSIS artifacts are still `NotSigned`. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None | N/A | N/A | No live mutation in this audit | N/A |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Live ADO/Azure resources | N/A | This run did not create branches, PRs, work items, pipeline runs, cloud rows, or secrets. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current suite remains aligned with the business goal. | Pass | Continue prioritizing real Chat-driven Git/ADO/pipeline/PR insight workflows over generic code-quality-only checks. |
+| The active unrun cases are intentional live/destructive gates, not silent coverage loss. | Info | Run with `MERGEPILOT_E2E_DESTRUCTIVE=1` only when explicitly validating real PR/pipeline mutation and cleanup. |
+| Azure cloud persistence is still limited by RBAC. | Open external state | Grant Storage Table data-plane and Cosmos SQL data-plane roles before claiming cloud persistence success. |
+| Installed native `0.5.22` proof still requires elevated MSI installation. | Open external state | Install local `0.5.22` MSI from elevated PowerShell, then rerun strict installed/native smoke. |
+| Trusted Windows publisher status is still blocked by signing configuration. | Open external state | Configure the code-signing certificate secrets and rerun signing readiness plus artifact signature verification. |
+
+## Run: mp-0522-build-release-guard-reprobe-20260717-1133
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 11:27-11:33 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon build`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build`; `.\scripts\windows\verify-no-stale-chat-template.ps1 -DistDir apps\desktop\dist`; `.\scripts\windows\verify-release-workflow-static.ps1`; `.\scripts\windows\verify-windows-installer-metadata.ps1 -Version 0.5.22`; `.\scripts\windows\verify-windows-signing-readiness.ps1 -Version 0.5.22`; `.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.22`; `.\scripts\windows\verify-active-doc-links.ps1`; cleanup probes |
+| Environment flags | `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Build/static pass; Windows signing expected fail |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Core build | Pass | `@mergepilot/core build` completed `tsc -p tsconfig.json`. |
+| Daemon build | Pass | `@mergepilot/daemon build` completed `tsc -p tsconfig.json`. |
+| Desktop production build | Pass | `@mergepilot/desktop build` completed TypeScript and Vite production build, transforming 2705 modules. Vite emitted the existing large-chunk warning for chunks above 500 kB, but the build succeeded. |
+| Built dist stale Chat template scan | Pass | `apps\desktop\dist` scan checked 77 files and found no old New Chat welcome-template strings, `useChatIndexStatus`, or `fetchChatIndexStatus` matches. |
+| Release workflow static verification | Pass | Release workflow still contains the expected build, stale-template verification, installer metadata, signing readiness, signing, signature verification, and upload steps across Windows/macOS matrix. |
+| Windows installer metadata | Pass | Local `0.5.22` MSI metadata and NSIS/desktop executable metadata still match expected product/version/manufacturer values. |
+| Windows signing readiness | Expected fail | `signtool` and timestamp TCP probe are available, but no Windows code-signing certificate is configured through `WINDOWS_CODESIGN_CERT_PFX_BASE64` or `-PfxPath`. |
+| Windows artifact signature verification | Expected fail | Local `0.5.22` MSI and NSIS artifacts remain `NotSigned`. |
+| Active documentation links | Pass | Active docs link verifier checked 91 references across README, Windows code-signing, and automated test-suite docs with no failures. |
+| Cleanup probes | Pass | No listener remained on ports `8787` or `1420`; no `MERGEPILOT_E2E_*` variables remained in the shell. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Desktop build output | `apps\desktop\dist` | local filesystem only | desktop build | retained as current build artifact |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Test environment | cleaned | No daemon/Vite port or live E2E environment residue remained. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Unsigned local `0.5.22` MSI/NSIS artifacts | No Windows code-signing certificate is configured in this environment. | Release owner |
+| Desktop large chunk warning | Existing Vite warning from large Mermaid/CodeMirror/vendor chunks; build succeeds. | Frontend owner |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current source still builds cleanly across core, daemon, and desktop after the latest test/record additions. | Pass | Keep this as the current build gate evidence. |
+| Windows trusted-publisher readiness remains blocked by missing Authenticode certificate. | High external state | Configure trusted signing certificate before publishing a release expected to avoid Unknown Publisher prompts. |
+
+## Run: mp-0522-core-live-ado-readonly-reprobe-20260717-1126
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 11:24-11:26 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `$env:MERGEPILOT_E2E_LIVE_ADO='1'; .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAdoDiscovery.test.ts test/liveAdoPipeline.test.ts; Remove-Item Env:MERGEPILOT_E2E_LIVE_ADO`; `az pipelines runs list --org https://dev.azure.com/tebssg --project TeBS-ClaimBot --pipeline-ids 117 --top 1`; cleanup probes for ports `8787`/`1420`, `MERGEPILOT_E2E_*`, and temporary live directories |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=1` for the test command; `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | `https://dev.azure.com/tebssg` |
+| Azure DevOps project | `TeBS-ClaimBot` |
+| Azure DevOps repo | `ClaimBot_API` |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Core live ADO discovery smoke | Pass | Discovered ClaimBot_API project, repository, and pipeline with the current account. |
+| Core live ADO pipeline read-only smoke | Pass | Listed recent pipeline runs and read timeline/log evidence for pipeline run analysis. |
+| Destructive pipeline queue test | Skipped by design | The destructive queue test stayed skipped because `MERGEPILOT_E2E_DESTRUCTIVE` was unset. |
+| ClaimBot_API pipeline #117 mutation safety check | Pass | Latest run after the core live ADO checks remained `4680 / 20260706.1 / completed / succeeded`, branch `refs/heads/main`, source `dffeecd534790c4446a29208674f2b6021640a63`; no pipeline run was queued. |
+| Cleanup probes | Pass | No listener remained on ports `8787` or `1420`; no `MERGEPILOT_E2E_*` variables or temporary live directories remained. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Azure DevOps pipeline run | not created | Pipeline `#117` latest run stayed `4680`; no cleanup required. |
+| Local test environment | cleaned | No live env vars, daemon ports, or live temp directories remained. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Core ADO discovery and pipeline read-only client paths remain healthy for ClaimBot_API. | Pass | Keep destructive ADO tests opt-in and separately recorded. |
+
+## Run: mp-0522-live-ado-readonly-reprobe-20260717-1123
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 11:20-11:23 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon -LiveAdo -Grep "ClaimBot_API pipeline #117" -Project chromium -Workers 1`; `$env:MERGEPILOT_E2E_LIVE_ADO='1'; .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts; Remove-Item Env:MERGEPILOT_E2E_LIVE_ADO`; `az pipelines runs list --org https://dev.azure.com/tebssg --project TeBS-ClaimBot --pipeline-ids 117 --top 1` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=1` for the live gates; `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | `https://dev.azure.com/tebssg` |
+| Azure DevOps project | `TeBS-ClaimBot` |
+| Azure DevOps repo | `ClaimBot_API` |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Live UI ClaimBot_API pipeline #117 read-only gate | Pass | Source daemon `0.5.22` started and Playwright passed 4/4: discover/save ClaimBot_API pipeline `#117`, inspect real pipeline evidence through Chat, prepare rerun approval from evidence suggestions, and prepare pipeline approval through the real Chat UI. Destructive mode was off. |
+| Live daemon PR insight read-only gate | Pass | `test/liveAdoPrInsight.test.ts` passed 1/1 against a real ClaimBot_API pull request through `/chat/workflow-action`, receiving HTTP `200` without pending approval or mutation. |
+| ClaimBot_API pipeline #117 mutation safety check | Pass | Latest run after the live gates remained `4680 / 20260706.1 / completed / succeeded`, branch `refs/heads/main`, source `dffeecd534790c4446a29208674f2b6021640a63`; no pipeline run was queued. |
+| Cleanup probes | Pass | No listener remained on ports `8787` or `1420`; no `MERGEPILOT_E2E_*` variables remained in the shell. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Source daemon / Vite ports | cleaned | The live-app wrapper stopped the source daemon it started; post-run port probes found no listeners. |
+| Azure DevOps pipeline run | not created | Pipeline `#117` latest run stayed `4680`; no cleanup required. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Live ADO read-only pipeline and PR insight flows remain aligned with the product goal of AI insight over Git/ADO context. | Pass | Keep destructive ADO gates separate and opt-in only. |
+
+## Run: mp-0522-packaged-live-nonado-reprobe-20260717-1119
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 11:08-11:19 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\packaged-fresh-config-smoke.ps1 -Port 19141`; `.\scripts\windows\packaged-sidecar-smoke.ps1 -Port 19142`; `.\scripts\windows\packaged-msi-payload-smoke.ps1 -Port 19143`; `.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon -Project chromium -Workers 1`; cleanup probes for ports `8787`/`1420`/`19141`/`19142`/`19143`, `MERGEPILOT_E2E_*`, and temporary `mergepilot-live-*` / MSI extraction directories |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Packaged fresh config smoke | Pass | Extracted local `0.5.22` MSI daemon reported health `0.5.22`, used `secretSource: local_env`, `aoaiKeyInVault: false`, and no Key Vault secret error in a fresh temporary user home. |
+| Packaged sidecar smoke | Pass | Local packaged sidecar reported health `0.5.22`, indexed 1 file into 2 chunks, workflow phase reached `inspect_environment`, and `/chat` returned HTTP `200`. |
+| MSI payload smoke | Pass | Extracted local `0.5.22` MSI desktop/daemon payload, validated legacy cleanup WiX metadata, daemon health reported `0.5.22`, indexed 1 file, workflow phase reached `inspect_environment`, and `/chat` returned HTTP `200`. |
+| Live source-app non-ADO business gate | Pass | `run-live-app-e2e.ps1` started source daemon `0.5.22` and Playwright passed 26/26 local Git/Chat workflow tests with 4 ClaimBot_API ADO tests skipped because Live ADO was disabled. Coverage included selected-file staging, approval reload/restore, denial, denial feedback, stage+commit, validation failure, empty commit guard, staged-only summary, draft commit message, credential/secret redaction, branch switch, merge, merge/rebase conflict recovery, branch creation, push, pull/rebase, stash/apply/pop, restore, revert, local tag creation, and one-tag push. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary local Git repositories/remotes | `%TEMP%\mergepilot-live-*` | local filesystem only | live-app wrapper | cleaned by test harness |
+| Temporary MSI extraction/config directories | `%TEMP%\mergepilot-msi-extract-*`, `%TEMP%\mergepilot-fresh-config-*` | local filesystem only | packaged smoke scripts | cleaned by test harness |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Source daemon / Vite ports | cleaned | No listener remained on ports `8787`, `1420`, `19141`, `19142`, or `19143`. |
+| Live-app temp directories | cleaned | No `%TEMP%\mergepilot-live-*`, `%TEMP%\mergepilot-msi-extract-*`, or `%TEMP%\mergepilot-fresh-config-*` directories remained after the run. |
+| Live test environment flags | cleaned | No `MERGEPILOT_E2E_*` variables remained in the shell. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Program Files MergePilot `0.5.20` install | This run validated source and extracted/local package behavior, not administrative installation. | User / installer validation |
+| Unsigned local `0.5.22` MSI/NSIS artifacts | No Windows code-signing certificate is configured in this environment. | Release owner |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Packaged daemon and extracted MSI payload still match current `0.5.22` behavior. | Pass | Keep packaged fresh-config, sidecar, and MSI payload smokes as package-level gates before release. |
+| Real Chat UI local Git workflows remain green against source daemon `0.5.22`. | Pass | Keep live-app non-ADO gate as the running-app business workflow guard. |
+
+## Run: mp-0522-default-browser-release-static-audit-20260717-1108
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 11:00-11:08 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Project chromium -Workers 1`; `.\scripts\windows\verify-release-workflow-static.ps1`; `.\scripts\windows\verify-windows-installer-metadata.ps1 -Version 0.5.22`; `.\scripts\windows\verify-windows-signing-readiness.ps1 -Version 0.5.22`; `.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.22`; stale UI/error string scans with `rg`; `.\scripts\windows\verify-no-stale-chat-template.ps1 -DistDir apps\desktop\dist` |
+| Environment flags | `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Browser/static pass; Windows signing expected fail |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Default mocked Chromium browser gate | Pass | `run-mocked-browser-e2e.ps1 -Project chromium -Workers 1` passed 84 non-live tests with 30 live-app tests skipped by design. Coverage included Chat layout/onboarding, Project Link inference, pipeline recommendation, image attachments, approval composer, workflow stream dedupe, source preview, Review Queue ADO write-back mock, stale review reruns, route caching, Pipeline Markdown AI analysis, Activity sections/raw-output folding, and Settings Key Vault/local-env behavior. |
+| Release workflow static verification | Pass | `verify-release-workflow-static.ps1` passed and found the expected Windows/macOS matrix plus build/sign/verification/upload steps. |
+| Windows installer metadata | Pass | Local `0.5.22` MSI metadata reports product `MergePilot`, manufacturer `Total eBiz Solutions Pte Ltd`, upgrade code `{85E97B81-5039-4096-9BCC-11B117E21101}`, and product version `0.5.22`; NSIS and desktop executable metadata also report `0.5.22`. |
+| Windows signing readiness | Expected fail | `signtool` and timestamp TCP probe are available, but no Windows code-signing certificate is configured through `WINDOWS_CODESIGN_CERT_PFX_BASE64` or `-PfxPath`. |
+| Windows artifact signature verification | Expected fail | Local `0.5.22` MSI and NSIS artifacts are `NotSigned`; this remains the trusted-publisher blocker. |
+| Stale UI/error string source scan | Pass | Product source scan found no current product-code matches for `AI ANALYSIS STREAMING`, `Preview Insight`, raw `/chat/workflow-action HTTP`, `useChatIndexStatus`, `fetchChatIndexStatus`, or old New Chat welcome copy. Remaining matches are historical docs or negative tests. |
+| Runtime stale Chat template scan | Pass | `apps\desktop\dist` scan checked 77 files and found no stale Chat welcome template or removed preload helper names. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Mocked browser test resources | cleaned by wrapper | The mocked browser wrapper serialized the Vite server and did not touch live ADO/Azure resources. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Unsigned local `0.5.22` MSI/NSIS artifacts | No Windows code-signing certificate is configured in this environment. | Release owner |
+| Program Files MergePilot `0.5.20` install | This run did not install the local `0.5.22` MSI. | User / installer validation |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Default mocked browser gate is green beyond the smaller smoke subset. | Pass | Keep this as the broad non-live UI gate before release or large UI changes. |
+| Windows trusted-publisher status remains blocked by missing Authenticode signing configuration. | High external state | Configure a trusted Windows code-signing certificate before publishing a release that should avoid Unknown Publisher prompts. |
+
+## Run: mp-0522-full-source-browser-boundary-reprobe-20260717-1058
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 10:49-10:58 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -ProbeDaemon -ProbeAuth -RequireAvatar -RequireLegacyCleanup`; `gh release list --repo ZP151/MergePilot --limit 5`; `.\scripts\windows\verify-no-stale-chat-template.ps1 -DistDir apps\desktop\dist`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test`; package typechecks for core/daemon/desktop; `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked" -Project chromium -Workers 1` |
+| Environment flags | `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Source/browser pass; installed and published-release boundaries still stale |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Installed package parity reprobe | Expected fail | Program Files still contains MergePilot `0.5.20`, daemon health reports `0.5.20`, and the old NSIS-shaped uninstall entry remains. Auth/avatar itself is healthy for `Zhou Ping` with `hasAvatar: true` and avatar data present. |
+| GitHub published release check | Stale remote | `gh release list --repo ZP151/MergePilot --limit 5` still reports `MergePilot v0.5.21` as Latest; current source/package versions are `0.5.22`. |
+| Stale Chat template scan | Pass | `apps\desktop\dist` scan checked 77 files and found no old New Chat welcome-template strings, `useChatIndexStatus`, or `fetchChatIndexStatus` matches. |
+| Core full test suite | Pass | `@mergepilot/core test` passed 50 files / 258 tests with 4 live-gated files and 6 tests skipped. |
+| Daemon full test suite | Pass | `@mergepilot/daemon test` passed 47 files / 270 tests with 1 live-gated test skipped. |
+| Desktop full test suite | Pass | `@mergepilot/desktop test` passed 91 files / 410 tests. |
+| Package typechecks | Pass | Core, daemon, and desktop typechecks all passed. |
+| Mocked browser smoke | Pass | Chromium `@smoke @mocked` passed 39/39, covering Chat layout, quiet New Chat empty state, avatar rendering, warm route caching, Pull Requests, Review Queue, Pipelines, Activity, Pipeline Markdown AI analysis, collapsed Activity raw output, and Settings Key Vault/local-env behavior. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Test browser/server resources | cleaned by wrappers | Mocked browser wrapper completed successfully and did not require live ADO or destructive mode. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Program Files MergePilot `0.5.20` install | Current shell is non-admin and no install was requested in this turn. | User / installer validation |
+| GitHub latest release `v0.5.21` | Current `0.5.22` package has not been staged, committed, pushed, tagged, and released. | Release owner |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current source/browser evidence is green after the latest Review Queue route and UI coverage additions. | Pass | Keep this as the current broad uncommitted source baseline. |
+| Installed-window screenshots can still show stale Chat/auth behavior because Program Files remains `0.5.20`. | High external state | Install local `0.5.22` MSI elevated, then rerun strict installed parity and native UI smoke before treating installed-window symptoms as current-version regressions. |
+| Published GitHub latest remains `v0.5.21`, not current local `0.5.22`. | Medium external state | Do not download or validate the GitHub latest installer as proof of the current uncommitted fixes. |
+
+## Run: mp-0522-review-queue-route-coverage-20260717-1047
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 10:46-10:47 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/serverReviewQueueRoutes.test.ts test/serverReviewStorageRoutes.test.ts test/serverReviewRunRoutes.test.ts test/serverReviewDispositionWritebackRoutes.test.ts`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck`; cleanup probes for ports `8787`/`1420` and `MERGEPILOT_E2E_*` variables |
+| Environment flags | `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Added `serverReviewQueueRoutes.test.ts` | Pass | New daemon route tests cover `/review-history` writes feeding `/review-queue`, queue sorting, scoped Project Link isolation, and unknown Project Link `404` handling with machine-readable `project_link_not_found`. |
+| Review Queue route/storage/run/disposition suite | Pass | Focused daemon suite passed 4 files / 9 tests across Review Queue listing, persisted review storage, review-run queue generation, and disposition write-back routes. |
+| Daemon typecheck | Pass | `@mergepilot/daemon typecheck` completed without TypeScript errors after adding the route tests. |
+| Cleanup probes | Pass | No listener remained on ports `8787` or `1420`; no `MERGEPILOT_E2E_*` variables remained in the shell. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Focused daemon test resources | cleaned by test harness | Tests use isolated temp state and did not touch Azure DevOps or Azure resources. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Review Queue now has both route-level API coverage and focused UI component coverage. | Pass | Keep these tests in the focused Review Queue regression path before release. |
+
+## Run: mp-0522-review-queue-component-coverage-20260717-1042
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 10:39-10:42 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/reviewFindings/ReviewQueueCard.test.tsx src/pages/reviewFindings/FindingsPanel.test.tsx src/pages/reviewFindings/reviewQueueViewModel.test.ts src/pages/reviewFindings/reviewQueueRuntime.test.ts src/pages/reviewFindings/ReviewActivityRail.test.tsx`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`; cleanup probes for ports `8787`/`1420` and `MERGEPILOT_E2E_*` variables |
+| Environment flags | `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Added `ReviewQueueCard.test.tsx` | Pass | New focused component tests cover visible queue/risk/reason text, attention reasons, disposition audit summary, ADO pending state, findings button, retry action, request-changes action, and in-progress labels for rerun/retry/save. |
+| Added `FindingsPanel.test.tsx` | Pass | New focused component tests cover findings list rendering, file/line display, severity/category labels, disposition audit, failed ADO write-back summary, write-back attempts, Azure DevOps thread links, and the empty findings state. |
+| Review Findings focused suite | Pass | The focused reviewFindings suite passed 5 files / 19 tests, including the two new component tests plus existing view-model/runtime/activity rail tests. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed without TypeScript errors after adding the tests. |
+| Cleanup probes | Pass | No listener remained on ports `8787` or `1420`; no `MERGEPILOT_E2E_*` variables remained in the shell. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Focused component test resources | cleaned by test harness | Tests were static render/typecheck only and did not mutate production resources. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The previously identified missing Review Queue card/findings component coverage is now covered by focused tests. | Pass | Keep these tests in the regression path for Review Queue UI changes. |
+| The previously identified missing Review Queue route coverage was closed by `mp-0522-review-queue-route-coverage-20260717-1047`. | Pass | Keep `serverReviewQueueRoutes.test.ts` with the daemon route regression set. |
+
+## Run: mp-0522-ai-insight-review-activity-focused-20260717-1038
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 10:36-10:38 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/serverPrInsightWorkflowRoutes.test.ts test/serverPrInsightStorageRoutes.test.ts test/serverReviewRunRoutes.test.ts test/serverReviewQueueRoutes.test.ts test/serverAiInsightQualityRoutes.test.ts`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pullRequests/pullRequestViewModel.test.ts src/pages/pullRequests/PullRequestCard.test.tsx src/pages/pullRequests/PullRequestContextPanel.test.tsx src/pages/reviewFindings/reviewQueueViewModel.test.ts src/pages/reviewFindings/ReviewQueueCard.test.tsx src/pages/reviewFindings/FindingsPanel.test.tsx`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/reviewFindings/reviewQueueViewModel.test.ts src/pages/taskViewer/ActivitySidebar.test.tsx src/pages/taskViewer/CheckpointDetailPanel.test.tsx src/pages/taskViewer/PrInsightDetailPanel.test.tsx src/pages/taskViewer/ReviewOperationDetailPanel.test.tsx src/pages/taskViewer/TaskRunDetailPanel.test.tsx src/pages/taskViewer/activityPresentation.test.ts src/pages/taskViewer/taskViewerActivityLoaders.test.ts`; cleanup probes for ports `8787`/`1420` and `MERGEPILOT_E2E_*` variables |
+| Environment flags | `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Daemon AI insight/review route focused suites | Pass | Vitest ran 4 discovered files and 8 tests: `serverPrInsightWorkflowRoutes`, `serverPrInsightStorageRoutes`, `serverReviewRunRoutes`, and `serverAiInsightQualityRoutes`. Coverage includes structured PR insight workflow actions, persisted PR insight artifacts, review-run queue generation, and AI insight quality scoring/blocking behavior. |
+| Missing daemon Review Queue route test file check | Info | The command also named `test/serverReviewQueueRoutes.test.ts`, but that file does not exist and was not counted as executed. Current Review Queue route coverage comes through review-run route tests plus desktop Review Queue view-model/presentation tests. |
+| Desktop PR/Review Queue focused presentation pass | Pass | First desktop focused pass ran 4 discovered files and 18 tests: Pull Request view model/card/context panel and Review Queue view model. Named files `ReviewQueueCard.test.tsx` and `FindingsPanel.test.tsx` do not exist and were not counted. |
+| Desktop Activity/Review detail focused presentation pass | Pass | Second desktop focused pass ran 8 discovered files and 18 tests: Review Queue view model plus Activity sidebar, checkpoint detail, PR insight detail, review operation detail, task run detail, activity presentation, and activity loaders. |
+| Cleanup probes | Pass | No listener remained on ports `8787` or `1420`; no `MERGEPILOT_E2E_*` variables remained in the shell. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Focused route/presentation test resources | cleaned by test harness | No production or live ADO resources were mutated. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| AI insight, PR insight artifacts, review-run queue generation, and Activity presentation remain green in focused tests. | Pass | Keep these focused suites in the regression path for PR/quality workspace changes. |
+| Two named desktop component test files and one named daemon route test file do not exist. | Low | Add targeted component/route tests later if those surfaces need narrower coverage than the existing view-model and route tests. |
+
+## Run: mp-0522-live-ado-pr-insight-readonly-20260717-1035
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 10:33-10:35 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `$env:MERGEPILOT_E2E_LIVE_ADO='1'; .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts; Remove-Item Env:MERGEPILOT_E2E_LIVE_ADO`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/prWorkflow.test.ts`; cleanup probes for ports `8787`/`1420`, `%TEMP%\mergepilot-daemon-live-pr-insight-*`, and `MERGEPILOT_E2E_*` environment variables |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=1` only inside the live PR insight command; `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | `tebssg` |
+| Azure DevOps project | `TeBS-ClaimBot` |
+| Azure DevOps repo | `ClaimBot_API` |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Live Azure DevOps PR insight workflow | Pass | `test/liveAdoPrInsight.test.ts` passed 1/1. It posted to `/chat/workflow-action`, received HTTP 200, and inspected a real ClaimBot_API pull request without approval or mutation. |
+| Focused PR insight summary model regression | Pass | `test/prWorkflow.test.ts` passed 3/3. This is not live ADO evidence; it verifies readiness summaries for blocked/ready PRs and readable fallback wording when build status is missing. |
+| Cleanup probes | Pass | No `%TEMP%\mergepilot-daemon-live-pr-insight-*` directories remained; no `MERGEPILOT_E2E_*` variables remained; no listener remained on ports `8787` or `1420`. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| ADO PR | None |  | no | n/a |
+| ADO pipeline run | None |  | no | n/a |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Temporary live PR insight workspace | cleaned | No `mergepilot-daemon-live-pr-insight-*` temp directories remained. |
+| Live test environment variables | cleaned | `MERGEPILOT_E2E_LIVE_ADO` was removed after the command. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Read-only PR insight is aligned with the product goal: use ADO connection primarily for AI insight/analysis rather than mutation. | Pass | Keep PR insight actions read-only unless the user explicitly requests mutation workflows such as PR creation or linking. |
+| Focused `prWorkflow.test.ts` is model-regression evidence, not live ADO evidence. | Info | Continue recording live ADO gates separately from mocked/focused summary tests. |
+
+## Run: mp-0522-live-ado-claimbot-pipeline-readonly-20260717-1031
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 10:30-10:31 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon -LiveAdo -Grep "ClaimBot_API pipeline #117" -Project chromium -Workers 1`; cleanup probes for ports `8787`/`1420`, `%TEMP%\mergepilot-live-*`, and `MERGEPILOT_E2E_*` environment variables |
+| Environment flags | Wrapper enabled Live ADO for the command; `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | `tebssg` |
+| Azure DevOps project | `TeBS-ClaimBot` |
+| Azure DevOps repo | `ClaimBot_API` |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| ClaimBot_API pipeline discovery/save | Pass | Source daemon `0.5.22` ran the real Chat UI test that discovers and saves ClaimBot_API pipeline `#117` when the Project Link has no pipeline ID. |
+| ClaimBot_API pipeline evidence inspection | Pass | The real Chat UI inspected pipeline `#117` failure evidence through normal Chat input. |
+| Pipeline rerun approval preparation | Pass | The real Chat UI prepared a rerun approval from failure evidence suggestions without queueing a new pipeline run. |
+| Pipeline approval preparation through Chat | Pass | The real Chat UI prepared pipeline approval through normal Chat input. |
+| Cleanup probes | Pass | No listener remained on ports `8787` or `1420`; no `%TEMP%\mergepilot-live-*` directories remained; no `MERGEPILOT_E2E_*` environment variables remained in the shell. |
+
+### Logs
+
+| Type | Path |
+|---|---|
+| Playwright | `output\live-e2e\live-app-e2e-20260717-103021.log` |
+| Source daemon stdout | `output\live-e2e\live-app-source-daemon-20260717-103021.log` |
+| Source daemon stderr | `output\live-e2e\live-app-source-daemon-20260717-103021.err.log` |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| ADO pipeline run | None |  | no | n/a |
+| ADO PR | None |  | no | n/a |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Source daemon | cleaned | Wrapper started source daemon `0.5.22` and left no `8787` listener. |
+| Live test environment variables | cleaned | No `MERGEPILOT_E2E_*` variables remained after the run. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| ClaimBot_API pipeline read-only Chat workflow remains green at `0.5.22`. | Pass | Keep destructive pipeline trigger tests gated behind `MERGEPILOT_E2E_DESTRUCTIVE=1`. |
+| This run prepared approvals but did not execute ADO mutation actions. | Info | Run destructive cleanup-aware gates separately only when real pipeline queue/cleanup validation is explicitly needed. |
+
+## Run: mp-0522-live-app-nonado-business-20260717-1027
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 10:18-10:27 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon -Project chromium -Workers 1`; cleanup probes for ports `8787`/`1420`, `%TEMP%\mergepilot-live-*`, and `MERGEPILOT_E2E_*` environment variables |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset; `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Source live-app non-ADO business gate | Pass | Wrapper started source daemon `0.5.22` on `http://127.0.0.1:8787` and ran `tests/e2e/live-app-business.spec.ts` in Chromium. Playwright reported 26 passed and 4 skipped. The skipped cases are the ClaimBot_API ADO pipeline tests because Live ADO was not enabled for this run. |
+| Real Chat approval and Git operations | Pass | Covered staging only requested files, approval restore after reload, approval denial, denial feedback, consecutive stage/commit approvals, commit validation failure, empty commit prevention, staged-change summary, commit-message draft, remote push target redaction, secret redaction, branch switch with dirty changes, merge, merge conflict recovery, branch creation/switch, push to local bare remote, pull/rebase, rebase conflict recovery, stash/apply/pop, stash pop conflict recovery, file restore, revert, local tag creation, and one-tag push. |
+| Cleanup probes | Pass | No listener remained on ports `8787` or `1420`; no `%TEMP%\mergepilot-live-*` directories remained; no `MERGEPILOT_E2E_*` environment variables remained in the shell. |
+
+### Logs
+
+| Type | Path |
+|---|---|
+| Playwright | `output\live-e2e\live-app-e2e-20260717-101825.log` |
+| Source daemon stdout | `output\live-e2e\live-app-source-daemon-20260717-101825.log` |
+| Source daemon stderr | `output\live-e2e\live-app-source-daemon-20260717-101825.err.log` |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary local Git repos/remotes | `%TEMP%\mergepilot-live-*` | local filesystem | yes | deleted by test/wrapper |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Source daemon | cleaned | Wrapper started source daemon `0.5.22` and left no `8787` listener. |
+| Temporary local Git resources | cleaned | No `%TEMP%\mergepilot-live-*` directories remained after the run. |
+| Live test environment variables | cleaned | No `MERGEPILOT_E2E_*` variables remained after the run. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Source Chat-driven Git workflow behavior remains green at `0.5.22`. | Pass | Keep this as the current non-ADO business baseline while installed-app parity waits for elevated MSI installation. |
+| ADO-specific live workflow cases were skipped by design in this run. | Info | Run with `-LiveAdo` when rechecking ClaimBot_API pipeline/PR behavior. |
+
+## Run: mp-0522-source-ui-smoke-while-install-stale-20260717-1015
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 10:12-10:15 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -ProbeDaemon -RequireLegacyCleanup`; admin-shell probe; `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked" -Project chromium -Workers 1`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`; `.\scripts\windows\verify-no-stale-chat-template.ps1 -DistDir apps\desktop\dist` |
+| Environment flags | `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Source UI smoke pass; installed app still stale |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Installed `0.5.22` parity reprobe | Expected fail | Program Files still contains MergePilot `0.5.20`; installed daemon health reports `version: 0.5.20`. The current shell is not elevated (`IsAdmin: false`), so this run did not attempt installation. |
+| Mocked browser source UI smoke | Pass | `@smoke @mocked` passed 39/39. Coverage includes Chat viewport/layout, PR and Pipeline structured actions, read-only PR/pipeline natural-language routing, project-context source references, Review Queue recent-activity persistence and semantic lane selection, signed-in avatar rendering, Project Link cache warm routes, New Chat quiet state without index-status preload, Pull Requests/Review Queue/Pipelines/Activity stale-while-revalidate behavior, Pipeline Markdown AI analysis, Activity raw output folding, and Settings Key Vault/local-env behavior. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed without TypeScript errors. |
+| Dist stale Chat template scan | Pass | `apps\desktop\dist` scan covered 77 files and found no old New Chat welcome-template strings or removed preload helper names. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Browser/Vite smoke resources | cleaned by wrapper | No production resources were mutated. |
+| Installed daemon probe | cleaned | The verifier stopped the stale daemon it auto-started for health probing. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Program Files MergePilot `0.5.20` install | Current shell is not elevated and installation was not attempted. | User / elevated installer validation |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Source UI behavior remains green while installed-app parity waits on elevated installation. | Pass | After installing `0.5.22`, rerun installed parity/native UI smoke to prove the same behavior in Program Files. |
+| Installed UI screenshots still come from `0.5.20`. | High | Close the stale desktop process and run the elevated installer verification command for `MergePilot_0.5.22_x64_en-US.msi`. |
+
+## Run: mp-0522-install-preflight-payload-smoke-20260717-1012
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 10:12 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\install-and-verify-msi-state.ps1 -ExpectedVersion 0.5.22 -MsiPath 'C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi' -SkipVision`; `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath 'C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi' -Port 19131` |
+| Environment flags | `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Install preflight blocked by elevation; MSI payload pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Non-admin install preflight | Expected fail | The script returned `requiresElevation: true`, current installed version `0.5.20`, and detected the running stale desktop process `C:\Program Files\MergePilot\mergepilot-desktop.exe` product version `0.5.20`. |
+| Recommended elevated command generation | Pass | The script returned an absolute-path elevated command for installing and verifying `MergePilot_0.5.22_x64_en-US.msi`: `Set-Location -LiteralPath 'C:\Users\15492\Develop\Agents\CICD-agents'; & 'C:\Users\15492\Develop\Agents\CICD-agents\scripts\windows\install-and-verify-msi-state.ps1' -ExpectedVersion 0.5.22 -MsiPath 'C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi' -SkipVision`. |
+| MSI payload smoke | Pass | Extracted MSI desktop and daemon from the local `0.5.22` MSI. Extracted daemon health reported `0.5.22`, legacy cleanup WiX validation passed, index refresh saw/indexed 1 file, workflow phase was `inspect_environment`, and `/chat` returned HTTP `200`. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| MSI payload daemon | cleaned | The packaged payload smoke managed its temporary extracted daemon and port `19131`. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Program Files MergePilot `0.5.20` install | Installation was not attempted from the non-admin shell; the current installed app is still running. | User / elevated installer validation |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The next installed-app proof requires elevated installation, and the stale `0.5.20` desktop process should be closed first. | High | Run the recommended elevated command, or install the local `0.5.22` MSI manually, then rerun installed parity/native UI smoke. |
+| The local `0.5.22` MSI payload remains healthy and can serve `/chat` before installation. | Pass | Keep using this MSI for the next installed-app validation step unless a newer package is built. |
+
+## Run: mp-0522-installed-stale-reprobe-20260717-1010
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 10:08-10:10 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -ProbeDaemon -ProbeAuth -RequireAvatar -RequireLegacyCleanup`; `.\scripts\windows\verify-no-stale-chat-template.ps1 -DistDir apps\desktop\dist`; `.\scripts\windows\verify-windows-installer-metadata.ps1 -Version 0.5.22` |
+| Environment flags | `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Source/package pass; installed app still stale |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Strict installed `0.5.22` parity | Expected fail | Program Files still contains `MergePilot` `0.5.20`, NSIS-shaped install files, and uninstall registry `DisplayVersion=0.5.20`. The probe auto-started the installed daemon and health reported `version: 0.5.20`, so installed screenshots still exercise the old app. |
+| Installed auth/avatar probe | Pass on stale install | The same installed probe reports authenticated user `Zhou Ping` / `Zhou.Ping@totalebizsolutions.com`, with avatar data URL present (`avatarLength: 19339`). This confirms the visible account avatar is not the current blocker. |
+| Dist stale Chat template scan | Pass | `apps\desktop\dist` scan covered 77 files and found no old New Chat welcome-template strings or removed preload helper names such as `WelcomeSuggestions`, `useChatIndexStatus`, or `fetchChatIndexStatus`. |
+| Windows installer metadata | Pass | Local MSI, NSIS, and desktop executable all report `0.5.22`. MSI ProductVersion is `0.5.22`, ProductName is `MergePilot`, Manufacturer is `Total eBiz Solutions Pte Ltd`, and UpgradeCode is `{85E97B81-5039-4096-9BCC-11B117E21101}`. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Installed daemon probe | cleaned | The verifier stopped the daemon process it auto-started for the health check. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Program Files MergePilot `0.5.20` install | The local `0.5.22` MSI has not yet been installed into Program Files. | User / installer validation |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Installed UI screenshots still represent `0.5.20`, so they can continue to show removed New Chat welcome-template behavior and old auth flows. | High | Close the running `C:\Program Files\MergePilot\mergepilot-desktop.exe`, install `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi`, then rerun strict installed parity and native UI smoke. |
+| Current source/dist and local installer identity remain clean for the reported Chat empty-state/auth issue. | Pass | Keep the release gate and installer metadata checks in the validation path before publishing a new release. |
+
+## Run: mp-0522-live-azure-permission-boundary-20260717-1001
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 09:57-10:01 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `az account show`; `$env:MERGEPILOT_E2E_LIVE_AZURE='1'; .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAzurePermissions.test.ts`; `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "settings" -Project chromium -Workers 1`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/api/userFacingErrors.test.ts src/pages/settings/settingsTypes.test.ts`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/daemonEnv.test.ts test/daemonConfigRoutes.test.ts` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_AZURE=1` only inside the live Azure probe command; `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Probe targets `a99512b0-3dc5-476f-8f43-d7db40fbc923`; current default CLI subscription is `9e1bd067-1e30-4e20-b29a-f2343141a25e` |
+| Azure resource group | `developmentagent` |
+| Result | Diagnostic pass, cloud data-plane access still partial |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Azure CLI account context | Pass | `az account show` reports user `Zhou.Ping@totalebizsolutions.com`, tenant `1f432b2e-9e7a-4aa0-ace2-53af62d309f6`, default subscription `TeBS-Internal Azure Bot` (`9e1bd067-1e30-4e20-b29a-f2343141a25e`). |
+| Live Azure permission probe | Diagnostic pass / partial access | `test/liveAzurePermissions.test.ts` passed 1/1 and reported each area separately. ARM reads pass for `devagentstorage001`, `devagentcosmos001`, and `devagentkv001`; Storage Table list passes and returns `CicdAgentProfiles`; Cosmos SQL database list passes and returns `cicd-agent`. Storage Table entity query still fails for missing Table data-plane permission; Cosmos SQL data-plane role assignments are missing; Key Vault secret metadata/list still fails with RBAC `Forbidden`. |
+| Settings Key Vault permission browser gate | Pass | Focused Chromium settings gate passed 1/1, proving missing Key Vault `secrets/get`/`secrets/set` permissions are explained clearly and switching built-in model secrets to local `.env` clears the cloud warning. |
+| Desktop user-facing error formatting | Pass | `src/api/userFacingErrors.test.ts` and `src/pages/settings/settingsTypes.test.ts` passed 2 files / 16 tests, covering readable API errors and settings defaults/parsing. |
+| Daemon local-env and Key Vault config boundary | Pass | `test/daemonEnv.test.ts` and `test/daemonConfigRoutes.test.ts` passed 2 files / 9 tests, proving new installs default to `local_env` and model-key saves stay local unless Key Vault is explicitly enabled. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Azure resources | not mutated | Probe is read-only and diagnostic. |
+| Test environment variables | cleaned | `MERGEPILOT_E2E_LIVE_AZURE` was scoped to the command and removed afterward. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Missing Storage Table entity data-plane access | Current signed-in user lacks `Storage Table Data Reader` or `Storage Table Data Contributor` for table/entity operations. | Azure administrator |
+| Missing Cosmos SQL data-plane role assignment | No Cosmos SQL data-plane role assignments were returned. | Azure administrator |
+| Missing Key Vault secret metadata/list access | Current signed-in user lacks Key Vault secret data-plane RBAC on `devagentkv001`. | Azure administrator |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Cloud control-plane visibility is available, but full cloud persistence is still blocked by data-plane RBAC. | Medium | Grant Storage Table data role, Cosmos DB Built-in Data Contributor, and Key Vault Secrets User/Officer as needed. |
+| The product can continue using local `.env` model secrets while Key Vault permissions are missing. | Pass | Keep Key Vault as an explicit Settings secret-source path. |
+
+## Run: mp-0522-post-build-dist-install-state-reprobe-20260717-1009
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 10:03-10:09 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\verify-no-stale-chat-template.ps1 -Version 0.5.22`; `.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -ProbeDaemon -ProbeAuth -RequireAvatar -RequireLegacyCleanup`; `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "New Chat|source preview|settings" -Project chromium -Workers 1` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass for post-build dist and focused frontend smoke; installed app still stale at `0.5.20` |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Post-build stale Chat template scan | Pass | After the desktop production build regenerated `apps\desktop\dist`, `verify-no-stale-chat-template.ps1 -Version 0.5.22` scanned 77 files and found no old welcome-template strings and no removed preload helper names. |
+| Installed Program Files state reprobe | Expected fail / stale install | Strict installed probe still reports Program Files desktop and daemon at `0.5.20`, with daemon health `0.5.20`. Auth/avatar remains healthy for `Zhou Ping`, and daemon config still uses local `C:\Users\15492\.mergepilot\config.toml` with Azure OpenAI `gpt-4o`. |
+| Focused frontend browser smoke | Pass | `run-mocked-browser-e2e.ps1 -Grep "New Chat|source preview|settings" -Project chromium -Workers 1` passed 6/6, covering empty New Chat without preloaded command templates, no `/chat/index-status` preload, no stale prompts after Project Link switch, warm return without skeleton pulses, source preview copy/tab cleanup, and Settings Key Vault permission/local `.env` behavior. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Mocked Vite server on `127.0.0.1:1420` | cleaned | Browser wrapper left no listener. |
+| Installed daemon probe on `127.0.0.1:8787` | cleaned | Installed probe auto-started and stopped the stale `0.5.20` daemon for health/auth verification. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Program Files MergePilot `0.5.20` install | No administrative install requested in this turn. | User / installer validation |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Rebuilding desktop dist did not reintroduce stale New Chat template/preload behavior. | Info | Keep `verify-no-stale-chat-template.ps1` in the release workflow. |
+| Installed app remains stale at `0.5.20`, so installed-window screenshots can still show old behavior. | Medium | Install local `0.5.22` MSI or publish `v0.5.22` before treating installed UI as current. |
+
+## Run: mp-0522-build-release-boundary-reprobe-20260717-1000
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 09:50-10:00 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon build`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build`; package/Tauri version checks; GitHub release/run checks; `.\scripts\windows\verify-windows-signing-readiness.ps1 -Version 0.5.22`; `.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.22`; `.\scripts\windows\verify-release-workflow-static.ps1 -RequireTrackedScripts` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass for build/version checks; expected release-boundary failures for unsigned artifacts, missing signing certificate, and untracked release workflow scripts |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Core build | Pass | `@mergepilot/core build` passed. |
+| Daemon build | Pass | `@mergepilot/daemon build` passed. |
+| Desktop production build | Pass with existing warning | `@mergepilot/desktop build` passed. Vite emitted the existing large-chunk warning for Mermaid/CodeMirror-related chunks; no build failure. |
+| Monorepo package version consistency | Pass | Root package, desktop, core, daemon, CLI, review-agent, and Tauri config all report `0.5.22`. |
+| Local package hash check | Pass | Local `0.5.22` MSI hash remains `9FEA9AD6FEAC5104E2E717078929BF0A058D86F48958907E281D000CD8AE5F75`; NSIS hash remains `97BD8BE5A9D67E6F327E17877AEB7261ABF5336034C58A88C8E346E2AD101A9A`. |
+| GitHub release/run state | Stale remote | GitHub latest release remains `v0.5.21`; latest Release workflow run remains the successful `v0.5.21` run `29436222385`. |
+| Signing readiness | Expected fail / actionable | `verify-windows-signing-readiness.ps1 -Version 0.5.22` found `signtool`, validated timestamp server reachability with `probe: tcp_connect`, and failed only because `WINDOWS_CODESIGN_CERT_PFX_BASE64` or `-PfxPath` is not configured. |
+| Artifact signature verification | Expected fail / actionable | `verify-windows-artifact-signatures.ps1 -Version 0.5.22` reports both MSI and NSIS artifacts as `NotSigned`. |
+| Release workflow strict tracking | Expected fail / actionable | `verify-release-workflow-static.ps1 -RequireTrackedScripts` reports the five workflow-referenced Windows release scripts that are present locally but not tracked by Git. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Desktop build output | `apps\desktop\dist` | Local filesystem | Desktop production build | Kept as current build artifact |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| External resources | not applicable | Build/static checks only. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Unsigned local MSI/NSIS artifacts | No Windows code-signing certificate configured in the current environment. | Release owner |
+| GitHub latest release `v0.5.21` | Current `0.5.22` package has not been staged, committed, pushed, tagged, and released. | Release owner |
+| Untracked release workflow scripts | No staging/commit requested yet. | Release owner |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Build and version consistency are green at `0.5.22`. | Info | Keep build gates in the release checklist. |
+| Trusted-publisher installation is still blocked by missing signing configuration and unsigned local artifacts. | High | Configure the Windows code-signing PFX secret and rerun signing readiness/signature verification. |
+| Release automation cannot be trusted remotely until workflow-referenced scripts are tracked. | High | Stage/commit the Windows release scripts before pushing/tagging a `v0.5.22` release. |
+
+## Run: mp-0522-live-ado-readonly-confirmation-20260717-0949
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 09:46-09:49 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon -LiveAdo -Grep "ClaimBot_API pipeline #117" -Project chromium -Workers 1`; `$env:MERGEPILOT_E2E_LIVE_ADO='1'; .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=1` only inside the two test commands; `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | `https://tebssg.visualstudio.com/` |
+| Azure DevOps project | `TeBS-ClaimBot` |
+| Azure DevOps repo | `ClaimBot_API` |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Pre-run ClaimBot_API pipeline #117 latest run baseline | Pass | Latest run before live checks was `4680 / 20260706.1 / completed / succeeded`, branch `refs/heads/main`, source `dffeecd534790c4446a29208674f2b6021640a63`. |
+| Live UI ClaimBot_API pipeline read-only gate | Pass | Source daemon `0.5.22` started and the focused Chromium live-app gate passed with `liveAdo: true`, `destructive: false`, and grep `ClaimBot_API pipeline #117`. It discovered/saved the pipeline, inspected real evidence, and prepared approval paths without executing destructive operations. Playwright log: `output\live-e2e\live-app-e2e-20260717-094713.log`. |
+| Live daemon PR insight read-only gate | Pass | `test/liveAdoPrInsight.test.ts` passed 1/1 against a real ClaimBot_API PR through `/chat/workflow-action`, without pending approval or mutation. |
+| Post-run ClaimBot_API pipeline #117 safety check | Pass | Latest run after live checks remained `4680 / 20260706.1 / completed / succeeded`, proving no new pipeline run was queued. |
+| Environment cleanup | Pass | `MERGEPILOT_E2E_LIVE_ADO` and `MERGEPILOT_E2E_DESTRUCTIVE` were unset after the run; ports `8787` and `1420` had no listener. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Source daemon on `127.0.0.1:8787` | cleaned | Wrapper-managed daemon stopped after the live-app run. |
+| Azure DevOps pipeline run | not created | Latest pipeline run ID stayed `4680`; no cleanup required. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Live ADO read-only Project Link, pipeline evidence, and PR insight paths remain green at source/package version `0.5.22`. | Info | Keep destructive ADO rerun/trigger tests gated behind `MERGEPILOT_E2E_DESTRUCTIVE=1`. |
+
+## Run: mp-0522-broad-ui-liveapp-static-regression-20260717-0946
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 09:31-09:46 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Project chromium -Workers 1`; `.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon -Project chromium -Workers 1`; `.\scripts\windows\verify-release-workflow-static-smoke.ps1`; `.\scripts\windows\verify-no-stale-chat-template-smoke.ps1`; `.\scripts\windows\verify-windows-installer-metadata-smoke.ps1`; `.\scripts\windows\verify-active-doc-links.ps1` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass for broad mocked UI, live non-ADO Chat/Git workflows, and release/static smoke |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Default mocked Chromium browser gate | Pass | `run-mocked-browser-e2e.ps1 -Project chromium -Workers 1` ran 114 tests: 84 passed and 30 live-app tests skipped by design. Coverage includes Chat layout, Project Link onboarding, image attachments, PR/pipeline structured actions, read-only PR/pipeline/local Git routing, approval composer behavior, workflow transcript streaming/deduplication, source preview/artifacts, Review Queue, route-cache stale-while-revalidate, Activity folding, and Settings Key Vault/local-env behavior. |
+| Live source-app non-ADO business gate | Pass | `run-live-app-e2e.ps1 -RestartMismatchedDaemon -Project chromium -Workers 1` started source daemon `0.5.22`, ran `tests/e2e/live-app-business.spec.ts`, returned `ok: true`, `exitCode: 0`, `liveAdo: false`, and `destructive: false`. Playwright log: `output\live-e2e\live-app-e2e-20260717-093537.log`; daemon log: `output\live-e2e\live-app-source-daemon-20260717-093537.log`. |
+| Release workflow static smoke | Pass | `verify-release-workflow-static-smoke.ps1` passed. It proved default release verification, release script parser validity, strict tracking diagnostics for the currently untracked workflow-referenced scripts, and TCP timestamp probe coverage. |
+| Stale Chat template verifier smoke | Pass | `verify-no-stale-chat-template-smoke.ps1` passed, proving clean runtime payloads pass, stale welcome copy fails, stale preload helper usage fails, source maps are ignored by default, and source-map auditing can be enabled. |
+| Windows installer metadata smoke | Pass | `verify-windows-installer-metadata-smoke.ps1` passed for local `0.5.22` MSI/NSIS/desktop metadata. |
+| Active documentation links | Pass | `verify-active-doc-links.ps1` passed with 91 references checked. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary local Git repositories/remotes | Generated under test temp directories | Local filesystem only | Live-app non-ADO tests | Wrapper cleanup |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Source daemon on `127.0.0.1:8787` | cleaned | Wrapper-managed daemon stopped after the live-app run. |
+| Mocked Vite server on `127.0.0.1:1420` | cleaned | Browser wrapper left no listener. |
+| Test temp repositories | cleaned | No `%TEMP%\mergepilot-live-*` leftovers were observed in later cleanup probes. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Program Files MergePilot `0.5.20` install | This run validates source and local package behavior, not administrative MSI installation. | User / installer validation |
+| GitHub latest release `v0.5.21` | Current `0.5.22` package has not been staged, committed, pushed, tagged, and released. | Release owner |
+| Untracked release workflow scripts | The workflow references these local scripts but they are not yet tracked because no staging/commit was requested. | Release owner |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Broad source UI and live local Git workflows remain green at `0.5.22`. | Info | Continue using these gates before release. |
+| Strict release script tracking remains actionable. | Medium | Stage/commit the workflow-referenced Windows scripts before relying on GitHub release automation. |
+
+## Run: mp-0522-full-source-version-parity-reprobe-20260717-0915
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 09:11-09:31 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test`; `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "New Chat" -Project chromium -Workers 1`; `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "route caching|settings" -Project chromium -Workers 1`; `.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -ProbeDaemon -ProbeAuth -RequireAvatar -RequireLegacyCleanup`; package smoke and GitHub `gh release/run` version checks |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass for full source suites and local package discovery; installed and GitHub release parity still stale |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Core full source suite | Pass | `@mergepilot/core` passed 50 files / 258 tests with 4 skipped files / 6 live-gated skipped tests. |
+| Daemon full source suite | Pass | `@mergepilot/daemon` passed 46 files / 267 tests with 1 skipped file / 1 skipped test. |
+| Desktop full source suite | Pass | `@mergepilot/desktop` passed 89 files / 406 tests. This covers the route-cache, Chat empty-state, avatar, Pipeline AI analysis, Pull Requests, Review Queue, Activity, source preview, approval-card, and safe-date regressions currently present in source. |
+| New Chat focused mocked browser regression | Pass | `run-mocked-browser-e2e.ps1 -Grep "New Chat" -Project chromium -Workers 1` passed 4/4, covering empty New Chat without preloaded command templates, no `/chat/index-status` preload, no stale prompts after Project Link switch, and warm return without skeleton pulses. |
+| Route/cache and Settings permission browser regression | Pass | `run-mocked-browser-e2e.ps1 -Grep "route caching|settings" -Project chromium -Workers 1` passed 29/29. Coverage includes sidebar avatar rendering, cached Project Links, New Chat quiet state, Pull Requests stale-while-revalidate, Review Queue stale-state isolation, Pipelines AI Markdown/error detail behavior, Activity operational-history sections and collapsed checkpoint raw output, plus Settings Key Vault permission messaging and switching built-in model secrets back to local `.env`. |
+| Focused Microsoft auth scope guard | Pass | `@mergepilot/core` auth tests passed 2 files / 7 tests, covering identity-only sign-in with Graph `User.Read` and Key Vault token handling as a separate secret-access path. |
+| Source typecheck gates | Pass | `@mergepilot/core`, `@mergepilot/daemon`, and `@mergepilot/desktop` typecheck all passed with the repository-local toolchain. |
+| Removed/stale UI string scan | Pass | Product-source scan found no visible old New Chat welcome template strings, no removed Chat preload helper names, no old `AI ANALYSIS STREAMING` label, no old `Preview Insight` wording, and no `/chat/workflow-action HTTP` or `Expected string, received null` daemon-route leakage strings. `Unknown` matches were type/helper names, not visible Pipeline card header copy. |
+| Installed Program Files parity | Expected fail / stale install | Strict installed probe still found desktop and daemon `0.5.20` in `C:\Program Files\MergePilot`; daemon health also reported `0.5.20`. Auth/avatar remained healthy for `Zhou Ping`, with avatar data URL present. |
+| Local `0.5.22` package discovery | Pass | Local MSI and NSIS artifacts exist: `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi` (`SHA256 9FEA9AD6FEAC5104E2E717078929BF0A058D86F48958907E281D000CD8AE5F75`) and `apps\desktop\src-tauri\target\release\bundle\nsis\MergePilot_0.5.22_x64-setup.exe` (`SHA256 97BD8BE5A9D67E6F327E17877AEB7261ABF5336034C58A88C8E346E2AD101A9A`). |
+| Local `0.5.22` stale Chat template gate | Pass | `verify-no-stale-chat-template.ps1 -Version 0.5.22` found no old welcome-template strings and no removed preload helper names: `WelcomeSuggestions`, `useChatIndexStatus`, or `fetchChatIndexStatus`. |
+| Local `0.5.22` Windows installer metadata | Pass | `verify-windows-installer-metadata.ps1 -Version 0.5.22` confirmed MSI product version `0.5.22`, manufacturer `Total eBiz Solutions Pte Ltd`, upgrade code `{85E97B81-5039-4096-9BCC-11B117E21101}`, NSIS product/file version `0.5.22`, and desktop exe version `0.5.22`. |
+| Local `0.5.22` fresh packaged config smoke | Pass | Extracted the MSI and started packaged daemon on port `18871`; health reported `0.5.22`, `secretSource: local_env`, `aoaiKeyInVault: false`, and `keyVaultSecretError: null`. |
+| Local `0.5.22` MSI payload smoke | Pass | Extracted the MSI and started packaged daemon on port `18872`; health reported `0.5.22`, legacy cleanup WiX validation passed, index refresh saw/indexed 1 file, Chat workflow phase reached `inspect_environment`, and `/chat` returned HTTP 200. |
+| Local `0.5.22` packaged sidecar smoke | Pass | Started `apps\desktop\src-tauri\target\release\mergepilot-daemon.exe` on port `18873`; health reported `0.5.22`, index refresh saw/indexed 1 file, produced 2 embedded chunks, Chat workflow phase reached `inspect_environment`, and `/chat` returned HTTP 200. |
+| GitHub release/run version check | Stale remote | GitHub latest release is still `v0.5.21`; user-provided run `29436222385` is the successful `v0.5.21` Release run from 2026-07-15, not the current local `0.5.22` build. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| None | cleaned | Source and version-probe checks only. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Program Files MergePilot `0.5.20` install | The current shell is non-admin and the user has not asked to install from this turn. | User / installer validation |
+| GitHub latest release `v0.5.21` | The current `0.5.22` package has not been staged, committed, pushed, tagged, and released. | Release owner |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Installed screenshots are still testing `0.5.20`, so removed Chat preload/template behavior can still appear there. | Medium | Install local `0.5.22` MSI or publish a new `v0.5.22` release before treating installed-window feedback as current-version behavior. |
+| The GitHub Actions run supplied by the user is successful but belongs to `v0.5.21`. | Medium | Do not download run `29436222385` as the latest fix-bearing installer; it predates the current local `0.5.22` source and package. |
+
+## Run: mp-0522-release-readiness-reprobe-20260717-0854
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 08:52-08:54 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\verify-release-workflow-static.ps1`; `.\scripts\windows\verify-windows-installer-metadata.ps1 -Version 0.5.22`; `.\scripts\windows\verify-windows-signing-readiness.ps1 -Version 0.5.22`; desktop and daemon typecheck |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass for workflow/metadata/typecheck; signing readiness expected fail only for missing certificate |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Release workflow static gate | Pass | `verify-release-workflow-static.ps1` returned `ok: true`. |
+| Windows installer metadata | Pass | `verify-windows-installer-metadata.ps1 -Version 0.5.22` returned `ok: true`; MSI product version is `0.5.22`, manufacturer is `Total eBiz Solutions Pte Ltd`, NSIS hash is `97BD8BE5A9D67E6F327E17877AEB7261ABF5336034C58A88C8E346E2AD101A9A`, and desktop exe hash is `A8CA1948C231BACDDEC5AAAC767B4A6F1CB92E48FD08A00CB52E0CADB38ED846`. |
+| Signing readiness timestamp probe | Pass after fix | `verify-windows-signing-readiness.ps1` now probes timestamp server reachability with URI parsing plus TCP connect instead of HTTP `HEAD`; `http://timestamp.digicert.com` reports `ok: true`, `probe: tcp_connect`, host `timestamp.digicert.com`, port `80`. |
+| Signing certificate readiness | Expected fail | Signing readiness now fails only because no trusted Windows code-signing certificate is configured: `WINDOWS_CODESIGN_CERT_PFX_BASE64` or `-PfxPath` is missing. |
+| Release static regression guard | Pass | `verify-release-workflow-static.ps1` now also verifies that all Windows release scripts referenced by the workflow exist, that signing readiness reports `probe: tcp_connect`, and that it does not use `Invoke-WebRequest -Uri $TimestampUrl -Method Head` for RFC3161 timestamp servers. |
+| Release script tracking guard | Expected fail / actionable | Added optional `-RequireTrackedScripts` to `verify-release-workflow-static.ps1`. Default workflow static verification still passes, while strict local mode correctly fails because the five Windows scripts referenced by `.github\workflows\release.yml` exist locally but are not yet tracked by Git: stale-template verifier, installer metadata verifier, signing readiness verifier, signing script, and signature verifier. |
+| Release workflow static smoke | Pass | Added `verify-release-workflow-static-smoke.ps1`. The smoke passed and proves the default release verifier passes, all workflow-referenced Windows release scripts parse successfully, strict tracking mode reports the current untracked release scripts from Git state, and signing readiness uses the TCP timestamp probe without the old HTTP `HEAD` probe. |
+| Release script bundle smoke | Pass | Re-ran the release script bundle: `verify-release-workflow-static-smoke.ps1`, `verify-no-stale-chat-template-smoke.ps1`, and `verify-windows-installer-metadata-smoke.ps1` all passed; parser checks passed for all release workflow Windows scripts and the release static smoke. |
+| Signature verification boundary | Expected fail / actionable | `verify-windows-artifact-signatures.ps1 -Version 0.5.22` correctly reports both local Windows artifacts as `NotSigned`, and `verify-release-workflow-static.ps1 -RequireTrackedScripts` correctly reports the five workflow-referenced scripts that are not yet tracked by Git. |
+| Script parser and workflow static regression | Pass | PowerShell parser checks passed for `verify-release-workflow-static.ps1` and `verify-windows-signing-readiness.ps1`; release workflow static verification still passed after the timestamp probe fix. |
+| Source typecheck spot checks | Pass | `@mergepilot/desktop` and `@mergepilot/daemon` typecheck both passed. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| None | cleaned | Static/source checks only. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Windows trusted code-signing certificate configuration | Not configured in the current environment. | Release owner |
+| Program Files MergePilot `0.5.20` install | This run validates source/static release readiness, not installed-app parity. | User / installer validation |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The signing readiness gate no longer has a false timestamp-server blocker. | Info | Keep the TCP reachability probe; actual timestamping remains validated by `signtool /tr` during signing once a PFX is configured. |
+| Trusted Windows signing remains the release trust blocker. | High | Configure `WINDOWS_CODESIGN_CERT_PFX_BASE64` and `WINDOWS_CODESIGN_CERT_PASSWORD`, then rerun signing readiness and artifact signature verification. |
+
+## Run: mp-0522-live-ado-readonly-reprobe-20260717-0851
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 08:48-08:51 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon -LiveAdo -Grep "ClaimBot_API pipeline #117" -Project chromium -Workers 1`; `$env:MERGEPILOT_E2E_LIVE_ADO='1'; .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=1` for the test commands, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | `https://tebssg.visualstudio.com/` |
+| Azure DevOps project | `TeBS-ClaimBot` |
+| Azure DevOps repo | `ClaimBot_API` |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Live UI ClaimBot_API pipeline read-only gate | Pass | Source daemon `0.5.22` started and Chromium passed 4/4 tests in about 1.3 minutes: discover/save pipeline `#117`, inspect real pipeline evidence through Chat, prepare rerun approval from evidence suggestions, and prepare pipeline approval through the real Chat UI. Playwright log: `output\live-e2e\live-app-e2e-20260717-084829.log`. |
+| Live daemon PR insight read-only gate | Pass | `test/liveAdoPrInsight.test.ts` passed 1/1 against a real ClaimBot_API PR through `/chat/workflow-action`, without pending approval or mutation. |
+| ClaimBot_API pipeline #117 latest run safety check | Pass | Latest run after the test remained `4680 / 20260706.1 / completed / succeeded`, branch `refs/heads/main`, source `dffeecd534790c4446a29208674f2b6021640a63`; no new pipeline run was queued. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Source daemon on `127.0.0.1:8787` | cleaned | Cleanup probe found no listener on port `8787`. |
+| Live env vars | cleaned | `MERGEPILOT_E2E_LIVE_ADO` and `MERGEPILOT_E2E_DESTRUCTIVE` were unset in the current shell after the tests. |
+| Live temp directories | cleaned | Cleanup probe found no `%TEMP%\mergepilot-live-*` or `%TEMP%\mergepilot-daemon-live-pr-insight-*` directories. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Program Files MergePilot `0.5.20` install | This run validates source daemon/UI read-only ADO behavior, not installed-app parity. | User / installer validation |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Live ADO read-only behavior remains aligned with the product goal: inspect real PR/pipeline state and prepare explicit approvals without mutating ADO. | Info | Keep destructive ADO validation separate and intentional. |
+| Installed parity remains outside this proof because Program Files still runs `0.5.20`. | High | Install the local `0.5.22` MSI and rerun installed native smoke. |
+
+## Run: mp-0522-source-ui-live-nonado-reprobe-20260717-0847
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 08:35-08:47 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked" -Project chromium -Workers 1`; `.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon -Project chromium -Workers 1`; installed `0.5.22` parity probe |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass for current source UI and live local workflows; installed Program Files still stale |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Broad mocked browser UI smoke | Pass | Chromium `@smoke @mocked` passed 39/39 in about 2.2 minutes. Coverage included Chat layout, New Chat quiet state without index-status preload, sidebar avatar rendering, warm route cache, Project Link switching, Pull Requests, Review Queue, Pipelines, Activity, Pipeline Markdown AI analysis, and Settings Key Vault/local-env messaging. |
+| Live source-app non-ADO business workflows | Pass | `run-live-app-e2e.ps1` started source daemon `0.5.22` and passed 26/26 real Chat UI local Git workflow tests; 4 ADO live tests were skipped because `MERGEPILOT_E2E_LIVE_ADO` was unset. Playwright log: `output\live-e2e\live-app-e2e-20260717-083736.log`. |
+| Installed Program Files parity | Expected fail | Program Files still reports desktop and daemon `0.5.20`, while installed auth/avatar remains healthy for `Zhou Ping`. This is unchanged from the previous installed-artifact reprobe. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Local temp Git repositories/remotes | `mergepilot-live-*` / `mergepilot-live-stage-*` temporary directories | Local filesystem only | Live source-app non-ADO tests | Removed by test cleanup |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Source daemon on `127.0.0.1:8787` | cleaned | Cleanup probe found no listener on port `8787` after the wrapper exited. |
+| Live temp directories | cleaned | Cleanup probe found no `%TEMP%\mergepilot-live-*`, `%TEMP%\mergepilot-live-stage-*`, or `%TEMP%\mergepilot-daemon-live-pr-insight-*` directories. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Program Files MergePilot `0.5.20` install | The local `0.5.22` MSI has not been installed elevated yet. | User / installer validation |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current source UI and local Git workflow behavior remains green after the latest documentation and package checks. | Info | Keep this as the fast source-level business gate while installed parity is pending. |
+| Installed-window screenshots still cannot prove or disprove current `0.5.22` UI fixes because Program Files remains `0.5.20`. | High | Install `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi`, then rerun strict installed parity and native UI smoke. |
+
+## Run: mp-0522-installed-artifact-reprobe-20260717-0832
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 08:24-08:32 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -ProbeDaemon -ProbeAuth -RequireAvatar -RequireLegacyCleanup`; `.\scripts\windows\verify-no-stale-chat-template.ps1 -MsiPath apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi`; `.\scripts\windows\packaged-fresh-config-smoke.ps1 -MsiPath apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/azureAuthSession.test.ts test/azureAuthCredential.test.ts` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Partial / source and local package pass; Program Files install still stale |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Installed Program Files parity | Expected fail | Program Files still reports desktop `0.5.20`, daemon health `0.5.20`, and uninstall display version `0.5.20`; this installed window cannot prove current `0.5.22` Chat/auth fixes. |
+| Installed auth/avatar probe | Pass | Installed daemon still authenticates `Zhou Ping`, UPN `Zhou.Ping@totalebizsolutions.com`, avatar data URL present with length `19339`, and `cloudSecrets: false`. |
+| Local `0.5.22` MSI stale-template scan | Pass | MSI extraction scan returned `ok: true`, scanned 4 files, and found no stale New Chat template or preload-helper matches. MSI SHA-256: `9FEA9AD6FEAC5104E2E717078929BF0A058D86F48958907E281D000CD8AE5F75`. |
+| Fresh packaged config smoke | Pass | Extracted packaged daemon reported `healthVersion: 0.5.22`, `secretSource: local_env`, `aoaiKeyInVault: false`, and `keyVaultSecretError: null`. |
+| Microsoft sign-in scope regression | Pass | Focused core auth tests passed 2 files / 7 tests, proving basic Microsoft sign-in stays identity-only and does not request Key Vault scope. |
+| Elevated install preflight | Expected fail / actionable | `install-and-verify-msi-state.ps1` refused to install from the non-elevated shell, reported `requiresElevation: true`, confirmed current installed version `0.5.20`, detected a running `C:\Program Files\MergePilot\mergepilot-desktop.exe` process, and emitted an absolute-path elevated command for the `0.5.22` MSI. |
+| Active document links and docs whitespace | Pass | `verify-active-doc-links.ps1` returned `ok: true` with 91 references; `git diff --check -- docs\live-e2e-test-records.md docs\business-test-execution-report.md` passed. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Probe daemon | cleaned | Installed probe auto-started and stopped the Program Files daemon for health/auth checks. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Program Files MergePilot `0.5.20` install | The local `0.5.22` MSI has not been installed elevated yet. | User / installer validation |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current installed screenshots still represent `0.5.20`, not current `0.5.22`. | High | Install `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi`, then rerun strict installed parity and native UI smoke. |
+| The local `0.5.22` MSI does not contain the removed New Chat template or preload helper names. | Info | Keep the stale-template verifier in the release workflow before installer metadata/signing. |
+| The Key Vault `invalid_resource` login screenshot remains consistent with stale installed behavior; source auth tests do not reproduce it. | High | Re-test after installing `0.5.22`; if it reproduces, capture the auth request URL/scopes as a fresh bug. |
+
+## Run: mp-0522-live-ado-pr-insight-readonly-20260717-0823
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 08:21-08:23 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `$env:MERGEPILOT_E2E_LIVE_ADO='1'; .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts`; focused daemon PR insight tests; focused desktop PR/Pipeline tests |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=1`, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | `https://tebssg.visualstudio.com/` |
+| Azure DevOps project | `TeBS-ClaimBot` |
+| Azure DevOps repo | `ClaimBot_API` |
+| Azure subscription | n/a |
+| Azure resource group | n/a |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Live PR insight workflow | Pass | `test/liveAdoPrInsight.test.ts` passed 1/1. It inspected real ClaimBot_API PR `#2655` via `/chat/workflow-action` with `action: inspect_pr_insight`, completed without pending approval, and verified real changed-file evidence was returned. |
+| Daemon PR insight model and route tests | Pass | `test/serverPrInsightWorkflowRoutes.test.ts`, `test/prWorkflow.test.ts`, and `test/chatSessionPrInsightContext.test.ts` passed 3 files / 12 tests. Coverage includes PR readiness summaries, saved PR insight context injection, read-only PR chat routing without approval, and seeded quality signals from files, builds, policies, threads, and work items. |
+| Desktop PR/Pipeline view model tests | Pass | `src/pages/pullRequests/pullRequestViewModel.test.ts` and `src/pages/Pipelines.test.tsx` passed 2 files / 11 tests. Coverage includes PR categorization, Project Link scoped cache keys, duplicate PR IDs across Project Links, unavailable preview wording, and Pipeline page rendering. |
+| Cleanup probe | Pass | No `%TEMP%\mergepilot-daemon-live-pr-insight-*` directories remained; no listener remained on port `8787`; temporary environment variables were not left in the current shell. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary daemon runtime data | `%TEMP%\mergepilot-daemon-live-pr-insight-*` | n/a | yes | Cleaned by test `afterAll` |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Temporary daemon runtime data | cleaned | No matching temp directory remained after the run. |
+| Live ADO resources | none created | The workflow was read-only and did not create PRs, comments, work item links, or pipeline runs. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None | n/a | n/a |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Live PR insight read-only workflow successfully reaches real ADO PR, changes, builds, work items, policies, and threads without requiring approval or mutation. | Info | Keep this gate alongside the ClaimBot_API pipeline read-only gate. |
+| This test is daemon-level, not installed-window proof. | Medium | Repeat installed UI smoke after `0.5.22` MSI is installed. |
+
+## Run: mp-0522-live-ado-claimbot-pipeline-readonly-20260717-0820
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 08:18-08:20 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon -LiveAdo -Grep "ClaimBot_API pipeline #117" -Project chromium -Workers 1` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_APP=1`, `MERGEPILOT_E2E_LIVE_ADO=1`, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | `https://tebssg.visualstudio.com/` |
+| Azure DevOps project | `TeBS-ClaimBot` |
+| Azure DevOps repo | `ClaimBot_API` |
+| Azure subscription | n/a |
+| Azure resource group | n/a |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| ClaimBot_API pipeline #117 baseline | Pass | Latest run before/after remained `4680 / 20260706.1 / completed / succeeded`, branch `refs/heads/main`, source `dffeecd534790c4446a29208674f2b6021640a63`. |
+| Discover and save pipeline connection | Pass | Real Chat UI discovered and saved ClaimBot_API pipeline `#117` when the Project Link had no pipeline ID. |
+| Inspect pipeline failure evidence | Pass | Real Chat UI inspected ClaimBot_API pipeline #117 through normal Chat input and surfaced pipeline evidence without requiring a trigger. |
+| Prepare rerun approval from suggestions | Pass | The app prepared the rerun approval path from failure-evidence suggestions but did not execute it because destructive mode was off. |
+| Prepare pipeline approval from Chat input | Pass | The app prepared pipeline approval through normal Chat input but did not queue a build. |
+| Cleanup probe | Pass | Post-run probes found no listener on port `8787` and no `%TEMP%\mergepilot-live-*` directories. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary Project Link / chat data | test-scoped records | local/source daemon store | yes | Cleaned by tests |
+| Source daemon process | port `8787` | `http://127.0.0.1:8787` | yes | Stopped by wrapper |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Source daemon on `8787` | cleaned | No listener remained after the wrapper exited. |
+| Temporary live-app directories | cleaned | No matching `%TEMP%\mergepilot-live-*` directories remained. |
+| ADO pipeline run | none created | Latest ClaimBot_API pipeline #117 run stayed `4680`; no rerun was queued. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Playwright and daemon logs | Retained for audit under `output\live-e2e`. | MergePilot |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Live ADO read-only ClaimBot_API pipeline workflows remain aligned with the product goal: discover/save pipeline mapping, inspect real run evidence, and prepare explicit approval without executing destructive actions. | Info | Keep this gate before release; run with `-Destructive` only when intentionally validating a real rerun and cleanup record. |
+| Installed Program Files parity is still separate: this run used source daemon `0.5.22`, not the installed desktop window. | High | Install `0.5.22` MSI and rerun installed UI/daemon parity. |
+
+## Run: mp-0522-live-app-non-ado-business-reprobe-20260717-0817
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 08:08-08:17 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon -Project chromium -Workers 1` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_APP=1`, `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | n/a |
+| Azure DevOps project | n/a |
+| Azure DevOps repo | n/a |
+| Azure subscription | n/a |
+| Azure resource group | n/a |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Source daemon setup | Pass | Wrapper started source daemon `0.5.22` on `http://127.0.0.1:8787` because the workspace expects `0.5.22`. |
+| Real Chat UI local Git workflows | Pass | 26/26 non-ADO live app business tests passed in Chromium. Coverage includes scoped staging, persisted approval recovery, approval denial and denial feedback, stage+commit, validation failure, empty commit prevention, staged summary, commit-message draft, credential redaction, branch switch, merge, merge conflict recovery, branch creation, push to local bare remote, pull/rebase, rebase conflict recovery, stash/apply/pop/conflict, restore, revert, local tag creation, and single-tag push. |
+| ClaimBot_API ADO live tests | Skipped by design | 4 ADO tests were skipped because `MERGEPILOT_E2E_LIVE_ADO` was unset. No real ADO pipeline, PR, or work item was touched. |
+| Cleanup probe | Pass | Post-run probes found no listener on port `8787` and no `%TEMP%\mergepilot-live-*` or `%TEMP%\mergepilot-live-stage-*` directories. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary local Git repositories/remotes | `%TEMP%\mergepilot-live-*`, `%TEMP%\mergepilot-live-stage-*` | n/a | yes | Cleaned by tests |
+| Source daemon process | port `8787` | `http://127.0.0.1:8787` | yes | Stopped by wrapper |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Source daemon on `8787` | cleaned | No listener remained after the wrapper exited. |
+| Temporary local Git test directories | cleaned | No matching temp directories remained after the run. |
+| Live ADO / cloud resources | none created | ADO tests were skipped and destructive mode was off. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Playwright and daemon logs | Retained for audit under `output\live-e2e`. | MergePilot |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current source app still passes the non-ADO business workflow gate after the Chat/auth/package changes. | Info | Keep this as a release prerequisite before publishing the next installer. |
+| Installed Program Files parity remains a separate open item because this run intentionally used the source daemon and browser test harness, not the installed `0.5.20` desktop window. | High | Install and verify `0.5.22` before treating installed-app screenshots as current behavior. |
+
+## Run: mp-0522-installed-source-package-reprobe-20260717-0807
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 08:03-08:07 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -ProbeDaemon -ProbeAuth -RequireAvatar -RequireLegacyCleanup`; `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked" -Project chromium -Workers 1`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`; `.\scripts\windows\packaged-fresh-config-smoke.ps1 -MsiPath apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi`; `.\scripts\windows\packaged-msi-payload-smoke.ps1 -Version 0.5.22` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_LIVE_AZURE=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | n/a |
+| Azure DevOps project | n/a |
+| Azure DevOps repo | n/a |
+| Azure subscription | n/a |
+| Azure resource group | n/a |
+| Result | Partial / source and package pass; installed app still stale |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Installed Program Files parity | Expected fail | Program Files still runs desktop `0.5.20` and daemon health `0.5.20`; active desktop process path is `C:\Program Files\MergePilot\mergepilot-desktop.exe`. |
+| Installed auth/avatar probe | Pass | Installed daemon reports authenticated `Zhou Ping`, UPN `Zhou.Ping@totalebizsolutions.com`, avatar present, avatar data URL length `19339`, and `cloudSecrets: false`. |
+| Desktop typecheck | Pass | `@mergepilot/desktop` TypeScript typecheck passed. |
+| Mocked browser smoke | Pass | 39/39 Chromium tests passed, covering quiet New Chat without index-status preload, warm route cache, sidebar avatar rendering, PR/Pipeline/Review Queue/Activity UX, Pipeline Markdown analysis, Settings Key Vault/local-env messaging, and raw output collapsed by default. |
+| Packaged fresh config smoke | Pass | Extracted local `0.5.22` MSI daemon health reported `0.5.22`, default `secretSource: local_env`, `aoaiKeyInVault: false`, and `keyVaultSecretError: null`. |
+| Packaged MSI payload smoke | Pass | Extracted local `0.5.22` MSI payload passed legacy cleanup WiX validation, indexed 1 file during refresh, reached workflow phase `inspect_environment`, and `/chat` returned HTTP 200. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary MSI extraction directory | `%TEMP%\mergepilot-fresh-config-msi-*`, `%TEMP%\mergepilot-msi-extract-*` | n/a | yes | Removed by smoke scripts |
+| Temporary MergePilot home | `%TEMP%\mergepilot-fresh-config-home-*` | n/a | yes | Removed by smoke scripts |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Live cloud / ADO resources | none created | No destructive live tests were run. |
+| Temporary smoke resources | cleaned | Smoke scripts completed with `ok: true`. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Program Files MergePilot `0.5.20` install | The new local MSI has not been installed with admin rights. | User / installer validation |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Installed UI screenshots still exercise `0.5.20`; they cannot validate the `0.5.22` Chat/auth fixes until the MSI is installed. | High | Install `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi`, then rerun installed parity and UI smoke. |
+| Source and local package gates remain green for the recently reported New Chat preload, route cache, avatar, Settings local-env, and packaged first-run paths. | Info | Keep these gates in the release checklist before publishing the next signed build. |
+
+## Run: mp-0522-installed-version-auth-scope-recheck-20260717-0802
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 07:54-08:02 +08:00 |
+| Operator/account | Zhou Ping / `Zhou.Ping@totalebizsolutions.com` |
+| Machine | zhoulaptop |
+| Git commit | `eb11352` plus uncommitted workspace changes |
+| Test command | `.\scripts\windows\verify-installed-msi-state.ps1 -ProbeDaemon -ProbeAuth -RequireLegacyCleanup`; `gh run view/list`; `gh run download 29436222385`; focused core/daemon auth and secret-source tests; stale Chat template verifier gates |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=` unset, `MERGEPILOT_E2E_LIVE_AZURE=` unset, `MERGEPILOT_E2E_DESTRUCTIVE=` unset |
+| Azure DevOps org | n/a |
+| Azure DevOps project | n/a |
+| Azure DevOps repo | n/a |
+| Azure subscription | n/a |
+| Azure resource group | n/a |
+| Result | Partial / source and local package pass; installed app remains stale |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Installed Program Files version probe | Expected fail | Program Files still reports desktop `0.5.20`, daemon health `0.5.20`, and one legacy/stale uninstall entry. This explains why the user can still see the removed New Chat welcome template in the installed app. |
+| Installed auth/avatar probe | Pass | Existing installed daemon reports authenticated user `Zhou Ping`, UPN `Zhou.Ping@totalebizsolutions.com`, and avatar data URL length `19339`; avatar retrieval itself is not the root cause of the sign-in screenshot. |
+| GitHub Actions release run lookup | Pass | User-provided run `29436222385` is successful but is branch/title `v0.5.21`, not the current local `0.5.22` package. Artifacts were downloaded to `.artifacts/run-29436222385` for comparison. |
+| Core Microsoft sign-in scope tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/azureAuthSession.test.ts test/azureAuthCredential.test.ts` passed 2 files / 7 tests, including identity-only sign-in assertions that do not request Key Vault or Azure DevOps scopes. |
+| Daemon local `.env` / Key Vault fallback tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/daemonEnv.test.ts test/daemonConfigRoutes.test.ts test/serverProjectLinkRoutes.test.ts` passed 3 files / 17 tests and confirms `local_env` mode does not call Key Vault. |
+| Built desktop dist stale-template scan | Pass | `.\scripts\windows\verify-no-stale-chat-template.ps1` passed with 77 files scanned and no matches for removed welcome copy or preload helpers. |
+| Local `0.5.22` MSI stale-template scan | Pass | `.\scripts\windows\verify-no-stale-chat-template.ps1 -MsiPath apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi` passed with no stale template/preload matches. The scan needs more than 120 seconds on this machine when run cold. |
+| Release workflow static gate | Pass | `.\scripts\windows\verify-release-workflow-static.ps1` passed and confirms the release workflow contains the stale-template, metadata, signing readiness, signing, and signature verification gates. |
+| Stale-template verifier smoke | Pass | `.\scripts\windows\verify-no-stale-chat-template-smoke.ps1` passed and proves the verifier rejects both stale welcome copy and stale preload helper references. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| GitHub artifact download | `.artifacts/run-29436222385` | n/a | yes | Retained locally for installer comparison |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Live cloud / ADO resources | none created | No destructive live tests were run. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Program Files MergePilot `0.5.20` install | User still needs to install `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi` or a future signed/released package. | User / installer validation |
+| `.artifacts/run-29436222385` | Retained to compare the successful `v0.5.21` GitHub Actions artifact against local `0.5.22`. | MergePilot |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Installed app is still `0.5.20`, so screenshots from the installed app can show old New Chat template behavior even though source and local `0.5.22` package have removed it. | High | Install `MergePilot_0.5.22_x64_en-US.msi`, then rerun installed parity verification. |
+| The Microsoft sign-in `invalid_resource` screenshot is consistent with the stale installed app requesting Key Vault scope. Current source tests prove base sign-in is identity-only and `local_env` mode avoids Key Vault secret hydration. | High | Verify again after `0.5.22` install; if it reproduces, capture the auth request URL/scopes for a new repro loop. |
+| The latest GitHub Release workflow run visible from `gh run list` is `v0.5.21`; it does not contain the current `0.5.22` local fixes. | Medium | Do not use run `29436222385` as the fix-bearing installer; release a new version after validation when requested. |
+
+## Run: mp-0522-chat-template-verifier-smoke-20260717-0751
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 07:48-07:51 +08:00 |
+| Runtime | Current source and rebuilt local Windows artifacts `0.5.22` |
+| Resource mode | Non-destructive verifier self-test |
+| Result | Pass |
+
+### Purpose
+
+Add a repeatable smoke harness for `verify-no-stale-chat-template.ps1` so the release gate's behavior is proven, not only inspected manually. The harness validates both positive and negative cases for removed New Chat copy and removed frontend preload helper names.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Smoke harness added | Pass | Added `scripts/windows/verify-no-stale-chat-template-smoke.ps1`. It creates temporary runtime payloads and invokes the verifier through PowerShell, collecting JSON output and exit codes. |
+| Clean payload acceptance | Pass | The smoke confirms a clean runtime file containing `refreshChatIndexStatus` passes, while the verifier pattern list still includes `fetchChatIndexStatus`. |
+| Stale welcome rejection | Pass | The smoke confirms a payload containing `Ask MergePilot anything` fails and reports that pattern in `matches`. |
+| Stale preload helper rejection | Pass | The smoke confirms a payload containing `fetchChatIndexStatus` fails and reports that pattern in `matches`. |
+| Source map policy | Pass | The smoke confirms source maps are ignored by default, but `-IncludeSourceMaps` can audit and reject `WelcomeSuggestions` inside a `.map` file. |
+| Existing release verifier paths | Pass | After adding the smoke harness, `verify-no-stale-chat-template.ps1` still passed against built `apps\desktop\dist` and the rebuilt `0.5.22` MSI, and `verify-release-workflow-static.ps1` still returned `ok: true`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The stale Chat/preload verifier now has a repeatable self-test covering clean, stale-copy, stale-helper, and source-map behavior. | Pass | Use this smoke when changing the verifier pattern list or release gate behavior. |
+| The release gate remains non-destructive and does not require app install. | Pass | Installed-native parity still remains a separate gate. |
+
+## Run: mp-0522-chat-preload-release-gate-hardening-20260717-0746
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 07:43-07:46 +08:00 |
+| Runtime | Current source and rebuilt local Windows artifacts `0.5.22` |
+| Resource mode | Non-destructive release-gate hardening |
+| Result | Pass |
+
+### Purpose
+
+Harden the stale Chat template release gate so it also catches frontend empty-state preload helper regressions. This closes the gap between the manual `rg` scan for `fetchChatIndexStatus` and the automated release verifier.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Verifier pattern expansion | Pass | `verify-no-stale-chat-template.ps1` now scans for removed welcome/template copy plus `WelcomeSuggestions`, `useChatIndexStatus`, and `fetchChatIndexStatus`. It intentionally does not block `/chat/index-status` because the daemon route remains valid for backend diagnostics/tests. |
+| Built dist verifier | Pass | `.\scripts\windows\verify-no-stale-chat-template.ps1` passed against `apps\desktop\dist`, scanning 77 runtime files with no matches for stale template/preload patterns. |
+| Rebuilt MSI verifier | Pass | `.\scripts\windows\verify-no-stale-chat-template.ps1 -MsiPath ...\MergePilot_0.5.22_x64_en-US.msi` passed, extracting the rebuilt MSI and finding no stale template/preload patterns. |
+| Release workflow static gate | Pass | `.\scripts\windows\verify-release-workflow-static.ps1` returned `ok: true`; release still runs the stale Chat verifier after Tauri installer build and before Windows installer metadata/signing/upload. |
+| Focused desktop tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/api.test.ts src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 3 files / 16 tests. |
+| Script/doc hygiene | Pass | PowerShell parser check for `verify-no-stale-chat-template.ps1` passed, `verify-active-doc-links.ps1` returned `ok: true`, and `git diff --check` returned no whitespace errors beyond LF/CRLF warnings. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The release gate now protects both removed New Chat copy and removed frontend preload helper names. | Pass | Keep this verifier in the Windows release job before signing/upload. |
+| Backend diagnostic index-status route remains intentionally allowed. | Pass | Route-level removal is not part of this UI/preload cleanup. |
+| Installed-app and signing blockers are unchanged. | Open external state | Install rebuilt `0.5.22` MSI elevated and configure Authenticode signing before final release trust proof. |
+
+## Run: mp-0522-rebuilt-package-after-chat-preload-cleanup-20260717-0738
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 07:30-07:38 +08:00 |
+| Runtime | Current source and rebuilt local Windows artifacts `0.5.22` |
+| Resource mode | Non-destructive source/package verification |
+| Result | Package pass; signing and installed parity still blocked |
+
+### Purpose
+
+Move the Chat preload cleanup from source-only evidence into rebuilt frontend assets and regenerated Windows installers. This run verifies that the local `0.5.22` MSI now contains the current Chat bundle, still avoids stale New Chat welcome templates, starts a healthy daemon, and preserves first-run local `.env` defaults.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Desktop production build | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build` passed. Vite still reports known large optional chunks for Mermaid/Wardley/CodeMirror, not introduced by this change. |
+| Built asset scan | Pass | Direct `rg` scan of `apps\desktop\dist` found no old New Chat welcome/template strings and no `fetchChatIndexStatus` string. `verify-no-stale-chat-template.ps1` also passed over 77 built files. |
+| Release workflow static gate | Pass | `verify-release-workflow-static.ps1` returned `ok: true`; release still verifies removed Chat templates before installer metadata/signing/upload. |
+| Mocked browser workspace smoke | Pass | `run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked" -Project chromium -Workers 1` passed 39/39. Coverage includes quiet New Chat, no index-status preload, avatar rendering, PR/Pipeline/Review Queue/Activity route cache, Pipeline Markdown AI analysis, Activity raw output folding, and Settings Key Vault/local-env fallback. |
+| Tauri package build | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop run tauri:build` rebuilt sidecar, desktop exe, MSI, and NSIS artifacts for `0.5.22`. Known pkg dynamic-require warnings and Node `DEP0040` warning remain unchanged. |
+| Installer metadata | Pass | `verify-windows-installer-metadata.ps1 -Version 0.5.22` passed. Rebuilt MSI product version is `0.5.22`; NSIS SHA-256 is `97BD8BE5A9D67E6F327E17877AEB7261ABF5336034C58A88C8E346E2AD101A9A`; desktop exe SHA-256 is `A8CA1948C231BACDDEC5AAAC767B4A6F1CB92E48FD08A00CB52E0CADB38ED846`. |
+| MSI stale Chat template scan | Pass | `verify-no-stale-chat-template.ps1 -MsiPath ...\MergePilot_0.5.22_x64_en-US.msi` extracted the rebuilt MSI and found no old welcome/template strings. |
+| Fresh packaged config smoke | Pass | `packaged-fresh-config-smoke.ps1` passed with extracted daemon health `0.5.22`, generated temporary `config.toml` and `.env`, `secretSource: local_env`, `aoaiKeyInVault: false`, and no Key Vault secret error. |
+| MSI payload smoke | Pass | `packaged-msi-payload-smoke.ps1 -Version 0.5.22` passed with extracted daemon health `0.5.22`, legacy cleanup WiX validation, one file indexed, workflow phase `inspect_environment`, and `/chat` HTTP 200. |
+| Signature verification | Fail expected | `verify-windows-artifact-signatures.ps1 -Version 0.5.22` still reports rebuilt MSI/NSIS artifacts as `NotSigned`. Rebuilt MSI SHA-256 is `9FEA9AD6FEAC5104E2E717078929BF0A058D86F48958907E281D000CD8AE5F75`. |
+| Signing readiness | Fail expected | `verify-windows-signing-readiness.ps1 -SkipTimestampProbe` finds `signtool` and artifacts, but fails because no Windows code-signing certificate is configured. |
+| Installed Program Files parity | Fail expected | `verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -ProbeDaemon -ProbeAuth -RequireAvatar -RequireLegacyCleanup` still reports Program Files as `0.5.20`, daemon health `0.5.20`, and a legacy uninstall entry. Auth/avatar remains available for `Zhou Ping` with avatar data length `19339`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The rebuilt local `0.5.22` Windows installers now include the latest Chat preload cleanup. | Pass | Use the rebuilt local MSI for any next elevated install proof. |
+| Source, browser, build, and package gates are aligned for the Chat/template issue. | Pass | Keep the release stale-template verifier and route-cache smoke as regression gates. |
+| Windows trust is still blocked by missing Authenticode signing. | Open external state | Configure/provide a trusted code-signing certificate before expecting Windows to show a verified publisher. |
+| Installed-app parity is still stale because Program Files remains `0.5.20`. | Open external state | Install the rebuilt `0.5.22` MSI elevated, then rerun strict installed/native UI smoke. |
+
+## Run: mp-0522-chat-preload-api-surface-cleanup-20260717-0729
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 07:27-07:29 +08:00 |
+| Runtime | Current source `0.5.22` |
+| Resource mode | Non-destructive frontend/API cleanup verification |
+| Result | Pass |
+
+### Purpose
+
+Remove the remaining frontend API entry point that could reintroduce Chat index-status preloading, while preserving explicit user-driven index refresh. This directly targets the installed-app symptom where New Chat looked like it still had a preloaded welcome/template layer.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Frontend API cleanup | Pass | Removed the unused `fetchChatIndexStatus()` export from the desktop Chat API layer. The daemon/core `/chat/index-status` route remains available for backend diagnostics/tests, but the Chat page no longer has a frontend preload fetch helper to call it. |
+| API and Chat focused tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/api.test.ts src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 3 files / 16 tests. New assertions prove `fetchChatIndexStatus` is no longer exported and `refreshChatIndexStatus` still calls `/chat/index-refresh`. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| New Chat mocked browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "New Chat" -Project chromium -Workers 1` passed 4/4. Coverage includes no preloaded command templates, no `/chat/index-status` request, no stale prompts after Project Link switch, and no skeleton pulses on warm return. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current source no longer has a frontend path for automatic Chat index-status preloading. | Pass | Keep this focused gate alongside the broader route-cache smoke. |
+| Explicit index refresh remains available. | Pass | Refresh remains tied to `/chat/index-refresh`, not background empty-state preload. |
+| Installed screenshots can still show old prompts if the installed app is not the local `0.5.22` build. | Open external state | Install/publish `0.5.22` or newer before using installed-window screenshots as current-source evidence. |
+
+## Run: mp-0522-full-suite-fresh-config-recheck-20260717-0724
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 07:20-07:24 +08:00 |
+| Runtime | Current source and local Windows package artifact `0.5.22` |
+| Resource mode | Non-destructive source/package verification |
+| Result | Pass |
+
+### Purpose
+
+Close the verification gap left by truncated full-test output and add a fresh-installed-user package smoke for the current local `0.5.22` MSI. This run specifically rechecks the risk classes from the latest installed screenshots: stale New Chat prompt templates, Microsoft sign-in scope separation, local `.env` default configuration, and package/runtime parity.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Core full test suite | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test` passed 50 files / 258 tests, with 4 files / 6 live-gated skips. Log: `.tmp-test-logs\core-test.log`. |
+| Daemon full test suite | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test` passed 46 files / 267 tests, with 1 skipped test. Log: `.tmp-test-logs\daemon-test.log`. |
+| Desktop full test suite | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` passed 89 files / 404 tests. Log: `.tmp-test-logs\desktop-test.log`. |
+| Fresh packaged config smoke | Pass | `.\scripts\windows\packaged-fresh-config-smoke.ps1` extracted `MergePilot_0.5.22_x64_en-US.msi`, started the packaged daemon, reported health `0.5.22`, created temporary `config.toml` and `.env`, and verified default `secretSource: local_env`, `aoaiKeyInVault: false`, and no Key Vault secret error. |
+| User-provided GitHub Actions run probe | Not latest | `gh run view 29436222385 --repo ZP151/MergePilot` reports branch/title `v0.5.21`, head SHA `11796ff`, workflow `Release`, and success. The current local workspace/package is `0.5.22`, so downloading that run would install an older artifact. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current source and packaged daemon are green after the latest Chat/auth/config changes. | Pass | Keep these full-suite logs as the latest source-level baseline. |
+| Fresh packaged config defaults to local `.env` instead of Key Vault. | Pass | This prevents a new install from turning missing Key Vault permission into a base Chat/model startup failure. |
+| The linked GitHub Actions run is not the newest fix-bearing package. | Open release state | Publish/install a `v0.5.22` or newer artifact before using GitHub release assets as installed-app proof. |
+| Program Files/native installed proof remains separate. | Open external state | Install the local `0.5.22` MSI elevated and rerun strict installed/native UI smoke. |
+
+## Run: mp-live-app-non-ado-after-chat-auth-cleanup-20260717-0207
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 01:58-02:07 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\run-live-app-e2e.ps1`; then `.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon` |
+| Environment flags | No live ADO or destructive flags set |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass after expected version-guard retry |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Live-app wrapper version guard | Pass | The first run refused to test against an existing Program Files daemon on `http://127.0.0.1:8787` because it reported version `0.5.20` while the workspace expected `0.5.21`. This preserved the intended source-vs-installed parity guard. |
+| Live-app non-ADO business gate | Pass | Reran with `-RestartMismatchedDaemon`; wrapper replaced the mismatched installed daemon for the test, started source daemon `0.5.21`, and Playwright passed 26 local Git/Chat workflow tests with 4 ADO tests skipped by design. |
+| Approval and persistence flows | Pass | Covered requested-file staging, approval restoration after reload, approval denial, denial feedback, consecutive stage/commit approvals, validation failure handling, empty commit prevention, staged-change summary, and commit-message drafting. |
+| Git safety and recovery flows | Pass | Covered credential redaction, dirty branch switch approval, approved merge, merge conflict recovery, new branch creation, local bare remote push, pull rebase, rebase conflict recovery, stash/apply/pop, restore, revert, local tag creation, and one-tag push. |
+| Cleanup probe | Pass | After the wrapper completed, `127.0.0.1:8787` was not listening and `%TEMP%\mergepilot-live-*` had no remaining directories. Daemon stderr only contained the Node `punycode` deprecation warning. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Source daemon process | `mergepilot-daemon` on `127.0.0.1:8787` |  | Live-app wrapper | stopped by wrapper |
+| Local temp repositories/remotes | `%TEMP%\mergepilot-live-*` |  | Live-app Playwright tests | cleaned by tests/wrapper |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Source daemon port | cleaned | `Get-NetTCPConnection -LocalPort 8787` returned no listener after the run. |
+| Local temp repos | cleaned | No `%TEMP%\mergepilot-live-*` directories were found after the run. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None from this test |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Existing installed daemon was stale for source live-app testing | Low | Wrapper correctly blocked the first run and required `-RestartMismatchedDaemon`; this is expected while Program Files is still `0.5.20` and source is `0.5.21`. |
+| Installed-app parity still pending | Medium | The live source app is green, but fresh installer parity still requires commit/push/release and installing the new artifact. |
+
+## Run: mp-current-source-build-default-browser-gate-20260717-0156
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 01:49-01:56 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon build`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build`; `.\scripts\windows\run-mocked-browser-e2e.ps1`; plus focused reruns for the Pipeline AI analysis Markdown assertion |
+| Environment flags | No live ADO, live Azure, or destructive flags set |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Core build | Pass | `@mergepilot/core build` passed. |
+| Daemon build | Pass | `@mergepilot/daemon build` passed. |
+| Desktop production build | Pass | `@mergepilot/desktop build` passed, including TypeScript and Vite production build. Vite emitted the existing large-chunk warning only. |
+| Default mocked Chromium browser gate | Pass after test assertion hardening | First default run passed 82 non-live tests, skipped 30 live-app tests, and exposed one overly implementation-specific assertion in the Pipeline AI analysis Markdown regression. After updating the assertion to verify user-visible Markdown text/list/code instead of a `<strong>` DOM tag, the default wrapper passed 83 non-live tests with 30 live-app tests skipped. |
+| Pipeline AI analysis focused regression | Pass | Focused `renders successful pipeline AI analysis as Markdown with run evidence` passed 1/1 after the assertion fix. |
+| Pipeline row card unit tests | Pass | `PipelineRowCard.test.tsx` passed 4/4. |
+| Route-cache full rerun | Pass | `tests/e2e/route-cache.spec.ts` passed 27/27 after the assertion fix. |
+| Broader mocked smoke rerun | Pass | `@smoke @mocked` passed 38/38 after the assertion fix. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Local desktop build output | `apps/desktop/dist` |  | Desktop production build | retained as local build output |
+| Local test browser/server | Mocked Chromium runs |  | Playwright wrapper | stopped by wrapper |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Mocked browser/server | cleaned | Wrapper completed without requiring live resources. |
+| Desktop build output | retained | Expected local generated output from production build. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| `apps/desktop/dist` | Expected build artifact from `@mergepilot/desktop build` | Keep until next clean/build cycle unless explicitly removed. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pipeline AI Markdown test was too coupled to `<strong>` DOM output | Low | Fixed the test to assert user-visible Markdown behavior: status text, list item, inline code, detail panel, and run evidence. |
+| Installed-app parity still pending | Medium | Current source is green, but the latest published installer does not include these uncommitted changes. Commit/push/release is required before fresh installed-app smoke can prove parity. |
+
+## Run: mp-chat-empty-auth-root-cleanup-20260717-0144
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 01:38-01:48 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/chatDerivedState.test.ts src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test`; `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts`; `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked"` |
+| Environment flags | No live ADO, live Azure, or destructive flags set |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Chat empty-state root cleanup | Pass | Removed the unused New Chat welcome-suggestion derivation and deleted the now-unused `useChatIndexStatus` hook so the Chat empty state no longer computes or preloads the removed template. |
+| New Chat index-status browser regression | Pass | Full mocked Chromium route-cache suite passed 27/27 after the focused New Chat checks passed 3/3. The first New Chat test now asserts that `/chat/index-status` is not requested from the empty Chat page, and the old `Ask MergePilot anything` template/buttons remain absent. |
+| Desktop focused Chat tests | Pass | Focused desktop tests passed 3 files / 9 tests, covering derived state, empty state, and message list rendering. |
+| Desktop full suite | Pass | `@mergepilot/desktop test` passed 87 files / 398 tests after the `useChatIndexStatus` removal. |
+| Broader mocked smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked"` passed 38/38, covering Chat shell/workflows, New Chat empty state, PR insight, Pipelines, Review Queue, Activity, and Settings permission/local-env behavior. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` passed after removing the unused hook and view-model fields. |
+| Core full suite | Pass | `@mergepilot/core test` passed 50 files / 256 tests with 6 live-gated tests skipped by design. |
+| Daemon full suite | Pass | `@mergepilot/daemon test` passed 45 files / 265 tests with 1 live-gated test skipped by design. |
+| Residual source scan | Pass | Product-source scan found no `WelcomeSuggestions`, `useChatIndexStatus`, `Ask MergePilot anything`, or old welcome prompt copy. The only old heading references are negative assertions in tests. |
+| Microsoft sign-in consent scan | Pass | Source scan found no `ensureInteractiveCloudResourceConsent` or `trySilentCloudResourceConsent`; basic sign-in no longer requests Key Vault/Storage/Cosmos consent up front. |
+| Diff hygiene | Pass | `git diff --check` passed for touched Chat/auth/test files with CRLF warnings only. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Local test browser/server | Mocked Chromium route-cache run |  | Playwright wrapper | stopped by wrapper |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Mocked browser/server | cleaned | The wrapper completed without leaving a product daemon or live resource behind. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current GitHub `v0.5.21` installer does not include this uncommitted source fix | Medium | Commit/push/release is required before a new installer can prove the Chat empty-state and auth-consent cleanup in Program Files. |
+
+## Run: mp-installed-app-smoke-wrapper-20260716-1613
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 16:13-16:14 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis -PackageProbePort 8798 -PersistencePort 8799 -SafetyPort 8800` |
+| Environment flags | No live ADO or destructive flags set |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Installed app smoke wrapper | Pass | Added and ran `scripts\windows\run-installed-app-smoke.ps1`, which orchestrates package-state verification, restart persistence, and unexpected-port safety in one command. Wrapper log: `output\live-e2e\installed-app-smoke-wrapper-20260716-161344.log`. |
+| Package-state verifier | Pass | Wrapper started installed daemon on port `8798`, verified installed `0.5.20` NSIS shape, legacy cleanup, daemon health, auth, and avatar, then stopped the daemon it owned. Child log: `output\live-e2e\installed-app-package-state-20260716-161344.log`. |
+| Restart persistence | Pass | Child persistence gate passed on port `8799`; Project Link state, chat session, terminal `done`, and assistant completion survived daemon restart and were cleaned. Child log: `output\live-e2e\installed-app-persistence-20260716-161344.log`. |
+| Unexpected-port safety | Pass | Child safety gate passed on port `8800`; inner persistence smoke exited `1` as expected, logged `Refusing to restart unexpected process`, and left the unrelated listener alive for the harness to clean. Child log: `output\live-e2e\installed-app-safety-20260716-161344.log`. |
+| Cleanup and residue probe | Pass | Wrapper reported `openAfterRun: []`; post-run probes confirmed ports `8787`, `8798`, `8799`, and `8800` were closed, and temp probe found zero matching installed/live test directories. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Local installed daemon process | Package-state probe on port `8798` |  | Installed app smoke wrapper | stopped by wrapper |
+| Local temp Project Link | Child persistence smoke resource |  | Installed restart persistence smoke | deleted by child script |
+| Local temp chat session | Child persistence smoke resource |  | Installed restart persistence smoke | deleted by child script |
+| Local temp repo | Child persistence smoke resource |  | Installed restart persistence smoke | deleted by child script |
+| Local non-MergePilot listener | Safety probe on port `8800` |  | Installed persistence safety smoke | stopped by child safety wrapper |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Package-state daemon | cleaned | Wrapper reported `packageProbe.daemonStopped: true`. |
+| Persistence resources | cleaned | Child persistence smoke deleted Project Link, chat session, and temp repo. |
+| Safety listener | cleaned | Child safety wrapper stopped the unrelated listener after proving the persistence smoke did not. |
+| Test ports and temp directories | cleaned | Ports `8787`, `8798`, `8799`, and `8800` were closed; temp directory probe returned zero matches. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Current Program Files install | Existing installed app under test | User/development session |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Installed app smoke is now one-command repeatable for the current Program Files app. | Info | Prefer `run-installed-app-smoke.ps1` for installed NSIS/MSI shape, auth/avatar, persistence, and safety-boundary checks. |
+| Current installed app remains healthy at `0.5.20` NSIS shape. | Info | Install the local `0.5.21` package before claiming installed `0.5.21` parity. |
+
+## Run: mp-installed-persistence-autostart-gate-20260716-1552
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 15:52-15:53 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\installed-restart-persistence-smoke.ps1 -ExpectedVersion 0.5.20 -Port 8796` |
+| Environment flags | No live ADO or destructive flags set |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Installed restart persistence script auto-start | Pass | The script now starts `C:\Program Files\MergePilot\mergepilot-daemon.exe` automatically when the requested port is not already listening, instead of requiring a manual pre-start. Log: `output\live-e2e\installed-v0520-restart-persistence-autostart-20260716-155225.log`. |
+| Installed daemon restart persistence | Pass | Temporary Project Link `46c7b27aa33b9b32` and chat session `chat_1784188353170_7b987e` survived daemon restart on port `8796`; terminal SSE reached `done`, and assistant completion `persistence-ok-mp-installed-persist-20260716-155225` was present before and after restart. |
+| Owned daemon cleanup | Pass | JSON output reported `daemonAutoStarted: true` and `cleanup.daemonStopped: true`; post-run probe confirmed ports `8796` and `8787` were closed. |
+| Temporary resource cleanup | Pass | Script deleted the temporary chat session, Project Link, and temp repo; temp probe found zero matching `mp-installed-persist-*`, `mergepilot-live-*`, `mp-live-*`, and `mergepilot-daemon-live-pr-insight-*` directories. |
+| Unexpected port safety boundary | Pass | With port `8797` occupied by a non-MergePilot PowerShell listener, the script exited `1`, logged `Refusing to restart unexpected process`, left the unrelated listener alive, and did not create persistent test resources. Log: `output\live-e2e\installed-v0520-restart-persistence-unexpected-port-process-20260716-160141.log`. |
+| Repeatable safety wrapper | Pass | Added and ran `.\scripts\windows\installed-restart-persistence-safety-smoke.ps1 -ExpectedVersion 0.5.20 -Port 8797`. Wrapper exit code was `0` while the inner smoke exit code was the expected `1`; JSON reported `containsExpectedRefusal: true`, `listenerStillAliveAfterSmoke: true`, and no failures. Log: `output\live-e2e\installed-restart-persistence-safety-wrapper-20260716-160559.log`. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Local temp Project Link | `46c7b27aa33b9b32` |  | Installed restart persistence smoke | deleted by script |
+| Local temp chat session | `chat_1784188353170_7b987e` |  | Installed restart persistence smoke | deleted by script |
+| Local temp repo | `mp-installed-persist-20260716-155225` |  | Installed restart persistence smoke | deleted by script |
+| Local installed daemon process | PID `16148`, then PID `31828` after restart |  | Installed restart persistence smoke | stopped by script |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Temporary Project Link | cleaned | Script reported `projectLinkDeleted: true`. |
+| Temporary chat session | cleaned | Script reported `chatDeleted: true`. |
+| Temporary repo | cleaned | Script reported `tempRepoDeleted: true`; temp directory probe found zero `mp-installed-persist-*` entries. |
+| Auto-started daemon | cleaned | Script reported `daemonStopped: true`; post-run ports `8796` and `8787` were closed. |
+| Unexpected port listener | cleaned by harness | The script did not kill it; the negative-test harness stopped PID `37872` afterward, and port `8797` was closed. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Current Program Files install | Existing installed app under test | User/development session |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Installed persistence gate no longer requires a manually prestarted daemon. | Info | Use `installed-restart-persistence-smoke.ps1` directly in future installed-app gates. |
+| The script still refuses to reuse an unexpected process occupying the requested port. | Info | This preserves the safety boundary against accidentally controlling a non-MergePilot process. |
+| Unexpected-port negative coverage is now scriptable. | Info | Use `installed-restart-persistence-safety-smoke.ps1` when changing installed-daemon lifecycle logic. |
+
+## Run: mp-installed-v0520-nsis-state-and-persistence-20260716-1548
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 15:47-15:49 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | Installed app state; workspace still uncommitted |
+| Test command | Started `C:\Program Files\MergePilot\mergepilot-daemon.exe --port 8794`, then `.\scripts\windows\verify-installed-windows-package-state.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis -RequireLegacyCleanup -ProbeDaemon -ProbeAuth -RequireAvatar -Port 8794`; started installed daemon on `8795`, then `.\scripts\windows\installed-restart-persistence-smoke.ps1 -ExpectedVersion 0.5.20 -Port 8795` |
+| Environment flags | No live ADO or destructive flags set |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Installed package state | Pass | Current Program Files install is `0.5.20`, desktop bundle kind `nsis`, uninstall entry count is exactly 1, `uninstall.exe` is present as expected for NSIS, and no legacy `C:\Program Files\CICD-Agent` or old publisher shortcut directory remains. Log: `output\live-e2e\installed-v0520-package-state-20260716-154711.log`. |
+| Installed daemon health/config | Pass | Installed daemon on port `8794` returned `healthVersion: 0.5.20`, Azure OpenAI provider, deployment `gpt-4o`, endpoint `https://devagentproj-resource.openai.azure.com`, `cloudProjectLinkStore: true`, `cloudSessions: true`, and `cloudSecrets: false`. |
+| Installed auth/avatar | Pass | `/auth/status` returned authenticated user `Zhou Ping`, UPN `Zhou.Ping@totalebizsolutions.com`, avatar data URL present with length `19339`. |
+| Installed restart persistence | Pass | Temporary Project Link `672ed2846e45d723` and chat session `chat_1784188101618_d81cf2` survived installed daemon restart on port `8795`; terminal SSE reached `done`, assistant completion was present before and after restart, and health config remained stable. Log: `output\live-e2e\installed-v0520-restart-persistence-20260716-154816.log`. |
+| Cleanup and residue probe | Pass | Persistence smoke deleted the temporary chat session, Project Link, and temp repo. Ports `8794`, `8795`, and `8787` were closed afterward; temp probe found zero matching installed/live test directories. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Local temp Project Link | `672ed2846e45d723` |  | Installed restart persistence smoke | deleted by script |
+| Local temp chat session | `chat_1784188101618_d81cf2` |  | Installed restart persistence smoke | deleted by script |
+| Local temp repo | `mp-installed-persist-20260716-154820` |  | Installed restart persistence smoke | deleted by script |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Temporary Project Link | cleaned | Script reported `projectLinkDeleted: true`. |
+| Temporary chat session | cleaned | Script reported `chatDeleted: true`. |
+| Temporary repo | cleaned | Script reported `tempRepoDeleted: true`; temp directory probe found zero `mp-installed-persist-*` entries. |
+| Installed test ports | cleaned | `8787`, `8794`, and `8795` were not listening after the run. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Current Program Files install | Existing installed app under test | User/development session |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current installed app remains `0.5.20`, not the newly built local `0.5.21` package. | Info | Install the newly built MSI/NSIS before claiming installed `0.5.21` parity. |
+| Installed NSIS state, auth/avatar, and restart persistence are healthy. | Info | Keep this as the current installed-app baseline while local package acceptance tracks `0.5.21` payload behavior separately. |
+| A first persistence-smoke attempt failed before business operations because the daemon was not prestarted on the requested port. | Info | The corrected run explicitly started the installed daemon before invoking the persistence script; no temp resources were left by the precondition failure. |
+
+## Run: mp-current-dirty-tree-package-acceptance-20260716-1542
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 15:36-15:42 +08:00 |
+| Operator/account | Local development session |
+| Machine | `zhoulaptop` |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop tauri:build`; `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi -Port 19041`; `.\scripts\windows\packaged-live-vision-smoke.ps1 -MsiPath apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi -Port 19042`; `.\scripts\windows\verify-windows-artifact-signatures.ps1` |
+| Environment flags | No live ADO or destructive flags set; packaged vision smoke used local configured model credentials |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass with signing blocker |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Current dirty-tree Tauri package build | Pass | Built fresh local `0.5.21` MSI and NSIS artifacts after the full current-source suite. Log: `output\live-e2e\current-package-tauri-build-20260716-153645.log`. |
+| MSI payload smoke | Pass | Administrative MSI extraction found both `mergepilot-desktop.exe` and `mergepilot-daemon.exe`; legacy cleanup WiX markers validated; extracted daemon returned `healthVersion: 0.5.21`, indexed 1 file, reached workflow phase `inspect_environment`, and `/chat` returned HTTP 200. Log: `output\live-e2e\current-package-msi-payload-smoke-20260716-154120.log`. |
+| Packaged live vision smoke | Pass | Extracted MSI daemon accepted a deterministic PNG image attachment and answered: `The large text is "MP VISION TEST," and the two colored shapes are a blue square and a red circle.` Checks passed for text, shapes, no control JSON leakage, no duplicate final sentence, and session deletion HTTP 200. Log: `output\live-e2e\current-package-live-vision-smoke-20260716-154205.log`; SSE: `output\live-e2e\packaged-live-vision-sse-19042.log`. |
+| Windows artifact signature verification | Expected fail | Both local artifacts exist at version `0.5.21`, but `MergePilot_0.5.21_x64-setup.exe` and `MergePilot_0.5.21_x64_en-US.msi` are `NotSigned`. Log: `output\live-e2e\current-package-signature-check-20260716-154243.log`. |
+| Cleanup and residue probe | Pass | Ports `19041`, `19042`, and `8787` were closed after the run. Temp probe found zero matching `mergepilot-msi-extract-*`, `mergepilot-vision-msi-extract-*`, `mergepilot-packaged-vision-repo-*`, `mergepilot-vision-fixture-*`, and `mergepilot-packaged-vision-data-*` directories after clearing one old 2026-07-14 packaged-vision data directory. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Local MSI | `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi` |  | Tauri build | retained as local build output |
+| Local NSIS setup | `apps\desktop\src-tauri\target\release\bundle\nsis\MergePilot_0.5.21_x64-setup.exe` |  | Tauri build | retained as local build output |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| MSI extraction directories | cleaned | No matching temp extraction directories remained. |
+| Packaged vision temp repo/data/fixture | cleaned | No matching temp repo, data, or fixture directories remained after the residue probe. |
+| Packaged vision chat session | cleaned | Delete returned HTTP 200. |
+| Local test ports | cleaned | `19041`, `19042`, and `8787` were not listening after the run. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Local unsigned package artifacts | Build output for current source verification | Development session |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current dirty tree can produce functional `0.5.21` MSI/NSIS artifacts. | Info | Use this as the current local packaging baseline before any future stage/commit/release. |
+| Packaged daemon image-input and streaming path is healthy. | Info | Keep packaged live vision smoke in release acceptance because it catches model config, image payload, SSE, and packaged daemon regressions together. |
+| Windows artifacts are still unsigned. | Medium | Configure trusted Authenticode signing secrets/certificate before claiming the Windows unknown-publisher prompt is fixed. |
+| Installed-app proof remains separate. | Medium | This run validates extracted MSI payload behavior, not a system-wide installed Program Files app. |
+
+## Run: mp-local-v0521-packaged-smoke-20260716-1237
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 12:32-12:37 +08:00 |
+| Operator/account | Local development session |
+| Machine | Windows development machine |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop run tauri:build`; `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi -Port 19031`; `.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.21`; `.\scripts\windows\packaged-live-vision-smoke.ps1 -MsiPath apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi -Port 19032` |
+| Environment flags | No live ADO or destructive flags set; packaged vision smoke used local configured model credentials |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Partial |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Current working-tree Tauri package build | Pass | Built `MergePilot_0.5.21_x64_en-US.msi` and `MergePilot_0.5.21_x64-setup.exe` from the current dirty working tree. Sidecar build produced `mergepilot-daemon-x86_64-pc-windows-msvc.exe`; Tauri produced MSI and NSIS bundles. |
+| MSI payload smoke | Pass | Extracted the MSI payload, verified `healthVersion: 0.5.21`, validated legacy cleanup WiX, indexed 1 source file, reached workflow phase `inspect_environment`, and `/chat` returned HTTP 200. |
+| Packaged live vision smoke | Pass | Extracted the MSI daemon and verified image input/model path end-to-end. Final answer identified `MP VISION TEST`, a blue square, and a red circle; `matchesText`, `matchesShapes`, and `deletedSessionStatus: 200` all passed; `leaksControlJson` and duplicate output checks stayed false. SSE log: `output\live-e2e\packaged-live-vision-sse-19032.log`. |
+| Windows artifact signature verification | Expected fail | Local artifacts exist and have version `0.5.21`, but both NSIS setup and MSI are `NotSigned`. This preserves the known Windows unknown-publisher gap until a trusted code-signing certificate is configured. |
+| Temporary extraction cleanup | Pass | No `%TEMP%\mergepilot-msi-extract-*`, `%TEMP%\mergepilot-vision-msi-extract-*`, `%TEMP%\mergepilot-packaged-vision-repo-*`, or `%TEMP%\mergepilot-vision-fixture-*` directories remained after the smoke runs. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Local MSI | `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi` |  | Tauri build | retained as local build output |
+| Local NSIS setup | `apps\desktop\src-tauri\target\release\bundle\nsis\MergePilot_0.5.21_x64-setup.exe` |  | Tauri build | retained as local build output |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| MSI extraction directories | cleaned | No matching temp extraction directories remained. |
+| Packaged vision temp repo/fixture | cleaned | No matching temp repo or fixture directories remained. |
+| Packaged vision chat session | cleaned | Delete returned HTTP 200. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| Local unsigned package artifacts | Build output for current source verification | Development session |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Windows artifacts are unsigned | Medium | Configure trusted Authenticode signing secrets/certificate before claiming the Windows unknown-publisher prompt is fixed. |
+| Installed-app proof still pending | Medium | Current MSI payload is verified, but the MSI was not installed in this run. Run installed-package verification after installing the newly built `0.5.21` package. |
+
+## Run: mp-workspace-ux-polish-followup-20260716-1231
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 12:28-12:31 +08:00 |
+| Operator/account | Local development session |
+| Machine | Windows development machine |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/chatBubbleTransitions.test.ts src/pages/chat/chatUiChunkDispatcher.test.ts src/pages/chat/chatTerminalStreamState.test.ts src/pages/pullRequests/pullRequestViewModel.test.ts src/api/pullRequests.test.ts`; `.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --grep "@smoke @mocked" --workers=1`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` |
+| Environment flags | No live ADO, live Azure, or destructive flags set |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Source string audit follow-up | Pass | Fixed remaining product-facing fallback roughness found by static scan: empty Chat terminal/UI errors now use `Something went wrong.` and PR changed-file fallback now says `(path not available)`. Raw route/status fragments were only found in API paths and tests, not as new direct UI render paths. |
+| Desktop typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed for `@mergepilot/desktop`. |
+| Focused affected tests | Pass | 21/21 tests passed across Chat bubble transitions, Chat UI chunk dispatcher, Chat terminal stream state, PR view model, and PR API formatting. |
+| Mocked browser smoke | Pass | `@smoke @mocked` Chromium passed 30/30, covering Chat shell, PR insight, Pipeline controls, Review Queue, route-cache behavior, and Settings permission/local-env behavior. |
+| Full desktop source suite | Pass | `@mergepilot/desktop test` passed 70/70 files and 358/358 tests. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO resources | not applicable | No live or destructive flags were set. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Installed package proof still pending | Medium | Current source is green; rebuild/reinstall is still required before claiming the installed app contains these UI polish and no-raw-route fixes. |
+
+## Run: mp-workspace-ux-polish-rerun-20260716-1225
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 12:20-12:25 +08:00 |
+| Operator/account | Local development session |
+| Machine | Windows development machine |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/api/userFacingErrors.test.ts src/api/workspace.test.ts src/api/pullRequests.test.ts`; `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` |
+| Environment flags | No live ADO, live Azure, or destructive flags set |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Workspace UX polish source checks | Pass | Desktop typecheck passed after replacing user-visible `Unknown`/`unknown` placeholders in PR cards, PR context, Pipeline detail, checkpoint preview/apply detail, review operation detail, review findings, and PR insight comparison summaries with quieter explicit unavailable-state labels. |
+| Focused user-facing API/workspace tests | Pass | 22/22 focused API/workspace tests still passed after the UI polish changes. |
+| Route-cache Chromium regression | Pass | 21/21 route-cache tests passed, including stable New Chat suggestions, warm Pull Requests/Review Queue/Pipelines/Activity refresh behavior, and collapsed checkpoint raw output. |
+| Full desktop source suite | Pass | `@mergepilot/desktop test` passed 70/70 files and 358/358 tests. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO resources | not applicable | No live or destructive flags were set. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Installed package proof still pending | Medium | Current source is green; rebuild/reinstall is still required before claiming the installed app contains these UI polish and no-raw-route fixes. |
+
+## Run: mp-user-facing-api-error-hardening-20260716-1154
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 11:52-12:16 +08:00 |
+| Operator/account | Local development session |
+| Machine | Windows development machine |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/api/userFacingErrors.test.ts src/api/workspace.test.ts src/api/pullRequests.test.ts`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`; `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1 --grep "does not show stale Pull Requests after Project Link switch"`; `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test`; `.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --grep "@smoke @mocked" --workers=1` |
+| Environment flags | No live ADO, live Azure, or destructive flags set |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| User-facing API error formatting | Pass | 22/22 focused API/workspace tests passed across PR list/artifacts, workflow-action, Project Link CRUD/discovery/migration, Pipeline connection, Settings, Activity task, Review Queue cloud fallback warning, source preview fallback, daemon health, Azure DevOps OAuth, plain-text body, JSON body, empty-body fallback, whitespace-only body fallback, and nested object error formatting. |
+| Desktop typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed for `@mergepilot/desktop`. |
+| Route-cache Chromium regression | Pass | A full-suite run initially exposed one non-reproducible blank-page timing failure in the Project Link switch test; the focused test then passed 1/1 and the full route-cache suite passed 21/21 on immediate rerun. |
+| Full desktop source suite | Pass | `@mergepilot/desktop test` passed 70/70 files and 358/358 tests after adding the new user-facing API error formatting coverage. |
+| Mocked smoke browser gate | Pass | `@smoke @mocked` Chromium passed 30/30 after the Project Link migration formatter change. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO resources | not applicable | No live or destructive flags were set. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Empty or whitespace-only error bodies previously fell back to labels containing raw `HTTP NNN` status text. | Medium | Fixed in the shared desktop runtime error helper; covered by focused API regression. |
+| JSON object-shaped `error` values could degrade to `[object Object]` instead of the nested message. | Medium | Fixed in the shared desktop runtime error helper; covered by focused API regression. |
+| Project Link cloud migration could still fall back to raw `HTTP 500` or JSON parse errors when the daemon returned an empty/non-message error body. | Medium | Fixed by routing migration failures through `messageFromErrorResponse`; covered by focused API regression. |
+| Review Queue cloud fallback, source preview, and daemon health had narrower fallback paths that could expose route/status style noise for empty or unknown failures. | Medium | Fixed Review Queue warning fallback, source preview unknown-error fallback, and daemon health fallback; covered by focused API/workspace regressions. |
+| One full route-cache run briefly failed on a blank page in the Project Link switch case, but the failure did not reproduce in either focused or full-suite reruns. | Low | Treat as a watch item only; the rerun proved current route-cache behavior green without product or test changes. |
+| Remaining raw HTTP strings in desktop API are mostly health checks, swallowed Review Queue local-fallback paths, or backend diagnostic records. | Low | Review before the next release hardening pass if those become directly visible in the app. |
+
+## Run: mp-user-facing-api-error-formatting-20260716-1148
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 11:40-11:48 +08:00 |
+| Operator/account | Local development session |
+| Machine | Windows development machine |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/api/pullRequests.test.ts src/api/userFacingErrors.test.ts`; `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1 --grep "shows pipeline action errors"`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`; `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1` |
+| Environment flags | No live ADO, live Azure, or destructive flags set |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| User-facing API error formatting | Pass | 7/7 API tests passed across PR list/artifacts, workflow-action, Project Link, and Pipeline connection auth-error formatting. |
+| Pipeline action error browser regression | Pass | Focused Chromium test passed and now asserts the Pipeline detail panel shows `Pipeline inspection failed: ADO permission denied` while hiding `/chat/workflow-action` and `HTTP 500`. |
+| Route-cache Chromium regression | Pass | 21/21 tests passed after Chat, Pipeline, and Project Link API errors moved to shared readable formatting. |
+| Desktop typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed for `@mergepilot/desktop`. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO resources | not applicable | No live or destructive flags were set. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| High-priority user-facing API routes now use shared readable error formatting instead of surfacing internal route/status strings. | None | Remaining raw HTTP strings are mostly diagnostic, swallowed fallback paths, or lower-priority settings/tasks paths; review before the next release hardening pass. |
+
+## Run: mp-pr-auth-error-no-raw-route-20260716-1137
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 11:35-11:37 +08:00 |
+| Operator/account | Local development session |
+| Machine | Windows development machine |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/api/pullRequests.test.ts`; `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1 --grep "keeps Pull Requests failure visible"`; `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` |
+| Environment flags | No live ADO, live Azure, or destructive flags set |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Pull Request API auth-error formatting | Pass | 4/4 tests passed. The list, artifact list, artifact lookup, and artifact save paths reject with the readable Azure credential message and not `/project-links/`. |
+| Pull Requests failure browser regression | Pass | Focused Chromium route-cache test passed and now asserts the page does not render `/project-links/` or `HTTP 401` while keeping the readable credential message visible across a warm route return. |
+| Route-cache Chromium regression | Pass | 21/21 tests passed after the stronger no-raw-route assertion was added. |
+| Desktop typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed for `@mergepilot/desktop`. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| ADO resources | not applicable | No live or destructive flags were set. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current source now has direct regression proof that PR credential failures do not expose internal runtime routes. | None | Rebuild/install a new package and repeat the installed-window visual smoke to prove the fix in packaged form. |
+
+## Run: mp-installed-window-visual-smoke-20260716-1132
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 11:25-11:32 +08:00 |
+| Operator/account | Installed Windows app session, signed in as `Zhou Ping` |
+| Machine | Windows development machine |
+| Git commit | Working tree only; not committed |
+| Test command | Computer Use window smoke against `C:\Program Files\MergePilot\mergepilot-desktop.exe`; focused source follow-up: `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/api/pullRequests.test.ts src/pages/pipelines/pipelineModel.test.ts src/pages/pullRequests/pullRequestViewModel.test.ts src/pages/reviewFindings/reviewQueueViewModel.test.ts src/pages/reviewFindings/ReviewActivityRail.test.tsx src/pages/TaskViewer.test.tsx`; `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` |
+| Environment flags | No live ADO, live Azure, or destructive test flags set |
+| Azure DevOps org | Not mutated |
+| Azure DevOps project | Not mutated |
+| Azure DevOps repo | Not mutated |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Partial for installed `v0.5.20` visual smoke; Pass for current source follow-up |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Installed New Chat visual smoke | Pass | The installed app opened to one stable welcome prompt set, visible `ClaimBot_API link`, `GPT-4o` model selector, and visible signed-in avatar. |
+| Installed Pull Requests visual smoke | Finding | The installed `v0.5.20` window showed a raw `/project-links/.../pull-requests HTTP 401` error when Azure credentials were expired/missing. Current source already formats the PR list error through `messageFromErrorBody`; this run added the same guard to PR insight artifact list/lookup/save errors. |
+| Installed Review Queue visual smoke | Pass | The queue loaded real status cards without the previous gray selected-card treatment dominating the layout. |
+| Installed Pipelines visual smoke | Pass with credential warning | First render showed discovery/loading, then settled to a user-facing Azure credential warning instead of raw JSON/HTTP output. No pipeline run was triggered. |
+| Installed Activity visual smoke | Pass with slow initial refresh | The checkpoint section initially showed `Loading`, then populated after an additional wait. The two-column operational-history layout remained visible and raw tool output was not dominating the page. |
+| Focused desktop source tests | Pass | 6 files / 21 tests passed, including the new PR insight artifact auth-error formatting tests. |
+| Route-cache Chromium regression | Pass | 21/21 tests passed after the API formatting change. |
+| Desktop typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed for `@mergepilot/desktop`. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Installed MergePilot desktop process | cleaned | Launched for the smoke and stopped after capture. |
+| Installed MergePilot daemon on port `8787` | cleaned | Port `8787` was no longer listening after cleanup. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Installed `v0.5.20` Pull Requests page can show raw route text for expired Azure credentials. | Medium | Current source now has readable PR list coverage and newly added PR insight artifact coverage. Verify the installed window again after the next package is built/installed. |
+| Installed Activity checkpoint refresh may take several seconds before replacing `Loading`. | Low | Keep as a UX watch item; current source route-cache tests cover cached Activity refresh, but installed visual timing should be rechecked in a packaged build. |
+
+## Run: mp-workspace-ux-focused-rerun-20260716-1124
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 11:22-11:24 +08:00 |
+| Operator/account | Local development session |
+| Machine | Windows development machine |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pipelines/pipelineModel.test.ts src/pages/pullRequests/pullRequestViewModel.test.ts src/pages/reviewFindings/reviewQueueViewModel.test.ts src/pages/reviewFindings/ReviewActivityRail.test.tsx src/pages/TaskViewer.test.tsx`; `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` |
+| Environment flags | No live ADO, live Azure, or destructive flags set |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Focused desktop workspace component/model tests | Pass | 5 files / 18 tests passed for Pipeline model, Pull Request view model, Review Queue view model, Review Activity rail, and Activity/TaskViewer behavior. |
+| Route-cache Chromium regression | Pass | 21/21 tests passed, covering stable New Chat prompts, warm route returns, Project Link switch isolation, Pull Requests/Review Queue/Pipelines/Activity cached refresh behavior, pipeline detail panel state, and checkpoint raw output collapsed by default. |
+| Desktop typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed for `@mergepilot/desktop`. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Daemon listener on port `8787` | not applicable | These tests did not start or leave a persistent daemon listener. |
+| Recent `mergepilot-live-*` and `mergepilot-daemon-live-pr-insight-*` temp folders | not applicable | No live-app or live ADO test flags were set for this run. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| No new verified Workspace UX regression found in the focused route-cache/component/typecheck gate. | None | Continue with installed-app visual/Computer Use smoke when native control is stable enough to prove layout details directly. |
+
+## Run: mp-live-ado-source-daemon-readonly-20260716-1117
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 11:16-11:17 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` via Azure CLI |
+| Machine | Windows development machine |
+| Git commit | Working tree only; not committed |
+| Test command | `MERGEPILOT_E2E_LIVE_ADO=1 .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAdoDiscovery.test.ts test/liveAdoPipeline.test.ts`; `MERGEPILOT_E2E_LIVE_ADO=1 .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_ADO=1`; `MERGEPILOT_E2E_DESTRUCTIVE` unset |
+| Azure DevOps org | `https://tebssg.visualstudio.com/` |
+| Azure DevOps project | `TeBS-ClaimBot` |
+| Azure DevOps repo | `ClaimBot_API` |
+| Azure subscription | CLI default: `9e1bd067-1e30-4e20-b29a-f2343141a25e` |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Core live ADO discovery | Pass | Discovered the ClaimBot_API project, repository, and pipeline with the current account. |
+| Core live ADO pipeline read | Pass | Listed recent pipeline runs and read timeline/log evidence for the latest failed pipeline run; destructive queue case skipped by design. |
+| Daemon live ADO PR insight | Pass | Inspected a real ClaimBot_API pull request through the workflow route without approval or mutation. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Daemon listener on port `8787` | not applicable | These source/daemon tests did not leave a persistent daemon listener. |
+| Recent `mergepilot-live-*` and `mergepilot-daemon-live-pr-insight-*` temp folders | cleaned | No matching temp directories modified in the last 20 minutes remained after the run. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| No live ADO source/daemon read-only regression found. | None | Latest ClaimBot_API pipeline #117 run remained `4680 / 20260706.1`, confirming no pipeline run was queued. |
+
+## Run: mp-live-ado-pipeline-readonly-chat-20260716-1112
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 11:09-11:12 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` via Azure CLI |
+| Machine | Windows development machine |
+| Git commit | Working tree only; not committed |
+| Test command | `MERGEPILOT_E2E_LIVE_APP=1 MERGEPILOT_E2E_LIVE_ADO=1 .\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/live-app-business.spec.ts --project=chromium --workers=1 --grep "inspects ClaimBot_API pipeline #117 failure evidence|prepares ClaimBot_API pipeline #117 rerun approval"` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_APP=1`; `MERGEPILOT_E2E_LIVE_ADO=1`; `MERGEPILOT_E2E_DESTRUCTIVE` unset |
+| Azure DevOps org | `https://tebssg.visualstudio.com/` |
+| Azure DevOps project | `TeBS-ClaimBot` |
+| Azure DevOps repo | `ClaimBot_API` |
+| Azure subscription | CLI default: `9e1bd067-1e30-4e20-b29a-f2343141a25e` |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Runtime
+
+| Area | Value |
+|---|---|
+| Daemon | Source daemon started temporarily on `http://127.0.0.1:8787`, then stopped |
+| Version | `0.5.21` |
+| Config | `C:\Users\15492\.mergepilot\config.toml` |
+| Model | Azure OpenAI `gpt-4o` |
+| Cloud mode | Project Link store enabled; cloud secrets disabled; cloud sessions enabled |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Inspect ClaimBot_API pipeline #117 failure evidence through normal Chat input | Pass | Real Chat UI inspected the configured ClaimBot_API pipeline context without approval or mutation. |
+| Prepare ClaimBot_API pipeline #117 rerun approval from failure evidence suggestions | Pass | Real Chat UI prepared the rerun approval path but destructive mode was unset, so no pipeline run was queued. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Source daemon on port `8787` | cleaned | Port listener was stopped after the focused live ADO run. |
+| Recent `mergepilot-live-*` temp folders | cleaned | No matching temp directories modified in the last 20 minutes remained after the run. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| No live ADO read-only Chat UI regression found. | None | Latest ClaimBot_API pipeline #117 run remained `4680 / 20260706.1` (`completed/succeeded` on `refs/heads/main`), confirming this run did not queue a new pipeline. |
+
+## Run: mp-live-app-focused-nondestructive-20260716-1108
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 11:03-11:08 +08:00 |
+| Operator/account | Local Codex test runner |
+| Machine | Windows development machine |
+| Git commit | Working tree only; not committed |
+| Test command | `MERGEPILOT_E2E_LIVE_APP=1 .\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/live-app-business.spec.ts --project=chromium --workers=1 --grep "does not stage files when the user rejects|uses approval denial feedback|redacts secret-like values"` |
+| Environment flags | `MERGEPILOT_E2E_LIVE_APP=1`; `MERGEPILOT_E2E_DESTRUCTIVE` unset; `MERGEPILOT_E2E_LIVE_ADO` unset |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Runtime
+
+| Area | Value |
+|---|---|
+| Daemon | Source daemon started temporarily on `http://127.0.0.1:8787`, then stopped |
+| Version | `0.5.21` |
+| Config | `C:\Users\15492\.mergepilot\config.toml` |
+| Model | Azure OpenAI `gpt-4o` |
+| Cloud mode | Project Link store enabled; cloud secrets disabled; cloud sessions enabled |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Rejecting a real Chat UI approval does not stage files | Pass | Verified the approval denial path remains non-mutating for a temporary local repo. |
+| Approval denial feedback becomes the next Chat instruction | Pass | Verified the compact approval feedback path continues the workflow with user feedback rather than silently skipping. |
+| Secret-like values are redacted while reviewing current changes | Pass | Verified the live Chat UI review path does not reveal the test secret value. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary local Git repositories | Playwright-generated `mergepilot-live-*` temp folders | Local filesystem only | Test harness | Cleaned by test harness |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Source daemon on port `8787` | cleaned | Port listener was stopped after the focused live-app run. |
+| Recent `mergepilot-live-*` temp folders | cleaned | No matching temp directories modified in the last 15 minutes remained after the run. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Initial daemon-stop command used PowerShell's read-only `$PID` variable name and did not stop the listener. | Low / harness | Retried with `$listenerId`; daemon stopped successfully. Avoid `$pid` loop variables in PowerShell cleanup snippets. |
+
+## Run: mp-default-chromium-browser-gate-20260716-1101
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 10:59-11:01 +08:00 |
+| Operator/account | Local Codex test runner |
+| Machine | Windows development machine |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --workers=1` |
+| Environment flags | No live/destructive flags set; live-app gated tests skipped by design |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Default Chromium browser gate | Pass | Playwright ran 105 Chromium tests: 75 passed and 30 live-app gated tests skipped. |
+| Chat layout and workflow UX | Pass | Covered chat shell viewport, onboarding, branch divergence, pinned summary dropdown exclusivity, image attachments, natural-language read-only PR/pipeline/Git flows, approvals, UI stream chunks, source references, and artifact workspace behavior. |
+| Review Queue browser smoke | Pass | Covered queue rendering, acknowledgement disposition, ADO write-back retry UI, stale rerun, and route-cache Review Queue behavior. |
+| Workspace route cache | Pass | Covered New Chat prompt stability, warm route returns, Pull Requests, Review Queue, Pipelines, Activity caching, Project Link switch isolation, pipeline detail panel behavior, and checkpoint raw output collapsed by default. |
+| Settings permissions smoke | Pass | Covered Key Vault permission messaging and local-env model secret mode. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Browser/dev-server test state | cleaned | Default mocked browser gate used Playwright-managed app state only. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| No default browser-gate regression found. | None | Continue using explicit live/destructive flags for real ADO mutation flows. |
+
+## Run: mp-workspace-ux-current-audit-20260716-1058
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 10:54-10:58 +08:00 |
+| Operator/account | Local Codex test runner |
+| Machine | Windows development machine |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` |
+| Environment flags | No live/destructive flags set |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Workspace UX implementation audit | Pass | Reviewed current Chat welcome prompt, Pull Requests insight side panel, Pipelines analysis/detail panel, Review Queue activity rail, and Activity operational-history sections against the v0.5.20 UX stabilization requirements. No new product-code patch was required in this pass. |
+| Full desktop source suite | Pass | `@mergepilot/desktop test` passed 68/68 files and 339/339 tests. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| None | not applicable | Source/unit component test only. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| No new verified regression found during this pass. | None | Continue with live/installed-app business smoke when the next package or runtime change needs proof. |
+
+## Run: mp-activity-cache-regression-20260716-1052
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 10:48-10:52 +08:00 |
+| Operator/account | Local Codex test runner |
+| Machine | Windows development machine |
+| Git commit | Working tree only; not committed |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/chatDerivedState.test.ts src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/workspaceActions.test.ts`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`; `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1` |
+| Environment flags | No live/destructive flags set |
+| Azure DevOps org | Not touched |
+| Azure DevOps project | Not touched |
+| Azure DevOps repo | Not touched |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Chat focused desktop tests | Pass | `chatDerivedState`, `ChatMessageList`, and `workspaceActions` passed 10/10, covering welcome prompt stability and workspace action mapping. |
+| Review Queue route-cache focused E2E | Pass | `--grep "Review Queue"` passed 6/6, covering cached decisions, first-load state, warm-route failure visibility, Project Link switch isolation, warning clearing, and findings panel close behavior. |
+| Activity route-cache focused E2E | Pass | `--grep "Activity"` passed 1/1 after restoring PR insight/review operation Activity placeholder cache behavior. |
+| Pipelines route-cache focused E2E | Pass | `--grep "Pipelines"` passed 1/1 for first-load Project Link resolution behavior. |
+| Pull Requests route-cache focused E2E | Pass | First concurrent attempt failed because two Playwright commands contended for the same dev-server port; sequential rerun passed 4/4. Product assertions did not fail. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` passed. |
+| Full route-cache E2E | Pass | `tests/e2e/route-cache.spec.ts` passed 21/21 in 41.7 seconds. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| None |  |  |  |  |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Browser/dev-server test state | cleaned | Mocked browser tests used Playwright-managed app state only. |
+
+### Resources Left Behind
+
+| Resource | Reason | Follow-up owner |
+|---|---|---|
+| None |  |  |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity PR insight/review operation queries had lost `placeholderData`, weakening warm-route cache behavior. | Medium | Restored `placeholderData: (previous) => previous` for both Activity queries and reran focused plus full route-cache tests. |
+| Parallel Playwright invocations can contend for the same local dev-server port and produce `ERR_CONNECTION_REFUSED`/`ERR_CONNECTION_RESET`. | Low / harness | Use a single Playwright invocation or distinct ports for concurrent browser test jobs. |
+
+## Run: mp-installed-v0520-nsis-and-persistence-20260716-0358
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 03:55-03:58 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Installed Program Files daemon `C:\Program Files\MergePilot\mergepilot-daemon.exe`; temporary ports `8791` and `8792`; local config `C:\Users\15492\.mergepilot\config.toml` |
+| Resource mode | Installed runtime verification; temporary Project Link/chat/repo created and cleaned by restart persistence smoke; no ADO pipeline/PR mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\verify-installed-windows-package-state.ps1 `
+  -ExpectedVersion 0.5.20 `
+  -ExpectedDesktopBundleKind nsis `
+  -RequireLegacyCleanup `
+  -ProbeDaemon `
+  -ProbeAuth `
+  -RequireAvatar `
+  -NsisSetupPath output\live-e2e\release-v0.5.20\MergePilot_0.5.20_x64-setup.exe `
+  -RequireNsisSetupAsset `
+  -Port 8791
+
+.\scripts\windows\installed-restart-persistence-smoke.ps1 `
+  -ExpectedVersion 0.5.20 `
+  -Port 8792 `
+  -ChatTimeoutSec 180
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Installed package shape | Pass | Program Files desktop is the expected NSIS install shape for the current install: `actualDesktopBundleKind: nsis`, `uninstall.exe` present, uninstall version `0.5.20`, and one `MergePilot` uninstall entry. |
+| Installed daemon health | Pass | Program Files daemon on port `8791` reported version `0.5.20`, Azure OpenAI `gpt-4o`, config source `C:\Users\15492\.mergepilot\config.toml`, `cloudProjectLinkStore: true`, `cloudSecrets: false`, and `cloudSessions: true`. Port `8787` was separately confirmed to belong to the dev Node daemon at source version `0.5.21`, so it was not used as installed-app evidence. |
+| Installed auth/avatar | Pass | `/auth/status` returned authenticated user `Zhou Ping`, UPN `Zhou.Ping@totalebizsolutions.com`, and a JPEG avatar data URL with length `19339`. |
+| Legacy cleanup | Pass | `C:\Program Files\CICD-Agent` absent, old publisher Start Menu folder absent, current MergePilot shortcut present, and no legacy uninstall entries found. |
+| NSIS setup asset metadata | Pass with known unsigned status | Setup asset `MergePilot_0.5.20_x64-setup.exe` exists, version `0.5.20`, SHA256 `CC14F0BC8ACA5E4E0569401500276E43609711A8EB5C985671C75BE093F79115`, Nullsoft marker present, and signature status `NotSigned`. Unsigned Windows artifacts remain tracked as a release-signing follow-up. |
+| Installed restart persistence | Pass | Temporary run `mp-installed-persist-20260716-035740` created Project Link `767fe663a77fdc72` and chat session `chat_1784145466151_8bff20`, received terminal SSE `done`, verified assistant completion before and after installed daemon restart, then deleted the chat, Project Link, and temp repo. |
+| Cleanup verification | Pass | Temporary port `8792` was closed after the smoke, and no `%TEMP%\mp-installed-*` or `%TEMP%\mergepilot-live-*` directories remained. |
+
+### Resources Created
+
+| Type | Name / ID | URL | Created by test | Cleanup action |
+|---|---|---|---|---|
+| Temporary repo | `%TEMP%\mp-installed-persist-20260716-035740` | local filesystem | `installed-restart-persistence-smoke.ps1` | Deleted |
+| Project Link | `767fe663a77fdc72` | installed daemon API | `installed-restart-persistence-smoke.ps1` | Deleted via `/project-links/{id}` |
+| Chat session | `chat_1784145466151_8bff20` | installed daemon API | `installed-restart-persistence-smoke.ps1` | Deleted via `/chat/{sessionId}` |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Installed Program Files runtime remains healthy at `0.5.20` when launched directly from the installed daemon path. | Info | Continue using temporary ports for installed probes so dev daemon `0.5.21` on `8787` is not mistaken for installed evidence. |
+| Current installed Windows shape is still NSIS, not MSI-strict. | Medium | This is expected for the current install and passes `-ExpectedDesktopBundleKind nsis`; MSI-specific acceptance still requires installing the MSI asset explicitly and rerunning MSI parity verification. |
+| Windows setup asset remains unsigned. | Medium | Keep code-signing secrets/workflow setup as the release-blocking follow-up before claiming trusted Windows publisher behavior. |
+
+## Run: mp-broader-mocked-browser-gate-20260716-0354
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 03:52-03:54 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Repository-local Node/pnpm via `scripts/windows/pnpm-project.ps1`; mocked Chromium browser gate |
+| Resource mode | Source and mocked browser verification only; no ADO/Azure mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/chat-layout.spec.ts tests/e2e/review-queue.spec.ts tests/e2e/settings-permissions.spec.ts --project=chromium --grep "@smoke @mocked" --workers=1
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/chat-layout.spec.ts tests/e2e/review-queue.spec.ts tests/e2e/settings-permissions.spec.ts --project=chromium --workers=1
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Mocked browser smoke gate | Pass | `@smoke @mocked` passed 9/9 across Chat layout, PR insight controls, pipeline controls/setup, read-only PR/pipeline routing, source references, Review Queue, and Settings permissions. |
+| Broader mocked browser gate | Pass | `chat-layout.spec.ts`, `review-queue.spec.ts`, and `settings-permissions.spec.ts` passed 54/54 in Chromium. This revalidated chat viewport, onboarding, Project Link inference, image attachments, PR/pipeline structured routing, approval UI, streaming transcript, source preview/artifact workspace, Review Queue actions, and Settings Key Vault/local-env behavior. |
+| Desktop typecheck | Pass | `@mergepilot/desktop` TypeScript check passed after the browser gate. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The broader mocked browser gate remains green after New Chat warm-return, Pipelines cache, PR/Pipeline insight layout, Review Queue, Activity, and Settings changes. | Info | Keep this 54-test gate as the broad non-mutating UI regression set alongside the 21-test route-cache suite. |
+| No Azure DevOps, Azure, GitHub, or installed-package resources were created or mutated in this run. | Info | Safe to run before installed app or live business gates. |
+
+## Run: mp-new-chat-warm-route-regression-20260716-0351
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 03:49-03:51 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Repository-local Node/pnpm via `scripts/windows/pnpm-project.ps1`; mocked Chromium route-cache gate |
+| Resource mode | Source and mocked browser verification only; no ADO/Azure mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 exec prettier --write tests/e2e/route-cache.spec.ts
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --grep "warm return free" --workers=1
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/chatDerivedState.test.ts src/pages/chat/layout/ChatMessageList.test.tsx
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| New Chat warm-return regression | Pass | New mocked Chromium test verifies Chat can load welcome suggestions, navigate to Activity, return to New Chat, and still show `Review my changes` with zero `.animate-pulse` placeholders at 80 ms. |
+| Route-cache browser gate | Pass | Expanded route-cache suite passed 21/21. The new case complements existing first-load prompt stability and Project Link switch guards. |
+| Desktop typecheck | Pass | `@mergepilot/desktop` TypeScript check passed. |
+| Focused Chat tests | Pass | `chatDerivedState` and `ChatMessageList` focused tests passed 7/7. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The live New Chat warm-return fix from `mp-new-chat-warm-route-polish-20260716-0348` needed a permanent mocked browser regression. | Medium | Added `keeps New Chat warm return free of skeleton pulses` to `tests/e2e/route-cache.spec.ts`; route-cache is now 21 tests. |
+| No Azure DevOps, Azure, GitHub, or installed-package resources were created or mutated in this run. | Info | Safe to keep this gate in the normal non-mutating workspace UX regression set. |
+
+## Run: mp-new-chat-warm-route-polish-20260716-0348
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 03:39-03:48 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Repository-local Node/pnpm via `scripts/windows/pnpm-project.ps1`; mocked Chromium route-cache gate; live dev app already running on `http://127.0.0.1:1420` |
+| Resource mode | Source, mocked browser, and live dev-app UI verification only; no ADO/Azure mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 exec prettier --write apps/desktop/src/pages/chat/chatDerivedState.ts apps/desktop/src/pages/chat/useChatIndexStatus.ts apps/desktop/src/pages/chat/useChatHistoryRuntime.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/chatDerivedState.test.ts src/pages/chat/layout/ChatMessageList.test.tsx
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `@mergepilot/desktop` TypeScript check passed after the New Chat warm-route changes. |
+| Focused Chat tests | Pass | `chatDerivedState` and `ChatMessageList` focused tests passed 7/7. |
+| Route-cache browser gate | Pass | 20/20 mocked Chromium tests passed, including first-load New Chat suggestion hiding and Project Link switch stale-state guards. |
+| Live New Chat warm-route probe | Pass | After visiting Chat once, navigating away, and returning to `#/chat`, the 80 ms probe showed `animatePulse: 0`, stable welcome buttons (`Explain this project architecture`, `Review my changes`, `Open Pipelines workspace`), no hard loading text, no Pipeline `Unknown`, no old `AI ANALYSIS STREAMING`, no raw `{"returncode":0`, and no horizontal overflow. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The prior warm-route probe still showed five `animate-pulse` placeholders on New Chat after returning from another page. | Medium | Fixed by keeping resolved welcome suggestions stable per Project Link/repo and by caching Chat history across Chat route remounts. |
+| A first attempted welcome-suggestion cache could prematurely show default suggestions before `/chat/index-status` resolved. | Medium | Fixed by treating `repoPath` as unresolved when a Project Link exists but no repo path has been applied, and by writing stable welcome suggestions only after a real index-status response exists. |
+| The Review Queue quick probe still showed pulse placeholders when visiting Review Queue for the first time in that browser session. | Info | This was cold-load behavior, not a warm-route regression. The focused route-cache suite continues to cover cached Review Queue decisions on warm route return. |
+
+## Run: mp-workspace-ux-warm-route-reprobe-20260716-0337
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 03:31-03:37 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Repository-local Node/pnpm via `scripts/windows/pnpm-project.ps1`; mocked Chromium browser gate; live dev app route probe already running on `http://127.0.0.1:1420` |
+| Resource mode | Source, mocked browser, and live dev-app UI verification only; no ADO/Azure mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 exec prettier --write apps/desktop/src/pages/Pipelines.tsx apps/desktop/src/pages/pipelines/usePipelinesRuntime.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pipelines/pipelineModel.test.ts src/pages/TaskViewer.test.tsx src/pages/reviewFindings/ReviewActivityRail.test.tsx
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --grep "New Chat" --workers=1
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Live SPA warm-route probe | Pass after fix | A click-based dev-app probe originally found warm `Pipelines` route switches still showing skeleton blocks at 80 ms. The page now keeps cached pipeline rows visible and shows only `Refreshing...` during background discovery. |
+| Desktop typecheck | Pass | `@mergepilot/desktop` TypeScript check passed after the Pipelines query-cache change. |
+| Focused desktop UI tests | Pass | Pipeline model, Activity, and Review activity rail focused tests passed 9/9. |
+| New Chat prompt stability E2E | Pass | The two New Chat route-cache tests passed after hardening the mocked `/chat/index-status` request handshake. |
+| Route-cache browser gate | Pass | 20/20 mocked Chromium tests passed, covering New Chat, Pull Requests, Review Queue, Pipelines, and Activity route-cache behavior. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The mocked route-cache suite was green, but a real SPA click probe still exposed a short Pipelines skeleton flash on warm route return. | Medium | Fixed in `usePipelinesRuntime`: first-load skeleton now checks existing TanStack Query cache data, not only the current rendered row list. |
+| The first New Chat prompt-stability test had a race in the mocked `/chat/index-status` release path. | Low | Fixed test handshake so the response is only released after the request reaches the route handler. Product behavior was not changed. |
+| No Azure DevOps, Azure, GitHub, or installed-package resources were created or mutated in this run. | Info | Continue using this as a non-mutating regression gate before the next installed-app test batch. |
+
+## Run: mp-workspace-ux-stabilization-closeout-20260716-0326
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 03:24-03:26 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Repository-local Node/pnpm via `scripts/windows/pnpm-project.ps1`; mocked Chromium browser gates; live dev app on `http://127.0.0.1:1420` |
+| Resource mode | Source, mocked browser, and live dev-app UI verification only; no ADO/Azure mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/reviewFindings/ReviewActivityRail.test.tsx src/components/PaginationControls.test.tsx
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
+.\scripts\windows\pnpm-project.ps1 lint
+.\scripts\windows\pnpm-project.ps1 typecheck
+.\scripts\windows\pnpm-project.ps1 test
+git diff --check
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `@mergepilot/desktop` TypeScript check passed. |
+| Focused desktop UI tests | Pass | Activity, Review activity rail, and pagination focused tests passed 7/7. |
+| Full desktop tests | Pass | 68 desktop test files passed, 339 tests total. |
+| Route-cache browser gate | Pass | 20/20 mocked Chromium tests passed, covering stable New Chat prompts, warm Pull Requests/Review Queue/Pipelines/Activity route data, Project Link switch stale-state guards, Pipeline detail behavior, and collapsed checkpoint raw output. |
+| Desktop production build | Pass | Vite build passed; existing large chunk warning remains for Mermaid/CodeMirror/vendor chunks. |
+| Root lint | Pass | Root lint passed across core, daemon, CLI, and review-agent packages. |
+| Root package typecheck | Pass | Core, daemon, CLI, and review-agent package typechecks passed. |
+| Root package tests | Pass | Core, daemon, CLI, and review-agent package tests passed; live-gated tests stayed skipped by design. Node emitted existing `punycode` deprecation warnings during package tests. |
+| Diff whitespace check | Pass | `git diff --check` returned no whitespace errors; only Windows CRLF warnings were emitted. |
+| Live dev-app route smoke | Pass | Headless Chromium visited `#/chat`, `#/pulls`, `#/findings`, `#/pipelines`, and `#/activity` on the running dev app. No full-page loading text, Pipeline `Unknown` header, old `AI ANALYSIS STREAMING` label, or raw `{"returncode":0` output was detected. Screenshots were written to `output/playwright/workspace-ux-live-*.png`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Workspace UX stabilization remains green after the Pipeline button/state token cleanup. | Info | Keep `tests/e2e/route-cache.spec.ts` as the focused regression suite for route switching and stale-state behavior. |
+| Direct first-load route visits can still show skeleton placeholders before data exists. | Info | This matches the intended first-load behavior; warm-route cache behavior is covered by the passing route-cache suite. |
+| Production desktop build still emits Vite chunk-size warnings for large diagram/editor/vendor bundles. | Low | Track separately as a bundle-splitting optimization; not a functional blocker for this UX stabilization phase. |
+
+## Run: mp-workspace-ux-activity-token-audit-20260716-0315
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 03:05-03:15 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | Working tree after workspace UX stabilization and Activity token sweep |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/components/PaginationControls.test.tsx src/pages/reviewFindings/ReviewActivityRail.test.tsx`; `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test`; `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/review-queue.spec.ts tests/e2e/settings-permissions.spec.ts tests/e2e/chat-layout.spec.ts --project=chromium --workers=1`; inline Playwright route smoke against `http://127.0.0.1:1420`; `git diff --check` |
+| Environment flags | Non-destructive UI/source verification; `MERGEPILOT_E2E_DESTRUCTIVE` not set |
+| Azure DevOps org | Not mutated |
+| Azure DevOps project | Not mutated |
+| Azure DevOps repo | Not mutated |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `@mergepilot/desktop` TypeScript check passed after the Activity token sweep. |
+| Focused desktop tests | Pass | `TaskViewer`, `PaginationControls`, and `ReviewActivityRail` focused tests passed 7/7. |
+| Activity source formatting | Pass | Focused Prettier check passed for `TaskViewer` and `taskViewer` sources after formatting the token sweep changes. |
+| Desktop production build | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build` completed successfully; Vite emitted only existing large-chunk warnings for heavy client dependencies such as Mermaid, CodeMirror, and vendor bundles. |
+| Test documentation table scan | Pass | A local Node scan found and then verified no header/separator column-count mismatches in `docs/live-e2e-test-records.md`, `docs/business-test-execution-report.md`, or `docs/automated-business-test-suite-plan.md`. |
+| Route-cache mocked E2E regression | Pass | `tests/e2e/route-cache.spec.ts` passed 20/20, including New Chat prompt stability, route cache behavior, Project Link stale-state guards, Activity cache behavior, and collapsed raw output. |
+| Full desktop test suite | Pass | 68 desktop test files passed, 339 tests total. |
+| Broader mocked browser gate | Pass | `chat-layout.spec.ts`, `review-queue.spec.ts`, and `settings-permissions.spec.ts` passed 54/54. |
+| Live dev-app route smoke | Pass | `chat`, `pulls`, `findings`, `pipelines`, and `activity` rendered without hard loading text, Pipeline `Unknown`, `AI ANALYSIS STREAMING`, raw `{returncode:0}`, or horizontal overflow. |
+| Activity detail smoke | Pass | Selecting a checkpoint shows one `Raw output` disclosure and keeps raw `{returncode:0}` hidden until expanded. |
+| Diff whitespace check | Pass | `git diff --check` returned no whitespace errors; only Windows CRLF warnings were emitted. |
+
+### Resources Created
+
+| Type | Identifier / URL | Cleanup status | Notes |
+|---|---|---|---|
+| Screenshot artifacts | `output/playwright/workspace-ux-current-audit-*.png`; `output/playwright/workspace-ux-current-audit-activity-detail.png` | retained | Local visual evidence only. |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Azure DevOps / Azure resources | n/a | No live resources were created or mutated. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity still used a separate hardcoded light `zinc`/`white` visual vocabulary after the initial workspace UX pass. | Medium | Fixed by migrating Activity sidebar/detail components, filters, checkpoint preview/rollback, PR insight activity, review operation activity, and task details to shared `--app-*` tokens and softer semantic state chips. |
+| Activity checkpoint raw output remained a critical regression risk because historical tool summaries can contain JSON-looking records. | Low | Verified raw output remains collapsed by default in the real dev app and in the route-cache browser regression. |
+| The business test report had Markdown tables with mismatched header/separator column counts. | Low | Fixed the affected table separators and added a local document table scan to this run's verification record. |
+| Desktop build warns about chunks above 500 kB. | Low | No regression from this UI pass; keep as a future performance/code-splitting optimization because the warning is tied to known heavy dependencies such as Mermaid and CodeMirror. |
+
+## Run: mp-workspace-ux-live-smoke-20260716-0244
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 02:40-02:52 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Git commit | Working tree after workspace UX stabilization updates |
+| Test command | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck`; `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test`; `git diff --check`; inline Playwright route smoke against `http://127.0.0.1:1420` |
+| Environment flags | Non-destructive UI/source verification; `MERGEPILOT_E2E_DESTRUCTIVE` not set |
+| Azure DevOps org | Not mutated; live ADO refresh returned current OAuth 401 state |
+| Azure DevOps project | Not mutated |
+| Azure DevOps repo | Not mutated |
+| Azure subscription | Not touched |
+| Azure resource group | Not touched |
+| Result | Pass for source checks and route UI stability; external ADO OAuth remains unavailable |
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `@mergepilot/desktop` TypeScript check passed. |
+| Desktop unit/component tests | Pass | 68 desktop test files passed, 339 tests total. |
+| Focused Review Queue view-model test | Pass | Updated the tone assertion from `yellow` to `amber`, matching the softened medium-risk/warning semantic style. |
+| Diff whitespace check | Pass | `git diff --check` returned no whitespace errors; only Windows CRLF warnings were emitted. |
+| Browser route smoke | Pass | `chat`, `pulls`, `findings`, `pipelines`, and `activity` all rendered expected page content without hard loading text, horizontal overflow, Pipeline `Unknown`, or PR endpoint leakage. |
+| Warm route switching | Pass | Revisiting the same five routes after cache warm-up showed no hard loading text and preserved expected route content. |
+| Visual screenshot review | Pass | Pipelines, Review Queue, Activity, and Pull Requests screenshots were reviewed for calmer token-based colors, collapsed secondary detail, and user-facing credential errors. |
+| Follow-up UI token sweep | Pass | Re-scanned PR, Review Queue, Pipelines, and shared pagination surfaces for stale high-contrast dark classes; patched remaining PR risk badges, shared pagination controls, and the pipeline skeleton accessibility label. |
+| Follow-up browser route smoke | Pass | `output/playwright/workspace-ux-followup-*.png` confirms cold and warm route navigation still renders without full-page loading text, Pipeline `Unknown`, `AI ANALYSIS STREAMING`, raw `returncode` JSON, or horizontal overflow. |
+| Route-cache mocked E2E regression | Pass | `tests/e2e/route-cache.spec.ts` now passes 20/20. The run caught cross-Project-Link stale data caused by `placeholderData: previous`; fixed Chat index status, Pull Requests, Review Queue, and Pipeline project-scoped queries so route revisits keep cache but Project Link switches do not show the previous project's prompts, PRs, warnings, or decisions. |
+| Post-fix browser route smoke | Pass | `output/playwright/workspace-ux-no-cross-project-stale-*.png` confirms the live dev app still renders `chat`, `pulls`, `findings`, `pipelines`, and `activity` without hard loading text, Pipeline `Unknown`, raw `returncode` JSON, or horizontal overflow after the query placeholder fix. |
+| Broader mocked browser gate | Pass | `chat-layout.spec.ts`, `review-queue.spec.ts`, and `settings-permissions.spec.ts` passed 54/54 after the query placeholder and token cleanup work. |
+| Activity scoped-placeholder audit | Pass | Removed `placeholderData: previous` from Activity PR insight and review-operation queries keyed by the Project Link set. Global activity runs, checkpoint activity, and global pipeline connections keep placeholder data because they are not Project Link scoped. |
+
+### Resources Created
+
+| Type | Identifier / URL | Cleanup status | Notes |
+|---|---|---|---|
+| Screenshot artifacts | `output/playwright/workspace-ux-after-pr-theme-*.png`; `output/playwright/workspace-ux-stabilization-*.png`; `output/playwright/workspace-ux-followup-*.png`; `output/playwright/workspace-ux-no-cross-project-stale-*.png` | retained | Local visual evidence only. |
+
+### Cleanup Results
+
+| Resource | Cleanup result | Notes |
+|---|---|---|
+| Azure DevOps / Azure resources | n/a | No live resources were created or mutated. |
+
+### Failures / Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Live ADO calls still return HTTP 401 because Azure DevOps OAuth credentials are expired or unavailable. | Medium | Re-authenticate ADO before live PR/Pipeline mutation tests; frontend now renders the user-facing message instead of leaking `/project-links/.../pull-requests HTTP 401`. |
+| Pull Request UI still carried dark-theme hardcoded classes in cards, headers, and insight/detail panels. | Medium | Fixed in the current working tree by migrating PR module surfaces to shared app tokens and softer semantic badges. |
+| Review Queue and Pipelines still had a few older dark/high-saturation class names after the PR cleanup. | Medium | Fixed in the current working tree by migrating lane cards, finding drawers, pipeline error cards, and pipeline IDs to shared app tokens and softer semantic colors. |
+| Shared pagination and PR risk badges still used older dark/high-contrast colors after the first token sweep. | Low | Fixed in the current working tree by moving `PaginationControls` and `InsightRiskBadges` to shared app tokens and softer red/amber/accent variants. |
+| Route-cache E2E initially failed because project-scoped queries reused previous data across Project Link key changes. | High | Fixed in the current working tree by removing cross-key `placeholderData` from Chat index status, Pull Requests, PR insights, Review Queue, Pipeline related PRs, and Pipeline discovery queries; route-cache E2E now passes 20/20. |
+| Activity PR insight/review-operation queries had the same scoped-placeholder pattern, but keyed by the Project Link set rather than the active Project Link. | Medium | Fixed in the current working tree by removing those placeholders as a preventive stabilization; focused Activity tests, full desktop tests, and route-cache E2E remain green. |
+| Workspace route cache/skeleton behavior remains stable after the PR visual/error-message cleanup. | Info | Keep the route smoke as a quick regression check before installed-app release validation. |
+
 ## Run: mp-source-typecheck-gate-20260706-0601
 
 | Field | Value |
@@ -8280,6 +12866,98 @@ git diff --check
 | Running Playwright web-server-backed specs in parallel can emit a Vite `Port 1420 is already in use` startup log even when the tests pass. | Low | Run browser specs serially when collecting release evidence, or split web server ownership explicitly before parallelizing. |
 | Source search confirms the pipeline card no longer renders the screenshot-style top-right `Unknown`, and pipeline AI analysis uses the shared Markdown renderer. | Info | Keep the existing pipeline model/card tests as the deterministic guard for date fallback and Markdown rendering. |
 
+## Run: mp-live-app-business-full-ado-recovery-20260716-0423
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 04:00-04:23 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Dev frontend `http://127.0.0.1:1420`; dev daemon `http://127.0.0.1:8787`; repository-local Node/pnpm |
+| Resource mode | Live app, live ADO read/approval-prep, isolated temporary Git repositories; `MERGEPILOT_E2E_DESTRUCTIVE` unset |
+| Result | Pass after fix |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- serverAdoWorkflowRoutes.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+
+$env:MERGEPILOT_E2E_LIVE_APP='1'
+$env:MERGEPILOT_E2E_LIVE_ADO='1'
+Remove-Item Env:MERGEPILOT_E2E_DESTRUCTIVE -ErrorAction SilentlyContinue
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/live-app-business.spec.ts --project=chromium --workers=1 --grep "ClaimBot_API pipeline #117"
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/live-app-business.spec.ts --project=chromium --workers=1
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Initial full live app business gate | Failed, fixed | The first run timed out while waiting for the missing-pipeline setup transcript. The page showed `/chat/workflow-action HTTP 401` with `authStatus: oauth_unavailable` instead of rendering the recoverable `No Azure Pipeline is configured on this Project Link yet.` guidance. |
+| ADO auth context probe before fix | Failed | `/chat/workflow-action` for `inspect_ado_auth_context` returned `oauth_unavailable`, while `az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798` succeeded for tenant `1f432b2e-9e7a-4aa0-ace2-53af62d309f6`. This showed the current Azure CLI identity had ADO access, but the app non-interactive credential chain did not use it. |
+| Pipeline setup workflow ordering | Fixed | `packages/daemon/src/workflows/pipelineWorkflow.ts` now checks missing `adoPipelineId` before normal pipeline inspection authentication and returns `pipeline_setup_required` guidance. If candidate discovery cannot authenticate, the transcript remains a setup-required business result with the credential detail instead of surfacing a raw HTTP 401. |
+| Azure CLI ADO fallback | Fixed | `packages/core/src/store/azureAuthSession.ts` now tries `DefaultAzureCredential` after MSAL/desktop credential ADO token lookup fails. After `@mergepilot/core build` and daemon restart, `inspect_ado_auth_context` returned `authStatus: ok` and `Credential state: available` through OAuth. |
+| Daemon ADO workflow regression | Pass | `serverAdoWorkflowRoutes.test.ts` passed 4/4 and daemon typecheck passed. |
+| Core typecheck/build | Pass | Core typecheck and build passed; build was required because `@mergepilot/core` package exports point to `dist`. |
+| Focused ClaimBot_API pipeline #117 live gate | Pass | 4/4 Playwright live tests passed in 50.7 seconds: pipeline discovery/save, failure evidence inspection, rerun approval preparation from failure suggestions, and direct trigger approval preparation. |
+| Full live app business gate | Pass | 30/30 Playwright live tests passed in 8.3 minutes. Covered selected staging, approval reload/restore, denial/feedback, stage-and-commit, commit validation failure, empty commit guard, staged-only summaries, draft commit message, credential redaction, secret redaction, dirty branch switching, merge/pull/rebase/stash recovery, restore/revert/tag workflows, single-tag publication, and ClaimBot_API pipeline `#117` discovery/inspection/approval-prep. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| A configured desktop client id caused non-interactive ADO token lookup to ignore the already-working Azure CLI credential path. | High | Fixed with a `DefaultAzureCredential` fallback for ADO token retrieval after MSAL silent lookup fails. Keep `az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798` as a useful diagnostic when app ADO auth fails on a dev machine. |
+| Missing pipeline ID should be treated as Project Link setup before normal pipeline execution. | High | Fixed by moving pipeline ID validation ahead of normal pipeline auth and preserving setup guidance even when candidate discovery lacks credentials. |
+| The dev daemon may keep using old `@mergepilot/core/dist` after a core source fix. | Medium | Run `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build` before daemon live reprobes when touching core package code that is consumed through package exports. |
+| Live test cleanup remained clean after the timeout/fix/rerun cycle. | Info | Post-failure checks found no `%TEMP%\mergepilot-live-*` directories and `/project-links` retained only the long-lived `ClaimBot_API link` and `project link2`. |
+
+## Run: mp-ado-route-cache-smoke-rerun-20260716-1040
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 10:38-10:40 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm; Playwright-managed Chromium app runtime |
+| Resource mode | Non-destructive source verification; mocked browser smoke; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- serverAdoWorkflowRoutes.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1
+.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --grep "@smoke @mocked" --workers=1
+git diff --check
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Core typecheck | Pass | Confirms the ADO token fallback uses existing `@azure/identity` dependency cleanly. |
+| Daemon typecheck | Pass | Confirms the pipeline workflow setup-path changes compile. |
+| Daemon ADO workflow regression | Pass | `serverAdoWorkflowRoutes.test.ts` passed 4/4, including missing-pipeline setup and structured CI workflow actions. |
+| Core build | Pass | Rebuilt `@mergepilot/core/dist`, which the daemon consumes through package exports. |
+| Desktop typecheck | Pass | Confirms the route-cache and UX stabilization frontend changes still compile. |
+| Route-cache mocked E2E | Pass | `tests/e2e/route-cache.spec.ts` passed 21/21, covering stable New Chat suggestions, warm route returns, Project Link switch isolation, PR/Review Queue/Pipeline/Activity cached refresh behavior, and collapsed checkpoint raw output. |
+| Mocked smoke browser gate | Pass | `--grep "@smoke @mocked"` passed 30/30, covering Chat layout, PR insight controls, pipeline controls, missing-pipeline setup, read-only PR/pipeline routing, source references, Review Queue acknowledgement, route-cache smoke cases, and Settings Key Vault/local-env behavior. |
+| Diff whitespace check | Pass | `git diff --check` emitted only Windows CRLF warnings and no whitespace errors. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| No new regression was found in the targeted ADO auth recovery, missing-pipeline setup, route-cache, or mocked smoke coverage. | Info | Keep the full non-destructive live app business gate as the broader proof before release; this rerun is a fast current-state confidence check. |
+| `@azure/identity` is already a declared `@mergepilot/core` dependency, so the new `DefaultAzureCredential` fallback is not a packaging-only dependency gap. | Info | Continue using core build after auth-session changes so packaged daemon consumers receive the updated `dist`. |
+
 ## Run: mp-installed-v0520-reprobe-20260716-0113
 
 | Field | Value |
@@ -8319,7 +12997,9 @@ Start-Process -FilePath 'C:\Program Files\MergePilot\mergepilot-daemon.exe' -Arg
 | Installed daemon health | Pass | `/healthz` returned `ok: true`, version `0.5.20`, Azure OpenAI `gpt-4o`, config source `C:\Users\15492\.mergepilot\config.toml`, `cloudProjectLinkStore: true`, `cloudSecrets: false`, and `cloudSessions: true`. |
 | Installed auth/avatar | Pass | `/auth/status` returned authenticated user `Zhou Ping`, UPN `Zhou.Ping@totalebizsolutions.com`, and a JPEG avatar data URL with length `19339`. |
 | Installed daemon payload hash | Pass | Installed `mergepilot-daemon.exe` hash matched the `v0.5.20` MSI payload hash: `A95CE4652CCA7F1D005E66A631C3A2585FFAFFF8E2B83091E7F3581ED43ABB05`. |
-| Strict MSI desktop payload parity | Partial | Installed `mergepilot-desktop.exe` is version `0.5.20` but hash differs from the MSI payload by 2 bytes. Binary inspection showed the installed file embeds `__TAURI_BUNDLE_TYPE_VAR_NSS`, while the MSI payload embeds `__TAURI_BUNDLE_TYPE_VAR_MSI`, indicating the current Program Files desktop was installed from the NSIS setup asset rather than the MSI asset. |
+| Strict MSI desktop payload parity | Partial | Installed `mergepilot-desktop.exe` is version `0.5.20` but hash differs from the MSI payload by 2 bytes. The verifier now reports `installedBundleKind.desktop: nsis` and `msiPayload.desktopBundleKind: msi`; binary inspection also showed the installed file embeds `__TAURI_BUNDLE_TYPE_VAR_NSS`, while the MSI payload embeds `__TAURI_BUNDLE_TYPE_VAR_MSI`, indicating the current Program Files desktop was installed from the NSIS setup asset rather than the MSI asset. |
+| Installed Windows package shape | Pass for NSIS; expected fail for MSI | `verify-installed-windows-package-state.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis -RequireLegacyCleanup` returned `ok: true` with `actualDesktopBundleKind: nsis`, `uninstallPresent: true`, and `uninstallVersion: 0.5.20`. The same verifier with `-ExpectedDesktopBundleKind msi` failed as expected because the installed desktop is `nsis` and `uninstall.exe` is present. With `-NsisSetupPath output\live-e2e\release-v0.5.20\MergePilot_0.5.20_x64-setup.exe -RequireNsisSetupAsset`, the verifier captured setup metadata: version `0.5.20`, SHA256 `CC14F0BC8ACA5E4E0569401500276E43609711A8EB5C985671C75BE093F79115`, Nullsoft marker present, and `signatureStatus: NotSigned`. |
+| Windows artifact signature gate | Added; current assets fail as expected | `verify-windows-artifact-signatures.ps1 -Version 0.5.20 -Paths @(<setup>, <msi>)` returned `ok: false`; both `MergePilot_0.5.20_x64-setup.exe` and `MergePilot_0.5.20_x64_en-US.msi` reported `status: NotSigned`. Release workflow now signs Windows artifacts with `WINDOWS_CODESIGN_CERT_PFX_BASE64` / `WINDOWS_CODESIGN_CERT_PASSWORD` and verifies signatures before upload. |
 | Legacy cleanup | Partial | Legacy `C:\Program Files\CICD-Agent` and old publisher Start Menu folder are absent, and the current MergePilot shortcut exists. `C:\Program Files\MergePilot\uninstall.exe` remains and reports version `0.5.20`; in this run it is evidence of the NSIS install shape rather than a stale `CICD-Agent` binary. |
 | Installed restart persistence | Pass | `installed-restart-persistence-smoke.ps1` created temporary Project Link `9987330225d77d17` and chat session `chat_1784135608476_f14637`, observed terminal SSE `done`, verified assistant completion before and after restarting the installed daemon, then deleted the chat, Project Link, and temp repo. |
 
@@ -8330,3 +13010,7456 @@ Start-Process -FilePath 'C:\Program Files\MergePilot\mergepilot-daemon.exe' -Arg
 | The installed daemon is now current at `0.5.20`; the previous `0.5.10` Program Files daemon gap is resolved for the running installed daemon. | Info | Keep probing installed `/healthz` before any installed-app gate so stale daemon regressions are caught immediately. |
 | The current Program Files desktop install is not MSI-strict despite being version `0.5.20`; it appears to be the NSIS setup install shape. | Medium | For MSI release acceptance, install `MergePilot_0.5.20_x64_en-US.msi` specifically from an elevated PowerShell and rerun `verify-installed-msi-state.ps1 -RequireMsiPayloadMatch`. If NSIS remains supported, add a separate NSIS parity verifier instead of treating `uninstall.exe` as a stale MSI failure. |
 | Auth/avatar root cause is closed for the installed daemon path in this reprobe. | Info | If the UI misses the avatar again, investigate frontend image rendering/cache/CSP first, not Graph retrieval. |
+
+## Run: mp-workspace-ux-regression-hardening-20260716-1250
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 12:45-12:50 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm; Playwright-managed Chromium app runtime |
+| Resource mode | Non-destructive source verification; mocked browser smoke; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --grep "@smoke @mocked" --workers=1
+rg -n "AI ANALYSIS STREAMING|Insight Preview|Preview Insight|Unknown\b|Loading pull requests|Loading review decisions|Loading activity|whitespace-pre-wrap" apps/desktop/src/pages apps/desktop/src/components --glob '!**/*.test.*'
+git diff --check
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Route-cache mocked E2E | Pass | `tests/e2e/route-cache.spec.ts` passed 22/22. New assertions cover PR insight side-panel wording (`AI insight`, `Refresh insight`, no redundant `Generate insight`) and Pipeline AI analysis failure behavior (`Error` state, local run evidence preserved, failure detail in the right panel, no false `Ready`). |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` passed after adding the `analysis_error` Pipeline inspect state. |
+| Mocked smoke browser gate | Pass | `--grep "@smoke @mocked"` passed 31/31, including Chat layout, PR insight controls, Pipeline controls/setup/analysis, Review Queue, route-cache, and Settings permission cases. |
+| Full desktop source suite | Pass | `@mergepilot/desktop test` passed 70/70 files and 358/358 tests. |
+| UI text/source scan | Pass | No remaining `AI ANALYSIS STREAMING`, `Insight Preview`, `Preview Insight`, page-level `Unknown`, or old `Loading pull requests/review decisions/activity` copy in the scanned page/component sources. Remaining `formatUnknown` and `whitespace-pre-wrap` hits are utility/raw-output rendering names or shell/detail formatting, not the user-facing Pipeline/PR route issues under test. |
+| Diff whitespace check | Pass | `git diff --check` emitted only Windows CRLF warnings and no whitespace errors. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pipeline AI analysis failures were not previously distinguished from successful `Ready` analysis. | Medium | Fixed in source: `analysis_error` preserves local evidence and shows `Error` plus the analysis failure message in the Pipeline detail panel. Covered by route-cache browser regression. |
+| Pull Request insight side-panel controls could still use generation language after an insight already existed. | Low | Fixed in source: existing insights now show `Refresh insight`, while first-time insight generation still shows `Generate insight`. Covered by route-cache browser regression. |
+
+## Run: mp-workspace-ux-projectlink-cache-gate-20260716-1259
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 12:55-12:59 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm; Playwright-managed Chromium app runtime |
+| Resource mode | Non-destructive source verification; mocked browser smoke; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1
+.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --grep "@smoke @mocked" --workers=1
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+git diff --check
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` passed after changing AppData Project Link loading semantics. |
+| Route-cache mocked E2E | Pass | `tests/e2e/route-cache.spec.ts` passed 23/23. New coverage simulates cached Project Links in `localStorage` while `/project-links` daemon sync is delayed, then verifies Pull Requests and Pipelines do not render blocking skeletons and still show cached Project Link-scoped content. |
+| Mocked smoke browser gate | Pass | `--grep "@smoke @mocked"` passed 32/32, including the new Project Link cache gate plus Chat layout, PR insight controls, Pipeline controls/setup/analysis, Review Queue, route-cache, and Settings permission cases. |
+| Full desktop source suite | Pass | `@mergepilot/desktop test` passed 70/70 files and 358/358 tests. |
+| Diff whitespace check | Pass | `git diff --check` emitted only Windows CRLF warnings and no whitespace errors. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| AppData exposed cached Project Links as blocking `projectLinksLoading` during background daemon sync, which could make Pull Requests or Pipelines briefly show route skeletons even though local Project Link data already existed. | Medium | Fixed in source: `refreshProjectLinks` now sets blocking loading only when there are no cached Project Links. Covered by the new route-cache browser regression. |
+
+## Run: mp-local-v0521-package-refresh-20260716-1304
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 13:00-13:06 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Current working tree, repository-local Node/pnpm, local Tauri Windows packaging |
+| Resource mode | Non-destructive package build and extracted MSI payload verification; no Program Files install; no Azure DevOps mutation |
+| Result | Partial: package runtime smoke passed, Windows signing and installed-app proof remain open |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop tauri:build
+.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath "C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi" -Port 19031
+.\scripts\windows\packaged-live-vision-smoke.ps1 -MsiPath "C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi" -Port 19032
+.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.21
+.\scripts\windows\verify-installed-windows-package-state.ps1 -ExpectedVersion 0.5.21 -ExpectedDesktopBundleKind any -RequireLegacyCleanup
+.\scripts\windows\install-and-verify-msi-state.ps1 -ExpectedVersion 0.5.21 -MsiPath "C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi" -SkipVision
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Desktop production build | Pass | `@mergepilot/desktop build` passed. Vite emitted only existing large chunk warnings. |
+| Tauri Windows package build | Pass | `tauri:build` rebuilt the sidecar and produced `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi` and `apps\desktop\src-tauri\target\release\bundle\nsis\MergePilot_0.5.21_x64-setup.exe`. Build warnings were limited to known pkg dynamic require warnings, Vite large chunks, and Node `punycode` deprecation. |
+| MSI payload smoke | Pass | Extracted MSI daemon reported `healthVersion: 0.5.21`; legacy cleanup WiX validation passed; index refresh saw/indexed 1 file; workflow phase was `inspect_environment`; `/chat` returned HTTP 200. |
+| Packaged live vision smoke | Pass | Extracted MSI daemon reported `healthVersion: 0.5.21`; final answer recognized `MP VISION TEST`, a blue square, and a red circle; `matchesText: true`; `matchesShapes: true`; `leaksControlJson: false`; `duplicateSentence: false`; deleted session returned HTTP 200. SSE log: `output\live-e2e\packaged-live-vision-sse-19032.log`. |
+| Windows Authenticode signature verification | Expected fail | Both `MergePilot_0.5.21_x64-setup.exe` and `MergePilot_0.5.21_x64_en-US.msi` exist and have version `0.5.21` where available, but both report `NotSigned`. This keeps the Windows unknown-publisher issue open until release signing secrets/certificate are configured and applied. |
+| Installed package reprobe | Expected fail | Current Program Files install remains `0.5.20` with desktop bundle kind `nsis` and `uninstall.exe` version `0.5.20`; the refreshed `0.5.21` MSI has not been installed. |
+| MSI install verifier entrypoint | Expected fail | Non-admin shell returned `requiresElevation: true` and instructed running from elevated PowerShell or installing the MSI as administrator, then rerunning with `-SkipInstall`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current source still packages successfully after the Project Link cache gate fix. | Info | Keep `tauri:build`, MSI payload smoke, and packaged vision smoke in the release verification path. |
+| Local Windows package artifacts remain unsigned. | High | Configure a trusted Windows code-signing certificate and signing secrets, then rerun `verify-windows-artifact-signatures.ps1 -Version 0.5.21` or the equivalent release-version gate before publishing. |
+| Refreshed `0.5.21` package was not installed into Program Files in this run; Program Files still contains `0.5.20`. | Medium | Install the refreshed MSI/NSIS in an elevated session and rerun installed-state plus installed-window smoke before claiming installed-app parity for this exact build. |
+
+## Run: mp-default-chromium-after-cache-fix-20260716-1309
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 13:07-13:09 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Non-destructive mocked/default browser gate; live-app tests skipped by default; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Command
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --workers=1
+```
+
+### Result
+
+| Metric | Value |
+|---|---|
+| Total discovered/run entries | 107 |
+| Passed non-live tests | 77 |
+| Skipped live-app gated tests | 30 |
+| Failed tests | 0 |
+
+### Coverage Notes
+
+| Area | Evidence |
+|---|---|
+| Chat layout and workflows | Passed tests cover project-linked shell layout, onboarding form responsiveness, command chips, commit controls, branch divergence/readiness, pinned-summary menus, Project Link onboarding, image attach/drop/paste, approval composer state, transcript lifecycle, long markdown/source/tool output, scroll behavior, stream stopping, restored streaming drafts, Mermaid errors, source preview copy/tab cleanup, and saved PR insight artifacts. |
+| PR, Pipeline, and Git routing | Passed tests cover PR insight controls, pipeline controls/setup, read-only PR and pipeline requests, local Git branch/change inspection without write approval, structured follow-up chips, PR validation recovery, and no raw route/status fragments in covered failure states. |
+| Review Queue and Activity | Passed tests cover Review Queue acknowledgement, change requests/write-back retry, stale rerun refresh, cached Review Queue route behavior, Activity cached runs, and collapsed checkpoint raw output. |
+| Route caching | Passed tests include the new cached Project Link background-sync gate, stable New Chat prompt loading, Project Link switch isolation, warm Pull Requests/Review Queue/Pipelines/Activity refreshes, stale data clearing, pipeline AI analysis error handling, and detail-panel closing when rows are filtered out. |
+| Settings | Passed Key Vault permission/local-env regression: missing `secrets/get` is explained, built-in model secret source can switch to local `.env`, and cloud warnings clear in local mode. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The AppData Project Link cache fix holds in the broader default browser gate, not only the focused route-cache suite. | Info | Keep the new route-cache regression as the fast focused guard, and keep this default Chromium gate as the wider pre-release UI gate. |
+| Live-app business tests were skipped by design because `MERGEPILOT_E2E_LIVE_APP` was not set. | Info | Run the live-app business gate after the refreshed `0.5.21` installer is actually installed or when a source dev app/daemon gate is specifically desired. |
+
+## Run: mp-live-ado-and-pipeline-ui-after-cache-fix-20260716-1314
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 13:12-13:14 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, source daemon `0.5.21`, Playwright-managed Chromium app runtime |
+| Resource mode | Live Azure DevOps read-only verification; focused live-app Chat UI pipeline verification; no destructive ADO flag; no pipeline run queued |
+| Result | Pass after satisfying daemon precondition |
+
+### Commands
+
+```powershell
+$env:MERGEPILOT_E2E_LIVE_ADO='1'
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAdoDiscovery.test.ts test/liveAdoPipeline.test.ts *> output\live-e2e\live-ado-core-after-cache-fix-20260716.log
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts *> output\live-e2e\live-ado-pr-insight-after-cache-fix-20260716.log
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon dev
+
+$env:MERGEPILOT_E2E_LIVE_APP='1'
+$env:MERGEPILOT_E2E_LIVE_ADO='1'
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/live-app-business.spec.ts --project=chromium --workers=1 --grep "inspects ClaimBot_API pipeline #117 failure evidence|prepares ClaimBot_API pipeline #117 rerun approval" *> output\live-e2e\live-app-claimbot-pipeline-after-cache-fix-20260716.log
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Live ADO core discovery/pipeline | Pass | `test/liveAdoDiscovery.test.ts` and `test/liveAdoPipeline.test.ts` passed 3/3 with 1 destructive queue case skipped. The current account can discover the ClaimBot_API project/repository/pipeline, list recent pipeline runs, and read timeline/log evidence for the latest failed pipeline run. |
+| Live ADO daemon PR insight | Pass | `test/liveAdoPrInsight.test.ts` passed 1/1. `/chat/workflow-action` inspected a real ClaimBot_API pull request without approval or mutation. |
+| Focused live-app ClaimBot_API pipeline Chat UI | Pass | After starting the source daemon on `127.0.0.1:8787`, both focused UI tests passed: normal Chat input inspected ClaimBot_API pipeline `#117` failed-run evidence, and the failure-evidence suggestion prepared rerun approval without queueing a run. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The first focused live-app attempt failed before UI execution because no daemon was listening on `127.0.0.1:8787`. | Low | Treat source daemon startup as an explicit precondition for live-app UI gates, or add a script wrapper that starts and health-checks the daemon before running live-app tests. |
+| The Project Link cache fix did not regress live ADO discovery, pipeline evidence, PR insight, or the focused ClaimBot_API pipeline Chat UI path. | Info | Keep this gate as the fast live ADO/read-only confirmation after future Workspace UX cache changes. |
+
+## Run: mp-live-app-wrapper-after-cache-fix-20260716-1320
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 13:18-13:20 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, wrapper-started source daemon `0.5.21`, Playwright-managed Chromium app runtime |
+| Resource mode | Live Azure DevOps read-only UI verification; no destructive ADO flag; no pipeline run queued |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\verify-installed-windows-package-state.ps1 -ExpectedVersion 0.5.21 -ExpectedDesktopBundleKind any -RequireLegacyCleanup
+.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.21
+.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -Grep "inspects ClaimBot_API pipeline #117 failure evidence|prepares ClaimBot_API pipeline #117 rerun approval"
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Installed package reprobe | Expected fail | Program Files still contains MergePilot `0.5.20` with desktop bundle kind `nsis`, `uninstall.exe` version `0.5.20`, and daemon hash matching the previous install. This confirms `0.5.21` installed-app parity still requires an elevated install or user-admin install step. |
+| Windows signature reprobe | Expected fail | Local `0.5.21` NSIS setup and MSI artifacts both exist, but both report `NotSigned`. This keeps Windows publisher trust open until a trusted code-signing certificate is configured and applied. |
+| Live-app wrapper syntax and help | Pass | `scripts\windows\run-live-app-e2e.ps1` parsed successfully with PowerShell tokenization. `Get-Help .\scripts\windows\run-live-app-e2e.ps1 -Examples` shows non-destructive, destructive, and mismatched-daemon restart examples. |
+| Live-app wrapper ClaimBot_API pipeline gate | Pass | Wrapper output reported `ok: true`, `daemonVersion: 0.5.21`, `startedDaemon: true`, `liveAdo: true`, and `destructive: false`. The focused ClaimBot_API pipeline Chat UI gate passed 2/2 through the wrapper. Playwright log: `output\live-e2e\live-app-e2e-20260716-131853.log`. |
+| Live-app wrapper local Git gate | Pass | Wrapper output reported `ok: true`, `daemonVersion: 0.5.21`, `startedDaemon: true`, `liveAdo: false`, and `destructive: false`. The non-ADO local Git approval-denial UI test passed 1/1 through the wrapper, proving the wrapper also works for source live-app gates that should not touch Azure DevOps. Playwright log: `output\live-e2e\live-app-e2e-20260716-132343.log`. |
+| Full non-ADO live-app business gate through wrapper | Pass | Wrapper output reported `ok: true`, `daemonVersion: 0.5.21`, `startedDaemon: true`, `liveAdo: false`, and `destructive: false`. `tests/e2e/live-app-business.spec.ts` passed 26/26 local Git UI workflows with 4 ADO pipeline tests skipped by design. Coverage included selected staging, pending approval reload/restore, approval denial, denial feedback replanning, stage+commit, commit validation, empty commit guard, staged-only summary, draft commit message, credential redaction, secret-like diff redaction, dirty branch switch approval, merge/rebase conflict recovery, branch creation, local bare remote push, stash push/apply/pop/conflict, restore, revert, local tag creation, and single tag push. Playwright log: `output\live-e2e\live-app-e2e-20260716-132530.log`. |
+| Wrapper daemon cleanup | Pass | After the wrapper completed, `http://127.0.0.1:8787/healthz` was unreachable, confirming the source daemon started by the wrapper was cleaned up. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The live-app daemon precondition is now encoded in a reusable script instead of being a manual test-run assumption. | Low | Prefer `scripts\windows\run-live-app-e2e.ps1` for future source live-app gates so stale or missing daemon state does not produce misleading failures. |
+| Installed-app parity and Windows publisher trust remain external release/install blockers. | Medium | Install `0.5.21` from an elevated session and configure trusted Windows signing before claiming those gates complete. |
+
+## Run: mp-post-wrapper-source-stability-20260716-1333
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 13:33 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Non-destructive source and mocked browser verification; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1
+$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -LiteralPath scripts\windows\run-live-app-e2e.ps1 -Raw), [ref]$errors)
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` passed after wrapper and documentation updates. |
+| Route-cache focused Chromium | Pass | `tests/e2e/route-cache.spec.ts` passed 23/23, keeping cached Project Link loading, New Chat prompt stability, Pull Requests, Review Queue, Pipelines, Activity, API-error formatting, and raw-output folding covered. |
+| Live-app wrapper parse | Pass | PowerShell tokenization found no syntax errors in `scripts\windows\run-live-app-e2e.ps1`. |
+| Daemon residue check | Pass | `http://127.0.0.1:8787/healthz` was unreachable after wrapper-managed live-app runs, confirming no source daemon was left occupying the standard port. |
+
+## Run: mp-live-app-wrapper-cleanup-hardening-20260716-1337
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 13:36-13:37 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, wrapper-started source daemon `0.5.21`, Playwright-managed Chromium app runtime |
+| Resource mode | Non-destructive source and mocked browser verification; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\run-live-app-e2e.ps1 -Grep "drafts a commit message without staging"
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1
+$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -LiteralPath scripts\windows\run-live-app-e2e.ps1 -Raw), [ref]$errors)
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Wrapper cleanup hardening | Pass | Cleanup now uses repo-owned port-owner filtering when the wrapper started the source daemon, so it avoids stopping an unrelated process that could occupy `8787` after the test. |
+| Local live-app smoke | Pass | `run-live-app-e2e.ps1 -Grep "drafts a commit message without staging"` passed 1/1 with `daemonVersion: 0.5.21`, `startedDaemon: true`, `liveAdo: false`, and `destructive: false`. Playwright log: `output\live-e2e\live-app-e2e-20260716-133626.log`. |
+| Route-cache focused Chromium | Pass | `tests/e2e/route-cache.spec.ts` passed 23/23 after the cleanup hardening. |
+| Live-app wrapper parse | Pass | PowerShell tokenization found no syntax errors in `scripts\windows\run-live-app-e2e.ps1`. |
+| Daemon residue check | Pass | `http://127.0.0.1:8787/healthz` was unreachable after the wrapper-managed live-app run. |
+
+## Run: mp-live-app-wrapper-mismatch-guard-20260716-1340
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 13:40 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace wrapper negative-path validation with a fake non-workspace daemon on `127.0.0.1:8787` |
+| Resource mode | Non-destructive local validation; no Playwright UI execution; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Command
+
+```powershell
+# Test harness started a fake HTTP daemon on 127.0.0.1:8787 returning version 0.0.0-test.
+.\scripts\windows\run-live-app-e2e.ps1 -Grep "drafts a commit message without staging"
+```
+
+### Result
+
+| Check | Result | Notes |
+|---|---|---|
+| Mismatched daemon rejection | Pass | Wrapper failed before Playwright with: `Daemon on http://127.0.0.1:8787 is version 0.0.0-test, but this workspace expects 0.5.21.` |
+| Exit code | Pass | Child wrapper process returned exit code `1`, as expected for the negative path. |
+| Unrelated daemon safety | Pass | The fake daemon process remained alive after the wrapper exited, proving the wrapper did not kill a non-workspace process occupying `8787`. |
+| Final cleanup | Pass | After the test harness stopped the fake daemon, `http://127.0.0.1:8787/healthz` was unreachable. |
+
+### Finding
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Live-app tests now fail closed when `8787` is occupied by a daemon from a different workspace or version. | Low | Keep the default mismatch rejection. Use `-RestartMismatchedDaemon` only when intentionally replacing a stale repo-owned daemon for a test run. |
+
+## Run: mp-current-dirty-tree-regression-20260716-1346
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 13:46 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Non-destructive source and mocked browser verification; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/api/userFacingErrors.test.ts src/api/pullRequests.test.ts src/api/workspace.test.ts src/pages/reviewFindings/reviewQueueViewModel.test.ts src/pages/chat/chatTerminalStreamState.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/pipelineWorkflow.test.ts
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Core typecheck | Pass | `@mergepilot/core` TypeScript check passed. |
+| Daemon typecheck | Pass | `@mergepilot/daemon` TypeScript check passed. |
+| Desktop typecheck | Pass | `@mergepilot/desktop` TypeScript check passed. |
+| Focused desktop regressions | Pass | 5 files / 29 tests passed across user-facing API errors, Pull Requests API formatting, workspace API behavior, Review Queue view model, and chat terminal stream state. |
+| Daemon pipeline workflow regression | Pass | `test/pipelineWorkflow.test.ts` passed 5/5, preserving pipeline failure evidence, analysis, and classification behavior. |
+| Route-cache Chromium regression | Pass | `tests/e2e/route-cache.spec.ts` passed 23/23, covering New Chat prompt stability, cached Pull Requests/Review Queue/Pipelines/Activity behavior, readable PR/Pipeline errors, panel close behavior, and Activity raw-output folding. |
+
+### Finding
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current uncommitted source remains green across the most relevant non-mutating checks for the Workspace UX stabilization and live-app wrapper changes. | Info | Keep using this gate before staging, and rerun broader full desktop/source suites before release packaging. |
+
+## Run: mp-current-dirty-tree-full-source-smoke-20260716-1348
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 13:48-13:51 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Non-destructive source and mocked browser verification; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --grep "@smoke @mocked" --workers=1
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Core full source suite | Pass | 47 files passed, 4 live-gated files skipped; 250 tests passed, 6 live-gated tests skipped. Coverage includes Git options, ADO client/tool contracts, Azure auth/session caching, chat planning, PR insight quality, repo indexing, memory store, checkpoints, and validation output. |
+| Daemon full source suite | Pass | 45 files passed, 1 live-gated file skipped; 258 tests passed, 1 live-gated test skipped. Coverage includes HTTP routes, chat workflow actions, approval continuation, Project Link routes, PR/pipeline workflow routes, Review Queue, recovery, push, image handling, and pipeline workflow classification. |
+| Desktop full source suite | Pass | 70 files / 358 tests passed. Coverage includes conversation rendering, execution timeline, approval cards, route APIs, Pull Request/Pipeline/Review Queue view models, Activity panels, source preview, image attachments, pagination, and Settings/API error formatting. |
+| Mocked browser smoke | Pass | `@smoke @mocked` Chromium passed 32/32. Coverage includes Chat shell, PR insight controls, pipeline controls/setup, read-only PR/pipeline routing, project-context source references, Review Queue, route-cache warm routes, Activity raw-output folding, and Settings Key Vault/local-env fallback. |
+
+### Finding
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current uncommitted source has now passed the full non-mutating source suites plus page-level mocked smoke after the latest Workspace UX and wrapper changes. | Info | Before release packaging, still rerun install/package/signing gates because this source proof does not validate Program Files parity or Windows publisher trust. |
+
+## Run: mp-legacy-confirm-card-cleanup-20260716-1352
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 13:52-13:57 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Non-destructive source/static/browser verification plus expected external install/signing reprobes |
+| Result | Pass for source/browser; expected fail for external install/signing |
+
+### Commands
+
+```powershell
+rg -n -e "AI ANALYSIS STREAMING" -e "Preview Insight" -e "Insight Preview" -e "/chat/workflow-action HTTP" -e "HTTP 401" -e "HTTP 500" -e "returncode" -e "Approved action finished" -e "Reading project context" -e "Working: Reading project context" apps packages tests docs --glob "!docs/live-e2e-test-records.md" --glob "!docs/business-test-execution-report.md" --glob "!docs/automated-business-test-suite-plan.md"
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/approval/PendingActionCard.test.tsx src/components/conversation/ExecutionTimeline.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1
+.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --grep "@smoke @mocked" --workers=1
+.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --workers=1
+.\scripts\windows\verify-installed-windows-package-state.ps1 -ExpectedVersion 0.5.21 -ExpectedDesktopBundleKind any -RequireLegacyCleanup
+.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.21
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Static regression string scan | Pass with one actionable cleanup | Product-source scan found no active UI source remnants of `AI ANALYSIS STREAMING`, `Preview Insight`, or raw `/chat/workflow-action HTTP` display paths. It did expose a legacy `confirm` card path that still rendered `bubble.plan` inside the approval card. |
+| Legacy confirmation-card cleanup | Pass | Removed the duplicated plan/body render from `ConfirmCard` and added `ChatMessageList` coverage proving legacy confirmation cards remain action-only. |
+| Focused conversation tests | Pass | `ChatMessageList`, `PendingActionCard`, and `ExecutionTimeline` tests passed 3 files / 16 tests. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` passed after the cleanup. |
+| Route-cache Chromium | Pass | `tests/e2e/route-cache.spec.ts` passed 23/23. |
+| Mocked browser smoke | Pass | `@smoke @mocked` Chromium passed 32/32. |
+| Default non-live Chromium | Pass | Default Chromium passed 77/77 non-live tests with 30 live-app gated tests skipped by design. |
+| Installed `0.5.21` parity reprobe | Expected fail | Program Files still contains MergePilot `0.5.20` in NSIS shape with `uninstall.exe` `0.5.20`; verifier reports expected version mismatch and remaining `MergePilot` uninstall entry for that installed version. |
+| Windows artifact signature reprobe | Expected fail | Local `0.5.21` NSIS setup and MSI artifacts exist but both are `NotSigned`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Legacy confirmation cards could still duplicate the assistant's explanatory body inside the approval card. | Medium | Fixed in `apps/desktop/src/pages/chat/approval/ConfirmCard.tsx`; regression added in `ChatMessageList.test.tsx`. |
+| Source/browser behavior remains green after the cleanup. | Info | Keep the source/browser gates as the pre-stage baseline. |
+| Installed-app parity and Windows publisher trust remain external release/install blockers. | Medium | Install the current `0.5.21` package from an elevated session and configure trusted Windows signing before claiming release/install completion. |
+
+## Run: mp-live-app-approval-ui-after-confirm-cleanup-20260716-1357
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 13:57-13:59 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, wrapper-started source daemon `0.5.21`, Playwright-managed Chromium app runtime |
+| Resource mode | Non-destructive local Git UI workflows; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Command
+
+```powershell
+.\scripts\windows\run-live-app-e2e.ps1 -Grep "does not stage files when the user rejects|uses approval denial feedback"
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Live-app approval denial non-mutation | Pass | `does not stage files when the user rejects a real Chat UI approval` passed through the real Chat UI. |
+| Live-app approval denial feedback | Pass | `uses approval denial feedback as the next real Chat UI instruction` passed through the real Chat UI, preserving the feedback replanning path. |
+| Wrapper daemon cleanup | Pass | `http://127.0.0.1:8787/healthz` was unreachable after the wrapper run. |
+| Temp live directory cleanup | Pass | No `%TEMP%\mergepilot-live-*` directories were returned by the cleanup probe. |
+
+### Logs
+
+| Log | Path |
+|---|---|
+| Playwright | `output\live-e2e\live-app-e2e-20260716-135741.log` |
+| Daemon stdout | `output\live-e2e\live-app-source-daemon-20260716-135741.log` |
+| Daemon stderr | `output\live-e2e\live-app-source-daemon-20260716-135741.err.log` |
+
+### Finding
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The confirmation-card cleanup did not regress the real Chat UI approval-denial or denial-feedback workflows. | Info | Keep this focused wrapper run as a quick live-app check after future approval-card UI changes. |
+
+## Run: mp-current-dirty-tree-build-gate-20260716-1400
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 14:00-14:05 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm |
+| Resource mode | Non-mutating source package build; no Azure DevOps, Azure, or Git mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
+git status --short
+git diff --check
+try { Invoke-RestMethod -Uri 'http://127.0.0.1:8787/healthz' -TimeoutSec 2 | ConvertTo-Json -Depth 3 } catch { 'daemon_stopped_or_unreachable' }
+Get-ChildItem apps\desktop\dist -Force | Select-Object -First 20 Name,Length,LastWriteTime
+```
+
+### Results
+
+| Check | Result | Notes |
+|---|---|---|
+| Core package build | Pass | `@mergepilot/core build` completed with `tsc -p tsconfig.json`. |
+| Daemon package build | Pass | `@mergepilot/daemon build` completed with `tsc -p tsconfig.json`. |
+| Desktop package build | Pass | `@mergepilot/desktop build` completed with `tsc -p tsconfig.json && vite build`; Vite transformed 2702 modules and produced `apps\desktop\dist`. |
+| Desktop Vite warning | Info | Vite emitted the expected large-chunk warning for bundles over 500 kB after minification. No build failure occurred. |
+| Diff hygiene | Pass | `git diff --check` exited `0`; output contained CRLF normalization warnings only. |
+| Daemon cleanup | Pass | `http://127.0.0.1:8787/healthz` returned `daemon_stopped_or_unreachable`, confirming no wrapper/source daemon was left running. |
+| Desktop dist output | Pass | `apps\desktop\dist` contained regenerated `index.html` and `assets`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current uncommitted source builds successfully across core, daemon, and desktop packages. | Info | Keep this as the latest source-build baseline before any future staging/release action. |
+| Vite still reports large post-minification chunks. | Low | This is not a regression gate failure; consider route-level code splitting later if desktop startup/runtime payload size becomes a measured issue. |
+| This gate does not validate installed Program Files parity or Authenticode publisher trust. | Medium | Re-run installed package verification and signing gates only after the next package is installed/signed. |
+
+## Run: mp-workspace-ux-filter-swr-gap-20260716-1406
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 14:06-14:12 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Mocked/non-mutating browser and source verification; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Change
+
+The Workspace UX stabilization plan required stale-while-revalidate behavior for route switching and filters. The existing evidence covered warm route switching, manual refresh, and Project Link isolation, but a source audit found a remaining filter-level gap:
+
+- Pull Requests status filter changes did not preserve previous rows while the new status query was pending.
+- Pipeline related-PR and discovery query-key refreshes did not explicitly preserve previous query data.
+- Project Link switches must still clear stale PR rows, because showing rows from another Project Link is incorrect.
+
+The fix adds guarded `placeholderData` for Pull Requests so previous data is reused only when the Project Link scope is unchanged, plus `placeholderData` for Pipeline related PR and discovery queries.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1 --grep "Pull Requests visible while status filter refreshes|does not show stale Pull Requests after Project Link switch|keeps cached pipeline rows visible"
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` passed after the guarded placeholder-data change. |
+| New Pull Requests status-filter regression | Pass | `keeps cached Pull Requests visible while status filter refreshes` passed, proving same-Project-Link status changes keep cached rows visible and avoid the full preparing skeleton. |
+| Pull Requests Project Link isolation regression | Pass | `does not show stale Pull Requests after Project Link switch` still passed, proving the new placeholder behavior does not leak old Project Link rows. |
+| Pipeline cached discovery regression | Pass | `keeps cached pipeline rows visible while discovery refreshes` still passed after adding placeholder data to Pipeline related/discovery queries. |
+| Full route-cache browser suite | Pass | Expanded Chromium route-cache suite passed 24/24. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Route-level SWR was green, but filter-level SWR was not fully explicit for Pull Requests status changes. | Medium | Fixed with guarded Pull Requests placeholder data and permanent browser regression coverage. |
+| Project Link switch isolation remains protected. | Info | Keep the stale-Project-Link browser regression paired with any future query placeholder changes. |
+| Pipeline query-key refreshes now preserve previous related/discovery data while refreshing. | Info | Existing pipeline warm-refresh and detail-panel browser regressions remain green. |
+
+## Run: mp-broader-mocked-smoke-after-filter-swr-20260716-1413
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 14:13 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Mocked/non-mutating browser smoke; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Command
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --grep "@smoke @mocked" --workers=1
+```
+
+### Result
+
+| Metric | Value |
+|---|---|
+| Passed tests | 33 |
+| Failed tests | 0 |
+
+### Coverage Notes
+
+| Area | Evidence |
+|---|---|
+| New filter-level SWR coverage | The new `keeps cached Pull Requests visible while status filter refreshes` regression is now part of the regular mocked smoke gate. |
+| Chat and workflow shell | Chat shell, PR insight controls, pipeline controls, missing-pipeline setup, read-only PR/pipeline workflows, and project-context source references passed. |
+| Workspace pages | Pull Requests, Review Queue, Pipelines, Activity, route-cache warm returns, stale Project Link isolation, and Activity raw-output folding passed. |
+| Settings | Key Vault permission messaging and local-env fallback smoke passed. |
+
+## Run: mp-review-queue-activity-panel-persistence-20260716-1418
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 14:18-14:22 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Mocked/non-mutating browser and source verification; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Change
+
+The Workspace UX plan required Review Queue recent activity to live in a collapsible right-side panel with locally persisted open/closed state. Source review showed the product implementation already used `mergepilot_review_activity_panel_open`, but browser coverage did not prove the state survived a page remount.
+
+A mocked browser regression was added to hide the panel, reload Review Queue, and verify that `Show activity` remains visible while `Recent activity` stays hidden. The Review Queue test harness was also adjusted to preserve this UI preference across reloads while continuing to reset unrelated Project Link test data.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/review-queue.spec.ts --project=chromium --workers=1 --grep "persists the Recent activity panel collapsed state|renders review-run queue evidence"
+.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --grep "@smoke @mocked" --workers=1
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` passed before the browser reruns. |
+| Review Queue activity persistence | Pass | New mocked Chromium test proved the Recent activity panel collapsed state persists across reload through `localStorage`. |
+| Existing Review Queue smoke | Pass | `renders review-run queue evidence and records an acknowledged disposition` still passed after the harness adjustment. |
+| Broader mocked smoke | Pass | `@smoke @mocked` passed 34/34 with the new Review Queue persistence regression included. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Review Queue panel persistence existed in source but lacked browser proof. | Medium | Fixed by adding a permanent mocked smoke regression. |
+| The test harness was clearing the very UI preference the new test needed to verify. | Low | Fixed by preserving `mergepilot_review_activity_panel_open` across test reloads while still resetting other seeded state. |
+
+## Run: mp-chat-source-preview-regression-20260716-1428
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 14:28 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Mocked/non-mutating browser and source verification; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Change
+
+The Chat right-side source preview was re-audited against the installed-app UX feedback. The current implementation already uses CodeMirror as a functional read-only code preview with full-file loading, language-specific syntax extensions, line numbers, fold gutter, target-line highlighting, vertical/horizontal scrolling, file-type tab badges, copy actions, and tab cleanup.
+
+Permanent browser coverage was tightened so the project-context source preview regression now proves the active source tab shows a language badge, renders CodeMirror gutters, exposes the target line number, loads the full file line count, and keeps unrelated source tabs out of the preview area.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/chat-layout.spec.ts --project=chromium --workers=1 --grep "source references"
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/chat-layout.spec.ts --project=chromium --workers=1 --grep "copy actions"
+.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --grep "@smoke @mocked" --workers=1
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` passed after the source-preview assertion update. |
+| Source reference preview | Pass | `renders project-context source references in the conversation` passed and now checks the `TS` tab badge, CodeMirror gutters, visible line `291`, full-file `300 lines`, target-line highlighting, and no stale unrelated source tab. |
+| Source preview copy and cleanup | Pass | `supports source preview copy actions and tab cleanup` still passed, proving path/content copy plus close-one/close-all behavior. |
+| Broader mocked smoke | Pass | `@smoke @mocked` passed 34/34 with the strengthened source-preview regression included. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Source preview functionality was stronger than the earlier installed-app visual state suggested, but some key guarantees were not directly asserted. | Medium | Fixed by strengthening the existing browser regression around CodeMirror line numbers and source type badges. |
+| The preview workbench intentionally opens the selected source reference without retaining unrelated old source tabs. | Info | Keep this behavior aligned with the user's expectation that the file area should not accumulate stale files from previous context. |
+
+## Run: mp-activity-information-architecture-regression-20260716-1442
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 14:42-14:46 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Mocked/non-mutating browser and source verification; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Change
+
+The Activity page was re-audited against the feedback that it previously felt like a mixed dashboard without a clear purpose. Source review confirmed the current page is framed as operational history and separates `Runs`, `Checkpoints`, `PR Insights`, and `Review Operations` in the left rail with details shown on the right.
+
+Permanent mocked browser coverage was added to seed all four activity sources at once, verify each scoped section is present with real data instead of empty states, and confirm selecting a Git checkpoint opens the right-side checkpoint detail while raw tool JSON remains hidden by default.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1 --grep "Activity"
+.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --grep "@smoke @mocked" --workers=1
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` passed after adding the Activity regression fixtures and browser case. |
+| Activity focused browser checks | Pass | Activity-focused route-cache tests passed 2/2, including the new four-section operational-history regression. |
+| Broader mocked smoke | Pass | `@smoke @mocked` passed 35/35 with the new Activity information-architecture regression included. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity had warm-refresh and raw-output coverage, but not a direct regression for its revised four-section information architecture. | Medium | Fixed by adding a permanent mocked smoke test that seeds and verifies all four operational sections. |
+| Raw checkpoint JSON remains available for auditability but hidden by default. | Info | Keep raw evidence behind `Raw output`; do not surface tool JSON as the primary Activity reading experience. |
+
+## Run: mp-pipeline-ai-analysis-success-regression-20260716-1454
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 14:54-14:59 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Mocked/non-mutating browser and source verification; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Change
+
+Pipeline AI analysis was re-audited after the workspace UX stabilization work. Static scan confirmed the old `AI analysis streaming` label, top-right `Unknown`, and plain `whitespace-pre-wrap` AI analysis path are not present in the covered Pipeline card/detail analysis surfaces. Existing browser coverage already protected the analysis error state, but the successful `Ready` state did not directly prove Markdown rendering or right-panel evidence retention.
+
+A mocked Chromium regression was added for successful Pipeline AI analysis. It drives `AI analyze`, returns an LLM-style Markdown analysis, verifies the compact card shows the stable `AI analysis` section with `Ready`, verifies Markdown list/inline-code rendering, opens the detail panel, and confirms run evidence remains visible with no `Unknown` placeholder.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1 --grep "pipeline AI analysis|Pipeline action|pipeline detail"
+.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --grep "@smoke @mocked" --workers=1
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` passed after adding the successful Pipeline AI analysis regression. |
+| Pipeline-focused browser checks | Pass | Focused Pipeline route-cache checks passed 4/4, covering action errors, analysis errors, analysis success, and detail-panel close behavior. |
+| Broader mocked smoke | Pass | `@smoke @mocked` passed 36/36 with the new successful Pipeline AI analysis regression included. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pipeline analysis error behavior was covered, but successful Markdown rendering and run-evidence preservation were not directly locked. | Medium | Fixed by adding a permanent mocked smoke regression for the successful `Ready` analysis state. |
+| The successful analysis detail panel renders both AI text and run evidence; this keeps analysis from replacing operational evidence. | Info | Keep this split when future Pipeline AI analysis evolves. |
+
+## Run: mp-pr-insight-markdown-summary-regression-20260716-1451
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 14:49-14:51 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Mocked/non-mutating browser and source verification; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Change
+
+Pull Requests AI insight rendering was re-audited after the workspace UX stabilization work. The card and right-side detail panel already route saved PR insight summaries through the shared Markdown renderer, but the browser regression only proved readable Project Link scope and artifact selection. The test now seeds a saved insight with bold text, list items, and inline code, then verifies the compact `Latest insight` card and the `PR insight` side panel render the summary as readable Markdown instead of exposing raw `**Status:**` syntax.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe exec playwright test tests/e2e/route-cache.spec.ts --grep "readable PR insight scope" --project=chromium
+.\.tools\pnpm.exe exec playwright test tests/e2e/route-cache.spec.ts --grep "PR insight|duplicate PR ids" --project=chromium
+.\.tools\pnpm.exe exec playwright test --grep "@smoke @mocked" --project=chromium
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` passed after strengthening the PR insight Markdown regression. |
+| PR insight focused browser check | Pass | The readable-scope regression passed 1/1 and now verifies `Latest insight` plus the side panel render Markdown text/list/inline-code without raw `**Status:**`. |
+| PR insight focused browser subset | Pass | PR insight and duplicate-PR-id checks passed 2/2, confirming the Markdown assertion does not break Project Link artifact isolation. |
+| Broader mocked smoke | Pass | `@smoke @mocked` passed 36/36 with the strengthened PR insight Markdown regression included. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Saved PR insight summaries rendered through Markdown, but the card-level user-visible proof was indirect. | Medium | Fixed by strengthening the existing PR insight browser smoke to assert formatted card and side-panel summaries. |
+| A parallel local Playwright run briefly made a tag-level `<strong>` assertion flaky while the lazy Markdown renderer was settling. | Low | The regression now asserts stable user-visible text plus list and inline-code structure instead of a specific bold DOM tag. |
+
+## Run: mp-review-queue-selected-lane-regression-20260716-1458
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 14:56-14:58 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Mocked/non-mutating browser and source verification; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Change
+
+Review Queue lane selection was re-audited against the earlier UI feedback that selected status blocks should not turn gray. The implementation already keeps lane selection semantic by combining each lane's tone with an accent border/ring. Browser coverage was added so selecting `Needs human review` proves `aria-pressed="true"`, preserves the amber semantic background, applies the accent selected border, and does not use gray/slate/zinc selected backgrounds.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\.tools\pnpm.exe exec playwright test tests/e2e/review-queue.spec.ts --grep "selected queue lane" --project=chromium
+.\.tools\pnpm.exe exec playwright test tests/e2e/review-queue.spec.ts --grep "@smoke @mocked" --project=chromium
+.\.tools\pnpm.exe exec playwright test --grep "@smoke @mocked" --project=chromium
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` passed after adding the Review Queue selected-lane regression. |
+| Selected lane focused browser check | Pass | `selected queue lane` passed 1/1, proving the selected `Needs human review` block stays amber/accented rather than gray. |
+| Review Queue smoke subset | Pass | Review Queue mocked smoke passed 3/3, covering Recent activity persistence, selected lane semantics, and acknowledged disposition evidence. |
+| Broader mocked smoke | Pass | First parallel broad run collided with another Playwright process and produced `127.0.0.1:1420` connection refusals. The immediate single-process rerun passed `@smoke @mocked` 37/37, confirming the failures were harness port contention rather than a product regression. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Review Queue lane selection behavior matched the desired semantic style but lacked direct browser proof. | Medium | Fixed by adding a permanent mocked smoke regression for selected lane styling. |
+| Running two Playwright commands concurrently can make the Vite app server unavailable for one run. | Low | Treat browser suite runs as single-process unless the config gives each run an isolated port. |
+
+## Run: mp-mocked-browser-wrapper-port-lock-20260716-1505
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 15:05 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Mocked/non-mutating browser smoke; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Change
+
+Added `scripts\windows\run-mocked-browser-e2e.ps1` as the preferred local wrapper for mocked Playwright browser gates. The wrapper serializes app-server use with a named mutex before delegating to `pnpm-project.ps1 exec playwright test`, preventing false failures when two local browser runs try to own `127.0.0.1:1420` at the same time.
+
+### Commands
+
+```powershell
+[System.Management.Automation.Language.Parser]::ParseFile("scripts/windows/run-mocked-browser-e2e.ps1", [ref]$null, [ref]$errors)
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/review-queue.spec.ts -Grep "selected queue lane"
+.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked"
+```
+
+### Tests Run
+
+| Test | Result | Notes |
+|---|---|---|
+| Wrapper parse check | Pass | PowerShell parser accepted the new wrapper. |
+| Focused wrapper smoke | Pass | `selected queue lane` passed 1/1 through the wrapper. |
+| Broader wrapper smoke | Pass | `@smoke @mocked` passed 37/37 through the wrapper. Log: `output\live-e2e\mocked-browser-wrapper-smoke-20260716-150511.log`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The product smoke is green, but direct concurrent Playwright invocations can still create local harness noise. | Low | Use `scripts\windows\run-mocked-browser-e2e.ps1` for future mocked browser gates when another browser run may be active. |
+| The wrapper does not change application behavior or coverage; it only protects the local test runner from shared-port contention. | Info | Keep feature regressions in the existing specs; keep the wrapper thin. |
+
+## Run: mp-default-chromium-through-mocked-wrapper-20260716-1509
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 15:09-15:11 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Default non-live Chromium browser gate; live-app cases skipped by design |
+| Result | Pass |
+
+### Command
+
+```powershell
+.\scripts\windows\run-mocked-browser-e2e.ps1
+```
+
+### Result
+
+| Metric | Value |
+|---|---|
+| Passed tests | 82 |
+| Skipped tests | 30 |
+| Failed tests | 0 |
+| Log | `output\live-e2e\mocked-browser-wrapper-default-20260716-150936.log` |
+
+### Coverage Notes
+
+| Area | Evidence |
+|---|---|
+| Chat workflows | Approval composer, structured workflow chips, read-only Git/PR/pipeline routing, streaming recovery, source references, artifact workspace, Mermaid error display, and image attachment UI all passed. |
+| Workspace UX caching | New Chat prompt stability, Pull Requests warm refresh, status-filter refresh, Review Queue warm refresh, Pipelines warm refresh, Activity warm refresh, Project Link switch isolation, and raw checkpoint folding all passed. |
+| Pull Requests and PR insight | PR insight scope, duplicate PR ids across Project Links, saved insight source preview, persisted lookup errors, and non-raw route handling all passed. |
+| Review Queue | Recent activity persistence, selected lane semantic styling, ADO write-back retry path, stale rerun flow, and review-run evidence passed. |
+| Pipelines | Structured pipeline controls, missing-pipeline setup, pipeline action errors, AI analysis error/success states, and detail-panel filtering passed. |
+| Settings | Local-env/Key Vault permission handling passed. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The wrapper-protected default Chromium gate found no new non-live browser regressions in the current dirty tree. | Info | Continue using the default wrapper run as a broader local browser gate before future packaging or release work. |
+| Live-app and live ADO cases remain intentionally skipped in this command. | Info | Use `scripts\windows\run-live-app-e2e.ps1` and explicit live flags when the next testing step needs installed/source daemon or ADO coverage. |
+
+## Run: mp-live-app-non-ado-wrapper-gate-20260716-1515
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 15:15-15:24 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source daemon `0.5.21` started by `scripts\windows\run-live-app-e2e.ps1`, Playwright Chromium UI |
+| Resource mode | Live app, non-ADO, non-destructive; local temp Git repositories and bare remotes only |
+| Result | Pass |
+
+### Command
+
+```powershell
+.\scripts\windows\run-live-app-e2e.ps1
+```
+
+### Result
+
+| Metric | Value |
+|---|---|
+| Passed tests | 26 |
+| Skipped tests | 4 |
+| Failed tests | 0 |
+| Started source daemon | `true` |
+| Daemon version | `0.5.21` |
+| Live ADO | `false` |
+| Destructive | `false` |
+| Wrapper output | `output\live-e2e\live-app-wrapper-non-ado-outer-20260716-151524.log` |
+| Playwright log | `output\live-e2e\live-app-e2e-20260716-151524.log` |
+| Daemon log | `output\live-e2e\live-app-source-daemon-20260716-151524.log` |
+| Daemon stderr | `output\live-e2e\live-app-source-daemon-20260716-151524.err.log` |
+
+### Coverage Notes
+
+| Area | Evidence |
+|---|---|
+| Approval safety | Staging one requested file, restored pending approval after reload, denial non-mutation, and denial feedback as the next instruction all passed. |
+| Commit workflows | Consecutive stage/commit approvals, commit validation failure with staged changes preserved, empty-commit prevention, staged-change summary, and draft commit message all passed. |
+| Git remotes and branches | Remote push target redaction, dirty branch-switch approval, branch creation/switching, local bare-remote push, behind-branch pull with rebase, and rebase conflict recovery all passed. |
+| Merge/stash/revert/tag workflows | Approved merge, merge conflict recovery, stash/apply/pop/conflict recovery, single-file restore, revert last commit, local tag creation, and one-tag push all passed. |
+| Cleanup | Wrapper-started daemon was stopped after the run; `http://127.0.0.1:8787/healthz` was unreachable afterward. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The non-ADO live-app UI gate passed against the current source daemon and validates the core local Git workflow surface more strongly than mocked browser tests. | Info | Keep this gate as the preferred real UI/business check before packaging or release work. |
+| Four ClaimBot_API pipeline tests were skipped because `-LiveAdo` was not enabled. | Info | Run `.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -Grep "ClaimBot_API pipeline"` when the next step needs real Azure DevOps pipeline evidence. |
+| Daemon stderr contained Node's `punycode` deprecation warning and a pnpm dev exit status after wrapper cleanup. | Low | Treat as non-blocking harness noise for now; revisit if daemon shutdown becomes user-visible or log-noisy in packaged runs. |
+
+## Run: mp-live-app-ado-pipeline-readonly-wrapper-gate-20260716-1526
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 15:26-15:28 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source daemon `0.5.21` started by `scripts\windows\run-live-app-e2e.ps1`, Playwright Chromium UI |
+| Resource mode | Live app with live Azure DevOps reads; destructive mode disabled |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -Grep "ClaimBot_API pipeline"
+az pipelines runs list --organization https://tebssg.visualstudio.com/ --project TeBS-ClaimBot --pipeline-ids 117 --top 5 --query "[].{id:id,buildNumber:buildNumber,status:status,result:result,sourceBranch:sourceBranch,queueTime:queueTime}" -o json
+```
+
+### Result
+
+| Metric | Value |
+|---|---|
+| Passed tests | 4 |
+| Skipped tests | 0 |
+| Failed tests | 0 |
+| Started source daemon | `true` |
+| Daemon version | `0.5.21` |
+| Live ADO | `true` |
+| Destructive | `false` |
+| Wrapper output | `output\live-e2e\live-app-wrapper-ado-pipeline-outer-20260716-152629.log` |
+| Playwright log | `output\live-e2e\live-app-e2e-20260716-152629.log` |
+| Daemon log | `output\live-e2e\live-app-source-daemon-20260716-152629.log` |
+| Daemon stderr | `output\live-e2e\live-app-source-daemon-20260716-152629.err.log` |
+
+### Coverage Notes
+
+| Area | Evidence |
+|---|---|
+| Pipeline discovery | Project Link without pipeline ID discovered real ClaimBot_API pipeline `#117` and saved `117 / ClaimBot_API` without showing trigger approval. |
+| Pipeline failure evidence | Chat inspected pipeline `#117`, surfaced recent failed-run evidence, and included `#4665`, `MSBuild`, and publishing failure details while excluding pipeline `#108`. |
+| Rerun approval boundary | Failure-evidence suggestion prepared an `ado_trigger_pipeline` approval for pipeline `#117`; because destructive mode was disabled, the test rejected it and asserted the latest run id stayed unchanged. |
+| Pipeline workspace trigger boundary | Pipelines workspace prepared an `ado_trigger_pipeline` approval for pipeline `#117`; because destructive mode was disabled, the test rejected it. |
+| ADO run history | Post-run `az pipelines runs list` still reported latest ClaimBot_API pipeline `#117` run as `4680 / 20260706.1`, queued at `2026-07-05T23:23:00.158026+00:00`; no new run was queued by this test. |
+| Cleanup | Wrapper-started daemon was stopped after the run; `http://127.0.0.1:8787/healthz` was unreachable afterward. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current source app can discover and inspect the real ClaimBot_API pipeline through normal Chat/Pipelines UI while preserving the non-destructive approval boundary. | Info | Keep `-LiveAdo -Grep "ClaimBot_API pipeline"` as the focused read-only live ADO pipeline gate. |
+| Live ADO read-only behavior remains aligned with the project goal: AI insight over PR/pipeline evidence, not calling ADO as an external bridge or queueing runs by default. | Info | Use destructive pipeline trigger tests only when explicitly validating queue behavior and cleanup expectations. |
+| Daemon stderr again contained Node's `punycode` deprecation warning and a pnpm dev exit status after wrapper cleanup. | Low | Same harness noise as the non-ADO wrapper run; not a product failure. |
+
+## Run: mp-live-ado-core-daemon-readonly-20260716-1530
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 15:30 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm |
+| Resource mode | Live Azure DevOps read-only product-code tests; destructive mode disabled |
+| Result | Pass |
+
+### Commands
+
+```powershell
+$env:MERGEPILOT_E2E_LIVE_ADO = "1"
+Remove-Item Env:\MERGEPILOT_E2E_DESTRUCTIVE -ErrorAction SilentlyContinue
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAdoDiscovery.test.ts test/liveAdoPipeline.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts
+az pipelines runs list --organization https://tebssg.visualstudio.com/ --project TeBS-ClaimBot --pipeline-ids 117 --top 5 --query "[].{id:id,buildNumber:buildNumber,status:status,result:result,sourceBranch:sourceBranch,queueTime:queueTime}" -o json
+```
+
+### Result
+
+| Test | Result | Notes |
+|---|---|---|
+| Core live ADO discovery/pipeline | Pass | `test/liveAdoDiscovery.test.ts` and `test/liveAdoPipeline.test.ts` passed 3/3 read-only tests with 1 destructive queue test skipped. Log: `output\live-e2e\live-ado-core-readonly-20260716-153021.log`. |
+| Daemon live ADO PR insight | Pass | `test/liveAdoPrInsight.test.ts` passed 1/1, inspecting a real ClaimBot_API pull request without approval or mutation. Log: `output\live-e2e\live-ado-daemon-pr-insight-20260716-153021.log`. |
+| ADO run history | Pass | Latest ClaimBot_API pipeline `#117` run remained `4680 / 20260706.1`; no new run was queued. |
+| Local daemon residue | Pass | `http://127.0.0.1:8787/healthz` was unreachable after the tests. |
+| Temp cleanup | Pass | No `%TEMP%\mergepilot-live-*` or `%TEMP%\mergepilot-daemon-live-pr-insight-*` directories were found. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current core product code can still discover ClaimBot_API project/repo/pipeline and read failed-run timeline/log evidence with the current Azure identity. | Info | Keep this gate paired with the UI-level live ADO pipeline wrapper gate. |
+| Current daemon workflow can still inspect a real ClaimBot_API PR insight without approval or mutation. | Info | This supports the product goal of AI insight over PR/pipeline evidence. |
+| The only daemon test warning was Node's `punycode` deprecation warning. | Low | Track separately from product behavior; it did not fail the gate. |
+
+## Run: mp-current-dirty-tree-full-source-suite-20260716-1533
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 15:33-15:35 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm |
+| Resource mode | Local source typecheck and unit/integration suites; live/destructive gates not enabled |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Core typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed. |
+| Daemon typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed. |
+| Desktop typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed. |
+| Core test suite | Pass | 47 files passed, 4 skipped; 250 tests passed, 6 skipped. Log: `output\live-e2e\current-source-core-test-20260716-153319.log`. |
+| Daemon test suite | Pass | 45 files passed, 1 skipped; 258 tests passed, 1 skipped. Log: `output\live-e2e\current-source-daemon-test-20260716-153319.log`. |
+| Desktop test suite | Pass | 70 files passed; 359 tests passed. Log: `output\live-e2e\current-source-desktop-test-20260716-153319.log`. |
+
+### Coverage Notes
+
+| Area | Evidence |
+|---|---|
+| Core contracts | Git options, ADO clients/tools, planner/approval contracts, context building, checkpointing, memory store, repository indexing, telemetry, and pipeline agent offline behavior passed. |
+| Daemon routes/workflows | Chat routes, workflow actions, approvals, commit/push/recovery workflows, image handling, route formatting, review queue/storage, pipeline workflow, PR insight, and SSE/UI-stream behavior passed. |
+| Desktop UI/model layer | Execution transcript, approval cards, source preview/artifacts, route-cache API formatting, PR/Pipeline/Review Queue view models, Activity/Task viewer models, image attachments, streaming state, suggestions, and pagination passed. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current dirty tree is green across typecheck and all local source suites after the Workspace UX, wrapper, and live ADO verification work. | Info | Keep this as the current pre-stage source baseline. |
+| Test output still includes Node's `punycode` deprecation warning in core/daemon paths. | Low | Track as dependency/runtime cleanup; it did not fail any gate. |
+
+## Run: mp-broader-mocked-smoke-after-wrapper-hardening-20260716-1338
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 13:38 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Mocked/non-mutating browser smoke; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Command
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 exec playwright test --project=chromium --grep "@smoke @mocked" --workers=1
+```
+
+### Result
+
+| Metric | Value |
+|---|---|
+| Passed tests | 32 |
+| Failed tests | 0 |
+
+### Coverage Notes
+
+| Area | Evidence |
+|---|---|
+| Chat shell and workflow controls | Project-linked Chat shell, PR insight controls, pipeline controls, missing-pipeline setup, read-only PR insight, read-only pipeline inspection, and project-context source references passed. |
+| Review Queue and route caching | Review Queue acknowledgement/disposition, cached Project Links, New Chat prompt stability, Pull Requests, Review Queue, Pipelines, and Activity warm-route behavior passed. |
+| Settings | Key Vault permission messaging and local-env fallback smoke passed. |
+| Cleanup | `127.0.0.1:8787` was unreachable after the run, and no `%TEMP%\mergepilot-live-*`, `%TEMP%\mp-live-*`, or `%TEMP%\mergepilot-daemon-live-pr-insight-*` directories were found. |
+
+## Run: mp-workspace-ux-stabilization-source-smoke-20260716-1630
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 16:30 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace, repository-local Node/pnpm, Playwright-managed Chromium app runtime |
+| Resource mode | Mocked/non-mutating source verification; no Azure DevOps or Azure mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts tests/e2e/review-queue.spec.ts
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/settings-permissions.spec.ts tests/e2e/chat-layout.spec.ts
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed. |
+| Desktop test suite | Pass | 74 files passed; 364 tests passed. |
+| Route cache and Review Queue browser smoke | Pass | 31 tests passed after fixing Review Queue cached placeholder scoping so stale decisions do not leak across Project Links. |
+| Settings permissions and Chat layout browser smoke | Pass | 51 tests passed. |
+| Total non-mutating browser smoke in this pass | Pass | 82 Playwright tests passed. |
+
+### Coverage Notes
+
+| Area | Evidence |
+|---|---|
+| New Chat prompt stability | Focused component coverage verifies welcome prompts do not render one set before index status and then swap after index resolution. |
+| Route switching cache | Browser coverage verifies Pull Requests, Review Queue, Pipelines, and Activity keep warm data visible instead of flashing full-page loading. |
+| Review Queue stale-data guard | Browser coverage verifies switching Project Links clears storage warnings and does not show stale decisions from the previous Project Link. |
+| Pipeline AI readability | Component coverage verifies missing latest-run dates do not render `Unknown`, and AI analysis renders through Markdown with a stable `Ready` state. |
+| Pull Request insight density | Component coverage verifies PR cards use `Open insight` for existing insight, keep `Run review` separate, and render insight summaries as Markdown. |
+| Activity raw output | Component coverage verifies raw checkpoint/tool output is collapsed by default. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The frontend route-cache and detail-panel stabilization passes source-level and mocked browser verification. | Info | Keep this as the current source baseline before the next installed-app/manual smoke. |
+| Review Queue cached placeholder data originally leaked across Project Links during route switching. | Medium | Fixed by reusing placeholder data only when the previous query key has the same Project Link ID. |
+| Live installed app, live ADO, and destructive workflow gates were not run in this pass. | Info | Run `tests/e2e/live-app-business.spec.ts` only with the explicit live/destructive environment flags and cleanup plan. |
+
+## Run: mp-current-source-and-installed-local-business-gates-20260716-1635
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 16:35-16:47 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace `0.5.21`, installed Program Files app `0.5.20`, repository-local Node/pnpm |
+| Resource mode | Local source suites, installed-app smoke, and live browser workflows against temp Git repos/local remotes; no live ADO or destructive ADO mutation |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test
+.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind any
+.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Core typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed for `@mergepilot/core@0.5.21`. |
+| Core test suite | Pass | 47 files passed, 4 skipped; 250 tests passed, 6 skipped. Live Azure/ADO/destructive tests stayed skipped by default. |
+| Daemon typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed for `@mergepilot/daemon@0.5.21`. |
+| Daemon test suite | Pass | 45 files passed, 1 skipped; 258 tests passed, 1 skipped. |
+| Installed app smoke | Pass | Installed Program Files daemon `0.5.20` passed package-state, auth/avatar, restart persistence, and lifecycle safety checks. Logs: `output\live-e2e\installed-app-package-state-20260716-163817.log`, `output\live-e2e\installed-app-persistence-20260716-163817.log`, `output\live-e2e\installed-app-safety-20260716-163817.log`. |
+| Source live-app local business workflows | Pass | 26 browser-driven real Chat UI workflows passed against source daemon `0.5.21`; 4 live ADO pipeline tests were skipped because `-LiveAdo` was not enabled. Log: `output\live-e2e\live-app-e2e-20260716-163940.log`. |
+| Cleanup | Pass | Ports `8787`, `8798`, `8799`, and `8800` were not left listening after the run; no `mergepilot-live-*`, `mp-live-*`, or `mergepilot-daemon-live-pr-insight-*` temp directories remained. |
+
+### Coverage Notes
+
+| Area | Evidence |
+|---|---|
+| Installed first-run/runtime health | `/healthz` reported installed daemon `0.5.20`, Azure provider, `gpt-4o`, local config source `C:\Users\15492\.mergepilot\config.toml`, Key Vault secrets disabled, Project Link cloud store enabled, and sessions enabled. |
+| Installed auth/avatar | Package-state verifier reported authenticated user `Zhou Ping`, `Zhou.Ping@totalebizsolutions.com`, avatar present with data URL length `19339`. |
+| Installed persistence | Restart persistence smoke created a temporary Project Link and chat session, completed a terminal chat, restarted the installed daemon, verified the Project Link/session/assistant completion still existed, and cleaned all temporary resources. |
+| Lifecycle safety | Safety smoke verified the installed restart persistence gate refuses to control an unrelated port owner and leaves that listener alive. |
+| Local Git business workflows | Live browser workflows covered staging, approval reload, denial, denial feedback, stage+commit, validation failure, empty commit guard, staged summary, commit-message drafting, credential redaction, secret diff redaction, branch switch approval, merge/conflict recovery, branch creation, local push, pull rebase, rebase recovery, stash apply/pop/conflict, restore, revert, local tag, and single-tag push. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Source `0.5.21` core and daemon behavior remains green after the Workspace UX changes. | Info | Keep full desktop/browser gates paired with these backend gates before staging. |
+| Installed `0.5.20` runtime still has working local config, Azure OpenAI model config, auth/avatar, cloud Project Link store, cloud sessions, restart persistence, and lifecycle safety. | Info | Version-bumped `0.5.21` installer still needs a fresh installed-app proof after release/build. |
+| Live-app local business workflows pass against source daemon `0.5.21` without touching live ADO. | Info | Run `run-live-app-e2e.ps1 -LiveAdo` separately when ready to verify ClaimBot_API pipeline/ADO read paths; use `-Destructive` only with explicit cleanup intent. |
+| Test output still includes Node's `punycode` deprecation warning in core/daemon suites. | Low | Track as dependency/runtime cleanup; it did not fail any gate. |
+
+## Run: mp-live-ado-claimbot-pipeline-readonly-20260716-1649
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 16:49-16:51 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace daemon `0.5.21`, Playwright-managed Chromium app runtime |
+| Resource mode | Live Azure DevOps read path plus approval-preparation denial; destructive ADO queue disabled |
+| Result | Pass |
+
+### Command
+
+```powershell
+.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -RestartMismatchedDaemon -Grep "ClaimBot_API pipeline #117"
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| ClaimBot_API pipeline discovery/save | Pass | Browser workflow discovered ClaimBot_API pipeline `#117` from a Project Link without a pipeline ID and saved it to the temporary Project Link. |
+| ClaimBot_API failed-run evidence inspection | Pass | Browser workflow inspected pipeline `#117`, surfaced failed/canceled evidence including `#4665` and MSBuild/publishing evidence, and created no approval while in read-only mode. |
+| Rerun approval preparation from evidence suggestion | Pass | Browser workflow prepared `ado_trigger_pipeline` approval for pipeline `#117`, denied it because destructive mode was off, and verified no new run was queued. |
+| Pipeline workspace trigger approval preparation | Pass | Browser workflow opened the Pipelines workspace, showed pipeline `#117`, prepared trigger approval for `#117`, and denied it. |
+| ADO run history | Pass | Latest ClaimBot_API run remained `4680 / 20260706.1`, `completed/succeeded`, branch `refs/heads/main`, version `dffeecd534790c4446a29208674f2b6021640a63`; no new run was queued. |
+| Cleanup | Pass | Port `8787` was not left listening and no `mergepilot-live-*`, `mp-live-*`, or `mergepilot-daemon-live-pr-insight-*` temp directories remained. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Live ADO browser read paths for ClaimBot_API pipeline `#117` are still aligned with the active project goal. | Info | Keep this gate before release when pipeline/Project Link UI changes. |
+| Pipeline trigger/rerun approval preparation targets ClaimBot_API pipeline `#117` and does not queue a run unless destructive mode is explicitly enabled. | Info | Destructive `-LiveAdo -Destructive` queue proof remains a separate opt-in gate. |
+| The read-only ADO gate does not depend on or target the other project pipeline. | Info | Continue naming future tests around ClaimBot_API pipeline `#117` only. |
+
+## Run: mp-live-ado-claimbot-pipeline-destructive-trigger-20260716-1653
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 16:53-16:56 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace daemon `0.5.21`, Playwright-managed Chromium app runtime |
+| Resource mode | Live Azure DevOps destructive pipeline queue, followed by run cleanup |
+| Result | Pass with external capacity finding |
+
+### Baseline
+
+| Field | Value |
+|---|---|
+| Latest run before test | `4680 / 20260706.1` |
+| Status/result before test | `completed / succeeded` |
+| Branch | `refs/heads/main` |
+| Source version | `dffeecd534790c4446a29208674f2b6021640a63` |
+
+### Command
+
+```powershell
+.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -Destructive -RestartMismatchedDaemon -Grep "prepares ClaimBot_API pipeline #117 approval through the real Chat UI"
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Browser-driven destructive approval | Pass | The real Chat UI opened the Pipelines workspace, prepared `ado_trigger_pipeline` approval for ClaimBot_API pipeline `#117`, and confirmed the action. Log: `output\live-e2e\live-app-e2e-20260716-165330.log`. |
+| ADO queue side effect | Pass | New run `4764 / 20260716.1` was queued for definition `#117`, repository `ClaimBot_API`, branch `refs/heads/main`, source version `dffeecd534790c4446a29208674f2b6021640a63`. |
+| Pipeline execution result | External failure | Run `4764` completed `failed` immediately because Azure DevOps reported: `Your organization has no free minutes remaining. Add a hosted pipeline to run more builds or releases.` |
+| Cleanup | Pass | Run `4764` was deleted through the ADO Build API. A subsequent latest-run query returned `4680 / 20260706.1` again. |
+| Local runtime cleanup | Pass | Ports `8787`, `8798`, `8799`, and `8800` were not left listening and no `mergepilot-live-*`, `mp-live-*`, or `mergepilot-daemon-live-pr-insight-*` temp directories remained. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Destructive pipeline trigger approval works end to end for ClaimBot_API pipeline `#117`. | Info | This closes the highest-risk UI-to-ADO trigger path for the current source daemon. |
+| The queued pipeline cannot currently prove a successful hosted build because the Azure DevOps organization has no hosted pipeline free minutes remaining. | High external dependency | Add hosted pipeline capacity or switch the definition to an available self-hosted pool before using successful-run status as a product release gate. |
+| Test-created run cleanup is possible and was performed. | Info | Keep the delete-build cleanup step for future destructive ADO tests. |
+
+## Run: mp-source-build-and-packaged-artifact-smoke-20260716-1700
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 17:00-17:06 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace and existing `0.5.21` release artifacts |
+| Resource mode | Local build and packaged artifact smoke; no live ADO mutation |
+| Result | Pass with release-signing gap |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
+.\scripts\windows\packaged-sidecar-smoke.ps1
+.\scripts\windows\packaged-msi-payload-smoke.ps1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Core build | Pass | `@mergepilot/core@0.5.21` compiled with `tsc -p tsconfig.json`. |
+| Daemon build | Pass | `@mergepilot/daemon@0.5.21` compiled with `tsc -p tsconfig.json`. |
+| Desktop production build | Pass | Desktop `tsc` plus Vite production build completed. Vite emitted large-chunk warnings for dependencies such as Mermaid, CodeMirror, Cytoscape, and the main index bundle. |
+| Packaged sidecar smoke | Pass | `apps\desktop\src-tauri\binaries\mergepilot-daemon-x86_64-pc-windows-msvc.exe` started as `0.5.21`, indexed a fixture repo, ran `inspect_environment`, and returned chat HTTP `200`. |
+| MSI payload smoke | Pass | `MergePilot_0.5.21_x64_en-US.msi` extracted successfully; extracted daemon started as `0.5.21`, indexed a fixture repo, ran `inspect_environment`, returned chat HTTP `200`, and generated WiX source contained legacy cleanup markers. |
+| Windows artifact signature check | Gap confirmed | `MergePilot_0.5.21_x64_en-US.msi` and `MergePilot_0.5.21_x64-setup.exe` both reported Authenticode status `NotSigned`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current source build and packaged daemon/MSI payload smoke pass for `0.5.21`. | Info | Keep these gates before installing or publishing a new release. |
+| Release artifacts are still unsigned, so Windows will still show unknown-publisher trust warnings for the local `0.5.21` artifacts. | High release blocker | Configure the signing certificate/secrets and rerun `scripts\windows\verify-windows-artifact-signatures.ps1` before publishing signed installers. |
+| The production desktop bundle is functional but still has large chunks. | Medium performance | Consider lazy-loading heavy Markdown/diagram/code-preview dependencies, especially Mermaid and CodeMirror, after release-critical gates are stable. |
+
+## Run: mp-source-preview-lazy-load-optimization-20260716-1705
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 17:05-17:09 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace `0.5.21` |
+| Resource mode | Local frontend optimization and mocked browser smoke |
+| Result | Pass |
+
+### Changes Verified
+
+| Area | Evidence |
+|---|---|
+| Source preview code splitting | The CodeMirror source preview implementation moved behind lazy-loaded `SourceCodeViewport`; the lightweight source/artifact shell no longer statically imports `@uiw/react-codemirror` or CodeMirror language packages. |
+| Shared helper preservation | `sourceLineStartOffset`, source path/name helpers, and source preview empty state were split into lightweight modules so existing tests and shell rendering still work without loading CodeMirror. |
+| Build output | Desktop build produced a separate `SourceCodeViewport-*.js` chunk and the main `index-*.js` chunk dropped from roughly `517.27 kB` to `510.80 kB` minified. |
+| Remaining warning | Vite still reports large chunks because heavy async vendor chunks remain, including `vendor-codemirror`, Mermaid, and related diagram dependencies. |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/artifacts/ArtifactWorkspace.test.tsx src/pages/chat/artifacts/sourcePreviewLanguage.test.ts src/pages/chat/artifacts/sourcePreviewCopyState.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/chat-layout.spec.ts -Grep "source|architecture|file|preview"
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused artifact/source-preview unit tests | Pass | 3 files passed; 15 tests passed. |
+| Desktop typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed. |
+| Desktop build | Pass | Vite production build passed and emitted the new lazy `SourceCodeViewport` chunk. |
+| Source preview browser smoke | Pass | 5 browser tests passed, covering source references, Mermaid error source visibility, source preview copy/tab cleanup, and saved PR insight artifact source loading. |
+| Full desktop test suite | Pass | 74 files passed; 364 tests passed. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Source preview now loads CodeMirror on demand instead of through the source/artifact shell module. | Info | Keep this pattern for other heavy optional surfaces. |
+| Large bundle warnings remain because Mermaid/diagram and CodeMirror vendor chunks are still individually large. | Medium performance | Next optimization should lazy-load or separate Mermaid/diagram rendering paths further, or tune manual chunks once product behavior is stable. |
+
+## Run: mp-artifact-workspace-content-lazy-load-optimization-20260716-1712
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 17:10-17:13 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace `0.5.21` |
+| Resource mode | Local frontend optimization |
+| Result | Pass |
+
+### Changes Verified
+
+| Area | Evidence |
+|---|---|
+| Artifact workspace code splitting | `ArtifactWorkspaceShell` now lazy-loads `ArtifactWorkspaceContent` only when a result artifact is selected. The shell stays lightweight for normal Chat and source-preview usage. |
+| Test boundary update | Server-rendered shell tests now verify the lazy fallback, while `ArtifactWorkspaceContent` tests continue to verify Markdown report rendering, copy/download actions, Mermaid source display, and lookup error rendering. |
+| Build output | Desktop build emitted a separate `ArtifactWorkspaceContent-*.js` chunk of about `9.99 kB`. The main `index-*.js` chunk dropped further from roughly `510.80 kB` to `502.08 kB` minified. |
+| Remaining warning | Vite still reports large chunks because Mermaid, Wardley, Cytoscape, KaTeX, and CodeMirror vendor chunks remain large optional dependencies. |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/artifacts/ArtifactWorkspace.test.tsx src/pages/chat/artifacts/sourcePreviewLanguage.test.ts src/pages/chat/artifacts/sourcePreviewCopyState.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused artifact/source-preview unit tests | Pass | 3 files passed; 16 tests passed. |
+| Desktop typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed. |
+| Desktop build | Pass with warning | Vite production build passed and emitted the new lazy `ArtifactWorkspaceContent` chunk. The large-chunk warning remains for optional heavy renderer/vendor chunks and the main bundle, which is still slightly above 500 kB. |
+| Full desktop test suite | Pass | 74 files passed; 365 tests passed. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Artifact content is no longer loaded with the result workspace shell. | Info | Keep optional result-rendering paths behind lazy boundaries. |
+| The main desktop entry is now only slightly above Vite's default 500 kB warning threshold. | Medium performance | Next optimization should target route-level page bundles or move additional optional panels behind lazy/preloaded boundaries without causing route-switch flicker. |
+
+## Run: mp-route-level-lazy-load-optimization-20260716-1716
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 17:14-17:17 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace `0.5.21` |
+| Resource mode | Local frontend optimization and mocked route-cache smoke |
+| Result | Pass |
+
+### Changes Verified
+
+| Area | Evidence |
+|---|---|
+| Route-level code splitting | `FullLayout` now keeps Chat in the initial path and lazy-loads non-chat pages such as Project Links, Pull Requests, Review Queue, Pipelines, Activity, Settings, Dashboard, and Repos. |
+| Warm route behavior | Existing route-cache browser smoke still passed, proving cached PRs, Review Queue decisions, Pipeline rows, Activity runs, and New Chat prompts remain stable across warm route switches. |
+| Build output | Desktop build emitted separate route chunks including `PullRequests-*.js`, `Pipelines-*.js`, `ReviewFindings-*.js`, `TaskViewer-*.js`, `ProjectLinks-*.js`, and `Settings-*.js`. The main `index-*.js` chunk dropped from roughly `502.08 kB` to `281.83 kB` minified. |
+| Remaining warning | Vite still reports large chunks for optional renderer/vendor bundles such as `vendor-codemirror`, `mermaid.core`, `wardley`, and `cytoscape.esm`. The main app entry is no longer the cause of the warning. |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed. |
+| Desktop build | Pass with warning | Main entry fell below the default Vite chunk warning threshold; remaining warnings are for optional heavy renderer/vendor chunks. |
+| Full desktop test suite | Pass | 74 files passed; 365 tests passed. |
+| Route-cache browser smoke | Pass | 26 Playwright tests passed, covering New Chat prompts, PR caching, Review Queue caching, Pipeline caching/AI analysis, and Activity raw-output behavior. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Route-level lazy loading fixes the main-entry bundle issue without regressing warm route cache behavior. | Info | Keep Chat as the initial path and continue lazy-loading secondary workspaces. |
+| Remaining Vite warnings are now isolated to large optional rendering libraries rather than the core app shell. | Low performance | Future work can tune renderer/vendor chunks, but this is less urgent than installed `0.5.21` parity, signing, and ADO hosted-capacity proof. |
+
+## Run: mp-post-route-split-full-mocked-and-package-smoke-20260716-1720
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 17:18-17:23 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source workspace and existing local `0.5.21` package artifacts |
+| Resource mode | Mocked browser smoke plus non-installing package extraction/runtime smoke |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\run-mocked-browser-e2e.ps1
+.\scripts\windows\packaged-sidecar-smoke.ps1
+.\scripts\windows\packaged-msi-payload-smoke.ps1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Full mocked browser smoke | Pass | 82 Playwright tests passed and 30 live/destructive tests were skipped by tag/script policy. Coverage included Chat layout, image attachment flows, Project Link inference, PR/pipeline structured controls, route caching, Review Queue, Settings/Key Vault permission messaging, source preview, and artifact workspace behavior. |
+| Packaged sidecar smoke | Pass | `0.5.21` packaged sidecar became healthy, indexed one fixture source file, produced 2 indexed/embedded chunks, ran `inspect_environment`, and returned chat HTTP `200`. |
+| MSI payload smoke | Pass | `MergePilot_0.5.21_x64_en-US.msi` administrative extraction succeeded; extracted daemon reported `0.5.21`, indexed one fixture source file, ran `inspect_environment`, returned chat HTTP `200`, and validated legacy cleanup WiX markers. |
+| Cleanup | Pass | Ports `18887` and `18899` were not left listening; temporary `mergepilot-packaged-sidecar-*` and `mergepilot-msi-extract-*` directories were removed after verification. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Route-level lazy loading did not regress the broader mocked browser UI surface. | Info | Keep the full mocked browser smoke as the broad non-mutating gate after shell/routing changes. |
+| Existing local `0.5.21` MSI payload and packaged sidecar still pass runtime smoke after frontend route splitting. | Info | A rebuilt MSI should still be produced and installed for final `0.5.21` installed-app parity. |
+| The package smoke remains non-installing, so it does not prove Program Files UI parity. | Medium release gap | Install the rebuilt MSI in an elevated shell and run installed-app state/native smoke before release. |
+
+## Run: mp-rebuilt-0521-package-payload-smoke-20260716-1725
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 17:23-17:29 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Rebuilt local `0.5.21` package artifacts from the current worktree |
+| Resource mode | Local Tauri package build plus non-installing package extraction/runtime smoke |
+| Result | Pass with signing gap |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop run tauri:build
+.\scripts\windows\packaged-sidecar-smoke.ps1
+.\scripts\windows\packaged-msi-payload-smoke.ps1
+Get-AuthenticodeSignature apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi
+Get-AuthenticodeSignature apps\desktop\src-tauri\target\release\bundle\nsis\MergePilot_0.5.21_x64-setup.exe
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Tauri package build | Pass with warning | Rebuilt sidecar, desktop app, MSI, and NSIS setup from the current worktree. Vite still warns only on optional heavy renderer/vendor chunks. `pkg` emitted existing dynamic MySQL require warnings, but the packaged sidecar smoke passed. |
+| Rebuilt MSI artifact | Pass | `MergePilot_0.5.21_x64_en-US.msi` was regenerated at `2026-07-16 17:24:15`; size `54,235,136` bytes. |
+| Rebuilt NSIS artifact | Pass | `MergePilot_0.5.21_x64-setup.exe` was regenerated at `2026-07-16 17:24:57`; size `45,788,896` bytes. |
+| Packaged sidecar smoke | Pass | Rebuilt `0.5.21` sidecar became healthy, indexed one fixture source file, produced 2 indexed/embedded chunks, ran `inspect_environment`, and returned chat HTTP `200`. |
+| MSI payload smoke | Pass | Rebuilt MSI extracted successfully; extracted daemon reported `0.5.21`, indexed one fixture source file, ran `inspect_environment`, returned chat HTTP `200`, and validated legacy cleanup WiX markers. |
+| Cleanup | Pass | Ports `18887` and `18899` were not left listening; temporary package-smoke folders were removed. |
+| Authenticode signature | Gap confirmed | Rebuilt MSI and NSIS setup both report `NotSigned`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current worktree changes are now represented in freshly rebuilt local `0.5.21` package artifacts. | Info | Use these artifacts for the next elevated installed-app parity smoke if no further package-affecting edits are made. |
+| The rebuilt package passes extracted runtime smoke without installing. | Info | This proves payload health, not Program Files install-state parity. |
+| Signing is still unresolved for the rebuilt artifacts. | High release blocker | Configure/use trusted code-signing credentials and rerun signature verification before publishing user-facing installers. |
+
+## Run: mp-post-package-core-daemon-regression-20260716-1730
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 17:28-17:32 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Current worktree `0.5.21` |
+| Resource mode | Local core/daemon regression verification |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Core typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed. |
+| Core test suite | Pass | 47 files passed and 4 live/destructive files were skipped by default; 250 tests passed and 6 tests skipped. |
+| Daemon typecheck | Pass | `tsc -p tsconfig.json --noEmit` passed. |
+| Daemon test suite | Pass | 45 files passed and 1 file skipped; 258 tests passed and 1 test skipped. |
+| Cleanup | Pass | Ports `8787`, `8798`, `8799`, `8800`, `18887`, and `18899` were not left listening; no live/package temporary directories were found. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Backend contract tests remain green after the current UI/package work. | Info | Keep core/daemon suites in the broad regression gate before staging. |
+| Tests emit Node `punycode` deprecation warnings from dependencies. | Low maintenance | Track separately if warning noise becomes disruptive; it is not a functional failure. |
+
+## Run: mp-extracted-0521-desktop-startup-smoke-20260716-1734
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 17:33-17:34 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Rebuilt local `0.5.21` MSI extracted through administrative install |
+| Resource mode | Non-installing desktop startup smoke |
+| Result | Pass with installed-parity gap |
+
+### Commands
+
+```powershell
+msiexec.exe /a apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi /qn TARGETDIR=<temp>
+Start-Process <temp>\PFiles\MergePilot\mergepilot-desktop.exe
+Invoke-RestMethod http://127.0.0.1:8787/healthz
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| MSI administrative extraction | Pass | The rebuilt `0.5.21` MSI extracted into a temporary package root without installing to Program Files. |
+| Desktop startup | Pass | Extracted `mergepilot-desktop.exe` launched successfully from the MSI payload. |
+| Sidecar startup | Pass | The extracted desktop app spawned the extracted `mergepilot-daemon.exe`; daemon health reported `0.5.21`. |
+| Process proof | Pass | During the smoke there were 2 MergePilot processes: desktop and daemon, both running from the extracted MSI payload path. |
+| Cleanup | Pass | After the smoke there were 0 MergePilot processes, 0 listeners on port `8787`, and 0 `mergepilot-extracted-desktop-smoke-*` temporary directories left. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The rebuilt MSI payload can launch the real desktop shell and sidecar together, not only the daemon sidecar in isolation. | Info | Keep this smoke as a fast package-shell check before asking for elevated install tests. |
+| This still does not prove installed Program Files parity, shortcut registration, per-user first-run state, or Windows installer UX. | Medium release gap | Install the rebuilt MSI from an elevated shell and run installed-app state/native UI smoke. |
+| The rebuilt Windows artifacts remain unsigned. | High release blocker | Configure trusted Authenticode signing before user-facing release distribution. |
+
+## Run: mp-installed-0520-state-and-persistence-smoke-20260716-1736
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 17:36-17:37 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Currently installed Program Files app |
+| Resource mode | Installed-app package/auth/avatar/restart-persistence smoke |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind any
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Installed version detection | Pass | Program Files contains one `MergePilot` uninstall entry at `0.5.20`; installed desktop file version is `0.5.20`. |
+| Package shape | Pass | Installed app shape is NSIS, with `mergepilot-desktop.exe`, `mergepilot-daemon.exe`, and `uninstall.exe` present under `C:\Program Files\MergePilot`. Legacy `CICD-Agent` install paths and publisher shortcut paths were absent. |
+| Daemon health | Pass | Installed daemon reported health version `0.5.20`, Azure provider `azure`, deployment `gpt-4o`, API version `2024-08-01-preview`, and endpoint `https://devagentproj-resource.openai.azure.com`. |
+| Config source | Pass | Installed daemon used `C:\Users\15492\.mergepilot\config.toml`; `llmConfigured` was true and Azure deployment availability was true. |
+| Auth and avatar | Pass | `/auth/status` returned `authenticated: true`, name `Zhou Ping`, UPN `Zhou.Ping@totalebizsolutions.com`, and `hasAvatar: true` with a JPEG data URL payload. |
+| Restart persistence | Pass | Test-created Project Link and Chat session were available before and after daemon restart; chat HTTP status was `200`; assistant output was present after restart. |
+| Safety boundary | Pass | The safety smoke intentionally used an occupied port and confirmed the restart helper refused to control an unrelated listener while leaving it alive. |
+| Cleanup | Pass | Test-created chat, Project Link, and temp repo were deleted; ports `8787`, `8798`, `8799`, and `8800` were not left listening; no MergePilot processes remained. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The avatar issue is fixed at the backend/auth contract level for the currently installed app. | Info | Keep `-ProbeAuth -RequireAvatar` in installed-app smoke so screenshot-only avatar checks are not the only proof. |
+| Installed app state and restart persistence are healthy for the installed `0.5.20` build. | Info | Repeat this gate after installing the rebuilt `0.5.21` MSI. |
+| The installed app is not the locally rebuilt `0.5.21` package. | Medium release gap | Install the rebuilt `0.5.21` artifact from an elevated shell before declaring `0.5.21` installed parity. |
+
+## Run: mp-installed-0520-live-vision-retry-20260716-1741
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 17:39-17:42 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Currently installed Program Files daemon |
+| Resource mode | Installed daemon live vision stream smoke |
+| Result | Pass with one cloud retry |
+
+### Commands
+
+```powershell
+.\scripts\windows\packaged-live-vision-smoke.ps1 -SidecarPath "C:\Program Files\MergePilot\mergepilot-daemon.exe" -Port 19041
+.\scripts\windows\packaged-live-vision-smoke.ps1 -SidecarPath "C:\Program Files\MergePilot\mergepilot-daemon.exe" -Port 19042
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| First attempt | External transient | Port `19041` produced an SSE `error` event: `500 The server is overloaded or not ready yet. Please try again later.` No control JSON leaked and cleanup succeeded. |
+| Retry | Pass | Port `19042` returned health version `0.5.20`, produced 24 assistant deltas, and final answer: `The large text is "MP VISION TEST," and the two colored shapes are a blue square and a red circle.` |
+| Vision assertion | Pass | `matchesText: true`, `matchesShapes: true`, `leaksControlJson: false`, `duplicateSentence: false`, and `deletedSessionStatus: 200`. |
+| Cleanup | Pass | After both attempts there were 0 MergePilot processes, 0 listeners on ports `19041`, `19042`, `8787`, `8798`, `8799`, and `8800`, and 0 vision temp repos/data dirs/images left. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Installed Program Files daemon live vision works for the currently installed `0.5.20` app after retrying a transient model-service 500. | Info | Keep retry-aware recording for live AI gates because cloud capacity can fail independently of MergePilot behavior. |
+| The first attempt confirms live AI tests need to preserve SSE error evidence instead of only reporting an empty final response. | Fixed test harness | `packaged-live-vision-smoke.ps1` now includes collected SSE error messages and the SSE log path in failure summaries. |
+| This does not prove rebuilt `0.5.21` installed parity. | Medium release gap | Install rebuilt `0.5.21` MSI and rerun installed state plus live vision gates. |
+
+## Run: mp-windows-powershell-package-smoke-hardening-20260716-1756
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 17:49-17:58 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Current worktree scripts plus installed `0.5.20` daemon and local `0.5.21` packaged sidecar |
+| Resource mode | Test harness compatibility and failure-path verification |
+| Result | Pass after harness fixes |
+
+### Commands
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\packaged-live-vision-smoke.ps1 -SidecarPath "C:\Program Files\MergePilot\mergepilot-daemon.exe" -Port 19045 -ExpectedText "MP VISION TEST EXPECTED FAILURE"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\packaged-sidecar-smoke.ps1 -Port 18888
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Windows PowerShell 5 compatibility discovery | Fixed | Initial controlled run exposed two harness issues: `ProcessStartInfo.ArgumentList` is unavailable in Windows PowerShell 5, and `.Kill($true)` is unavailable in the same runtime. Both were replaced with PS5-compatible `Arguments` and `Kill()` usage. |
+| JSON cleanliness discovery | Fixed | Temporary Git repos now set `core.autocrlf false`, preventing CRLF warnings from polluting JSON stdout in PowerShell 5 harness runs. |
+| Live vision failure path | Pass | A controlled assertion failure returned parseable JSON with `ok: false`, `matchesText: false`, `matchesShapes: true`, `leaksControlJson: false`, `duplicateSentence: false`, and SSE log `output\live-e2e\packaged-live-vision-sse-19045.log`. |
+| Packaged sidecar normal path | Pass | Windows PowerShell 5 run of `packaged-sidecar-smoke.ps1` returned parseable JSON with `ok: true`, health version `0.5.21`, workflow phase `inspect_environment`, and chat HTTP `200`. |
+| Cleanup | Pass | Ports `18888`, `19045`, `8787`, `8798`, `8799`, and `8800` were clean; no sidecar/vision temp repos, data dirs, or images remained. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Package smoke scripts are now compatible with Windows PowerShell 5 as well as newer PowerShell runtimes for their process-launch and cleanup paths. | Info | Keep PS5 invocation in periodic package-smoke checks because Windows users often run scripts from Windows PowerShell. |
+| Live vision failures are now machine-readable when the model returns a wrong answer or SSE error evidence is present. | Info | Future CI wrappers can parse `ok: false` logs instead of scraping red exception text. |
+
+## Run: mp-strict-live-vision-sse-error-gate-20260716-1804
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 18:00-18:05 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Installed `0.5.20` daemon and local `0.5.21` packaged sidecar |
+| Resource mode | Strict live vision SSE cleanliness verification |
+| Result | Pass for strict harness; installed `0.5.20` passed after retry; local `0.5.21` passed cleanly |
+
+### Commands
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\packaged-live-vision-smoke.ps1 -SidecarPath "C:\Program Files\MergePilot\mergepilot-daemon.exe" -Port 19047
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\packaged-live-vision-smoke.ps1 -Port 19048
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\packaged-live-vision-smoke.ps1 -SidecarPath "C:\Program Files\MergePilot\mergepilot-daemon.exe" -Port 19049
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Strict SSE error rule | Fixed | `packaged-live-vision-smoke.ps1` now fails when any SSE `error` event is present, even if the visible answer text matches. JSON includes `hasSseErrors` and `sseErrors`. |
+| Installed `0.5.20` strict attempt | Retry required | Port `19047` returned parseable JSON with `ok: false`, `hasSseErrors: true`, and `sseErrors: read ECONNRESET`. The SSE log contained no assistant deltas before the error. |
+| Local `0.5.21` strict comparison | Pass | Port `19048` against the local packaged sidecar returned `ok: true`, `matchesText: true`, `matchesShapes: true`, `leaksControlJson: false`, `duplicateSentence: false`, `hasSseErrors: false`, and `deletedSessionStatus: 200`. |
+| Installed `0.5.20` strict retry | Pass | Port `19049` returned `ok: true`, `matchesText: true`, `matchesShapes: true`, `leaksControlJson: false`, `duplicateSentence: false`, `hasSseErrors: false`, and `deletedSessionStatus: 200`. |
+| Cleanup | Pass | Ports `18888`, `19045`, `19046`, `19047`, `19048`, and `19049` were clean; no sidecar or vision temp repos/data dirs/images remained. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The previous looser live vision gate could report success even when the SSE stream ended with an error event after or before assistant deltas. | Fixed test harness | Strict SSE error handling is now part of the package live vision smoke. |
+| Installed `0.5.20` can still hit transient `read ECONNRESET`, but strict retry passed cleanly. | Low live stability | Keep retry-aware recording and treat repeated strict failures as a live AI stability issue, not a packaging proof. |
+| Local `0.5.21` packaged sidecar passed the strict gate cleanly. | Info | After elevated installation of `0.5.21`, rerun the same strict gate against Program Files. |
+
+## Run: mp-install-verifier-summary-and-cleanup-hardening-20260716-1808
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 18:06-18:09 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Current worktree install verifier against installed `0.5.20` and local `0.5.21` MSI |
+| Resource mode | Non-installing installed-verifier failure-path smoke |
+| Result | Pass for harness hardening; expected installed-version mismatch |
+
+### Commands
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\install-and-verify-msi-state.ps1 -ExpectedVersion 0.5.21 -MsiPath .\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi -SkipInstall -SkipVision -Port 19051
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Child JSON summaries | Pass | `install-and-verify-msi-state.ps1` now parses child verifier output and includes `verifySummary`; future vision runs also surface `visionSummary`. |
+| Empty port owner handling | Fixed | The verifier no longer calls `Stop-Process -Id @()` when the probe port has no owner, avoiding a Windows PowerShell failure. |
+| Probe daemon cleanup | Fixed | The verifier tracks the daemon process it starts and stops it before returning, including failed verification paths. |
+| Expected mismatch smoke | Pass | Non-installing check returned parseable JSON with `ok: false`, `verifyExitCode: 1`, and first failure `Expected MergePilot version 0.5.21; found 0.5.20.` |
+| Cleanup | Pass | Probe port `19051` was not left listening after the expected failure. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The install verifier is now suitable for elevated `0.5.21` parity runs because it exposes nested verify/vision evidence in the top-level JSON result. | Info | Use the same script after installing the rebuilt MSI as administrator. |
+| The current installed version boundary remains unchanged. | Medium release gap | Program Files still contains installed `0.5.20`; rebuilt `0.5.21` installed parity is unproven until elevated installation. |
+
+## Run: mp-install-verifier-port-owner-safety-20260716-1812
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 18:10-18:13 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Current worktree install verifier |
+| Resource mode | Negative safety regression with temporary non-MergePilot listener |
+| Result | Pass |
+
+### Commands
+
+```powershell
+# Test harness started a temporary powershell.exe TcpListener on port 19052.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\install-and-verify-msi-state.ps1 -ExpectedVersion 0.5.21 -MsiPath .\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi -SkipInstall -SkipVision -Port 19052
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Unexpected port owner refusal | Pass | The verifier returned parseable JSON with `ok: false`, `refusedUnexpectedPortOwner: true`, owner path `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, and the expected daemon path `C:\Program Files\MergePilot\mergepilot-daemon.exe`. |
+| Unrelated process safety | Pass | The temporary listener process stayed alive after the verifier refused to proceed, proving the verifier did not kill an unrelated port owner. |
+| Harness cleanup | Pass | The test harness then stopped the temporary listener it created. Port `19052` and the other recent smoke ports were clean after the run. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| `install-and-verify-msi-state.ps1` no longer stops arbitrary processes on the requested daemon port. | Fixed safety | Keep this guard aligned with the installed restart-persistence safety smoke. |
+| The elevated installer verifier is safer for real developer machines because it only replaces an existing listener when that listener is the installed MergePilot daemon. | Info | Re-run this safety check if the install verifier's startup lifecycle changes. |
+
+## Run: mp-live-app-wrapper-port-owner-safety-20260716-1816
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 18:14-18:17 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Current worktree live-app wrapper |
+| Resource mode | Negative safety regression with fake `/healthz` listener on port `8787` |
+| Result | Pass |
+
+### Commands
+
+```powershell
+# Test harness started a temporary powershell.exe TCP listener on 127.0.0.1:8787
+# returning {"ok":true,"version":"0.0.0"} for /healthz.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon -Grep "__should_not_run__"
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Unexpected daemon replacement refusal | Pass | `run-live-app-e2e.ps1 -RestartMismatchedDaemon` refused to stop the fake health server and emitted `Refusing to stop unexpected process on http://127.0.0.1:8787`. |
+| Unrelated listener safety | Pass | The temporary `powershell.exe` listener stayed alive after refusal, proving the wrapper did not kill an unrelated port owner. |
+| Harness cleanup | Pass | The test harness stopped the temporary listener afterward. Port `8787` was clean after the run. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| `run-live-app-e2e.ps1` no longer treats `-RestartMismatchedDaemon` as permission to stop any process on port `8787`. | Fixed safety | It now only stops repo-owned processes or `mergepilot-daemon.exe`; unrelated owners are refused. |
+| Live-app tests are safer for developer machines and installed-app sessions. | Info | Keep this negative safety pattern when adding new live wrappers. |
+
+## Run: mp-live-app-wrapper-structured-setup-failure-20260716-1822
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 18:20-18:23 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Current worktree live-app wrapper |
+| Resource mode | Negative safety regression with fake `/healthz` listener on port `8787` |
+| Result | Pass |
+
+### Commands
+
+```powershell
+# Test harness started a temporary powershell.exe TCP listener on 127.0.0.1:8787
+# returning {"ok":true,"version":"0.0.0"} for /healthz.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon -Grep "__should_not_run__"
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Structured setup failure | Pass | The wrapper returned parseable JSON with `ok: false`, `setupFailed: true`, `expectedVersion: 0.5.21`, and an error containing `Refusing to stop unexpected process on http://127.0.0.1:8787`. |
+| Exit code | Pass | The wrapper exited with code `1`, making the failure usable by CI or parent harnesses. |
+| Unrelated listener safety | Pass | The temporary `powershell.exe` listener stayed alive after refusal and was cleaned up by the harness. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Live-app wrapper setup failures are now machine-readable. | Fixed observability | Parent scripts and future CI can parse `setupFailed` instead of scraping PowerShell exception text. |
+| The safety refusal remains intact after adding structured setup-failure output. | Fixed safety | Keep both parseability and unrelated-process preservation in future wrapper changes. |
+
+## Run: mp-live-app-approval-denial-feedback-20260716-1830
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 18:29-18:31 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source desktop app and source daemon |
+| Resource mode | Local live-app browser tests with temporary Git repositories |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\run-live-app-e2e.ps1 -Grep "does not stage files when the user rejects a real Chat UI approval|uses approval denial feedback as the next real Chat UI instruction"
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Source daemon lifecycle | Pass | The wrapper started the source daemon, `/healthz` returned version `0.5.21`, and the expected version was `0.5.21`. |
+| Approval rejection safety | Pass | `does not stage files when the user rejects a real Chat UI approval` passed in Chromium against the live frontend and daemon. |
+| Approval denial feedback | Pass | `uses approval denial feedback as the next real Chat UI instruction` passed in Chromium against the live frontend and daemon. |
+| Test count | Pass | Playwright ran 2 tests and both passed. |
+
+### Evidence
+
+| Artifact | Path |
+|---|---|
+| Playwright log | `output\live-e2e\live-app-e2e-20260716-182909.log` |
+| Daemon stdout log | `output\live-e2e\live-app-source-daemon-20260716-182909.log` |
+| Daemon stderr log | `output\live-e2e\live-app-source-daemon-20260716-182909.err.log` |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The simplified approval card behavior is verified through the real browser UI and source daemon, not only mocked component tests. | Fixed confidence gap | Keep this local live-app subset as the regression gate for approval denial and denial-feedback behavior. |
+| This run does not touch real Azure DevOps resources. | Info | Live ADO approval flows remain covered by separate gated tests. |
+
+## Run: mp-installed-v0520-smoke-reprobe-20260716-1834
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 18:33-18:35 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Installed Program Files app |
+| Resource mode | Local installed-app smoke with temporary daemon ports |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Installed version and bundle shape | Pass | Registry has one `MergePilot` uninstall entry at `0.5.20`; installed desktop bundle kind is `nsis`; `uninstall.exe` is present. |
+| Legacy cleanup | Pass | `C:\Program Files\CICD-Agent` and the old publisher shortcut directory are absent; the current MergePilot shortcut exists. |
+| Daemon health and model config | Pass | Probe daemon reported version `0.5.20`, Azure provider, deployment `gpt-4o`, API version `2024-08-01-preview`, endpoint `https://devagentproj-resource.openai.azure.com`, and config source `C:\Users\15492\.mergepilot\config.toml`. |
+| Auth and avatar | Pass | `/auth/status` reported authenticated user `Zhou Ping`, UPN `Zhou.Ping@totalebizsolutions.com`, `hasAvatar: true`, and avatar data URL length `19339`. |
+| Restart persistence | Pass | Temporary Project Link and chat session survived daemon restart; chat HTTP status was `200`; assistant content existed before and after restart. |
+| Lifecycle safety | Pass | Safety smoke refused to control an unrelated listener on port `8800`, left it alive for harness cleanup, and returned `containsExpectedRefusal: true`. |
+| Cleanup | Pass | Package probe, persistence, and safety ports were closed after the run; temporary chat, Project Link, and repo were deleted. |
+
+### Evidence
+
+| Artifact | Path |
+|---|---|
+| Wrapper result | `run-installed-app-smoke.ps1` stdout |
+| Package/auth log | `output\live-e2e\installed-app-package-state-20260716-183331.log` |
+| Persistence log | `output\live-e2e\installed-app-persistence-20260716-183331.log` |
+| Safety log | `output\live-e2e\installed-app-safety-20260716-183331.log` |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The currently installed app remains `0.5.20`, not the current worktree/package version `0.5.21`. | Release parity gap | Install rebuilt `0.5.21` from an elevated shell before claiming installed parity for current source. |
+| The installed app's identity/avatar, local model config, cloud-session flags, restart persistence, and safety boundaries are still healthy. | Pass | Keep this wrapper as the repeatable installed-app smoke after every installer change. |
+
+## Run: mp-live-azure-ado-reprobe-20260716-1838
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 18:36-18:39 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Current worktree core, daemon, and source app |
+| Resource mode | Non-destructive live Azure and Azure DevOps probes |
+| Result | Pass as diagnostic; Azure data-plane access remains partial |
+
+### Commands
+
+```powershell
+$env:MERGEPILOT_E2E_LIVE_AZURE='1'
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAzurePermissions.test.ts
+
+$env:MERGEPILOT_E2E_LIVE_ADO='1'
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAdoDiscovery.test.ts test/liveAdoPipeline.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts
+
+.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -Grep "inspects ClaimBot_API pipeline #117 failure evidence through normal Chat input"
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Azure account | Pass | Azure CLI user is `Zhou.Ping@totalebizsolutions.com`; tenant is `1f432b2e-9e7a-4aa0-ace2-53af62d309f6`. The active CLI subscription shown by `az account show` is `TeBS-Internal Azure Bot`, while the probes explicitly target subscription `a99512b0-3dc5-476f-8f43-d7db40fbc923`. |
+| Storage ARM | Pass | `devagentstorage001` ARM read succeeded. |
+| Storage Table list | Pass | Table list succeeded and returned `CicdAgentProfiles`. |
+| Storage Table entity query | Partial | Entity query failed with missing Storage Table data-plane permissions. Remediation remains `Storage Table Data Reader` or `Storage Table Data Contributor` on the target table/account. |
+| Cosmos ARM and database list | Pass | `devagentcosmos001` ARM read and SQL database list for `cicd-agent` succeeded. |
+| Cosmos SQL role assignments | Partial | No Cosmos SQL data-plane role assignments were returned. Remediation remains Cosmos DB Built-in Data Contributor scoped to `devagentcosmos001/cicd-agent` where possible. |
+| Key Vault ARM | Pass | `devagentkv001` ARM read succeeded; RBAC authorization is enabled and vault URI is `https://devagentkv001.vault.azure.net/`. |
+| Key Vault secret list | Partial | Secret metadata list failed with `Forbidden`; remediation remains Key Vault Secrets User on `devagentkv001`. |
+| ADO discovery | Pass | Live ADO discovery found project `TeBS-ClaimBot`, repository `ClaimBot_API`, and pipeline `#117 ClaimBot_API`. |
+| ADO pipeline read | Pass | Live pipeline tests listed recent runs and read timeline/log evidence for the latest failed run; destructive queue test was skipped by policy. |
+| ADO PR insight | Pass | Daemon live test inspected a real ClaimBot_API PR without approval or mutation. |
+| Source app live ADO UI | Pass | Source app/browser test inspected ClaimBot_API pipeline `#117` failure evidence through normal Chat input. |
+
+### Evidence
+
+| Artifact | Path |
+|---|---|
+| Azure permission probe | `output\live-e2e\live-azure-permissions-reprobe-20260716-1836.log` |
+| ADO core discovery/pipeline log | `output\live-e2e\live-ado-core-reprobe-20260716-1838.log` |
+| ADO daemon PR insight log | `output\live-e2e\live-ado-pr-insight-reprobe-20260716-1838.log` |
+| Source app live ADO Playwright log | `output\live-e2e\live-app-e2e-20260716-183740.log` |
+| Source app live ADO daemon stdout log | `output\live-e2e\live-app-source-daemon-20260716-183740.log` |
+| Source app live ADO daemon stderr log | `output\live-e2e\live-app-source-daemon-20260716-183740.err.log` |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Azure DevOps read-only integration for the ClaimBot_API project, PR insight, and pipeline failure evidence is currently healthy. | Pass | Keep destructive pipeline queue/cleanup tests gated separately. |
+| Azure cloud data-plane persistence remains permission-blocked for Table entity query, Cosmos SQL data roles, and Key Vault secret metadata. | External permission gap | Grant the documented RBAC/data-plane roles before claiming cloud persistence and Key Vault secret access complete. |
+| The app-level ADO pipeline insight path is verified through the real browser UI and source daemon, not only lower-level API tests. | Pass | Keep `run-live-app-e2e.ps1 -LiveAdo` as the app-level live ADO smoke. |
+
+## Run: mp-live-app-ado-pipeline-approval-prep-20260716-1841
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 18:40-18:42 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Source desktop app and source daemon |
+| Resource mode | Non-destructive live Azure DevOps browser tests |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -Grep "prepares ClaimBot_API pipeline #117 rerun approval from failure evidence suggestions|prepares ClaimBot_API pipeline #117 approval through the real Chat UI"
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Source daemon lifecycle | Pass | The wrapper started the source daemon, `/healthz` returned version `0.5.21`, and the expected version was `0.5.21`. |
+| Live ADO mode | Pass | The wrapper ran with `liveAdo: true` and `destructive: false`. |
+| Failure-evidence rerun approval | Pass | `prepares ClaimBot_API pipeline #117 rerun approval from failure evidence suggestions` passed. The test verifies the approval is for pipeline `#117`, not `#108`, and does not queue a new run when destructive mode is disabled. |
+| Direct pipeline trigger approval | Pass | `prepares ClaimBot_API pipeline #117 approval through the real Chat UI` passed. The test verifies the approval is for pipeline `#117`, not `#108`, and cancels instead of triggering when destructive mode is disabled. |
+| Test count | Pass | Playwright ran 2 tests and both passed. |
+
+### Evidence
+
+| Artifact | Path |
+|---|---|
+| Playwright log | `output\live-e2e\live-app-e2e-20260716-184037.log` |
+| Daemon stdout log | `output\live-e2e\live-app-source-daemon-20260716-184037.log` |
+| Daemon stderr log | `output\live-e2e\live-app-source-daemon-20260716-184037.err.log` |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The app prepares Azure DevOps pipeline trigger approvals for the correct ClaimBot_API pipeline `#117` from both failure-evidence suggestions and direct pipeline UI actions. | Pass | Keep this non-destructive live ADO smoke as a guard against accidentally targeting unrelated pipelines. |
+| Pipeline queue/trigger execution remains intentionally unproven in this run. | Gated destructive gap | Run with `-Destructive` only when hosted capacity or a self-hosted pool is ready and cleanup/reporting is planned. |
+
+## Run: mp-mocked-browser-wrapper-spec-alias-20260716-1855
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 18:52-18:55 +08:00 |
+| Runtime | Local mocked Playwright browser wrapper |
+| Resource mode | Non-live, non-destructive |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "keeps cached pipeline rows visible while discovery refreshes"
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/review-queue.spec.ts -Grep "selected queue lane semantic"
+$errors=$null; $tokens=$null; [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path scripts\windows\run-mocked-browser-e2e.ps1), [ref]$tokens, [ref]$errors)
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| `-Spec` alias | Pass | The wrapper accepted `-Spec` as an alias for `-TestPath` and ran only the targeted `route-cache.spec.ts` test: `1 passed`. |
+| Existing `-TestPath` parameter | Pass | The original parameter still scoped the run to `review-queue.spec.ts` and ran only the selected-lane test: `1 passed`. |
+| Script parse | Pass | PowerShell parser reported no syntax errors after adding `[CmdletBinding()]` and `Spec`/`Path` aliases. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| A mistyped `-Spec` argument previously behaved like an unscoped wrapper run, which could accidentally trigger the full mocked browser gate. | Harness defect fixed | Prefer `-TestPath` in docs, but `-Spec` is now a supported alias for focused runs. |
+| Strict parameter binding now makes future unsupported wrapper arguments fail earlier. | Pass | Keep `[CmdletBinding()]` on local harness scripts that are meant to be called by hand. |
+
+## Run: mp-installed-0520-shape-reprobe-20260716-1900
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 18:58-19:01 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Machine | `zhoulaptop` |
+| Runtime | Already-installed Program Files app |
+| Resource mode | Local installed-app smoke, non-live/non-destructive |
+| Result | Pass for actual NSIS install shape; expected MSI shape failed as designed |
+
+### Commands
+
+```powershell
+.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind msi
+.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| MSI-shape expectation | Expected failure | The installed desktop app is version `0.5.20`, but the package-state verifier detected `actualDesktopBundleKind: nsis` and `uninstall.exe`; registry `UninstallString` points to `C:\Program Files\MergePilot\uninstall.exe`, with no `WindowsInstaller` value. |
+| Actual NSIS-shape installed smoke | Pass | The same installed app passed package-state, restart-persistence, and lifecycle-safety checks when expected as `nsis`; all probe ports were closed after the run. |
+| Daemon health | Pass | Installed daemon probe returned version `0.5.20`, Azure provider, deployment `gpt-4o`, API version `2024-08-01-preview`, endpoint `https://devagentproj-resource.openai.azure.com`, and config source `C:\Users\15492\.mergepilot\config.toml`. |
+| Auth/avatar | Pass | `/auth/status` returned authenticated user `Zhou Ping`, UPN `Zhou.Ping@totalebizsolutions.com`, `hasAvatar: true`, avatar length `19339`, and JPEG data URL prefix. |
+| Restart persistence | Pass | Temporary Project Link and chat session survived daemon restart; assistant content was available before and after restart; cleanup removed temporary resources. |
+| Lifecycle safety | Pass | The safety smoke refused to control an unrelated listener on port `8800`, left it alive for harness cleanup, and reported `containsExpectedRefusal: true`. |
+
+### Evidence
+
+| Artifact | Path |
+|---|---|
+| MSI-shape failed package-state log | `output\live-e2e\installed-app-package-state-20260716-185847.log` |
+| NSIS-shape passed package-state log | `output\live-e2e\installed-app-package-state-20260716-190020.log` |
+| NSIS-shape persistence log | `output\live-e2e\installed-app-persistence-20260716-190020.log` |
+| NSIS-shape safety log | `output\live-e2e\installed-app-safety-20260716-190020.log` |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The currently installed `0.5.20` Program Files app is healthy for auth/avatar, Azure model config, persistence, and lifecycle safety. | Pass | Keep this as proof that the visible avatar issue is resolved in the current installed state. |
+| The current Program Files install is not MSI-shaped even if the operator believed an MSI was installed. | Install source mismatch | For MSI parity, install rebuilt `MergePilot_0.5.21_x64_en-US.msi` from an elevated shell, then rerun `run-installed-app-smoke.ps1 -ExpectedVersion 0.5.21 -ExpectedDesktopBundleKind msi`. |
+| The installed daemon executable reports Node.js file metadata but daemon `/healthz` correctly reports the product version. | Expected packaging detail | Prefer daemon `/healthz.version` over Windows file metadata for daemon product-version assertions. |
+
+## Run: mp-route-cache-full-wrapper-rerun-20260716-1902
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:02 +08:00 |
+| Runtime | Local mocked Playwright browser wrapper |
+| Resource mode | Non-live, non-destructive |
+| Result | Pass |
+
+### Command
+
+```powershell
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Route-cache suite | Pass | 26/26 Chromium tests passed through the serialized mocked browser wrapper. |
+| New Chat prompt stability | Pass | Covered stable welcome suggestions before index status resolves, no prompt reuse after Project Link switch, and no skeleton pulses on warm return. |
+| Pull Requests warm-route behavior | Pass | Covered cached rows during refresh/status-filter changes, no premature empty state before Project Links resolve, readable insight scope, duplicate PR id isolation, and warm-return failure visibility. |
+| Review Queue warm-route behavior | Pass | Covered cached decisions during refresh, no premature empty state, no stale decisions after Project Link switch, warning clearing, and findings-panel cleanup. |
+| Pipelines warm-route and AI analysis behavior | Pass | Covered cached rows during discovery refresh, no premature empty state, pipeline action errors in the detail panel, Markdown AI analysis rendering, evidence preservation, and detail-panel cleanup after filtering. |
+| Activity operational history | Pass | Covered cached runs during refresh, scoped operational-history sections, and collapsed checkpoint raw output by default. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The latest source UI route-switching/cache behavior is green in the mocked browser harness. | Pass | Use this as the fast non-mutating gate for the route flicker issues reported from the installed app. |
+| Installed-native route-switching parity remains distinct from mocked browser proof. | Remaining evidence gap | After installing rebuilt `0.5.21` MSI, rerun installed-app smoke and native/window smoke to prove Program Files parity. |
+
+## Run: mp-desktop-source-gate-after-installed-reprobe-20260716-1904
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:03-19:05 +08:00 |
+| Runtime | Desktop package source verification |
+| Resource mode | Local, non-live, non-destructive |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+$errors=$null; $tokens=$null; [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path scripts\windows\run-installed-app-smoke.ps1), [ref]$tokens, [ref]$errors)
+$errors=$null; $tokens=$null; [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path scripts\windows\run-live-app-e2e.ps1), [ref]$tokens, [ref]$errors)
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `tsc -p tsconfig.json --noEmit` completed successfully for `@mergepilot/desktop@0.5.21`. |
+| Desktop Vitest suite | Pass | 74 test files passed; 365 tests passed. |
+| Installed-app wrapper parse | Pass | PowerShell parser reported no syntax errors for `scripts\windows\run-installed-app-smoke.ps1`. |
+| Live-app wrapper parse | Pass | PowerShell parser reported no syntax errors for `scripts\windows\run-live-app-e2e.ps1`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current desktop source remains green after the route-cache and installed-app reprobe documentation updates. | Pass | Keep this as the component/typecheck baseline before the next package/install pass. |
+| The two local smoke wrappers used for installed-app and source live-app verification parse successfully. | Pass | Continue using wrappers instead of raw Playwright or ad hoc daemon lifecycle commands. |
+
+## Run: mp-core-daemon-source-gate-after-ui-reprobe-20260716-1907
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:05-19:08 +08:00 |
+| Runtime | Core and daemon package source verification |
+| Resource mode | Local, non-live, non-destructive |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Core typecheck | Pass | `tsc -p tsconfig.json --noEmit` completed successfully for `@mergepilot/core@0.5.21`. |
+| Daemon typecheck | Pass | `tsc -p tsconfig.json --noEmit` completed successfully for `@mergepilot/daemon@0.5.21`. |
+| Core Vitest suite | Pass with warning | 47 test files passed, 4 live/destructive-gated files skipped; 250 tests passed, 6 skipped. Node emitted `DEP0040` `punycode` deprecation warnings. |
+| Daemon Vitest suite | Pass with warning | 45 test files passed, 1 live/destructive-gated file skipped; 258 tests passed, 1 skipped. Node emitted `DEP0040` `punycode` deprecation warnings. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Shared Azure/ADO, planner, Git option, PR insight, review, and pipeline logic remain green after the current UI/cache/package-smoke changes. | Pass | Keep core tests as the shared-business-logic baseline before staging. |
+| Daemon chat/workflow/API routes remain green, including commit/push/recovery workflows, read-only Git routing, ADO workflow routes, image chat, and Project Link routes. | Pass | Keep daemon tests as the API/workflow baseline before packaging. |
+| `punycode` deprecation warnings are still present but did not fail the gate. | Low | Track separately as dependency/runtime cleanup, not as a blocker for this UX stabilization pass. |
+
+## Run: mp-current-dirty-tree-build-and-script-parse-20260716-1910
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:09-19:11 +08:00 |
+| Runtime | Current dirty-tree build and script syntax verification |
+| Resource mode | Local, non-live, non-destructive |
+| Result | Pass with existing bundle-size warning |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
+git diff --check
+# PowerShell parser pass over touched Windows smoke/signing/verification scripts.
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Core build | Pass | `@mergepilot/core@0.5.21 build` completed with `tsc -p tsconfig.json`. |
+| Daemon build | Pass | `@mergepilot/daemon@0.5.21 build` completed with `tsc -p tsconfig.json`. |
+| Desktop production build | Pass with warning | `@mergepilot/desktop@0.5.21 build` completed; Vite transformed 2705 modules. Existing large-chunk warnings remain for optional heavy renderer chunks such as `mermaid.core`, `wardley`, and `vendor-codemirror`. Main `index` chunk is about `281.57 kB`. |
+| Dirty-tree scope check | Pass | `git diff --check` reported no whitespace errors; it only emitted LF/CRLF normalization warnings. |
+| Windows script parse | Pass | PowerShell parser reported no syntax errors for the touched install/package/live-app/signing wrappers and verifiers. |
+
+### Script Parse Coverage
+
+| Script | Result |
+|---|---|
+| `scripts/windows/install-and-verify-msi-state.ps1` | Pass |
+| `scripts/windows/installed-restart-persistence-smoke.ps1` | Pass |
+| `scripts/windows/installed-restart-persistence-safety-smoke.ps1` | Pass |
+| `scripts/windows/packaged-live-vision-smoke.ps1` | Pass |
+| `scripts/windows/packaged-sidecar-smoke.ps1` | Pass |
+| `scripts/windows/run-installed-app-smoke.ps1` | Pass |
+| `scripts/windows/run-live-app-e2e.ps1` | Pass |
+| `scripts/windows/run-mocked-browser-e2e.ps1` | Pass |
+| `scripts/windows/sign-windows-release-artifacts.ps1` | Pass |
+| `scripts/windows/verify-installed-msi-state.ps1` | Pass |
+| `scripts/windows/verify-installed-windows-package-state.ps1` | Pass |
+| `scripts/windows/verify-windows-artifact-signatures.ps1` | Pass |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current dirty tree still builds across core, daemon, and desktop after the UI, route-cache, package-smoke, and verification-script changes. | Pass | Keep this as the current build baseline before staging or packaging. |
+| Large optional renderer chunks remain, but the main desktop entry is no longer the bundle-size concern. | Low | Continue optional renderer code splitting later; not a blocker for this stabilization pass. |
+| The changed Windows smoke/signing scripts are syntactically valid. | Pass | Functional MSI/signing proof still requires installing/signing the rebuilt package artifacts. |
+
+## Run: mp-package-smoke-and-signature-reprobe-20260716-1914
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:14 +08:00 |
+| Runtime | Current local `0.5.21` Windows package artifacts |
+| Resource mode | Non-installing package smoke; signature check only |
+| Result | Package smoke passed; signature verification failed as expected |
+
+### Commands
+
+```powershell
+.\scripts\windows\packaged-sidecar-smoke.ps1 -Port 18887
+.\scripts\windows\packaged-live-vision-smoke.ps1 -Port 18941 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi"
+.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.21
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Packaged sidecar smoke | Pass | Sidecar reported health version `0.5.21`; index refresh saw 1 file and indexed 1 file / 2 chunks; workflow phase was `inspect_environment`; `/chat` returned HTTP `200`. |
+| MSI-extracted live vision smoke | Pass | MSI administrative extraction found `mergepilot-daemon.exe`; extracted daemon reported health version `0.5.21`; image chat produced 24 assistant deltas and final answer: `The large text is "MP VISION TEST," and the two colored shapes are a blue square and a red circle.` |
+| SSE cleanliness | Pass | Live vision smoke reported `matchesText: true`, `matchesShapes: true`, `leaksControlJson: false`, `duplicateSentence: false`, and `hasSseErrors: false`. SSE log: `output\live-e2e\packaged-live-vision-sse-18941.log`. |
+| NSIS signature | Expected failure | `MergePilot_0.5.21_x64-setup.exe` exists and reports product/file version `0.5.21`, but Authenticode status is `NotSigned`. |
+| MSI signature | Expected failure | `MergePilot_0.5.21_x64_en-US.msi` exists, but Authenticode status is `NotSigned`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current local `0.5.21` package runtime is healthy without installing it system-wide. | Pass | Keep packaged sidecar and MSI-extracted live vision smoke as pre-install package gates. |
+| The current Windows artifacts are not trusted/signed. | Release blocker | Configure a trusted Authenticode signing certificate/secrets and rerun `verify-windows-artifact-signatures.ps1`; this is the direct remaining cause of Windows unknown-publisher prompts. |
+| MSI installation parity is still unproven. | Remaining evidence gap | Install the rebuilt `0.5.21` MSI from an elevated shell, then rerun `run-installed-app-smoke.ps1 -ExpectedVersion 0.5.21 -ExpectedDesktopBundleKind msi`. |
+
+## Run: mp-broader-mocked-ui-smoke-after-package-reprobe-20260716-1918
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:18 +08:00 |
+| Runtime | Local mocked Playwright browser wrapper |
+| Resource mode | Non-live, non-destructive |
+| Result | Pass |
+
+### Command
+
+```powershell
+.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked" -Project chromium -Workers 1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Broader mocked UI smoke | Pass | 37/37 Chromium tests passed through the serialized wrapper. |
+| Chat workflow shell and structured controls | Pass | Covered project-linked Chat viewport, PR insight controls, Pipeline controls, pipeline setup guidance, read-only PR/pipeline prompts without approval UI, and project-context source references. |
+| Review Queue | Pass | Covered Recent activity panel persistence, semantic selected lane styling, review-run evidence, and acknowledged disposition recording. |
+| Route/cache behavior | Pass | Covered cached Project Links, New Chat prompt stability, PR/Review Queue/Pipelines/Activity warm-route behavior, Pipeline AI analysis Markdown/error states, and Activity raw-output folding. |
+| Settings permissions | Pass | Covered missing Key Vault permission messaging and switching built-in model secrets to local env. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The broader non-live UI smoke remains green after the source, build, package-smoke, and installed-app reprobes. | Pass | Keep this as the wider local UI gate before staging. |
+| This gate does not prove native installed-window behavior or live ADO mutation. | Remaining evidence gap | Keep installed MSI parity and destructive/live ADO gates separate. |
+
+## Run: mp-live-readonly-external-reprobe-20260716-1915
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:14-19:16 +08:00 |
+| Operator/account | `Zhou.Ping@totalebizsolutions.com` |
+| Runtime | Azure CLI plus live ADO/Core/Daemon gated tests |
+| Resource mode | Live read-only; destructive ADO disabled |
+| Result | ADO read paths pass; Azure data-plane remains partial |
+
+### Commands
+
+```powershell
+$env:MERGEPILOT_E2E_LIVE_AZURE='1'
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAzurePermissions.test.ts
+
+$env:MERGEPILOT_E2E_LIVE_ADO='1'
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAdoDiscovery.test.ts test/liveAdoPipeline.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts
+```
+
+### Azure Permission Probe
+
+| Area | Result | Detail |
+|---|---|---|
+| Azure account | Pass | CLI user is `Zhou.Ping@totalebizsolutions.com`; current CLI default subscription is `TeBS-Internal Azure Bot`, while probes explicitly target subscription `a99512b0-3dc5-476f-8f43-d7db40fbc923`. |
+| Storage account ARM | Pass | `devagentstorage001` visible as `StorageV2` in `eastus`. |
+| Storage Table list | Pass | Table list returned `CicdAgentProfiles`. |
+| Storage Table entity query | Fail | Missing Storage Table data-plane permission; probe recommends Storage Table Data Reader/Contributor on table `CicdAgentProfiles`. |
+| Cosmos account ARM | Pass | `devagentcosmos001` visible with endpoint `https://devagentcosmos001.documents.azure.com:443/`. |
+| Cosmos SQL database list | Pass | Database list includes `cicd-agent`. |
+| Cosmos SQL role assignments | Fail | No Cosmos SQL data-plane role assignments were returned; probe recommends Cosmos DB Built-in Data Contributor scoped to `devagentcosmos001/cicd-agent` where possible. |
+| Key Vault ARM | Pass | `devagentkv001` visible with RBAC authorization enabled and vault URI `https://devagentkv001.vault.azure.net/`. |
+| Key Vault secret list | Fail | `Forbidden`; caller lacks `Microsoft.KeyVault/vaults/secrets/readMetadata/action`; probe recommends Key Vault Secrets User on `devagentkv001`. |
+
+### ADO Read-Only Probe
+
+| Gate | Result | Notes |
+|---|---|---|
+| Live ADO discovery | Pass | Discovered project `TeBS-ClaimBot`, repository `ClaimBot_API`, and repository-filtered pipeline `#117 ClaimBot_API`. |
+| Live ADO pipeline read | Pass | Listed recent ClaimBot_API pipeline runs and read timeline/log evidence for the latest failed pipeline run. Destructive queue test stayed skipped. |
+| Live daemon PR insight | Pass with warning | `test/liveAdoPrInsight.test.ts` inspected a real ClaimBot_API pull request without approval or mutation. Node emitted the existing `DEP0040` `punycode` deprecation warning. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Live ADO read-only integration for ClaimBot_API remains healthy with the current account. | Pass | Keep live ADO mutation/queue tests gated separately. |
+| Azure resource ARM/list access is available, but true data-plane persistence/secrets are still blocked. | External permission gap | Grant Storage Table Data Reader/Contributor, Cosmos DB Built-in Data Contributor, and Key Vault Secrets User before claiming cloud persistence/Key Vault secret success complete. |
+| The live probes did not mutate ADO resources or cloud data. | Pass | Keep destructive tests opt-in with explicit `MERGEPILOT_E2E_DESTRUCTIVE=1`. |
+
+## Run: mp-live-app-non-ado-wrapper-rerun-20260716-1916
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:16-19:22 +08:00 |
+| Runtime | Source daemon `0.5.21` started by `run-live-app-e2e.ps1` |
+| Resource mode | Live local app workflow; non-ADO; non-destructive |
+| Result | Pass |
+
+### Command
+
+```powershell
+.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Wrapper setup | Pass | Wrapper started a source daemon on `http://127.0.0.1:8787`; `/healthz` reported daemon version `0.5.21`, matching the expected version. |
+| Live app business suite | Pass | Playwright ran 30 tests with 26 passed and 4 skipped. Skipped tests remained behind live/destructive policy gates. |
+| ADO mutation safety | Pass | Wrapper result reported `liveAdo: false` and `destructive: false`; no ADO queue/trigger mutation was attempted. |
+| Evidence logs | Pass | Playwright log: `output\live-e2e\live-app-e2e-20260716-191636.log`. Daemon logs: `output\live-e2e\live-app-source-daemon-20260716-191636.log` and `output\live-e2e\live-app-source-daemon-20260716-191636.err.log`. |
+| Cleanup | Pass | Ports `8787`, `8798`, `8799`, and `8800` were no longer listening after the run. Temp directories matching `mergepilot-live-*`, `mp-live-*`, `mergepilot-daemon-live-pr-insight-*`, `mp-installed-persist-*`, `mp-persist-*`, and `mp-projectlink-restart-*` were absent. |
+| Runtime warnings | Informational | Daemon stderr only showed the existing Node `DEP0040` `punycode` deprecation warning. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The source live-app workflow gate remains healthy after route-cache, chat transcript, PR, Pipeline, Review Queue, Activity, and package-smoke stabilization. | Pass | Keep this wrapper as the broad local live-app gate before staging. |
+| This run intentionally avoided live ADO mutation and destructive operations. | Remaining evidence gap | Continue to use separate live ADO/destructive gates for pipeline queue, PR write/update, and cleanup proof. |
+
+## Run: mp-focused-ui-residual-scan-20260716-1926
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:26 +08:00 |
+| Runtime | Current worktree desktop component tests |
+| Resource mode | Non-live; non-destructive |
+| Result | Pass |
+
+### Source Scan
+
+Checked the current UI source for residual strings and presentation states from the installed-app review:
+
+- Pipeline card/header `Unknown` state.
+- Old `AI analysis streaming` label.
+- Pull Request `Preview Insight` action language.
+- Route-level loading placeholders around PRs, Pipelines, Review Queue, Activity, and New Chat.
+- Remaining `whitespace-pre-wrap` usage around analysis text.
+
+No product-code residual was found for Pipeline `AI analysis streaming`, Pipeline synthetic `Unknown` header text, or Pull Request `Preview Insight`. Remaining matches were either tests, generic error/raw-output rendering, markdown rendering internals, or acceptable first-load/inline loading states.
+
+### Command
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pullRequests/PullRequestCard.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx src/pages/taskViewer/CheckpointDetailPanel.test.tsx src/pages/chat/layout/ChatEmptyState.test.tsx src/api/userFacingErrors.test.ts src/api/pullRequests.test.ts
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused desktop component regression | Pass | 6 test files passed with 23 tests. |
+| Pull Request card language | Pass | `PullRequestCard.test.tsx` confirms the card uses `Open insight` and no longer contains `Preview Insight`. |
+| Pipeline card header/date state | Pass | `PipelineRowCard.test.tsx` confirms missing run dates do not render `Unknown`, and markdown analysis content is rendered. |
+| Chat first-load stability | Pass | `ChatEmptyState.test.tsx` covers the welcome empty state without flashing the Project Link setup while links are still loading. |
+| Activity detail raw output behavior | Pass | `CheckpointDetailPanel.test.tsx` keeps raw output collapsed by default. |
+| User-facing API errors | Pass | `userFacingErrors.test.ts` and `pullRequests.test.ts` keep auth/runtime errors readable instead of leaking low-level HTTP/schema text. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The focused residual scan did not find the specific old UI states reported from the installed-app screenshots in current product code. | Pass | Keep the focused tests alongside the broader mocked browser and live-app gates. |
+| This is not a native installed-window proof. | Remaining evidence gap | Fresh elevated install of rebuilt `0.5.21` and native installed smoke remain separate gates. |
+
+## Run: mp-settings-and-route-cache-browser-rerun-20260716-1930
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:28-19:30 +08:00 |
+| Runtime | Current worktree mocked browser E2E wrapper |
+| Resource mode | Non-live; non-destructive |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/settings-permissions.spec.ts -Project chromium -Workers 1
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Settings permissions browser smoke | Pass | 1/1 Chromium test passed. It verified the Settings page explains missing Key Vault permission and can switch built-in model secrets to local env. |
+| Route-cache browser suite | Pass | 26/26 Chromium tests passed. |
+| New Chat stability | Pass | Covered stable welcome suggestions during index-status resolution, no stale prompts after Project Link switch, and no skeleton pulse on warm return. |
+| Pull Requests stability | Pass | Covered cached PRs during refresh/status filter changes, no empty-state flash before Project Links resolve, no stale PRs after Project Link switch, readable insight scope, and duplicate PR ids across Project Links. |
+| Review Queue stability | Pass | Covered cached decisions during refresh, no empty-state flash before Project Links resolve, storage-warning cleanup after Project Link switch, stale-decision prevention, and findings-panel cleanup. |
+| Pipeline stability | Pass | Covered cached pipeline rows during discovery refresh, no empty-state flash before Project Links resolve, action errors in the detail panel, AI-analysis errors without hiding evidence, Markdown-rendered AI analysis with run evidence, and panel close when filtered out. |
+| Activity stability | Pass | Covered cached Activity runs during refresh, operational-history sections, and checkpoint raw output collapsed by default. |
+| Cleanup | Pass | Ports `1420`, `8787`, `8798`, `8799`, and `8800` were not listening after the runs. MergePilot live-test temp directories were absent. Existing generic `playwright-*` temp directories predated this run and were cache/artifact folders from earlier dates. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The browser-level mocked route/cache and Settings permission behavior remains green after the focused residual scan. | Pass | Keep these as the fastest browser proof for the reported route-switching, prompt-stability, and Key Vault/local-env UX issues. |
+| These tests do not prove installed native-window behavior. | Remaining evidence gap | Fresh elevated install of rebuilt `0.5.21` and native installed smoke remain separate gates. |
+
+## Run: mp-installed-0520-nsis-health-reprobe-20260716-1931
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:31-19:32 +08:00 |
+| Runtime | Current Program Files install |
+| Resource mode | Installed app smoke; non-installing; non-destructive |
+| Result | Pass |
+
+### Command
+
+```powershell
+.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Installed package shape | Pass | Program Files contains the current NSIS-shaped install: `mergepilot-desktop.exe`, `mergepilot-daemon.exe`, and `uninstall.exe`; registry uninstall entry is `MergePilot` version `0.5.20`; legacy `CICD-Agent` and old publisher shortcut paths remain absent. |
+| Installed daemon health | Pass | Package probe started `C:\Program Files\MergePilot\mergepilot-daemon.exe` on port `8798`; `/healthz` returned version `0.5.20`, Azure provider, deployment `gpt-4o`, API version `2024-08-01-preview`, endpoint `https://devagentproj-resource.openai.azure.com`, config source `C:\Users\15492\.mergepilot\config.toml`, `cloudProjectLinkStore: true`, `cloudSecrets: false`, and `cloudSessions: true`. |
+| Auth/avatar | Pass | `/auth/status` returned authenticated user `Zhou Ping`, UPN `Zhou.Ping@totalebizsolutions.com`, `hasAvatar: true`, avatar length `19339`, and JPEG data URL prefix. |
+| Restart persistence | Pass | `installed-restart-persistence-smoke.ps1` created a temporary Project Link and chat session, completed a chat request with HTTP `200`, restarted the installed daemon, verified the Project Link/session/assistant response after restart, then deleted the temporary chat, Project Link, repo, and daemon process. |
+| Lifecycle safety | Pass | Safety smoke preserved an unrelated listener on port `8800`, returned the expected refusal, and confirmed the listener remained alive for harness cleanup. |
+| Cleanup | Pass | Ports `8798`, `8799`, and `8800` were closed after the run. Temp directories matching `mp-installed-persist-*`, `mp-persist-*`, `mp-projectlink-restart-*`, `mergepilot-live-*`, and `mp-live-*` were absent. |
+| Evidence logs | Pass | Package log: `output\live-e2e\installed-app-package-state-20260716-193153.log`; persistence log: `output\live-e2e\installed-app-persistence-20260716-193153.log`; safety log: `output\live-e2e\installed-app-safety-20260716-193153.log`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The currently installed Program Files app remains healthy for runtime, auth/avatar, restart persistence, and safety behavior. | Pass | Keep installed smoke as a real-machine regression guard. |
+| This run proves the installed `0.5.20` NSIS-shaped app only. | Remaining evidence gap | Fresh elevated install of rebuilt `0.5.21` MSI and strict MSI parity/native smoke remain separate gates. |
+
+## Run: mp-release-artifact-staleness-guard-20260716-1936
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:36 +08:00 |
+| Runtime | Current worktree release workflow and local package output |
+| Resource mode | Static release/package audit; non-live; non-destructive |
+| Result | Product config clean; release workflow hardened |
+
+### Audit
+
+Scanned product configuration, installer assets, scripts, and package output for stale legacy naming and stale installer risks:
+
+- Product Tauri config is `productName: MergePilot`, version `0.5.21`, identifier `com.mergepilot.desktop`, publisher `Total eBiz Solutions Pte Ltd`, and bundle targets `msi`, `nsis`, and `dmg`.
+- Rust package name is `mergepilot-desktop`; the current release executable is `mergepilot-desktop.exe` with product/file version `0.5.21`.
+- Current bundle outputs include expected `MergePilot_0.5.21_x64-setup.exe` and `MergePilot_0.5.21_x64_en-US.msi`.
+- Legacy `CICD-Agent` / `cicd-agent` references outside generated `target` output are limited to installer cleanup, installed-state verifiers, the historical Cosmos database name `cicd-agent`, and test branch fixture text.
+- Local ignored/generated `apps/desktop/src-tauri/target/release/bundle` still contains old installer files such as `CICD-Agent_0.3.0` and older `MergePilot_0.5.x` artifacts.
+
+### Change
+
+Hardened `.github/workflows/release.yml`:
+
+- Added `Clean stale installer artifacts` before `pnpm --filter @mergepilot/desktop tauri build`.
+- The cleanup removes `apps/desktop/src-tauri/target/release/bundle` so stale installers cannot be uploaded from a dirty bundle directory.
+- Changed `actions/upload-artifact` from `if-no-files-found: warn` to `if-no-files-found: error`, so a release job fails if no installer is produced.
+
+### Verification
+
+| Gate | Result | Notes |
+|---|---|---|
+| Release workflow structure check | Pass | Dependency-free check confirmed the workflow still contains Release metadata, cleanup step, Windows signing step, Windows signature verification step, and strict upload behavior. |
+| Windows release/signing scripts parser check | Pass | PowerShell parser check passed for `sign-windows-release-artifacts.ps1`, `verify-windows-artifact-signatures.ps1`, `install-and-verify-msi-state.ps1`, `verify-installed-msi-state.ps1`, and `verify-installed-windows-package-state.ps1`. |
+| Whitespace check | Pass | `git diff --check` passed for the release workflow and signing verification scripts, with only the existing LF/CRLF warning. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Product config no longer carries old `CICD-Agent` naming in active installer/app metadata. | Pass | Keep legacy references only where they are cleanup or compatibility checks. |
+| Stale local bundle output could have been accidentally uploaded by a broad release glob if a release ran in a dirty bundle directory. | Fixed | Release workflow now cleans the bundle directory before building installers and fails if no installer is produced. |
+| Local generated `target/release/bundle` still contains old ignored installer artifacts. | Informational | They are not removed in this pass; the release workflow cleanup prevents them from contaminating CI release assets. |
+
+## Run: mp-null-session-workflow-schema-regression-20260716-1942
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:40-19:42 +08:00 |
+| Runtime | Current worktree daemon route tests |
+| Resource mode | Source API regression; non-live; non-destructive |
+| Result | Fixed and verified |
+
+### Regression
+
+The installed app previously surfaced `/chat/workflow-action HTTP 400` with `sessionId: Expected string, received null` during a first-run chat request. The current route already tolerated `projectLink: null`, but both `/chat` and `/chat/workflow-action` still used `z.string().optional()` for `sessionId`, which rejects explicit `null`.
+
+### Change
+
+- `/chat` now treats `sessionId: null` as no existing session and creates a new chat session.
+- `/chat/workflow-action` now treats `sessionId: null` as absent, matching the no-link first-run workflow behavior.
+- Added focused regression coverage for a no-link chat request with `sessionId: null` and for a no-link workflow action with `sessionId: null`.
+
+### Verification
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts test/serverBranchWorkflowRoutes.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/api.test.ts src/api/userFacingErrors.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+```
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused daemon regression tests | Pass | 2 files passed, 17 tests passed. Coverage includes the new null-session chat regression and workflow-action regression. |
+| Daemon typecheck | Pass | `tsc -p tsconfig.json --noEmit` completed successfully. |
+| Frontend API regression tests | Pass | 2 files passed, 22 tests passed. Coverage includes client-side omission of `sessionId: null` from `/chat/workflow-action` requests and user-facing workflow error formatting. |
+| Desktop typecheck | Pass | `tsc -p tsconfig.json --noEmit` completed successfully. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Explicit `sessionId: null` no longer causes schema-level HTTP 400 for first-run chat/workflow requests. | Fixed | Keep this focused route regression with future first-run installer smoke. |
+| The desktop API boundary also omits `sessionId: null`, so current clients should not send the stale first-run payload shape even though the daemon now tolerates it. | Pass | Keep both client and daemon coverage as defense-in-depth. |
+
+## Run: mp-post-null-session-broad-smoke-20260716-1948
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:44-19:48 +08:00 |
+| Runtime | Current worktree mocked browser and daemon route tests |
+| Resource mode | Source regression; non-live; non-destructive |
+| Result | Pass |
+
+### Commands
+
+```powershell
+.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked" -Project chromium -Workers 1
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/server.test.ts test/serverBranchWorkflowRoutes.test.ts test/serverReadOnlyGitChatRoutes.test.ts test/serverPushWorkflowRoutes.test.ts test/serverPrWorkflowRoutes.test.ts test/serverPrInsightWorkflowRoutes.test.ts test/serverPrCreationWorkflowRoutes.test.ts test/serverAdoWorkflowRoutes.test.ts
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Broad mocked UI smoke | Pass | 37/37 Chromium tests passed. Coverage includes New Chat prompt stability, Chat project-linked viewport, PR/Pipeline structured controls, Review Queue recent activity and semantic selection, route-cache stale-while-revalidate behavior, Pipeline Markdown AI analysis, Activity raw output folding, and Settings local-env/Key Vault permission UX. |
+| Daemon chat/workflow route suite | Pass with warning | 8 files passed, 41 tests passed. Coverage includes no-link read-only Git chat, branch workflows, push/sync/fetch approvals, PR insight/creation workflows, ADO workflow routing, and the null-session regression inherited from `server.test.ts`/`serverBranchWorkflowRoutes.test.ts`. Node emitted the existing `DEP0040 punycode` deprecation warning. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The null-session fix did not regress the broader mocked UI routes or core daemon chat/workflow route behavior. | Pass | Keep this as post-fix evidence before packaging or staging. |
+| No new functional regression was found in this source-level pass. | Info | External gates remain separate: fresh elevated `0.5.21` installed app smoke, Windows signing, Azure data-plane RBAC, and destructive ADO capacity. |
+
+## Run: mp-post-null-session-build-and-sidecar-smoke-20260716-1951
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:49-19:51 +08:00 |
+| Runtime | Current worktree build outputs and regenerated Windows sidecar |
+| Resource mode | Source/package smoke; non-installing; non-live; non-destructive |
+| Result | Pass with known warnings |
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop run build:sidecar
+.\scripts\windows\packaged-sidecar-smoke.ps1 -Port 18887
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Core build | Pass | `tsc -p tsconfig.json` completed successfully. |
+| Daemon build | Pass | `tsc -p tsconfig.json` completed successfully, so the null-session schema change compiles into daemon output. |
+| Desktop production build | Pass with warning | `tsc` and Vite production build completed after transforming 2705 modules. Vite still reports large optional renderer chunks (`mermaid.core`, `wardley`, `vendor-codemirror`); main `index` chunk remains about `281.57 kB`. |
+| Sidecar build | Pass with warning | `build:sidecar` regenerated `apps/desktop/src-tauri/binaries/mergepilot-daemon-x86_64-pc-windows-msvc.exe` and synced `apps/desktop/src-tauri/target/release/mergepilot-daemon.exe`, both `78,075,645` bytes with UTC timestamp `2026-07-16T11:50:25Z`. pkg emitted existing dynamic MySQL require warnings and Node emitted the existing `DEP0040 punycode` deprecation warning. |
+| Packaged sidecar smoke | Pass | Binary returned `healthVersion: 0.5.21`, indexed 1 file into 2 chunks, completed workflow phase `inspect_environment`, and `/chat` returned HTTP `200`. |
+| Cleanup | Pass | Ports `18887`, `1420`, `8787`, `8798`, `8799`, and `8800` were not listening after the run. No `mergepilot-packaged-sidecar-*`, `mergepilot-live-*`, or `mp-live-*` temp directories remained. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The null-session fix now passes source build gates and is present in the regenerated packaged Windows sidecar binary. | Pass | Keep this sidecar smoke as package-level evidence before a fresh installed-app proof. |
+| The sidecar smoke is non-installing; it does not prove Program Files/MSI install parity. | Remaining evidence gap | Fresh elevated `0.5.21` installed smoke is still needed. |
+
+## Run: mp-fresh-0521-installer-payload-after-null-session-20260716-1957
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:52-19:57 +08:00 |
+| Runtime | Current worktree fresh Tauri Windows bundle output |
+| Resource mode | Non-installing package build and MSI payload smoke; non-live; non-destructive |
+| Result | Package payload pass; signing still fails as expected |
+
+### Commands
+
+```powershell
+$bundle = Resolve-Path -LiteralPath "apps\desktop\src-tauri\target\release\bundle"
+Remove-Item -LiteralPath $bundle.Path -Recurse -Force
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop run tauri:build
+.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi" -Port 18899
+.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.21
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Stale local bundle cleanup | Pass | Confirmed `apps\desktop\src-tauri\target\release\bundle` was inside the workspace, then removed it before packaging so old `MergePilot_0.5.x` and `CICD-Agent_0.3.0` artifacts could not contaminate this build. |
+| Fresh Tauri package build | Pass with known warnings | `tauri:build` regenerated sidecar, desktop app, MSI, and NSIS artifacts for `0.5.21`. pkg emitted existing dynamic MySQL require warnings; Vite emitted existing large optional chunk warnings; Node emitted existing `DEP0040 punycode` warning. |
+| Fresh bundle contents | Pass | Bundle directory now contains only `MergePilot_0.5.21_x64_en-US.msi` and `MergePilot_0.5.21_x64-setup.exe`. |
+| MSI payload smoke | Pass | Administrative extraction found `mergepilot-desktop.exe` and `mergepilot-daemon.exe`; WiX legacy cleanup markers validated; extracted daemon returned `healthVersion: 0.5.21`, indexed 1 file, completed workflow phase `inspect_environment`, and `/chat` returned HTTP `200`. |
+| Artifact signatures | Expected fail | Signature verifier returned `NotSigned` for both MSI and NSIS artifacts. This remains the direct Windows unknown-publisher blocker. |
+| Cleanup | Pass | Ports `18899`, `18887`, `1420`, `8787`, `8798`, `8799`, and `8800` were not listening after the run. No `mergepilot-msi-extract-*`, `mergepilot-packaged-sidecar-*`, `mergepilot-live-*`, or `mp-live-*` temp directories remained. |
+
+### Artifacts
+
+| Artifact | Size | SHA256 |
+|---|---:|---|
+| `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi` | 54,235,136 bytes | `35C8A34D1A911388D6031B3E391CC6186B1CC73D25127B69931D19D6675ED951` |
+| `apps\desktop\src-tauri\target\release\bundle\nsis\MergePilot_0.5.21_x64-setup.exe` | 45,786,800 bytes | `486F7A271DF9B4A58DFF0E243962567BDBEAC0CBA54E674BB5B202890B44200D` |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current null-session/workflow fixes are now present in a fresh local `0.5.21` MSI payload that passes non-installing runtime smoke. | Pass | Use this MSI for the next elevated installed-app parity smoke. |
+| The fresh Windows artifacts are still unsigned. | High | Wire trusted Authenticode signing before release to remove Windows unknown-publisher prompts. |
+
+## Run: mp-msi-payload-explicit-null-session-20260716-2001
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 19:59-20:01 +08:00 |
+| Runtime | Current fresh `0.5.21` MSI payload, extracted daemon |
+| Resource mode | Non-installing package smoke; non-live; non-destructive |
+| Result | Pass |
+
+### Change
+
+Strengthened `scripts\windows\packaged-sidecar-smoke.ps1` so both package runtime calls now explicitly send `sessionId: null`:
+
+- `/chat/workflow-action` with `action: inspect_environment`
+- `/chat` with the fixture repository prompt
+
+Because `packaged-msi-payload-smoke.ps1` delegates to `packaged-sidecar-smoke.ps1` using the daemon extracted from the MSI, the MSI payload smoke now directly covers the installed-app first-run payload shape that previously produced `/chat/workflow-action HTTP 400`.
+
+### Commands
+
+```powershell
+$files = @('scripts\windows\packaged-sidecar-smoke.ps1','scripts\windows\packaged-msi-payload-smoke.ps1')
+foreach ($file in $files) {
+  $tokens=$null; $errors=$null
+  [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$errors) | Out-Null
+  if ($errors.Count -gt 0) { throw "PowerShell parser errors in $file" }
+}
+.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi" -Port 18901
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| PowerShell parser check | Pass | Parser checks passed for `packaged-sidecar-smoke.ps1` and `packaged-msi-payload-smoke.ps1`. |
+| Explicit null-session MSI payload smoke | Pass | Administrative extraction found the MSI daemon; extracted daemon returned `healthVersion: 0.5.21`, indexed 1 file, accepted explicit `sessionId: null` for workflow action and chat, completed workflow phase `inspect_environment`, and `/chat` returned HTTP `200`. |
+| Cleanup | Pass | Ports `18901`, `18899`, `18887`, `1420`, `8787`, `8798`, `8799`, and `8800` were not listening after the run. No `mergepilot-msi-extract-*`, `mergepilot-packaged-sidecar-*`, `mergepilot-live-*`, or `mp-live-*` temp directories remained. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The fresh `0.5.21` MSI payload now has direct package-level regression proof for the explicit `sessionId: null` first-run request shape. | Pass | Keep this strengthened smoke before elevated installed-app parity runs. |
+
+## Run: mp-installed-persistence-null-session-harness-20260716-2003
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 20:01-20:03 +08:00 |
+| Runtime | Current rebuilt release daemon via installed-app persistence harness |
+| Resource mode | Non-installing harness proof; live local daemon; non-destructive |
+| Result | Pass |
+
+### Change
+
+Strengthened `scripts\windows\installed-restart-persistence-smoke.ps1` so installed-app persistence verification now includes:
+
+- `/chat/workflow-action` with explicit `sessionId: null`
+- `/chat` with explicit `sessionId: null`
+- persisted Project Link and chat session verification across a daemon restart
+
+This makes `run-installed-app-smoke.ps1` a direct guard for the first-run null-session regression once a fresh MSI is installed.
+
+### Commands
+
+```powershell
+$files = @(
+  'scripts\windows\installed-restart-persistence-smoke.ps1',
+  'scripts\windows\run-installed-app-smoke.ps1',
+  'scripts\windows\installed-restart-persistence-safety-smoke.ps1',
+  'scripts\windows\packaged-sidecar-smoke.ps1',
+  'scripts\windows\packaged-msi-payload-smoke.ps1'
+)
+foreach ($file in $files) {
+  $tokens=$null; $errors=$null
+  [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$errors) | Out-Null
+  if ($errors.Count -gt 0) { throw "PowerShell parser errors in $file" }
+}
+.\scripts\windows\installed-restart-persistence-smoke.ps1 -InstalledDaemonPath "$(Resolve-Path apps\desktop\src-tauri\target\release\mergepilot-daemon.exe)" -ExpectedVersion 0.5.21 -Port 18905 -ChatTimeoutSec 120
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| PowerShell parser check | Pass | Parser checks passed for installed and packaged smoke scripts. |
+| Installed persistence harness with rebuilt daemon | Pass | The harness auto-started rebuilt `mergepilot-daemon.exe` `0.5.21`, created a temporary Project Link, ran explicit null-session workflow action with HTTP `200` and phase `inspect_environment`, ran explicit null-session chat with HTTP `200`, restarted the daemon, verified the Project Link and chat session remained visible, and deleted temporary resources. |
+| Runtime config | Pass | Health before/after restart reported Azure `gpt-4o`, config source `C:\Users\15492\.mergepilot\config.toml`, `cloudProjectLinkStore: true`, and `cloudSessions: true`. |
+| Cleanup | Pass | Temporary chat, Project Link, repo, and owned daemon were deleted/stopped. Ports `18905`, `18903`, `18901`, `18899`, `18887`, `1420`, `8787`, `8798`, `8799`, and `8800` were not listening afterward; no relevant temp directories remained. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The installed-app persistence harness now verifies both null-session first-run request handling and restart persistence. | Pass | After installing the fresh MSI, run `run-installed-app-smoke.ps1 -ExpectedVersion 0.5.21 -ExpectedDesktopBundleKind msi` for true Program Files parity. |
+
+## Run: mp-continuation-workspace-ux-smoke-20260716-2010
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 20:09-20:10 +08:00 |
+| Runtime | Mocked Chromium browser gate against the current worktree |
+| Resource mode | Non-live; non-destructive |
+| Result | Pass |
+
+### Purpose
+
+Continuation reprobe for the active Workspace UX stabilization goal after confirming the installed-harness null-session record existed and adding its missing business-report summary row.
+
+### Commands
+
+```powershell
+.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked" -Project chromium -Workers 1
+git diff --check -- docs\business-test-execution-report.md docs\live-e2e-test-records.md scripts\windows\installed-restart-persistence-smoke.ps1 scripts\windows\packaged-sidecar-smoke.ps1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Broader mocked browser smoke | Pass | 37/37 Chromium tests passed. Coverage includes Chat layout and structured workflow controls, PR insight controls, Pipeline controls/setup/read-only inspection, project-context source references, Review Queue activity and semantic lane selection, New Chat prompt/cache stability, PR/Review Queue/Pipeline/Activity warm-route cache behavior, Pipeline AI analysis Markdown/evidence states, Activity raw-output folding, and Settings Key Vault/local-env permission behavior. |
+| Diff check | Pass with warnings | `git diff --check` emitted only LF/CRLF conversion warnings for touched docs/scripts; no whitespace errors were reported. |
+| Progress record consistency | Fixed | Added the missing `INSTALLED-HARNESS / NULL-SESSION` row to `docs/business-test-execution-report.md`, linking to `mp-installed-persistence-null-session-harness-20260716-2003`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| No new mocked-browser regression was found in this continuation pass. | Pass | Keep fresh installed `0.5.21` MSI parity, Authenticode signing, Azure data-plane RBAC, and destructive ADO/pipeline gates separate. |
+
+## Run: mp-installed-smoke-legacy-null-session-compat-20260716-2018
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 20:12-20:18 +08:00 |
+| Runtime | Current Program Files `0.5.20` NSIS install plus rebuilt release daemon `0.5.21` |
+| Resource mode | Live local installed daemon probes; non-destructive |
+| Result | Pass after harness compatibility fix |
+
+### Discovery
+
+The first rerun of:
+
+```powershell
+.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis
+```
+
+failed in the persistence phase because the strengthened installed persistence smoke sent `sessionId: null` to the currently installed `0.5.20` `/chat/workflow-action` route. The installed daemon returned the known pre-fix validation error:
+
+```text
+{"error":{"formErrors":[],"fieldErrors":{"sessionId":["Expected string, received null"]}}}
+```
+
+This confirmed the installed `0.5.20` app still contains the old null-session behavior, while current source and rebuilt `0.5.21` already fix it.
+
+### Change
+
+Updated the smoke harness so the meanings stay separate:
+
+- `installed-restart-persistence-smoke.ps1` now accepts `-SkipNullSessionProbe`.
+- `run-installed-app-smoke.ps1` automatically passes `-SkipNullSessionProbe` when `-ExpectedVersion` is lower than `0.5.21`.
+- Default/current-version smoke still keeps the explicit null-session probe enabled for `0.5.21+`.
+
+### Commands
+
+```powershell
+$files = @(
+  'scripts\windows\installed-restart-persistence-smoke.ps1',
+  'scripts\windows\run-installed-app-smoke.ps1',
+  'scripts\windows\installed-restart-persistence-safety-smoke.ps1'
+)
+foreach ($file in $files) {
+  $tokens=$null; $errors=$null
+  [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$errors) | Out-Null
+  if ($errors.Count -gt 0) { throw "PowerShell parser errors in $file" }
+}
+.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis -PackageProbePort 8798 -PersistencePort 8799 -SafetyPort 8800
+.\scripts\windows\installed-restart-persistence-smoke.ps1 -InstalledDaemonPath "$(Resolve-Path apps\desktop\src-tauri\target\release\mergepilot-daemon.exe)" -ExpectedVersion 0.5.21 -Port 18907 -ChatTimeoutSec 120
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| PowerShell parser check | Pass | Parser checks passed for the installed smoke wrapper, persistence smoke, and safety smoke scripts. |
+| Installed `0.5.20` NSIS smoke | Pass | Package shape, legacy cleanup, daemon health, authenticated user/avatar, restart persistence, lifecycle safety, and port cleanup all passed. Persistence log reported `nullSessionProbeEnabled: false`, chat HTTP `200`, terminal SSE `done`, Project Link/chat persistence before/after restart, and cleanup of the temporary chat, Project Link, repo, and owned daemon. |
+| Rebuilt `0.5.21` null-session harness | Pass | Non-installing persistence smoke against rebuilt `apps\desktop\src-tauri\target\release\mergepilot-daemon.exe` reported `nullSessionProbeEnabled: true`, workflow HTTP `200`, workflow phase `inspect_environment`, chat HTTP `200`, session persistence before/after restart, and clean resource cleanup. |
+| Cleanup | Pass | Follow-up checks found ports `8798`, `8799`, `8800`, `8787`, and `18907` not listening, with no matching temporary test directories left behind. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The installed smoke suite now preserves old-version health verification while keeping the `0.5.21+` null-session regression gate strict. | Pass | Use `run-installed-app-smoke.ps1 -ExpectedVersion 0.5.21 -ExpectedDesktopBundleKind msi` after elevated MSI installation to prove Program Files parity. |
+
+## Run: mp-msi-payload-and-vision-reprobe-20260716-2025
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 20:21-20:25 +08:00 |
+| Runtime | Rebuilt local MSI payload `MergePilot_0.5.21_x64_en-US.msi` |
+| Resource mode | MSI administrative extraction; non-installed local daemon probes; non-destructive |
+| Result | Pass |
+
+### Purpose
+
+Continue the active stabilization audit without requiring administrator installation. This run verifies that the rebuilt `0.5.21` MSI payload itself still satisfies the core package, workflow, chat, and vision gates after the installed-smoke harness compatibility work.
+
+### Commands
+
+```powershell
+.\scripts\windows\packaged-msi-payload-smoke.ps1 -Port 18921
+.\scripts\windows\packaged-live-vision-smoke.ps1 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi" -Port 18942
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| MSI payload package smoke | Pass | Administrative extraction found `mergepilot-desktop.exe` and `mergepilot-daemon.exe`; legacy cleanup WiX markers were validated; extracted daemon health reported `0.5.21`; index refresh saw and indexed one source file; `/chat/workflow-action` returned phase `inspect_environment`; `/chat` returned HTTP `200`. |
+| MSI payload vision smoke | Pass | Extracted daemon health reported `0.5.21`; image fixture was attached to chat; final answer identified `MP VISION TEST`, a blue square, and a red circle; no control JSON leaked, no duplicate final sentence was emitted, and no SSE errors were captured. |
+| Cleanup | Pass | Follow-up port checks found ports `18921` and `18942` not listening after the run. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The rebuilt `0.5.21` MSI payload remains healthy before installation. | Pass | Elevated MSI install is still required to prove Program Files parity, desktop bundle kind `msi`, and installed hash match against this payload. |
+
+## Run: mp-installed-msi-parity-verifier-autostart-20260716-2033
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 20:28-20:33 +08:00 |
+| Runtime | Current Program Files install plus rebuilt local MSI `0.5.21` |
+| Resource mode | Installed-state verifier; non-destructive daemon probe on temporary port `18931` |
+| Result | Expected fail for installed parity; verifier hardening passed |
+
+### Purpose
+
+Reprobe the fresh-installed-app parity gate against the current Program Files state and remove a verifier weakness found during the probe: `verify-installed-msi-state.ps1 -ProbeDaemon` assumed a daemon was already listening on the requested port, which produced noisy `connection refused` failures instead of proving the installed daemon can start.
+
+### Change
+
+`verify-installed-msi-state.ps1` now starts `C:\Program Files\MergePilot\mergepilot-daemon.exe --port <Port>` when daemon/auth/avatar probing is requested and no process is listening on that port. It records the started process and only stops the same process if it still owns the port after probing.
+
+### Commands
+
+```powershell
+$tokens=$null; $errors=$null
+[System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path scripts\windows\verify-installed-msi-state.ps1).Path,[ref]$tokens,[ref]$errors) | Out-Null
+if ($errors.Count -gt 0) { throw "parser failed" }
+.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.21 -RequireLegacyCleanup -ProbeDaemon -ProbeAuth -RequireAvatar -RequireMsiPayloadMatch -Port 18931
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Verifier parser check | Pass | PowerShell parser check passed after the auto-start change. |
+| Installed daemon probe behavior | Pass | The verifier auto-started `C:\Program Files\MergePilot\mergepilot-daemon.exe` on port `18931`, collected health/auth/avatar, and stopped the same process afterward. Output reported `daemonProbe.autoStarted: true`, `daemonProbe.stopped: true`, authenticated user `Zhou Ping`, and avatar data URL length `19339`. |
+| Fresh `0.5.21` MSI parity | Expected fail | Program Files still contains `0.5.20` NSIS-shaped install: uninstall entry version `0.5.20`, `uninstall.exe` present, installed desktop bundle kind `nsis`, daemon health version `0.5.20`, and installed desktop/daemon hashes differ from the `0.5.21` MSI payload. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The installed-state verifier is now a stronger first-run gate because it proves the installed daemon can launch on a temporary port before checking health/auth/avatar. | Pass | After elevated `0.5.21` MSI install, rerun the same command and expect no version, bundle-kind, uninstall.exe, or hash mismatch failures. |
+| Current Program Files state is not the rebuilt `0.5.21` MSI payload. | External gate | Requires administrator MSI installation before Program Files parity can pass. |
+
+## Run: mp-installed-verifier-current-success-path-20260716-2038
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 20:36-20:38 +08:00 |
+| Runtime | Current Program Files `0.5.20` install |
+| Resource mode | Installed-state verifier; non-destructive daemon probe on temporary port `18932` |
+| Result | Pass |
+
+### Purpose
+
+Verify that the installed-state verifier auto-start hardening works on the current success path too, not only on the expected-failing `0.5.21` MSI parity path.
+
+### Commands
+
+```powershell
+.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.20 -RequireLegacyCleanup -ProbeDaemon -ProbeAuth -RequireAvatar -Port 18932
+$files = @(
+  'scripts\windows\verify-installed-msi-state.ps1',
+  'scripts\windows\installed-restart-persistence-smoke.ps1',
+  'scripts\windows\run-installed-app-smoke.ps1',
+  'scripts\windows\installed-restart-persistence-safety-smoke.ps1'
+)
+foreach ($file in $files) {
+  $tokens=$null; $errors=$null
+  [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path,[ref]$tokens,[ref]$errors) | Out-Null
+  if ($errors.Count -gt 0) { throw "Parser failed: $file" }
+}
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Current installed verifier success path | Pass | The verifier reported `ok: true` for expected version `0.5.20`, exactly one MergePilot uninstall entry, no legacy uninstall entries, no legacy install directory, current shortcut present, daemon health `0.5.20`, authenticated user `Zhou Ping`, and avatar data URL length `19339`. |
+| Daemon lifecycle | Pass | The verifier auto-started the installed daemon on port `18932`, recorded the started process, and stopped the same process afterward. |
+| Parser and cleanup checks | Pass | Parser checks passed for the touched smoke/verifier scripts. Follow-up checks found no listeners on `18932`, `18931`, `18921`, `18942`, `8798`, `8799`, `8800`, or `8787`, and no matching test temp directories. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The verifier auto-start change preserves the current installed-app health-check success path. | Pass | Keep using strict `0.5.21` parity after elevated MSI install and expected-version `0.5.20` health checks while the local machine still has the older Program Files app. |
+
+## Run: mp-installed-wrapper-success-after-verifier-hardening-20260716-2040
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 20:32-20:40 +08:00 |
+| Runtime | Current Program Files `0.5.20` install |
+| Resource mode | Installed app smoke wrapper; non-destructive local probes on temporary ports `8798`, `8799`, and `8800` |
+| Result | Pass |
+
+### Purpose
+
+Verify that the top-level installed smoke wrapper still passes after hardening `verify-installed-msi-state.ps1`, since `run-installed-app-smoke.ps1` calls `verify-installed-windows-package-state.ps1`, which delegates to the hardened MSI verifier.
+
+### Commands
+
+```powershell
+.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis -PackageProbePort 8798 -PersistencePort 8799 -SafetyPort 8800
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Installed wrapper | Pass | Wrapper output reported `ok: true`, package-state exit code `0`, persistence exit code `0`, safety exit code `0`, and no open ports after the run. |
+| Package-state verifier | Pass | Package log showed installed desktop bundle kind `nsis`, daemon health `0.5.20`, Azure OpenAI deployment `gpt-4o`, authenticated user `Zhou Ping`, and avatar data URL length `19339`. |
+| Restart persistence | Pass | Persistence log reported `nullSessionProbeEnabled: false` for the older expected version, chat HTTP `200`, terminal SSE `done`, Project Link/chat session present before and after daemon restart, assistant response present before and after restart, and cleanup of chat, Project Link, temp repo, and owned daemon. |
+| Lifecycle safety | Pass | Safety log reported the inner smoke refused to restart an unrelated listener, the listener remained alive for harness cleanup, and the expected refusal marker was present. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The top-level installed app smoke wrapper still covers and passes the current installed `0.5.20` health path after verifier hardening. | Pass | After elevated `0.5.21` MSI installation, rerun the wrapper with `-ExpectedVersion 0.5.21 -ExpectedDesktopBundleKind msi` to cover package shape, persistence, and safety at the installed-app level. |
+
+## Run: mp-installed-wrapper-msi-parity-gate-20260716-2044
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 20:36-20:44 +08:00 |
+| Runtime | Current Program Files `0.5.20` install plus local `0.5.21` MSI payload |
+| Resource mode | Installed app smoke wrapper and package-state verifier; non-destructive local probes |
+| Result | Legacy success path pass; MSI parity path expected fail |
+
+### Purpose
+
+Close a verification gap in the top-level installed smoke wrapper. The lower-level package verifier could compare installed desktop/daemon hashes against the local MSI payload, but `run-installed-app-smoke.ps1 -ExpectedDesktopBundleKind msi` did not automatically enable that parity check.
+
+### Change
+
+`run-installed-app-smoke.ps1` now accepts `-MsiPath` and automatically passes `-RequireMsiPayloadMatch` to `verify-installed-windows-package-state.ps1` when `-ExpectedDesktopBundleKind msi` is used. The wrapper JSON also reports `msiPath` and `requireMsiPayloadMatch`.
+
+`verify-installed-windows-package-state.ps1` now de-duplicates failure messages after combining the lower-level MSI verifier failures with package-shape checks.
+
+### Commands
+
+```powershell
+.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis -PackageProbePort 8798 -PersistencePort 8799 -SafetyPort 8800
+.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.21 -ExpectedDesktopBundleKind msi -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi" -PackageProbePort 8794 -PersistencePort 8795 -SafetyPort 8796
+.\scripts\windows\verify-installed-windows-package-state.ps1 -ExpectedVersion 0.5.21 -ExpectedDesktopBundleKind msi -RequireLegacyCleanup -ProbeDaemon -ProbeAuth -RequireAvatar -RequireMsiPayloadMatch -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi" -Port 8797
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Current `0.5.20` NSIS wrapper path | Pass | Wrapper output reported `ok: true`, `requireMsiPayloadMatch: false`, package-state exit code `0`, persistence exit code `0`, safety exit code `0`, and no open ports after the run. |
+| Future `0.5.21` MSI wrapper parity path | Expected fail | Wrapper output reported `requireMsiPayloadMatch: true` and failed because current Program Files is still `0.5.20`/NSIS. The package-state log included installed hashes, MSI payload hashes, desktop bundle kind mismatch, and desktop/daemon hash mismatches. |
+| Package-state failure clarity | Pass | Direct package-state rerun still failed as expected, but the top-level failure list was de-duplicated. It retained the real blockers: installed version `0.5.20`, NSIS uninstall presence, legacy uninstall entry, daemon health version `0.5.20`, desktop bundle kind `nsis`, and desktop/daemon hash mismatches against the `0.5.21` MSI payload. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The top-level installed smoke can now prove MSI payload parity, not just MSI-shaped installation. | Pass | After elevated `0.5.21` MSI installation, run `run-installed-app-smoke.ps1 -ExpectedVersion 0.5.21 -ExpectedDesktopBundleKind msi -MsiPath <local MSI>` and expect `requireMsiPayloadMatch: true` plus no package-state failures. |
+
+## Run: mp-installed-verifier-port-owner-guard-20260716-2049
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 20:46-20:49 +08:00 |
+| Runtime | Current Program Files `0.5.20` install |
+| Resource mode | Installed-state verifier safety probe; non-destructive local ports `18933` and `18934` |
+| Result | Pass |
+
+### Purpose
+
+Close a false-positive risk in `verify-installed-msi-state.ps1`: when a requested probe port was already owned by another process, the verifier could attempt to probe that process instead of refusing the port owner.
+
+### Change
+
+`verify-installed-msi-state.ps1` now refuses to probe a listening process whose executable path does not match `C:\Program Files\MergePilot\mergepilot-daemon.exe`. The refusal is reported as a verifier failure and the unrelated process is left untouched.
+
+### Commands
+
+```powershell
+# Negative probe with an unrelated PowerShell TCP listener on port 18933.
+# The verifier must fail with "Refusing to probe unexpected process" and leave the listener alive.
+
+.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.20 -RequireLegacyCleanup -ProbeDaemon -ProbeAuth -RequireAvatar -Port 18934
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Unexpected port owner refusal | Pass | Negative probe returned verifier exit code `1`, included the refusal text, and the unrelated listener was still alive after the verifier exited. |
+| Installed daemon success path | Pass | Positive verifier run on port `18934` returned `ok: true`, auto-started the installed daemon, reported daemon health `0.5.20`, authenticated user `Zhou Ping`, avatar data URL length `19339`, no legacy uninstall entries, and stopped the daemon it started. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The installed-state verifier now matches the lifecycle safety model used by the restart-persistence smoke: it refuses unexpected port owners instead of probing or controlling them. | Pass | Keep this guard in the fresh `0.5.21` MSI parity run so a busy local port cannot produce misleading installed-app evidence. |
+
+## Run: mp-installed-verifier-safety-script-20260716-2053
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 20:44-20:53 +08:00 |
+| Runtime | Current Program Files `0.5.20` install |
+| Resource mode | Repeatable installed-state verifier safety smoke; non-destructive local ports `18935` and `18936` |
+| Result | Pass |
+
+### Purpose
+
+Turn the one-off `verify-installed-msi-state.ps1` unexpected-port-owner probe into a repeatable Windows smoke script so future installed-app verification can run the same negative safety gate.
+
+### Change
+
+Added `scripts\windows\verify-installed-msi-state-safety-smoke.ps1`. It starts a temporary non-MergePilot listener, runs `verify-installed-msi-state.ps1 -ProbeDaemon`, requires the verifier to fail with `Refusing to probe unexpected process`, verifies the unrelated listener stayed alive, and then cleans up the listener.
+
+### Commands
+
+```powershell
+.\scripts\windows\verify-installed-msi-state-safety-smoke.ps1 -ExpectedVersion 0.5.20 -Port 18935
+.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.20 -RequireLegacyCleanup -ProbeDaemon -ProbeAuth -RequireAvatar -Port 18936
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Repeatable verifier safety smoke | Pass | New script returned `ok: true`, verifier exit code `1`, expected refusal text present, and unrelated listener alive after the verifier exited. |
+| Positive installed verifier path | Pass | Verifier returned `ok: true`, auto-started `C:\Program Files\MergePilot\mergepilot-daemon.exe`, reported daemon health `0.5.20`, authenticated user `Zhou Ping`, avatar data URL length `19339`, and stopped the started daemon. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The verifier port-owner safety behavior is now repeatable through a named script instead of only being proven by an ad hoc inline command. | Pass | Include this script in future installed-app smoke batches when testing fresh MSI installs or diagnosing local port conflicts. |
+
+## Run: mp-installed-wrapper-includes-verifier-safety-20260716-2059
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 20:54-20:59 +08:00 |
+| Runtime | Current Program Files `0.5.20` install |
+| Resource mode | Top-level installed app smoke wrapper; non-destructive local ports `8798`, `8799`, `8800`, and `8801` |
+| Result | Pass |
+
+### Purpose
+
+Include the repeatable `verify-installed-msi-state-safety-smoke.ps1` gate in the top-level installed app wrapper so one command covers package-state verification, restart persistence, restart lifecycle safety, and verifier port-owner safety.
+
+### Change
+
+`run-installed-app-smoke.ps1` now accepts `-VerifierSafetyPort`, writes `installed-app-verifier-safety-*.log`, runs `verify-installed-msi-state-safety-smoke.ps1`, reports `verifierSafety` in its JSON output, and includes the verifier safety port in the post-run open-port check.
+
+### Commands
+
+```powershell
+.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis -PackageProbePort 8798 -PersistencePort 8799 -SafetyPort 8800 -VerifierSafetyPort 8801
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Top-level installed wrapper | Pass | Wrapper output reported `ok: true`, package-state exit code `0`, restart persistence exit code `0`, restart safety exit code `0`, verifier safety exit code `0`, and no open ports after the run. |
+| Package-state verification | Pass | Package log reported installed desktop bundle kind `nsis`, daemon health `0.5.20`, Azure OpenAI deployment `gpt-4o`, authenticated user `Zhou Ping`, and avatar data URL length `19339`. |
+| Restart persistence | Pass | Persistence log reported chat HTTP `200`, terminal SSE `done`, Project Link/chat persistence before and after daemon restart, assistant response before and after restart, and cleanup of the temporary chat, Project Link, repo, and owned daemon. |
+| Restart lifecycle safety | Pass | Safety log reported the restart-persistence smoke refused an unrelated listener and left it alive for harness cleanup. |
+| Verifier port-owner safety | Pass | Verifier safety log reported the MSI-state verifier failed with the expected refusal against an unrelated listener and left it alive for harness cleanup. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The top-level installed smoke wrapper now covers both lifecycle safety boundaries: restart-persistence process control and package-verifier port probing. | Pass | After elevated `0.5.21` MSI installation, run the same wrapper with `-ExpectedVersion 0.5.21 -ExpectedDesktopBundleKind msi -MsiPath <local MSI>` to cover installed parity and both safety gates in one command. |
+
+## Run: mp-install-and-verify-uses-wrapper-20260716-2100
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 20:59-21:00 +08:00 |
+| Runtime | Current Program Files `0.5.20` install plus local `0.5.21` MSI payload |
+| Resource mode | Non-elevated `install-and-verify-msi-state.ps1 -SkipInstall -SkipVision` dry run; non-destructive local ports `8788`, `8789`, `8790`, and `8791` |
+| Result | Expected fail for parity; wrapper integration verified |
+
+### Purpose
+
+Ensure the administrator-oriented MSI install verifier uses the strengthened top-level installed smoke wrapper, not the older direct `verify-installed-msi-state.ps1` path.
+
+### Change
+
+`install-and-verify-msi-state.ps1` now passes installed verification through `run-installed-app-smoke.ps1` with `-ExpectedDesktopBundleKind msi`, `-MsiPath`, package probe, restart persistence, restart safety, and verifier safety ports. The old direct daemon start/stop and direct MSI verifier call were removed.
+
+### Commands
+
+```powershell
+.\scripts\windows\install-and-verify-msi-state.ps1 -SkipInstall -SkipVision -ExpectedVersion 0.5.21 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi" -Port 8788 -PersistencePort 8789 -SafetyPort 8790 -VerifierSafetyPort 8791
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Install verifier wrapper integration | Pass | Dry run returned `verifySummary` from `run-installed-app-smoke.ps1`, with `expectedDesktopBundleKind: msi`, `requireMsiPayloadMatch: true`, package probe port `8788`, persistence port `8789`, safety port `8790`, verifier safety port `8791`, and `openAfterRun: []`. |
+| Current Program Files parity | Expected fail | The wrapper failed because current Program Files still runs daemon `0.5.20` while expected version was `0.5.21`; package-state and restart persistence failed as expected. |
+| Safety gates inside install verifier | Pass | Even in the expected parity failure run, restart safety and verifier safety both exited `0`, proving the install verifier now includes both process-control and port-probing safety gates. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The elevated install verifier now delegates to the same comprehensive installed smoke wrapper used for manual Program Files parity checks. | Pass | After elevated MSI installation, run `install-and-verify-msi-state.ps1` without `-SkipInstall`; it should install the MSI, run wrapper parity/safety gates, and then run the vision smoke unless `-SkipVision` is set. |
+
+## Run: mp-install-and-verify-skips-vision-after-wrapper-fail-20260716-2056
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 20:55-20:56 +08:00 |
+| Runtime | Current Program Files `0.5.20` install plus local `0.5.21` MSI payload |
+| Resource mode | Non-elevated `install-and-verify-msi-state.ps1 -SkipInstall` dry run; non-destructive local ports `8788`, `8789`, `8790`, `8791`, and `18945` |
+| Result | Expected fail for parity; vision ordering verified |
+
+### Purpose
+
+Ensure the administrator-oriented MSI install verifier does not run the live vision smoke after installed wrapper parity already failed. This prevents old Program Files state from producing misleading vision evidence.
+
+### Change
+
+`install-and-verify-msi-state.ps1` now records `visionSkippedReason` and only runs `packaged-live-vision-smoke.ps1` when the installed wrapper verification succeeds. `-SkipVision` still skips vision explicitly.
+
+### Commands
+
+```powershell
+.\scripts\windows\install-and-verify-msi-state.ps1 -SkipInstall -ExpectedVersion 0.5.21 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi" -Port 8788 -PersistencePort 8789 -SafetyPort 8790 -VerifierSafetyPort 8791 -VisionPort 18945
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Current Program Files parity | Expected fail | The wrapper returned `verifyExitCode: 1` because current Program Files still runs daemon `0.5.20` while expected version was `0.5.21`. |
+| Vision ordering | Pass | The top-level result reported `visionExitCode: null`, `visionLog: null`, `visionSummary: null`, and `visionSkippedReason: "Skipped because installed wrapper verification failed."` |
+| Failure clarity | Pass | The failed result now points at the real installed-app parity blockers instead of also running image/vision tests against the wrong installed version. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The install verifier now enforces a cleaner gate order: installed parity and lifecycle safety first, live vision only after the installed wrapper is green. | Pass | After elevated `0.5.21` MSI installation, rerun without `-SkipVision`; vision should execute only if the wrapper reports installed MSI parity success. |
+
+## Run: mp-continuation-source-ui-regression-gate-20260716-2101
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 20:58-21:01 +08:00 |
+| Runtime | Current worktree source packages |
+| Resource mode | Non-destructive local typecheck, unit tests, and mocked Chromium UI smoke |
+| Result | Pass |
+
+### Purpose
+
+Continue the active stabilization goal by checking whether the current UI/data-flow, daemon workflow routes, core agent logic, and installer-smoke harness changes still pass the main non-destructive regression gates.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked" -Project chromium -Workers 1
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `tsc -p tsconfig.json --noEmit` completed for `@mergepilot/desktop`. |
+| Mocked browser smoke | Pass | Chromium smoke ran 37 tests and passed all 37. Coverage included New Chat prompt stability, Project Link warm-route caching, Pull Requests/Review Queue/Pipelines/Activity cached refresh behavior, Pipeline Markdown analysis, Activity raw-output folding, and Settings Key Vault/local-env UX. |
+| Desktop Vitest | Pass | 74 test files passed, 365 tests passed. |
+| Daemon typecheck | Pass | `tsc -p tsconfig.json --noEmit` completed for `@mergepilot/daemon`. |
+| Core typecheck | Pass | `tsc -p tsconfig.json --noEmit` completed for `@mergepilot/core`. |
+| Daemon Vitest | Pass with warning | 45 test files passed, 1 skipped; 259 tests passed, 1 skipped. Node emitted existing `DEP0040` `punycode` deprecation warnings. |
+| Core Vitest | Pass with warning | 47 test files passed, 4 skipped; 250 tests passed, 6 skipped. Live/destructive tests stayed gated; Node emitted existing `DEP0040` `punycode` deprecation warnings. |
+| Port residue check | Pass | Pre-run and post-script checks found no relevant installed-smoke ports listening from the prior harness work. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current source/UI regression gates did not reveal a new functional regression. | Pass | Continue with installed `0.5.21` MSI parity/native UI smoke when elevated install is available. |
+| `punycode` deprecation warnings still appear in core/daemon Vitest. | Low | Track separately as dependency/runtime noise; it did not fail tests. |
+
+## Run: mp-package-installed-signing-continuation-gate-20260716-2104
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 21:02-21:04 +08:00 |
+| Runtime | Local rebuilt `0.5.21` package artifacts plus current Program Files `0.5.20` install |
+| Resource mode | Non-installing package smoke, current installed-app smoke, and Windows signature verification |
+| Result | Package/installed smoke pass; signing still fails as expected |
+
+### Purpose
+
+Continue the stabilization goal beyond source-level tests by checking package behavior, current installed-app behavior, and the trusted-publisher/unknown-publisher gate.
+
+### Commands
+
+```powershell
+.\scripts\windows\packaged-sidecar-smoke.ps1 -Port 18887
+.\scripts\windows\packaged-msi-payload-smoke.ps1 -Port 18921
+.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis -PackageProbePort 8798 -PersistencePort 8799 -SafetyPort 8800 -VerifierSafetyPort 8801
+.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.21
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Packaged sidecar smoke | Pass | Sidecar health reported `0.5.21`; index refresh saw and indexed one file; workflow phase was `inspect_environment`; `/chat` returned HTTP `200`. |
+| MSI payload smoke | Pass | Administrative MSI extraction found `mergepilot-desktop.exe` and `mergepilot-daemon.exe`; legacy cleanup WiX markers validated; extracted daemon health reported `0.5.21`; index refresh and workflow/chat probes passed. |
+| Current installed wrapper smoke | Pass | Program Files `0.5.20` NSIS smoke reported package probe exit `0`, restart persistence exit `0`, restart lifecycle safety exit `0`, verifier safety exit `0`, and `openAfterRun: []`. |
+| Windows artifact signatures | Expected fail | Local `0.5.21` NSIS and MSI artifacts both exist with version `0.5.21` metadata, but both returned `NotSigned`. |
+| Temp fixture residue | Cleaned | Post-run scan found two stale `mergepilot-sidecar-null-link*` temp fixture repos created on 2026-07-05 and last written on 2026-07-13. They were not created by this run; paths were verified under `%TEMP%` and removed. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The local `0.5.21` package payload remains runtime-healthy without installing it. | Pass | Use this payload for the next elevated MSI parity install. |
+| The current installed `0.5.20` app remains healthy under the strengthened installed wrapper. | Pass | This does not prove fresh `0.5.21` Program Files parity; elevated MSI install is still required. |
+| Windows trusted-publisher readiness is still incomplete. | High | Configure Authenticode signing and rerun `verify-windows-artifact-signatures.ps1 -Version 0.5.21`; this remains the direct blocker for removing the unknown-publisher prompt. |
+
+## Run: mp-live-app-azure-ado-continuation-gate-20260716-2115
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 21:07-21:15 +08:00 |
+| Runtime | Source daemon `0.5.21`, current Azure CLI account, live Azure DevOps read-only resources |
+| Resource mode | Non-destructive live-app UI workflows, Azure permission diagnostic, ADO read-only tests |
+| Result | Live app and ADO pass; Azure data-plane access remains partial |
+
+### Purpose
+
+Continue the active stabilization goal against real runtime paths after source/package/installed smoke passed: browser-driven local Git workflows through the source daemon, current Azure permissions, and live ClaimBot_API ADO read-only discovery/pipeline/PR-insight behavior.
+
+### Commands
+
+```powershell
+.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon
+
+$env:MERGEPILOT_E2E_LIVE_AZURE='1'
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAzurePermissions.test.ts
+
+$env:MERGEPILOT_E2E_LIVE_ADO='1'
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAdoDiscovery.test.ts test/liveAdoPipeline.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts
+
+az pipelines runs list --org https://tebssg.visualstudio.com/ --project TeBS-ClaimBot --pipeline-ids 117 --top 1 --query "[0].{id:id,result:result,sourceBranch:sourceBranch}" -o json
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Source live-app local workflows | Pass | Wrapper started source daemon `0.5.21`; Playwright ran 30 tests with 26 passed and 4 ClaimBot_API ADO tests skipped because `-LiveAdo` was not enabled. Coverage included staged-file approvals, denial/feedback replanning, stage+commit, validation failure, empty commit guard, branch switch, merge/rebase conflict recovery, stash flows, restore/revert, local tag creation, and single-tag push to a local remote. Log: `output\live-e2e\live-app-e2e-20260716-210722.log`. |
+| Azure account and ARM reads | Pass | Probe used current account `Zhou.Ping@totalebizsolutions.com`; ARM reads passed for `devagentstorage001`, `devagentcosmos001`, and `devagentkv001`; Storage Table list found `CicdAgentProfiles`; Cosmos SQL database list found `cicd-agent`. |
+| Azure data-plane readiness | Partial | Storage Table entity query still failed for missing `Storage Table Data Reader/Contributor`; Cosmos SQL role assignments still returned none; Key Vault secret list still failed with `Forbidden` for `Microsoft.KeyVault/vaults/secrets/readMetadata/action`. |
+| ADO discovery and pipeline read-only | Pass | Core live tests passed 3/3 read-only cases with 1 destructive queue case skipped. The account discovered ClaimBot_API project/repo/pipeline `#117`, listed recent runs, and read timeline/log evidence for the latest failed pipeline run. |
+| ADO PR insight read-only | Pass with warning | Daemon live PR insight test passed 1/1 and inspected a real ClaimBot_API PR without approval or mutation. Node emitted the existing `DEP0040` `punycode` warning. |
+| ADO pipeline mutation check | Pass | Latest ClaimBot_API pipeline `#117` run remained `4680` with result `succeeded` on `refs/heads/main`; no new run was queued by this non-destructive pass. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Real browser local Git workflows still pass against the current source daemon after the recent UI/workflow changes. | Pass | Keep this wrapper as the broad non-destructive live-app gate. |
+| Live ADO read-only behavior for ClaimBot_API remains healthy. | Pass | Continue to keep destructive ADO queue/PR mutation gates explicit and separate. |
+| Azure data-plane access is still incomplete. | Medium | Grant Storage Table Data Reader/Contributor, Cosmos DB Built-in Data Contributor, and Key Vault Secrets User before cloud persistence and Key Vault secret reads can be declared complete. |
+
+## Run: mp-live-app-ado-pipeline-ui-continuation-gate-20260716-2118
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 21:17-21:18 +08:00 |
+| Runtime | Source daemon `0.5.21`, live Azure DevOps ClaimBot_API pipeline `#117` |
+| Resource mode | Non-destructive live-app ADO UI gate; `-LiveAdo` enabled, `-Destructive` disabled |
+| Result | Pass |
+
+### Purpose
+
+Verify the real browser UI path for ClaimBot_API pipeline `#117` after the source/package/installed and API-level ADO probes passed. This covers the user-facing Chat/Pipelines flow, not only lower-level ADO clients.
+
+### Commands
+
+```powershell
+az pipelines runs list --org https://tebssg.visualstudio.com/ --project TeBS-ClaimBot --pipeline-ids 117 --top 1 --query "[0].{id:id,result:result,sourceBranch:sourceBranch}" -o json
+
+.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -RestartMismatchedDaemon -Grep "ClaimBot_API pipeline #117"
+
+az pipelines runs list --org https://tebssg.visualstudio.com/ --project TeBS-ClaimBot --pipeline-ids 117 --top 1 --query "[0].{id:id,result:result,sourceBranch:sourceBranch}" -o json
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Baseline pipeline run | Pass | Before the UI gate, latest pipeline `#117` run was `4680`, result `succeeded`, source branch `refs/heads/main`. |
+| Live-app ADO UI gate | Pass | Wrapper started source daemon `0.5.21`, `liveAdo: true`, `destructive: false`; Playwright ran 4 tests and passed all 4. Log: `output\live-e2e\live-app-e2e-20260716-211732.log`. |
+| Pipeline discovery/save UI | Pass | Browser test discovered and saved ClaimBot_API pipeline `#117` when the Project Link had no pipeline ID. |
+| Pipeline evidence UI | Pass | Browser test inspected ClaimBot_API pipeline `#117` failure evidence through normal Chat input. |
+| Approval preparation UI | Pass | Browser tests prepared rerun and trigger approvals for ClaimBot_API pipeline `#117` without confirming them because destructive mode was disabled. |
+| Mutation guard | Pass | After the UI gate, latest pipeline `#117` run was still `4680`, result `succeeded`, source branch `refs/heads/main`; no new run was queued. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The real browser UI path for ClaimBot_API pipeline discovery, inspection, and approval preparation remains healthy and non-destructive. | Pass | Keep `run-live-app-e2e.ps1 -LiveAdo -Grep "ClaimBot_API pipeline #117"` as the focused live ADO UI smoke. |
+
+## Run: mp-build-and-packaged-vision-continuation-gate-20260716-2122
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 21:20-21:22 +08:00 |
+| Runtime | Current worktree source packages and local `0.5.21` MSI payload |
+| Resource mode | Non-installing production builds plus MSI-extracted live vision smoke |
+| Result | Pass with known chunk-size warnings |
+
+### Purpose
+
+Verify that the current dirty worktree still builds for production and that the packaged MSI daemon can process image input through the live vision/chat stream path.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
+.\scripts\windows\packaged-live-vision-smoke.ps1 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi" -Port 18942
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Core build | Pass | `@mergepilot/core build` completed `tsc -p tsconfig.json`. |
+| Daemon build | Pass | `@mergepilot/daemon build` completed `tsc -p tsconfig.json`. |
+| Desktop production build | Pass with warning | `@mergepilot/desktop build` completed TypeScript and Vite production build after transforming 2705 modules. Vite still warned that `mermaid.core`, `wardley`, and `vendor-codemirror` chunks exceed 500 kB after minification. |
+| MSI-extracted live vision | Pass | Extracted MSI daemon health reported `0.5.21`; final answer identified `MP VISION TEST`, a blue square, and a red circle; `matchesText: true`, `matchesShapes: true`, `leaksControlJson: false`, `duplicateSentence: false`, and `hasSseErrors: false`. SSE log: `output\live-e2e\packaged-live-vision-sse-18942.log`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current source packages build successfully after the ongoing stabilization work. | Pass | Keep build gates before staging/release. |
+| Packaged live vision remains healthy in the local `0.5.21` MSI payload. | Pass | This still does not prove Program Files parity until the MSI is installed elevated. |
+| Large optional renderer chunks remain. | Low | Continue tracking Mermaid/Wardley/CodeMirror chunk splitting separately from functional release readiness. |
+
+## Run: mp-full-live-app-ado-continuation-gate-20260716-2132
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 21:24-21:32 +08:00 |
+| Runtime | Source daemon `0.5.21`, live Azure DevOps ClaimBot_API pipeline `#117` |
+| Resource mode | Full non-destructive live-app browser gate; `-LiveAdo` enabled, `-Destructive` disabled |
+| Result | Pass |
+
+### Purpose
+
+Run the full browser-driven live-app business suite with live Azure DevOps enabled, combining local Git workflow coverage and ClaimBot_API pipeline UI read-only/approval-preparation coverage in one gate.
+
+### Commands
+
+```powershell
+az pipelines runs list --org https://tebssg.visualstudio.com/ --project TeBS-ClaimBot --pipeline-ids 117 --top 1 --query "[0].{id:id,result:result,sourceBranch:sourceBranch}" -o json
+
+.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -RestartMismatchedDaemon
+
+az pipelines runs list --org https://tebssg.visualstudio.com/ --project TeBS-ClaimBot --pipeline-ids 117 --top 1 --query "[0].{id:id,result:result,sourceBranch:sourceBranch}" -o json
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Full live-app browser suite | Pass | Wrapper started source daemon `0.5.21`, `liveAdo: true`, `destructive: false`; Playwright ran 30 tests and passed all 30. Log: `output\live-e2e\live-app-e2e-20260716-212438.log`. |
+| Local Git workflow coverage | Pass | 26 browser-driven workflows passed, including staging, approval restoration, denial/feedback replanning, stage+commit, validation failure, empty commit guard, branch switch, merge/rebase conflict recovery, stash apply/pop/conflict, restore/revert, local tag creation, and single-tag push to a local remote. |
+| ClaimBot_API ADO UI coverage | Pass | 4 live ADO UI workflows passed: pipeline discovery/save, failure-evidence inspection, rerun approval preparation, and trigger approval preparation for pipeline `#117`. |
+| Mutation guard | Pass | Before and after the full gate, the latest pipeline `#117` run stayed `4680`, result `succeeded`, source branch `refs/heads/main`; no new ADO run was queued. |
+| Cleanup | Pass | Post-run checks found no listener on `127.0.0.1:8787` and no matching `mergepilot-live-*`, `mergepilot-e2e-*`, `mergepilot-daemon-live-pr-insight-*`, or `mergepilot-pipeline-*` temp directories. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The full non-destructive live-app suite passes with live ADO enabled, so local Git UI workflows and ClaimBot_API pipeline UI read-only flows are healthy together. | Pass | Keep destructive ADO queue/PR mutation gates explicit; do not infer mutation safety beyond the non-destructive guard proven here. |
+
+## Run: mp-remaining-external-gates-reprobe-20260716-2135
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 21:34-21:35 +08:00 |
+| Runtime | Current Program Files install, local `0.5.21` Windows artifacts, current Azure CLI account |
+| Resource mode | Non-installing parity probe, signature probe, and Azure permission diagnostic |
+| Result | External blockers unchanged |
+
+### Purpose
+
+Re-check the remaining completion blockers after the full non-destructive browser/live ADO gates passed, so the current unfinished state is based on fresh evidence instead of older assumptions.
+
+### Commands
+
+```powershell
+.\scripts\windows\verify-installed-windows-package-state.ps1 -ExpectedVersion 0.5.21 -ExpectedDesktopBundleKind msi -RequireLegacyCleanup -ProbeDaemon -ProbeAuth -RequireAvatar -RequireMsiPayloadMatch -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi" -Port 8797
+
+.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.21
+
+$env:MERGEPILOT_E2E_LIVE_AZURE='1'
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAzurePermissions.test.ts
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Installed `0.5.21` MSI parity | Expected fail | Program Files still contains `0.5.20` NSIS shape: `uninstall.exe` is present, uninstall entry version is `0.5.20`, desktop file version is `0.5.20`, daemon health reports `0.5.20`, installed desktop bundle kind is `nsis`, and installed desktop/daemon hashes do not match the local `0.5.21` MSI payload. The verifier auto-started and stopped the installed daemon on port `8797` and still reported authenticated user `Zhou Ping` plus avatar data. |
+| Windows artifact signatures | Expected fail | Local `0.5.21` NSIS and MSI artifacts both exist, but both returned `NotSigned`; no signer subject or thumbprint was present. |
+| Azure permission diagnostic | Pass as diagnostic, access partial | Azure CLI account remained `Zhou.Ping@totalebizsolutions.com`; ARM reads passed for Storage, Cosmos, and Key Vault. Storage Table list and Cosmos SQL database list passed. Storage Table entity query still lacks data-plane permission, Cosmos SQL role assignments still returned none, and Key Vault secret metadata/list still failed with `Forbidden`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Fresh MSI Program Files parity is still not proven because the installed app remains `0.5.20` NSIS. | High | Install `MergePilot_0.5.21_x64_en-US.msi` from an elevated shell, then rerun the installed parity wrapper. |
+| Unknown publisher remains expected because local Windows artifacts are unsigned. | High | Configure trusted Authenticode signing and rerun signature verification. |
+| Azure cloud persistence/Key Vault secret reads remain blocked by RBAC. | Medium | Grant Storage Table Data Reader/Contributor, Cosmos DB Built-in Data Contributor, and Key Vault Secrets User. |
+
+## Run: mp-release-workflow-static-continuation-gate-20260716-2138
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 21:36-21:38 +08:00 |
+| Runtime | Current worktree release workflow and Windows signing scripts |
+| Resource mode | Static YAML/semantic validation and non-mutating signing failure-path probe |
+| Result | Pass for workflow structure; signing still blocked by missing certificate |
+
+### Purpose
+
+Verify the changed release workflow shape after package/build/runtime gates passed, with special attention to stale installer cleanup, Windows signing, signature verification, and release artifact upload behavior.
+
+### Commands
+
+```powershell
+# Parsed .github/workflows/release.yml with the repo's local Node runtime and YAML dependency.
+# Semantic assertions checked step ordering, Windows-only signing conditions,
+# and upload-artifact if-no-files-found behavior.
+
+.\scripts\windows\sign-windows-release-artifacts.ps1 -Version 0.5.21
+
+# Parser checks:
+# sign-windows-release-artifacts.ps1
+# verify-windows-artifact-signatures.ps1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Release workflow YAML parse | Pass | Local YAML parse succeeded for `.github/workflows/release.yml`. |
+| Release workflow semantics | Pass | The semantic check found `Clean stale installer artifacts` before `Build Tauri installer`, `Sign Windows installers` after Tauri build, `Verify Windows installer signatures` after signing, both signing/verification steps gated to `matrix.os == 'windows-latest'`, and `actions/upload-artifact` configured with `if-no-files-found: error`. |
+| Signing script parser | Pass | PowerShell parser checks passed for `sign-windows-release-artifacts.ps1` and `verify-windows-artifact-signatures.ps1`. |
+| Signing failure path | Expected fail | `sign-windows-release-artifacts.ps1 -Version 0.5.21` failed clearly with `Windows code-signing certificate is not configured. Set WINDOWS_CODESIGN_CERT_PFX_BASE64 and WINDOWS_CODESIGN_CERT_PASSWORD.` |
+| Signing residue | Pass | No `mergepilot-codesign-*.pfx` temp files were left after the failure-path probe. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The release workflow now has the intended local structure for stale artifact cleanup and Windows signing enforcement. | Pass | GitHub runner proof still requires an actual tag-triggered workflow run after signing secrets are configured. |
+| The current release will fail at signing until certificate secrets are configured, which is desirable while unknown-publisher remains a release blocker. | High | Add `WINDOWS_CODESIGN_CERT_PFX_BASE64` and `WINDOWS_CODESIGN_CERT_PASSWORD` repository secrets backed by a trusted code-signing certificate. |
+
+## Run: mp-release-workflow-static-script-gate-20260716-2140
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 21:39-21:40 +08:00 |
+| Runtime | Current worktree release workflow and repeatable static verifier |
+| Resource mode | Non-mutating release workflow semantic verification |
+| Result | Pass |
+
+### Purpose
+
+Turn the ad hoc release workflow semantic check into a repeatable Windows script so future release candidates can verify stale bundle cleanup, Windows signing, signature verification, and upload ordering before a tag-triggered GitHub Release run.
+
+### Commands
+
+```powershell
+$tokens=$null; $errors=$null
+[System.Management.Automation.Language.Parser]::ParseFile(
+  (Resolve-Path scripts\windows\verify-release-workflow-static.ps1).Path,
+  [ref]$tokens,
+  [ref]$errors
+) | Out-Null
+
+.\scripts\windows\verify-release-workflow-static.ps1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Static verifier parser | Pass | PowerShell parser reported `parse ok` for `scripts\windows\verify-release-workflow-static.ps1`. |
+| Release workflow semantic script | Pass | The script returned `ok: true`, found both `windows-latest` and `macos-latest` in the installer matrix, and listed the expected build steps through `Upload installer artifacts`. |
+| Ordering and safety assertions | Pass | The script verified cleanup before Tauri build, signing after build, signature verification after signing, upload after verification, Windows-only signing/verification conditions, strict upload failure behavior, and GitHub Release creation from downloaded artifacts. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Release workflow structure is now protected by a repeatable repository-local verifier instead of a one-off inline check. | Pass | Run `.\scripts\windows\verify-release-workflow-static.ps1` before release staging and tag publication. |
+
+## Run: mp-workspace-ux-residual-and-route-cache-recheck-20260716-2145
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 21:42-21:46 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Non-mutating focused component tests plus mocked Chromium route-cache suite |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization audit by checking for residual user-facing strings from earlier installed-app screenshots and rerunning the route-switching cache suite that covers New Chat, Pull Requests, Review Queue, Pipelines, and Activity.
+
+### Commands
+
+```powershell
+rg -n "AI analysis streaming|Preview Insight|Reading project context|Working: Reading project context|Approved action finished|Unknown|Review scope|Next:|Run unit tests" apps tests packages docs --glob '!docs/live-e2e-test-records.md' --glob '!docs/business-test-execution-report.md'
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/components/conversation/ConversationPartRenderer.test.tsx `
+  src/pages/chat/layout/ChatMessageList.test.tsx `
+  src/pages/chat/approval/PendingActionCard.test.tsx `
+  src/pages/pipelines/PipelineRowCard.test.tsx `
+  src/pages/pullRequests/PullRequestCard.test.tsx
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Residual string scan | Pass with explainable references | Active UI pages did not reintroduce Pipeline `Unknown`, `Preview Insight`, or `AI analysis streaming`. Hits were limited to historical docs, explicit negative test assertions, shared helper names, generated Tauri installer files, or backend/test fixture content. |
+| Focused residual component tests | Pass | Desktop Vitest passed 5 files / 22 tests covering transcript suggestion filtering, completed approval-card hiding, compact approval commands, Pipeline missing-date/Markdown rendering, and Pull Request card action wording. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 26/26 tests. Coverage includes stable New Chat prompts, warm route returns, cached PR/Review Queue/Pipeline/Activity data during refresh, Pipeline Markdown AI analysis with detail-panel evidence, and Activity raw-output folding. |
+| Cleanup | Pass | No listeners remained on the checked app/daemon test ports and no matching MergePilot E2E temp directories were left. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current source UI does not reproduce the duplicate prompt, warm-route blanking, Pipeline `Unknown`, `Preview Insight`, or old suggested-action transcript issues covered by the tests. | Pass | Continue to require native installed-window proof after the fresh MSI is installed. |
+| The route-cache behavior now has a focused browser suite that exercises the exact route-switching pattern reported from installed testing. | Pass | Keep this suite as the fast UX regression gate before staging. |
+
+## Run: mp-pr-cache-scope-key-hardening-20260716-2149
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 21:46-21:50 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Source inspection, targeted cache-key fix, focused tests, and route-cache browser rerun |
+| Result | Pass |
+
+### Purpose
+
+Continue checking for non-obvious issues after the visible Workspace UX bugs were covered. Source inspection found that Pull Requests route caching used Project Link ids as the primary cache signature, which could briefly reuse an old PR list if the same Project Link id was edited to point at a different ADO repository or branch scope.
+
+### Change
+
+Added `projectLinkPullRequestCacheKey(...)` so Pull Request query caching now includes the Project Link id plus key mapping fields: repo path, Azure DevOps organization/project/repository, default branch, target branch, and `updatedAt`. The selected Project Link query only keys the selected link, while the all-links query keys the whole sorted link set.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/pullRequests/pullRequestViewModel.test.ts `
+  src/pages/pullRequests/PullRequestCard.test.tsx
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully. |
+| Full desktop tests | Pass | Desktop Vitest passed 74 files / 365 tests before the cache-key hardening edit. |
+| Focused PR cache tests | Pass | Focused Vitest passed 2 files / 7 tests, including the new assertion that changing branch or ADO repository changes the PR cache key while link order remains stable. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 26/26 after the cache-key change, confirming warm-route PR, Review Queue, Pipeline, Activity, and New Chat behavior stayed stable. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pull Requests warm caching is now less likely to show stale PRs after editing an existing Project Link's ADO mapping or branch scope. | Fixed | Keep route-cache tests in the pre-stage UI gate. |
+| No new frontend source regression was found after this hardening pass. | Pass | Native installed-window proof remains separate from source/browser proof. |
+
+## Run: mp-review-queue-cache-scope-key-hardening-20260716-2155
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 21:51-21:56 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Source inspection, targeted Review Queue cache-key fix, focused tests, and route-cache browser rerun |
+| Result | Pass |
+
+### Purpose
+
+Continue looking for non-obvious stale-context issues after the Pull Requests cache-key hardening. Source inspection found the Review Queue query and local loaded-items scope were keyed only by `projectLinkId`, which could briefly show old review decisions if the same Project Link was edited to point at another Azure DevOps repository or branch scope.
+
+### Change
+
+Added `projectLinkReviewQueueCacheKey(...)` and wired it into `useReviewQueueRuntime`. Review Queue caching and local items now scope to Project Link id plus repo path, Azure DevOps organization/project/repository, default branch, target branch, and `updatedAt`. Normal warm-route caching remains intact for unchanged Project Links, while edited mappings no longer reuse stale queue items.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/reviewFindings/reviewQueueViewModel.test.ts `
+  src/pages/reviewFindings/reviewQueueRuntime.test.ts `
+  src/pages/reviewFindings/ReviewActivityRail.test.tsx
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Review Queue tests | Pass | Desktop Vitest passed 3 files / 14 tests, including the new cache-key assertion for changed branch and ADO repository mappings. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully after the hook/query-key change. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 26/26 after the Review Queue cache-key change, confirming Review Queue warm-route behavior, Project Link switching cleanup, and the broader route-cache suite remain stable. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Review Queue warm caching now avoids stale review decisions after editing an existing Project Link's repository or branch mapping. | Fixed | Keep route-cache tests and cache-key unit tests in the pre-stage UI gate. |
+| No new Review Queue route-cache regression was found after the hardening. | Pass | Native installed-window proof remains separate from source/browser proof. |
+
+## Run: mp-pipelines-cache-scope-and-detail-key-hardening-20260716-2159
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 21:56-22:00 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Source inspection, targeted Pipeline cache/detail-key fix, focused tests, and route-cache browser rerun |
+| Result | Pass |
+
+### Purpose
+
+Continue the stale-context audit across Project Link-backed pages. Source inspection found Pipelines already keyed Azure DevOps project/repository for discovery, but it did not include branch scope, local repo path, configured pipeline fields, or `updatedAt`; Pipeline row detail state was also keyed only by `projectLinkId:pipelineId`, which could reuse old inspection/analysis state if a Project Link was edited and the pipeline id stayed the same.
+
+### Change
+
+Added `pipelineProjectLinksCacheKey(...)` and wired it into Pipeline discovery and related-PR queries. Placeholder data is now reused only when the selected Project Link mapping key is unchanged. Pipeline row detail state keys now include Project Link id, pipeline id, repo path, org, project, repository, default branch, and target branch.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/pipelines/pipelineModel.test.ts `
+  src/pages/pipelines/PipelineRowCard.test.tsx
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Pipeline tests | Pass | Desktop Vitest passed 2 files / 9 tests, including new assertions for Project Link mapping cache keys and Pipeline row detail keys. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully after the query-key and row-key changes. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 26/26 after the Pipeline cache/detail-key hardening, confirming warm-route pipeline behavior and detail-panel cleanup remain stable. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pipelines now avoids stale discovery, related PR evidence, and analysis/detail state after editing an existing Project Link's mapping. | Fixed | Keep pipeline cache-key tests and the route-cache suite in the pre-stage UI gate. |
+| No new Pipeline route-cache regression was found after the hardening. | Pass | Native installed-window proof remains separate from source/browser proof. |
+
+## Run: mp-activity-cache-scope-key-hardening-20260716-2203
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 22:00-22:03 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Source inspection, targeted Activity cache-key fix, focused tests, and route-cache browser rerun |
+| Result | Pass |
+
+### Purpose
+
+Finish the stale-context audit for Project Link-backed workspace routes. Source inspection found Activity PR insight and review-operation queries were scoped by Project Link id only. If the same Project Link was edited to point at a different repository, Azure DevOps mapping, or branch scope, the Activity page could briefly reuse old operational-history rows while a refresh was pending.
+
+### Change
+
+Added `taskViewerProjectLinksCacheKey(...)` and wired it into Activity review-operation and PR-insight queries. Cached placeholder data is now reused only when the full Project Link mapping key is unchanged. Normal warm-route caching remains intact for unchanged Project Links, while edited mappings no longer reuse stale Activity history.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/taskViewer/taskViewerActivityLoaders.test.ts `
+  src/pages/TaskViewer.test.tsx `
+  src/pages/taskViewer/CheckpointDetailPanel.test.tsx
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Activity tests | Pass | Desktop Vitest passed 3 files / 4 tests, including the new Activity Project Link mapping cache-key assertion. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully after the Activity query-key change. |
+| Full desktop tests | Pass | `@mergepilot/desktop test` passed 75 files / 370 tests after the workspace UX cache hardening changes. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 26/26 after the Activity cache-key hardening, confirming route switching remains stable across New Chat, Pull Requests, Review Queue, Pipelines, and Activity. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity now avoids stale PR insight and review-operation history after editing an existing Project Link's repository or branch mapping. | Fixed | Keep Activity cache-key tests and route-cache browser coverage in the pre-stage UI gate. |
+| No new route-cache regression was found after the Activity hardening. | Pass | Native installed-window proof remains separate from source/browser proof. |
+
+## Run: mp-linked-artifact-activity-cache-scope-hardening-20260716-2214
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 22:08-22:14 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Source inspection, targeted Pull Requests and Review Queue cache-key fix, focused tests, full desktop tests, and route-cache browser rerun |
+| Result | Pass |
+
+### Purpose
+
+Continue the stale-context audit after the route pages were already stabilized. Source inspection found two remaining linked-history surfaces still scoped too narrowly:
+
+- Pull Requests PR-insight artifacts were keyed by Project Link id only, while the PR list had already been hardened to include repository, Azure DevOps mapping, branch scope, and `updatedAt`.
+- Review Queue Recent activity used `reviewActivity(projectLinkId)` only, while the Review Queue decisions themselves were already keyed by the full Project Link mapping scope.
+
+Both could briefly show old AI insight or review-operation history if an existing Project Link was edited to point at a different repository or branch scope.
+
+### Change
+
+Added `prInsightArtifactsCacheKey(...)` and wired PR-insight artifact queries, placeholder reuse, cache writes, and invalidation to the same Project Link mapping key used by the Pull Requests list. Updated Review Queue operation activity to accept the Review Queue mapping scope key and to reuse placeholder data only when that scope is unchanged.
+
+During test design, a mocked browser case that expected normal route switching to simulate Project Link edits was rejected because it asserted the wrong behavior: route switching should keep warm cached Project Links, while actual Project Link edits update AppData through the Project Links flow. The final coverage uses helper-level key assertions plus the full route-cache browser suite.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/pullRequests/pullRequestViewModel.test.ts `
+  src/pages/pullRequests/PullRequestCard.test.tsx
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/reviewFindings/reviewQueueViewModel.test.ts `
+  src/pages/reviewFindings/reviewQueueRuntime.test.ts `
+  src/pages/reviewFindings/ReviewActivityRail.test.tsx
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Pull Requests tests | Pass | Desktop Vitest passed 2 files / 8 tests, including the new PR insight artifact mapping-scope cache-key assertion. |
+| Focused Review Queue tests | Pass | Desktop Vitest passed 3 files / 14 tests after Review Queue Recent activity was scoped to the same mapping key as the decisions list. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully after the linked-history cache-key changes. |
+| Full desktop tests | Pass | `@mergepilot/desktop test` passed 75 files / 371 tests. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 26/26 after the linked-history cache-key changes. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pull Requests saved AI insight artifacts now avoid stale reuse after editing an existing Project Link's repository or branch mapping. | Fixed | Keep the PR insight artifact cache-key assertion with the Pull Requests focused tests. |
+| Review Queue Recent activity now uses the same Project Link mapping scope as the main Review Queue decisions. | Fixed | Keep the Review Queue focused tests and route-cache suite in the pre-stage UI gate. |
+| A proposed browser test was intentionally removed because it conflated route switching with Project Link edit propagation. | Fixed test design | Real Project Link edit propagation should be covered separately through Project Links form/edit-flow tests. |
+
+## Run: mp-project-link-edit-propagation-cache-scope-20260716-2219
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 22:15-22:19 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Project Links edit-flow mocked browser test, route-cache browser rerun, desktop typecheck, and full desktop tests |
+| Result | Pass |
+
+### Purpose
+
+Prove the remaining Project Link edit-flow gap left by the linked-history cache hardening. The previous cache-key tests proved PR insight artifact and review-operation history keys change when the Project Link mapping changes, but they did not prove the actual Project Links UI update path propagates the edited mapping into downstream workspace routes.
+
+### Change
+
+Added a mocked browser route-cache scenario that opens Project Links, edits the existing Project Link to point at a different repository mapping, saves through the real `PUT /project-links/:id` UI path, then opens Pull Requests. The test verifies the Pull Requests page uses the edited repository's PR, hides the old PR title and old saved insight text, and offers `Generate insight` instead of reusing the previous `Open insight` state.
+
+### Commands
+
+```powershell
+.\scripts\windows\run-mocked-browser-e2e.ps1 `
+  -TestPath tests/e2e/route-cache.spec.ts `
+  -Project chromium `
+  -Workers 1 `
+  -Grep "Project Link edits update Pull Requests insight scope"
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Project Link edit browser test | Pass | Mocked Chromium passed the new edit-flow scenario. A first selector attempt failed because Repo path is not a labelled field; the final test uses the Workspace section input structure and passed. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 27/27 after adding the Project Link edit-flow coverage. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully after the new browser test and cache-scope changes. |
+| Full desktop tests | Pass | `@mergepilot/desktop test` passed 75 files / 371 tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Project Link edits now have browser-level coverage proving downstream Pull Requests insight scope updates through the real UI save path. | Pass | Keep this scenario in the route-cache suite as the regression guard for Project Link edit propagation. |
+| The Repo path input is not associated with a semantic label, which forced the browser test to use section/input structure. | UX/testability gap | Consider making Repo path a real labelled input for accessibility and more durable tests. |
+
+## Run: mp-project-link-repo-path-label-a11y-20260716-2222
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 22:20-22:22 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Accessibility/testability fix, focused browser proof, route-cache browser rerun, desktop typecheck, and full desktop tests |
+| Result | Pass |
+
+### Purpose
+
+Close the UX/testability gap found while proving Project Link edit propagation. The Project Link form displayed `Repo path` text, but the input was not semantically associated with that label. This made keyboard/screen-reader affordance weaker and forced the browser test to target the input by section structure instead of user-facing label.
+
+### Change
+
+Added a generated id via `useId()` to the Repo path input and associated it with a real `<label htmlFor=...>`. Updated the Project Link edit-flow browser test to use `page.getByLabel("Repo path")`, proving the field is now discoverable by accessible name.
+
+### Commands
+
+```powershell
+.\scripts\windows\run-mocked-browser-e2e.ps1 `
+  -TestPath tests/e2e/route-cache.spec.ts `
+  -Project chromium `
+  -Workers 1 `
+  -Grep "Project Link edits update Pull Requests insight scope"
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Project Link edit browser test | Pass | Mocked Chromium passed with `getByLabel("Repo path")`, proving the semantic label is active. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully after the form markup change. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 27/27 after the selector/accessibility change. |
+| Full desktop tests | Pass | `@mergepilot/desktop test` passed 75 files / 371 tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Repo path is now a semantically labelled field, improving accessibility and browser-test durability. | Fixed | Keep the Project Link edit-flow browser scenario using `getByLabel("Repo path")`. |
+
+## Run: mp-page-select-label-a11y-20260716-2228
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 22:24-22:28 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Accessibility/testability fix, route-cache browser rerun, focused Chat browser check, desktop typecheck, and full desktop tests |
+| Result | Pass |
+
+### Purpose
+
+Close another testability and accessibility gap found during Workspace UX stabilization. Pull Requests, Review Queue, and Pipelines page-level `<select>` controls were visually understandable, but browser tests still targeted them by ordinal position. That made route-cache tests easier to break when page chrome changed and weaker as proof of user-facing affordances.
+
+### Change
+
+Added stable accessible names for the page-level select controls:
+
+- `Pull Requests Project Link`
+- `Pull Requests status`
+- `Review Queue Project Link`
+- `Pipelines project filter`
+
+Updated route-cache browser tests to use those labels. Also replaced the remaining Chat Project Link ordinal selector with the existing `Composer Project Link` label.
+
+### Commands
+
+```powershell
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 `
+  -TestPath tests/e2e/chat-layout.spec.ts `
+  -Project chromium `
+  -Workers 1 `
+  -Grep "shows persisted PR insight lookup errors"
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Route-cache browser suite | Pass | Mocked Chromium passed 27/27 using labelled page controls for PR and Review Queue route switching. |
+| Focused Chat Project Link browser test | Pass | Mocked Chromium passed the saved PR insight lookup-error test using `getByLabel("Composer Project Link")`. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully after the label and selector changes. |
+| Full desktop tests | Pass | `@mergepilot/desktop test` passed 75 files / 371 tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Page-level route controls now have stable accessible names and browser tests no longer depend on select ordinal position. | Fixed | Keep future UI route tests aligned to accessible names instead of DOM position. |
+
+## Run: mp-shared-pagination-icon-controls-20260716-2231
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 22:29-22:31 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Shared UI polish, focused component test, desktop typecheck, route-cache browser rerun, and full desktop tests |
+| Result | Pass |
+
+### Purpose
+
+Continue converging list navigation on the compact icon-control direction already used in Chat history pagination. The shared `PaginationControls` component still rendered `Previous` and `Next` text buttons, making PR, Review Queue, Pipeline, and other paginated workspaces visually heavier than the target installed-app UX.
+
+### Change
+
+Replaced the shared pagination stepper text buttons with icon-only chevron controls. The controls keep explicit `title` and `aria-label` values such as `Previous pipelines page` and `Next pipelines page`, so the visual UI is quieter without removing keyboard or screen-reader semantics.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/PaginationControls.test.tsx
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused pagination component test | Pass | `PaginationControls.test.tsx` passed 4/4, including proof that stepper buttons are icon-only while keeping accessible labels. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully after the shared component change. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 27/27, proving paginated workspace routes still render and switch cleanly. |
+| Full desktop tests | Pass | `@mergepilot/desktop test` passed 75 files / 372 tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Shared list pagination is now visually quieter and consistent with the icon pagination direction while preserving accessible labels. | Fixed | Keep future pagination controls icon-first with explicit labels. |
+
+## Run: mp-activity-task-step-detail-folding-20260716-2234
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 22:32-22:34 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Activity UX hardening, focused Activity tests, desktop typecheck, route-cache browser rerun, and full desktop tests |
+| Result | Pass |
+
+### Purpose
+
+Continue removing noisy raw execution output from the Activity page. Checkpoint tool output was already hidden behind `Raw output`, but task run step details were still rendered inline. If a task step carried JSON-like command output, `returncode/stdout/stderr` payloads could dominate the operational history detail panel.
+
+### Change
+
+Updated `TaskRunDetailPanel` so short human-readable step details remain inline, while long or JSON-like details are collapsed by default under `Step detail`. This preserves auditability without letting raw command payloads become the primary Activity reading experience.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/taskViewer/TaskRunDetailPanel.test.tsx `
+  src/pages/taskViewer/CheckpointDetailPanel.test.tsx `
+  src/pages/taskViewer/taskViewerActivityLoaders.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Activity tests | Pass | 3 files / 4 tests passed, including new coverage that JSON-like task step details render in a closed `<details>` block while short detail text stays inline. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully after the Activity detail rendering change. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 27/27, including Activity route cache and checkpoint raw-output folding coverage. |
+| Full desktop tests | Pass | `@mergepilot/desktop test` passed 76 files / 374 tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity task run details now follow the same collapsed-evidence principle as checkpoint raw output. | Fixed | Keep raw/JSON execution evidence available but folded by default across Activity detail panels. |
+
+## Run: mp-review-operation-detail-folding-20260716-2238
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 22:36-22:38 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Activity Review Operations UX hardening, focused Activity tests, desktop typecheck, route-cache browser rerun, and full desktop tests |
+| Result | Pass |
+
+### Purpose
+
+Continue applying the Activity page rule that raw/internal operation evidence should be available but visually secondary. Task step details and checkpoint output were folded, but Review Operation detail panels still rendered `operation.details` directly. Long internal error payloads, schema errors, or JSON-like responses could still dominate the operational history view.
+
+### Change
+
+Updated `ReviewOperationDetailPanel` so short human-readable details stay inline, while long or JSON-like operation details fold under `Operation detail` by default.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/taskViewer/TaskRunDetailPanel.test.tsx `
+  src/pages/taskViewer/ReviewOperationDetailPanel.test.tsx `
+  src/pages/taskViewer/CheckpointDetailPanel.test.tsx `
+  src/pages/taskViewer/taskViewerActivityLoaders.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Activity tests | Pass | 4 files / 6 tests passed, including new coverage that JSON-like review operation details render in a closed `<details>` block while short detail text stays inline. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully after the Review Operation detail rendering change. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 27/27 after the Activity detail-panel change. |
+| Full desktop tests | Pass | `@mergepilot/desktop test` passed 77 files / 376 tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Review Operation details now follow the same folded-evidence rule as checkpoint output and task step details. | Fixed | Keep Activity detail panels optimized for readable operational history first, with raw/internal evidence behind disclosures. |
+
+## Run: mp-pipeline-run-evidence-status-tone-20260716-2241
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 22:39-22:41 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Pipelines UI polish, focused Pipeline tests, desktop typecheck, route-cache browser rerun, and full desktop tests |
+| Result | Pass |
+
+### Purpose
+
+Fix a subtle Pipelines readability bug found while rechecking the AI/run analysis surface. Pipeline card run-evidence rows used only the first class from the semantic run tone, which kept the background class but dropped the text color and ring state. This made evidence status chips less legible and inconsistent with the rest of the Pipelines UI.
+
+### Change
+
+Updated inspected run evidence in `PipelineRowCard` to render as a complete rounded status chip using the full semantic tone returned by `runTone`.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/pipelines/PipelineRowCard.test.tsx `
+  src/pages/pipelines/pipelineModel.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Pipeline tests | Pass | 2 files / 10 tests passed, including new coverage that inspected run evidence keeps full succeeded tone classes. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully after the Pipeline evidence chip change. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 27/27 after the Pipelines card rendering change. |
+| Full desktop tests | Pass | `@mergepilot/desktop test` passed 77 files / 377 tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pipeline run evidence status now uses full semantic styling instead of a partial background-only class. | Fixed | Keep Pipeline run status presentation chip-based and semantically colored across compact cards and detail panels. |
+
+## Run: mp-pipeline-detail-run-evidence-status-tone-20260716-2244
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 22:42-22:44 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Pipelines detail-panel UI consistency, focused Pipeline tests, desktop typecheck, route-cache browser rerun, and full desktop tests |
+| Result | Pass |
+
+### Purpose
+
+Carry the Pipeline run-evidence status chip fix from compact cards into the right-side Pipeline detail panel. The card-level run evidence now used complete semantic chips, but the detail panel still displayed plain status text, making the detailed view less readable than the compact card.
+
+### Change
+
+Updated `PipelineDetailPanel` run evidence rows to use the same `runTone` semantic chip presentation as `PipelineRowCard`. Exported the detail panel for direct component regression coverage.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/Pipelines.test.tsx `
+  src/pages/pipelines/PipelineRowCard.test.tsx `
+  src/pages/pipelines/pipelineModel.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Pipeline tests | Pass | 3 files / 11 tests passed, including new coverage that the Pipeline detail panel run evidence keeps full succeeded tone classes. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully after exporting and testing the detail panel. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 27/27 after the Pipelines detail-panel rendering change. |
+| Full desktop tests | Pass | `@mergepilot/desktop test` passed 78 files / 378 tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pipeline detail-panel run evidence now matches the compact card's semantic status-chip presentation. | Fixed | Keep card and right-panel evidence presentation consistent when changing Pipeline analysis UX. |
+
+## Run: mp-pr-insight-detail-action-dedup-20260716-2250
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 22:46-22:50 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | PR insight detail-panel UX polish, focused Task Viewer tests, desktop typecheck, route-cache browser rerun, and full desktop tests |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by reducing duplicated actions in the PR insight detail panel. The detail header already provided the primary navigation actions, while the Provenance block repeated shorter `Pull Requests` and `Chat` buttons. That made the right-side detail panel feel like a second action bar instead of a source/evidence area.
+
+### Change
+
+Removed the duplicate Provenance navigation buttons and kept `Open in Pull Requests` plus `Ask in Chat` in the panel header. Provenance now keeps only the artifact copy action and source metadata.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/taskViewer/PrInsightDetailPanel.test.tsx `
+  src/pages/TaskViewer.test.tsx
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Task Viewer tests | Pass | 2 files / 3 tests passed, including new coverage that PR insight navigation actions are not duplicated in Provenance. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 27/27 after the PR insight detail-panel action cleanup. |
+| Full desktop tests | Pass | `@mergepilot/desktop test` passed 79 files / 379 tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| PR insight detail actions now have a single primary location in the panel header. | Fixed | Keep detail-panel provenance focused on source/evidence metadata rather than repeating navigation controls. |
+
+## Run: mp-pr-context-description-markdown-20260716-2254
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 22:50-22:54 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Pull Requests context-panel readability polish, focused PR tests, desktop typecheck, route-cache browser rerun, and full desktop tests |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by making Pull Request context details read like product content instead of raw text. Azure DevOps PR descriptions commonly contain Markdown, but the context panel still rendered the description as a pre-wrapped text block, which was inconsistent with AI insight and Pipeline analysis rendering.
+
+### Change
+
+Updated the Pull Request context-panel description area to use the shared Markdown renderer. Thread comments remain compact plain snippets for list scanning.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/pullRequests/PullRequestContextPanel.test.tsx `
+  src/pages/pullRequests/PullRequestCard.test.tsx `
+  src/pages/pullRequests/pullRequestViewModel.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Pull Requests tests | Pass | 3 files / 9 tests passed, including new coverage that PR descriptions render Markdown instead of raw `**...**` text. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 27/27 after the Pull Requests context-panel Markdown change. |
+| Full desktop tests | Pass | `@mergepilot/desktop test` passed 80 files / 380 tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pull Request descriptions now share the same Markdown presentation vocabulary as AI insight summaries. | Fixed | Keep long-form PR/user-authored content rendered as formatted text while keeping compact list snippets terse. |
+
+## Run: mp-pr-insight-artifact-unavailable-labels-20260716-2258
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 22:54-22:58 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Chat PR insight artifact readability polish, focused artifact tests, desktop typecheck, route-cache browser rerun, and full desktop tests |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by removing a remaining user-visible `unknown` fallback from saved PR insight artifacts opened in Chat. Other PR, Pipeline, and Activity surfaces have moved toward explicit unavailable-state labels; the artifact markdown should follow the same vocabulary.
+
+### Change
+
+Changed missing saved insight metadata and missing build-blocker status text from `unknown` to `Not available` in generated PR insight artifact Markdown.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/ChatPrInsightArtifact.test.ts `
+  src/pages/chat/artifacts/ArtifactWorkspace.test.tsx
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused artifact tests | Pass | 2 files / 9 tests passed, including new coverage that missing saved insight metadata renders `Not available` and does not emit `unknown`. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 27/27 after the artifact fallback-label cleanup. |
+| Full desktop tests | Pass | `@mergepilot/desktop test` passed 80 files / 381 tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Saved PR insight artifacts now use the same explicit unavailable-state language as the rest of the workspace UI. | Fixed | Keep user-visible fallback labels consistent across PR, Pipeline, Activity, and Chat artifact surfaces. |
+
+## Run: mp-chat-git-status-branch-fallback-label-20260716-2300
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 22:58-23:00 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Chat execution-result readability polish, focused Chat tool-renderer tests, desktop typecheck, route-cache browser rerun, and full desktop tests |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by removing another small user-visible `unknown` fallback from Chat execution output. When structured `git_status` output lacked a branch header, the Chat tool renderer displayed `unknown`, which is inconsistent with the explicit unavailable-state language used elsewhere.
+
+### Change
+
+Changed the structured Git status branch fallback from `unknown` to `Branch not available`.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/chat/toolOutputRenderers.test.tsx `
+  src/chatToolParts.test.ts `
+  src/components/conversation/ExecutionTimeline.test.tsx
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Chat execution tests | Pass | 3 files / 13 tests passed, including new coverage that missing Git branch output renders `Branch not available` and does not emit `unknown`. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 27/27 after the Chat Git status fallback-label cleanup. |
+| Full desktop tests | Pass | `@mergepilot/desktop test` passed 81 files / 382 tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Chat Git status output now uses explicit unavailable-state wording when branch metadata is absent. | Fixed | Keep Chat tool output labels aligned with the rest of the workspace UI's unavailable-state vocabulary. |
+
+## Run: mp-execution-row-missing-tool-name-fallback-20260716-2303
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 23:00-23:03 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Chat execution transcript fallback polish, focused execution-row tests, desktop typecheck, route-cache browser rerun, and full desktop tests |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by removing a low-frequency but user-visible `unknown` fallback from execution transcript rows. If a tool row arrived without a tool name, the row detail tooltip/accessible label used `unknown details`, which exposed internal missing metadata instead of a neutral product label.
+
+### Change
+
+Changed the execution row missing tool-name fallback from `unknown` to `tool`.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/components/conversation/ExecutionCommandRow.test.tsx `
+  src/components/conversation/ExecutionTimeline.test.tsx `
+  src/pages/chat/toolOutputRenderers.test.tsx `
+  src/chatToolParts.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused execution transcript tests | Pass | 4 files / 14 tests passed, including new coverage that rows without a tool name show `tool details` and do not emit `unknown`. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully. |
+| Route-cache browser suite | Pass | Mocked Chromium passed 27/27 after the execution-row fallback-label cleanup. |
+| Full desktop tests | Pass | `@mergepilot/desktop test` passed 82 files / 383 tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Execution transcript row details now use a neutral fallback when tool metadata is absent. | Fixed | Keep internal missing metadata from surfacing as user-facing labels in Chat execution rows. |
+
+## Run: mp-activity-task-raw-output-label-20260716-2306
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 23:04-23:06 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Activity detail panel label polish, focused Activity component tests, desktop typecheck, and Activity route-cache browser rerun |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by aligning Activity task-run evidence labels with the rest of the Activity detail surfaces. Task run JSON/tool payloads were already collapsed by default, but the disclosure label still said `Step detail`, while checkpoint raw payloads used the clearer `Raw output` wording.
+
+### Change
+
+Renamed the folded JSON/tool-output disclosure in Activity task run details from `Step detail` to `Raw output`.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/taskViewer/TaskRunDetailPanel.test.tsx `
+  src/pages/taskViewer/CheckpointDetailPanel.test.tsx `
+  src/pages/taskViewer/ReviewOperationDetailPanel.test.tsx
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts `
+  --project=chromium --grep "Activity" --workers=1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Activity detail tests | Pass | 3 files / 5 tests passed, including Task Run, Checkpoint, and Review Operation raw-detail folding coverage. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully. |
+| Activity route-cache browser subset | Pass | Mocked Chromium passed 2/2 Activity route-cache tests and kept raw `{"returncode":0...}` output hidden by default. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity task-run raw command payloads now use the same `Raw output` disclosure label as checkpoint evidence. | Fixed | Keep Activity evidence labels consistent and audit-oriented across all operational-history detail panels. |
+
+## Run: mp-pr-operation-details-unavailable-labels-20260716-2310
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 23:07-23:10 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Pull Requests view-model label polish, focused PR tests, desktop typecheck, and Pull Requests route-cache browser subset |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by removing remaining user-visible `unknown` placeholders from Pull Request operation detail strings. Missing PR insight readiness and Review Run confidence were formatted as `readiness=unknown` and `confidence=unknown`, which leaked internal absence-state wording into user-facing Activity/operation summaries.
+
+### Change
+
+Changed missing PR operation fields to explicit unavailable wording:
+
+- `readiness=not available`
+- `confidence=not available`
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/pullRequests/pullRequestViewModel.test.ts `
+  src/pages/pullRequests/PullRequestCard.test.tsx `
+  src/pages/pullRequests/PullRequestContextPanel.test.tsx
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts `
+  --project=chromium --grep "Pull Requests|PR" --workers=1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Pull Requests tests | Pass | 3 files / 11 tests passed, including new view-model coverage that missing readiness/confidence no longer emit `unknown`. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully. |
+| Pull Requests route-cache browser subset | Pass | Mocked Chromium passed 16/16 selected route-cache tests covering warm PR routes, Project Link switching, PR insight scope, and related PR-adjacent flows. |
+| Active UI source scan | Pass | No active source matches for `readiness=unknown`, `confidence=unknown`, or `=unknown` in app/page/component UI sources. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pull Request operation details no longer expose `unknown` for missing readiness or confidence metadata. | Fixed | Keep user-facing absence states explicit and consistent with `Not available`/`not available` wording across PR, Pipeline, Activity, and Chat surfaces. |
+
+## Run: mp-safe-date-formatting-for-workspace-pages-20260716-2314
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 23:11-23:14 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Workspace page date-formatting hardening, focused view-model tests, desktop typecheck, and full route-cache browser rerun |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by checking for additional browser/runtime placeholders that can leak into product UI. The full route-cache suite remained green, but source inspection found that PR, Pipeline, and Review Queue date formatters could render the browser-native `Invalid Date` string when given malformed timestamps.
+
+### Change
+
+Hardened date formatting in:
+
+- Pull Requests: invalid or empty dates now return an empty string so existing card fallbacks can render `Not available`.
+- Pipelines: invalid or empty run dates now return an empty string so pipeline headers do not render synthetic date text.
+- Review Queue: invalid or empty dates now return `Not available`, matching the existing queue detail vocabulary.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts `
+  --project=chromium --workers=1
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/pipelines/pipelineModel.test.ts `
+  src/pages/pullRequests/pullRequestViewModel.test.ts `
+  src/pages/reviewFindings/reviewQueueViewModel.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Full route-cache browser suite | Pass | Mocked Chromium passed 27/27 before the date-formatting hardening, confirming the broader warm-route behavior remained healthy. |
+| Focused workspace view-model tests | Pass | 3 files / 22 tests passed, including new invalid-date coverage for PR, Pipeline, and Review Queue formatters. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully. |
+| Active UI source scan | Pass | No active source contains the literal `Invalid Date`; date formatters now guard invalid timestamps before rendering. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| PR, Pipeline, and Review Queue date formatters no longer leak `Invalid Date` into user-facing UI when upstream timestamps are malformed. | Fixed | Keep workspace page view-models defensive around external ADO/local-store timestamps. |
+
+## Run: mp-chat-history-safe-timestamp-formatting-20260716-2317
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 23:15-23:17 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Chat History timestamp hardening, focused chat layout tests, desktop typecheck, and New Chat route-cache browser subset |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by checking the remaining chat surfaces for browser-native date placeholder leakage. History rows rendered `createdAt` directly in both the row and hover card, so malformed local/daemon history timestamps could surface as `Invalid Date`.
+
+### Change
+
+Added safe History timestamp formatting. Invalid or non-finite `createdAt` values now render `Time not available` in both the row and hover-card detail instead of the browser-native `Invalid Date` string.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/chat/layout/HistorySidebarItem.test.tsx `
+  src/pages/chat/layout/ChatMessageList.test.tsx `
+  src/pages/chat/layout/ChatEmptyState.test.tsx
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts `
+  --project=chromium --grep "New Chat|Chat" --workers=1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Chat layout tests | Pass | 3 files / 8 tests passed, including new History row invalid-timestamp coverage. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully. |
+| New Chat route-cache browser subset | Pass | Mocked Chromium passed 3/3 New Chat route-cache tests after the History timestamp hardening. |
+| Active Chat layout source scan | Pass | No direct `new Date(entry.createdAt * 1000).toLocaleString()` path remains in `HistorySidebarItem`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Chat History rows and hover cards no longer leak `Invalid Date` when persisted session timestamps are malformed. | Fixed | Keep persisted local/daemon history data defensive because installed-app upgrades can encounter older or partial records. |
+
+## Run: mp-appshell-route-module-preload-20260716-2322
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 23:18-23:22 +08:00 |
+| Runtime | Current worktree desktop source, mocked browser app, and production desktop build |
+| Resource mode | AppShell route module preloading, focused AppShell tests, desktop typecheck, full route-cache browser suite, and desktop production build |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by addressing a remaining source of page-switch loading flashes. Data for Pull Requests, Review Queue, Pipelines, and Activity was already query-cached, but the route components were still loaded only on first navigation through React lazy imports, leaving a possible first-switch `Loading...` fallback even when data was warm.
+
+### Change
+
+Extracted the lazy route import functions in `AppShell` and reused them for a delayed route-module preload after the full layout mounts. The Suspense fallback remains as a recovery path, but the main workspace route chunks are warmed shortly after app startup so normal navigation is less likely to show a full-page lazy-loading fallback.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/app/AppShell.test.ts `
+  src/pages/chat/layout/HistorySidebarItem.test.tsx
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts `
+  --project=chromium --workers=1
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused AppShell tests | Pass | 2 files / 4 tests passed, including route preload coverage and preload failure swallowing so Suspense remains the recovery path. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully. |
+| Full route-cache browser suite | Pass | Mocked Chromium passed 27/27 after the route preloading change. |
+| Desktop production build | Pass | `@mergepilot/desktop build` completed successfully. Vite still reports known large optional chunks for Mermaid/Wardley/CodeMirror. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Workspace route chunks are now preloaded after AppShell mount, reducing first-switch lazy-loading flashes without removing the Suspense safety fallback. | Fixed | Keep route preloading lightweight; heavy optional artifact renderers should remain separately lazy-loaded. |
+
+## Run: mp-activity-safe-timestamp-formatting-20260716-2328
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 23:26-23:28 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | Activity presentation helpers, Activity detail components, desktop typecheck, and full route-cache browser suite |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by removing a remaining defensive-data gap in Activity. Missing or malformed PR insight/review operation timestamps could previously be parsed through `Date.parse(value || "0")`, which risks selecting or displaying synthetic dates instead of treating the timestamp as unavailable.
+
+### Change
+
+Added shared safe Activity timestamp helpers. Activity PR Insight, Review Operation, and PR Insight comparison surfaces now format ISO timestamps through the same guard, while Activity sorting/comparison code uses a safe sortable timestamp parser. Invalid values now collapse to empty/unavailable ordering instead of `Invalid Date` or a fake fallback date.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/taskViewer/activityPresentation.test.ts `
+  src/pages/taskViewer/TaskRunDetailPanel.test.tsx `
+  src/pages/taskViewer/CheckpointDetailPanel.test.tsx `
+  src/pages/taskViewer/PrInsightDetailPanel.test.tsx `
+  src/pages/taskViewer/ReviewOperationDetailPanel.test.tsx `
+  src/pages/taskViewer/taskViewerActivityLoaders.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts `
+  --project=chromium --workers=1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused Activity tests | Pass | 6 files / 10 tests passed, including safe numeric and ISO timestamp guards. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully. |
+| Full route-cache browser suite | Pass | Mocked Chromium passed 27/27 after Activity timestamp hardening. |
+| Activity source scan | Pass | Remaining `Date.parse` usage is centralized in `parseIsoTimestamp`; no component-level `Date.parse(value || "0")` display paths remain. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity no longer surfaces browser-native invalid dates or synthetic fallback dates when persisted PR insight/review operation timestamps are missing or malformed. | Fixed | Keep local/daemon Activity data readers defensive because installed-app upgrades can encounter partial historical records. |
+
+## Run: mp-safe-sortable-date-for-local-history-20260716-2335
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 23:30-23:35 +08:00 |
+| Runtime | Current worktree desktop source, core source/dist, daemon source, and mocked browser app |
+| Resource mode | PR insight artifacts, Review Queue history, review operations, Pipeline latest-run selection, daemon review storage routes, and route-cache browser suite |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by hardening the lower-level data ordering paths behind Pull Requests, Review Queue, Pipelines, and Activity. A source scan found multiple `Date.parse(value || "0")` paths that were no longer directly visible as UI text, but could still affect latest-record selection, local/cloud merge precedence, and list ordering when persisted timestamps are missing or malformed.
+
+### Change
+
+Added shared safe sortable-date helpers for desktop and core. Replaced fallback-date parsing in PR insight artifact lists, review operation lists, Review Queue comparison/merge logic, Pipeline latest-run selection, Pull Request saved-insight merging, Activity sorting, and daemon review route merge logic. Missing or malformed timestamps now sort as unavailable (`0`) instead of using a synthetic browser date.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/safeDate.test.ts `
+  src/prInsightArtifacts.test.ts `
+  src/reviewHistoryLocal.test.ts `
+  src/reviewRunHistory.test.ts `
+  src/pages/pipelines/pipelineModel.test.ts `
+  src/pages/pullRequests/pullRequestViewModel.test.ts `
+  src/pages/reviewFindings/reviewQueueViewModel.test.ts `
+  src/pages/taskViewer/activityPresentation.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- `
+  test/safeDate.test.ts `
+  test/prInsightArtifactsLocal.test.ts `
+  test/reviewOperationsLocal.test.ts `
+  test/reviewHistoryLocal.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- `
+  test/serverPrInsightStorageRoutes.test.ts `
+  test/serverReviewStorageRoutes.test.ts `
+  test/serverReviewDispositionWritebackRoutes.test.ts
+
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts `
+  --project=chromium --workers=1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Desktop focused tests | Pass | 8 files / 50 tests passed across safe date, PR insights, Review Queue, Pipeline, and Activity view-model/persistence helpers. |
+| Core focused tests | Pass | 4 files / 16 tests passed across safe date, PR insight artifact local store, review operations local store, and review history local store. |
+| Core build and typechecks | Pass | Core build refreshed `dist` types for daemon imports; desktop, core, and daemon typecheck all passed. |
+| Daemon review storage route tests | Pass with warning | 3 files / 5 tests passed. Existing Node `DEP0040` `punycode` deprecation warnings remain. |
+| Full route-cache browser suite | Pass | Mocked Chromium passed 27/27 after the lower-level sortable-date hardening. |
+| Residual scan | Pass | No `Date.parse(value || "0")` source paths remain in `apps/desktop/src`, `packages/core/src`, or `packages/daemon/src`; old UI strings are limited to negative assertions/tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Local PR insight, Review Queue, review operation, Pipeline run, and daemon review merge logic no longer rely on synthetic fallback dates for ordering or latest-record selection. | Fixed | Keep date parsing centralized when adding new persisted activity/history stores. |
+
+## Run: mp-appshell-immediate-preload-quiet-fallback-20260716-2338
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 23:36-23:38 +08:00 |
+| Runtime | Current worktree desktop source and mocked browser app |
+| Resource mode | AppShell route module preloading, lazy-route fallback presentation, desktop typecheck, and full route-cache browser suite |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by tightening the last source-level route-switching flash risk found in AppShell. Route data was already cached and route modules were preloaded after mount, but the preload was delayed by 250ms and the Suspense recovery fallback still rendered a visible `Loading...` card if a user switched routes before preload completed.
+
+### Change
+
+Started workspace route-module preloading immediately after AppShell mount and replaced the heavy `Loading...` fallback card with a quiet minimal preparing indicator. This preserves Suspense as a recovery path while reducing the chance and visual weight of first-switch route loading flashes.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/app/AppShell.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts `
+  --project=chromium --workers=1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused AppShell tests | Pass | 1 file / 2 tests passed for route preload behavior and failed-preload recovery. |
+| Desktop typecheck | Pass | `@mergepilot/desktop typecheck` completed successfully. |
+| Full route-cache browser suite | Pass | Mocked Chromium passed 27/27 after immediate route preload and quiet fallback changes. |
+| AppShell loading scan | Pass | AppShell no longer contains a user-visible `Loading...` fallback; remaining `Loading...` strings are local button/page states outside the workspace route-shell fallback. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| First-switch workspace route loading fallback is now less likely to appear and visually quieter if it does appear. | Fixed | Keep full-page route fallback understated; route data freshness should remain visible through page-level refreshing indicators. |
+
+## Run: mp-readable-unavailable-fallbacks-20260716-2342
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 23:39-23:42 +08:00 |
+| Runtime | Current worktree desktop source, daemon source, and mocked browser app |
+| Resource mode | Saved PR insight chat context, Review Audit view model, PR insight freshness labels, desktop/daemon typecheck, and full route-cache browser suite |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by removing remaining user-readable `unknown` placeholders from prompt context and audit/freshness labels. These strings were not type names: they could appear in saved PR readiness context, Review Queue audit details, or PR insight freshness messaging, and could be repeated by the assistant or shown in UI details.
+
+### Change
+
+Replaced saved PR context `readiness=unknown` with `readiness=not available`, pipeline blocker result fallback with `not available`, Review Audit missing actor text with `actor not available`, and PR insight freshness labels with `freshness not available`. Internal enum/state values remain unchanged where they are used by code.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/ChatPrInsightArtifact.test.ts `
+  src/reviewAudit.test.ts `
+  src/prInsightArtifactAnalysis.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- `
+  test/chatSessionPrInsightContext.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+
+.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts `
+  --project=chromium --workers=1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Desktop focused tests | Pass | 3 files / 12 tests passed for chat PR artifact markdown, Review Audit labels, and PR insight freshness. |
+| Daemon focused tests | Pass with warning | `chatSessionPrInsightContext.test.ts` passed 6/6; existing Node `DEP0040` `punycode` warning remains. |
+| Desktop and daemon typecheck | Pass | Both `@mergepilot/desktop typecheck` and `@mergepilot/daemon typecheck` completed successfully. |
+| Full route-cache browser suite | Pass | Mocked Chromium passed 27/27 after the fallback wording cleanup. |
+| Residual source scan | Pass | No product-source matches remain for `readiness=unknown`, `unknown actor`, or `freshness unknown`; remaining matches are historical docs or internal type/state names. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Saved PR context, audit details, and insight freshness labels no longer expose internal `unknown` wording to users or assistant prompt context. | Fixed | Continue treating user-readable absence states as `not available` style wording while preserving internal enum values where needed. |
+
+## Run: mp-pipeline-artifact-readable-fallbacks-20260716-2347
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 23:45-23:47 +08:00 |
+| Runtime | Current worktree daemon source |
+| Resource mode | Pipeline run summary and failure artifact text generation with mocked Azure DevOps run/timeline data |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by removing user-readable `unknown` placeholders from Pipeline AI analysis and failure evidence artifacts. These strings can be rendered as Markdown in Pipeline cards or right-side detail panels, so missing Azure DevOps metadata should read as an explicit unavailable state rather than an internal fallback.
+
+### Change
+
+Added display fallback helpers for Pipeline run id, branch, run status, and timeline record status. Pipeline summaries and failure artifacts now use `not available`, `branch not available`, and `Unclassified failure` instead of `unknown`, `unknown branch`, or `Unknown failure class` when Azure DevOps returns incomplete metadata. Backend Azure DevOps requests and failure classification logic are unchanged.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- `
+  test/pipelineWorkflow.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+
+rg -n "unknown branch|Unknown failure class|latest status=.*unknown|latest result=.*unknown|\| .*unknown|\bunknown\b" `
+  packages\daemon\src\workflows\pipelineWorkflowArtifacts.ts
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused daemon Pipeline tests | Pass with warning | `pipelineWorkflow.test.ts` passed 6/6; existing Node `DEP0040` `punycode` warning remains. |
+| Daemon typecheck | Pass | `@mergepilot/daemon typecheck` completed successfully. |
+| Pipeline artifact residual scan | Pass | No matches remain in `pipelineWorkflowArtifacts.ts` for `unknown branch`, `Unknown failure class`, or generic user-facing `unknown` fallback wording. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pipeline AI analysis/failure artifacts no longer expose internal missing-metadata placeholders when run metadata is incomplete. | Fixed | Keep user-visible Pipeline evidence aligned with the rest of the workspace unavailable-state vocabulary. |
+
+## Run: mp-pr-review-prompt-readable-fallbacks-20260716-2352
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 23:48-23:52 +08:00 |
+| Runtime | Current worktree core and daemon source |
+| Resource mode | PR review prompt generation, review decision reason generation, and Azure DevOps PR workflow insight summary generation with mocked data |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by removing remaining model/user-visible `(unknown)` style placeholders from PR review and PR workflow insight context. These strings can feed directly into AI insight generation or Review Queue decision reasons, so missing Azure DevOps metadata should be represented as explicit unavailable-state wording.
+
+### Change
+
+Review prompt PR signals now use `not available` and `branch not available` for missing PR status, branches, author, and latest build metadata. Auto-approval policy reasons now use `Target branch not available` for missing target branch values. PR workflow insight build readiness now treats failed/canceled `status` as well as `result`, and uses `not available` if both build state fields are absent.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- `
+  test/reviewPromptFallbacks.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- `
+  test/prWorkflow.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core build
+
+rg -n "\((unknown)\)|\bunknown\b" `
+  packages\core\src\review\prompt.ts `
+  packages\core\src\review\reviewDecision.ts `
+  packages\core\test\reviewPromptFallbacks.test.ts `
+  packages\daemon\src\workflows\prWorkflowInsight.ts `
+  packages\daemon\test\prWorkflow.test.ts
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Core review prompt focused tests | Pass | `reviewPromptFallbacks.test.ts` passed 2/2. |
+| Daemon PR workflow focused tests | Pass with warning | `prWorkflow.test.ts` passed 3/3; existing Node `DEP0040` `punycode` warning remains. |
+| Core and daemon typecheck | Pass | Both `@mergepilot/core typecheck` and `@mergepilot/daemon typecheck` completed successfully. |
+| Core build | Pass | `@mergepilot/core build` completed successfully. |
+| Residual wording scan | Pass | Remaining `unknown` matches are test names/assertions or TypeScript `as unknown as` casts, not product/prompt output. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| PR review prompts and workflow insight summaries no longer use internal unknown placeholders for missing ADO metadata. | Fixed | Keep AI-insight context aligned with the workspace unavailable-state vocabulary so generated summaries do not inherit placeholder language. |
+
+## Run: mp-chat-context-validation-readable-fallbacks-20260716-2355
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-16 23:53-23:55 +08:00 |
+| Runtime | Current worktree core and daemon source |
+| Resource mode | Chat quick-context summary and validation failure artifact generation with focused unit tests |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by removing remaining user/model-visible internal placeholder wording from Chat context and validation recovery artifacts. These outputs can appear in assistant context, source summaries, or artifact Markdown, so missing metadata should use explicit unavailable-state wording.
+
+### Change
+
+Quick repository scan summaries now render missing file-type distribution as `not available` instead of `unknown`. Validation failure artifacts now render missing validation command as `not available` instead of `(unknown)`.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- `
+  test/chatContextScan.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- `
+  test/chatSessionValidationArtifacts.test.ts
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck
+
+rg -n "\((unknown)\)|file types: unknown|Command: `\(unknown\)`" `
+  packages\core\src\chatContextScan.ts `
+  packages\core\test\chatContextScan.test.ts `
+  packages\daemon\src\chatValidationOutcome.ts `
+  packages\daemon\test\chatSessionValidationArtifacts.test.ts
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Core chat-context scan focused test | Pass | `chatContextScan.test.ts` passed 1/1. |
+| Daemon validation artifact focused tests | Pass with warning | `chatSessionValidationArtifacts.test.ts` passed 9/9; existing Node `DEP0040` `punycode` warning remains. |
+| Core and daemon typecheck | Pass | Both `@mergepilot/core typecheck` and `@mergepilot/daemon typecheck` completed successfully. |
+| Residual wording scan | Pass | No matches remain in the touched Chat context / validation artifact files for the old user-visible placeholder strings. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Chat context summaries and validation failure artifacts no longer expose `unknown` or `(unknown)` when metadata is absent. | Fixed | Continue separating internal enum/type states from user- or model-visible fallback text. |
+
+## Run: mp-installed-app-smoke-current-0520-20260717-000829
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 00:08:29 +08:00 |
+| Runtime | Current Program Files install: MergePilot desktop `0.5.20`, installed daemon health `0.5.20` |
+| Resource mode | Non-destructive installed-app package state, persistence, lifecycle safety, and verifier safety smoke |
+| Result | Pass |
+
+### Purpose
+
+Continue the installed-app regression track while the worktree has advanced to `0.5.21`. This run verifies that the currently installed `0.5.20` Program Files app remains healthy after the smoke harness hardening, without claiming fresh `0.5.21` MSI parity.
+
+### Command
+
+```powershell
+.\scripts\windows\run-installed-app-smoke.ps1 `
+  -ExpectedVersion 0.5.20 `
+  -ExpectedDesktopBundleKind any `
+  -PackageProbePort 8798 `
+  -PersistencePort 8799 `
+  -SafetyPort 8800 `
+  -VerifierSafetyPort 8801
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Package-state probe | Pass | Started the installed daemon, reported daemon version `0.5.20`, then stopped it cleanly. |
+| Restart persistence smoke | Pass | Project Link/chat persistence smoke completed with exit code `0`. |
+| Lifecycle safety smoke | Pass | Safety smoke completed with exit code `0`. |
+| Verifier port-owner safety smoke | Pass | Verifier safety smoke completed with exit code `0`. |
+
+### Logs
+
+| Log | Path |
+|---|---|
+| Package-state probe | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\installed-app-package-state-20260717-000829.log` |
+| Persistence | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\installed-app-persistence-20260717-000829.log` |
+| Lifecycle safety | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\installed-app-safety-20260717-000829.log` |
+| Verifier safety | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\installed-app-verifier-safety-20260717-000829.log` |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current installed `0.5.20` remains healthy under the strengthened installed-app smoke wrapper. | Pass | Keep using this as the current Program Files regression guard until a fresh `0.5.21` MSI is installed. |
+| The local worktree and available MSI are `0.5.21`, while the installed Program Files app is `0.5.20`. | Gap | Install `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi` elevated, then rerun the installed smoke with `-ExpectedVersion 0.5.21 -ExpectedDesktopBundleKind msi -MsiPath ...` for true MSI parity. |
+
+## Run: mp-workspace-ux-focused-recheck-20260717-0014
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 00:14-00:15 +08:00 |
+| Runtime | Current worktree desktop source |
+| Resource mode | Focused component/model tests plus mocked Chromium route-cache browser smoke |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization goal by rechecking the areas reported from the installed `0.5.20` UI: New Chat prompt stability, route warm-cache behavior, Pull Request insight actions, Pipeline Markdown AI analysis, Review Queue activity panel behavior, and Activity raw-output folding.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/pipelines/PipelineRowCard.test.tsx `
+  src/pages/Pipelines.test.tsx `
+  src/pages/pullRequests/PullRequestCard.test.tsx `
+  src/pages/pullRequests/PullRequestContextPanel.test.tsx `
+  src/pages/pullRequests/pullRequestViewModel.test.ts `
+  src/pages/reviewFindings/ReviewActivityRail.test.tsx `
+  src/pages/reviewFindings/reviewQueueViewModel.test.ts `
+  src/pages/chat/layout/ChatEmptyState.test.tsx `
+  src/pages/chat/layout/ChatMessageList.test.tsx `
+  src/app/AppShell.test.ts
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 `
+  -TestPath tests/e2e/route-cache.spec.ts `
+  -Project chromium `
+  -Workers 1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused desktop component/model tests | Pass | 10 files / 33 tests passed. |
+| Mocked Chromium route-cache suite | Pass | 27/27 browser tests passed. Coverage includes New Chat prompt stability, warm route caches, PR detail actions, Pipeline Markdown analysis and evidence panel, Review Queue refresh/switch behavior, and Activity raw-output folding. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current source still satisfies the main Workspace UX stabilization browser guards after the installed-app smoke recheck. | Pass | Keep native installed-window pixel/click proof and fresh `0.5.21` MSI parity as separate gates. |
+
+## Run: mp-live-azure-ado-readonly-reprobe-20260717-0016
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 00:16-00:17 +08:00 |
+| Runtime | Current worktree core and daemon source |
+| Resource mode | Live read-only Azure permission probe and Azure DevOps discovery/pipeline/PR insight probes |
+| Result | ADO pass; Azure data-plane partial |
+
+### Purpose
+
+Continue the live-resource verification track without mutating Azure DevOps or Azure resources. This rechecks whether the current signed-in account can read required Azure cloud dependencies and whether the ClaimBot_API Azure DevOps integration remains healthy.
+
+### Commands
+
+```powershell
+$env:MERGEPILOT_E2E_LIVE_AZURE = "1"
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- `
+  test/liveAzurePermissions.test.ts
+Remove-Item Env:\MERGEPILOT_E2E_LIVE_AZURE
+
+$env:MERGEPILOT_E2E_LIVE_ADO = "1"
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- `
+  test/liveAdoDiscovery.test.ts `
+  test/liveAdoPipeline.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- `
+  test/liveAdoPrInsight.test.ts
+Remove-Item Env:\MERGEPILOT_E2E_LIVE_ADO
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Live Azure permission diagnostic | Pass as diagnostic; partial access | Test passed and reported granular readiness. Azure account, Storage account ARM, Storage Table list, Cosmos account ARM, Cosmos SQL database list, and Key Vault ARM passed. Storage Table entity query, Cosmos SQL role assignments, and Key Vault secret metadata/list still failed. |
+| Live ADO discovery | Pass | Discovered project `TeBS-ClaimBot`, repository `ClaimBot_API`, and pipeline `#117 ClaimBot_API` with the current account. |
+| Live ADO pipeline read-only evidence | Pass | Listed recent pipeline runs and read timeline/log evidence for the latest failed or canceled run. Destructive queue test remained skipped because `MERGEPILOT_E2E_DESTRUCTIVE` was not enabled. |
+| Live daemon PR insight | Pass | `/chat/workflow-action` inspected real ClaimBot_API PR insight data and returned HTTP `200` without approval or mutation. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Azure DevOps read-only integration for ClaimBot_API remains healthy. | Pass | Keep destructive pipeline queue/PR mutation as separate opt-in gates with cleanup. |
+| Azure cloud data-plane access is still incomplete for Table entity reads, Cosmos SQL data roles, and Key Vault secret metadata/list. | Open | Grant Storage Table Data Reader/Contributor on `CicdAgentProfiles`, Cosmos DB Built-in Data Contributor scoped to `devagentcosmos001/cicd-agent`, and Key Vault Secrets User on `devagentkv001`; Secrets Officer is needed only for writes. |
+
+## Run: mp-live-app-ado-pipeline-browser-reprobe-20260717-001916
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 00:19-00:20 +08:00 |
+| Runtime | Source daemon `0.5.21` started by `run-live-app-e2e.ps1` |
+| Resource mode | Live app browser E2E with real Azure DevOps reads, destructive actions disabled |
+| Result | Pass |
+
+### Purpose
+
+Move beyond API-level ADO probes by verifying the real browser workflow can discover, save, inspect, and prepare approval proposals for the ClaimBot_API pipeline through the app UI while keeping destructive execution disabled.
+
+### Command
+
+```powershell
+.\scripts\windows\run-live-app-e2e.ps1 `
+  -LiveAdo `
+  -RestartMismatchedDaemon `
+  -Grep "ClaimBot_API pipeline #117" `
+  -Project chromium `
+  -Workers 1
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Wrapper setup | Pass | Started source daemon `0.5.21`, expected `0.5.21`, `liveAdo: true`, `destructive: false`. |
+| Browser tests | Pass | 4/4 Chromium tests passed. |
+| Port cleanup | Pass | Port `8787` had no owner after the wrapper completed. |
+
+### Passed Browser Cases
+
+| Case | Result |
+|---|---|
+| Discovers and saves ClaimBot_API pipeline `#117` when the Project Link has no pipeline ID | Pass |
+| Inspects ClaimBot_API pipeline `#117` failure evidence through normal Chat input | Pass |
+| Prepares ClaimBot_API pipeline `#117` rerun approval from failure evidence suggestions | Pass |
+| Prepares ClaimBot_API pipeline `#117` approval through the real Chat UI | Pass |
+
+### Logs
+
+| Log | Path |
+|---|---|
+| Playwright | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\live-app-e2e-20260717-001916.log` |
+| Source daemon stdout | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\live-app-source-daemon-20260717-001916.log` |
+| Source daemon stderr | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\live-app-source-daemon-20260717-001916.err.log` |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The live browser UI can route ClaimBot_API pipeline discovery, read-only inspection, and approval-preparation flows without triggering a real pipeline run. | Pass | Keep the destructive queue proof gated behind explicit `-Destructive` and cleanup requirements. |
+| The daemon stderr contains the known Node `DEP0040` `punycode` warning and the expected dev-daemon termination trace after the wrapper stops the process. | Informational | Track the deprecation separately; it did not affect this run. |
+
+## Run: mp-workspace-ux-browser-continuation-20260717-0027
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 00:27-00:31 +08:00 |
+| Runtime | Current worktree desktop source |
+| Resource mode | Mocked browser and desktop source verification |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization verification after the route-cache pass by checking the user-visible Chat layout and Review Queue browser behavior that matches the installed-app screenshots: warm route navigation, compact panels, right-side detail rails, source preview behavior, composer image attachments, approval composer locking, and Review Queue activity-panel state.
+
+### Commands
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/pipelines/PipelineRowCard.test.tsx `
+  src/pages/Pipelines.test.tsx `
+  src/pages/pullRequests/PullRequestCard.test.tsx `
+  src/pages/reviewFindings/ReviewActivityRail.test.tsx `
+  src/pages/taskViewer/TaskRunDetailPanel.test.tsx `
+  src/pages/taskViewer/CheckpointDetailPanel.test.tsx
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- `
+  src/pages/chat/layout/ChatEmptyState.test.tsx
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 `
+  -Spec tests/e2e/review-queue.spec.ts `
+  -Project chromium
+
+.\scripts\windows\run-mocked-browser-e2e.ps1 `
+  -Spec tests/e2e/chat-layout.spec.ts `
+  -Project chromium
+
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test
+```
+
+### Result
+
+| Gate | Result | Notes |
+|---|---|---|
+| Focused desktop component tests | Pass | 7 files / 12 tests passed. Coverage includes Pipeline Markdown analysis and run evidence, PR insight action wording, Review activity rail collapse, Activity raw-output folding, and New Chat empty-state prompt stability. |
+| Review Queue mocked browser suite | Pass | 5/5 Chromium tests passed. Coverage includes persisted Recent activity collapse state, selected queue lane semantic color, review-run evidence, disposition write-back retry, and stale review rerun behavior. |
+| Chat layout mocked browser suite | Pass | 50/50 Chromium tests passed. Coverage includes viewport layout, Project Link onboarding, branch/commit menu exclusivity, image attachment upload/drop/paste, PR/Pipeline read-only natural-language routing, approval composer locking, stream/tool-event deduplication, source preview, and artifact workspace behavior. |
+| Desktop typecheck | Pass | `tsc -p tsconfig.json --noEmit` completed successfully. |
+| Full desktop Vitest suite | Pass | 86 files / 396 tests passed. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current source-level and mocked-browser evidence supports the Workspace UX stabilization plan for Chat, Pull Requests, Review Queue, Pipelines, and Activity. | Pass | Keep native installed-window pixel/click proof and fresh installed `0.5.21` MSI parity as separate gates. |
+| No new browser-level regressions were found in the Chat layout or Review Queue suites. | Pass | Continue using `route-cache.spec.ts`, `chat-layout.spec.ts`, and `review-queue.spec.ts` as the main non-live UX regression triad. |
+
+## Run: mp-installed-auth-cache-avatar-verifier-fix-20260717-0032
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 00:32-00:38 +08:00 |
+| Runtime | Current Program Files install, daemon `0.5.20`; current worktree verifier script |
+| Resource mode | Installed-app smoke and verifier regression |
+| Result | Fixed and pass |
+
+### Purpose
+
+Continue installed-app verification and diagnose a newly observed package-state smoke failure where `/auth/status` did not include an avatar. The goal was to determine whether the installed app had lost the Microsoft identity/avatar path or whether the verifier was not matching the real frontend startup flow.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Program Files version check | Installed app is still `0.5.20` | `mergepilot-desktop.exe` reports `0.5.20`; the daemon sidecar is Node-based and reports Node file metadata, while `/healthz` reports daemon `0.5.20`. |
+| Initial installed smoke | Failed | `run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind any` failed only the package-state verifier. Persistence and safety probes passed. |
+| Failure root cause | Verifier false negative | `C:\Users\15492\.mergepilot\auth-cache.json` was missing. `/auth/status` is cache-only and returned `authenticated:false`; `/auth/me` successfully restored `Zhou Ping`, `Zhou.Ping@totalebizsolutions.com`, and avatar data from the Azure/MSAL credential cache. |
+| Script fix | Pass | `verify-installed-msi-state.ps1` now calls `/auth/me` when `ProbeAuth`/`RequireAvatar` sees an unauthenticated or avatarless `/auth/status`, then rechecks `/auth/status`. This matches the real frontend `AuthProvider` startup path. |
+| No-cache verifier regression | Pass | Temporarily moving `auth-cache.json` away and running `verify-installed-windows-package-state.ps1 ... -ProbeAuth -RequireAvatar -Port 8813` returned `ok:true`, `authenticated:true`, `hasAvatar:true`, and recreated the cache. The original cache file was restored afterward. |
+| Parser check | Pass | PowerShell parser check for `verify-installed-msi-state.ps1` returned `parser-ok`. |
+| Full installed smoke after fix | Pass | `run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind any` passed with package probe, restart persistence, safety, and verifier safety all exit code `0`. |
+
+### Logs
+
+| Log | Path |
+|---|---|
+| Initial failed package-state verifier | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\installed-app-package-state-20260717-003255.log` |
+| Passing package-state verifier | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\installed-app-package-state-20260717-003734.log` |
+| Passing restart persistence smoke | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\installed-app-persistence-20260717-003734.log` |
+| Passing safety smoke | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\installed-app-safety-20260717-003734.log` |
+| Passing verifier safety smoke | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\installed-app-verifier-safety-20260717-003734.log` |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The installed app identity/avatar path is healthy when the live Azure credential is refreshed. | Pass | Keep `/auth/me` as the canonical live identity refresh path. |
+| The previous verifier behavior could falsely fail fresh or cache-missing installs because it only checked `/auth/status`. | Fixed | Keep the no-cache verifier regression as the guard for future first-run installed-app smoke. |
+| This is still a `0.5.20` Program Files proof, not fresh installed `0.5.21` MSI parity. | Open | Install the rebuilt `0.5.21` MSI elevated and rerun installed-app smoke with MSI payload matching. |
+
+## Run: mp-activity-section-filter-browser-coverage-20260717-0052
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 00:52 +08:00 |
+| Runtime | Source workspace, mocked Chromium route-cache harness |
+| Resource mode | Non-destructive mocked browser UI |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by proving that the Activity page is not only grouped visually, but also supports a user-controllable section filter for operational history. This targets the installed-app feedback that Activity felt visually mixed and unclear.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Activity section chooser implementation | Pass | The Activity rail now exposes `All`, `Runs`, `Checkpoints`, `PR Insights`, and `Reviews` section buttons with counts. Choosing a scoped section selects the first visible operation in that section; empty sections clear stale details. |
+| Component regression | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/taskViewer/ActivitySidebar.test.tsx src/pages/TaskViewer.test.tsx` passed 2 files / 4 tests. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Focused browser interaction | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Grep "presents Activity as scoped operational history sections"` passed 1/1. The browser test clicks `Checkpoints`, verifies other sections hide, verifies the right detail panel switches to the checkpoint, then returns to `All` and verifies sections restore. |
+| Full route-cache browser suite | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium` passed 27/27. |
+| Full desktop Vitest suite | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` passed 87 files / 398 tests. |
+| Diff hygiene | Pass | `git diff --check -- apps/desktop/src/pages/taskViewer/ActivitySidebar.tsx apps/desktop/src/pages/taskViewer/ActivitySidebar.test.tsx tests/e2e/route-cache.spec.ts` reported no whitespace errors, only LF/CRLF warnings. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity now behaves more like a scoped operational-history workbench instead of a mixed dashboard rail. | Pass | Keep the section filter as the primary way to reduce Activity page density, with detail context synchronized to the selected section. |
+| This is mocked browser/source proof, not native installed pixel proof. | Open | Continue to treat fresh installed `0.5.21` MSI parity and native installed-window smoke as separate gates. |
+
+## Run: mp-activity-section-refresh-selection-sync-20260717-0103
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 01:03 +08:00 |
+| Runtime | Source workspace, mocked Chromium route-cache harness |
+| Resource mode | Non-destructive mocked browser UI |
+| Result | Pass |
+
+### Purpose
+
+Continue the Workspace UX stabilization pass by testing a refresh-time edge case in Activity: when the user is scoped to one operational source, refreshed data must not leave a stale detail panel or jump back to an unrelated run.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Root cause found | Fixed | `useTaskRuns` auto-selected the first run whenever run selection became empty. That behavior is useful for first load, but wrong after the user moves to Checkpoints, PR Insights, or Reviews. |
+| Runtime fix | Pass | Run auto-selection is now disabled when the user explicitly clears or moves away from Runs, and re-enabled when a run is selected. |
+| Activity section refresh sync | Pass | `ActivitySidebar` now keeps a scoped section synchronized during data refresh: if the selected item disappears, it selects the first refreshed item in that section or clears the detail panel when the section is empty. |
+| Focused component regression | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/taskViewer/ActivitySidebar.test.tsx src/pages/TaskViewer.test.tsx` passed 2 files / 4 tests. |
+| Focused browser interaction | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Grep "presents Activity as scoped operational history sections"` passed 1/1. The test now proves that a scoped Checkpoints refresh to zero items clears the right detail instead of showing the old checkpoint or an unrelated run. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Full route-cache browser suite | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium` passed 27/27. |
+| Full desktop Vitest suite | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` passed 87 files / 398 tests. |
+| Diff hygiene | Pass | `git diff --check -- apps/desktop/src/pages/taskViewer/ActivitySidebar.tsx apps/desktop/src/pages/taskViewer/useTaskRuns.ts tests/e2e/route-cache.spec.ts` reported no whitespace errors, only LF/CRLF warnings. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity scoped sections now preserve user intent across refresh instead of allowing Runs to regain focus implicitly. | Pass | Keep source-specific Activity sections as independent operational scopes. |
+| This strengthens mocked browser proof for the Activity page but is still not native installed-window pixel/click proof. | Open | Continue fresh installed MSI/native smoke separately. |
+
+## Run: mp-current-installed-0520-regression-smoke-20260717-0109
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 01:07-01:09 +08:00 |
+| Runtime | Current Program Files install, NSIS bundle, daemon `0.5.20` |
+| Resource mode | Installed-app smoke against existing install; temporary local Project Link/chat data only |
+| Result | Pass |
+
+### Purpose
+
+Continue the business/UX verification loop by checking that the currently installed app remains healthy while source work continues. This is a regression guard for the user's installed environment, not proof of fresh `0.5.21` MSI parity.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Installed package shape | Pass | `C:\Program Files\MergePilot` contains `mergepilot-desktop.exe`, `mergepilot-daemon.exe`, and `uninstall.exe`; desktop bundle kind is `nsis`; uninstall entry reports `MergePilot` version `0.5.20`. |
+| Legacy cleanup | Pass | `C:\Program Files\CICD-Agent` and the legacy publisher Start Menu shortcut directory are absent. |
+| Daemon health | Pass | Installed daemon health reported `version: 0.5.20`, `llmProvider: azure`, deployment `gpt-4o`, endpoint `https://devagentproj-resource.openai.azure.com`, and `envSource: C:\Users\15492\.mergepilot\config.toml`. |
+| Auth and avatar | Pass | `/auth/status` after `/auth/me` refresh reported authenticated user `Zhou Ping`, UPN `Zhou.Ping@totalebizsolutions.com`, and `hasAvatar: true`. |
+| Restart persistence | Pass | Temporary Project Link and chat session survived daemon restart; assistant response was available before and after restart; cleanup deleted the test chat, Project Link, temp repo, and daemon process. |
+| Safety boundary | Pass | Installed smoke refused to control an unrelated listener on the safety port and left that listener alive. |
+| Verifier safety | Pass | The verifier safety gate also exited cleanly. |
+| Wrapper result | Pass | `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis` returned `ok: true` with no open smoke ports afterward. |
+
+### Logs
+
+| Log | Path |
+|---|---|
+| Package state | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\installed-app-package-state-20260717-010736.log` |
+| Restart persistence | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\installed-app-persistence-20260717-010736.log` |
+| Lifecycle safety | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\installed-app-safety-20260717-010736.log` |
+| Verifier safety | `C:\Users\15492\Develop\Agents\CICD-agents\output\live-e2e\installed-app-verifier-safety-20260717-010736.log` |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The currently installed `0.5.20` app remains operational with Azure OpenAI config, authenticated identity, avatar, and restart persistence. | Pass | Keep this as a regression guard for the user's current installed environment. |
+| This is not fresh `0.5.21` MSI parity and does not validate native installed-window pixel/click behavior. | Open | Install the rebuilt `0.5.21` MSI elevated and rerun strict installed smoke plus native UI smoke when ready. |
+
+## Run: mp-chat-reviewqueue-browser-continuation-20260717-0111
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 01:10-01:11 +08:00 |
+| Runtime | Source workspace, mocked Chromium browser harness |
+| Resource mode | Non-destructive mocked browser UI |
+| Result | Pass |
+
+### Purpose
+
+Continue checking the UX areas that were reported from installed-app screenshots after the latest Activity fixes and installed-app smoke: Chat middle/right panel behavior, source preview, composer attachment controls, approval locking, and Review Queue's right-side activity panel.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Chat layout browser suite | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/chat-layout.spec.ts -Project chromium` passed 50/50. |
+| Review Queue browser suite | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/review-queue.spec.ts -Project chromium` passed 5/5. |
+| Chat workflow shell | Pass | Coverage includes viewport containment, narrow onboarding, structured command chips, branch/commit dropdown mutual exclusion, Project Link ADO inference, and Pipeline setup guidance. |
+| Composer and attachments | Pass | Coverage includes compact add menu image upload, dropped image attachments, pasted image attachments, approval composer notice, and disabled composer controls during pending approval. |
+| Workflow transcript and streaming | Pass | Coverage includes UI stream tool lifecycle, approval cards from canonical UI chunks, deduped legacy/UI events, long streamed Markdown, interrupted stream restore, late-response ignore, and composer release after UI-stream completion. |
+| Source preview/artifacts | Pass | Coverage includes project-context source references, source preview copy actions, tab cleanup, saved PR insight artifact source loading, persisted lookup errors, and ordinary artifact shell handling. |
+| Review Queue panel behavior | Pass | Coverage includes persisted Recent activity collapse state, semantic selected lane styling instead of gray, review-run evidence, ADO write-back retry, and stale review rerun refresh. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| No new mocked-browser regression was found in the Chat layout or Review Queue surfaces after the Activity refresh fix. | Pass | Keep `chat-layout.spec.ts`, `review-queue.spec.ts`, and `route-cache.spec.ts` as the core non-live UX regression triad. |
+| This remains source/browser proof rather than native installed-window proof. | Open | Native installed UI smoke is still needed after a fresh elevated `0.5.21` MSI install. |
+
+## Run: mp-chat-empty-auth-consent-fix-20260717-0124
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 01:14-01:38 +08:00 |
+| Runtime | Source workspace plus downloaded GitHub Actions Windows artifact |
+| Resource mode | Non-destructive source/browser verification |
+| Result | Pass |
+
+### Purpose
+
+Resolve two installed-app issues reported from the `0.5.20` UI: New Chat still rendered a preloaded welcome/prompt template, and Microsoft sign-in requested Key Vault resource consent during basic login, producing `AADSTS650057` when the app registration lacked `https://vault.azure.net` delegated permission.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Current installed version check | Observed | Program Files still reports `0.5.20`; this is not the latest Actions run artifact. |
+| Latest artifact download | Pass | Downloaded run `29436222385` Windows artifacts: `output\github-run-29436222385\windows\msi\MergePilot_0.5.21_x64_en-US.msi` and `output\github-run-29436222385\windows\nsis\MergePilot_0.5.21_x64-setup.exe`. |
+| Chat empty state | Pass | Empty active Project Link chats no longer render `Ask MergePilot anything`, sample prompts, suggestion chips, or skeleton prompt pulses. |
+| Structured chat actions | Pass | Compact `PR insight` and `Pipeline` actions are available from the pinned summary Project Link section instead of the central empty-state template. |
+| Microsoft sign-in consent | Pass | `loginWithBrowser` no longer requests Key Vault/Storage/Cosmos scopes during basic Microsoft sign-in; cloud resource access is left to the feature path that needs it. |
+| Focused tests | Pass | Desktop Chat empty/message tests passed 2 files / 6 tests; core auth session tests passed 1 file / 3 tests; Chat workspace action/derived-state tests passed 2 files / 6 tests. |
+| Typecheck | Pass | Desktop and core typecheck passed. |
+| Mocked browser | Pass | Full `route-cache.spec.ts` passed 27/27. Full `chat-layout.spec.ts` initially exposed two stale test anchors that still expected the removed welcome template; after updating those anchors to verify the composer/model/viewport behavior instead, the full Chat layout suite passed 50/50. |
+| Full desktop tests | Pass | `@mergepilot/desktop` Vitest passed 87 files / 398 tests. |
+| Diff hygiene | Pass | `git diff --check` on the touched Chat/auth/test/docs files reported no whitespace errors; Git emitted only expected LF-to-CRLF working-copy warnings. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The source now prevents the two reported issues from shipping in the next package. | Pass | Build/release and install a new Windows artifact before expecting the installed app to reflect the fixes. |
+| The downloaded latest artifact is `0.5.21` from the referenced successful Release run, but it does not include the source changes made in this run unless a new release is built afterward. | Open | Use the downloaded `0.5.21` MSI only to move off installed `0.5.20`; create a newer release after committing these fixes. |
+
+## Run: mp-local-msi-after-chat-auth-fix-and-live-ado-ui-20260717-0224
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 02:17-02:25 +08:00 |
+| Runtime | Source workspace, local Windows Tauri package, live ADO browser harness |
+| Resource mode | Non-destructive package build and live ADO UI verification |
+| Result | Pass |
+
+### Purpose
+
+Confirm that the New Chat empty-state removal and Microsoft sign-in consent fix are included in a freshly rebuilt local Windows package, and update the live ADO browser test to follow the new pinned-summary `Pipeline` action instead of the removed central `Open Pipelines workspace` welcome template.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Referenced GitHub Actions run | Observed | Run `29436222385` succeeded on branch/tag `v0.5.21` at commit `11796ff179e02cdc273a7d41617419a12a72cd4f`, which is older than the current source fix state. |
+| Local package rebuild | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop tauri:build` rebuilt core, daemon sidecar, desktop production assets, MSI, and NSIS. Existing package warnings were limited to dynamic MySQL requires in `pkg`, Node `punycode`, and Vite large optional chunks. |
+| Fresh MSI timestamp | Pass | `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi` was regenerated at `2026-07-17 02:21:56`, after `ChatEmptyState.tsx` and `azureAuthSession.ts` were fixed. |
+| Fresh NSIS timestamp | Pass | `apps\desktop\src-tauri\target\release\bundle\nsis\MergePilot_0.5.21_x64-setup.exe` was regenerated at `2026-07-17 02:22:49`. |
+| Live ADO focused UI gate | Pass | `.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -Grep "discovers and saves ClaimBot_API pipeline\|prepares ClaimBot_API pipeline #117 approval"` passed. |
+| Live ADO ClaimBot_API group | Pass | `.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -Grep "ClaimBot_API pipeline"` passed all 4 real-browser tests against source daemon `0.5.21`. |
+| ADO mutation safety | Pass | `destructive: false`; the tests prepared approvals and verified discovery/inspection paths without queueing a pipeline run. |
+| Diff hygiene | Pass | `git diff --check` on the touched Chat/auth/live-ADO test files reported no whitespace errors; Git emitted only expected LF-to-CRLF working-copy warnings. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The GitHub Actions run linked during testing is not sufficient for the latest Chat empty-state and Microsoft sign-in consent fixes. | Open | Use the freshly rebuilt local MSI for immediate manual testing, or create a new release after committing these fixes. |
+| The rebuilt local `0.5.21` MSI now contains the source fixes made after the referenced run. | Pass | Install `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi` elevated for Program Files parity testing. |
+| Live ADO UI tests now follow the new pinned-summary `Pipeline` action and still prove ClaimBot_API pipeline `#117` discovery, inspection, and approval preparation. | Pass | Keep the old-button fallback only as compatibility for older captured states; product UI should no longer show the central welcome template. |
+
+## Run: mp-package-and-installed-state-continuation-20260717-0230
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 02:26-02:32 +08:00 |
+| Runtime | Rebuilt local package, source/mocked browser gates, current Program Files install |
+| Resource mode | Non-destructive package and installed-state verification |
+| Result | Package/source pass; installed parity still old |
+
+### Purpose
+
+Continue verification after rebuilding the local `0.5.21` package: prove the package payload works, prove the old New Chat welcome-template strings are absent from the built frontend, confirm basic Microsoft sign-in tests still pass without up-front Key Vault consent, and separate those results from the still-installed Program Files `0.5.20` app.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| MSI payload smoke | Pass | `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi" -Port 18951` passed with extracted daemon `healthVersion: 0.5.21`, `workflowPhase: inspect_environment`, and `/chat` HTTP `200`. |
+| Built frontend stale-template scan | Pass | `apps\desktop\dist` contains no `Ask MergePilot anything`, `help me review changes and go all the way to PR`, `what's changed since main?`, `create PR`, or `Open Pipelines workspace` strings. |
+| Source stale-helper scan | Pass with test-only residue | Active product source contains no removed cloud-consent helpers. The remaining `Open Pipelines workspace` occurrences are compatibility/unit-test expectations, not shipped built frontend strings. |
+| Auth focused test | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/azureAuthSession.test.ts` passed 1 file / 3 tests. |
+| Chat focused tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/chatDerivedState.test.ts` passed 3 files / 9 tests. |
+| Chat browser focused tests | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/chat-layout.spec.ts -Project chromium -Grep "keeps empty New Chat free of preloaded command templates\|routes pipeline controls\|guides pipeline setup\|read-only pipeline inspection"` passed 4/4. |
+| Signature verification | Expected fail | `verify-windows-artifact-signatures.ps1 -Version 0.5.21` still reports both MSI and NSIS artifacts as `NotSigned`. |
+| Strict installed `0.5.21` MSI parity | Expected fail | `run-installed-app-smoke.ps1 -ExpectedVersion 0.5.21 -ExpectedDesktopBundleKind msi -MsiPath ...` failed because Program Files still reports daemon `0.5.20`, not because the rebuilt MSI payload failed. |
+| Current installed `0.5.20` smoke | Pass | `run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind any` passed package probe, restart persistence, lifecycle safety, verifier safety, and cleanup. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The rebuilt local MSI payload and source/browser gates support the Chat/auth fixes. | Pass | Use the rebuilt MSI for the next manual install test. |
+| Program Files still contains the older installed app. | Open | Install `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.21_x64_en-US.msi` elevated, then rerun the strict `0.5.21` installed smoke. |
+| Windows signing remains unresolved. | Open | Configure trusted Authenticode signing before expecting Windows to remove the unknown-publisher prompt. |
+
+## Run: mp-version-0522-package-collision-fix-20260717-0239
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 02:32-02:40 +08:00 |
+| Runtime | Source workspace, local Windows Tauri package, current Program Files install |
+| Resource mode | Non-destructive version/package verification |
+| Result | Pass with installed/signing blockers unchanged |
+
+### Purpose
+
+Fix a newly discovered release identity risk: the referenced GitHub Actions artifact and the locally rebuilt package were both named `MergePilot_0.5.21_x64_en-US.msi` but had different contents. Bump the current workspace version to `0.5.22`, rebuild package artifacts, and verify the new MSI has a unique version/file name and healthy payload before any next release.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Old published/local collision | Confirmed | Downloaded Actions MSI SHA-256 was `02D100B8DFFF25F408BC5E19C96CA40864086B15142B64B69BA691E69A8EBAA4`; locally rebuilt `0.5.21` MSI SHA-256 was `309F212BE59AD0CEE02D4A1683114D8BCEC05745885EFA24F68A6A38B4BFF7FB`. |
+| Manifest version bump | Pass | Root, desktop, core, daemon, cli, review-agent package manifests and `apps\desktop\src-tauri\tauri.conf.json` now report `0.5.22`. |
+| Focused typecheck | Pass | Desktop, core, and daemon typecheck commands passed with package output showing `@mergepilot/*@0.5.22`. |
+| Tauri package rebuild | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop tauri:build` produced `MergePilot_0.5.22_x64_en-US.msi` and `MergePilot_0.5.22_x64-setup.exe`. Existing warnings were limited to dynamic MySQL requires in `pkg`, Node `punycode`, and Vite optional large chunks. |
+| `0.5.22` artifact identity | Pass | MSI: `2026-07-17 02:36:42`, length `54239232`, SHA-256 `CFC62918A0A0BE6BCE64AF2DA8DEA706BEE3662526B442B2AF49E67FE6756A97`. NSIS: `2026-07-17 02:37:36`, length `45796633`, SHA-256 `05787BF03CB6E854A7AA59AFA5D71A527C98EDDAA8C4A5E227C0FA2498562F9F`. |
+| MSI payload smoke | Pass | `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -Port 18971` passed with extracted daemon `healthVersion: 0.5.22`, `workflowPhase: inspect_environment`, and `/chat` HTTP `200`. |
+| Built frontend stale-template scan | Pass | `apps\desktop\dist` still contains no old New Chat welcome-template strings. |
+| Release workflow static check | Pass | `.\scripts\windows\verify-release-workflow-static.ps1` passed; release workflow still cleans stale bundle artifacts before Tauri build, signs Windows installers, verifies signatures, and uploads artifacts. |
+| Signature verification | Expected fail | `.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.22` still reports both Windows artifacts as `NotSigned`. |
+| Strict installed `0.5.22` parity | Expected fail | `run-installed-app-smoke.ps1 -ExpectedVersion 0.5.22 -ExpectedDesktopBundleKind msi -MsiPath ...` failed because Program Files still runs daemon `0.5.20`; lifecycle and verifier safety subprocesses passed. |
+| Diff hygiene | Pass | `git diff --check` on version manifests, test helper, and test-record docs reported no whitespace errors; Git emitted only expected LF-to-CRLF warnings. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The same-version package collision has been removed for the next local/release artifact. | Pass | Use `v0.5.22` for the next release tag; do not publish another `v0.5.21` artifact for these source fixes. |
+| The rebuilt `0.5.22` MSI payload is healthy and includes the latest Chat/auth fixes. | Pass | Install `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi` elevated for the next Program Files parity test. |
+| Installed-app parity remains intentionally unproven. | Open | Current Program Files app is still `0.5.20`; rerun strict installed smoke after elevated `0.5.22` MSI installation. |
+| Windows trusted publisher remains unresolved. | Open | Configure trusted Authenticode signing secrets/certificate before release if the goal is to remove unknown-publisher prompts. |
+
+## Run: mp-0522-packaged-vision-and-workspace-smoke-20260717-0244
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 02:40-02:44 +08:00 |
+| Runtime | Local `0.5.22` MSI payload, source daemon `0.5.22`, mocked Chromium browser |
+| Resource mode | Non-destructive package/source/browser verification |
+| Result | Pass |
+
+### Purpose
+
+Continue verification after the `0.5.22` version bump by proving the rebuilt MSI payload still supports image/vision chat over SSE, the live-app wrapper starts a source daemon whose version matches the new workspace version, and the established mocked workspace UX smoke remains green.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Packaged live vision smoke | Pass | `.\scripts\windows\packaged-live-vision-smoke.ps1 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -Port 18981` passed with extracted daemon `healthVersion: 0.5.22`. |
+| Vision answer quality | Pass | Final answer identified `MP VISION TEST`, a blue square, and a red circle; `matchesText: true`, `matchesShapes: true`, `leaksControlJson: false`, `duplicateSentence: false`, and `hasSseErrors: false`. |
+| Source live-app approval-denial workflow | Pass | `.\scripts\windows\run-live-app-e2e.ps1 -Grep "does not stage files when the user rejects a real Chat UI approval"` passed. The wrapper started daemon `0.5.22`, expected `0.5.22`, used `destructive: false`, and cleaned up after the run. |
+| Mocked workspace smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked" -Project chromium -Workers 1` passed 38/38. Coverage includes Chat viewport/pinned-summary actions, New Chat quiet state and route caching, Pull Requests, Review Queue, Pipelines, Activity, and Settings permission/local-env behavior. |
+| Artifact identity retained | Pass | Current local MSI SHA-256 remains `CFC62918A0A0BE6BCE64AF2DA8DEA706BEE3662526B442B2AF49E67FE6756A97`; NSIS SHA-256 remains `05787BF03CB6E854A7AA59AFA5D71A527C98EDDAA8C4A5E227C0FA2498562F9F`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The `0.5.22` MSI payload supports both ordinary package smoke and vision/SSE chat paths. | Pass | Use this MSI for elevated installed-app parity testing. |
+| Source live-app version parity is now aligned to `0.5.22`. | Pass | Keep using the wrapper so an old Program Files daemon on `8787` cannot masquerade as source evidence. |
+| Workspace UX smoke remains green after the version bump. | Pass | Continue using `@smoke @mocked` as the fast broad UI regression gate. |
+| Installed Program Files and Windows signing remain external blockers. | Open | Install `0.5.22` elevated and configure trusted Authenticode signing before release-grade distribution. |
+
+## Run: mp-0522-full-source-live-regression-20260717-0258
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 02:46-02:58 +08:00 |
+| Runtime | Source packages `0.5.22`, source daemon `0.5.22`, current Program Files `0.5.20`, live ADO read-only |
+| Resource mode | Non-destructive source/live/package boundary verification |
+| Result | Pass with signing and installed-version blockers unchanged |
+
+### Purpose
+
+Run the full source test suites and real browser workflow gates after the `0.5.22` version bump, then recheck package hashes, signing state, current installed-app health, and ClaimBot_API pipeline run state to ensure the broader verification did not mutate real resources.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Core full tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test` passed 50 files / 256 tests, with 4 live-gated files and 6 tests skipped by default. Existing Node `punycode` deprecation warnings remain. |
+| Daemon full tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test` passed 45 files / 265 tests, with 1 skipped test. Existing Node `punycode` deprecation warnings remain. |
+| Desktop full tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` passed 87 files / 398 tests. |
+| Full non-ADO live app browser gate | Pass | `.\scripts\windows\run-live-app-e2e.ps1` passed with source daemon `0.5.22`, expected `0.5.22`, `liveAdo: false`, and `destructive: false`. Log: `output\live-e2e\live-app-e2e-20260717-024737.log`. |
+| Live ADO ClaimBot_API pipeline browser gate | Pass | `.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -Grep "ClaimBot_API pipeline"` passed with source daemon `0.5.22`, expected `0.5.22`, `liveAdo: true`, and `destructive: false`. Log: `output\live-e2e\live-app-e2e-20260717-025531.log`. |
+| ADO mutation safety | Pass | Latest ClaimBot_API pipeline `#117` run remained `4680 / 20260706.1`, status `completed`, result `succeeded`, branch `refs/heads/main`; no new pipeline run was queued. |
+| Package artifact identity | Pass | MSI SHA-256 remained `CFC62918A0A0BE6BCE64AF2DA8DEA706BEE3662526B442B2AF49E67FE6756A97`; NSIS SHA-256 remained `05787BF03CB6E854A7AA59AFA5D71A527C98EDDAA8C4A5E227C0FA2498562F9F`. |
+| Windows signatures | Expected fail | `.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.22` still reports both Windows artifacts as `NotSigned`. |
+| Current installed app smoke | Pass | `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind any` passed package probe, restart persistence, lifecycle safety, verifier safety, and cleanup. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The `0.5.22` source tree passes the full core/daemon/desktop suites after the version bump. | Pass | Keep these as the pre-stage source gates. |
+| Real browser workflows remain healthy under source daemon `0.5.22`. | Pass | Continue using the wrapper to prevent mismatched installed daemons from being mistaken for source evidence. |
+| The live ADO pipeline tests stayed non-destructive. | Pass | Destructive pipeline queue proof remains opt-in and cleanup-gated. |
+| Current Program Files app remains healthy but is still `0.5.20`. | Open | Install `0.5.22` elevated for strict installed parity and native UI smoke. |
+| Windows trusted-publisher readiness is still incomplete. | Open | Configure Authenticode signing before publishing release-grade Windows artifacts. |
+
+## Run: mp-tauri-crate-version-0522-alignment-20260717-0306
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 03:00-03:06 +08:00 |
+| Runtime | Local Windows Tauri package `0.5.22`, MSI payload extraction smoke |
+| Resource mode | Non-destructive package metadata and payload verification |
+| Result | Pass with signing blocker unchanged |
+
+### Purpose
+
+Close a version-metadata gap found after the `0.5.22` package bump: the JavaScript package manifests and `tauri.conf.json` were already `0.5.22`, but the Rust crate metadata still identified the Tauri shell as `mergepilot-desktop v0.1.0`. Align the Rust crate and lockfile so the rebuilt Windows artifacts have consistent product/package identity.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Rust crate metadata | Pass | `apps\desktop\src-tauri\Cargo.toml` now has `version = "0.5.22"` for `mergepilot-desktop`; `apps\desktop\src-tauri\Cargo.lock` now records `mergepilot-desktop` as `0.5.22`. Remaining `0.1.0` matches are third-party dependencies, not the app crate. |
+| Cargo verification | Pass | `cargo metadata --format-version 1 --manifest-path apps\desktop\src-tauri\Cargo.toml --no-deps` completed, and `cargo check --manifest-path apps\desktop\src-tauri\Cargo.toml` compiled `mergepilot-desktop v0.5.22`. |
+| Tauri package rebuild | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop tauri:build` regenerated the `0.5.22` Windows artifacts after the Rust metadata fix. |
+| Artifact identity | Pass | MSI: `2026-07-17 03:04:01`, length `54247424`, SHA-256 `49649F88F455E1C4EB13B332D856EBB0AA4B15639DB8D98E4F15773656D6E48A`. NSIS: `2026-07-17 03:04:53`, length `45795775`, SHA-256 `ACA549B44FC4F7E17570A0B9D59889CB817D949D882C3237676C227314EA5914`. |
+| Windows executable metadata | Pass | `mergepilot-desktop.exe` and `MergePilot_0.5.22_x64-setup.exe` both report `ProductVersion: 0.5.22` and `FileVersion: 0.5.22`. |
+| MSI payload smoke | Pass | `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -Port 18991` passed with extracted daemon `healthVersion: 0.5.22`, `workflowPhase: inspect_environment`, and `/chat` HTTP `200`. |
+| Windows signatures | Expected fail | `.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.22` still reports both Windows artifacts as `NotSigned`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The Tauri/Rust crate identity is now aligned with the `0.5.22` app/package version. | Pass | Use this rebuilt local MSI for the next elevated install test. |
+| The rebuilt MSI payload remains healthy after the metadata alignment. | Pass | Continue to keep package payload evidence separate from Program Files installed-app evidence. |
+| Windows trusted-publisher readiness is still blocked by missing signing. | Open | Configure Authenticode signing before publishing release-grade Windows artifacts. |
+
+## Run: mp-0522-current-state-continuation-gate-20260717-0311
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 03:08-03:11 +08:00 |
+| Runtime | Current source `0.5.22`, local MSI payload `0.5.22`, current Program Files install `0.5.20` |
+| Resource mode | Non-destructive package, installed-state, focused source, and mocked browser verification |
+| Result | Pass with installed-version and signing blockers unchanged |
+
+### Purpose
+
+Continue the stabilization verification loop after the Rust/Tauri metadata alignment. Recheck the current version sources, package payload, installed app state, signing status, focused Chat/auth tests, and route-cache browser behavior so the latest evidence distinguishes clearly between fixed source/package behavior and unresolved external release/install blockers.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Version-source scan | Pass | Root, desktop, CLI, core, daemon, review-agent package manifests, `tauri.conf.json`, `Cargo.toml`, and the `mergepilot-desktop` Cargo.lock entry all report `0.5.22`. |
+| Artifact identity | Pass | Current MSI SHA-256 is `49649F88F455E1C4EB13B332D856EBB0AA4B15639DB8D98E4F15773656D6E48A`; NSIS SHA-256 is `ACA549B44FC4F7E17570A0B9D59889CB817D949D882C3237676C227314EA5914`; `mergepilot-desktop.exe` reports `ProductVersion/FileVersion 0.5.22`. |
+| Current installed app smoke | Pass | `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind any -PackageProbePort 19001 -PersistencePort 19002 -SafetyPort 19003 -VerifierSafetyPort 19004` passed package probe, restart persistence, lifecycle safety, verifier safety, and cleanup. |
+| `0.5.22` MSI payload smoke | Pass | `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -Port 19011` passed with extracted daemon `healthVersion: 0.5.22`, `workflowPhase: inspect_environment`, and `/chat` HTTP `200`. |
+| Windows signatures | Expected fail | `.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.22` still reports both MSI and NSIS artifacts as `NotSigned`. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed for `@mergepilot/desktop@0.5.22`. |
+| Auth session tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test\azureAuthSession.test.ts` passed 1 file / 3 tests. |
+| Focused Chat/AppShell tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src\pages\chat\layout\ChatEmptyState.test.tsx src\pages\chat\layout\ChatMessageList.test.tsx src\pages\chat\chatDerivedState.test.ts src\app\AppShell.test.ts` passed 4 files / 11 tests. |
+| Route-cache browser smoke | Pass | First rerun used Windows backslashes and found no tests, then reran with the wrapper's documented forward-slash path: `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Project chromium -Workers 1` passed 27/27 Chromium tests. Coverage includes New Chat quiet state without index-status preload, warm route returns, Project Link switch scoping, Pull Requests, Review Queue, Pipelines, Activity, Pipeline Markdown analysis, and raw-output folding. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current source/package evidence continues to support the Chat empty-state/auth/route-cache fixes at `0.5.22`. | Pass | Keep using the local `0.5.22` MSI for the next install parity test. |
+| Current Program Files remains healthy but is still the older `0.5.20` install. | Open | Install `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi` elevated, then rerun strict installed MSI parity and native UI smoke. |
+| Windows trusted-publisher readiness remains unresolved. | Open | Configure trusted Authenticode signing before release-grade distribution. |
+
+## Run: mp-0522-release-install-verifier-continuation-20260717-0316
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 03:12-03:16 +08:00 |
+| Runtime | Current source `0.5.22`, local `0.5.22` MSI/NSIS artifacts, current Program Files install `0.5.20` |
+| Resource mode | Non-destructive release workflow and installed-verifier continuation |
+| Result | Release/static guards pass; installed parity and signing remain expected blockers |
+
+### Purpose
+
+Check for less visible release/install regressions after the `0.5.22` version bump: stale lockfile references, release workflow ordering, strict installed MSI parity, verifier safety behavior, and signing-script failure clarity.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Active version residual scan | Pass | Current active manifests/configs contain `0.5.22`; `pnpm-lock.yaml` does not contain stale `0.5.21` package versions. The only active source `0.5.21` reference is the intentional installed-smoke compatibility branch for versions older than `0.5.21`. |
+| Release workflow static verifier | Pass | `.\scripts\windows\verify-release-workflow-static.ps1` returned `ok: true`; workflow matrix still covers `windows-latest` and `macos-latest`, cleans stale installer artifacts before Tauri build, signs Windows installers after build, verifies signatures, and uploads installer artifacts. |
+| Strict installed `0.5.22` MSI parity | Expected fail | `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.22 -ExpectedDesktopBundleKind msi -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -PackageProbePort 19021 -PersistencePort 19022 -SafetyPort 19023 -VerifierSafetyPort 19024` failed because Program Files still contains installed daemon/app `0.5.20` with NSIS shape and hashes that do not match the `0.5.22` MSI payload. |
+| Installed verifier safety paths | Pass | In the strict installed parity run, lifecycle safety and verifier port-owner safety both exited `0` even though package/persistence checks correctly failed on version mismatch. |
+| Script parser check | Pass | PowerShell AST parser check passed for 10 release/install/package/signing smoke scripts, including installed-state, restart-persistence, MSI payload, release static, signing, and signature verifier scripts. |
+| Signing-script failure clarity | Expected fail | `.\scripts\windows\sign-windows-release-artifacts.ps1 -Version 0.5.22` failed clearly with `Windows code-signing certificate is not configured. Set WINDOWS_CODESIGN_CERT_PFX_BASE64 and WINDOWS_CODESIGN_CERT_PASSWORD.` |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| No stale active `0.5.21` version source was found after the `0.5.22` bump. | Pass | Keep historical records as history; use `0.5.22` for the next release/install proof. |
+| Release workflow structure still enforces the intended Windows signing/verification order. | Pass | A real tag-triggered runner proof is still needed after signing secrets are configured. |
+| Strict installed parity is blocked only because Program Files has not been upgraded to the local `0.5.22` MSI. | Open | Install the local MSI elevated, then rerun the same strict command. |
+| Trusted Windows distribution is still blocked by missing signing configuration. | Open | Configure `WINDOWS_CODESIGN_CERT_PFX_BASE64` and `WINDOWS_CODESIGN_CERT_PASSWORD`, then rerun signing and signature verification. |
+
+## Run: mp-0522-installer-metadata-verifier-20260717-0324
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 03:18-03:24 +08:00 |
+| Runtime | Local `0.5.22` MSI/NSIS artifacts and release workflow |
+| Resource mode | Non-destructive installer metadata verification |
+| Result | Pass |
+
+### Purpose
+
+Close a remaining release-installation blind spot: previous package smoke proved extracted daemon health and artifact file versions, but did not provide a reusable check for the MSI Windows Installer `Property` table. Add a verifier that checks MSI `ProductName`, `ProductVersion`, `Manufacturer`, `UpgradeCode`, `ALLUSERS`, NSIS setup version metadata, and desktop executable version metadata. Then wire that verifier into the release workflow before Windows signing.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| New metadata verifier | Pass | Added `scripts\windows\verify-windows-installer-metadata.ps1`. It reads expected values from `package.json` and `apps\desktop\src-tauri\tauri.conf.json`, then reads the MSI `Property` table through Windows Installer COM. |
+| Initial self-test bug | Fixed | The first verifier run correctly exposed a comparison bug in expected `UpgradeCode` bracing. The script was fixed and rerun successfully. |
+| Current `0.5.22` metadata | Pass | `.\scripts\windows\verify-windows-installer-metadata.ps1 -Version 0.5.22` returned `ok: true`. MSI metadata: `ProductName=MergePilot`, `ProductVersion=0.5.22`, `Manufacturer=Total eBiz Solutions Pte Ltd`, `UpgradeCode={85E97B81-5039-4096-9BCC-11B117E21101}`, `ALLUSERS=1`. NSIS and desktop executable metadata both report `ProductVersion/FileVersion 0.5.22`. |
+| Default-version path | Pass | `.\scripts\windows\verify-windows-installer-metadata.ps1` returned `ok: true`, proving the script correctly resolves the active version from root `package.json` and finds the default `0.5.22` MSI/NSIS paths. |
+| Version-mismatch negative path | Expected fail | Running the verifier with `-Version 0.5.21` against the current `0.5.22` MSI/NSIS/desktop executable exited `1` and reported concrete mismatches for MSI `ProductVersion`, NSIS `ProductVersion/FileVersion`, and desktop executable `ProductVersion/FileVersion`. |
+| Missing-artifact negative path | Expected fail | Running the verifier with `-Version 9.9.9` exited `1` with structured failures for missing MSI/NSIS artifacts and desktop executable version mismatch. |
+| Release workflow integration | Pass | `.github\workflows\release.yml` now runs `Verify Windows installer metadata` on `windows-latest` after `Build Tauri installer` and before `Sign Windows installers`. |
+| Release workflow static verifier | Pass | `.\scripts\windows\verify-release-workflow-static.ps1` returned `ok: true` and now asserts the metadata step exists, is Windows-only, uses `pwsh`, calls `scripts\windows\verify-windows-installer-metadata.ps1`, and runs before signing. |
+| Parser checks | Pass | PowerShell parser checks passed for the new metadata verifier and updated release workflow static verifier. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The local `0.5.22` MSI has correct internal Windows Installer metadata, not just a correct filename. | Pass | Keep this verifier in the release workflow to catch future version/UpgradeCode regressions before signing. |
+| The release workflow now validates installer metadata before Authenticode signing. | Pass | Real runner proof still depends on a tag-triggered release run. |
+| Signing remains a separate blocker. | Open | Configure signing secrets before expecting trusted Windows publisher behavior. |
+
+## Run: mp-0522-release-guidance-refresh-20260717-0334
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 03:27-03:34 +08:00 |
+| Runtime | Current source `0.5.22`, release/install documentation and static gates |
+| Resource mode | Documentation and release-gate guidance verification |
+| Result | Pass |
+
+### Purpose
+
+Remove current guidance that could accidentally send the next release/install test back to stale `0.5.21` artifacts. Keep historical test records intact, but update active commands and signing documentation to use the current version from `package.json` and include the new Windows installer metadata verifier.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| README release command | Pass | `README.md` no longer hard-codes `git tag v0.5.21`; it now derives `$version` from `package.json` before tagging and pushing. |
+| Package acceptance command | Pass | `docs\automated-business-test-suite-plan.md` now derives `$version` and `$msi`, then runs `verify-windows-installer-metadata.ps1`, MSI payload smoke, packaged vision smoke, and signature verification for that version. |
+| Current install gap guidance | Pass | The same plan now identifies the current gap correctly: Program Files remains healthy at `0.5.20`, while current local package proof is `0.5.22`; next MSI acceptance requires elevated installation of `MergePilot_0.5.22_x64_en-US.msi`. |
+| Signing documentation | Pass | `docs\windows-code-signing.md` now lists the release gate order as installer metadata verification, signing, then signature verification. |
+| Residual stale-command scan | Pass | Active guidance files no longer contain stale `MergePilot_0.5.21...` package commands or `git tag v0.5.21`. Remaining `0.5.21` matches in `docs\automated-business-test-suite-plan.md` are historical test-result rows. |
+| Static release gates | Pass | `.\scripts\windows\verify-release-workflow-static.ps1` and `.\scripts\windows\verify-windows-installer-metadata.ps1` both returned `ok: true` after the guidance refresh. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current release/install instructions now point to the active package version instead of stale `0.5.21` artifacts. | Pass | Keep new guidance version-derived so the next bump does not require doc command edits. |
+| Historical records still mention older versions by design. | Note | Treat those as audit history, not current commands. |
+
+## Run: mp-readme-doc-link-recheck-20260717-0338
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 03:35-03:38 +08:00 |
+| Runtime | Documentation entrypoint and release metadata/static gates |
+| Resource mode | Non-destructive documentation verification |
+| Result | Pass |
+
+### Purpose
+
+Continue checking for user-facing issues after the release-guidance refresh. README is the main documentation entrypoint, so broken local document links there can mislead the next development or release pass even when package gates are healthy.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Broken README links | Fixed | `README.md` referenced non-existent `docs/mergepilot-product-roadmap-and-reuse-plan.md` and `docs/mergepilot-progress-tracker.md`. These now point to existing `docs/dev-agent-product-roadmap-and-reuse-plan.md` and `docs/dev-agent-progress-tracker.md`. |
+| Local documentation link scan | Pass | A scan across README, Windows signing docs, and the automated business test suite plan found 10 referenced local docs/files and all exist. |
+| Release static gate | Pass | `.\scripts\windows\verify-release-workflow-static.ps1` returned `ok: true` after the README/doc link fix. |
+| Installer metadata gate | Pass | `.\scripts\windows\verify-windows-installer-metadata.ps1` returned `ok: true` for current `0.5.22` artifacts after the README/doc link fix. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| README documentation entrypoint no longer contains broken local doc paths. | Pass | Keep active documentation links checked when docs are renamed during product terminology cleanup. |
+
+## Run: mp-active-doc-link-verifier-20260717-0342
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 03:39-03:42 +08:00 |
+| Runtime | Active documentation entrypoints and release/test guidance |
+| Resource mode | Non-destructive documentation verifier hardening |
+| Result | Pass |
+
+### Purpose
+
+Turn the README/documentation entrypoint link check into a reusable local gate, so future documentation renames do not silently leave active release/test guidance pointing to missing files.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| New active doc link verifier | Pass | Added `scripts\windows\verify-active-doc-links.ps1`. By default it checks `README.md`, `docs\windows-code-signing.md`, and `docs\automated-business-test-suite-plan.md` for local references to README, PRODUCT, and docs markdown files. |
+| Parser check | Pass | PowerShell parser check passed after fixing a string interpolation issue around `${relativePath}:line` failure messages. |
+| Link verifier run | Pass | `.\scripts\windows\verify-active-doc-links.ps1` returned `ok: true` with 91 active local documentation references and no failures. |
+| Release/test plan integration | Pass | `docs\automated-business-test-suite-plan.md` now includes `.\scripts\windows\verify-active-doc-links.ps1` in the local package acceptance command sequence before build/package checks. |
+| Existing release gates | Pass | `.\scripts\windows\verify-release-workflow-static.ps1` and `.\scripts\windows\verify-windows-installer-metadata.ps1` still returned `ok: true`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Active documentation links are now covered by a repeatable local gate. | Pass | Keep this scoped to active docs; historical test records can continue to reference old versions and artifacts as audit history. |
+
+## Run: mp-active-doc-link-verifier-output-tuning-20260717-0347
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 03:44-03:47 +08:00 |
+| Runtime | Active documentation link verifier and release metadata/static gates |
+| Resource mode | Non-destructive verifier usability hardening |
+| Result | Pass |
+
+### Purpose
+
+Make the active documentation link verifier suitable for routine package/release gates. The first implementation returned every successful reference by default, which was useful for debugging but too noisy for CI and long local logs.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Default output | Pass | `.\scripts\windows\verify-active-doc-links.ps1` now returns a compact JSON result with `ok`, `checkedDocuments`, `referenceCount`, and `failures`; current run returned `referenceCount: 91` and no failures. |
+| Verbose output | Pass | `.\scripts\windows\verify-active-doc-links.ps1 -IncludeReferences` still returns all 91 reference details for debugging. |
+| Parser checks | Pass | PowerShell parser checks passed for `verify-active-doc-links.ps1`, `verify-windows-installer-metadata.ps1`, and `verify-release-workflow-static.ps1`. |
+| Existing release gates | Pass | `.\scripts\windows\verify-release-workflow-static.ps1` and `.\scripts\windows\verify-windows-installer-metadata.ps1` still returned `ok: true`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Active doc link verification is now quieter by default while preserving full debug detail on demand. | Pass | Keep default gate output concise so release logs remain readable. |
+
+## Run: mp-active-doc-link-verifier-negative-path-20260717-0353
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 03:49-03:53 +08:00 |
+| Runtime | Active documentation link verifier |
+| Resource mode | Non-destructive verifier negative-path hardening |
+| Result | Pass |
+
+### Purpose
+
+Prove that the new active documentation link verifier fails clearly when a document references a missing local file. This also checks non-default invocation with an explicit document path.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Initial negative test | Found bug | Passing an absolute temp document path exposed that `-Paths` only handled repo-relative paths. After adding absolute-path support, a single-line temp file still returned `referenceCount: 0` because scalar `Get-Content` output was indexed as characters. |
+| Verifier fixes | Pass | `verify-active-doc-links.ps1` now supports absolute source document paths and wraps `Get-Content` with `@(...)` so single-line documents are scanned as one line. |
+| Positive path | Pass | Parser check passed and `.\scripts\windows\verify-active-doc-links.ps1` returned `ok: true`, `referenceCount: 91`, and no failures. |
+| Negative path | Pass | A temporary one-line document referencing `docs/does-not-exist-for-negative-test.md` made the verifier exit non-zero with `referenceCount: 1` and a clear missing-target failure message. The temp file was removed after the test. |
+| Verbose path | Pass | `.\scripts\windows\verify-active-doc-links.ps1 -IncludeReferences` still returned all 91 active references with no failures. |
+| Existing release gates | Pass | `.\scripts\windows\verify-release-workflow-static.ps1` and `.\scripts\windows\verify-windows-installer-metadata.ps1` still returned `ok: true`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The active documentation verifier now has positive and negative-path evidence. | Pass | Keep this in package acceptance guidance as the active-doc regression guard. |
+
+## Run: mp-0522-fresh-local-env-package-smoke-20260717-0354
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 03:43-03:54 +08:00 |
+| Runtime | Current source `0.5.22`, local `0.5.22` MSI/NSIS artifacts, current Program Files install `0.5.20` |
+| Resource mode | Non-destructive packaged fresh-user config smoke |
+| Result | Pass for package payload; installed parity still pending |
+
+### Purpose
+
+Verify the current Windows package after the New Chat empty-state and Microsoft sign-in consent fixes, with special focus on first-run configuration. A fresh installed user should not be blocked by Azure Key Vault consent or `secrets/get` permission unless Key Vault is explicitly enabled. The default package path should create local user config and `.env` placeholders, then load Azure OpenAI credentials from local env/config.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Linked GitHub Actions run | Informational | Run `29436222385` was inspected and downloaded. It produced `0.5.21` Windows artifacts, so it is older than the local `0.5.22` source/package being verified here. Downloaded MSI: `C:\Users\15492\Downloads\MergePilot-run-29436222385\installer-windows-latest\msi\MergePilot_0.5.21_x64_en-US.msi`. |
+| Current installed app | Open | Program Files still reports installed/running `0.5.20` from `C:\Program Files\MergePilot\mergepilot-desktop.exe`; this explains why the user can still see stale New Chat welcome-template behavior before installing the rebuilt MSI. |
+| Secret-source defaults | Pass | Source settings now default new installs to `local_env`, not Key Vault. `/daemon/config` reports `secretSource: "local_env"`, `aoaiKeyInVault: false`, and `keyVaultSecretError: null` for a fresh packaged runtime. |
+| Fresh local config smoke | Pass | `.\scripts\windows\packaged-fresh-config-smoke.ps1 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -Port 19043` passed with `healthVersion: "0.5.22"`, `secretSource: "local_env"`, no Key Vault error, generated `config.toml`, and generated `.env` placeholders. |
+| MSI payload smoke | Pass | `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -Port 19042` passed with extracted daemon `healthVersion: 0.5.22`, `workflowPhase: inspect_environment`, and `/chat` HTTP `200`. |
+| Installer metadata | Pass | `.\scripts\windows\verify-windows-installer-metadata.ps1 -Version 0.5.22` passed for MSI, NSIS, and desktop executable metadata. |
+| Artifact identity | Pass | Current MSI SHA-256 is `4D36ADC5DAFBA789D1ECE3AD38E3D9BB5441DC260F6743E675EFD2B403414BDB`; current NSIS SHA-256 is `77D3EC8E8307F5E2FA5BAC6FFDE70D8750C2D6E3E2C84C6086B8CA688BA69537`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| New packaged `0.5.22` first-run configuration no longer defaults to Azure Key Vault. | Pass | Install the rebuilt MSI elevated and rerun installed-app parity/native UI smoke to prove Program Files matches the package. |
+| The linked Actions artifact is not the newest build for this fix. | Note | Use the local `0.5.22` MSI until a new pushed/released artifact exists. |
+| Windows artifacts remain unsigned. | Open | Configure trusted Authenticode signing before release-grade distribution. |
+
+## Run: mp-0522-continuation-harness-regression-20260717-0400
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 03:55-04:00 +08:00 |
+| Runtime | Current source `0.5.22`, local `0.5.22` MSI payload, current Program Files install `0.5.20` |
+| Resource mode | Non-destructive continuation regression and test-harness hardening |
+| Result | Pass after harness fixes |
+
+### Purpose
+
+Continue validating the previous fixes against the actual current machine state. Keep the package/source/UI route-cache behavior under test, explicitly separate current installed `0.5.20` health from uninstalled local `0.5.22` package proof, and harden any flaky verification paths found during this continuation.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Current installed state | Confirmed old install | Registry and process inspection still show Program Files running `0.5.20` from `C:\Program Files\MergePilot\mergepilot-desktop.exe`; local source/package version is `0.5.22`. |
+| Focused daemon/config tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/daemonEnv.test.ts test/daemonConfigRoutes.test.ts` passed 2 files / 9 tests. |
+| Focused desktop Chat/settings tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx src/pages/settings/settingsTypes.test.ts` passed 3 files / 8 tests. |
+| Typechecks | Pass | `@mergepilot/core typecheck` and `@mergepilot/desktop typecheck` passed. |
+| Fresh package config smoke | Pass | `packaged-fresh-config-smoke.ps1 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi -Port 19046` passed with `secretSource: local_env`, `aoaiKeyInVault: false`, and no Key Vault error. |
+| MSI payload smoke retry hardening | Fixed and pass | Running fresh-config and MSI-payload extraction in parallel exposed Windows Installer exit code `1618` in `packaged-msi-payload-smoke.ps1`. The script now retries `1618` like the fresh-config smoke. Parser check passed, and a parallel rerun passed with extracted daemon `healthVersion: 0.5.22`, `workflowPhase: inspect_environment`, and `/chat` HTTP `200`. |
+| Installed `0.5.20` smoke | Pass | `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis` passed package probe, persistence, safety, and verifier-safety paths. This proves current installed health only, not `0.5.22` installed parity. |
+| Route-cache browser gate | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts` passed 27/27. This covers New Chat empty-state stability, route cache behavior, PR/Review Queue/Pipelines/Activity warm switching, and raw-output folding. |
+| Mocked browser wrapper path hardening | Fixed and pass | Passing a Windows-style test path (`tests\e2e\route-cache.spec.ts`) initially produced `No tests found`. `run-mocked-browser-e2e.ps1` now normalizes backslashes to `/` before invoking Playwright. Parser check passed, and the same Windows-style path passed a focused New Chat route-cache test. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Product/source/package evidence for the Chat empty-state and local-env first-run fixes remains green. | Pass | Install local `0.5.22` MSI elevated for Program Files parity and native UI proof. |
+| Two verification harness rough edges were found and fixed. | Pass | Keep both scripts in package/browser gate usage so future local runs are less flaky on Windows. |
+| Current installed app remains healthy but stale. | Open | Do not claim installed `0.5.22` behavior until the local MSI is installed and strict installed smoke passes. |
+
+## Run: mp-chat-welcome-template-dead-code-cleanup-20260717-0404
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 04:01-04:04 +08:00 |
+| Runtime | Current source `0.5.22`; current Program Files install still `0.5.20` |
+| Resource mode | Non-destructive source/UI cleanup verification |
+| Result | Pass |
+
+### Purpose
+
+Continue checking the reported New Chat preloaded-template issue from source, not only from rendered UI tests. The visible empty-state UI was already quiet, but source inspection still found a dead legacy helper that mapped removed welcome prompt labels such as `Explain this project architecture`, `Open Pipelines workspace`, `Stage and commit`, and `Push and create PR` into workspace actions. Keeping that dead mapping could confuse future work and accidentally reintroduce the removed template.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Source inspection | Found cleanup | `ChatEmptyState.tsx` renders Project Link setup/chooser/empty placeholder only. The remaining legacy prompt path was `workspaceActionFromWelcomeSuggestion`, exported only through `workspaceActions.ts` and covered only by unit tests. |
+| Dead code cleanup | Pass | Removed `workspaceActionFromWelcomeSuggestion`, its export, and the unit assertions that protected removed welcome-template labels. |
+| Residual helper scan | Pass | `rg -n "workspaceActionFromWelcomeSuggestion" apps/desktop/src tests/e2e packages/daemon/src` returned no matches. |
+| Focused desktop tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/workspaceActions.test.ts src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 3 files / 9 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser New Chat regression | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests\e2e\route-cache.spec.ts -Grep "keeps New Chat empty state quiet"` passed 1/1, proving no old template or `/chat/index-status` preload appears in the covered New Chat empty state. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The old welcome template is now absent from both the visible empty state and its dead action-mapping helper. | Pass | Keep future Chat action suggestions driven by transcript quick replies, not New Chat welcome templates. |
+| Current installed app can still show old behavior because it is still `0.5.20`. | Open | Install local `0.5.22` MSI elevated before claiming installed UI parity. |
+
+## Run: mp-0522-rebuilt-package-after-chat-cleanup-20260717-0411
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 04:05-04:11 +08:00 |
+| Runtime | Current source `0.5.22`, rebuilt local `0.5.22` MSI/NSIS artifacts, current Program Files install `0.5.20` |
+| Resource mode | Non-destructive package rebuild and smoke verification |
+| Result | Pass for rebuilt package; installed parity still pending |
+
+### Purpose
+
+Rebuild the installable Windows package after removing the dead New Chat welcome-template action mapper, so the MSI offered for manual installation matches the latest source fixes instead of the earlier 03:49 package.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Tauri package rebuild | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop tauri:build` completed successfully and regenerated `MergePilot_0.5.22_x64_en-US.msi` plus `MergePilot_0.5.22_x64-setup.exe`. Known warnings remain: `pkg` dynamic require warnings for optional MySQL paths, Node `DEP0040` `punycode`, and Vite large optional chunks. |
+| Rebuilt artifact identity | Pass | MSI last write `2026-07-17 04:07:58`, length `54247424`, SHA-256 `2DD30A0C3461B91D55E86BFF2D42E34196167995AABD32E904422BE7B8AA4E36`. NSIS last write `2026-07-17 04:08:52`, length `45792899`, SHA-256 `E26CA22CBA3306D6C9392F4AE9148C6B83D3B12215798E3BF8EBC6B1C01E4FD7`. |
+| Fresh package config smoke | Pass | `.\scripts\windows\packaged-fresh-config-smoke.ps1 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -Port 19048` passed with extracted daemon `0.5.22`, `secretSource: local_env`, `aoaiKeyInVault: false`, and no Key Vault error. |
+| MSI payload smoke | Pass | `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -Port 19049` passed with extracted daemon `0.5.22`, legacy cleanup WiX validation, `workflowPhase: inspect_environment`, and `/chat` HTTP `200`. |
+| Installer metadata | Pass | `.\scripts\windows\verify-windows-installer-metadata.ps1 -Version 0.5.22` passed. MSI metadata still reports `ProductName=MergePilot`, `ProductVersion=0.5.22`, manufacturer `Total eBiz Solutions Pte Ltd`, stable UpgradeCode `{85E97B81-5039-4096-9BCC-11B117E21101}`, and `ALLUSERS=1`. |
+| Current installed app | Pass for old install only | Registry still reports installed `0.5.20` NSIS shape. `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis` passed package probe, persistence, safety, and verifier-safety paths. This is not evidence that `0.5.22` has been installed. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The latest local MSI now includes the Chat dead-code cleanup and local-env first-run fixes. | Pass | Use this rebuilt `0.5.22` MSI for the next elevated install test. |
+| The current Program Files app remains a healthy but stale `0.5.20` install. | Open | Install the rebuilt MSI elevated, then rerun strict installed state/native UI smoke against Program Files. |
+| Windows artifacts remain unsigned. | Open | Configure Authenticode signing before trusted release distribution. |
+
+## Run: mp-0522-blocker-isolation-and-focused-regression-20260717-0414
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 04:12-04:14 +08:00 |
+| Runtime | Current source `0.5.22`, rebuilt local `0.5.22` MSI/NSIS artifacts, current Program Files install `0.5.20` |
+| Resource mode | Non-destructive blocker isolation and focused regression |
+| Result | Pass for focused gates; expected external blockers unchanged |
+
+### Purpose
+
+After rebuilding the local `0.5.22` package, verify that the remaining failures are isolated to the known external blockers: Program Files has not been upgraded and Windows artifacts are unsigned. Then rerun focused source/browser tests that cover the latest Chat empty-state and local-env changes.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Strict installed `0.5.22` parity | Expected fail | `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.22 -ExpectedDesktopBundleKind msi -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -PackageProbePort 19050 -PersistencePort 19051 -SafetyPort 19052 -VerifierSafetyPort 19053` failed because the installed daemon is still `0.5.20`. Safety and verifier-safety subchecks passed, and the script left no probe ports open. |
+| Windows artifact signatures | Expected fail | `.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.22` failed with `NotSigned` for both the rebuilt NSIS setup and MSI. |
+| Focused desktop Chat/settings tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/workspaceActions.test.ts src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx src/pages/settings/settingsTypes.test.ts` passed 4 files / 11 tests. |
+| Focused daemon config tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/daemonEnv.test.ts test/daemonConfigRoutes.test.ts` passed 2 files / 9 tests. |
+| Focused New Chat route-cache browser tests | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "New Chat"` passed 3/3, covering quiet empty state without `/chat/index-status`, no stale prompts after Project Link switch, and warm return without skeleton pulses. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| External blockers remain cleanly isolated. | Pass | The next proof still requires elevated installation of the rebuilt `0.5.22` MSI and configured Authenticode signing. |
+| Latest Chat/local-env source regressions remain green after package rebuild. | Pass | Keep these focused gates in the pre-install/pre-release loop. |
+
+## Run: mp-0522-broader-ui-and-packaged-vision-continuation-20260717-0417
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 04:15-04:17 +08:00 |
+| Runtime | Current source `0.5.22`, rebuilt local `0.5.22` MSI payload |
+| Resource mode | Non-destructive broader mocked UI and packaged live-vision smoke |
+| Result | Pass |
+
+### Purpose
+
+Maintain the previous broad UI and packaged multimodal test behavior after the `0.5.22` package rebuild and Chat welcome-template cleanup. This checks that the latest installable MSI still supports image/vision chat over SSE and that the core workspace UI flows remain stable under mocked browser coverage.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Broader mocked browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked"` passed 38/38. Coverage includes Chat viewport, New Chat quiet empty state, PR insight controls, Pipeline controls/setup/AI analysis Markdown, Review Queue lane/activity behavior, route-cache behavior across Project Links, Pull Requests, Review Queue, Pipelines, Activity, Settings local-env/Key Vault permission UI, source references, and collapsed checkpoint raw output. |
+| Rebuilt packaged live vision | Pass | `.\scripts\windows\packaged-live-vision-smoke.ps1 -MsiPath "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi" -Port 19054` passed with extracted daemon `healthVersion: 0.5.22`, `assistantDeltaCount: 24`, final answer identifying `MP VISION TEST`, a blue square, and a red circle. It reported `leaksControlJson: false`, `duplicateSentence: false`, `hasSseErrors: false`, and deleted the temporary session with HTTP `200`. |
+| Artifact identity | Pass | MSI SHA-256 remained `2DD30A0C3461B91D55E86BFF2D42E34196167995AABD32E904422BE7B8AA4E36`; NSIS SHA-256 remained `E26CA22CBA3306D6C9392F4AE9148C6B83D3B12215798E3BF8EBC6B1C01E4FD7`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The rebuilt `0.5.22` MSI still passes packaged image/SSE chat behavior after the latest cleanup. | Pass | Use this rebuilt MSI for elevated installed parity testing. |
+| The broader mocked UI smoke remains green. | Pass | Keep this as the fast workspace UX regression gate before stage/release work. |
+| Installed Program Files and signing proof remain separate. | Open | Install the MSI elevated and configure Authenticode signing before final release confidence. |
+
+## Run: mp-0522-live-source-non-ado-business-continuation-20260717-0426
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 04:18-04:26 +08:00 |
+| Runtime | Current source daemon/app `0.5.22`; current Program Files install still `0.5.20` |
+| Resource mode | Non-destructive live source-app browser workflows against temporary local Git repositories |
+| Result | Pass |
+
+### Purpose
+
+Maintain the real browser/source-app business workflow coverage after the rebuilt `0.5.22` package and Chat cleanup. This verifies the actual Chat UI plus daemon local Git workflows, rather than only mocked UI or extracted-package smoke. Live ADO and destructive flags were not enabled.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Live source-app wrapper | Pass | `.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon` passed. The wrapper started source daemon `0.5.22`, expected `0.5.22`, used `liveAdo: false`, `destructive: false`, and wrote logs to `output\live-e2e\live-app-e2e-20260717-041823.log` and `output\live-e2e\live-app-source-daemon-20260717-041823.log`. |
+| Local Chat/Git workflows | Pass | Playwright passed 26 local workflows and skipped 4 ADO live cases by design. Covered selected-file staging, pending approval restore, approval denial, denial feedback, stage+commit approvals, commit validation failure, empty commit guard, staged-only summary, draft commit message safety, credential redaction, secret-like diff redaction, dirty branch switch, approved merge, merge conflict recovery, create branch, push branch to local bare remote, pull/rebase, rebase conflict recovery, stash push/apply/pop, stash-pop conflict recovery, restore file, revert commit, local tag creation, and one-tag push. |
+| Cleanup | Pass | Post-run probes found no listener on `127.0.0.1:8787` and no `%TEMP%\mergepilot-live-*` or `%TEMP%\mergepilot-daemon-live-pr-insight-*` directories. Daemon stderr only contained the known Node `DEP0040` `punycode` warning. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Real source-app Chat/Git business workflows remain green at `0.5.22`. | Pass | Keep this wrapper in the pre-release non-destructive gate. |
+| Live ADO workflows were intentionally skipped in this run. | Note | Run `run-live-app-e2e.ps1 -LiveAdo` separately when validating ClaimBot_API pipeline/PR live read-only paths. |
+| Installed Program Files proof remains separate. | Open | Install rebuilt `0.5.22` MSI elevated before strict installed/native UI parity. |
+
+## Run: mp-0522-basic-signin-scope-cleanup-20260717-0436
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 04:31-04:36 +08:00 |
+| Runtime | Current source `0.5.22`, rebuilt local `0.5.22` MSI/NSIS artifacts |
+| Resource mode | Non-destructive auth/UI/package verification |
+| Result | Pass for source and package; installed parity pending |
+
+### Purpose
+
+Fix the installed-app sign-in issue where basic Microsoft login could surface extra cloud-resource consent during first-run testing. Basic sign-in should only establish Microsoft identity/profile state; Azure DevOps consent should be requested only through the explicit ADO enable path.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Source fix | Pass | Removed the implicit `getAzureDevOpsToken` calls from `loginWithBrowser` and `loginWithCachedAccount`. `/auth/azure-devops/enable` remains the explicit ADO OAuth path. |
+| Auth regression | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/azureAuthSession.test.ts` passed 4/4. Tests assert basic browser sign-in and cached-account sign-in do not request Key Vault or Azure DevOps scopes. |
+| Chat empty-state regression | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/workspaceActions.test.ts` passed 3 files / 9 tests. |
+| Typechecks | Pass | Core, daemon, and desktop typechecks all passed. |
+| Tauri package rebuild | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop tauri:build` regenerated `MergePilot_0.5.22_x64_en-US.msi` and `MergePilot_0.5.22_x64-setup.exe`. Known warnings remain: optional MySQL dynamic require warnings, Node `DEP0040` `punycode`, and Vite large optional chunks. |
+| Rebuilt artifact identity | Pass | MSI SHA-256 `DDE192437EE93E302297A3D0C33099AF36AFB7EAAC92D20B71D39BD9C755BC00`. NSIS SHA-256 `A3C6380A5F5E61F4B38F434B538E3C4F6B6A2036753F332E21DDC5FCA1518B3A`. |
+| Bundle stale-template scan | Pass | Product bundle scan with sourcemaps excluded found no `Ask MergePilot anything`, `Understand this project`, `Review my changes`, `What's on this branch`, `Open Pipelines workspace`, `Stage and commit`, or `Push and create PR` strings. |
+| MSI payload smoke | Pass | `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath .\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi -Port 19061` passed with extracted daemon `0.5.22`, legacy cleanup WiX validation, workflow phase `inspect_environment`, and `/chat` HTTP `200`. |
+| Fresh config smoke | Pass | `.\scripts\windows\packaged-fresh-config-smoke.ps1 -MsiPath .\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi -Port 19062` passed with `secretSource: local_env`, `aoaiKeyInVault: false`, and no Key Vault error. |
+| Linked Actions run check | Informational | `gh run view 29436222385 --repo ZP151/MergePilot` shows a successful `v0.5.21` run for commit `11796ff179e02cdc273a7d41617419a12a72cd4f`. It does not include this `0.5.22` source fix. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Basic Microsoft sign-in no longer performs hidden ADO authorization. | Pass | Test with the latest local MSI to verify the native installed flow. |
+| The old New Chat welcome template is not present in the current product bundle. | Pass | If it appears in the app, the installed app is not this rebuilt package or is showing stale WebView/cache state from an older install. |
+| The latest installable artifact is local `0.5.22`, not the linked `v0.5.21` Actions run. | Open | Install `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi` elevated, then rerun installed smoke. |
+| Windows artifacts remain unsigned. | Open | Configure Authenticode signing before trusted Windows distribution. |
+
+## Run: mp-0522-post-fix-ui-installed-blocker-recheck-20260717-0444
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 04:39-04:44 +08:00 |
+| Runtime | Current source `0.5.22`, rebuilt local `0.5.22` MSI/NSIS, current Program Files install `0.5.20` |
+| Resource mode | Non-destructive browser/package/installed-state recheck |
+| Result | Pass for source/package/current install; expected installed parity/signing blockers unchanged |
+
+### Purpose
+
+Continue the post-fix verification loop after removing implicit ADO authorization from basic Microsoft sign-in. Confirm that New Chat stays free of the removed welcome template, that the rebuilt package metadata is correct, and that remaining failures are still isolated to the external install/signing gates.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| New Chat route-cache browser regression | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests\e2e\route-cache.spec.ts -Grep "New Chat"` passed 3/3: quiet empty state without `/chat/index-status`, no stale prompts after Project Link switch, and warm return without skeleton pulses. |
+| Chat layout / Project Link browser regression | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests\e2e\chat-layout.spec.ts -Grep "empty state|welcome|Project Link"` passed 5/5, covering pinned-summary absence during onboarding, Project Link inference, ClaimBot_API pipeline recommendation, no-pipeline setup guidance, and long-workflow transcript clarity. |
+| Strict installed `0.5.22` parity | Expected fail | `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.22 -ExpectedDesktopBundleKind msi -MsiPath .\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi -PackageProbePort 19063 -PersistencePort 19064 -SafetyPort 19065 -VerifierSafetyPort 19066` failed because the installed daemon is still `0.5.20`, not `0.5.22`. Safety and verifier-safety subchecks passed. |
+| Windows artifact signatures | Expected fail | `.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.22` failed because both `MergePilot_0.5.22_x64-setup.exe` and `MergePilot_0.5.22_x64_en-US.msi` are `NotSigned`. |
+| Installer metadata | Pass | `.\scripts\windows\verify-windows-installer-metadata.ps1 -Version 0.5.22` passed. MSI metadata reports product name `MergePilot`, product version `0.5.22`, manufacturer `Total eBiz Solutions Pte Ltd`, stable UpgradeCode `{85E97B81-5039-4096-9BCC-11B117E21101}`, and `ALLUSERS=1`. |
+| Current installed `0.5.20` smoke | Pass | `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis -PackageProbePort 19067 -PersistencePort 19068 -SafetyPort 19069 -VerifierSafetyPort 19070` passed package probe, restart persistence, safety, and verifier-safety paths. This proves the current install is healthy but stale. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| New Chat and Project Link focused browser flows remain green after the auth scope cleanup. | Pass | Keep these focused gates in the pre-install loop. |
+| Strict `0.5.22` installed parity is still blocked only because Program Files has not been upgraded. | Open | Install the latest local MSI elevated, then rerun strict installed smoke. |
+| The current Program Files install is healthy at `0.5.20`, so installed verifier failures are not caused by a broken machine state. | Pass | Use this as the baseline before replacing it with `0.5.22`. |
+| Windows publisher trust remains unresolved. | Open | Configure Authenticode signing before trusted distribution. |
+
+## Run: mp-0522-broader-mocked-and-live-source-business-recheck-20260717-0454
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 04:45-04:54 +08:00 |
+| Runtime | Current source `0.5.22`, source daemon `0.5.22` for live-app gate |
+| Resource mode | Non-destructive mocked browser and source live-app non-ADO workflows |
+| Result | Pass |
+
+### Purpose
+
+Broaden verification after the basic Microsoft sign-in scope cleanup. Focused auth/New Chat checks were already green, so this run verifies that the same source state still supports the broader workspace UI and real Chat/Git business workflows.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Broader mocked browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked"` passed 38/38. Coverage includes New Chat quiet state, Project Link cache, Chat viewport, PR/Pipeline routing, PR insight controls, Pipeline AI Markdown/evidence behavior, Review Queue semantic lanes/activity panel, Activity operational-history sections, source references, Settings local-env/Key Vault permission UI, and checkpoint raw-output folding. |
+| Auth regression | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/azureAuthSession.test.ts` passed 4/4, preserving the guarantee that basic Microsoft sign-in and cached-account sign-in do not request Key Vault or Azure DevOps scopes. |
+| Live source-app non-ADO business gate | Pass | `.\scripts\windows\run-live-app-e2e.ps1 -RestartMismatchedDaemon` started source daemon `0.5.22` and passed 26 real Chat/Git workflows. The 4 ClaimBot_API live ADO tests were skipped by design because `-LiveAdo` was not enabled. Raw Playwright log: `output\live-e2e\live-app-e2e-20260717-044606.log`. |
+| Live workflow coverage | Pass | Covered selected-file staging, approval persistence/reload, approval denial and denial feedback, stage/commit, commit validation failure, empty commit prevention, staged-only summary, commit-message drafting, credential redaction, secret-like diff redaction, dirty branch switch approval, merge and conflict recovery, branch creation, push to local bare remote, pull with rebase, rebase conflict recovery, stash/apply/pop/conflict, restore, revert, local tag creation, and one-tag push. |
+| Cleanup | Pass | Post-run checks found no listener on `127.0.0.1:8787` and no `%TEMP%\mergepilot-live-*` directories. Daemon stderr contained only the known Node `DEP0040` `punycode` warning. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The source app remains green across broad mocked UI and real non-ADO Chat/Git workflows after the auth scope cleanup. | Pass | Keep this as the current source-level business confidence gate. |
+| No hidden ADO mutation was performed. | Pass | ADO tests stayed skipped because live ADO mode was not enabled. |
+| Installed `0.5.22` parity is still not proven by this source gate. | Open | Install the latest local MSI elevated and rerun strict installed smoke. |
+
+## Run: mp-0522-package-default-browser-and-live-ado-continuation-20260717-0459
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 04:55-04:59 +08:00 |
+| Runtime | Rebuilt local `0.5.22` MSI payload; current source `0.5.22`; source daemon `0.5.22` for live ADO browser gate |
+| Resource mode | Non-destructive package/default-browser/live-ADO read-only verification |
+| Result | Pass with signing blocker unchanged |
+
+### Purpose
+
+Continue testing after the basic Microsoft sign-in scope cleanup by covering the package-level image/SSE path, release workflow/static structure, the full default mocked Chromium suite, and real Azure DevOps read-only PR/Pipeline paths.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Packaged live vision | Pass | `.\scripts\windows\packaged-live-vision-smoke.ps1 -MsiPath .\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi -Port 19071` passed with extracted daemon `0.5.22`. The final answer identified `MP VISION TEST`, a blue square, and a red circle; `assistantDeltaCount: 24`, `leaksControlJson: false`, `duplicateSentence: false`, `hasSseErrors: false`, and delete-session status `200`. |
+| Release workflow static verifier | Pass | `.\scripts\windows\verify-release-workflow-static.ps1` returned `ok: true`, with Windows signing after Tauri build and signature verification after signing. |
+| Installer metadata | Pass | `.\scripts\windows\verify-windows-installer-metadata.ps1 -Version 0.5.22` passed for MSI/NSIS/desktop metadata. |
+| Signature verification | Expected fail | `.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.22` still reports both MSI and NSIS artifacts as `NotSigned`. |
+| Default mocked Chromium suite | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1` ran 113 Chromium tests: 83 passed and 30 live-app tests skipped by design. This includes non-smoke Chat layout, route cache, Review Queue, Settings, source preview, artifact, stream lifecycle, composer, and follow-up-chip coverage. |
+| Live ADO browser gate | Pass | `.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -RestartMismatchedDaemon -Grep "ClaimBot_API pipeline"` passed 4/4 against ClaimBot_API pipeline `#117`, covering discovery/save, failed-run evidence inspection, rerun approval preparation, and trigger approval preparation. Destructive execution stayed disabled. |
+| Live ADO core gates | Pass | `MERGEPILOT_E2E_LIVE_ADO=1 .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAdoDiscovery.test.ts test/liveAdoPipeline.test.ts` passed 3 read-only tests with 1 destructive queue test skipped. |
+| Live ADO daemon PR insight | Pass | `MERGEPILOT_E2E_LIVE_ADO=1 .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts` passed 1/1, inspecting a real ClaimBot_API PR without approval or mutation. |
+| Cleanup | Pass | Post-live probes found no listener on `127.0.0.1:8787` and no `%TEMP%\mergepilot-live-*` directories. Daemon stderr only contained the known Node `DEP0040` `punycode` warning. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Package image/SSE behavior, default mocked browser behavior, and live ADO read-only behavior remain green after the auth scope cleanup. | Pass | Keep this as the current package/source/read-only ADO confidence gate. |
+| No destructive ADO action was performed. | Pass | Destructive queue tests remained skipped and browser approvals were prepared only. |
+| Windows publisher trust is still blocked by unsigned artifacts. | Open | Configure Authenticode signing before trusted release distribution. |
+| Installed `0.5.22` Program Files parity remains unproven. | Open | Install the latest local MSI elevated and rerun strict installed smoke. |
+
+## Run: mp-0522-external-blocker-reprobe-20260717-0504
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 05:02-05:04 +08:00 |
+| Runtime | Current Program Files install; rebuilt local `0.5.22` MSI/NSIS artifacts |
+| Resource mode | Non-destructive external-state reprobe |
+| Result | Blockers unchanged |
+
+### Purpose
+
+Recheck whether the two remaining external blockers changed after the latest package/default-browser/live-ADO gates: installed Program Files parity and Windows Authenticode signing.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Installed package-state probe | Expected fail | `.\scripts\windows\verify-installed-windows-package-state.ps1 -ExpectedVersion 0.5.22 -ExpectedDesktopBundleKind msi -MsiPath .\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi` still reports installed `0.5.20`, NSIS shape, `uninstall.exe` present, and uninstall registry `DisplayVersion=0.5.20`. |
+| Program Files file metadata | Expected stale | `C:\Program Files\MergePilot\mergepilot-desktop.exe` has file/product version `0.5.20`, last write `2026-07-07 01:43:14 +08:00`, length `17593856`. `mergepilot-daemon.exe` is still the old packaged Node sidecar, last write `2026-07-07 01:36:08 +08:00`. |
+| Local artifact identity | Pass | Latest local MSI SHA-256 remains `DDE192437EE93E302297A3D0C33099AF36AFB7EAAC92D20B71D39BD9C755BC00`; NSIS SHA-256 remains `A3C6380A5F5E61F4B38F434B538E3C4F6B6A2036753F332E21DDC5FCA1518B3A`. |
+| Signature verification | Expected fail | `.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.22` still reports both MSI and NSIS artifacts as `NotSigned`. |
+| Strict installed smoke | Skipped by evidence | Full strict installed smoke was not rerun because the faster package-state probe already proves Program Files has not been upgraded from `0.5.20` to `0.5.22`; rerunning the long gate would repeat the same known failure. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Installed `0.5.22` parity remains externally blocked by not-yet-upgraded Program Files state. | Open | Install the latest local MSI from an elevated shell, then rerun strict installed smoke. |
+| Windows publisher trust remains externally blocked by unsigned artifacts. | Open | Configure Authenticode signing secrets/certificate and rerun signature verification. |
+| No new source or package regression was found in this reprobe. | Pass | Continue from the existing source/package evidence; do not reinterpret this as installed parity. |
+
+## Run: mp-0522-full-source-and-external-recheck-20260717-0506
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 05:03-05:06 +08:00 |
+| Runtime | Current source tree; rebuilt local `0.5.22` MSI/NSIS artifacts; current Program Files install |
+| Resource mode | Non-destructive full source verification plus external-state reprobe |
+| Result | Source pass; external blockers unchanged |
+
+### Purpose
+
+Continue the business-test pass after context compaction by proving the current dirty source tree still typechecks and tests across all packages, then separating source health from the remaining machine/release blockers.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Core gate | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck` and `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test` both passed. Logs: `output\live-e2e\full-source-core-typecheck-20260717-050409.log`, `output\live-e2e\full-source-core-test-20260717-050409.log`. |
+| Daemon gate | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck` and `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test` both passed. Logs: `output\live-e2e\full-source-daemon-typecheck-20260717-050409.log`, `output\live-e2e\full-source-daemon-test-20260717-050409.log`. |
+| Desktop gate | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` and `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` both passed. Logs: `output\live-e2e\full-source-desktop-typecheck-20260717-050409.log`, `output\live-e2e\full-source-desktop-test-20260717-050409.log`. |
+| Whitespace/doc/release hygiene | Pass | `git diff --check` reported no whitespace errors, only LF/CRLF warnings. `verify-active-doc-links.ps1` returned `ok: true` with 91 references. `verify-release-workflow-static.ps1` returned `ok: true`. `verify-windows-installer-metadata.ps1 -Version 0.5.22` returned `ok: true`. |
+| GitHub Actions artifact lineage | Expected stale | `gh run view 29436222385 --repo ZP151/MergePilot` reports successful Release run `feat: stabilize workspace route state for v0.5.21`, head SHA `11796ff179e02cdc273a7d41617419a12a72cd4f`, created `2026-07-15T17:22:31Z`. It does not include the local `0.5.22` basic-sign-in scope cleanup. |
+| Installed package-state probe | Expected fail | `verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -RequireLegacyCleanup` still reports Program Files desktop version `0.5.20`, NSIS `uninstall.exe`, and uninstall registry `DisplayVersion=0.5.20`. |
+| Signature verification | Expected fail | `verify-windows-artifact-signatures.ps1 -Version 0.5.22` still reports both local MSI and NSIS artifacts as `NotSigned`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current source tree is green across all package typecheck and unit/component tests. | Pass | Treat reported Chat template/auth fixes as source-level verified. |
+| The linked GitHub Actions run is not the latest fix-bearing artifact for this issue. | Open | Use the local rebuilt `0.5.22` MSI for manual install testing until a new release workflow is triggered. |
+| Program Files is still not running the rebuilt `0.5.22` MSI payload. | Open | Install the local MSI elevated, then rerun strict installed smoke. |
+| Windows publisher trust remains blocked by unsigned installer artifacts. | Open | Configure Authenticode signing before release-grade distribution. |
+
+## Run: mp-0522-chat-auth-installed-state-continuation-20260717-0509
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 05:07-05:09 +08:00 |
+| Runtime | Current source tree; local `0.5.22` MSI payload; current Program Files install |
+| Resource mode | Non-destructive continuation check |
+| Result | Source/package pass; installed blocker unchanged |
+
+### Purpose
+
+Continue the active verification loop by checking whether the reported New Chat preload/auth issue is fixed in the current source/package state or still explained by stale installed state.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Installed package-state probe | Expected fail | `verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -RequireLegacyCleanup` still reports Program Files `mergepilot-desktop.exe` as `0.5.20`, NSIS `uninstall.exe` present, and uninstall registry `DisplayVersion=0.5.20`. |
+| Linked GitHub Actions run | Expected stale | `gh run view 29436222385 --repo ZP151/MergePilot` still reports successful Release run `feat: stabilize workspace route state for v0.5.21`, head SHA `11796ff179e02cdc273a7d41617419a12a72cd4f`. |
+| Auth scope regression | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/azureAuthSession.test.ts` passed 4/4, preserving the guarantee that basic Microsoft sign-in and cached-account sign-in do not request Key Vault or Azure DevOps scopes. |
+| Chat empty-state focused tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/workspaceActions.test.ts` passed 3 files / 9 tests. |
+| New Chat route-cache browser regression | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests\e2e\route-cache.spec.ts -Grep "New Chat" -Project chromium -Workers 1` passed 3/3, including no index-status preload, no stale prompts after Project Link switch, and no warm-return skeleton pulses. |
+| Residual template scan | Pass | `rg` found no product-bundle matches for removed New Chat empty-state strings such as `Ask MergePilot anything`, `help me review changes and go all the way to PR`, `Review my changes`, or `Push and create PR` under `apps\desktop\dist` excluding maps. The only remaining source match was a follow-up suggestion message in `suggestionReplyDerivation.ts`, not the empty-state template. |
+| MSI extracted payload smoke | Pass | `packaged-msi-payload-smoke.ps1 -MsiPath .\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi -Port 19082` passed with extracted daemon `healthVersion: 0.5.22`, `workflowPhase: inspect_environment`, and `/chat` HTTP `200`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The New Chat preload/auth fixes are still verified at current source and local MSI payload level. | Pass | Use these gates as the active evidence for the fix. |
+| Current visible installed app behavior can still be stale because Program Files is `0.5.20`. | Open | Install the local `0.5.22` MSI elevated, then rerun strict installed smoke. |
+| The linked Actions run remains useful historical evidence only, not the latest fix-bearing package. | Open | Trigger/download a newer release after staging/committing the current work. |
+
+## Run: mp-0522-msi-content-and-current-install-smoke-20260717-0512
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 05:10-05:12 +08:00 |
+| Runtime | Local `0.5.22` MSI content; current Program Files `0.5.20` install |
+| Resource mode | Non-destructive package-content scan plus current-install smoke |
+| Result | MSI content pass; current installed app pass as stale `0.5.20` |
+
+### Purpose
+
+Prove that the local `0.5.22` MSI itself does not contain the removed New Chat template strings, while separately keeping a health check on the still-installed `0.5.20` app.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Program Files parity probe | Expected fail | `verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -RequireLegacyCleanup` still reports Program Files desktop `0.5.20`, NSIS `uninstall.exe`, and uninstall registry `DisplayVersion=0.5.20`. A running `mergepilot-desktop` process was also observed from `C:\Program Files\MergePilot\mergepilot-desktop.exe`. |
+| MSI content extraction | Pass | Administrative extraction of `MergePilot_0.5.22_x64_en-US.msi` succeeded. Extracted `mergepilot-desktop.exe` reports product version `0.5.22`; extraction log: `output\live-e2e\msi-content-extract-20260717-051125.log`. |
+| Removed New Chat template scan inside MSI | Pass | Fixed-string scans of the extracted MSI content found zero matches for `Ask MergePilot anything`, `help me review changes and go all the way to PR`, `what's changed since main?`, `Review my changes`, `Push and create PR`, and `Open Pipelines workspace`. |
+| Current installed `0.5.20` smoke | Pass | `run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis -PackageProbePort 8798 -PersistencePort 8799 -SafetyPort 8800` passed. Logs: `output\live-e2e\installed-app-package-state-20260717-051142.log`, `output\live-e2e\installed-app-persistence-20260717-051142.log`, `output\live-e2e\installed-app-safety-20260717-051142.log`, `output\live-e2e\installed-app-verifier-safety-20260717-051142.log`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The local `0.5.22` MSI content does not contain the removed New Chat template strings. | Pass | Treat old visible template screenshots as stale install evidence unless reproduced after `0.5.22` installation. |
+| The current Program Files app remains healthy but stale at `0.5.20`. | Open | Install the local `0.5.22` MSI elevated and rerun strict installed parity plus native UI smoke. |
+| No new package-content issue was found. | Pass | Continue keeping installed parity separate from package/source proof. |
+
+## Run: mp-0522-install-preflight-hardening-20260717-0515
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 05:13-05:15 +08:00 |
+| Runtime | Current non-elevated shell; current Program Files `0.5.20` install; local `0.5.22` MSI |
+| Resource mode | Non-destructive installer upgrade diagnosis |
+| Result | Installer preflight hardened; installed blocker explained more clearly |
+
+### Purpose
+
+Investigate why the local `0.5.22` MSI remains unproven in Program Files even though source/package tests pass, and make the installer verification path more diagnostic for manual/elevated installation.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Installed registry scan | Observed stale | The only MergePilot uninstall entry is `HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\MergePilot`, `DisplayVersion=0.5.20`, `UninstallString="C:\Program Files\MergePilot\uninstall.exe"`, with no Windows Installer product entry. |
+| Install locations scan | Observed stale | Program Files contains `C:\Program Files\MergePilot`; user-local app-data directories also contain historical `com.cicdagent.desktop` and `com.mergepilot.desktop` data directories, but no alternate installed `0.5.22` app location was found. |
+| WiX cleanup fragment | Pass | `legacy-cleanup.wxs` removes old `uninstall.exe`, old logs, legacy CICD-Agent files, and NSIS uninstall registry keys during MSI install. Generated `target\release\wix\x64\main.wxs` includes `LegacyInstallCleanup`, `LegacyCicdAgentInstallDirCleanup`, `LegacyStartMenuCleanup`, stable `UpgradeCode`, `MajorUpgrade`, and Program Files `INSTALLDIR`. |
+| Elevation preflight | Expected fail | Current shell is not administrator. `install-and-verify-msi-state.ps1 -ExpectedVersion 0.5.22 -SkipVision` now returns structured JSON including the stale `0.5.20` install entry, the running `0.5.20` desktop process, and a recommended elevated command. |
+| Script parser check | Pass | PowerShell parser check passed for `scripts\windows\install-and-verify-msi-state.ps1`. |
+
+### Changes
+
+| Area | Change |
+|---|---|
+| Installer verification script | `install-and-verify-msi-state.ps1` now includes `currentInstallEntries`, `runningMergePilotProcesses`, and `recommendedElevatedCommand` when it cannot install because the shell is not elevated. |
+| User guidance | The non-admin message now explains that the script closes running MergePilot processes before installing and that manual install should close MergePilot first, then rerun with `-SkipInstall`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The MSI upgrade cleanup appears configured, but it has not run on this machine because no MSI install entry exists and Program Files remains `0.5.20`. | Open | Run the recommended elevated `install-and-verify-msi-state.ps1` command so the same script installs, closes old processes, and verifies parity. |
+| A running `0.5.20` desktop process can make manual install attempts confusing. | Medium | Prefer the script path or close MergePilot before manual MSI installation. |
+| No new source/package defect was found in the installer configuration review. | Pass | Keep the blocker classified as installation-state proof, not product bundle content. |
+
+## Run: mp-0522-installed-parity-guidance-refresh-20260717-0518
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 05:16-05:18 +08:00 |
+| Runtime | Current non-elevated shell; active test-plan docs; local `0.5.22` MSI |
+| Resource mode | Non-destructive documentation and preflight verification |
+| Result | Pass |
+
+### Purpose
+
+Align the active package/install acceptance documentation with the hardened installer preflight so future installed-parity attempts do not bypass the script that closes old processes and verifies Program Files parity.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Active install guidance | Updated | `docs\automated-business-test-suite-plan.md` now prefers `install-and-verify-msi-state.ps1 -ExpectedVersion $version -MsiPath $msi` over double-clicking the MSI, documents the `-SkipInstall` path, and notes that non-admin runs emit structured preflight JSON. |
+| Next target guidance | Updated | The current package-version proof gap now points to elevated `install-and-verify-msi-state.ps1 -ExpectedVersion 0.5.22 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi`, not directly to `run-installed-app-smoke.ps1`. |
+| Non-admin preflight regression | Pass | `install-and-verify-msi-state.ps1 -ExpectedVersion 0.5.22 -SkipVision` exited `1` as expected and returned `requiresElevation: true`, one current install entry at `0.5.20`, one running MergePilot process at `0.5.20`, and a non-empty `recommendedElevatedCommand`. |
+| Hygiene | Pass | `git diff --check` reported no whitespace errors, only LF/CRLF warnings. `verify-active-doc-links.ps1` returned `ok: true` with 91 references. PowerShell parser check passed for `install-and-verify-msi-state.ps1`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The active docs now route installed parity through the safer script entrypoint. | Pass | Use this as the next manual/elevated install command. |
+| Installed `0.5.22` parity remains pending because this shell is not elevated. | Open | Run the documented elevated command, then rerun strict installed/native smoke. |
+
+## Run: mp-0522-chat-auth-user-screenshot-recheck-20260717-0521
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 05:19-05:21 +08:00 |
+| Runtime | Current non-elevated shell; local `0.5.22` MSI; user screenshot from installed app |
+| Resource mode | Non-destructive source/package/current-install verification |
+| Result | Source/package pass; current installed app is stale |
+
+### Purpose
+
+Recheck the user-reported New Chat welcome-template and Microsoft login consent symptoms against the latest source/package and the currently installed Program Files app.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Current installed state | Stale | `verify-installed-windows-package-state.ps1 -ExpectedVersion 0.5.22` failed only because Program Files still contains `0.5.20` NSIS files and registry entry. |
+| GitHub Actions run | Older release | `https://github.com/ZP151/MergePilot/actions/runs/29436222385` is the successful `v0.5.21` release run, not the local `0.5.22` fix-bearing package. |
+| Local MSI metadata | Pass | `verify-windows-installer-metadata.ps1 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi` passed with `ProductVersion=0.5.22`. |
+| Local MSI payload smoke | Pass | `packaged-msi-payload-smoke.ps1 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi -Port 19122` passed with extracted daemon health `0.5.22`, `/chat` HTTP 200, and workflow phase `inspect_environment`. |
+| Basic Microsoft sign-in scope regression | Pass | Core auth tests passed 4/4 and verify basic Microsoft sign-in requests Graph profile only, not Key Vault or Azure DevOps scopes. |
+| Chat empty-state regression | Pass | Focused Chat layout tests passed 6/6 and verify active Project Link empty chat does not render the old `Ask MergePilot anything` welcome template. |
+| Artifact signing | Expected blocker | Local `0.5.22` MSI and NSIS are still `NotSigned`; this is separate from the template/auth symptoms. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The screenshot symptoms match stale `0.5.20` installed behavior, not the latest source/local `0.5.22` package. | High | Install the local `0.5.22` MSI with the elevated installer-verification script, then rerun installed UI smoke. |
+| The linked GitHub Actions artifact is `0.5.21`, so installing it would not prove the latest auth/template fixes. | Medium | Use the local `0.5.22` MSI path until a new release run is published. |
+| Source/package regressions for both reported symptoms are green. | Pass | Keep installed parity as the only remaining proof gap for this issue. |
+
+## Run: mp-0522-github-artifact-version-probe-20260717-0528
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 05:22-05:28 +08:00 |
+| Runtime | Current non-elevated shell; GitHub Actions artifact download; local `0.5.22` package |
+| Resource mode | Non-destructive artifact inspection |
+| Result | Probe pass; GitHub artifact is not the latest fix-bearing package |
+
+### Purpose
+
+Verify whether the user-provided GitHub Actions run can be used as the install package for the latest Chat/auth fixes.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Artifact download | Pass | `gh run download 29436222385 --repo ZP151/MergePilot --name installer-windows-latest --dir output\gh-run-29436222385-artifacts` downloaded `MergePilot_0.5.21_x64_en-US.msi` and `MergePilot_0.5.21_x64-setup.exe`. |
+| Downloaded MSI version | Pass | Administrative extraction succeeded and the extracted desktop executable reports `ProductVersion=0.5.21`. |
+| Downloaded artifact signatures | Expected blocker | Downloaded `0.5.21` MSI and NSIS are both `NotSigned`. |
+| Downloaded MSI template scan | Pass for removed template strings | Fixed-string scan of the extracted `0.5.21` MSI content found zero matches for the old New Chat template strings `Ask MergePilot anything`, `help me review changes and go all the way to PR`, `Review my changes`, `Push and create PR`, and `Open Pipelines workspace`. |
+| Current installed version | Stale | Program Files still reports `C:\Program Files\MergePilot\mergepilot-desktop.exe` as `0.5.20`. |
+| Local fix-bearing package | Pass | The local package remains `MergePilot_0.5.22_x64_en-US.msi`, SHA-256 `DDE192437EE93E302297A3D0C33099AF36AFB7EAAC92D20B71D39BD9C755BC00`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The linked GitHub Actions run is useful evidence for `0.5.21`, but it cannot validate the `0.5.22` basic Microsoft sign-in scope fix. | High | Do not use run `29436222385` as the final install package for the current auth issue. |
+| The downloaded `0.5.21` package also appears to have the old New Chat template removed. | Pass | The remaining screenshot template evidence still points to the current installed `0.5.20` app or cached installed UI state. |
+| The correct package for the next install test is still the local `0.5.22` MSI, not the downloaded Actions artifact. | High | Install local `0.5.22` elevated and rerun strict installed parity. |
+
+## Run: mp-0522-installer-metadata-historical-artifact-hardening-20260717-0534
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 05:29-05:34 +08:00 |
+| Runtime | Current non-elevated shell; local scripts; downloaded `0.5.21` artifact; local `0.5.22` package |
+| Resource mode | Non-destructive test-tool hardening |
+| Result | Pass |
+
+### Purpose
+
+Harden the Windows installer metadata verifier so it can cleanly inspect historical/downloaded artifacts without mixing them with the current repo's local package outputs.
+
+### Changes
+
+| Area | Change |
+|---|---|
+| Version parameter | `scripts\windows\verify-windows-installer-metadata.ps1` now accepts `-ExpectedVersion` as an alias for `-Version`. |
+| Script help | Added comment-based help documenting strict active-build mode and downloaded/historical-artifact mode. |
+| Smoke harness | Added `scripts\windows\verify-windows-installer-metadata-smoke.ps1` to run the verifier's positive and negative paths through one repeatable command. |
+| Custom MSI path | When `-MsiPath` points outside the active Tauri build output, the verifier checks only the sibling `nsis\MergePilot_$version_x64-setup.exe` next to that MSI bundle instead of mixing downloaded MSI artifacts with local build outputs. |
+| Desktop executable check | When a custom MSI path outside the active Tauri build output is supplied without `-DesktopExePath`, the verifier skips local desktop executable validation and reports `desktopSkippedReason` instead of comparing against the current repo build. Local package paths still validate the active desktop executable. |
+| Test plan guidance | `docs\automated-business-test-suite-plan.md` now documents historical artifact verification with `-ExpectedVersion`. |
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Parser check | Pass | PowerShell parser returned zero errors for `verify-windows-installer-metadata.ps1`. |
+| Downloaded `0.5.21` artifact metadata | Pass | `verify-windows-installer-metadata.ps1 -ExpectedVersion 0.5.21 -MsiPath output\gh-run-29436222385-artifacts\msi\MergePilot_0.5.21_x64_en-US.msi` returned `ok: true`, checked the sibling downloaded NSIS artifact, and skipped desktop validation with an explicit reason. |
+| Downloaded `0.5.21` artifact with extracted desktop | Pass | Supplying `-DesktopExePath output\gh-run-29436222385-artifacts\msi-extracted\PFiles\MergePilot\mergepilot-desktop.exe` returned `ok: true` and validated the downloaded MSI, sibling NSIS, and extracted desktop executable together. |
+| Local `0.5.22` explicit MSI metadata | Pass | `verify-windows-installer-metadata.ps1 -Version 0.5.22 -MsiPath apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi` returned `ok: true` and checked the local MSI, sibling NSIS artifact, and active desktop executable. |
+| Default release gate metadata | Pass | `verify-windows-installer-metadata.ps1` returned `ok: true` and still validates the current MSI, NSIS, and local desktop executable. |
+| Mismatched historical desktop negative path | Pass | Pairing downloaded `0.5.21` MSI/NSIS with the local `0.5.22` desktop executable exited `1` and reported desktop ProductVersion/FileVersion mismatches. |
+| Wrong expected version negative path | Pass | Running the downloaded `0.5.21` MSI with `-ExpectedVersion 9.9.9` exited `1`, reported the MSI ProductVersion mismatch, and looked only for sibling `output\gh-run-29436222385-artifacts\nsis\MergePilot_9.9.9_x64-setup.exe`, not the active local build output. |
+| Metadata verifier smoke harness | Pass | `verify-windows-installer-metadata-smoke.ps1 -Version 0.5.22 -MsiPath ...0.5.22... -HistoricalVersion 0.5.21 -HistoricalMsiPath ...0.5.21... -HistoricalDesktopExePath ...\mergepilot-desktop.exe` returned `ok: true` across active default, active explicit MSI, historical skip, historical full, mismatched desktop negative, and wrong expected version negative checks. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Historical artifact inspection is now deterministic and no longer confuses `0.5.21` downloads with current `0.5.22` local outputs. | Pass | Use this path for future release-run artifact probes. |
+| The default release gate remains strict for the active local build. | Pass | Keep running the default verifier in package/release acceptance. |
+
+## Run: mp-0522-chat-auth-route-cache-regression-20260717-0547
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 05:41-05:47 +08:00 |
+| Runtime | Current source/package `0.5.22`; current Program Files install still `0.5.20`; downloaded GitHub Actions artifact `0.5.21` |
+| Resource mode | Non-destructive focused source/UI/package/install-state regression |
+| Result | Source/UI/package pass; installed parity expected fail |
+
+### Purpose
+
+Recheck the user-reported New Chat preload/template and Microsoft login consent symptoms, then continue Workspace UX stabilization coverage for route caching, Pipeline AI analysis, Pull Requests, Review Queue, and Activity.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Current installed app version | Stale | `C:\Program Files\MergePilot\mergepilot-desktop.exe` still reports `ProductVersion=0.5.20` / `FileVersion=0.5.20`, so installed-app screenshots remain stale-version evidence until the local `0.5.22` MSI is installed. |
+| Removed New Chat template source scan | Pass | `rg` found no runtime component matches for `Ask MergePilot anything`, `help me review changes and go all the way to PR`, `Open Pipelines workspace`, `Stage and commit`, or `Push and create PR` under `apps\desktop\src`; remaining matches are negative test assertions. |
+| Chat empty-state regression | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 2 files / 6 tests. |
+| Basic Microsoft sign-in scope regression | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/azureAuthSession.test.ts` passed 1 file / 4 tests, including the assertion that basic Microsoft sign-in does not request Key Vault or Azure DevOps scopes. |
+| Installer metadata smoke harness | Pass | `verify-windows-installer-metadata-smoke.ps1` returned `ok: true` across 6 checks: active default `0.5.22`, active explicit MSI `0.5.22`, downloaded `0.5.21` artifact without desktop, downloaded `0.5.21` artifact with extracted desktop, mismatched desktop negative path, and wrong expected version negative path. |
+| Strict installed `0.5.22` parity | Expected fail | `verify-installed-msi-state.ps1 -ProbeDaemon -RequireLegacyCleanup` failed because Program Files still contains `0.5.20`, the legacy NSIS uninstall entry remains, and installed daemon health reports `0.5.20`. |
+| Workspace UX component/model regressions | Pass | Focused desktop tests passed 6 files / 28 tests for Pipeline presentation, pipeline model, Pull Request view model, Review Queue view model, Activity sidebar, and Activity presentation. |
+| Route-cache browser regression | Pass | `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts` passed 27/27 Chromium tests. Coverage includes New Chat empty state without index-status preload, no stale prompts after Project Link switch, warm-route Pull Requests/Review Queue/Pipelines/Activity caching, Pipeline Markdown AI analysis with evidence panel, and Activity raw output collapsed by default. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The old New Chat welcome template is absent from current source/runtime components and covered by focused UI tests plus browser route-cache tests. | Pass | Re-test only after installing the local `0.5.22` MSI if the installed app still shows it. |
+| The Microsoft login `invalid_resource` screenshot matches stale installed behavior or old package behavior; current source prevents basic sign-in from requesting Key Vault/ADO scopes. | Pass in source | Install local `0.5.22` elevated to prove the fix in Program Files. |
+| Route caching and Workspace UX stabilization gates are green in mocked Chromium. | Pass | Keep this as the fast UI regression gate for route switching/loading flashes. |
+| The only failing command in this run is expected installed-version parity, not a new source/package defect. | Open | Run the elevated install-and-verify command for `MergePilot_0.5.22_x64_en-US.msi`. |
+
+## Run: mp-0522-broad-source-release-regression-20260717-0552
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 05:48-05:52 +08:00 |
+| Runtime | Current source/package `0.5.22`; local Windows release artifacts |
+| Resource mode | Non-destructive full source and release-static regression |
+| Result | Source/release-static pass; signing blocker unchanged |
+
+### Purpose
+
+Broaden the previous focused Chat/auth/route-cache pass to the full desktop, daemon, and core typecheck/test gates, then recheck release workflow metadata and Authenticode signing state.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Daemon typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck` passed. |
+| Core typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck` passed. |
+| Desktop unit/component tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` passed 88 files / 400 tests. |
+| Daemon tests | Pass with known warning | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test` passed 46 files / 267 tests with 1 skipped. Node emitted the known `DEP0040` `punycode` deprecation warning. |
+| Core tests | Pass with gated live skips | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test` passed 50 files / 257 tests with 4 files / 6 live tests skipped by environment flags. Node emitted the known `DEP0040` `punycode` deprecation warning. |
+| Release workflow static verification | Pass | `.\scripts\windows\verify-release-workflow-static.ps1` returned `ok: true`. |
+| Windows installer metadata | Pass | `.\scripts\windows\verify-windows-installer-metadata.ps1` returned `ok: true` with MSI, NSIS, and desktop versions all `0.5.22`. |
+| Windows artifact signatures | Expected fail | `.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.22` returned `ok: false` because both `MergePilot_0.5.22_x64-setup.exe` and `MergePilot_0.5.22_x64_en-US.msi` are `NotSigned`. |
+| Whitespace hygiene | Pass | `git diff --check` reported no whitespace errors, only LF/CRLF warnings for touched files. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| No new source-level typecheck or unit-test regression was found across desktop, daemon, and core. | Pass | Keep these full package gates as the broad source acceptance layer. |
+| Release workflow/static metadata and local installer metadata remain coherent for `0.5.22`. | Pass | Keep the release-static and installer-metadata verifiers in the release gate. |
+| Authenticode signing is still not configured for the current Windows artifacts. | Open | Configure the signing certificate/secrets and rerun the signature verifier before publishing a trusted Windows release. |
+| Installed Program Files parity was not closed by this source/release-static pass. | Open | Install the local `0.5.22` MSI elevated and rerun installed parity/native UI smoke. |
+
+## Run: mp-0522-package-runtime-and-installed-baseline-20260717-0555
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 05:53-05:55 +08:00 |
+| Runtime | Local packaged `0.5.22` sidecar/MSI payload; current Program Files `0.5.20` NSIS install |
+| Resource mode | Non-destructive package runtime and installed baseline smoke |
+| Result | Package runtime pass; current installed baseline pass as stale `0.5.20` |
+
+### Purpose
+
+Continue the package/install evidence chain after the full source and release-static gates by proving the local `0.5.22` packaged daemon can run, while separately confirming the current Program Files install remains healthy but stale.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Packaged sidecar smoke | Pass | `.\scripts\windows\packaged-sidecar-smoke.ps1 -Port 19022` returned `ok: true`, `healthVersion: 0.5.22`, workflow phase `inspect_environment`, and `/chat` HTTP `200`. |
+| Packaged MSI payload smoke | Pass | `.\scripts\windows\packaged-msi-payload-smoke.ps1 -Port 19023` returned `ok: true`, extracted daemon `healthVersion: 0.5.22`, workflow phase `inspect_environment`, and `/chat` HTTP `200`. |
+| Current installed app smoke | Pass as stale baseline | `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.20 -ExpectedDesktopBundleKind nsis -PackageProbePort 8798 -PersistencePort 8799 -SafetyPort 8800 -VerifierSafetyPort 8801` returned `ok: true`; package-state, persistence, safety, and verifier-safety logs were written under `output\live-e2e\installed-app-*-20260717-055339.log`. |
+| Port cleanup | Pass | Ports `8787`, `8798`, `8799`, `8800`, `8801`, `19022`, and `19023` had no `127.0.0.1` listeners after the smokes. |
+| Temp cleanup | Pass | No `%TEMP%\mergepilot-live-*` directories were left after the smokes. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The local packaged `0.5.22` runtime is healthy without installing it system-wide. | Pass | Keep packaged sidecar/MSI payload smokes as package-runtime acceptance gates. |
+| The machine's current Program Files install is still operational but remains `0.5.20`/NSIS. | Open | Use the elevated install-and-verify script to replace it with the local `0.5.22` MSI and rerun the same installed wrapper with `ExpectedDesktopBundleKind msi`. |
+| Smoke cleanup is clean. | Pass | No follow-up cleanup required for this run. |
+
+## Run: mp-0522-live-azure-ado-readonly-reprobe-20260717-0557
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 05:56-05:57 +08:00 |
+| Runtime | Current source tests `0.5.22`; Azure CLI account `Zhou.Ping@totalebizsolutions.com`; ClaimBot_API Azure DevOps read-only probes |
+| Resource mode | Live Azure diagnostic and live ADO read-only; no destructive queue/PR/pipeline mutation |
+| Result | ADO read-only pass; Azure access remains partial |
+
+### Purpose
+
+Continue the external integration verification after package/runtime smokes by confirming that live Azure DevOps read-only discovery, pipeline evidence, and PR insight still work, while checking whether Azure cloud data-plane permissions have changed.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Live Azure permission diagnostic | Pass as diagnostic / access partial | `MERGEPILOT_E2E_LIVE_AZURE=1 .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAzurePermissions.test.ts` passed 1/1. Azure account, Storage account ARM, Storage Table list, Cosmos account ARM, Cosmos SQL database list, and Key Vault ARM passed. |
+| Storage Table entity query | Permission gap unchanged | The probe still fails entity query for `CicdAgentProfiles`; remediation remains `Storage Table Data Reader/Contributor`. |
+| Cosmos SQL data-plane role assignments | Permission gap unchanged | The probe still finds no Cosmos SQL data-plane role assignments; remediation remains Cosmos DB Built-in Data Contributor scoped to `devagentcosmos001/cicd-agent` where possible. |
+| Key Vault secret metadata/list | Permission gap unchanged | The probe still fails `Microsoft.KeyVault/vaults/secrets/readMetadata/action`; remediation remains Key Vault Secrets User on `devagentkv001`. |
+| Live ADO discovery/pipeline read-only | Pass | `MERGEPILOT_E2E_LIVE_ADO=1 .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAdoDiscovery.test.ts test/liveAdoPipeline.test.ts` passed 2 files with 3 tests passed and 1 destructive queue test skipped. It discovered ClaimBot_API project/repo/pipeline, listed recent runs, and read timeline/log evidence for the latest failed run. |
+| Live ADO PR insight read-only | Pass | `MERGEPILOT_E2E_LIVE_ADO=1 .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts` passed 1/1, inspecting a real ClaimBot_API PR without approval or mutation. Node emitted the known `DEP0040` `punycode` deprecation warning. |
+| Cleanup | Pass | Ports `8787` and `1420` had no `127.0.0.1` listeners after the probes, and no `%TEMP%\mergepilot-daemon-live-pr-insight-*` directories remained. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Live ADO read-only integration remains healthy for ClaimBot_API. | Pass | Keep destructive queue/PR mutation proof behind explicit opt-in and cleanup. |
+| Azure cloud persistence/Key Vault access is still not fully provable with the current account permissions. | Open | Grant the documented Storage Table, Cosmos SQL data-plane, and Key Vault Secrets User roles before claiming cloud persistence/Key Vault success. |
+| No cleanup residue was found. | Pass | No follow-up cleanup required for this run. |
+
+## Run: mp-0522-mocked-ui-and-packaged-vision-20260717-0605
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 06:00-06:05 +08:00 |
+| Runtime | Current source UI `0.5.22`; local `0.5.22` MSI-extracted daemon for vision smoke |
+| Resource mode | Non-destructive mocked browser UI and packaged live vision smoke |
+| Result | Pass |
+
+### Purpose
+
+Continue user-visible workflow verification after source/package/live ADO checks by running the broad mocked browser smoke, then verify the packaged MSI payload still supports image input and vision streaming.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Playwright prerequisite | Pass | `npx` is available from the repository-local Node toolchain. |
+| Broad mocked browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked" -Project chromium -Workers 1` passed 38/38 Chromium tests. Covered Chat layout, PR insight controls, Pipeline controls/setup, read-only PR/Pipeline natural language, source references, Review Queue recent activity/semantic lane/disposition, route-cache behavior across New Chat/Pull Requests/Review Queue/Pipelines/Activity, Pipeline Markdown AI analysis, Activity raw output folding, and Settings Key Vault/local-env UX. |
+| Packaged live vision smoke | Pass | `.\scripts\windows\packaged-live-vision-smoke.ps1 -MsiPath apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi -Port 19025` returned `ok: true`, extracted daemon `healthVersion: 0.5.22`, `assistantDeltaCount: 24`, and final answer: `The large text is "MP VISION TEST," and the two colored shapes are a blue square and a red circle.` |
+| Vision SSE quality | Pass | The packaged vision smoke reported `matchesText: true`, `matchesShapes: true`, `leaksControlJson: false`, `duplicateSentence: false`, `hasSseErrors: false`, and `deletedSessionStatus: 200`. SSE log: `output\live-e2e\packaged-live-vision-sse-19025.log`. |
+| Cleanup | Pass | Ports `8787`, `1420`, `19024`, and `19025` had no `127.0.0.1` listeners after the run. No `%TEMP%\mergepilot-packaged-vision-*`, `%TEMP%\mergepilot-vision-msi-extract-*`, or `%TEMP%\mergepilot-vision-fixture-*` directories remained. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The broad mocked UI smoke remains green after the latest UX and route-cache changes. | Pass | Keep this as the broad fast browser gate before release packaging. |
+| Packaged MSI vision support remains healthy for image upload/recognition and SSE stream cleanliness. | Pass | Keep the packaged vision smoke as a package-level guard for GPT-4o image workflows. |
+| Installed Program Files `0.5.22` parity is still separate. | Open | Install the local `0.5.22` MSI elevated before treating installed native UI as current. |
+
+## Run: mp-0522-stale-template-release-gate-20260717-0616
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 06:08-06:16 +08:00 |
+| Runtime | Current source/release bundle `0.5.22`; Program Files still `0.5.20`; user-linked GitHub run `29436222385` |
+| Resource mode | Non-destructive source, artifact, installed-state, and release-static verification |
+| Result | Source/release gate pass; installed version blocker unchanged |
+
+### Purpose
+
+Continue the investigation of the reported New Chat preloaded-template and Microsoft sign-in consent screenshots by separating current source/package behavior from stale installed and hosted artifact state, then harden the release gate so removed New Chat template copy cannot silently re-enter the shipped frontend.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Current installed state | Expected fail for `0.5.22` parity | `.\scripts\windows\verify-installed-msi-state.ps1 -ProbeDaemon -RequireLegacyCleanup` still reports Program Files desktop `0.5.20`, daemon health `0.5.20`, and an NSIS uninstall entry `DisplayVersion=0.5.20`. |
+| Local Windows package metadata | Pass | `.\scripts\windows\verify-windows-installer-metadata.ps1 -Version 0.5.22` returned `ok: true` for local MSI, NSIS, and desktop executable metadata. |
+| Linked GitHub run version | Not latest | `gh run view 29436222385` reports the release title `feat: stabilize workspace route state for v0.5.21`, and the downloaded Windows artifacts are `MergePilot_0.5.21_x64_en-US.msi` and `MergePilot_0.5.21_x64-setup.exe`. |
+| Removed template runtime scan | Pass | New `.\scripts\windows\verify-no-stale-chat-template.ps1` returned `ok: true` for `apps\desktop\dist`, scanning 77 runtime files with source maps excluded. |
+| Local MSI stale-template scan | Pass as auxiliary evidence | `verify-no-stale-chat-template.ps1 -MsiPath apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi` returned `ok: true`. The MSI extraction exposes only a small binary payload, so this is auxiliary to the direct `dist` scan and package/browser smokes. |
+| Release workflow static gate | Pass | `.\scripts\windows\verify-release-workflow-static.ps1` returned `ok: true` and now requires the Windows release job to run `Verify removed chat templates` after `Build Tauri installer` and before `Verify Windows installer metadata`. |
+| Focused Chat/auth tests | Pass | Focused desktop Chat empty/message tests passed 2 files / 6 tests. Core auth session tests passed 1 file / 4 tests, including the regression that basic Microsoft sign-in requests `User.Read` only and does not request Key Vault or Azure DevOps scopes. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The user's screenshots are still explained by stale installed `0.5.20` or older hosted artifact state, not by current `0.5.22` source/package behavior. | Open external state | Install the local `0.5.22` MSI elevated, then rerun installed parity and native UI smoke. |
+| Removed New Chat template copy is now guarded by a release-static gate. | Pass | Keep `verify-no-stale-chat-template.ps1` in the Windows release job before signing/upload. |
+| Basic Microsoft sign-in no longer requests Key Vault consent in current source. | Pass | Keep Key Vault access as an explicit Settings/config capability, not a basic sign-in requirement. |
+| Windows artifacts are still unsigned. | Open external state | Configure trusted Authenticode signing before claiming no Unknown Publisher prompt. |
+
+## Run: mp-0522-install-preflight-absolute-command-20260717-0622
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 06:17-06:22 +08:00 |
+| Runtime | Current non-elevated shell; local `0.5.22` MSI; Program Files still `0.5.20` |
+| Resource mode | Non-destructive installed-parity preflight and script verification |
+| Result | Preflight pass; installed version blocker unchanged |
+
+### Purpose
+
+Reduce the chance of repeating the wrong-install loop by making the installed-parity preflight output the exact fix-bearing local MSI evidence and an elevated command that is safe to paste from any PowerShell working directory.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Script parser check | Pass | PowerShell parser check passed for `scripts\windows\install-and-verify-msi-state.ps1`. |
+| Non-admin installed-parity preflight | Pass as expected fail | `install-and-verify-msi-state.ps1 -ExpectedVersion 0.5.22 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi -SkipVision` exited `1` with `requiresElevation: true`, `ok: false`, `currentInstalledVersions: ["0.5.20"]`, and `installIsCurrent: false`. |
+| MSI identity in preflight | Pass | The preflight returned MSI path `C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi` and SHA-256 `DDE192437EE93E302297A3D0C33099AF36AFB7EAAC92D20B71D39BD9C755BC00`. |
+| Recommended elevated command | Pass | The preflight now returns `Set-Location -LiteralPath 'C:\Users\15492\Develop\Agents\CICD-agents'; & 'C:\Users\15492\Develop\Agents\CICD-agents\scripts\windows\install-and-verify-msi-state.ps1' -ExpectedVersion 0.5.22 -MsiPath 'C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi' -SkipVision`. |
+| Strict installed parity reprobe | Expected fail | `verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -ProbeDaemon -RequireLegacyCleanup` still reports daemon health `0.5.20`, stale uninstall entry `0.5.20`, and expected version mismatch. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The installer preflight now identifies the exact local MSI by path and hash and gives an absolute elevated command. | Pass | Use this preflight output for manual/admin installed-parity runs instead of double-clicking an arbitrary MSI. |
+| Program Files remains stale at `0.5.20`. | Open external state | Run the absolute elevated command, then rerun strict installed smoke without `-SkipVision`. |
+
+## Run: mp-0522-windows-signing-readiness-gate-20260717-0623
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 06:22-06:23 +08:00 |
+| Runtime | Current local `0.5.22` Windows artifacts; release workflow static verification |
+| Resource mode | Non-destructive signing preflight and release workflow static verification |
+| Result | Gate wiring pass; signing certificate blocker unchanged |
+
+### Purpose
+
+Add a release-time preflight before Windows signing so the release job fails clearly when trusted Authenticode signing is not configured, instead of uploading unsigned Windows installers or failing later with a less actionable error.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Signing readiness parser check | Pass | PowerShell parser check passed for `scripts\windows\verify-windows-signing-readiness.ps1`. |
+| Release workflow static verification | Pass | `.\scripts\windows\verify-release-workflow-static.ps1` returned `ok: true` and now requires `Verify Windows signing readiness` after installer metadata and before `Sign Windows installers`. |
+| Signing readiness failure path | Pass as expected fail | `.\scripts\windows\verify-windows-signing-readiness.ps1 -SkipTimestampProbe` found `signtool.exe`, found local `0.5.22` NSIS/MSI artifacts, and failed only because `WINDOWS_CODESIGN_CERT_PFX_BASE64` or `-PfxPath` was not configured. |
+| Signature verification | Expected fail | `.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.22` still reports both Windows artifacts as `NotSigned`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The release workflow now has an explicit signing readiness gate before signing. | Pass | Keep this gate before publishing release assets. |
+| Local `0.5.22` Windows artifacts are still unsigned. | Open external state | Configure trusted Authenticode certificate secrets before claiming no Windows unknown-publisher prompt. |
+| The signing readiness script does not print certificate secret material. | Pass | If a PFX is configured, review only metadata such as subject, issuer, thumbprint, validity, private-key presence, and Code Signing EKU. |
+
+## Run: mp-0522-chat-auth-release-continuation-recheck-20260717-0629
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 06:24-06:29 +08:00 |
+| Runtime | Current source/local package `0.5.22`; Program Files still `0.5.20`; GitHub latest release still `v0.5.21` |
+| Resource mode | Non-destructive source, browser, package, release-static, and installed-state verification |
+| Result | Focused gates pass; installed/signing blockers unchanged |
+
+### Purpose
+
+Continue the active stabilization goal by rechecking the latest reported Chat welcome-template and Microsoft sign-in symptoms against current source/package evidence, while preserving the installed-app and release-signing evidence boundaries.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Worktree/release version audit | Pass as diagnostic | Local package versions are `0.5.22`; `gh release list --repo ZP151/MergePilot` still reports `MergePilot v0.5.21` as the latest published release. |
+| Installed state audit | Expected fail for `0.5.22` parity | `verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -ProbeDaemon -RequireLegacyCleanup` still reports Program Files `0.5.20`, daemon health `0.5.20`, and the NSIS uninstall entry. |
+| Runtime stale-template scan | Pass | `verify-no-stale-chat-template.ps1` returned `ok: true`, scanning 77 `apps\desktop\dist` runtime files with no removed New Chat welcome-template matches. |
+| Auth scope regression | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/azureAuthSession.test.ts` passed 4/4, preserving the regression that basic Microsoft sign-in does not request Key Vault/ADO scopes. |
+| Focused Chat tests | Pass | Desktop Vitest passed `ChatEmptyState`, `ChatMessageList`, and `chatDerivedState` tests: 3 files / 9 tests. |
+| Browser route-cache/New Chat tests | Pass | `run-mocked-browser-e2e.ps1 -Grep "route cache|New Chat"` passed 4/4 Chromium tests, including quiet New Chat empty state, no stale prompts after Project Link switch, and warm route return without skeleton pulses. |
+| Installer metadata | Pass | `verify-windows-installer-metadata.ps1 -Version 0.5.22` returned `ok: true` for local MSI, NSIS, and desktop executable metadata. |
+| Local MSI stale-template scan | Pass but slow auxiliary check | `verify-no-stale-chat-template.ps1 -MsiPath ...MergePilot_0.5.22_x64_en-US.msi` returned `ok: true` after MSI extraction, scanning 4 files. It took about 116 seconds, so the release gate intentionally uses the direct `dist` scan instead. |
+| Release workflow static verification | Pass | `verify-release-workflow-static.ps1` returned `ok: true`, including stale-template, metadata, signing-readiness, signing, and signature-verification ordering. |
+| Signing readiness and signature verification | Expected fail | Signing readiness found `signtool.exe` and local Windows artifacts, then failed only because a trusted code-signing certificate is not configured. Signature verification still reports both local Windows artifacts as `NotSigned`. |
+| Install preflight | Expected fail with guidance | `install-and-verify-msi-state.ps1 -ExpectedVersion 0.5.22 ... -SkipVision` returned `requiresElevation: true`, current installed version `0.5.20`, the local MSI hash, and an absolute recommended elevated command. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current source/package no longer contains the old New Chat welcome-template strings. | Pass | Keep the release `dist` scan and browser route-cache tests as the primary guards. |
+| Basic Microsoft sign-in remains scoped away from Key Vault/ADO consent in current source. | Pass | Treat any Key Vault consent screenshot from the installed app as stale-version evidence until Program Files is upgraded and reproven. |
+| Program Files is still stale at `0.5.20`. | Open external state | Install the local `0.5.22` MSI elevated using the emitted absolute command, then rerun installed parity/native UI smoke. |
+| Published GitHub latest is still `v0.5.21`, not the current local `0.5.22` package. | Open external state | Do not use the linked `v0.5.21` GitHub Actions run as proof for the latest Chat/auth fixes. |
+| Windows trusted-publisher status remains blocked by missing Authenticode signing configuration. | Open external state | Configure trusted signing secrets and rerun the release/signature gates. |
+| MSI stale-template scan is slow because MSI extraction dominates. | Low test-harness issue | Keep it as an auxiliary/manual package check; avoid making release depend on the MSI extraction path. |
+
+## Run: mp-0522-broad-ui-package-live-continuation-20260717-0644
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 06:31-06:44 +08:00 |
+| Runtime | Current source/local package `0.5.22`; Program Files still `0.5.20`; GitHub latest release still `v0.5.21` |
+| Resource mode | Non-destructive mocked UI, packaged sidecar, live source-app local Git workflows, release/static checks |
+| Result | Broad source/package/live local gates pass; installed/signing blockers unchanged |
+
+### Purpose
+
+Broaden the continuation verification beyond the focused Chat/auth checks by exercising the mocked user-visible workspace routes, packaged daemon sidecar, and the real browser-driven local Git workflows. This keeps the test behavior aligned with the business goal: MergePilot should manage project work through Chat, Git, PR/Pipeline surfaces, Review Queue, Activity, and Settings without regressing core workflow behavior.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Installed/release state recheck | Expected external blockers unchanged | Local source/package is `0.5.22`; GitHub latest release is still `v0.5.21`; Program Files verification for `0.5.22` still fails because installed desktop/daemon are `0.5.20`. |
+| Installed auth/avatar probe | Pass for current stale install | `verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -ProbeDaemon -ProbeAuth -RequireAvatar -RequireLegacyCleanup` reports authenticated user `Zhou Ping`, `hasAvatar: true`, and avatar data length `19339` even though version parity fails. This makes avatar invisibility more likely a UI/cache/window-state issue than a backend avatar-fetch failure. |
+| Broad mocked UI smoke | Pass | `run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked" -Project chromium -Workers 1` passed 38/38. Coverage included Chat layout/workflow controls, PR and Pipeline controls, Review Queue recent activity and selected-lane semantics, route caching across New Chat/Pull Requests/Review Queue/Pipelines/Activity, Pipeline Markdown AI analysis, Activity raw-output folding, and Settings Key Vault/local-env UX. |
+| Packaged sidecar smoke | Pass | `packaged-sidecar-smoke.ps1 -Port 19031` returned `ok: true`, daemon `healthVersion: 0.5.22`, indexed one file into two chunks, workflow phase `inspect_environment`, and `/chat` HTTP `200`. |
+| Stale-template runtime scan | Pass | `verify-no-stale-chat-template.ps1` returned `ok: true` with 77 runtime files scanned and no removed New Chat welcome-template matches. |
+| Installer metadata | Pass | `verify-windows-installer-metadata.ps1 -Version 0.5.22` returned `ok: true` for local MSI/NSIS/desktop metadata. |
+| Live source-app local Git workflows | Pass after correcting test invocation | An initial `run-live-app-e2e.ps1 -Grep "local Git workflows|New Chat|source references"` failed with `No tests found`, which was a bad grep and not a product regression. The corrected full non-ADO run `run-live-app-e2e.ps1 -RestartMismatchedDaemon` passed 26/26 local Git workflow tests with 4 live ADO tests skipped by design. It covered staging, approval restore, approval denial feedback, commit validation, branch switch/merge/conflict recovery, push target redaction, stash/apply/pop/conflict recovery, restore, revert, local release tags, and pushing a single tag. |
+| Signing readiness | Expected fail | `verify-windows-signing-readiness.ps1 -SkipTimestampProbe` still finds local artifacts and `signtool.exe`, then fails only because trusted signing certificate configuration is missing. |
+| Cleanup | Pass | Listen-only checks found no listeners on `127.0.0.1:8787`, `1420`, or `19031`; no matching `%TEMP%\mergepilot-live-*` or `%TEMP%\mergepilot-daemon-live-*` directories remained. Daemon stderr only contained the known Node `DEP0040` `punycode` deprecation warning. |
+| Docs and diff hygiene | Pass | `verify-active-doc-links.ps1` returned `ok: true`; `git diff --check` reported no whitespace errors, only CRLF normalization warnings. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The broad mocked route-cache/UI suite remains green after the workspace UX and Chat cleanup changes. | Pass | Keep this as the fast broad user-visible regression gate. |
+| Real browser-driven local Git workflows remain green against source daemon `0.5.22`. | Pass | Keep live ADO/destructive mutation separate from local Git workflow confidence. |
+| Packaged daemon sidecar still handles workflow and chat requests correctly. | Pass | Keep packaged sidecar smoke as the package-level daemon guard. |
+| Installed Program Files remains stale at `0.5.20`. | Open external state | Run the local `0.5.22` MSI elevated and rerun installed parity/native UI smoke. |
+| Published GitHub latest remains `v0.5.21`. | Open external state | Publish a new release only after installed parity and signing readiness are intentionally handled. |
+| Windows signing remains unconfigured. | Open external state | Configure trusted Authenticode PFX secrets before claiming no unknown-publisher prompt. |
+| The installed avatar backend probe succeeds while the UI report was avatar-invisible. | Needs native UI follow-up | After installing `0.5.22`, use native UI smoke or browser-backed component evidence to confirm the avatar image renders, not merely that auth returns avatar data. |
+
+## Run: mp-0522-avatar-render-coverage-20260717-0647
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 06:45-06:47 +08:00 |
+| Runtime | Current source `0.5.22` desktop/core tests |
+| Resource mode | Non-destructive component and auth regression tests |
+| Result | Pass |
+
+### Purpose
+
+Follow up on the installed-app report that the user avatar was not visible. The previous installed probe proved the daemon can return avatar data for `Zhou Ping`; this run adds component-level evidence that the desktop UI renders a real image when `avatarDataUrl` exists and falls back to initials only when no image data is available.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Avatar component regression | Pass | Added `apps/desktop/src/app/avatar.test.tsx`; `SafeAvatar` renders an `<img>` with the Graph data URL when `src` is present and renders initials when no avatar data is available. |
+| Focused desktop tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/app/avatar.test.tsx src/app/AppShell.test.ts` passed 2 files / 6 tests. |
+| Auth scope regression | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/azureAuthSession.test.ts` passed 1 file / 4 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Docs and diff hygiene | Pass | `verify-active-doc-links.ps1` returned `ok: true`; `git diff --check` reported no whitespace errors, only CRLF normalization warnings. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The avatar rendering path now has direct component coverage. | Pass | Keep `avatar.test.tsx` as a guard for Graph avatar rendering and initials fallback. |
+| This does not prove native installed-window avatar visibility by itself. | Open external state | After installing `0.5.22`, rerun installed/native UI smoke to verify the actual app window renders the avatar image. |
+
+## Run: mp-0522-live-azure-ado-readonly-recheck-20260717-0714
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 07:13-07:15 +08:00 |
+| Runtime | Current source `0.5.22`; live Azure CLI and Azure DevOps read-only probes |
+| Resource mode | Live external resources, read-only; destructive pipeline/PR mutation disabled |
+| Result | ADO read-only pass; Azure cloud data-plane partial |
+
+### Purpose
+
+Recheck the live external-resource layer after the source/package gates. This verifies whether the current signed-in account can support MergePilot's intended Azure DevOps insight workflows and whether Azure Storage/Cosmos/Key Vault permissions have changed.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Azure account context | Pass | `az account show` reports user `Zhou.Ping@totalebizsolutions.com`, tenant `1f432b2e-9e7a-4aa0-ace2-53af62d309f6`, default subscription `TeBS-Internal Azure Bot` (`9e1bd067-1e30-4e20-b29a-f2343141a25e`). The live Azure permission test explicitly targets subscription `a99512b0-3dc5-476f-8f43-d7db40fbc923`. |
+| Live Azure permission probe | Diagnostic pass, partial access | `MERGEPILOT_E2E_LIVE_AZURE=1 .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAzurePermissions.test.ts` passed 1/1 as a diagnostic. ARM reads for `devagentstorage001`, `devagentcosmos001`, and `devagentkv001` pass; Storage table list and Cosmos database list pass. Storage Table entity query still fails, Cosmos SQL data-plane role assignments are missing, and Key Vault secret metadata/list still fails with `Forbidden`. |
+| Live ADO discovery/pipeline read-only | Pass | `MERGEPILOT_E2E_LIVE_ADO=1 .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAdoDiscovery.test.ts test/liveAdoPipeline.test.ts` passed 3/3 with 1 destructive queue test skipped. It discovered ClaimBot_API project/repository/pipeline and read recent run/timeline/log evidence. |
+| Live ADO daemon PR insight | Pass | `MERGEPILOT_E2E_LIVE_ADO=1 .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts` passed 1/1, inspecting a real ClaimBot_API pull request without approval or mutation. |
+| Pipeline mutation check | Pass | `az pipelines runs list --org https://dev.azure.com/tebssg --project TeBS-ClaimBot --pipeline-ids 117 --top 1` still reports latest ClaimBot_API pipeline run `4680 / 20260706.1`; no new run was queued by this read-only gate. |
+| Cleanup | Pass | Post-run probes found no listeners on `127.0.0.1:8787`, `127.0.0.1:1420`, or `127.0.0.1:19032`, and no `%TEMP%\mergepilot-live-*`, `%TEMP%\mergepilot-daemon-live-pr-insight-*`, or `%TEMP%\mergepilot-msi-extract-*` directories. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| ClaimBot_API Azure DevOps read-only insight paths are usable with the current account. | Pass | Keep destructive ADO tests gated separately. |
+| Azure cloud data-plane permissions remain incomplete. | Open external state | Grant Storage Table Data Reader/Contributor, Cosmos DB Built-in Data Contributor scoped appropriately, and Key Vault Secrets User/Officer depending on read/write needs. |
+| The app can continue to use local `.env` model secrets while Key Vault access is missing. | Pass | Keep Key Vault as optional secret source in Settings. |
+
+## Run: mp-0522-auth-keyvault-scope-guard-20260717-0701
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 07:01 +08:00 |
+| Runtime | Current source `0.5.22`; core/daemon/desktop focused tests |
+| Resource mode | Non-destructive unit/component checks and static dist scan |
+| Result | Pass |
+
+### Purpose
+
+Lock down the Microsoft sign-in and local-secret fallback behavior after an installed-app screenshot showed an `invalid_resource` error for `https://vault.azure.net`. Basic Microsoft sign-in must stay identity-only, even if Key Vault secret mode or Key Vault references exist in configuration; Key Vault access is optional and should only be used by explicit secret-source paths.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Basic Microsoft sign-in scope guard | Pass | Added a regression to `packages/core/test/azureAuthSession.test.ts` proving `loginWithBrowser("default")` requests only `https://graph.microsoft.com/User.Read` and does not request `https://vault.azure.net/.default` or Azure DevOps scopes, even when Key Vault secret mode and `kv://secret/mergepilot-aoai-key` are present in environment configuration. |
+| Core auth test | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/azureAuthSession.test.ts` passed 1 file / 5 tests. |
+| Local `.env` and Key Vault fallback gate | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/daemonEnv.test.ts test/daemonConfigRoutes.test.ts` passed 2 files / 9 tests. It covers new-install `local_env`, local `.env` key loading, and Settings model-key saves not calling Key Vault unless Key Vault is explicitly selected. |
+| Empty Chat template guard | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 2 files / 6 tests, including no old welcome-template rendering for an active Project Link empty chat. |
+| Built dist stale-template scan | Pass | `.\scripts\windows\verify-no-stale-chat-template.ps1` returned `ok: true` for `apps\desktop\dist` with no old welcome-template matches. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current source basic sign-in does not request Key Vault consent. | Pass | Keep Key Vault as an explicit Settings secret-source path, not part of base login. |
+| Current source and built dist do not contain the removed New Chat welcome template. | Pass | Installed-app parity still depends on installing a build that contains these uncommitted source changes. |
+| GitHub release `v0.5.21` and Program Files `0.5.20` do not prove these fixes. | Open external state | Install or release `0.5.22` before judging installed-app Chat/login behavior. |
+
+## Run: mp-0522-installed-parity-and-smoke-recheck-20260717-0710
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 07:05-07:10 +08:00 |
+| Runtime | Current source `0.5.22`; installed Program Files probe; GitHub release metadata |
+| Resource mode | Non-destructive installed-state probe, typecheck, and mocked browser smoke |
+| Result | Source pass; installed parity still blocked by stale install |
+
+### Purpose
+
+Continue the verification loop after the Key Vault scope regression by proving the current source baseline remains green while explicitly checking whether the local installed app or GitHub latest release had caught up to the source fixes.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Installed package parity | Fail as expected | `.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -ProbeDaemon -ProbeAuth -RequireAvatar -RequireLegacyCleanup` still found Program Files at `0.5.20`, daemon health version `0.5.20`, and the old uninstall entry. Auth/avatar data is available (`hasAvatar: true`, data URL length `19339`), so remaining avatar proof depends on installing the current UI build. |
+| GitHub latest release | Stale relative to source | `gh release list -R ZP151/MergePilot --limit 3` still reports `MergePilot v0.5.21` as Latest. |
+| Daemon typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck` passed. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Broad mocked browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep '@smoke @mocked' -Project chromium -Workers 1` passed 39/39. Coverage includes quiet New Chat without index-status preload, sidebar avatar image rendering, route cache/warm navigation, PR/Pipeline/Review Queue/Activity behavior, Pipeline Markdown analysis, and Settings Key Vault-to-local-env fallback. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current source remains healthy after the auth scope guard. | Pass | Keep this broad smoke as the short pre-release UI gate. |
+| Installed-app parity is not proven because the machine still runs `0.5.20`. | Open external state | Install local `0.5.22` MSI or publish/install a `v0.5.22` release, then rerun strict installed/native UI verification. |
+| GitHub latest release is still `v0.5.21`. | Open external state | Do not use the current public latest installer to judge the uncommitted `0.5.22` fixes. |
+
+## Run: mp-0522-package-readiness-recheck-20260717-0718
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 07:12-07:18 +08:00 |
+| Runtime | Local Windows package artifacts `0.5.22` |
+| Resource mode | Non-destructive package extraction/static verification and packaged daemon smoke |
+| Result | Package payload pass; signing still blocked |
+
+### Purpose
+
+Move one layer past source tests by verifying the local `0.5.22` Windows artifacts themselves: release workflow gates, MSI metadata, stale Chat template removal inside the MSI payload, extracted daemon health, and packaged Chat/index smoke.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Release workflow static gate | Pass | `.\scripts\windows\verify-release-workflow-static.ps1` returned `ok: true` and confirmed the Release workflow includes stale artifact cleanup, removed-template verification, installer metadata verification, signing readiness, signing, signature verification, and artifact upload. |
+| Windows installer metadata | Pass | `.\scripts\windows\verify-windows-installer-metadata.ps1 -Version 0.5.22` passed. MSI product name is `MergePilot`, product version `0.5.22`, manufacturer `Total eBiz Solutions Pte Ltd`, all-users install is enabled, and NSIS/desktop exe versions are `0.5.22`. |
+| MSI stale Chat template scan | Pass | `.\scripts\windows\verify-no-stale-chat-template.ps1 -MsiPath ...\MergePilot_0.5.22_x64_en-US.msi` returned `ok: true`; extracted MSI payload had no old New Chat welcome-template strings. |
+| MSI payload smoke | Pass | `.\scripts\windows\packaged-msi-payload-smoke.ps1 -Version 0.5.22` passed. Extracted daemon health reported `0.5.22`, legacy cleanup WiX validation passed, index refresh saw/indexed one file, workflow phase was `inspect_environment`, and `/chat` returned HTTP 200. |
+| Packaged sidecar smoke | Pass | `.\scripts\windows\packaged-sidecar-smoke.ps1 -Port 19032` passed with daemon health `0.5.22`, one file indexed into two embedded chunks, workflow phase `inspect_environment`, and `/chat` HTTP 200. |
+| Signature verification | Fail expected | `.\scripts\windows\verify-windows-artifact-signatures.ps1 -Version 0.5.22` reports both MSI and NSIS artifacts as `NotSigned`. |
+| Signing readiness | Fail expected | `.\scripts\windows\verify-windows-signing-readiness.ps1 -SkipTimestampProbe` finds `signtool` and both artifacts but fails because no Windows code-signing certificate is configured. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The local `0.5.22` MSI payload contains the Chat/auth fixes and starts a healthy `0.5.22` daemon. | Pass | Use this artifact for elevated install parity testing. |
+| Release workflow has the intended package, stale-template, metadata, and signing gates. | Pass | Keep this static gate as part of release preflight. |
+| Windows artifacts remain unsigned. | Open external state | Configure `WINDOWS_CODESIGN_CERT_PFX_BASE64` or provide a PFX path before expecting Microsoft/Windows to show a trusted publisher. |
+| Native installed-window UI proof is still pending. | Open external state | Install the local `0.5.22` MSI elevated and rerun strict installed/native app smoke. |
+
+### Native window attempt
+
+| Check | Result | Notes |
+|---|---|---|
+| Local release exe launch | Inconclusive | Started `apps\desktop\src-tauri\target\release\mergepilot-desktop.exe` without installing. Process launch succeeded and started the matching local `mergepilot-daemon.exe`, but Windows automation reported two `com.mergepilot.desktop` windows that could not be activated/captured reliably. |
+| Cleanup | Pass | Stopped the local `target\release` desktop and daemon processes. A follow-up process check showed only the existing Program Files `0.5.20` desktop process remained. |
+
+This attempt does not replace installed-app parity. Native UI proof should be collected from an elevated `0.5.22` MSI install or a published `v0.5.22` installer, not from a side-loaded release exe while the old installed app is still present.
+
+## Run: mp-0522-browser-avatar-smoke-20260717-0655
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 06:48-06:55 +08:00 |
+| Runtime | Current source `0.5.22` mocked Chromium UI |
+| Resource mode | Non-destructive mocked browser UI and focused desktop tests |
+| Result | Pass after test-fixture correction |
+
+### Purpose
+
+Strengthen the avatar investigation from component rendering to actual browser UI rendering. The goal was to prove that when the runtime returns a usable `avatarDataUrl`, the left sidebar account footer renders the avatar image rather than falling back to initials.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Browser avatar smoke | Pass | Added a `route-cache.spec.ts` smoke that mocks authenticated `name`, `upn`, and `avatarDataUrl`, opens `/#/chat`, and verifies the sidebar footer contains the avatar `<img>` and not the `ZP` fallback. |
+| Initial fixture issue | Diagnosed and fixed | The first broad smoke run failed only for the new avatar test because the mock GIF data URL was incomplete, causing browser image load failure and the expected `SafeAvatar` fallback. The fixture was replaced with a complete 1x1 GIF data URL. |
+| Focused browser rerun | Pass | `run-mocked-browser-e2e.ps1 -Grep "signed-in user avatar" -Project chromium -Workers 1` passed 1/1. |
+| Focused component rerun | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/app/avatar.test.tsx` passed 1 file / 4 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Broad mocked UI smoke | Pass | `run-mocked-browser-e2e.ps1 -Grep "@smoke @mocked" -Project chromium -Workers 1` passed 39/39 after adding the avatar browser smoke. |
+| Docs and diff hygiene | Pass | `verify-active-doc-links.ps1` returned `ok: true`; `git diff --check` reported no whitespace errors, only CRLF normalization warnings. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Browser-level UI now proves avatar image rendering for valid avatar data. | Pass | Keep the new smoke in the broad mocked route-cache gate. |
+| `SafeAvatar` fallback behavior is also proven by the initial bad-fixture diagnosis and component fallback test. | Pass | No runtime change needed for fallback behavior. |
+| Native installed-window avatar visibility remains unproven because Program Files is still stale. | Open external state | Install `0.5.22` MSI elevated, then rerun native/installed UI smoke against the real window. |
+
+## Run: mp-0522-live-ado-readonly-continuation-20260717-0430
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 04:28-04:30 +08:00 |
+| Runtime | Current source daemon/app `0.5.22`; live Azure DevOps ClaimBot_API read-only paths |
+| Resource mode | Live ADO read-only; destructive execution disabled |
+| Result | Pass |
+
+### Purpose
+
+Continue the live business verification by exercising real ClaimBot_API Azure DevOps PR and Pipeline read-only workflows after the rebuilt `0.5.22` package and Chat cleanup. This confirms the project remains aligned with AI insight over real Git/ADO workflows while avoiding ADO mutation.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Live source-app ADO browser gate | Pass | `.\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -RestartMismatchedDaemon -Grep "ClaimBot_API pipeline"` passed 4/4 with source daemon `0.5.22`, `liveAdo: true`, and `destructive: false`. Covered discovering/saving ClaimBot_API pipeline `#117`, inspecting failure evidence, preparing rerun approval from failure evidence, and preparing trigger approval through the real Chat UI. |
+| Browser cleanup | Pass | Post-run probes found no listener on `127.0.0.1:8787` and no `%TEMP%\mergepilot-live-*` or `%TEMP%\mergepilot-daemon-live-pr-insight-*` directories. Daemon stderr only contained the known Node `DEP0040` `punycode` warning. |
+| Live ADO core discovery/pipeline | Pass | `MERGEPILOT_E2E_LIVE_ADO=1 .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/liveAdoDiscovery.test.ts test/liveAdoPipeline.test.ts` passed 3 read-only tests with 1 destructive queue test skipped by design. |
+| Live ADO daemon PR insight | Pass | `MERGEPILOT_E2E_LIVE_ADO=1 .\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/liveAdoPrInsight.test.ts` passed 1/1, inspecting a real ClaimBot_API PR without approval or mutation. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Live ADO read-only PR/Pipeline workflows remain green at source `0.5.22`. | Pass | Keep destructive ADO queue/rerun proof explicit and separate. |
+| No ADO mutation was requested or performed in this run. | Pass | Destructive mode stayed disabled and the queue test remained skipped. |
+| Installed Program Files proof remains separate. | Open | Install rebuilt `0.5.22` MSI elevated before strict installed/native UI parity. |

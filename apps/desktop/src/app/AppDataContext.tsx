@@ -76,15 +76,13 @@ export function AppDataProvider({
   daemonReady: boolean;
 }) {
   const [projectLinks, setProjectLinks] = useState<ProjectLink[]>(() => lsProjectLinks());
-  const [projectLinksLoading, setProjectLinksLoading] = useState(
-    () => lsProjectLinks().length === 0,
-  );
+  const [projectLinksLoading, setProjectLinksLoading] = useState(() => projectLinks.length === 0);
   const [cloudProjectLinkStore, setCloudProjectLinkStore] = useState(false);
   const [usingDaemon, setUsingDaemon] = useState(false);
   const loadedRef = useRef(false);
 
   const refreshProjectLinks = useCallback(async () => {
-    setProjectLinksLoading(true);
+    setProjectLinksLoading(projectLinks.length === 0);
     try {
       const remote = (await listProjectLinks()).map(withProjectLinkDefaults);
       setProjectLinks(remote);
@@ -101,7 +99,7 @@ export function AppDataProvider({
     } finally {
       setProjectLinksLoading(false);
     }
-  }, []);
+  }, [projectLinks.length]);
 
   useEffect(() => {
     if (!daemonReady || loadedRef.current) return;

@@ -1,4 +1,5 @@
 import type { ReviewFinding, ReviewQueueItem } from "./api.js";
+import { parseSortableDate } from "./safeDate.js";
 
 export const REVIEW_HISTORY_LS_KEY = "mergepilot_review_history_v1";
 export const FINDINGS_LS_KEY = "mergepilot_pr_findings_v1";
@@ -165,7 +166,7 @@ function reviewQueuePriorityScore(item: ReviewQueueItem): number {
 export function compareReviewQueueItems(a: ReviewQueueItem, b: ReviewQueueItem): number {
   const priorityDelta = reviewQueuePriorityScore(b) - reviewQueuePriorityScore(a);
   if (priorityDelta !== 0) return priorityDelta;
-  return Date.parse(b.lastRunAt || "0") - Date.parse(a.lastRunAt || "0");
+  return parseSortableDate(b.lastRunAt) - parseSortableDate(a.lastRunAt);
 }
 
 export function reviewQueuePriorityReasons(item: ReviewQueueItem): string[] {
@@ -248,7 +249,7 @@ export function mergeReviewQueueItems(...groups: ReviewQueueItem[][]): ReviewQue
     for (const item of group) {
       const key = `${item.repository}/${item.pullRequestId}`;
       const existing = byKey.get(key);
-      if (!existing || Date.parse(item.lastRunAt || "0") >= Date.parse(existing.lastRunAt || "0")) {
+      if (!existing || parseSortableDate(item.lastRunAt) >= parseSortableDate(existing.lastRunAt)) {
         byKey.set(key, item);
       }
     }

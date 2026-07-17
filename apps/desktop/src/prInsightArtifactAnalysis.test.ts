@@ -172,6 +172,7 @@ describe("PR insight artifact analysis", () => {
     ).toMatchObject({
       state: "unknown",
       reasons: ["missing_baseline"],
+      label: "freshness not available: no saved PR baseline",
     });
   });
 });

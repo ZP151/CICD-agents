@@ -93,6 +93,7 @@ try {
   New-Item -ItemType Directory -Force -Path (Split-Path $ssePath -Parent) | Out-Null
   New-Item -ItemType Directory -Path $dataDir, $fixtureRepo | Out-Null
   git -C $fixtureRepo init -b main | Out-Null
+  git -C $fixtureRepo config core.autocrlf false
   git -C $fixtureRepo config user.email mergepilot-e2e@example.local
   git -C $fixtureRepo config user.name "MergePilot E2E"
   Set-Content -LiteralPath (Join-Path $fixtureRepo "README.md") -Value "# Packaged live vision fixture`n" -Encoding UTF8
@@ -105,8 +106,7 @@ try {
 
   $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
   $startInfo.FileName = $SidecarPath
-  $startInfo.ArgumentList.Add("--port")
-  $startInfo.ArgumentList.Add([string]$Port)
+  $startInfo.Arguments = "--port $Port"
   $startInfo.WorkingDirectory = Split-Path $SidecarPath -Parent
   $startInfo.UseShellExecute = $false
   $startInfo.CreateNoWindow = $true
@@ -149,6 +149,7 @@ try {
 
   $currentEvent = ""
   $assistantDeltas = New-Object System.Collections.Generic.List[string]
+  $sseErrors = New-Object System.Collections.Generic.List[string]
   $finalResponse = ""
 
   foreach ($line in ($response.Content -split "`r?`n")) {
@@ -169,6 +170,18 @@ try {
     if ($currentEvent -eq "assistant_delta" -and $payload.delta) {
       $assistantDeltas.Add([string]$payload.delta)
     }
+    if ($currentEvent -eq "error" -or $payload.type -eq "error") {
+      $errorMessage = if ($payload.message) {
+        [string]$payload.message
+      } elseif ($payload.error) {
+        [string]$payload.error
+      } else {
+        ($payload | ConvertTo-Json -Compress -Depth 6)
+      }
+      if (-not [string]::IsNullOrWhiteSpace($errorMessage)) {
+        $sseErrors.Add($errorMessage)
+      }
+    }
     if (($currentEvent -eq "done" -or $currentEvent -eq "final") -and $payload.result.response) {
       $finalResponse = [string]$payload.result.response
     }
@@ -184,9 +197,29 @@ try {
   $leaksControlJson = $assistantText -match "\{\\?`"response\\?`"" -or $assistantText -match "risk_level|actions_taken|approval_proposal|responsetext"
   $sentencePattern = [regex]::Escape($ExpectedText)
   $duplicateSentence = ([regex]::Matches($assistantText, $sentencePattern)).Count -gt 1
+  $hasSseErrors = $sseErrors.Count -gt 0
 
-  if (-not $matchesText -or -not $matchesShapes -or $leaksControlJson -or $duplicateSentence) {
-    throw "Live vision smoke failed. matchesText=$matchesText matchesShapes=$matchesShapes leaksControlJson=$leaksControlJson duplicateSentence=$duplicateSentence finalResponse=$finalResponse"
+  if (-not $matchesText -or -not $matchesShapes -or $leaksControlJson -or $duplicateSentence -or $hasSseErrors) {
+    [pscustomobject]@{
+      ok = $false
+      healthVersion = $health.version
+      sidecarPath = $SidecarPath
+      msiPath = if ($MsiPath) { (Resolve-Path $MsiPath).Path } else { $null }
+      repoPath = $fixtureRepo
+      imagePath = $imagePath
+      imageBytes = $imageBytes.Length
+      sessionId = $sessionId
+      assistantDeltaCount = $assistantDeltas.Count
+      finalAnswer = $finalResponse
+      matchesText = $matchesText
+      matchesShapes = $matchesShapes
+      leaksControlJson = $leaksControlJson
+      duplicateSentence = $duplicateSentence
+      hasSseErrors = $hasSseErrors
+      sseErrors = @($sseErrors)
+      ssePath = $ssePath
+    } | ConvertTo-Json -Depth 8
+    exit 1
   }
 
   $deletedSessionStatus = $null
@@ -214,13 +247,17 @@ try {
     matchesShapes = $matchesShapes
     leaksControlJson = $leaksControlJson
     duplicateSentence = $duplicateSentence
+    hasSseErrors = $hasSseErrors
+    sseErrors = @($sseErrors)
     deletedSessionStatus = $deletedSessionStatus
     ssePath = $ssePath
   } | ConvertTo-Json -Depth 8
 } finally {
   if ($process -and -not $process.HasExited) {
-    $process.Kill($true)
-    $process.WaitForExit(5000) | Out-Null
+    try {
+      $process.Kill()
+      $process.WaitForExit(5000) | Out-Null
+    } catch {}
   }
   Remove-Item -LiteralPath $fixtureRepo -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $dataDir -Recurse -Force -ErrorAction SilentlyContinue

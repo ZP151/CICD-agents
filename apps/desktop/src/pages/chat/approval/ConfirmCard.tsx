@@ -25,9 +25,6 @@ export function ConfirmCard({ bubble, onConfirm, onCancel }: ConfirmCardProps) {
           {(bubble.riskLevel ?? "medium").toUpperCase()} risk
         </span>
       </div>
-      {bubble.plan && (
-        <p className="mb-3 whitespace-pre-wrap text-sm leading-relaxed text-[rgb(var(--app-text))]">{bubble.plan}</p>
-      )}
       <div className="flex gap-2">
         <button
           onClick={onConfirm}

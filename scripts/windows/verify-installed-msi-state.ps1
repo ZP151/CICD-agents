@@ -62,6 +62,71 @@ function Get-Sha256OrNull([string]$Path) {
   return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash
 }
 
+function Get-FileVersionInfoOrNull([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path)) {
+    return $null
+  }
+  $item = Get-Item -LiteralPath $Path
+  return [pscustomobject]@{
+    path = $item.FullName
+    length = $item.Length
+    lastWriteTime = $item.LastWriteTime
+    productVersion = $item.VersionInfo.ProductVersion
+    fileVersion = $item.VersionInfo.FileVersion
+  }
+}
+
+function Get-TauriBundleKind([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path)) {
+    return $null
+  }
+  $bytes = [System.IO.File]::ReadAllBytes($Path)
+  $text = [System.Text.Encoding]::ASCII.GetString($bytes)
+  if ($text.Contains("__TAURI_BUNDLE_TYPE_VAR_MSI")) {
+    return "msi"
+  }
+  if ($text.Contains("__TAURI_BUNDLE_TYPE_VAR_NSS")) {
+    return "nsis"
+  }
+  return "unknown"
+}
+
+function Get-ListeningProcessInfo([int]$TcpPort) {
+  $connection = Get-NetTCPConnection -LocalPort $TcpPort -State Listen -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if (-not $connection) {
+    return $null
+  }
+
+  $process = Get-Process -Id $connection.OwningProcess -ErrorAction SilentlyContinue
+  return [pscustomobject]@{
+    id = $connection.OwningProcess
+    path = if ($process) { [string]$process.Path } else { $null }
+  }
+}
+
+function Wait-DaemonHealth([int]$TcpPort, [int]$Seconds) {
+  $deadline = (Get-Date).AddSeconds($Seconds)
+  $lastError = $null
+  while ((Get-Date) -lt $deadline) {
+    try {
+      return Invoke-RestMethod -Uri "http://127.0.0.1:$TcpPort/healthz" -Method Get -TimeoutSec 2
+    } catch {
+      $lastError = $_.Exception.Message
+      Start-Sleep -Milliseconds 500
+    }
+  }
+
+  throw "Daemon health probe failed after $Seconds seconds: $lastError"
+}
+
+function Test-SamePath([string]$Left, [string]$Right) {
+  if ([string]::IsNullOrWhiteSpace($Left) -or [string]::IsNullOrWhiteSpace($Right)) {
+    return $false
+  }
+  return [StringComparer]::OrdinalIgnoreCase.Equals($Left, $Right)
+}
+
 $uninstallEntries = @(Get-UninstallEntries)
 $mergePilotEntries = @($uninstallEntries | Where-Object { $_.displayName -eq "MergePilot" })
 $legacyEntries = @($uninstallEntries | Where-Object { $_.displayName -eq "CICD-Agent" -or ($_.displayName -eq "MergePilot" -and $_.displayVersion -ne $ExpectedVersion) })
@@ -75,11 +140,32 @@ if (Test-PathExists $legacyInstallDir) {
   $legacyDirChildren = @(Get-ChildItem -LiteralPath $legacyInstallDir -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name)
 }
 
+$daemonProbeAutoStarted = $false
+$daemonProbeStartedProcess = $null
+$daemonProbeStopped = $null
+$daemonProbePortOwnerBefore = $null
+$daemonProbePortOwnerAfter = $null
 $daemonHealth = $null
 $daemonError = $null
-if ($ProbeDaemon) {
+
+if ($ProbeDaemon -or $ProbeAuth -or $RequireAvatar) {
   try {
-    $daemonHealth = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/healthz" -Method Get -TimeoutSec 5
+    $daemonProbePortOwnerBefore = Get-ListeningProcessInfo $Port
+    if (-not $daemonProbePortOwnerBefore) {
+      if (-not (Test-Path -LiteralPath $installedDaemonPath)) {
+        throw "Installed daemon not found: $installedDaemonPath"
+      }
+      $started = Start-Process -FilePath $installedDaemonPath -ArgumentList "--port", "$Port" -WindowStyle Hidden -PassThru
+      $daemonProbeAutoStarted = $true
+      $daemonProbeStartedProcess = [pscustomobject]@{
+        id = $started.Id
+        path = if ([string]::IsNullOrWhiteSpace([string]$started.Path)) { $installedDaemonPath } else { [string]$started.Path }
+      }
+    } elseif (-not (Test-SamePath $daemonProbePortOwnerBefore.path $installedDaemonPath)) {
+      throw "Refusing to probe unexpected process on port $Port. Expected '$installedDaemonPath', got '$($daemonProbePortOwnerBefore.path)'."
+    }
+
+    $daemonHealth = Wait-DaemonHealth $Port 30
   } catch {
     $daemonError = $_.Exception.Message
   }
@@ -94,6 +180,14 @@ if ($ProbeAuth -or $RequireAvatar) {
     if ($null -ne $rawAuth.avatarDataUrl) {
       $avatar = [string]$rawAuth.avatarDataUrl
     }
+    if ((-not [bool]$rawAuth.authenticated) -or ($RequireAvatar -and [string]::IsNullOrWhiteSpace($avatar))) {
+      $null = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/auth/me" -Method Get -TimeoutSec 30
+      $rawAuth = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/auth/status" -Method Get -TimeoutSec 10
+    }
+    $avatar = ""
+    if ($null -ne $rawAuth.avatarDataUrl) {
+      $avatar = [string]$rawAuth.avatarDataUrl
+    }
     $authStatus = [pscustomobject]@{
       authenticated = [bool]$rawAuth.authenticated
       name = $rawAuth.name
@@ -104,6 +198,20 @@ if ($ProbeAuth -or $RequireAvatar) {
     }
   } catch {
     $authError = $_.Exception.Message
+  }
+}
+
+if ($daemonProbeAutoStarted -and $daemonProbeStartedProcess) {
+  try {
+    $daemonProbePortOwnerAfter = Get-ListeningProcessInfo $Port
+    if ($daemonProbePortOwnerAfter -and $daemonProbePortOwnerAfter.id -eq $daemonProbeStartedProcess.id) {
+      Stop-Process -Id $daemonProbeStartedProcess.id -Force -ErrorAction Stop
+      $daemonProbeStopped = $true
+    } else {
+      $daemonProbeStopped = "not stopped: port owner changed"
+    }
+  } catch {
+    $daemonProbeStopped = "error: $($_.Exception.Message)"
   }
 }
 
@@ -144,6 +252,8 @@ if ($RequireMsiPayloadMatch) {
       msiPath = (Resolve-Path $MsiPath).Path
       desktopHash = Get-Sha256OrNull $payloadDesktop.FullName
       daemonHash = Get-Sha256OrNull $payloadDaemon.FullName
+      desktopBundleKind = Get-TauriBundleKind $payloadDesktop.FullName
+      daemonBundleKind = Get-TauriBundleKind $payloadDaemon.FullName
     }
   } catch {
     $msiPayloadError = $_.Exception.Message
@@ -155,6 +265,15 @@ if ($RequireMsiPayloadMatch) {
 $installedHashes = [pscustomobject]@{
   desktopHash = Get-Sha256OrNull $installedDesktopPath
   daemonHash = Get-Sha256OrNull $installedDaemonPath
+}
+$installedFiles = [pscustomobject]@{
+  desktop = Get-FileVersionInfoOrNull $installedDesktopPath
+  daemon = Get-FileVersionInfoOrNull $installedDaemonPath
+  uninstall = Get-FileVersionInfoOrNull (Join-Path $installDir "uninstall.exe")
+}
+$installedBundleKind = [pscustomobject]@{
+  desktop = Get-TauriBundleKind $installedDesktopPath
+  daemon = Get-TauriBundleKind $installedDaemonPath
 }
 
 $failures = @()
@@ -170,10 +289,13 @@ if (-not (Test-PathExists $installedDesktopPath)) {
 if (-not (Test-PathExists $installedDaemonPath)) {
   $failures += "Installed mergepilot-daemon.exe was not found."
 }
-foreach ($legacyFile in @("cicd-agent-desktop.exe", "cicd-daemon.exe", "uninstall.exe")) {
+foreach ($legacyFile in @("cicd-agent-desktop.exe", "cicd-daemon.exe")) {
   if (Test-PathExists (Join-Path $installDir $legacyFile)) {
     $failures += "Legacy file remains in MergePilot install directory: $legacyFile."
   }
+}
+if ($RequireMsiPayloadMatch -and (Test-PathExists (Join-Path $installDir "uninstall.exe"))) {
+  $failures += "NSIS uninstall.exe is present while MSI payload parity was required."
 }
 if ($RequireLegacyCleanup -and $legacyEntries.Count -gt 0) {
   $failures += "Legacy uninstall entries remain: $($legacyEntries.displayName -join ', ')."
@@ -203,6 +325,9 @@ if ($RequireMsiPayloadMatch -and -not $msiPayload) {
   $failures += "MSI payload extraction failed: $msiPayloadError"
 }
 if ($RequireMsiPayloadMatch -and $msiPayload) {
+  if ($installedBundleKind.desktop -ne "msi") {
+    $failures += "Installed mergepilot-desktop.exe bundle kind is '$($installedBundleKind.desktop)', expected 'msi'."
+  }
   if ($installedHashes.desktopHash -ne $msiPayload.desktopHash) {
     $failures += "Installed mergepilot-desktop.exe does not match the MSI payload hash."
   }
@@ -223,8 +348,18 @@ $result = [pscustomobject]@{
   currentShortcutExists = Test-PathExists (Join-Path $currentShortcutDir "MergePilot.lnk")
   uninstallEntries = $uninstallEntries
   legacyEntries = $legacyEntries
+  installedFiles = $installedFiles
+  installedBundleKind = $installedBundleKind
   installedHashes = $installedHashes
   msiPayload = $msiPayload
+  daemonProbe = [pscustomobject]@{
+    port = $Port
+    autoStarted = $daemonProbeAutoStarted
+    startedProcess = $daemonProbeStartedProcess
+    portOwnerBefore = $daemonProbePortOwnerBefore
+    portOwnerAfter = $daemonProbePortOwnerAfter
+    stopped = $daemonProbeStopped
+  }
   daemonHealth = $daemonHealth
   authStatus = $authStatus
   failures = $failures

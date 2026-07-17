@@ -77,6 +77,7 @@ describe("daemon branch workflow routes", () => {
       payload: {
         action: "checkout_branch",
         repoPath: repo,
+        sessionId: null,
         branch: "feature/current",
         projectLink: null,
       },

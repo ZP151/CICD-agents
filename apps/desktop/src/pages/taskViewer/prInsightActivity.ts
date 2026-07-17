@@ -66,7 +66,7 @@ export function prInsightBlockerDetails(
             ? ` ${build.buildNumber}`
             : "";
         const definition = build.definitionName ? ` ${build.definitionName}` : "";
-        const result = build.result || build.status || "unknown";
+        const result = build.result || build.status || "not available";
         return `${id}${number}${definition}: ${result}`;
       }),
     });

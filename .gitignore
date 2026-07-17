@@ -18,6 +18,7 @@ venv/
 .coverage
 htmlcov/
 output/
+.artifacts/
 
 # Node / pnpm
 node_modules/

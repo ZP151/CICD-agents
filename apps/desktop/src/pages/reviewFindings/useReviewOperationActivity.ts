@@ -7,15 +7,22 @@ import {
 import type { ReviewOperationEvent } from "../../reviewOperations.js";
 import { operationActivityCategory, type ActivityCategory } from "./reviewQueueViewModel.js";
 
-export function useReviewOperationActivity(projectLinkId: string) {
+export function useReviewOperationActivity(projectLinkId: string, projectLinkScopeKey = "") {
   const [activityFilter, setActivityFilter] = useState<ActivityCategory>("all");
   const queryClient = useQueryClient();
 
   const operationsQuery = useQuery({
-    queryKey: ["reviewActivity", projectLinkId],
+    queryKey: ["reviewActivity", projectLinkId, projectLinkScopeKey],
     enabled: Boolean(projectLinkId),
     staleTime: 45_000,
     gcTime: 10 * 60_000,
+    placeholderData: (previous, previousQuery) => {
+      const previousKey = previousQuery?.queryKey;
+      if (!Array.isArray(previousKey)) return undefined;
+      return previousKey[1] === projectLinkId && previousKey[2] === projectLinkScopeKey
+        ? previous
+        : undefined;
+    },
     queryFn: async () => (await fetchProjectLinkReviewOperations(projectLinkId)).slice(0, 6),
     retry: false,
   });

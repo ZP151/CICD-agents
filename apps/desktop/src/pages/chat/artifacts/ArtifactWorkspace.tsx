@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import type { ConversationArtifactPart } from "../../../chatBubbles.js";
 import type { ArtifactLookupState } from "../chat.types.js";
 import {
@@ -5,7 +6,12 @@ import {
   artifactWorkspaceStatusClass,
   artifactWorkspaceStatusLabel,
 } from "./artifactWorkspaceHelpers.js";
-import { ArtifactWorkspaceContent } from "./ArtifactWorkspaceContent.js";
+
+const ArtifactWorkspaceContent = lazy(() =>
+  import("./ArtifactWorkspaceContent.js").then((module) => ({
+    default: module.ArtifactWorkspaceContent,
+  })),
+);
 
 export function ArtifactWorkspaceShell({
   artifact,
@@ -61,7 +67,9 @@ export function ArtifactWorkspaceShell({
               </span>
             </div>
           </div>
-          <ArtifactWorkspaceContent artifact={artifact} lookupState={lookupState} />
+          <Suspense fallback={<ArtifactWorkspaceContentFallback />}>
+            <ArtifactWorkspaceContent artifact={artifact} lookupState={lookupState} />
+          </Suspense>
         </div>
       ) : (
         <div className="px-3 py-3">
@@ -78,5 +86,17 @@ export function ArtifactWorkspaceShell({
         </div>
       )}
     </section>
+  );
+}
+
+function ArtifactWorkspaceContentFallback() {
+  return (
+    <div className="mt-3 rounded-md border border-dashed border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2" aria-live="polite">
+      <p className="text-xs font-medium text-[rgb(var(--app-text-muted))]">Loading result preview...</p>
+      <div className="mt-2 space-y-1.5">
+        <div className="h-1.5 w-4/5 rounded-full bg-[rgb(var(--app-border))]" />
+        <div className="h-1.5 w-2/3 rounded-full bg-[rgb(var(--app-border))]" />
+      </div>
+    </div>
   );
 }
