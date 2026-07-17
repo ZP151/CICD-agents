@@ -76,9 +76,11 @@ const requiredSteps = [
   "Build Tauri installer",
   "Verify removed chat templates",
   "Verify Windows installer metadata",
+  "Detect Windows signing configuration",
   "Verify Windows signing readiness",
   "Sign Windows installers",
   "Verify Windows installer signatures",
+  "Report unsigned Windows installers",
   "Upload installer artifacts",
 ];
 for (const name of requiredSteps) {
@@ -141,14 +143,26 @@ if (idx("Sign Windows installers") < idx("Verify Windows installer metadata")) {
 if (idx("Verify Windows signing readiness") < idx("Verify Windows installer metadata")) {
   fail("Verify Windows signing readiness must run after Verify Windows installer metadata.");
 }
+if (idx("Detect Windows signing configuration") < idx("Verify Windows installer metadata")) {
+  fail("Detect Windows signing configuration must run after Verify Windows installer metadata.");
+}
+if (idx("Verify Windows signing readiness") < idx("Detect Windows signing configuration")) {
+  fail("Verify Windows signing readiness must run after Detect Windows signing configuration.");
+}
 if (idx("Sign Windows installers") < idx("Verify Windows signing readiness")) {
   fail("Sign Windows installers must run after Verify Windows signing readiness.");
 }
 if (idx("Verify Windows installer signatures") < idx("Sign Windows installers")) {
   fail("Verify Windows installer signatures must run after Sign Windows installers.");
 }
+if (idx("Report unsigned Windows installers") < idx("Verify Windows installer signatures")) {
+  fail("Report unsigned Windows installers must run after Verify Windows installer signatures.");
+}
 if (idx("Upload installer artifacts") < idx("Verify Windows installer signatures")) {
   fail("Upload installer artifacts must run after signature verification.");
+}
+if (idx("Upload installer artifacts") < idx("Report unsigned Windows installers")) {
+  fail("Upload installer artifacts must run after unsigned Windows artifact reporting.");
 }
 
 const matrixOs = get(["strategy", "matrix", "os"], buildJob);
@@ -163,7 +177,10 @@ if (!String(clean?.run || "").includes("apps/desktop/src-tauri/target/release/bu
 }
 
 const sign = findStep("Sign Windows installers");
-if (sign?.if !== "matrix.os == 'windows-latest'") fail("Sign Windows installers must be gated to windows-latest.");
+if (!String(sign?.if || "").includes("matrix.os == 'windows-latest'")) fail("Sign Windows installers must be gated to windows-latest.");
+if (!String(sign?.if || "").includes("steps.windows_signing.outputs.configured == 'true'")) {
+  fail("Sign Windows installers must run only when Windows signing secrets are configured.");
+}
 if (sign?.shell !== "pwsh") fail("Sign Windows installers should use pwsh.");
 if (!String(sign?.run || "").includes("scripts\\windows\\sign-windows-release-artifacts.ps1")) {
   fail("Sign Windows installers must call scripts\\windows\\sign-windows-release-artifacts.ps1.");
@@ -183,7 +200,10 @@ if (!String(metadata?.run || "").includes("scripts\\windows\\verify-windows-inst
 }
 
 const signingReadiness = findStep("Verify Windows signing readiness");
-if (signingReadiness?.if !== "matrix.os == 'windows-latest'") fail("Verify Windows signing readiness must be gated to windows-latest.");
+if (!String(signingReadiness?.if || "").includes("matrix.os == 'windows-latest'")) fail("Verify Windows signing readiness must be gated to windows-latest.");
+if (!String(signingReadiness?.if || "").includes("steps.windows_signing.outputs.configured == 'true'")) {
+  fail("Verify Windows signing readiness must run only when Windows signing secrets are configured.");
+}
 if (signingReadiness?.shell !== "pwsh") fail("Verify Windows signing readiness should use pwsh.");
 if (!String(signingReadiness?.run || "").includes("scripts\\windows\\verify-windows-signing-readiness.ps1")) {
   fail("Verify Windows signing readiness must call scripts\\windows\\verify-windows-signing-readiness.ps1.");
@@ -203,10 +223,36 @@ if (!String(staleTemplates?.run || "").includes("scripts\\windows\\verify-no-sta
 }
 
 const verify = findStep("Verify Windows installer signatures");
-if (verify?.if !== "matrix.os == 'windows-latest'") fail("Verify Windows installer signatures must be gated to windows-latest.");
+if (!String(verify?.if || "").includes("matrix.os == 'windows-latest'")) fail("Verify Windows installer signatures must be gated to windows-latest.");
+if (!String(verify?.if || "").includes("steps.windows_signing.outputs.configured == 'true'")) {
+  fail("Verify Windows installer signatures must run only when Windows signing secrets are configured.");
+}
 if (verify?.shell !== "pwsh") fail("Verify Windows installer signatures should use pwsh.");
 if (!String(verify?.run || "").includes("scripts\\windows\\verify-windows-artifact-signatures.ps1")) {
   fail("Verify Windows installer signatures must call scripts\\windows\\verify-windows-artifact-signatures.ps1.");
+}
+
+const signingConfig = findStep("Detect Windows signing configuration");
+if (signingConfig?.if !== "matrix.os == 'windows-latest'") fail("Detect Windows signing configuration must be gated to windows-latest.");
+if (signingConfig?.shell !== "pwsh") fail("Detect Windows signing configuration should use pwsh.");
+if (!String(signingConfig?.run || "").includes("configured=")) {
+  fail("Detect Windows signing configuration must expose a configured output.");
+}
+if (get(["env", "WINDOWS_CODESIGN_CERT_PFX_BASE64"], signingConfig) !== "${{ secrets.WINDOWS_CODESIGN_CERT_PFX_BASE64 }}") {
+  fail("Detect Windows signing configuration must read WINDOWS_CODESIGN_CERT_PFX_BASE64 from repository secrets.");
+}
+if (get(["env", "WINDOWS_CODESIGN_CERT_PASSWORD"], signingConfig) !== "${{ secrets.WINDOWS_CODESIGN_CERT_PASSWORD }}") {
+  fail("Detect Windows signing configuration must read WINDOWS_CODESIGN_CERT_PASSWORD from repository secrets.");
+}
+
+const unsignedReport = findStep("Report unsigned Windows installers");
+if (!String(unsignedReport?.if || "").includes("matrix.os == 'windows-latest'")) fail("Report unsigned Windows installers must be gated to windows-latest.");
+if (!String(unsignedReport?.if || "").includes("steps.windows_signing.outputs.configured != 'true'")) {
+  fail("Report unsigned Windows installers must run only when Windows signing secrets are absent.");
+}
+if (unsignedReport?.shell !== "pwsh") fail("Report unsigned Windows installers should use pwsh.");
+if (!String(unsignedReport?.run || "").includes("Unsigned Windows artifact")) {
+  fail("Report unsigned Windows installers must clearly label unsigned artifacts.");
 }
 
 const upload = findStep("Upload installer artifacts");

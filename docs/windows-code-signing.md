@@ -41,7 +41,9 @@ The release workflow runs:
 .\scripts\windows\verify-windows-artifact-signatures.ps1
 ```
 
-If installer metadata is inconsistent, signing secrets are missing, or any Windows installer remains unsigned, the Windows release job fails before assets are uploaded.
+If installer metadata is inconsistent, the Windows release job fails before assets are uploaded. If signing secrets are configured, the workflow also fails when signing readiness, signing, or signature verification fails.
+
+If signing secrets are not configured, the workflow emits a warning and uploads the Windows installers unsigned. That fallback keeps release artifacts available for internal testing, but it does not solve the Windows unknown-publisher prompt. A public release that should be trusted by Windows users still needs the two GitHub signing secrets above.
 
 To check readiness locally without signing files:
 

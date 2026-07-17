@@ -77,8 +77,25 @@ jobs:
         shell: pwsh
         run: .\scripts\windows\verify-windows-installer-metadata.ps1
 
-      - name: Verify Windows signing readiness
+      - name: Detect Windows signing configuration
+        id: windows_signing
         if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          WINDOWS_CODESIGN_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_CERT_PFX_BASE64 }}
+          WINDOWS_CODESIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_CERT_PASSWORD }}
+        run: |
+          $configured = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_CERT_PFX_BASE64) -and
+            -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_CERT_PASSWORD)
+          "configured=$($configured.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if ($configured) {
+            "Windows code-signing secrets are configured."
+          } else {
+            "::warning::Windows code-signing secrets are not configured. Windows installers will be uploaded unsigned."
+          }
+
+      - name: Verify Windows signing readiness
+        if: matrix.os == 'windows-latest' && steps.windows_signing.outputs.configured == 'true'
         shell: pwsh
         env:
           WINDOWS_CODESIGN_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_CERT_PFX_BASE64 }}
@@ -86,7 +103,7 @@ jobs:
         run: .\scripts\windows\verify-windows-signing-readiness.ps1
 
       - name: Sign Windows installers
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && steps.windows_signing.outputs.configured == 'true'
         shell: pwsh
         env:
           WINDOWS_CODESIGN_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_CERT_PFX_BASE64 }}
@@ -94,9 +111,21 @@ jobs:
         run: .\scripts\windows\sign-windows-release-artifacts.ps1
 
       - name: Verify Windows installer signatures
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && steps.windows_signing.outputs.configured == 'true'
         shell: pwsh
         run: .\scripts\windows\verify-windows-artifact-signatures.ps1
+
+      - name: Report unsigned Windows installers
+        if: matrix.os == 'windows-latest' && steps.windows_signing.outputs.configured != 'true'
+        shell: pwsh
+        run: |
+          $artifacts = Get-ChildItem -LiteralPath "apps\desktop\src-tauri\target\release\bundle" -Recurse -File -Include *.msi,*.exe
+          $artifacts | ForEach-Object {
+            Write-Output "Unsigned Windows artifact: $($_.FullName)"
+          }
+          if (-not $artifacts) {
+            throw "No Windows installer artifacts were found to report."
+          }
 
       # Collect the produced installers as a workflow artifact and as a release asset
       - name: Upload installer artifacts
