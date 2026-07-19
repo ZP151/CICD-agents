@@ -24,9 +24,9 @@ export function ProjectLinkWorkspaceSection({
   const repoPathId = useId();
 
   return (
-    <section className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+    <section className="space-y-3.5 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4">
       <div>
-        <h3 className="text-sm font-semibold text-zinc-200">Workspace</h3>
+        <h3 className="text-sm font-semibold text-[rgb(var(--app-text))]">Workspace</h3>
       </div>
       <Field
         label="Project Link name *"
@@ -36,7 +36,7 @@ export function ProjectLinkWorkspaceSection({
       />
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between">
-          <label htmlFor={repoPathId} className="text-xs font-medium text-zinc-400">
+          <label htmlFor={repoPathId} className="text-xs font-medium text-[rgb(var(--app-text-muted))]">
             Repo path
           </label>
           {form.repoPath && (
@@ -45,7 +45,7 @@ export function ProjectLinkWorkspaceSection({
               onClick={() => onReloadBranches(form.repoPath)}
               disabled={branchLoading}
               title="Reload branches from this path"
-              className="flex items-center gap-1 text-[10px] text-zinc-500 transition hover:text-zinc-300 disabled:opacity-40"
+              className="flex items-center gap-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))] disabled:opacity-40"
             >
               <svg
                 width="11"
@@ -80,12 +80,12 @@ export function ProjectLinkWorkspaceSection({
           className={repoInputClass}
         />
         {branchError && form.repoPath && (
-          <p className="text-[10px] text-amber-500/80">
+          <p className="text-[10px] text-[rgb(var(--app-warning))]">
             Could not read branches. Check the path is a valid git repository.
           </p>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className={projectLinkBranchGridClass()}>
         <BranchSelect
           label="Default branch"
           value={form.defaultBranch}
@@ -103,4 +103,8 @@ export function ProjectLinkWorkspaceSection({
       </div>
     </section>
   );
+}
+
+export function projectLinkBranchGridClass(): string {
+  return "grid min-w-0 gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))]";
 }

@@ -65,7 +65,7 @@ export function PrInsightActivitySection({
           <option value="review_run">Full review</option>
         </select>
       </div>
-      <div className="max-h-[260px] overflow-y-auto space-y-1.5">
+      <div className="space-y-1.5">
         {!prInsightLoading && prInsightActivity.length === 0 && (
           <p className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text-muted))]">
             No saved PR insights yet.
@@ -107,14 +107,14 @@ function PrInsightActivityButton({
       }`}
     >
       <div className="mb-1 flex items-center gap-2">
-        <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-700 ring-1 ring-sky-500/20">
+        <span className="rounded-full bg-[rgb(var(--app-accent-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-accent-readable))] ring-1 ring-[rgb(var(--app-border-strong))]">
           {event.kind === "review_run" ? "full review" : "preview"}
         </span>
         {historyMeta && historyMeta.total > 1 && (
           <span
             className={`rounded-full px-2 py-0.5 text-[10px] ring-1 ${
               historyMeta.latest
-                ? "bg-emerald-500/10 text-emerald-700 ring-emerald-500/20"
+                ? "bg-[rgb(var(--app-success-soft))] text-[rgb(var(--app-success))] ring-[rgb(var(--app-success-border))]"
                 : "bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))] ring-[rgb(var(--app-border))]"
             }`}
           >

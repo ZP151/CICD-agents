@@ -1,6 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { PullRequestContextPanel } from "./PullRequestContextPanel.js";
+import {
+  PullRequestContextPanel,
+  pullRequestContextOverviewGridClass,
+  pullRequestContextSecondaryGridClass,
+} from "./PullRequestContextPanel.js";
 import type { ContextState } from "./pullRequestTypes.js";
 
 function loadedContextState(description: string): ContextState {
@@ -46,6 +50,22 @@ function loadedContextState(description: string): ContextState {
 }
 
 describe("PullRequestContextPanel", () => {
+  it("uses an auto-fit overview grid so description and work items reflow with card width", () => {
+    const className = pullRequestContextOverviewGridClass();
+
+    expect(className).toContain("auto-fit");
+    expect(className).toContain("minmax(min(100%,18rem),1fr)");
+    expect(className).not.toContain("lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]");
+  });
+
+  it("uses an auto-fit secondary grid so thread and build panels reflow with card width", () => {
+    const className = pullRequestContextSecondaryGridClass();
+
+    expect(className).toContain("auto-fit");
+    expect(className).toContain("minmax(min(100%,18rem),1fr)");
+    expect(className).not.toContain("lg:grid-cols-2");
+  });
+
   it("renders PR descriptions as Markdown instead of plain pre-wrapped text", () => {
     const html = renderToStaticMarkup(
       <PullRequestContextPanel state={loadedContextState("**Scope**\n\n- Update CI")} />,

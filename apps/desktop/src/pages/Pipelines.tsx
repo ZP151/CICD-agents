@@ -26,26 +26,44 @@ export default function Pipelines(): JSX.Element {
 
   const firstLoad =
     (projectLinksLoading && projectLinks.length === 0) || runtime.firstDiscoveryLoading;
+  const contentState = pipelineContentState({
+    firstLoad,
+    rowCount: runtime.rows.length,
+    discovering: runtime.discovering,
+  });
+  const showTopLevelError = pipelineShouldShowTopLevelError(runtime.error, contentState);
+  const showStatusFilters = pipelineShouldShowStatusFilters({
+    hasProjectLinks: projectLinks.length > 0,
+    rowCount: runtime.rows.length,
+    contentState,
+  });
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-[1320px] flex-col gap-4 px-4 py-2">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[rgb(var(--app-border))] pb-4">
-        <div>
+    <div className={pipelinesPageShellClass()}>
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[rgb(var(--app-border))] pb-3">
+        <div className="min-w-0 flex-1">
           <h2 className="text-2xl font-semibold text-[rgb(var(--app-text))]">Pipelines</h2>
-          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
+          <p className={pipelineHeaderDescriptionClass()}>
             CI/CD execution workspace for Azure Pipeline discovery, saved pipeline connections,
             recent run state, controlled triggers, and AI-assisted run analysis.
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-1">
+        <div className={pipelineHeaderControlsClass()}>
           <select
             aria-label="Pipelines project filter"
-            className="rounded-md border border-transparent bg-[rgb(var(--app-surface-raised))] px-3 py-1.5 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-[rgb(var(--app-accent))]"
+            className="min-w-0 rounded-md border border-transparent bg-[rgb(var(--app-surface-raised))] px-3 py-1.5 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-[rgb(var(--app-accent))]"
             value={runtime.projectFilter}
             disabled={projectLinksLoading || runtime.projectOptions.length === 0}
             onChange={(event) => runtime.setProjectFilter(event.target.value)}
           >
-            {runtime.projectOptions.length === 0 && <option value="">No ADO projects</option>}
+            {runtime.projectOptions.length === 0 && (
+              <option value="">
+                {pipelineProjectFilterFallbackLabel({
+                  projectLinksLoading,
+                  hasProjectLinks: projectLinks.length > 0,
+                })}
+              </option>
+            )}
             {runtime.projectOptions.length > 0 && <option value="">All projects</option>}
             {runtime.projectOptions.map((project) => (
               <option key={project} value={project}>
@@ -66,57 +84,58 @@ export default function Pipelines(): JSX.Element {
         </div>
       </header>
 
-      {runtime.error && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">
+      {showTopLevelError && (
+        <div className="rounded-lg border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] p-4 text-sm text-[rgb(var(--app-danger))]">
           {runtime.error}
         </div>
       )}
 
       {runtime.notice && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+        <div className="rounded-lg border border-[rgb(var(--app-warning))]/30 bg-[rgb(var(--app-warning)_/_0.10)] px-3 py-2 text-sm text-[rgb(var(--app-warning))]">
           {runtime.notice}
         </div>
       )}
 
-      <PipelineStatusFilters
-        filter={runtime.filter}
-        counts={runtime.counts}
-        onFilterChange={runtime.setFilter}
-      />
+      {showStatusFilters && (
+        <PipelineStatusFilters
+          filter={runtime.filter}
+          counts={runtime.counts}
+          onFilterChange={runtime.setFilter}
+        />
+      )}
 
-      {runtime.discovering && !runtime.firstDiscoveryLoading && (
+      {runtime.discovering && contentState === "rows" && (
         <p className="text-xs text-[rgb(var(--app-text-subtle))]">
           Refreshing pipeline discovery...
         </p>
       )}
 
-      {firstLoad && <PipelineLoadingSkeleton />}
+      {contentState === "loading" && <PipelineLoadingSkeleton />}
 
-      {!firstLoad && runtime.rows.length === 0 && (
-        <div className="flex flex-1 items-center justify-center rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-8 text-center">
-          <div>
-            <p className="text-sm font-medium text-[rgb(var(--app-text))]">
-              {projectLinks.length === 0
-                ? "No Project Links available"
-                : "No pipelines discovered yet"}
-            </p>
-            <p className="mt-1 text-sm text-[rgb(var(--app-text-muted))]">
-              {projectLinks.length === 0
-                ? "Create a Project Link with Azure DevOps mapping before inspecting pipelines."
-                : "Refresh discovery or check that the selected ADO project has repository and pipeline access."}
-            </p>
-          </div>
-        </div>
+      {contentState === "refreshing-empty" && (
+        <PipelineEmptyState
+          mode="refreshing"
+          hasProjectLinks={projectLinks.length > 0}
+          error={runtime.error}
+          onRefresh={runtime.discoverPipelines}
+        />
       )}
 
-      {!firstLoad && runtime.rows.length > 0 && (
+      {contentState === "empty" && (
+        <PipelineEmptyState
+          mode="empty"
+          hasProjectLinks={projectLinks.length > 0}
+          error={runtime.error}
+          onRefresh={runtime.discoverPipelines}
+        />
+      )}
+
+      {contentState === "rows" && (
         <div className="flex flex-1 flex-col gap-3">
           <div
-            className={
-              selectedDetailRow ? "grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_22rem]" : ""
-            }
+            className={pipelineWorkspaceGridClass(Boolean(selectedDetailRow))}
           >
-            <div className="grid items-start gap-3 xl:grid-cols-2">
+            <div className={pipelineRowsGridClass(Boolean(selectedDetailRow))}>
               {runtime.paginatedRows.pageItems.map((row) => (
                 <PipelineRowCard
                   key={`${row.projectLinkId}:${row.pipelineId}`}
@@ -173,28 +192,197 @@ export default function Pipelines(): JSX.Element {
   );
 }
 
-function PipelineLoadingSkeleton(): JSX.Element {
+export type PipelineContentState = "loading" | "refreshing-empty" | "empty" | "rows";
+
+export function pipelinesPageShellClass(): string {
+  return "mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-3 px-4 py-2";
+}
+
+export function pipelineHeaderDescriptionClass(): string {
+  return "mt-1 hidden max-w-2xl text-sm leading-relaxed text-[rgb(var(--app-text-muted))] xl:block";
+}
+
+export function pipelineHeaderControlsClass(): string {
+  return [
+    "grid w-full min-w-0 grid-cols-1 gap-2 rounded-lg border border-[rgb(var(--app-border))]",
+    "bg-[rgb(var(--app-surface))] p-1 sm:grid-cols-[minmax(0,1fr)_auto]",
+    "xl:w-[clamp(18rem,30vw,32rem)]",
+  ].join(" ");
+}
+
+export function pipelineShouldShowTopLevelError(
+  error: string | null | undefined,
+  contentState: PipelineContentState,
+): boolean {
+  return Boolean(error && contentState === "rows");
+}
+
+export function pipelineContentState({
+  firstLoad,
+  rowCount,
+  discovering,
+}: {
+  firstLoad: boolean;
+  rowCount: number;
+  discovering: boolean;
+}): PipelineContentState {
+  if (firstLoad) return "loading";
+  if (rowCount > 0) return "rows";
+  if (discovering) return "refreshing-empty";
+  return "empty";
+}
+
+export function pipelineShouldShowStatusFilters({
+  hasProjectLinks,
+  rowCount,
+  contentState = "rows",
+}: {
+  hasProjectLinks: boolean;
+  rowCount: number;
+  contentState?: PipelineContentState;
+}): boolean {
+  if (contentState === "loading" || contentState === "refreshing-empty") return false;
+  return hasProjectLinks || rowCount > 0;
+}
+
+export function pipelineRowsGridClass(detailOpen: boolean): string {
+  void detailOpen;
+  return "grid items-start gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,30rem),1fr))]";
+}
+
+export function pipelineWorkspaceGridClass(detailOpen: boolean): string {
+  void detailOpen;
+  return "";
+}
+
+export function pipelineDetailPanelClass(): string {
+  return [
+    "fixed inset-y-0 right-0 z-40 min-w-0 w-[min(30rem,calc(100vw-2rem))]",
+    "overflow-y-auto border-l border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl",
+  ].join(" ");
+}
+
+export function pipelineProjectFilterFallbackLabel({
+  projectLinksLoading,
+  hasProjectLinks,
+}: {
+  projectLinksLoading: boolean;
+  hasProjectLinks: boolean;
+}): string {
+  if (projectLinksLoading) return "Loading projects...";
+  if (!hasProjectLinks) return "No Project Links";
+  return "No ADO projects";
+}
+
+export function PipelineLoadingSkeleton(): JSX.Element {
   return (
-    <div className="grid gap-3 xl:grid-cols-2" aria-label="Pipeline loading placeholders">
-      {Array.from({ length: 2 }).map((_, index) => (
-        <div
-          // eslint-disable-next-line react/no-array-index-key
-          key={index}
-          className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3"
-        >
-          <div className="mb-3 flex items-center gap-2">
-            <div className="h-5 w-14 animate-pulse rounded-full bg-[rgb(var(--app-surface-raised))]" />
-            <div className="h-5 w-20 animate-pulse rounded-full bg-[rgb(var(--app-surface-raised))]" />
-          </div>
-          <div className="h-4 w-36 animate-pulse rounded bg-[rgb(var(--app-surface-raised))]" />
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <div className="h-10 animate-pulse rounded bg-[rgb(var(--app-surface-raised))]" />
-            <div className="h-10 animate-pulse rounded bg-[rgb(var(--app-surface-raised))]" />
-          </div>
+    <section
+      className="w-full max-w-4xl rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-4 py-3"
+      aria-label="Loading pipelines"
+      aria-live="polite"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[rgb(var(--app-text))]">
+            Loading pipelines
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
+            Checking Project Link mappings and Azure DevOps pipeline definitions.
+          </p>
         </div>
-      ))}
-    </div>
+        <div
+          className="flex items-center gap-1.5 text-xs text-[rgb(var(--app-text-subtle))]"
+          aria-hidden="true"
+        >
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[rgb(var(--app-accent))]" />
+          <span>Discovery running</span>
+        </div>
+      </div>
+    </section>
   );
+}
+
+export function PipelineEmptyState({
+  mode,
+  hasProjectLinks,
+  error,
+  onRefresh,
+}: {
+  mode: "refreshing" | "empty";
+  hasProjectLinks: boolean;
+  error?: string | null;
+  onRefresh: () => void | Promise<void>;
+}): JSX.Element {
+  const hasBlockingError = Boolean(error && mode === "empty");
+  const title = hasBlockingError
+    ? "Pipeline workspace unavailable"
+    : mode === "refreshing"
+    ? "Refreshing pipeline discovery"
+    : hasProjectLinks
+      ? "No pipelines discovered yet"
+      : "No Project Links available";
+  const description = hasBlockingError
+    ? "MergePilot could not load Project Links or pipeline discovery data. Check the desktop daemon or account session, then refresh this workspace."
+    : mode === "refreshing"
+    ? "Checking Azure DevOps for pipeline definitions."
+    : hasProjectLinks
+      ? "Check that the selected Project Link points at the intended Azure DevOps project and repository, then refresh discovery."
+      : "Create a Project Link with Azure DevOps mapping before inspecting pipeline runs or triggering CI.";
+  return (
+    <section className={pipelineEmptyStateClass(mode)}>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-2xl">
+          <p className="text-sm font-semibold text-[rgb(var(--app-text))]">{title}</p>
+          <p className="mt-1 text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
+            {description}
+          </p>
+          {mode !== "refreshing" && (
+            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[rgb(var(--app-text-muted))]">
+              <li>Project Link mapping</li>
+              <li>ADO repository access</li>
+              <li>Pipeline definition access</li>
+            </ul>
+          )}
+          {hasBlockingError && (
+            <p className="mt-3 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text-subtle))]">
+              Latest error: {error}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {!hasProjectLinks && (
+            <a
+              href="#/project-links"
+              className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-1.5 text-sm font-medium text-[rgb(var(--app-text))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))]"
+            >
+              Open Project Links
+            </a>
+          )}
+          {(hasProjectLinks || hasBlockingError) && (
+            <button
+              type="button"
+              onClick={() => void onRefresh()}
+              disabled={mode === "refreshing"}
+              className="rounded-md border border-[rgb(var(--app-border))] px-3 py-1.5 text-sm text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {mode === "refreshing"
+                ? "Refreshing..."
+                : hasBlockingError
+                  ? "Retry loading"
+                  : "Refresh discovery"}
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function pipelineEmptyStateClass(mode: "refreshing" | "empty"): string {
+  if (mode === "refreshing") {
+    return "w-full max-w-xl rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2.5";
+  }
+  return "w-full max-w-4xl rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-4 py-3";
 }
 
 export function PipelineDetailPanel({
@@ -223,7 +411,7 @@ export function PipelineDetailPanel({
   const isError = state.phase === "error";
   const isApproval = state.phase === "approval";
   return (
-    <aside className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 xl:sticky xl:top-4">
+    <aside className={pipelineDetailPanelClass()}>
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase text-[rgb(var(--app-text-subtle))]">
@@ -252,11 +440,11 @@ export function PipelineDetailPanel({
       )}
 
       {isError && (
-        <section className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 p-3">
-          <p className="text-xs font-semibold text-red-700 dark:text-red-300">
+        <section className="mb-4 rounded-md border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] p-3">
+          <p className="text-xs font-semibold text-[rgb(var(--app-danger))]">
             Pipeline action failed
           </p>
-          <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-red-800 dark:text-red-200">
+          <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-[rgb(var(--app-danger))]">
             {state.message}
           </p>
         </section>
@@ -282,7 +470,7 @@ export function PipelineDetailPanel({
             <span
               className={`rounded-full border px-2 py-0.5 text-[10px] ${
                 state.phase === "analysis_error"
-                  ? "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+                  ? "border-[rgb(var(--app-warning))]/35 bg-[rgb(var(--app-warning)_/_0.10)] text-[rgb(var(--app-warning))]"
                   : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))]"
               }`}
             >
@@ -294,7 +482,7 @@ export function PipelineDetailPanel({
             </span>
           </div>
           {state.phase === "analysis_error" && (
-            <p className="mb-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs leading-relaxed text-amber-800 dark:text-amber-200">
+            <p className="mb-2 rounded-md border border-[rgb(var(--app-warning))]/30 bg-[rgb(var(--app-warning)_/_0.10)] p-2 text-xs leading-relaxed text-[rgb(var(--app-warning))]">
               AI analysis failed. Showing local run evidence summary instead. {state.message}
             </p>
           )}
@@ -332,7 +520,7 @@ export function PipelineDetailPanel({
                       href={run.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="mt-1 block truncate text-[rgb(var(--app-accent))]"
+                      className="mt-1 block truncate text-[rgb(var(--app-accent-readable))]"
                     >
                       Open run
                     </a>

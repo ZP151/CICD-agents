@@ -1,5 +1,12 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { lazy, Suspense, useEffect, type ReactNode } from "react";
+import {
+  Component,
+  lazy,
+  Suspense,
+  useEffect,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
 import Chat from "../pages/Chat.js";
 import { UserFooter } from "./UserFooter.js";
 
@@ -46,6 +53,54 @@ export async function preloadWorkspaceRouteModules(
       }
     }),
   );
+}
+
+export function pageShellContentClass(scroll: boolean): string {
+  return `min-w-0 flex-1 px-4 pb-16 pt-4 sm:px-6 sm:pt-6 ${scroll ? "overflow-auto" : "overflow-hidden"}`;
+}
+
+export function pageShellFadeClass(): string {
+  return "pointer-events-none absolute inset-x-0 bottom-0 h-10 border-t border-[rgb(var(--app-border))] bg-gradient-to-t from-[rgb(var(--app-bg))] via-[rgb(var(--app-bg))] to-transparent";
+}
+
+export function appShellFrameClass(): string {
+  return "flex h-screen w-screen bg-[rgb(var(--app-bg))] text-[rgb(var(--app-text))]";
+}
+
+export function appShellSidebarClass(): string {
+  return "flex w-48 shrink-0 flex-col overflow-hidden border-r border-[rgb(var(--app-border))] bg-[rgb(var(--app-bg-muted))] max-[760px]:w-16";
+}
+
+export function appShellGroupLabelClass(): string {
+  return "mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-[rgb(var(--app-text-subtle))] max-[760px]:sr-only";
+}
+
+export function appShellNavLinkClass(active: boolean): string {
+  return `flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors max-[760px]:justify-center max-[760px]:px-0 ${
+    active
+      ? "bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text))] shadow-sm"
+      : "text-[rgb(var(--app-text-muted))] hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))]"
+  }`;
+}
+
+export function appShellNavLabelClass(): string {
+  return "min-w-0 truncate max-[760px]:sr-only";
+}
+
+export function workspaceRouteFallbackTarget(pathname: string): string {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  if (normalized === "/review" || normalized === "/review-queue") return "/findings";
+  if (normalized === "/pull-requests") return "/pulls";
+  if (normalized === "/tasks") return "/activity";
+  return "/chat";
+}
+
+export function routeErrorBoundaryResetKey(location: {
+  pathname: string;
+  search: string;
+  hash: string;
+}): string {
+  return `${location.pathname}${location.search}${location.hash}`;
 }
 
 function IconChat() {
@@ -191,15 +246,19 @@ export function MiniLayout() {
   );
 }
 
-function PageShell({ children, scroll = true }: { children: ReactNode; scroll?: boolean }) {
+function PageShell({
+  children,
+  scroll = true,
+  showBottomFade = false,
+}: {
+  children: ReactNode;
+  scroll?: boolean;
+  showBottomFade?: boolean;
+}) {
   return (
     <div className="relative flex min-w-0 flex-1 overflow-hidden">
-      <div
-        className={`min-w-0 flex-1 px-6 pb-16 pt-6 ${scroll ? "overflow-auto" : "overflow-hidden"}`}
-      >
-        {children}
-      </div>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 border-t border-zinc-900/70 bg-gradient-to-t from-zinc-950 via-zinc-950/90 to-transparent" />
+      <div className={pageShellContentClass(scroll)}>{children}</div>
+      {showBottomFade && <div className={pageShellFadeClass()} />}
     </div>
   );
 }
@@ -215,10 +274,98 @@ function PageLoadingFallback() {
   );
 }
 
-function LazyPageShell({ children, scroll = true }: { children: ReactNode; scroll?: boolean }) {
+interface RouteErrorBoundaryProps {
+  children: ReactNode;
+  resetKey: string;
+}
+
+interface RouteErrorBoundaryState {
+  error: Error | null;
+}
+
+export class RouteErrorBoundary extends Component<
+  RouteErrorBoundaryProps,
+  RouteErrorBoundaryState
+> {
+  override state: RouteErrorBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error): RouteErrorBoundaryState {
+    return { error };
+  }
+
+  override componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error("Workspace route crashed", error, info.componentStack);
+  }
+
+  override componentDidUpdate(previousProps: RouteErrorBoundaryProps): void {
+    if (previousProps.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null });
+    }
+  }
+
+  override render(): ReactNode {
+    if (this.state.error) return <RouteErrorFallback error={this.state.error} />;
+    return this.props.children;
+  }
+}
+
+export function RouteErrorFallback({ error }: { error: Error }): JSX.Element {
   return (
-    <PageShell scroll={scroll}>
-      <Suspense fallback={<PageLoadingFallback />}>{children}</Suspense>
+    <div className="mx-auto flex min-h-80 w-full max-w-3xl flex-col justify-center rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4">
+      <p className="text-xs font-semibold uppercase text-[rgb(var(--app-text-subtle))]">
+        Page recovery
+      </p>
+      <h2 className="mt-2 text-base font-semibold text-[rgb(var(--app-text))]">
+        This workspace page needs a refresh
+      </h2>
+      <p className="mt-2 max-w-xl text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
+        MergePilot kept the app open, but this page hit an unexpected data or rendering state.
+        Refresh the page data, switch routes, or return to Chat and try the workflow again.
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="rounded-md bg-[rgb(var(--app-accent))] px-3 py-1.5 text-sm font-medium text-white"
+        >
+          Refresh page
+        </button>
+        <a
+          href="#/chat"
+          className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-1.5 text-sm text-[rgb(var(--app-text))]"
+        >
+          Back to Chat
+        </a>
+      </div>
+      <details className="mt-4 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-2">
+        <summary className="cursor-pointer text-xs font-medium text-[rgb(var(--app-text-muted))]">
+          Technical detail
+        </summary>
+        <p className="mt-2 break-words font-mono text-xs text-[rgb(var(--app-text-subtle))]">
+          {error.message}
+        </p>
+      </details>
+    </div>
+  );
+}
+
+function LazyPageShell({
+  children,
+  scroll = true,
+  showBottomFade = false,
+}: {
+  children: ReactNode;
+  scroll?: boolean;
+  showBottomFade?: boolean;
+}) {
+  const location = useLocation();
+  const routeResetKey = routeErrorBoundaryResetKey(location);
+
+  return (
+    <PageShell scroll={scroll} showBottomFade={showBottomFade}>
+      <RouteErrorBoundary resetKey={routeResetKey}>
+        <Suspense fallback={<PageLoadingFallback />}>{children}</Suspense>
+      </RouteErrorBoundary>
     </PageShell>
   );
 }
@@ -231,28 +378,24 @@ export function FullLayout() {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen bg-zinc-950 text-zinc-100">
-      <aside className="flex w-48 shrink-0 flex-col overflow-hidden border-r border-zinc-800/80">
+    <div className={appShellFrameClass()}>
+      <aside className={appShellSidebarClass()}>
         <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
           {NAV_GROUPS.map((group) => (
             <div key={group.label}>
-              <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
-                {group.label}
-              </p>
+              <p className={appShellGroupLabelClass()}>{group.label}</p>
               {group.items.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  title={item.label}
+                  aria-label={item.label}
                   className={({ isActive }) =>
-                    `flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors ${
-                      (item.match ? location.pathname === item.match : isActive)
-                        ? "bg-zinc-800 text-zinc-100"
-                        : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300"
-                    }`
+                    appShellNavLinkClass(item.match ? location.pathname === item.match : isActive)
                   }
                 >
                   <item.Icon />
-                  {item.label}
+                  <span className={appShellNavLabelClass()}>{item.label}</span>
                 </NavLink>
               ))}
             </div>
@@ -282,10 +425,13 @@ export function FullLayout() {
             }
           />
           <Route path="/tasks" element={<Navigate to="/activity" replace />} />
+          <Route path="/review" element={<Navigate to="/findings" replace />} />
+          <Route path="/review-queue" element={<Navigate to="/findings" replace />} />
+          <Route path="/pull-requests" element={<Navigate to="/pulls" replace />} />
           <Route
             path="/activity"
             element={
-              <LazyPageShell scroll={false}>
+              <LazyPageShell>
                 <TaskViewer />
               </LazyPageShell>
             }
@@ -329,6 +475,10 @@ export function FullLayout() {
                 <Settings />
               </LazyPageShell>
             }
+          />
+          <Route
+            path="*"
+            element={<Navigate to={workspaceRouteFallbackTarget(location.pathname)} replace />}
           />
         </Routes>
       </main>

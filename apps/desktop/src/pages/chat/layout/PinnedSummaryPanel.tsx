@@ -120,7 +120,7 @@ export function PinnedSummaryPanel({
 
   return (
     <div
-      className="pointer-events-none absolute top-12 z-40 hidden w-[300px] max-w-[calc(100%-24px)] lg:block"
+      className={pinnedSummaryPanelShellClass()}
       style={{ right: codePanelOpen ? codePanelWidth + 20 : 20 }}
     >
       <div className="pointer-events-auto rounded-2xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4 text-[rgb(var(--app-text))] shadow-lg">
@@ -209,8 +209,8 @@ export function PinnedSummaryPanel({
                   <span className="min-w-0 truncate font-mono text-[rgb(var(--app-text-muted))]">{branchLabel}</span>
                   {hasChanges && (
                     <span className="shrink-0 whitespace-nowrap font-mono">
-                      <span className="text-emerald-500">+{added}</span>
-                      <span className="ml-1 text-red-500">-{removed}</span>
+                      <span className="text-[rgb(var(--app-success))]">+{added}</span>
+                      <span className="ml-1 text-[rgb(var(--app-danger))]">-{removed}</span>
                     </span>
                   )}
                 </div>
@@ -312,12 +312,13 @@ export function PinnedSummaryPanel({
             </p>
           )}
           {adoReady && (
-            <div className="mt-2 grid grid-cols-2 gap-1">
+            <div className={pinnedSummaryAdoActionsGridClass()}>
               <button
                 type="button"
                 onClick={() => runAction({ type: "inspect_pr_insight" })}
                 disabled={busy}
                 className="truncate rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
+                aria-label="Inspect PR insight"
                 title="Inspect the latest active pull request insight"
               >
                 PR insight
@@ -327,6 +328,7 @@ export function PinnedSummaryPanel({
                 onClick={() => runAction({ type: "inspect_pipeline" })}
                 disabled={busy}
                 className="truncate rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
+                aria-label="Inspect pipeline readiness"
                 title="Inspect Azure DevOps pipeline readiness"
               >
                 Pipeline
@@ -385,6 +387,14 @@ export function PinnedSummaryPanel({
       </div>
     </div>
   );
+}
+
+export function pinnedSummaryPanelShellClass(): string {
+  return "pointer-events-none absolute top-12 z-40 hidden w-[min(20rem,calc(100vw-2rem))] max-w-[calc(100%-24px)] lg:block";
+}
+
+export function pinnedSummaryAdoActionsGridClass(): string {
+  return "mt-2 grid min-w-0 gap-1 grid-cols-[repeat(auto-fit,minmax(min(100%,6.5rem),1fr))]";
 }
 
 function withDefaultBranch(action: WorkspaceAction, branchName: string): WorkspaceAction {

@@ -5,6 +5,7 @@ import {
   adoDiscoverySignature,
   applyAzureDevOpsRemoteSuggestion,
   applyAdoDiscoveryToProjectLinkInput,
+  isTemporaryProjectLink,
   loadStoredActiveProjectLinkId,
   pickRecommendedPipeline,
   resolveActiveProjectLinkId,
@@ -210,5 +211,52 @@ describe("active Project Link persistence", () => {
     ] as ProjectLink[]);
 
     expect(resolved).toBe("project-link-2");
+  });
+
+  it("moves stale temporary Project Link selections back to the matching saved link", () => {
+    localStorage.clear();
+    saveStoredActiveProjectLinkId("mp-live-link");
+
+    const links = [
+      {
+        id: "mp-live-link",
+        name: "mp-live-claimbot-pipeline-20260715120108",
+        repoPath: "C:\\Users\\15492\\AppData\\Local\\Temp\\mergepilot-live\\work",
+        adoOrgUrl: "https://tebssg.visualstudio.com/",
+        adoProject: "TeBS-ClaimBot",
+        adoRepoName: "ClaimBot_API",
+        adoPipelineId: "",
+        updatedAt: 20,
+      },
+      {
+        id: "claimbot-link",
+        name: "ClaimBot_API link",
+        repoPath: "C:\\work\\ClaimBot_API",
+        adoOrgUrl: "https://tebssg.visualstudio.com/",
+        adoProject: "TeBS-ClaimBot",
+        adoRepoName: "ClaimBot_API",
+        adoPipelineId: "117",
+        updatedAt: 10,
+      },
+    ] as ProjectLink[];
+
+    expect(isTemporaryProjectLink(links[0]!)).toBe(true);
+    expect(resolveActiveProjectLinkId(links, "mp-live-link")).toBe("claimbot-link");
+    expect(resolveActiveProjectLinkId(links)).toBe("claimbot-link");
+  });
+
+  it("keeps a temporary Project Link when no matching saved link exists", () => {
+    const links = [
+      {
+        id: "mp-live-link",
+        name: "mp-live-other",
+        repoPath: "C:\\Users\\15492\\AppData\\Local\\Temp\\mergepilot-live\\work",
+        adoOrgUrl: "https://tebssg.visualstudio.com/",
+        adoProject: "Other",
+        adoRepoName: "Other",
+      },
+    ] as ProjectLink[];
+
+    expect(resolveActiveProjectLinkId(links, "mp-live-link")).toBe("mp-live-link");
   });
 });

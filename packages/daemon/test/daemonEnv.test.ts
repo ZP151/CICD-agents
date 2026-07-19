@@ -187,6 +187,25 @@ describe("daemonEnv", () => {
     expect(process.env.AZURE_OPENAI_API_KEY).toBeUndefined();
   });
 
+  it("clears inactive Key Vault secret refs when writing local env config", () => {
+    const configFile = path.join(tmp, ".mergepilot", "config.toml");
+
+    writeMergePilotUserConfig({
+      llmProvider: "azure",
+      secretSource: "local_env",
+      azureEndpoint: "https://example.openai.azure.com",
+      azureDeployment: "gpt-4o",
+      azureApiKeyRef: "kv://secret/mergepilot-aoai-key",
+      openaiApiKeyRef: "kv://secret/openai-key",
+    }, configFile);
+
+    const content = fs.readFileSync(configFile, "utf8");
+    expect(content).toContain("source = \"local_env\"");
+    expect(content).toContain("api_key_ref = \"\"");
+    expect(content).not.toContain("kv://secret/mergepilot-aoai-key");
+    expect(content).not.toContain("kv://secret/openai-key");
+  });
+
   it("prefers configured Key Vault secret references over explicit plaintext secret environment values", () => {
     const userConfig = path.join(tmp, "user", "config.toml");
     writeMergePilotUserConfig({

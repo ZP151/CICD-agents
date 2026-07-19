@@ -8,7 +8,6 @@ import {
   insightReadinessTone,
   readiness,
 } from "./pullRequestViewModel.js";
-import { MarkdownContent } from "../../components/conversation/ConversationPartRenderer.js";
 import type {
   ContextState,
   DisplayPullRequest,
@@ -63,11 +62,20 @@ export function PullRequestCard({
   const storedInsightTone = storedInsight?.readiness
     ? insightReadinessTone(storedInsight.readiness)
     : null;
+  const authorLabel = pr.createdBy || "Not available";
+  const createdLabel = formatDate(pr.creationDate) || "Not available";
+  const reviewerLabel = `${pr.voteSummary.approved} approved / ${pr.reviewerCount} total`;
 
   const isRunning = qState.phase === "watching" || qState.phase === "reviewing";
   const isDone = qState.phase === "done";
   const isError = qState.phase === "error";
   const hasInsight = Boolean(storedInsight || previewState.phase === "done" || isDone);
+  const latestInsightSummary = isDone
+    ? qState.result.summary || "Review completed."
+    : previewState.phase === "done"
+      ? previewState.result.summary || "Insight preview generated."
+      : storedInsight?.summary || "Saved insight available.";
+  const latestInsightPreview = pullRequestInsightPreviewText(latestInsightSummary);
 
   const decisionLabel = isDone
     ? qState.result.decisionQueue === "auto_approved" ? "Auto-approved"
@@ -77,15 +85,15 @@ export function PullRequestCard({
     : "";
 
   const decisionTone = isDone
-    ? qState.result.decisionQueue === "auto_approved" ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-    : qState.result.decisionQueue === "needs_human_review" ? "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300"
-    : qState.result.decisionQueue === "blocked" ? "border-red-500/35 bg-red-500/10 text-red-700 dark:text-red-300"
-    : "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+    ? qState.result.decisionQueue === "auto_approved" ? "border-[rgb(var(--app-success))]/35 bg-[rgb(var(--app-success)_/_0.10)] text-[rgb(var(--app-success))]"
+    : qState.result.decisionQueue === "needs_human_review" ? "border-[rgb(var(--app-warning))]/35 bg-[rgb(var(--app-warning)_/_0.10)] text-[rgb(var(--app-warning))]"
+    : qState.result.decisionQueue === "blocked" ? "border-[rgb(var(--app-danger))]/35 bg-[rgb(var(--app-danger)_/_0.10)] text-[rgb(var(--app-danger))]"
+    : "border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent-readable))]"
     : "";
 
   const buttonClass = `rounded-md border px-3 py-1.5 text-xs transition disabled:opacity-60 ${
     isDone ? `${decisionTone} cursor-default`
-    : isError ? "border-red-500/35 text-red-700 hover:bg-red-500/10 dark:text-red-300"
+    : isError ? "border-[rgb(var(--app-danger))]/35 text-[rgb(var(--app-danger))] hover:bg-[rgb(var(--app-danger)_/_0.10)]"
     : isRunning ? "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-subtle))] cursor-wait"
     : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
   }`;
@@ -101,7 +109,7 @@ export function PullRequestCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-[rgb(var(--app-accent))]">#{pr.id}</span>
+            <span className="font-mono text-xs text-[rgb(var(--app-accent-readable))]">#{pr.id}</span>
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${state.tone}`}>
               {state.label}
             </span>
@@ -117,8 +125,8 @@ export function PullRequestCard({
             {pr.sourceBranch} {"->"} {pr.targetBranch}
           </p>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <div className="flex items-center gap-2">
+        <div className={pullRequestActionsClass()}>
+          <div className={pullRequestActionRowClass()}>
             <button
               onClick={() => onToggleContext(pr)}
               className="rounded-md border border-[rgb(var(--app-border))] px-3 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
@@ -162,44 +170,41 @@ export function PullRequestCard({
             )}
           </div>
           {isDone && (
-            <p className="max-w-xs truncate text-right text-[10px] leading-relaxed text-[rgb(var(--app-text-subtle))]" title={qState.result.decisionReason}>
+            <p className={pullRequestActionDetailClass("muted")} title={qState.result.decisionReason}>
               {qState.result.findingCount} finding{qState.result.findingCount === 1 ? "" : "s"} · {qState.result.decisionReason}
             </p>
           )}
           {isError && (
-            <p className="max-w-xs truncate text-right text-[10px] text-red-500" title={qState.message}>
+            <p className={pullRequestActionDetailClass("danger")} title={qState.message}>
               {qState.message}
             </p>
           )}
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2 text-xs text-[rgb(var(--app-text-muted))] sm:grid-cols-3">
-        <div>
-          <p className="text-[rgb(var(--app-text-subtle))]">Author</p>
-          <p className="mt-1 truncate text-[rgb(var(--app-text))]">
-            {pr.createdBy || "Not available"}
-          </p>
-        </div>
-        <div>
-          <p className="text-[rgb(var(--app-text-subtle))]">Created</p>
-          <p className="mt-1 truncate text-[rgb(var(--app-text))]">
-            {formatDate(pr.creationDate) || "Not available"}
-          </p>
-        </div>
-        <div>
-          <p className="text-[rgb(var(--app-text-subtle))]">Reviewers</p>
-          <p className="mt-1 text-[rgb(var(--app-text))]">
-            {pr.voteSummary.approved} approved / {pr.reviewerCount} total
-          </p>
-        </div>
+      <div
+        className={pullRequestMetaGridClass()}
+        title={`Author: ${authorLabel}; Created: ${createdLabel}; Reviewers: ${reviewerLabel}`}
+      >
+        <span>
+          <span className="text-[rgb(var(--app-text-subtle))]">Author:</span>{" "}
+          <span className="text-[rgb(var(--app-text))]">{authorLabel}</span>
+        </span>
+        <span>
+          <span className="text-[rgb(var(--app-text-subtle))]">Created:</span>{" "}
+          <span className="text-[rgb(var(--app-text))]">{createdLabel}</span>
+        </span>
+        <span>
+          <span className="text-[rgb(var(--app-text-subtle))]">Reviewers:</span>{" "}
+          <span className="text-[rgb(var(--app-text))]">{reviewerLabel}</span>
+        </span>
       </div>
 
       {hasInsight && (
         <button
           type="button"
           onClick={() => onOpenInsight(pr)}
-          className="mt-4 block w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3 text-left transition hover:border-[rgb(var(--app-border-strong))]"
+          className="mt-4 block w-full border-t border-[rgb(var(--app-border))] pt-3 text-left transition hover:border-[rgb(var(--app-border-strong))]"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-semibold text-[rgb(var(--app-text-muted))]">Latest insight</p>
@@ -209,26 +214,72 @@ export function PullRequestCard({
               </span>
             )}
           </div>
-          <div className="mt-2 line-clamp-3 text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
-            <MarkdownContent
-              markdown={
-                isDone
-                  ? qState.result.summary || "Review completed."
-                  : previewState.phase === "done"
-                    ? previewState.result.summary || "Insight preview generated."
-                    : storedInsight?.summary || "Saved insight available."
-              }
-            />
-          </div>
+          <p className={pullRequestInsightPreviewClass()} title={latestInsightSummary}>
+            {latestInsightPreview}
+          </p>
         </button>
       )}
 
       {previewState.phase === "error" && (
-        <p className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+        <p className="mt-3 rounded-md border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] px-3 py-2 text-xs text-[rgb(var(--app-danger))]">
           {previewState.message}
         </p>
       )}
       {isExpanded && <PullRequestContextPanel state={contextState} />}
     </article>
   );
+}
+
+export function pullRequestActionsClass(): string {
+  return "flex w-full max-w-full flex-col items-start gap-1.5 md:min-w-[220px] md:flex-1 md:items-end";
+}
+
+export function pullRequestActionRowClass(): string {
+  return "flex w-full min-w-0 flex-wrap items-center justify-start gap-2 md:w-auto md:justify-end";
+}
+
+export function pullRequestMetaGridClass(): string {
+  return "mt-3 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[rgb(var(--app-text-muted))]";
+}
+
+export function pullRequestInsightPreviewClass(): string {
+  return "mt-1 max-w-[72ch] truncate text-xs leading-relaxed text-[rgb(var(--app-text-muted))]";
+}
+
+export function pullRequestActionDetailClass(tone: "muted" | "danger"): string {
+  const color =
+    tone === "danger"
+      ? "text-[rgb(var(--app-danger))]"
+      : "text-[rgb(var(--app-text-subtle))]";
+  return `w-full max-w-full truncate text-left text-[10px] leading-relaxed ${color} md:max-w-xs md:text-right`;
+}
+
+export function pullRequestInsightPreviewText(markdown: string): string {
+  const fallback = "Open the latest insight details.";
+  const meaningfulLine = markdown
+    .split(/\r?\n/)
+    .filter((line) => !line.trim().startsWith("#"))
+    .map((line) => stripMarkdownLine(line))
+    .find((line) => (
+      line.length > 0 &&
+      !line.endsWith(":") &&
+      !/^PR Insight Summary\b/i.test(line)
+    ));
+  const text = (meaningfulLine || fallback).replace(/\s+/g, " ").trim();
+  if (text.length <= 180) return text;
+  return `${text.slice(0, 177).trimEnd()}...`;
+}
+
+function stripMarkdownLine(line: string): string {
+  return line
+    .trim()
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/^>\s*/, "")
+    .replace(/^[-*+]\s+/, "")
+    .replace(/^\d+\.\s+/, "")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .trim();
 }

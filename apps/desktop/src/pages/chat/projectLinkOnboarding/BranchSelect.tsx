@@ -34,7 +34,7 @@ export function BranchSelect({
         <select
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="w-full min-w-0 rounded-lg border border-emerald-700/60 bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-emerald-500"
+          className="w-full min-w-0 rounded-lg border border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-[rgb(var(--app-success))]"
         >
           {branches.map((branch) => (
             <option key={branch} value={branch}>{branch}</option>
@@ -51,7 +51,7 @@ export function BranchSelect({
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full min-w-0 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
+        className="w-full min-w-0 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] outline-none focus:border-[rgb(var(--app-accent))]"
         placeholder="main"
       />
     </label>

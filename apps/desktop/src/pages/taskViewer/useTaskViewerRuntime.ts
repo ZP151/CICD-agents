@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ACTIVITY_HANDOFF_KEY, handoffProjectLinkId, type ActivityHandoffDraft } from "../../checkpointHandoff.js";
 import { prInsightArtifactProjectLinkId } from "../../prInsightArtifacts.js";
 import {
   fetchChatCheckpointActivity,
+  type ChatCheckpointActivity,
   type PrInsightArtifactRecord,
   type ProjectLink,
+  type TaskView,
 } from "../../api.js";
 import type { ReviewOperationEvent } from "../../reviewOperations.js";
 import type { ReviewActivityItem } from "./activityTypes.js";
@@ -27,6 +29,7 @@ import { useTaskRuns } from "./useTaskRuns.js";
 export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
   const taskRuns = useTaskRuns();
   const { setSelected: setTaskSelected, setSelectedId: setTaskSelectedId } = taskRuns;
+  const autoSelectedInitialActivity = useRef(false);
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [selectedPrInsightId, setSelectedPrInsightId] = useState<string | null>(null);
   const [selectedCheckpointId, setSelectedCheckpointId] = useState<string | null>(null);
@@ -136,6 +139,50 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     sessionStorage.removeItem(ACTIVITY_HANDOFF_KEY);
   }, [prInsightActivity, setTaskSelected, setTaskSelectedId]);
 
+  useEffect(() => {
+    if (autoSelectedInitialActivity.current) return;
+    if (sessionStorage.getItem(ACTIVITY_HANDOFF_KEY)) return;
+    if (taskRuns.selectedId || selectedReviewId || selectedPrInsightId || selectedCheckpointId) return;
+    if (taskRuns.loading || reviewLoading || prInsightLoading || checkpointLoading) return;
+
+    const defaultSelection = defaultActivitySelection({
+      tasks: taskRuns.tasks,
+      checkpoints: checkpointActivity,
+      prInsights: prInsightActivity,
+      reviews: reviewActivity,
+    });
+    if (!defaultSelection) return;
+
+    autoSelectedInitialActivity.current = true;
+    if (defaultSelection.kind === "task") {
+      setTaskSelectedId(defaultSelection.id);
+      return;
+    }
+    if (defaultSelection.kind === "checkpoint") {
+      setSelectedCheckpointId(defaultSelection.id);
+      return;
+    }
+    if (defaultSelection.kind === "prInsight") {
+      setSelectedPrInsightId(defaultSelection.id);
+      return;
+    }
+    setSelectedReviewId(defaultSelection.id);
+  }, [
+    checkpointActivity,
+    checkpointLoading,
+    prInsightActivity,
+    prInsightLoading,
+    reviewActivity,
+    reviewLoading,
+    selectedCheckpointId,
+    selectedPrInsightId,
+    selectedReviewId,
+    setTaskSelectedId,
+    taskRuns.loading,
+    taskRuns.selectedId,
+    taskRuns.tasks,
+  ]);
+
   const selectedReview = useMemo(
     () => reviewActivity.find((event) => event.id === selectedReviewId) ?? null,
     [reviewActivity, selectedReviewId],
@@ -187,6 +234,21 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     if (filteredPrInsightActivity.some((event) => event.id === selectedPrInsightId)) return;
     setSelectedPrInsightId(filteredPrInsightActivity[0]?.id ?? null);
   }, [filteredPrInsightActivity, selectedPrInsightId]);
+
+  useEffect(() => {
+    if (!selectedCheckpointId) return;
+    if (checkpointActivity.some((event) => event.id === selectedCheckpointId)) return;
+    setSelectedCheckpointId(null);
+    setSelectedReviewId(null);
+    setSelectedPrInsightId(null);
+    setTaskSelectedId(null);
+    setTaskSelected(null);
+  }, [
+    checkpointActivity,
+    selectedCheckpointId,
+    setTaskSelected,
+    setTaskSelectedId,
+  ]);
 
   function selectTask(taskId: string): void {
     setTaskSelectedId(taskId);
@@ -278,4 +340,64 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     setReviewProjectLinkFilter,
     setReviewKindFilter,
   };
+}
+
+type DefaultActivitySelection =
+  | { kind: "task"; id: string }
+  | { kind: "checkpoint"; id: string }
+  | { kind: "prInsight"; id: string }
+  | { kind: "review"; id: string };
+
+export function defaultActivitySelection({
+  tasks,
+  checkpoints,
+  prInsights,
+  reviews,
+}: {
+  tasks: Pick<TaskView, "id" | "createdAt">[];
+  checkpoints: Pick<ChatCheckpointActivity, "id" | "at">[];
+  prInsights: Pick<PrInsightActivityItem, "id" | "at">[];
+  reviews: Pick<ReviewActivityItem, "id" | "at">[];
+}): DefaultActivitySelection | null {
+  const candidates: Array<DefaultActivitySelection & { timestamp: number; priority: number }> = [
+    ...tasks.map((task) => ({
+      kind: "task" as const,
+      id: task.id,
+      timestamp: numericActivityTimestamp(task.createdAt),
+      priority: 4,
+    })),
+    ...checkpoints.map((checkpoint) => ({
+      kind: "checkpoint" as const,
+      id: checkpoint.id,
+      timestamp: numericActivityTimestamp(checkpoint.at),
+      priority: 3,
+    })),
+    ...prInsights.map((insight) => ({
+      kind: "prInsight" as const,
+      id: insight.id,
+      timestamp: isoActivityTimestamp(insight.at),
+      priority: 2,
+    })),
+    ...reviews.map((review) => ({
+      kind: "review" as const,
+      id: review.id,
+      timestamp: isoActivityTimestamp(review.at),
+      priority: 1,
+    })),
+  ].filter((candidate) => candidate.id && candidate.timestamp > 0);
+
+  candidates.sort((a, b) => b.timestamp - a.timestamp || b.priority - a.priority);
+  const selected = candidates[0];
+  if (!selected) return null;
+  return { kind: selected.kind, id: selected.id };
+}
+
+function numericActivityTimestamp(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return value < 10_000_000_000 ? value * 1000 : value;
+}
+
+function isoActivityTimestamp(value: string): number {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }

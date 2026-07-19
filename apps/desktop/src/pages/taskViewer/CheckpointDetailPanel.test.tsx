@@ -1,6 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { CheckpointDetailPanel } from "./CheckpointDetailPanel.js";
+import {
+  CheckpointDetailPanel,
+  checkpointApplySummaryGridClass,
+  checkpointMetadataGridClass,
+} from "./CheckpointDetailPanel.js";
 import type { ChatCheckpointActivity } from "../../api.js";
 
 const checkpoint: ChatCheckpointActivity = {
@@ -17,6 +21,22 @@ const checkpoint: ChatCheckpointActivity = {
 };
 
 describe("CheckpointDetailPanel", () => {
+  it("uses an auto-fit metadata grid so repository and session reflow with panel width", () => {
+    const className = checkpointMetadataGridClass();
+
+    expect(className).toContain("auto-fit");
+    expect(className).toContain("minmax(min(100%,16rem),1fr)");
+    expect(className).not.toContain("sm:grid-cols-2");
+  });
+
+  it("uses an auto-fit apply summary grid so checkpoint apply metadata reflows", () => {
+    const className = checkpointApplySummaryGridClass();
+
+    expect(className).toContain("auto-fit");
+    expect(className).toContain("minmax(min(100%,14rem),1fr)");
+    expect(className).not.toContain("sm:grid-cols-2");
+  });
+
   it("keeps raw tool output collapsed by default", () => {
     const html = renderToStaticMarkup(
       <CheckpointDetailPanel
@@ -35,5 +55,51 @@ describe("CheckpointDetailPanel", () => {
     expect(html).toContain("pushed");
     expect(html).toContain("Raw output");
     expect(html).toContain("&quot;returncode&quot;:0");
+  });
+
+  it("keeps successful command stderr out of the visible checkpoint summary", () => {
+    const html = renderToStaticMarkup(
+      <CheckpointDetailPanel
+        checkpoint={{
+          ...checkpoint,
+          toolSummary:
+            '{"returncode":0,"stdout":"","stderr":"To C:\\\\\\\\Users\\\\\\\\15492\\\\\\\\repo.git\\n * [new tag] v0.1 -> v0.1"}',
+        }}
+        preview={null}
+        rollbackPlan={null}
+        previewLoading={false}
+        rollbackLoading={false}
+        onOpenRollbackPlanInChat={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Command completed successfully.");
+    expect(html).toContain("Command completed successfully.</p><details");
+    expect(html).toContain("Raw output");
+    expect(html).toContain("To C:");
+  });
+
+  it("wraps long checkpoint metadata so narrow activity layouts do not crop it", () => {
+    const html = renderToStaticMarkup(
+      <CheckpointDetailPanel
+        checkpoint={{
+          ...checkpoint,
+          repoPath:
+            "C:\\Users\\15492\\AppData\\Local\\Temp\\mergepilot-live-push-uNqAOB\\work",
+          sessionId: "chat_1783360943926_18c699",
+        }}
+        preview={null}
+        rollbackPlan={null}
+        previewLoading={false}
+        rollbackLoading={false}
+        onOpenRollbackPlanInChat={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("title=\"C:\\Users\\15492\\AppData\\Local\\Temp\\mergepilot-live-push-uNqAOB\\work\"");
+    expect(html).toContain("title=\"chat_1783360943926_18c699\"");
+    expect(html).toContain("class=\"mt-1 break-all font-mono");
+    expect(html).toContain("auto-fit");
+    expect(html).toContain("class=\"min-w-0 rounded-lg");
   });
 });

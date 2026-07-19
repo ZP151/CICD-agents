@@ -77,21 +77,21 @@ function ReviewMetadata({ result }: { result: ReviewRunResult }): JSX.Element {
         </span>
         <span className={`rounded border px-2 py-0.5 text-[10px] ${
           result.metadata.testsRequired
-            ? "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+            ? "border-[rgb(var(--app-warning))]/35 bg-[rgb(var(--app-warning)_/_0.10)] text-[rgb(var(--app-warning))]"
             : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))]"
         }`}>
           tests {result.metadata.testsRequired ? "needed" : "not flagged"}
         </span>
         <span className={`rounded border px-2 py-0.5 text-[10px] ${
           result.metadata.securityConcern
-            ? "border-red-500/35 bg-red-500/10 text-red-700 dark:text-red-300"
+            ? "border-[rgb(var(--app-danger))]/35 bg-[rgb(var(--app-danger)_/_0.10)] text-[rgb(var(--app-danger))]"
             : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))]"
         }`}>
           security {result.metadata.securityConcern ? "concern" : "clear"}
         </span>
         <span className={`rounded border px-2 py-0.5 text-[10px] ${
           result.metadata.canBeSplit
-            ? "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+            ? "border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent-readable))]"
             : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))]"
         }`}>
           split {result.metadata.canBeSplit ? "recommended" : "not flagged"}
@@ -154,9 +154,9 @@ function ReviewFindingsPreview({ result }: { result: ReviewRunResult }): JSX.Ele
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded px-1.5 py-0.5 text-[10px] ${
               finding.severity === "blocking"
-                ? "bg-red-500/10 text-red-700 dark:text-red-300"
+                ? "bg-[rgb(var(--app-danger)_/_0.10)] text-[rgb(var(--app-danger))]"
                 : finding.severity === "warning"
-                  ? "bg-amber-500/10 text-amber-800 dark:text-amber-300"
+                  ? "bg-[rgb(var(--app-warning)_/_0.10)] text-[rgb(var(--app-warning))]"
                   : "bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))]"
             }`}>
               {finding.severity}

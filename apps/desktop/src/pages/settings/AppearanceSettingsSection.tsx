@@ -10,14 +10,16 @@ export function AppearanceSettingsSection({
 }): JSX.Element {
   return (
     <SettingsSection title="Appearance">
-      <SettingsRow title="Theme">
+      <SettingsRow
+        title="Theme"
+        description="Choose a fixed visual mode for MergePilot."
+      >
         <SegmentedChoice<AppTheme>
           value={theme}
           onChange={onThemeChange}
           options={[
-            { label: "System", value: "system" },
-            { label: "Dark", value: "dark" },
             { label: "Light", value: "light" },
+            { label: "Dark", value: "dark" },
           ]}
         />
       </SettingsRow>

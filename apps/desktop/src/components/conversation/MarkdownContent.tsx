@@ -48,7 +48,7 @@ export function MarkdownContent({
           return (
             <button
               type="button"
-              className="inline rounded-sm font-semibold text-[rgb(var(--app-accent))] underline decoration-[rgb(var(--app-accent))]/35 decoration-1 underline-offset-2 transition hover:text-blue-400 hover:decoration-blue-400/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35"
+              className="inline rounded-sm font-semibold text-[rgb(var(--app-accent-readable))] underline decoration-[rgb(var(--app-accent))]/35 decoration-1 underline-offset-2 transition hover:decoration-[rgb(var(--app-accent))]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35"
               data-source-reference-id={source.sourceId}
               title={sourceReferenceTitle(source)}
               onClick={() => onSourceSelect?.(source)}
@@ -62,7 +62,7 @@ export function MarkdownContent({
             href={href}
             target="_blank"
             rel="noreferrer"
-            className="text-blue-400 underline decoration-blue-400/40 underline-offset-2 transition hover:text-blue-300"
+            className="text-[rgb(var(--app-accent-readable))] underline decoration-[rgb(var(--app-accent))]/40 underline-offset-2 transition hover:decoration-[rgb(var(--app-accent))]/70"
           >
             {children}
           </a>

@@ -6,42 +6,17 @@
 }
 
 .settings-message-warning {
-  background: rgb(205 143 66 / 0.14);
+  background: rgb(var(--app-warning-soft));
   color: rgb(var(--app-warning));
 }
 
 .settings-message-danger {
-  background: rgb(214 99 99 / 0.14);
+  background: rgb(var(--app-danger-soft));
   color: rgb(var(--app-danger));
 }
 
 :root[data-theme="light"] .review-lane-human {
-  background-color: rgb(251 243 219) !important;
-  border-color: rgb(210 169 91) !important;
-  color: rgb(127 80 0) !important;
-}
-
-@media (max-width: 760px) {
-  .settings-hero {
-    flex-direction: column;
-  }
-
-  .settings-row {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-  }
-
-  .settings-row-control {
-    justify-content: stretch;
-  }
-
-  .settings-segmented,
-  .settings-inline-status,
-  .settings-account {
-    width: 100%;
-  }
-
-  .settings-segmented button {
-    flex: 1;
-  }
+  background-color: rgb(var(--app-warning-soft) / 0.58) !important;
+  border-color: rgb(var(--app-warning-border)) !important;
+  color: rgb(var(--app-warning)) !important;
 }

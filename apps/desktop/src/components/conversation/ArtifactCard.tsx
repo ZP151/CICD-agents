@@ -45,14 +45,14 @@ export function ArtifactCard({
 
   const cardClass = [
     "rounded-md border bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-left text-xs transition",
-    selected ? "border-blue-500/60 bg-[rgb(var(--app-accent-soft))] ring-1 ring-blue-500/20" : "border-[rgb(var(--app-border))]",
+    selected ? "border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent-soft))] ring-1 ring-[rgb(var(--app-border-strong))]" : "border-[rgb(var(--app-border))]",
   ].join(" ");
 
   if (onSelect) {
     return (
       <button
         type="button"
-        className={`${cardClass} block w-full hover:border-blue-500/50 hover:bg-[rgb(var(--app-surface))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:translate-y-px`}
+        className={`${cardClass} block w-full hover:border-[rgb(var(--app-accent))] hover:bg-[rgb(var(--app-surface))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:translate-y-px`}
         data-artifact-id={part.artifactId}
         aria-pressed={selected}
         aria-label={`Open artifact workspace for ${part.title}`}
@@ -117,7 +117,7 @@ function artifactStatusClass(status: ConversationArtifactPart["status"]): string
 }
 
 function artifactStatusDotClass(status: ConversationArtifactPart["status"]): string {
-  const color = status === "error" ? "bg-red-500" : status === "ready" ? "bg-emerald-500" : "bg-blue-500";
+  const color = status === "error" ? "bg-[rgb(var(--app-danger))]" : status === "ready" ? "bg-[rgb(var(--app-success))]" : "bg-[rgb(var(--app-accent))]";
   const motion = status === "streaming" ? " animate-pulse" : "";
   return `h-1.5 w-1.5 rounded-full ${color}${motion}`;
 }

@@ -6,11 +6,11 @@ import type {
 
 export function workflowStepDotClass(step: WorkflowStep, actionState: WorkflowStepActionState): string {
   const base = "mt-1 h-3.5 w-3.5 shrink-0 rounded-full border";
-  if (actionState === "blocked") return `${base} border-red-500 bg-red-500/15`;
-  if (actionState === "running") return `${base} border-blue-500 bg-blue-500/25`;
+  if (actionState === "blocked") return `${base} border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))]`;
+  if (actionState === "running") return `${base} border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent-soft))]`;
   if (actionState === "waiting") return `${base} border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]`;
-  if (actionState === "done" || step.done) return `${base} border-emerald-500 bg-emerald-500`;
-  if (step.active) return `${base} border-amber-500 bg-amber-500/20`;
+  if (actionState === "done" || step.done) return `${base} border-[rgb(var(--app-success))] bg-[rgb(var(--app-success))]`;
+  if (step.active) return `${base} border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))]`;
   return `${base} border-[rgb(var(--app-border))]`;
 }
 
@@ -21,7 +21,7 @@ export function workflowStepActionDisabled(actionState: WorkflowStepActionState)
 export function workflowStepActionClass(step: WorkflowStep, actionState: WorkflowStepActionState): string {
   const base = "inline-flex min-w-0 max-w-full items-center gap-1.5 text-left transition hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-65";
   if (actionState === "blocked") return `${base} text-[rgb(var(--app-danger))]`;
-  if (actionState === "running") return `${base} text-blue-600 dark:text-blue-300`;
+  if (actionState === "running") return `${base} text-[rgb(var(--app-accent-readable))]`;
   if (actionState === "waiting") return `${base} text-[rgb(var(--app-text-subtle))]`;
   if (actionState === "done" || step.done) return `${base} text-[rgb(var(--app-text-subtle))]`;
   return `${base} underline decoration-dotted underline-offset-2`;
@@ -29,10 +29,10 @@ export function workflowStepActionClass(step: WorkflowStep, actionState: Workflo
 
 export function workflowStepActionBadgeClass(actionState: WorkflowStepActionState): string {
   const base = "shrink-0 rounded border px-1 py-px text-[10px] font-medium";
-  if (actionState === "blocked") return `${base} border-red-500/30 bg-red-500/10 text-[rgb(var(--app-danger))]`;
-  if (actionState === "running") return `${base} border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-300`;
+  if (actionState === "blocked") return `${base} border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] text-[rgb(var(--app-danger))]`;
+  if (actionState === "running") return `${base} border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent-readable))]`;
   if (actionState === "waiting") return `${base} border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-subtle))]`;
-  return `${base} border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300`;
+  return `${base} border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft))] text-[rgb(var(--app-success))]`;
 }
 
 export function workflowStepActionBadgeLabel(actionState: WorkflowStepActionState): string {

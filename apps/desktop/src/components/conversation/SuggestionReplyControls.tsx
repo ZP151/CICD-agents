@@ -68,19 +68,19 @@ export function CommandChipBar({ commands, onPick, disabled }: CommandChipBarPro
 function suggestionButtonClass(action: SuggestionReplyAction, state: SuggestionReplyButtonState = "idle"): string {
   const base = "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-65 disabled:active:translate-y-0";
   if (state === "queued") {
-    return `${base} border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300`;
+    return `${base} border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft))] text-[rgb(var(--app-success))]`;
   }
   if (state === "blocked") {
-    return `${base} border-red-500/30 bg-red-500/10 text-[rgb(var(--app-danger))]`;
+    return `${base} border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] text-[rgb(var(--app-danger))]`;
   }
   if (state === "running") {
-    return `${base} border-blue-500/40 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text))] hover:border-blue-500/60 hover:bg-[rgb(var(--app-surface-raised))]`;
+    return `${base} border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text))] hover:border-[rgb(var(--app-accent))] hover:bg-[rgb(var(--app-surface-raised))]`;
   }
   if (action.kind === "requires_approval") {
-    return `${base} border-amber-500/30 bg-amber-500/10 text-[rgb(var(--app-warning))] hover:bg-amber-500/15`;
+    return `${base} border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] text-[rgb(var(--app-warning))] hover:bg-[rgb(var(--app-warning-soft))]`;
   }
   if (action.kind === "workspace_action" || action.kind === "project_link_update") {
-    return `${base} border-blue-500/30 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text))] hover:border-blue-500/50 hover:bg-[rgb(var(--app-surface-raised))]`;
+    return `${base} border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text))] hover:border-[rgb(var(--app-accent))] hover:bg-[rgb(var(--app-surface-raised))]`;
   }
   return `${base} border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text-muted))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]`;
 }
@@ -88,16 +88,16 @@ function suggestionButtonClass(action: SuggestionReplyAction, state: SuggestionR
 function commandChipClass(action: SuggestionReplyAction): string {
   const base = "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[rgb(var(--app-text-subtle))]";
   if (action.kind === "workspace_action") {
-    return `${base} border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text-muted))] hover:border-blue-500/40 hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]`;
+    return `${base} border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-accent))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]`;
   }
   return `${base} border-[rgb(var(--app-border))] bg-transparent text-[rgb(var(--app-text-subtle))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]`;
 }
 
 function suggestionActionDotClass(action: SuggestionReplyAction, state: SuggestionReplyButtonState = "idle"): string {
-  if (state === "queued") return "h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500";
+  if (state === "queued") return "h-1.5 w-1.5 shrink-0 rounded-full bg-[rgb(var(--app-success))]";
   if (state === "blocked") return "h-1.5 w-1.5 shrink-0 rounded-full bg-[rgb(var(--app-danger))]";
   if (state === "running") return "h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[rgb(var(--app-accent))]";
-  if (action.kind === "requires_approval") return "h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500";
+  if (action.kind === "requires_approval") return "h-1.5 w-1.5 shrink-0 rounded-full bg-[rgb(var(--app-warning))]";
   if (action.kind === "workspace_action" || action.kind === "project_link_update") return "h-1.5 w-1.5 shrink-0 rounded-full bg-[rgb(var(--app-accent))]";
   return "h-1.5 w-1.5 shrink-0 rounded-full bg-[rgb(var(--app-text-faint))]";
 }

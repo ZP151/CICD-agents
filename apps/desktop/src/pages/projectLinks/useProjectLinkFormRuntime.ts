@@ -168,12 +168,12 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
     }));
   }, []);
 
-  const repoInputClass = `w-full rounded-lg border px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 outline-none transition ${
+  const repoInputClass = `w-full rounded-lg border px-3 py-2 text-sm text-[rgb(var(--app-text))] placeholder:text-[rgb(var(--app-text-subtle))] bg-[rgb(var(--app-surface-raised))] outline-none transition ${
     !branchLoading && branches.length > 0
-      ? "border-emerald-600 bg-zinc-900 focus:border-emerald-500"
+      ? "border-[rgb(var(--app-success-border))] focus:border-[rgb(var(--app-success))]"
       : branchError && form.repoPath
-        ? "border-amber-700/60 bg-zinc-900 focus:border-amber-600"
-        : "border-zinc-700/60 bg-zinc-900 focus:border-zinc-600"
+        ? "border-[rgb(var(--app-warning-border))] focus:border-[rgb(var(--app-warning))]"
+        : "border-[rgb(var(--app-border))] focus:border-[rgb(var(--app-accent))]"
   }`;
 
   return {

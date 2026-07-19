@@ -20,10 +20,10 @@ export function ProjectLinkBasicFields({
 }: ProjectLinkBasicFieldsProps) {
   const repoInputClass = `rounded-lg border px-3 py-2 font-mono text-sm text-[rgb(var(--app-text))] outline-none transition ${
     !branchLoading && branches.length > 0
-      ? "border-emerald-700/60 bg-[rgb(var(--app-surface-raised))] focus:border-emerald-500"
+      ? "border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-surface-raised))] focus:border-[rgb(var(--app-success))]"
       : branchError && form.repoPath
-        ? "border-amber-700/60 bg-[rgb(var(--app-surface-raised))] focus:border-amber-600"
-        : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] focus:border-zinc-500"
+        ? "border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-surface-raised))] focus:border-[rgb(var(--app-warning))]"
+        : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] focus:border-[rgb(var(--app-accent))]"
   }`;
 
   return (
@@ -33,7 +33,7 @@ export function ProjectLinkBasicFields({
         <input
           value={form.name}
           onChange={(e) => setField("name")(e.target.value)}
-          className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
+          className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] outline-none focus:border-[rgb(var(--app-accent))]"
           placeholder="web-app production"
         />
       </label>
@@ -58,10 +58,10 @@ export function ProjectLinkBasicFields({
           placeholder="C:\projects\my-app"
         />
         {branchError && form.repoPath && (
-          <span className="text-[10px] text-amber-500/80">Could not read branches. Check this is a valid git repository.</span>
+          <span className="text-[10px] text-[rgb(var(--app-warning))]">Could not read branches. Check this is a valid git repository.</span>
         )}
       </label>
-      <div className="grid min-w-0 grid-cols-1 gap-3">
+      <div className={projectLinkOnboardingBranchGridClass()}>
         <BranchSelect
           branches={branches}
           branchLoading={branchLoading}
@@ -79,4 +79,8 @@ export function ProjectLinkBasicFields({
       </div>
     </>
   );
+}
+
+export function projectLinkOnboardingBranchGridClass(): string {
+  return "grid min-w-0 gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))]";
 }

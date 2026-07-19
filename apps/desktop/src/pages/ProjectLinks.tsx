@@ -55,9 +55,9 @@ export default function ProjectLinks(): JSX.Element {
 
   if (mode === "new" || (typeof mode === "object" && "editing" in mode)) {
     return (
-      <div className="mx-auto w-full max-w-xl">
+      <div className={projectLinkFormShellClass()}>
         {error && (
-          <div className="mb-4 rounded-lg border border-red-800 bg-red-900/30 px-4 py-2 text-sm text-red-400">
+          <div className="mb-4 rounded-lg border border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] px-4 py-2 text-sm text-[rgb(var(--app-danger))]">
             {error}
           </div>
         )}
@@ -73,12 +73,12 @@ export default function ProjectLinks(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto w-full max-w-xl space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-zinc-100">Project Links</h2>
+    <div className={projectLinksListShellClass()}>
+      <div className={projectLinksHeaderClass()}>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl font-semibold text-[rgb(var(--app-text))]">Project Links</h2>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-[rgb(var(--app-text-muted))]">
               Each Project Link maps one local repo to Azure DevOps, branch defaults, and validation
               commands.
             </p>
@@ -90,7 +90,7 @@ export default function ProjectLinks(): JSX.Element {
         {projectLinks.length > 0 && (
           <button
             onClick={() => setMode("new")}
-            className="flex shrink-0 items-center gap-1.5 rounded-md border border-zinc-700 bg-transparent px-3 py-1.5 text-xs text-zinc-400 transition hover:border-zinc-600 hover:bg-zinc-800/40 hover:text-zinc-200"
+            className="flex shrink-0 items-center gap-1.5 self-start rounded-md border border-[rgb(var(--app-border))] bg-transparent px-3 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))] sm:self-auto"
           >
             <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
               <path
@@ -106,7 +106,7 @@ export default function ProjectLinks(): JSX.Element {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-800 bg-red-900/30 px-4 py-2 text-sm text-red-400">
+        <div className="rounded-lg border border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] px-4 py-2 text-sm text-[rgb(var(--app-danger))]">
           {error}
         </div>
       )}
@@ -116,7 +116,7 @@ export default function ProjectLinks(): JSX.Element {
       ) : projectLinks.length === 0 ? (
         <ProjectLinksEmpty onCreate={() => setMode("new")} />
       ) : (
-        <div className="space-y-2">
+        <div className={projectLinksGridClass()}>
           {projectLinks.map((projectLink) => (
             <ProjectLinkCard
               key={projectLink.id}
@@ -131,6 +131,22 @@ export default function ProjectLinks(): JSX.Element {
   );
 }
 
+export function projectLinkFormShellClass(): string {
+  return "mx-auto w-full max-w-5xl";
+}
+
+export function projectLinksListShellClass(): string {
+  return "mx-auto w-full max-w-7xl space-y-6";
+}
+
+export function projectLinksHeaderClass(): string {
+  return "flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between";
+}
+
+export function projectLinksGridClass(): string {
+  return "grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))]";
+}
+
 function ProjectLinkStoragePill({
   cloudSync,
   usingDaemon,
@@ -140,53 +156,95 @@ function ProjectLinkStoragePill({
 }): JSX.Element {
   if (cloudSync) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-800/40 bg-emerald-900/30 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+      <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-success))]">
+        <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--app-success))]" />
         Cloud synced · Azure Table Storage
       </span>
     );
   }
   if (usingDaemon) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-zinc-800/60 px-2 py-0.5 text-[10px] font-medium text-zinc-500">
-        <span className="h-1.5 w-1.5 rounded-full bg-zinc-600" />
+      <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-text-muted))]">
+        <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--app-text-subtle))]" />
         Local · daemon store
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-zinc-800/60 px-2 py-0.5 text-[10px] font-medium text-zinc-600">
-      <span className="h-1.5 w-1.5 rounded-full bg-zinc-700" />
+    <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-text-subtle))]">
+      <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--app-text-faint))]" />
       Local · browser storage
     </span>
   );
 }
 
-function ProjectLinksLoading(): JSX.Element {
+export function ProjectLinksLoading(): JSX.Element {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-      <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-400" />
-      <p className="text-xs text-zinc-600">Loading Project Links...</p>
-    </div>
+    <section
+      className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-5"
+      aria-label="Loading Project Links"
+    >
+      <div className="flex max-w-xl items-center gap-3">
+        <span className="h-9 w-9 animate-pulse rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]" />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[rgb(var(--app-text))]">
+            Loading Project Links
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
+            Checking saved repository mappings before showing the workspace.
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }
 
-function ProjectLinksEmpty({ onCreate }: { onCreate: () => void }): JSX.Element {
+export function ProjectLinksEmpty({ onCreate }: { onCreate: () => void }): JSX.Element {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-      <svg width="40" height="40" viewBox="0 0 40 40" fill="none" className="text-zinc-700">
-        <rect x="6" y="8" width="28" height="24" rx="3" stroke="currentColor" strokeWidth="1.5" />
-        <path
-          d="M13 16h14M13 21h10"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeWidth="1.5"
-        />
-      </svg>
-      <p className="text-sm text-zinc-500">No Project Links yet.</p>
-      <button onClick={onCreate} className="text-sm text-blue-400 transition hover:text-blue-300">
-        Create your first Project Link
-      </button>
-    </div>
+    <section className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-6">
+      <div className="max-w-2xl">
+        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))] ring-1 ring-[rgb(var(--app-border))]">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path
+              d="M4.5 10h11M7.5 6.5h5M7.5 13.5h5M5 3.75h10A1.25 1.25 0 0 1 16.25 5v10A1.25 1.25 0 0 1 15 16.25H5A1.25 1.25 0 0 1 3.75 15V5A1.25 1.25 0 0 1 5 3.75Z"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.5"
+            />
+          </svg>
+        </div>
+        <h3 className="text-base font-semibold text-[rgb(var(--app-text))]">
+          Create a Project Link to start
+        </h3>
+        <p className="mt-2 max-w-[65ch] text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
+          MergePilot needs one mapping between a local repository and Azure DevOps before it
+          can review changes, inspect PRs, analyze pipelines, or run Git workflows.
+        </p>
+        <button
+          type="button"
+          onClick={onCreate}
+          className="mt-4 inline-flex items-center justify-center rounded-md bg-[rgb(var(--app-accent))] px-3 py-2 text-sm font-medium text-white transition hover:bg-[rgb(var(--app-accent-strong))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:translate-y-px"
+        >
+          Create Project Link
+        </button>
+        <div className="mt-5">
+          <p className="text-xs font-medium uppercase tracking-wide text-[rgb(var(--app-text-subtle))]">
+            Setup needs
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-2 text-xs text-[rgb(var(--app-text-muted))]">
+            <li className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
+              Local repository path
+            </li>
+            <li className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
+              Default and PR branches
+            </li>
+            <li className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
+              Azure DevOps mapping
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
   );
 }

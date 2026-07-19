@@ -1,37 +1,18 @@
 export const CHAT_PANEL_LAYOUT = {
-  leftSidebarWidth: 192,
-  panelHandleWidth: 4,
-  viewportBuffer: 32,
   middleMin: 320,
   historyMin: 160,
   historyMax: 400,
   rightMin: 280,
   rightMax: 780,
+  rightOverlayBreakpoint: 1040,
+  rightOverlayMin: 240,
+  rightOverlayMax: 560,
+  rightOverlayWidthRatio: 0.88,
   handleGap: 8,
 };
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
-}
-
-export function requiredChatWindowWidth({
-  historyOpen,
-  historyWidth,
-  rightPanelOpen,
-  rightWidth,
-}: {
-  historyOpen: boolean;
-  historyWidth: number;
-  rightPanelOpen: boolean;
-  rightWidth: number;
-}): number {
-  return (
-    CHAT_PANEL_LAYOUT.leftSidebarWidth +
-    (historyOpen ? historyWidth + CHAT_PANEL_LAYOUT.panelHandleWidth : 0) +
-    CHAT_PANEL_LAYOUT.middleMin +
-    (rightPanelOpen ? rightWidth + CHAT_PANEL_LAYOUT.panelHandleWidth : 0) +
-    CHAT_PANEL_LAYOUT.viewportBuffer
-  );
 }
 
 export function constrainHistoryPanelWidth({
@@ -84,6 +65,30 @@ export function constrainRightPanelWidth({
   );
 }
 
+export function shouldOverlayRightPanel(workspaceWidth: number): boolean {
+  return workspaceWidth > 0 && workspaceWidth < CHAT_PANEL_LAYOUT.rightOverlayBreakpoint;
+}
+
+export function effectiveRightPanelWidth({
+  rightWidth,
+  workspaceWidth,
+}: {
+  rightWidth: number;
+  workspaceWidth: number;
+}): number {
+  if (!shouldOverlayRightPanel(workspaceWidth)) return rightWidth;
+
+  const overlayMax = Math.max(
+    CHAT_PANEL_LAYOUT.rightOverlayMin,
+    Math.min(
+      CHAT_PANEL_LAYOUT.rightMax,
+      CHAT_PANEL_LAYOUT.rightOverlayMax,
+      Math.floor(workspaceWidth * CHAT_PANEL_LAYOUT.rightOverlayWidthRatio),
+    ),
+  );
+  return clamp(rightWidth, Math.min(CHAT_PANEL_LAYOUT.rightMin, overlayMax), overlayMax);
+}
+
 export function nextPanelVisibilityForWorkspace({
   workspaceWidth,
   historyOpen,
@@ -98,12 +103,14 @@ export function nextPanelVisibilityForWorkspace({
   rightWidth: number;
 }): { historyOpen: boolean; rightPanelOpen: boolean } {
   if (workspaceWidth <= 0) return { historyOpen, rightPanelOpen };
+  const rightPanelConsumesLayout = rightPanelOpen && !shouldOverlayRightPanel(workspaceWidth);
   return {
     rightPanelOpen: rightPanelOpen && (
+      shouldOverlayRightPanel(workspaceWidth) ||
       workspaceWidth - rightWidth - (historyOpen ? historyWidth : 0) >= CHAT_PANEL_LAYOUT.middleMin
     ),
     historyOpen: historyOpen && (
-      workspaceWidth - historyWidth >= CHAT_PANEL_LAYOUT.middleMin
+      workspaceWidth - historyWidth - (rightPanelConsumesLayout ? rightWidth : 0) >= CHAT_PANEL_LAYOUT.middleMin
     ),
   };
 }

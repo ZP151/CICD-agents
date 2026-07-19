@@ -16,6 +16,7 @@ export function ChatShell(props: ChatShellProps) {
     mini,
     renameCurrentSession,
     rightPanelOpen,
+    rightPanelOverlay,
     rightWidth,
     setHistoryOpen,
     setRightPanelOpen,
@@ -30,7 +31,7 @@ export function ChatShell(props: ChatShellProps) {
 
   return (
     <div
-      className={`relative flex flex-col overflow-hidden bg-zinc-950 text-zinc-100 ${mini ? "h-full rounded-xl" : "flex-1 min-w-0 h-full"}`}
+      className={`relative flex flex-col overflow-hidden bg-[rgb(var(--app-bg))] text-[rgb(var(--app-text))] ${mini ? "h-full rounded-xl" : "flex-1 min-w-0 h-full"}`}
       onPointerDownCapture={closeModelMenuFromChatSurface}
       onMouseDownCapture={closeModelMenuFromChatSurface}
       onClickCapture={closeModelMenuFromChatSurface}
@@ -54,6 +55,7 @@ export function ChatShell(props: ChatShellProps) {
           historyWidth={historyWidth}
           onToggleHistory={() => setHistoryOpen((value) => !value)}
           rightPanelOpen={rightPanelOpen}
+          rightPanelOverlay={rightPanelOverlay}
           rightWidth={rightWidth}
           onToggleRight={() => setRightPanelOpen((value) => !value)}
           summaryPinnedAvailable={summaryPinnedAvailable}
@@ -68,8 +70,8 @@ export function ChatShell(props: ChatShellProps) {
           onCancelTitle={() => setTitleEditing(false)}
         />
       ) : (
-        <div className="flex min-h-[36px] shrink-0 items-center border-b border-zinc-800/80 px-3">
-          <span className="flex-1 truncate text-xs text-zinc-500">
+        <div className="flex min-h-[36px] shrink-0 items-center border-b border-[rgb(var(--app-border))] bg-[rgb(var(--app-bg))] px-3">
+          <span className="flex-1 truncate text-xs text-[rgb(var(--app-text-muted))]">
             {customTitle ?? conversationTitle ?? "Chat"}
           </span>
         </div>

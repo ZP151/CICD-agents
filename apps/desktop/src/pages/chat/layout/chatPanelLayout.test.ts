@@ -1,21 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
+  CHAT_PANEL_LAYOUT,
   constrainHistoryPanelWidth,
   constrainRightPanelWidth,
+  effectiveRightPanelWidth,
   nextPanelVisibilityForWorkspace,
-  requiredChatWindowWidth,
+  shouldOverlayRightPanel,
 } from "./chatPanelLayout.js";
 
 describe("chat panel layout", () => {
-  it("computes required window width from visible panels", () => {
-    expect(requiredChatWindowWidth({
-      historyOpen: true,
-      historyWidth: 220,
-      rightPanelOpen: true,
-      rightWidth: 420,
-    })).toBe(1192);
-  });
-
   it("constrains drag widths to panel and workspace limits", () => {
     expect(constrainHistoryPanelWidth({
       startWidth: 220,
@@ -34,12 +28,20 @@ describe("chat panel layout", () => {
     })).toBe(452);
   });
 
-  it("collapses the right panel before history when workspace is too narrow", () => {
+  it("keeps the right panel open as an overlay when workspace is too narrow for three columns", () => {
     expect(nextPanelVisibilityForWorkspace({
       workspaceWidth: 800,
       historyOpen: true,
       historyWidth: 220,
       rightPanelOpen: true,
+      rightWidth: 420,
+    })).toEqual({ historyOpen: true, rightPanelOpen: true });
+
+    expect(nextPanelVisibilityForWorkspace({
+      workspaceWidth: 700,
+      historyOpen: true,
+      historyWidth: 220,
+      rightPanelOpen: false,
       rightWidth: 420,
     })).toEqual({ historyOpen: true, rightPanelOpen: false });
 
@@ -49,6 +51,32 @@ describe("chat panel layout", () => {
       historyWidth: 220,
       rightPanelOpen: true,
       rightWidth: 420,
-    })).toEqual({ historyOpen: false, rightPanelOpen: false });
+    })).toEqual({ historyOpen: false, rightPanelOpen: true });
+  });
+
+  it("uses bounded overlay widths for the right panel on compact workspaces", () => {
+    expect(shouldOverlayRightPanel(900)).toBe(true);
+    expect(shouldOverlayRightPanel(1200)).toBe(false);
+
+    expect(effectiveRightPanelWidth({
+      rightWidth: 780,
+      workspaceWidth: 900,
+    })).toBe(CHAT_PANEL_LAYOUT.rightOverlayMax);
+    expect(effectiveRightPanelWidth({
+      rightWidth: 420,
+      workspaceWidth: 460,
+    })).toBe(404);
+  });
+
+  it("keeps the CSS middle-panel floor aligned with the resize model", () => {
+    const css = readFileSync(
+      new URL("../../../styles/chat-workspace.css", import.meta.url),
+      "utf8",
+    );
+
+    expect(css).toContain(`flex: 1 1 ${CHAT_PANEL_LAYOUT.middleMin}px`);
+    expect(css).toContain(`min-width: ${CHAT_PANEL_LAYOUT.middleMin}px`);
+    expect(css).toContain(".right-panel--overlay");
+    expect(css).not.toContain("min-width: 420px");
   });
 });

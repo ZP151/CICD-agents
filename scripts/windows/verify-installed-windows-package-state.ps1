@@ -103,6 +103,23 @@ function Get-SetupMetadataOrNull([string]$Path) {
   }
 }
 
+function Get-MissingDaemonHealthMetadata {
+  param([object]$Health)
+
+  if (-not $Health) {
+    return @("runtimeMode", "desktopVersion", "pid", "execPath")
+  }
+
+  $names = @($Health.PSObject.Properties | ForEach-Object { $_.Name })
+  $missing = @()
+  foreach ($name in @("runtimeMode", "desktopVersion", "pid", "execPath")) {
+    if ($names -notcontains $name) {
+      $missing += $name
+    }
+  }
+  return $missing
+}
+
 $verifyArgs = @(
   "-ExpectedVersion", $ExpectedVersion,
   "-Port", [string]$Port
@@ -155,6 +172,13 @@ $uninstallPresent = $null -ne $baseResult.installedFiles.uninstall
 
 if ($ExpectedDesktopBundleKind -ne "any" -and $actualDesktopBundleKind -ne $ExpectedDesktopBundleKind) {
   $failures += "Installed mergepilot-desktop.exe bundle kind is '$actualDesktopBundleKind', expected '$ExpectedDesktopBundleKind'."
+}
+
+if ($ProbeDaemon) {
+  $missingDaemonHealthMetadata = @(Get-MissingDaemonHealthMetadata -Health $baseResult.daemonHealth)
+  if ($missingDaemonHealthMetadata.Count -gt 0) {
+    $failures += "Installed daemon /healthz is missing runtime metadata fields: $($missingDaemonHealthMetadata -join ', ')."
+  }
 }
 
 if ($ExpectedDesktopBundleKind -eq "nsis" -and -not $uninstallPresent) {

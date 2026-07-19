@@ -6,22 +6,22 @@ export const conversationActionButtonClass =
 
 export function inlineStatePillClass(state: "ready" | "running" | "error"): string {
   if (state === "error") {
-    return "rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 font-mono text-[10px] text-[rgb(var(--app-danger))]";
+    return "rounded-full border border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] px-2 py-0.5 font-mono text-[10px] text-[rgb(var(--app-danger))]";
   }
   if (state === "ready") {
-    return "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] text-[rgb(var(--app-success))]";
+    return "rounded-full border border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft))] px-2 py-0.5 font-mono text-[10px] text-[rgb(var(--app-success))]";
   }
-  return "rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 font-mono text-[10px] text-blue-400";
+  return "rounded-full border border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-accent-soft))] px-2 py-0.5 font-mono text-[10px] text-[rgb(var(--app-accent-readable))]";
 }
 
 export function approvalRiskPillClass(level?: string): string {
-  if (level === "high") return "rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-danger))]";
-  if (level === "low") return "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-success))]";
-  return "rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-warning))]";
+  if (level === "high") return "rounded-full border border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-danger))]";
+  if (level === "low") return "rounded-full border border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-success))]";
+  return "rounded-full border border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-warning))]";
 }
 
 export function statusDotClass(status: "running" | "done" | "error"): string {
-  const color = status === "error" ? "bg-red-500" : status === "done" ? "bg-emerald-500" : "bg-blue-500";
+  const color = status === "error" ? "bg-[rgb(var(--app-danger))]" : status === "done" ? "bg-[rgb(var(--app-success))]" : "bg-[rgb(var(--app-accent))]";
   const motion = status === "running" ? " animate-pulse" : "";
   return `mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${color}${motion}`;
 }

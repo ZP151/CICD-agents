@@ -46,26 +46,6 @@ type PullRequestsAggregateResult =
   | { ok: true; prs: DisplayPullRequest[] }
   | { ok: false; projectLinkName: string; message: string };
 
-const PULL_REQUEST_LIST_TIMEOUT_MS = 3_500;
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-    promise.then(
-      (value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        window.clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
-
 export function usePullRequestsRuntime() {
   const { projectLinks, projectLinksLoading } = useAppData();
   const [projectLinkId, setProjectLinkId] = useState(() => loadStoredActiveProjectLinkId());
@@ -118,11 +98,7 @@ export function usePullRequestsRuntime() {
     retryOnMount: false,
     queryFn: async () => {
       if (projectLinkId) {
-        const nextPrs = (await withTimeout(
-          fetchProjectLinkPullRequests(projectLinkId, status),
-          PULL_REQUEST_LIST_TIMEOUT_MS,
-          selectedProjectLink?.name ?? "Pull request list",
-        ))
+        const nextPrs = (await fetchProjectLinkPullRequests(projectLinkId, status))
           .filter((pr) => matchesProjectLinkBranch(pr, selectedProjectLink))
           .map((pr) => ({
             ...pr,
@@ -132,13 +108,9 @@ export function usePullRequestsRuntime() {
         return { prs: nextPrs, warnings: [] };
       }
 
-      const results = await Promise.all(projectLinks.map(async (projectLink): Promise<PullRequestsAggregateResult> => {
-        try {
-          const items = await withTimeout(
-            fetchProjectLinkPullRequests(projectLink.id, status),
-            PULL_REQUEST_LIST_TIMEOUT_MS,
-            projectLink.name,
-          );
+    const results = await Promise.all(projectLinks.map(async (projectLink): Promise<PullRequestsAggregateResult> => {
+      try {
+          const items = await fetchProjectLinkPullRequests(projectLink.id, status);
           return {
             ok: true,
             prs: items.map((pr) => ({

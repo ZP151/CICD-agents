@@ -68,7 +68,7 @@ export function ArtifactWorkspaceContent({
 
   if (!artifact.content?.trim() && lookupState?.status === "error") {
     return (
-      <div className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2" aria-live="polite">
+      <div className="mt-3 rounded-md border border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] px-3 py-2" aria-live="polite">
         <p className="text-xs font-medium text-[rgb(var(--app-danger))]">Saved artifact unavailable</p>
         <p className="mt-1 break-words text-[11px] leading-relaxed text-[rgb(var(--app-text-muted))]">
           {lookupState.message}
@@ -186,7 +186,7 @@ function ArtifactActionButton({
       onClick={onClick}
       className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:translate-y-px ${
         active
-          ? "border-emerald-500/40 bg-emerald-500/10 text-[rgb(var(--app-success))]"
+          ? "border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft))] text-[rgb(var(--app-success))]"
           : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text-muted))] hover:bg-[rgb(var(--app-bg-muted))] hover:text-[rgb(var(--app-text))]"
       }`}
     >

@@ -61,7 +61,7 @@ export function PendingActionCard({ bubble, onConfirm, onCancel }: PendingAction
         <button
           type="button"
           onClick={onConfirm}
-          className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 active:translate-y-px"
+          className="rounded-md bg-[rgb(var(--app-accent))] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:translate-y-px"
         >
           Yes, run this action
         </button>
@@ -92,11 +92,11 @@ function ApprovalStateCard({ status, label }: ApprovalStateCardProps) {
 }
 
 function approvalRiskClass(level?: string): string {
-  if (level === "high") return "text-red-500";
-  if (level === "low") return "text-emerald-600";
-  return "text-amber-600";
+  if (level === "high") return "text-[rgb(var(--app-danger))]";
+  if (level === "low") return "text-[rgb(var(--app-success))]";
+  return "text-[rgb(var(--app-warning))]";
 }
 
 function approvalStatusDotClass(status: "executing"): string {
-  return "bg-blue-500";
+  return "bg-[rgb(var(--app-accent))]";
 }

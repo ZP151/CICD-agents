@@ -156,7 +156,22 @@ export async function deleteChatSession(sessionId: string): Promise<void> {
 export async function fetchChatCheckpointActivity(): Promise<ChatCheckpointActivity[]> {
   const r = await fetch(`${RUNTIME_URL}/chat/checkpoints`);
   if (!r.ok) throw new Error(await messageFromErrorResponse(`Checkpoints HTTP ${r.status}`, r));
-  return (await r.json()) as ChatCheckpointActivity[];
+  return chatCheckpointActivityFromResponse(await r.json());
+}
+
+export function chatCheckpointActivityFromResponse(value: unknown): ChatCheckpointActivity[] {
+  if (Array.isArray(value)) return value as ChatCheckpointActivity[];
+  if (
+    value &&
+    typeof value === "object" &&
+    "items" in value &&
+    Array.isArray((value as { items?: unknown }).items)
+  ) {
+    return (value as { items: ChatCheckpointActivity[] }).items;
+  }
+  throw new Error(
+    "Git checkpoints could not be loaded because the desktop daemon returned an unexpected response.",
+  );
 }
 
 export async function fetchChatCheckpointPreview(

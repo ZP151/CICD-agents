@@ -25,9 +25,9 @@ export function ProjectLinkAdoSection({
   onManualPipelineChange,
 }: ProjectLinkAdoSectionProps): JSX.Element {
   return (
-    <section className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+    <section className="space-y-3.5 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4">
       <div>
-        <h3 className="text-sm font-semibold text-zinc-200">Azure DevOps</h3>
+        <h3 className="text-sm font-semibold text-[rgb(var(--app-text))]">Azure DevOps</h3>
       </div>
       <Field
         label="Organisation URL"
@@ -35,7 +35,7 @@ export function ProjectLinkAdoSection({
         onChange={set("adoOrgUrl")}
         placeholder="https://dev.azure.com/myorg"
       />
-      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className={projectLinkAdoProjectRepoGridClass()}>
         <ProjectDiscoveryField
           kind="projects"
           label="Project"
@@ -68,10 +68,14 @@ export function ProjectLinkAdoSection({
         onManualChange={onManualPipelineChange}
       />
       {discoveryError && (
-        <p className="rounded-md border border-red-900/40 bg-red-950/20 px-2.5 py-1.5 text-[11px] text-red-300">
+        <p className="rounded-md border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] px-2.5 py-1.5 text-[11px] text-[rgb(var(--app-danger))]">
           {discoveryError}
         </p>
       )}
     </section>
   );
+}
+
+export function projectLinkAdoProjectRepoGridClass(): string {
+  return "grid min-w-0 gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))]";
 }

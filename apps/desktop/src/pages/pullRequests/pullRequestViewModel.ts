@@ -24,15 +24,15 @@ export function formatDate(value: string): string {
 
 export function readiness(pr: PullRequestSummary): { label: string; tone: string } {
   if (pr.isDraft) return { label: "Draft", tone: "bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))] ring-[rgb(var(--app-border))]" };
-  if (pr.voteSummary.rejected > 0) return { label: "Changes requested", tone: "bg-red-500/10 text-red-700 ring-red-500/25 dark:text-red-300" };
-  if (pr.voteSummary.approved > 0) return { label: "Reviewed", tone: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:text-emerald-300" };
-  return { label: "Needs review", tone: "bg-amber-500/10 text-amber-800 ring-amber-500/25 dark:text-amber-300" };
+  if (pr.voteSummary.rejected > 0) return { label: "Changes requested", tone: "bg-[rgb(var(--app-danger-soft))] text-[rgb(var(--app-danger))] ring-[rgb(var(--app-danger-border))]" };
+  if (pr.voteSummary.approved > 0) return { label: "Reviewed", tone: "bg-[rgb(var(--app-success-soft))] text-[rgb(var(--app-success))] ring-[rgb(var(--app-success-border))]" };
+  return { label: "Needs review", tone: "bg-[rgb(var(--app-warning-soft))] text-[rgb(var(--app-warning))] ring-[rgb(var(--app-warning-border))]" };
 }
 
 export function insightReadinessTone(value: PullRequestInsightPreview["readiness"]): { label: string; tone: string } {
-  if (value === "blocked") return { label: "Blocked", tone: "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300" };
-  if (value === "needs_attention") return { label: "Needs attention", tone: "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300" };
-  return { label: "Ready", tone: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" };
+  if (value === "blocked") return { label: "Blocked", tone: "border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] text-[rgb(var(--app-danger))]" };
+  if (value === "needs_attention") return { label: "Needs attention", tone: "border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] text-[rgb(var(--app-warning))]" };
+  return { label: "Ready", tone: "border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft))] text-[rgb(var(--app-success))]" };
 }
 
 export function previewOperationDetails(result: PullRequestInsightPreview): string {

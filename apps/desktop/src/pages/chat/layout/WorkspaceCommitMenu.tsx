@@ -105,8 +105,8 @@ export function WorkspaceCommitMenu({
             </span>
             {hasChanges && (
               <span className="shrink-0 whitespace-nowrap font-mono">
-                <span className="text-emerald-500">+{added}</span>
-                <span className="ml-1 text-red-500">-{removed}</span>
+                <span className="text-[rgb(var(--app-success))]">+{added}</span>
+                <span className="ml-1 text-[rgb(var(--app-danger))]">-{removed}</span>
               </span>
             )}
           </div>

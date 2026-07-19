@@ -1,0 +1,5 @@
+declare const __MERGEPILOT_DESKTOP_VERSION__: string;
+declare const __MERGEPILOT_BUILD_SHA__: string;
+
+export const DESKTOP_VERSION = __MERGEPILOT_DESKTOP_VERSION__;
+export const DESKTOP_BUILD_SHA = __MERGEPILOT_BUILD_SHA__;

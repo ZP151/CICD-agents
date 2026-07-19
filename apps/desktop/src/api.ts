@@ -1,5 +1,6 @@
 export * from "./api/runtime.js";
 export * from "./api/health.js";
+export * from "./api/desktopRuntime.js";
 export * from "./api/tasks.js";
 export * from "./api/pipelines.js";
 export * from "./api/chatTypes.js";

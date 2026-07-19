@@ -16,25 +16,25 @@ export const lanes: Array<{
     key: "auto_approved",
     title: "Auto-approved",
     description: "Low-risk PRs approved by the Review Agent with an audit record.",
-    tone: "text-emerald-800 border-emerald-500/30 bg-emerald-500/10 dark:text-emerald-300",
+    tone: "text-[rgb(var(--app-success))] border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft)_/_0.58)]",
   },
   {
     key: "needs_human_review",
     title: "Needs human review",
     description: "Warnings, sensitive paths, or approval guardrails that need judgment.",
-    tone: "review-lane-human text-amber-800 border-amber-500/35 bg-amber-500/10 dark:text-amber-300",
+    tone: "review-lane-human text-[rgb(var(--app-warning))] border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft)_/_0.58)]",
   },
   {
     key: "blocked",
     title: "Blocked",
     description: "High-risk findings, failed pipeline checks, or merge conflicts.",
-    tone: "text-red-800 border-red-500/30 bg-red-500/10 dark:text-red-300",
+    tone: "text-[rgb(var(--app-danger))] border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft)_/_0.58)]",
   },
   {
     key: "watching",
     title: "Watching",
     description: "PRs waiting for commits, pipeline results, or approval configuration.",
-    tone: "text-sky-800 border-sky-500/30 bg-sky-500/10 dark:text-sky-300",
+    tone: "text-[rgb(var(--app-accent-readable))] border-[rgb(var(--app-border))] bg-[rgb(var(--app-accent-soft)_/_0.62)]",
   },
 ];
 
@@ -54,14 +54,14 @@ export function formatDate(value: string): string {
 }
 
 export function riskTone(risk: ReviewQueueItem["decisionRiskLevel"]): string {
-  if (risk === "high") return "bg-red-500/10 text-red-700 ring-red-500/30 dark:text-red-300";
-  if (risk === "medium") return "bg-amber-500/10 text-amber-800 ring-amber-500/30 dark:text-amber-300";
-  return "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300";
+  if (risk === "high") return "bg-[rgb(var(--app-danger-soft))] text-[rgb(var(--app-danger))] ring-[rgb(var(--app-danger-border))]";
+  if (risk === "medium") return "bg-[rgb(var(--app-warning-soft))] text-[rgb(var(--app-warning))] ring-[rgb(var(--app-warning-border))]";
+  return "bg-[rgb(var(--app-success-soft))] text-[rgb(var(--app-success))] ring-[rgb(var(--app-success-border))]";
 }
 
 export function severityTone(severity: ReviewFinding["severity"]): string {
-  if (severity === "blocking") return "text-red-700 bg-red-500/10 ring-red-500/30 dark:text-red-300";
-  if (severity === "warning") return "text-amber-800 bg-amber-500/10 ring-amber-500/30 dark:text-amber-300";
+  if (severity === "blocking") return "text-[rgb(var(--app-danger))] bg-[rgb(var(--app-danger-soft))] ring-[rgb(var(--app-danger-border))]";
+  if (severity === "warning") return "text-[rgb(var(--app-warning))] bg-[rgb(var(--app-warning-soft))] ring-[rgb(var(--app-warning-border))]";
   return "text-[rgb(var(--app-text-muted))] bg-[rgb(var(--app-surface-raised))] ring-[rgb(var(--app-border))]";
 }
 

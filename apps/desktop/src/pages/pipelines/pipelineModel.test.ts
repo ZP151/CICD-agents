@@ -124,6 +124,53 @@ describe("pipeline model", () => {
     expect(rowMatchesFilter(rows[0]!, "discovered")).toBe(true);
   });
 
+  it("deduplicates the same discovered ADO pipeline across temporary Project Links", () => {
+    const duplicateLinks: ProjectLink[] = [
+      {
+        ...projectLinks[0]!,
+        id: "pl-live-1",
+        name: "mp-live-claimbot-pipeline-20260715120108",
+        adoRepoName: "ClaimBot_API",
+      },
+      {
+        ...projectLinks[0]!,
+        id: "pl-real",
+        name: "ClaimBot_API link",
+        adoRepoName: "ClaimBot_API",
+      },
+      {
+        ...projectLinks[0]!,
+        id: "pl-live-2",
+        name: "mp-live-claimbot-discover-pipeline-20260716180959",
+        adoRepoName: "ClaimBot_API",
+      },
+    ];
+    const discovered: Record<string, AdoDiscoveryOption[]> = {
+      "pl-live-1": [{ id: "117", name: "ClaimBot_API", description: "", url: "" }],
+      "pl-real": [{ id: "117", name: "ClaimBot_API", description: "", url: "" }],
+      "pl-live-2": [{ id: "117", name: "ClaimBot_API", description: "", url: "" }],
+    };
+
+    const rows = buildPipelineRows(duplicateLinks, [], discovered, {
+      "pl-live-1": [pullRequestWithPipelineRun("117", { id: 4701 })],
+      "pl-real": [pullRequestWithPipelineRun("117", { id: 4702 })],
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      projectLinkId: "pl-real",
+      projectLinkName: "ClaimBot_API link",
+      pipelineId: "117",
+      pipelineName: "ClaimBot_API",
+      source: "discovered",
+    });
+    expect(rows[0]?.relatedPullRequests).toHaveLength(1);
+    expect(countPipelineRows(rows)).toMatchObject({
+      all: 1,
+      discovered: 1,
+    });
+  });
+
   it("does not surface unknown as a synthetic missing run date", () => {
     expect(formatDate(undefined)).toBe("");
     expect(formatDate("not-a-date")).toBe("");

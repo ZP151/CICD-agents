@@ -141,7 +141,7 @@ export function ToolOutputRenderer({ toolName, toolResult }: { toolName?: string
   const stderr = String(result["stderr"] ?? "").trim();
 
   if ((returncode !== 0 && returncode !== undefined) && stderr) {
-    return <div className="text-xs text-red-300 font-mono whitespace-pre-wrap break-all">{stderr}</div>;
+    return <div className="text-xs text-[rgb(var(--app-danger))] font-mono whitespace-pre-wrap break-all">{stderr}</div>;
   }
 
   if (toolName === "git_status") return <GitStatusRenderer result={result} />;
@@ -156,16 +156,16 @@ function GitStatusRenderer({ result }: { result: Record<string, unknown> }) {
   return (
     <div className="space-y-1 text-xs">
       <div className="flex items-center gap-2">
-        <span className="text-blue-300 font-mono">{data.branch || "Branch not available"}</span>
-        {data.ahead > 0 && <span className="text-green-400">&uarr;{data.ahead}</span>}
-        {data.behind > 0 && <span className="text-yellow-400">&darr;{data.behind}</span>}
+        <span className="text-[rgb(var(--app-accent-readable))] font-mono">{data.branch || "Branch not available"}</span>
+        {data.ahead > 0 && <span className="text-[rgb(var(--app-success))]">&uarr;{data.ahead}</span>}
+        {data.behind > 0 && <span className="text-[rgb(var(--app-warning))]">&darr;{data.behind}</span>}
       </div>
-      {data.staged.length > 0 && <FileList label="Staged" files={data.staged} color="text-green-400" prefix="+" />}
-      {data.modified.length > 0 && <FileList label="Modified" files={data.modified} color="text-yellow-400" prefix="~" />}
-      {data.deleted.length > 0 && <FileList label="Deleted" files={data.deleted} color="text-red-400" prefix="-" />}
-      {data.untracked.length > 0 && <FileList label="Untracked" files={data.untracked} color="text-zinc-500" prefix="?" />}
+      {data.staged.length > 0 && <FileList label="Staged" files={data.staged} color="text-[rgb(var(--app-success))]" prefix="+" />}
+      {data.modified.length > 0 && <FileList label="Modified" files={data.modified} color="text-[rgb(var(--app-warning))]" prefix="~" />}
+      {data.deleted.length > 0 && <FileList label="Deleted" files={data.deleted} color="text-[rgb(var(--app-danger))]" prefix="-" />}
+      {data.untracked.length > 0 && <FileList label="Untracked" files={data.untracked} color="text-[rgb(var(--app-text-muted))]" prefix="?" />}
       {data.staged.length === 0 && data.modified.length === 0 && data.deleted.length === 0 && data.untracked.length === 0 && (
-        <p className="text-zinc-500">Working tree clean</p>
+        <p className="text-[rgb(var(--app-text-muted))]">Working tree clean</p>
       )}
     </div>
   );
@@ -181,7 +181,7 @@ function FileList({ label, files, color, prefix }: { label: string; files: strin
         {shown.map((f) => <li key={f} className={`font-mono ${color} opacity-80`}>{prefix} {f}</li>)}
       </ul>
       {files.length > 3 && (
-        <button onClick={() => setExpanded((v) => !v)} className="ml-2 text-zinc-600 hover:text-zinc-400">
+        <button onClick={() => setExpanded((v) => !v)} className="ml-2 text-[rgb(var(--app-text-subtle))] hover:text-[rgb(var(--app-text))]">
           {expanded ? "show less" : `+${files.length - 3} more`}
         </button>
       )}
@@ -192,15 +192,15 @@ function FileList({ label, files, color, prefix }: { label: string; files: strin
 function GitLogRenderer({ result }: { result: Record<string, unknown> }) {
   const stdout = String(result["stdout"] ?? "");
   const commits = parseGitLog(stdout);
-  if (commits.length === 0) return <p className="text-xs text-zinc-500">No commits found.</p>;
+  if (commits.length === 0) return <p className="text-xs text-[rgb(var(--app-text-muted))]">No commits found.</p>;
   return (
     <ul className="space-y-1 text-xs">
       {commits.map((c) => (
         <li key={c.hash} className="flex items-start gap-2">
-          <span className="shrink-0 font-mono text-blue-400">{c.hash}</span>
-          <span className="shrink-0 text-zinc-600">{c.date}</span>
-          <span className="shrink-0 text-zinc-500">{c.author}</span>
-          <span className="text-zinc-300">{c.message}</span>
+          <span className="shrink-0 font-mono text-[rgb(var(--app-accent-readable))]">{c.hash}</span>
+          <span className="shrink-0 text-[rgb(var(--app-text-subtle))]">{c.date}</span>
+          <span className="shrink-0 text-[rgb(var(--app-text-muted))]">{c.author}</span>
+          <span className="text-[rgb(var(--app-text))]">{c.message}</span>
         </li>
       ))}
     </ul>
@@ -211,25 +211,25 @@ function GitDiffRenderer({ result }: { result: Record<string, unknown> }) {
   const stdout = String(result["stdout"] ?? "");
   const files = parseGitDiff(stdout);
   const [expanded, setExpanded] = useState<string | null>(null);
-  if (files.length === 0) return <p className="text-xs text-zinc-500">No changes found.</p>;
+  if (files.length === 0) return <p className="text-xs text-[rgb(var(--app-text-muted))]">No changes found.</p>;
   return (
     <div className="space-y-1 text-xs">
       {files.map((f) => (
-        <div key={f.path} className="rounded border border-zinc-700/40 overflow-hidden">
+        <div key={f.path} className="rounded border border-[rgb(var(--app-border))] overflow-hidden">
           <button
             onClick={() => setExpanded((prev) => prev === f.path ? null : f.path)}
             title={`${expanded === f.path ? "Collapse" : "Expand"} diff for ${f.path}`}
             aria-label={`${expanded === f.path ? "Collapse" : "Expand"} diff for ${f.path}`}
-            className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-zinc-700/20"
+            className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-[rgb(var(--app-surface-raised))]"
           >
-            <span className="font-mono text-zinc-300 flex-1 truncate">{f.path}</span>
-            <span className="text-green-400">+{f.added}</span>
-            <span className="text-red-400">-{f.removed}</span>
-            <span className="text-zinc-600">{expanded === f.path ? "▲" : "▼"}</span>
+            <span className="font-mono text-[rgb(var(--app-text))] flex-1 truncate">{f.path}</span>
+            <span className="text-[rgb(var(--app-success))]">+{f.added}</span>
+            <span className="text-[rgb(var(--app-danger))]">-{f.removed}</span>
+            <span className="text-[rgb(var(--app-text-subtle))]">{expanded === f.path ? "▲" : "▼"}</span>
           </button>
           {expanded === f.path && (
-            <div className="border-t border-zinc-700/40 max-h-40 overflow-y-auto">
-              <pre className="px-2 py-1 font-mono text-[10px] text-zinc-400 whitespace-pre-wrap break-all">
+            <div className="border-t border-[rgb(var(--app-border))] max-h-40 overflow-y-auto">
+              <pre className="px-2 py-1 font-mono text-[10px] text-[rgb(var(--app-text-muted))] whitespace-pre-wrap break-all">
                 {stdout
                   .split("diff --git")
                   .find((chunk) => chunk.includes(f.path))
@@ -239,10 +239,10 @@ function GitDiffRenderer({ result }: { result: Record<string, unknown> }) {
                       key={i}
                       className={
                         line.startsWith("+") && !line.startsWith("+++")
-                          ? "text-green-400"
+                          ? "text-[rgb(var(--app-success))]"
                           : line.startsWith("-") && !line.startsWith("---")
-                            ? "text-red-400"
-                            : "text-zinc-500"
+                            ? "text-[rgb(var(--app-danger))]"
+                            : "text-[rgb(var(--app-text-muted))]"
                       }
                     >
                       {line}{"\n"}
@@ -265,7 +265,7 @@ function GenericToolRenderer({ result }: { result: Record<string, unknown> }) {
   }
   const ok = returncode === 0 || returncode === undefined;
   return (
-    <pre className={`whitespace-pre-wrap break-all text-xs font-mono ${ok ? "text-[rgb(var(--app-text-muted))]" : "text-red-300"} max-h-40 overflow-y-auto`}>
+    <pre className={`whitespace-pre-wrap break-all text-xs font-mono ${ok ? "text-[rgb(var(--app-text-muted))]" : "text-[rgb(var(--app-danger))]"} max-h-40 overflow-y-auto`}>
       {stdout}
     </pre>
   );

@@ -99,10 +99,26 @@ export function ActivitySidebar({
       }),
     [checkpointActivity.length, prInsightActivity.length, reviewActivity.length, tasks.length],
   );
-  const showRuns = sectionFilter === "all" || sectionFilter === "runs";
-  const showCheckpoints = sectionFilter === "all" || sectionFilter === "checkpoints";
-  const showPrInsights = sectionFilter === "all" || sectionFilter === "pr_insights";
-  const showReviewOps = sectionFilter === "all" || sectionFilter === "review_operations";
+  const visibleSections = activityVisibleSections({
+    sectionFilter,
+    runs: tasks.length,
+    checkpoints: checkpointActivity.length,
+    prInsights: prInsightActivity.length,
+    reviewOperations: reviewActivity.length,
+    loading,
+    checkpointLoading,
+    prInsightLoading,
+    reviewLoading,
+  });
+  const showRuns = visibleSections.runs;
+  const showCheckpoints = visibleSections.checkpoints;
+  const showPrInsights = visibleSections.prInsights;
+  const showReviewOps = visibleSections.reviewOperations;
+  const activityCount =
+    tasks.length + checkpointActivity.length + prInsightActivity.length + reviewActivity.length;
+  const anyActivityLoading = loading || checkpointLoading || prInsightLoading || reviewLoading;
+  const activityUnavailable = Boolean(error && activityCount === 0 && !anyActivityLoading);
+  const initialActivityLoading = anyActivityLoading && activityCount === 0 && !activityUnavailable;
 
   const selectFirstInSection = useCallback((nextFilter: ActivitySectionFilter): void => {
     if (nextFilter === "runs") {
@@ -150,7 +166,13 @@ export function ActivitySidebar({
 
     if (
       sectionFilter === "runs" &&
-      (tasks.length > 0 || selectedTaskId !== null) &&
+      (
+        tasks.length > 0 ||
+        selectedTaskId !== null ||
+        selectedCheckpointId !== null ||
+        selectedPrInsightId !== null ||
+        selectedReviewId !== null
+      ) &&
       !tasks.some((task) => task.id === selectedTaskId)
     ) {
       selectFirstInSection("runs");
@@ -158,7 +180,13 @@ export function ActivitySidebar({
     }
     if (
       sectionFilter === "checkpoints" &&
-      (checkpointActivity.length > 0 || selectedCheckpointId !== null) &&
+      (
+        checkpointActivity.length > 0 ||
+        selectedTaskId !== null ||
+        selectedCheckpointId !== null ||
+        selectedPrInsightId !== null ||
+        selectedReviewId !== null
+      ) &&
       !checkpointActivity.some((event) => event.id === selectedCheckpointId)
     ) {
       selectFirstInSection("checkpoints");
@@ -166,7 +194,13 @@ export function ActivitySidebar({
     }
     if (
       sectionFilter === "pr_insights" &&
-      (prInsightActivity.length > 0 || selectedPrInsightId !== null) &&
+      (
+        prInsightActivity.length > 0 ||
+        selectedTaskId !== null ||
+        selectedCheckpointId !== null ||
+        selectedPrInsightId !== null ||
+        selectedReviewId !== null
+      ) &&
       !prInsightActivity.some((event) => event.id === selectedPrInsightId)
     ) {
       selectFirstInSection("pr_insights");
@@ -174,7 +208,13 @@ export function ActivitySidebar({
     }
     if (
       sectionFilter === "review_operations" &&
-      (reviewActivity.length > 0 || selectedReviewId !== null) &&
+      (
+        reviewActivity.length > 0 ||
+        selectedTaskId !== null ||
+        selectedCheckpointId !== null ||
+        selectedPrInsightId !== null ||
+        selectedReviewId !== null
+      ) &&
       !reviewActivity.some((event) => event.id === selectedReviewId)
     ) {
       selectFirstInSection("review_operations");
@@ -193,13 +233,10 @@ export function ActivitySidebar({
   ]);
 
   return (
-    <section className="flex w-[380px] shrink-0 flex-col border-r border-[rgb(var(--app-border))] pr-4">
-      <div className="mb-4 flex items-start justify-between gap-3">
+    <section className={activitySidebarShellClass()}>
+      <div className="mb-2 flex items-start justify-between gap-3 xl:mb-4">
         <div>
-          <h2 className="text-xl font-semibold text-[rgb(var(--app-text))]">Activity</h2>
-          <p className="mt-1 text-sm text-[rgb(var(--app-text-subtle))]">
-            Operational history by source.
-          </p>
+          <h2 className="text-lg font-semibold text-[rgb(var(--app-text))] xl:text-xl">Activity</h2>
         </div>
         <button
           onClick={onRefreshAll}
@@ -210,121 +247,242 @@ export function ActivitySidebar({
       </div>
 
       {activeCount > 0 && (
-        <div className="mb-3 rounded-md border border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-accent-soft))] px-3 py-2 text-xs text-[rgb(var(--app-accent))]">
+        <div className="mb-3 rounded-md border border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-accent-soft))] px-3 py-2 text-xs text-[rgb(var(--app-accent-readable))]">
           {activeCount} active run{activeCount === 1 ? "" : "s"}
         </div>
       )}
 
-      {error && (
-        <div className="mb-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+      {error && !activityUnavailable && (
+        <div className="mb-3 rounded-md border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] px-3 py-2 text-xs text-[rgb(var(--app-danger))]">
           {error}
         </div>
       )}
 
-      <div className="mb-3 grid grid-cols-2 gap-1.5" aria-label="Activity sections">
-        {sectionOptions.map((section) => (
-          <button
-            key={section.key}
-            type="button"
-            aria-pressed={sectionFilter === section.key}
-            onClick={() => changeSectionFilter(section.key)}
-            className={`rounded-md border px-2 py-1.5 text-left transition ${
-              sectionFilter === section.key
-                ? "border-[rgb(var(--app-accent))]/45 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text))]"
-                : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:text-[rgb(var(--app-text))]"
-            }`}
-          >
-            <span className="block text-xs font-medium">{section.label}</span>
-            <span className="mt-0.5 block text-[10px] text-[rgb(var(--app-text-subtle))]">
-              {section.count}
-            </span>
-          </button>
-        ))}
-      </div>
+      {activityUnavailable ? (
+        <ActivitySidebarUnavailableState
+          error={error ?? "Failed to load activity"}
+          onRefresh={onRefreshAll}
+        />
+      ) : (
+        <>
+          <div className={activitySectionFilterGridClass()} aria-label="Activity sections">
+            {sectionOptions.map((section) => (
+              <button
+                key={section.key}
+                type="button"
+                aria-pressed={sectionFilter === section.key}
+                onClick={() => changeSectionFilter(section.key)}
+                className={`inline-flex min-w-0 shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-left transition ${
+                  sectionFilter === section.key
+                    ? "border-[rgb(var(--app-accent))]/45 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text))]"
+                    : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:text-[rgb(var(--app-text))]"
+                }`}
+                title={`${section.label}: ${section.count}`}
+              >
+                <span className="min-w-0 truncate text-xs font-medium">{section.shortLabel}</span>
+                <span className="shrink-0 text-[10px] text-current opacity-80">
+                  {section.count}
+                </span>
+              </button>
+            ))}
+          </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        {showRuns && (
-          <TaskRunList
-            tasks={tasks}
-            selectedTaskId={selectedTaskId}
-            loading={loading}
-            onSelectTask={onSelectTask}
-          />
-        )}
-        {showCheckpoints && (
-          <CheckpointActivityList
-            checkpointActivity={checkpointActivity}
-            checkpointLoading={checkpointLoading}
-            selectedCheckpointId={selectedCheckpointId}
-            onSelectCheckpoint={onSelectCheckpoint}
-          />
-        )}
-        {showPrInsights && (
-          <div
-            className={
-              showRuns || showCheckpoints
-                ? "mt-5 border-t border-[rgb(var(--app-border))] pt-4"
-                : ""
-            }
-          >
-            <PrInsightActivitySection
-              projectLinks={projectLinks}
-              prInsightActivity={prInsightActivity}
-              prInsightLoading={prInsightLoading}
-              prInsightProjectLinkFilter={prInsightProjectLinkFilter}
-              prInsightKindFilter={prInsightKindFilter}
-              prInsightHistoryMeta={prInsightHistoryMeta}
-              selectedPrInsightId={selectedPrInsightId}
-              onSelectPrInsight={onSelectPrInsight}
-              onPrInsightProjectLinkFilterChange={onPrInsightProjectLinkFilterChange}
-              onPrInsightKindFilterChange={onPrInsightKindFilterChange}
-            />
-          </div>
-        )}
-        {showReviewOps && (
-          <div
-            className={
-              showRuns || showCheckpoints || showPrInsights
-                ? "mt-5 border-t border-[rgb(var(--app-border))] pt-4"
-                : ""
-            }
-          >
-            <ReviewActivitySection
-              projectLinks={projectLinks}
-              reviewActivity={reviewActivity}
-              reviewLoading={reviewLoading}
-              reviewProjectLinkFilter={reviewProjectLinkFilter}
-              reviewKindFilter={reviewKindFilter}
-              selectedReviewId={selectedReviewId}
-              onSelectReview={onSelectReview}
-              onReviewProjectLinkFilterChange={onReviewProjectLinkFilterChange}
-              onReviewKindFilterChange={onReviewKindFilterChange}
-            />
-          </div>
-        )}
-      </div>
+          {initialActivityLoading ? (
+            <ActivitySidebarLoadingState />
+          ) : (
+            <div className={activitySidebarListClass()}>
+              {showRuns && (
+                <TaskRunList
+                  tasks={tasks}
+                  selectedTaskId={selectedTaskId}
+                  loading={loading}
+                  onSelectTask={onSelectTask}
+                />
+              )}
+              {showCheckpoints && (
+                <CheckpointActivityList
+                  checkpointActivity={checkpointActivity}
+                  checkpointLoading={checkpointLoading}
+                  selectedCheckpointId={selectedCheckpointId}
+                  onSelectCheckpoint={onSelectCheckpoint}
+                />
+              )}
+              {showPrInsights && (
+                <div
+                  className={
+                    showRuns || showCheckpoints
+                      ? "mt-5 border-t border-[rgb(var(--app-border))] pt-4"
+                      : ""
+                  }
+                >
+                  <PrInsightActivitySection
+                    projectLinks={projectLinks}
+                    prInsightActivity={prInsightActivity}
+                    prInsightLoading={prInsightLoading}
+                    prInsightProjectLinkFilter={prInsightProjectLinkFilter}
+                    prInsightKindFilter={prInsightKindFilter}
+                    prInsightHistoryMeta={prInsightHistoryMeta}
+                    selectedPrInsightId={selectedPrInsightId}
+                    onSelectPrInsight={onSelectPrInsight}
+                    onPrInsightProjectLinkFilterChange={onPrInsightProjectLinkFilterChange}
+                    onPrInsightKindFilterChange={onPrInsightKindFilterChange}
+                  />
+                </div>
+              )}
+              {showReviewOps && (
+                <div
+                  className={
+                    showRuns || showCheckpoints || showPrInsights
+                      ? "mt-5 border-t border-[rgb(var(--app-border))] pt-4"
+                      : ""
+                  }
+                >
+                  <ReviewActivitySection
+                    projectLinks={projectLinks}
+                    reviewActivity={reviewActivity}
+                    reviewLoading={reviewLoading}
+                    reviewProjectLinkFilter={reviewProjectLinkFilter}
+                    reviewKindFilter={reviewKindFilter}
+                    selectedReviewId={selectedReviewId}
+                    onSelectReview={onSelectReview}
+                    onReviewProjectLinkFilterChange={onReviewProjectLinkFilterChange}
+                    onReviewKindFilterChange={onReviewKindFilterChange}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </section>
   );
 }
 
+export function ActivitySidebarUnavailableState({
+  error,
+  onRefresh,
+}: {
+  error: string;
+  onRefresh?: () => void;
+}): JSX.Element {
+  return (
+    <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3">
+      <p className="text-xs font-semibold text-[rgb(var(--app-text))]">Sources unavailable</p>
+      <p className="mt-1 text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
+        MergePilot could not load local runs, checkpoints, PR insights, or review operations.
+        Check the desktop daemon or account session, then refresh.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Activity recovery checks">
+        {["Daemon activity API", "Local data folder", "Account session"].map((label) => (
+          <span
+            key={label}
+            className="rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-0.5 text-[11px] text-[rgb(var(--app-text-subtle))]"
+          >
+            {label}
+          </span>
+        ))}
+      </div>
+      <p className="mt-3 truncate text-[11px] text-[rgb(var(--app-danger))]" title={error}>
+        {error}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {onRefresh && (
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs font-medium text-[rgb(var(--app-text))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-bg-muted))]"
+          >
+            Refresh activity
+          </button>
+        )}
+        <a
+          href="#/settings"
+          className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs font-medium text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-bg-muted))] hover:text-[rgb(var(--app-text))]"
+        >
+          Open Settings
+        </a>
+      </div>
+    </div>
+  );
+}
+
+export function activitySidebarShellClass(): string {
+  return [
+    "flex w-full shrink-0 flex-col border-b border-[rgb(var(--app-border))] pb-3",
+    "xl:max-h-[calc(100vh-5rem)] xl:w-[clamp(16rem,24vw,21rem)] xl:border-b-0 xl:border-r xl:pb-0 xl:pr-4",
+  ].join(" ");
+}
+
+export function activitySidebarListClass(): string {
+  return "min-h-0 max-h-[16rem] overflow-y-auto pr-1 lg:max-h-[18rem] xl:max-h-none xl:flex-1";
+}
+
+export function activitySectionFilterGridClass(): string {
+  return "mb-2 flex min-w-0 flex-wrap items-center gap-1.5";
+}
+
 type ActivitySectionFilter = "all" | "runs" | "checkpoints" | "pr_insights" | "review_operations";
+
+export function activityVisibleSections({
+  sectionFilter,
+  runs,
+  checkpoints,
+  prInsights,
+  reviewOperations,
+  loading,
+  checkpointLoading,
+  prInsightLoading,
+  reviewLoading,
+}: {
+  sectionFilter: ActivitySectionFilter;
+  runs: number;
+  checkpoints: number;
+  prInsights: number;
+  reviewOperations: number;
+  loading: boolean;
+  checkpointLoading: boolean;
+  prInsightLoading: boolean;
+  reviewLoading: boolean;
+}): {
+  runs: boolean;
+  checkpoints: boolean;
+  prInsights: boolean;
+  reviewOperations: boolean;
+} {
+  if (sectionFilter !== "all") {
+    return {
+      runs: sectionFilter === "runs",
+      checkpoints: sectionFilter === "checkpoints",
+      prInsights: sectionFilter === "pr_insights",
+      reviewOperations: sectionFilter === "review_operations",
+    };
+  }
+
+  return {
+    runs: runs > 0 || loading,
+    checkpoints: checkpoints > 0 || checkpointLoading,
+    prInsights: prInsights > 0 || prInsightLoading,
+    reviewOperations: reviewOperations > 0 || reviewLoading,
+  };
+}
 
 function activitySectionOptions(counts: {
   runs: number;
   checkpoints: number;
   prInsights: number;
   reviewOperations: number;
-}): Array<{ key: ActivitySectionFilter; label: string; count: string }> {
+}): Array<{ key: ActivitySectionFilter; label: string; shortLabel: string; count: string }> {
   return [
     {
       key: "all",
       label: "All",
+      shortLabel: "All",
       count: String(counts.runs + counts.checkpoints + counts.prInsights + counts.reviewOperations),
     },
-    { key: "runs", label: "Runs", count: String(counts.runs) },
-    { key: "checkpoints", label: "Checkpoints", count: String(counts.checkpoints) },
-    { key: "pr_insights", label: "PR Insights", count: String(counts.prInsights) },
-    { key: "review_operations", label: "Reviews", count: String(counts.reviewOperations) },
+    { key: "runs", label: "Runs", shortLabel: "Runs", count: String(counts.runs) },
+    { key: "checkpoints", label: "Checkpoints", shortLabel: "Git", count: String(counts.checkpoints) },
+    { key: "pr_insights", label: "PR Insights", shortLabel: "PR", count: String(counts.prInsights) },
+    { key: "review_operations", label: "Reviews", shortLabel: "Reviews", count: String(counts.reviewOperations) },
   ];
 }
 
@@ -343,8 +501,33 @@ function ActivitySectionHeader({
         {title}
       </h3>
       <span className="rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-0.5 text-[11px] text-[rgb(var(--app-text-subtle))]">
-        {loading ? "Loading" : count}
+        {loading ? "..." : count}
       </span>
+    </div>
+  );
+}
+
+export function ActivitySidebarLoadingState(): JSX.Element {
+  return (
+    <div
+      className="mt-3 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3"
+      aria-label="Checking activity sources"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold text-[rgb(var(--app-text))]">
+            Checking activity sources
+          </p>
+          <p className="mt-1 text-xs text-[rgb(var(--app-text-muted))]">
+            Runs, checkpoints, PR insights, and reviews are loading.
+          </p>
+        </div>
+        <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[rgb(var(--app-accent))]" />
+      </div>
+      <div className="mt-3 grid gap-1.5" aria-hidden="true">
+        <span className="h-10 animate-pulse rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]" />
+        <span className="h-10 animate-pulse rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]" />
+      </div>
     </div>
   );
 }
@@ -427,7 +610,7 @@ function CheckpointActivityList({
         count={checkpointActivity.length}
         loading={checkpointLoading}
       />
-      <div className="max-h-[220px] overflow-y-auto space-y-1.5">
+      <div className="space-y-1.5">
         {!checkpointLoading && checkpointActivity.length === 0 && (
           <p className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text-muted))]">
             No Git checkpoints yet.
@@ -458,7 +641,10 @@ function CheckpointActivityList({
               <p className="truncate text-sm font-medium text-[rgb(var(--app-text))]">
                 {event.toolName}
               </p>
-              <p className="mt-1 truncate font-mono text-xs text-[rgb(var(--app-text-muted))]">
+              <p
+                className="mt-1 truncate font-mono text-xs text-[rgb(var(--app-text-muted))]"
+                title={event.repoPath}
+              >
                 {checkpointActivityDetail(event)}
               </p>
             </button>

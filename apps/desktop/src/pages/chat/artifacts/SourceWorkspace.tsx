@@ -77,17 +77,17 @@ export function CodeSidePanel({
   return (
     <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text))]">
       {sources.length > 0 && (
-        <div className="flex shrink-0 items-center gap-1 border-b border-[rgb(var(--app-border))]">
-          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 py-2">
+        <div className={sourceWorkspaceTabsShellClass()}>
+          <div className={sourceWorkspaceTabsListClass()}>
             {sources.map((tab) => {
               const selected = activeSource ? sourceReferenceKey(tab) === sourceReferenceKey(activeSource) : false;
               return (
                 <div
                   key={sourceReferenceKey(tab)}
                   className={[
-                    "group inline-flex max-w-[14rem] shrink-0 items-center rounded-md border text-xs transition",
+                    sourceWorkspaceTabClass(),
                     selected
-                      ? "border-[rgb(var(--app-accent))]/45 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent))]"
+                      ? "border-[rgb(var(--app-accent))]/45 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent-readable))]"
                       : "border-transparent text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]",
                   ].join(" ")}
                 >
@@ -141,7 +141,7 @@ export function CodeSidePanel({
               href={activeSource.url}
               target="_blank"
               rel="noreferrer"
-              className="shrink-0 rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] font-medium text-[rgb(var(--app-accent))] transition hover:bg-[rgb(var(--app-surface-raised))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35"
+              className="shrink-0 rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] font-medium text-[rgb(var(--app-accent-readable))] transition hover:bg-[rgb(var(--app-surface-raised))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35"
             >
               Open
             </a>
@@ -164,7 +164,7 @@ export function CodeSidePanel({
             />
           </div>
         ) : (
-          <SourcePreviewEmpty label="No file open" />
+          <SourcePreviewEmpty label="No file selected" />
         )}
       </div>
     </div>
@@ -185,4 +185,16 @@ function SourceTypeBadge({ source }: { source: ConversationSourcePart }) {
       {label}
     </span>
   );
+}
+
+export function sourceWorkspaceTabsShellClass(): string {
+  return "flex shrink-0 items-center gap-1 border-b border-[rgb(var(--app-border))]";
+}
+
+export function sourceWorkspaceTabsListClass(): string {
+  return "flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 py-2";
+}
+
+export function sourceWorkspaceTabClass(): string {
+  return "group inline-flex max-w-[min(14rem,60vw)] shrink-0 items-center rounded-md border text-xs transition";
 }

@@ -83,4 +83,42 @@ describe("daemon config routes", () => {
     expect(response.json()).toMatchObject({ ok: true, llmConfigured: true });
     expect(setAoaiKey).not.toHaveBeenCalled();
   });
+
+  it("explains Key Vault app permission failures without leaking raw AADSTS text", async () => {
+    writeMergePilotUserConfig({
+      llmProvider: "azure",
+      secretSource: "key_vault",
+      azureEndpoint: "https://example.openai.azure.com",
+      azureDeployment: "gpt-4o",
+      azureApiVersion: "2024-08-01-preview",
+    }, process.env.MERGEPILOT_USER_CONFIG_FILE!);
+    vi.spyOn(KeyVaultSecrets.prototype, "setAoaiKey").mockRejectedValue(
+      new Error("invalid_client: AADSTS650057: Invalid resource. The client requested access to https://vault.azure.net."),
+    );
+
+    app = await buildApp();
+    const response = await app.inject({
+      method: "POST",
+      url: "/daemon/configure",
+      headers: { "content-type": "application/json" },
+      payload: JSON.stringify({
+        secretSource: "key_vault",
+        llmProvider: "azure",
+        azureEndpoint: "https://example.openai.azure.com",
+        azureDeployment: "gpt-4o",
+        azureApiVersion: "2024-08-01-preview",
+        azureApiKey: "model-key",
+      }),
+    });
+
+    expect(response.statusCode, response.body).toBe(400);
+    expect(response.json()).toMatchObject({
+      ok: false,
+      code: "key_vault_permission_required",
+    });
+    expect(response.body).toContain("Azure Key Vault app permission is not configured");
+    expect(response.body).toContain("Local .env");
+    expect(response.body).not.toContain("AADSTS650057");
+    expect(response.body).not.toContain("invalid_client");
+  });
 });

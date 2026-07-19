@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-export type AppTheme = "dark" | "light" | "system";
+export type AppTheme = "dark" | "light";
 export type ResolvedTheme = "dark" | "light";
 
 const THEME_STORAGE_KEY = "dev_agent_theme";
@@ -13,8 +13,8 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: "system",
-  resolvedTheme: "dark",
+  theme: "light",
+  resolvedTheme: "light",
   setTheme: () => {},
   toggleTheme: () => {},
 });
@@ -22,15 +22,14 @@ const ThemeContext = createContext<ThemeContextValue>({
 function readStoredTheme(): AppTheme {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return stored === "dark" || stored === "light" || stored === "system" ? stored : "system";
+    return stored === "dark" || stored === "light" ? stored : "light";
   } catch {
-    return "system";
+    return "light";
   }
 }
 
 function resolveTheme(theme: AppTheme): ResolvedTheme {
-  if (theme !== "system") return theme;
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return theme;
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }): JSX.Element {
@@ -47,11 +46,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): JSX.
 
     applyTheme();
     localStorage.setItem(THEME_STORAGE_KEY, theme);
-    if (theme !== "system") return;
-
-    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
-    media?.addEventListener("change", applyTheme);
-    return () => media?.removeEventListener("change", applyTheme);
   }, [theme]);
 
   const value = useMemo<ThemeContextValue>(() => ({
@@ -59,8 +53,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): JSX.
     resolvedTheme,
     setTheme: setThemeState,
     toggleTheme: () => setThemeState((current) => {
-      const currentResolved = current === "system" ? resolveTheme(current) : current;
-      return currentResolved === "dark" ? "light" : "dark";
+      return current === "dark" ? "light" : "dark";
     }),
   }), [resolvedTheme, theme]);
 

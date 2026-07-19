@@ -40,11 +40,11 @@ describe("reviewQueueViewModel", () => {
   });
 
   it("maps risk and severity to semantic tones", () => {
-    expect(riskTone("high")).toContain("red");
-    expect(riskTone("medium")).toContain("amber");
-    expect(riskTone("low")).toContain("emerald");
-    expect(severityTone("blocking")).toContain("red");
-    expect(severityTone("warning")).toContain("amber");
+    expect(riskTone("high")).toContain("--app-danger");
+    expect(riskTone("medium")).toContain("--app-warning");
+    expect(riskTone("low")).toContain("--app-success");
+    expect(severityTone("blocking")).toContain("--app-danger");
+    expect(severityTone("warning")).toContain("--app-warning");
   });
 
   it("formats short commits with fallback", () => {

@@ -10,8 +10,10 @@ that those blockers are grouped and machine-readable.
 #>
 
 param(
+  [Alias("ExpectedVersion")]
   [string]$Version = "",
   [string]$MsiPath = "",
+  [string]$NsisPath = "",
   [int]$FreshConfigPort = 19121,
   [int]$MsiPayloadPort = 19122,
   [int]$StaleScanExtractionTimeoutSec = 120,
@@ -68,6 +70,8 @@ function Invoke-Readiness {
     $Version,
     "-MsiPath",
     $CandidateMsiPath,
+    "-NsisPath",
+    $NsisPath,
     "-StaleScanExtractionTimeoutSec",
     [string]$StaleScanExtractionTimeoutSec,
     "-SkipTimestampProbe"
@@ -116,50 +120,113 @@ function Add-Check {
   }
 }
 
+if ([string]::IsNullOrWhiteSpace($NsisPath)) {
+  $NsisPath = Get-SiblingNsisPath -MsiPath $MsiPath
+}
+
 $normalResult = Invoke-Readiness -CandidateMsiPath $MsiPath
+$aliasResultOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $readinessPath `
+  -ExpectedVersion $Version `
+  -MsiPath $MsiPath `
+  -NsisPath $NsisPath `
+  -SkipTimestampProbe 2>&1
+$aliasResultText = ($aliasResultOutput | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+$aliasExitCode = $LASTEXITCODE
+$aliasResult = $null
+try {
+  $aliasResult = $aliasResultText | ConvertFrom-Json
+} catch {
+  $aliasResult = $null
+}
+Add-Check -Name "readiness accepts ExpectedVersion alias and explicit NSIS path" -Passed (
+  $aliasExitCode -ne 0 -and
+  $null -ne $aliasResult -and
+  $aliasResult.version -eq $Version -and
+  $aliasResult.msiPath -eq (Get-FullPathForReport -Path $MsiPath) -and
+  $aliasResult.nsisPath -eq (Get-FullPathForReport -Path $NsisPath)
+) -Details ([pscustomobject]@{
+  exitCode = $aliasExitCode
+  version = if ($aliasResult) { $aliasResult.version } else { $null }
+  msiPath = if ($aliasResult) { $aliasResult.msiPath } else { $null }
+  nsisPath = if ($aliasResult) { $aliasResult.nsisPath } else { $null }
+  output = if ($null -eq $aliasResult) { $aliasResultText.Substring(0, [Math]::Min(500, $aliasResultText.Length)) } else { $null }
+})
 $normalBlockerNames = @($normalResult.json.blockers | ForEach-Object { $_.name })
 $normalCheckNames = @($normalResult.json.checks | ForEach-Object { $_.name })
 $parserCheck = $normalResult.json.checks | Where-Object { $_.name -eq "windows script parser" } | Select-Object -First 1
+$runtimeOwnerCheck = $normalResult.json.checks | Where-Object { $_.name -eq "installed runtime owner" } | Select-Object -First 1
+$installedPackageCheck = $normalResult.json.checks | Where-Object { $_.name -eq "installed package state" } | Select-Object -First 1
+$trackingCheck = $normalResult.json.checks | Where-Object { $_.name -eq "release workflow strict tracking" } | Select-Object -First 1
 Add-Check -Name "normal readiness returns grouped blockers" -Passed (
   $normalResult.exitCode -ne 0 -and
   $normalResult.json.ok -eq $false -and
-  $normalBlockerNames -contains "release workflow strict tracking" -and
   $normalBlockerNames -contains "windows signing readiness" -and
   $normalBlockerNames -contains "windows artifact signatures" -and
-  $normalBlockerNames -contains "installed package state"
+  $null -ne $installedPackageCheck
 ) -Details ([pscustomobject]@{
   exitCode = $normalResult.exitCode
   checkNames = $normalCheckNames
   blockerNames = $normalBlockerNames
+  installedPackageOk = if ($installedPackageCheck) { $installedPackageCheck.ok } else { $null }
 })
 
 $installNextAction = $normalResult.json.nextActions.installCurrentMsi
-Add-Check -Name "normal readiness includes installed MSI handoff" -Passed (
-  $normalResult.exitCode -ne 0 -and
-  $null -ne $installNextAction -and
-  $installNextAction.expectedVersion -eq $Version -and
-  $installNextAction.msiPath -eq (Get-FullPathForReport -Path $MsiPath) -and
-  ([string]$installNextAction.recommendedElevatedCommand).Contains("install-and-verify-msi-state.ps1") -and
-  ([string]$installNextAction.recommendedElevatedCommand).Contains("-ExpectedVersion $Version") -and
-  ([string]$installNextAction.recommendedElevatedCommand).Contains([string]$installNextAction.msiPath) -and
-  -not ([string]$installNextAction.recommendedElevatedCommand).Contains("-SkipVision") -and
-  ([string]$installNextAction.quickElevatedCommand).Contains("-SkipVision") -and
-  ([string]$installNextAction.verifyAfterManualInstall).Contains("-SkipInstall")
-) -Details $installNextAction
+$installedPackageBlockerPresent = $normalBlockerNames -contains "installed package state"
+$installHandoffPassed = $false
+if ($installedPackageBlockerPresent) {
+  $installHandoffPassed = (
+    $normalResult.exitCode -ne 0 -and
+    $null -ne $installNextAction -and
+    $installNextAction.expectedVersion -eq $Version -and
+    $installNextAction.msiPath -eq (Get-FullPathForReport -Path $MsiPath) -and
+    ([string]$installNextAction.recommendedElevatedCommand).Contains("install-and-verify-msi-state.ps1") -and
+    ([string]$installNextAction.recommendedElevatedCommand).Contains("-ExpectedVersion $Version") -and
+    ([string]$installNextAction.recommendedElevatedCommand).Contains([string]$installNextAction.msiPath) -and
+    -not ([string]$installNextAction.recommendedElevatedCommand).Contains("-SkipVision") -and
+    ([string]$installNextAction.quickElevatedCommand).Contains("-SkipVision") -and
+    ([string]$installNextAction.verifyAfterManualInstall).Contains("-SkipInstall")
+  )
+} else {
+  $installHandoffPassed = (
+    $null -ne $installedPackageCheck -and
+    $installedPackageCheck.ok -eq $true -and
+    $null -eq $installNextAction
+  )
+}
+Add-Check -Name "normal readiness handles installed MSI handoff state" -Passed $installHandoffPassed -Details ([pscustomobject]@{
+  installedPackageBlockerPresent = $installedPackageBlockerPresent
+  installedPackageCheck = $installedPackageCheck
+  installNextAction = $installNextAction
+})
 
 $trackingNextAction = $normalResult.json.nextActions.trackReleaseWorkflowScripts
 $trackingScripts = @($trackingNextAction.scripts)
-Add-Check -Name "normal readiness includes release script tracking handoff" -Passed (
-  $normalResult.exitCode -ne 0 -and
-  $null -ne $trackingNextAction -and
-  $trackingScripts.Count -gt 0 -and
-  $trackingScripts -contains "scripts\windows\verify-no-stale-chat-template.ps1" -and
-  ([string]$trackingNextAction.suggestedStageCommand).StartsWith("git add -- ") -and
-  ([string]$trackingNextAction.suggestedStageCommand).Contains("scripts/windows/verify-no-stale-chat-template.ps1")
-) -Details $trackingNextAction
+$trackingBlockerPresent = $normalBlockerNames -contains "release workflow strict tracking"
+$trackingStatePassed = $false
+if ($trackingBlockerPresent) {
+  $trackingStatePassed = (
+    $normalResult.exitCode -ne 0 -and
+    $null -ne $trackingNextAction -and
+    $trackingScripts.Count -gt 0 -and
+    $trackingScripts -contains "scripts\windows\verify-no-stale-chat-template.ps1" -and
+    ([string]$trackingNextAction.suggestedStageCommand).StartsWith("git add -- ") -and
+    ([string]$trackingNextAction.suggestedStageCommand).Contains("scripts/windows/verify-no-stale-chat-template.ps1")
+  )
+} else {
+  $trackingStatePassed = (
+    $null -ne $trackingCheck -and
+    $trackingCheck.ok -eq $true -and
+    $null -eq $trackingNextAction
+  )
+}
+Add-Check -Name "normal readiness handles release script tracking state" -Passed $trackingStatePassed -Details ([pscustomobject]@{
+  trackingBlockerPresent = $trackingBlockerPresent
+  trackingCheck = $trackingCheck
+  trackingNextAction = $trackingNextAction
+})
 
 $expectedMsiPath = Get-FullPathForReport -Path $MsiPath
-$expectedNsisPath = Get-SiblingNsisPath -MsiPath $MsiPath
+$expectedNsisPath = Get-FullPathForReport -Path $NsisPath
 $signingNextAction = $normalResult.json.nextActions.configureWindowsSigning
 $signingArtifactPaths = @($signingNextAction.artifactPaths)
 Add-Check -Name "normal readiness includes Windows signing handoff" -Passed (
@@ -192,6 +259,43 @@ Add-Check -Name "normal readiness includes parser gate" -Passed (
   $null -ne $parserCheck -and
   $parserCheck.ok -eq $true
 ) -Details $parserCheck
+
+Add-Check -Name "normal readiness includes installed runtime owner gate" -Passed (
+  $null -ne $runtimeOwnerCheck -and
+  (
+    $runtimeOwnerCheck.ok -eq $true -or
+    (
+      $normalBlockerNames -contains "installed runtime owner" -and
+      ([string]$normalResult.json.nextActions.fixInstalledRuntimeOwner.inspectCommand).Contains("verify-installed-runtime-owner.ps1") -and
+      ([string]$normalResult.json.nextActions.fixInstalledRuntimeOwner.inspectCommand).Contains("-RequireRuntime") -and
+      ([string]$normalResult.json.nextActions.fixInstalledRuntimeOwner.inspectCommand).Contains("-RequireDesktopSidecarMode")
+    )
+  )
+) -Details ([pscustomobject]@{
+  runtimeOwnerCheck = $runtimeOwnerCheck
+  fixInstalledRuntimeOwner = $normalResult.json.nextActions.fixInstalledRuntimeOwner
+})
+
+$runtimeMetadataScripts = @(
+  "scripts\windows\packaged-sidecar-smoke.ps1",
+  "scripts\windows\packaged-msi-payload-smoke.ps1",
+  "scripts\windows\verify-installed-windows-package-state.ps1",
+  "scripts\windows\verify-installed-runtime-owner.ps1",
+  "scripts\windows\verify-installed-desktop-runtime-takeover.ps1",
+  "scripts\windows\run-installed-app-smoke.ps1"
+)
+$runtimeMetadataMissing = @(
+  $runtimeMetadataScripts |
+    Where-Object {
+      -not (Get-Content -LiteralPath (Join-Path $repoRoot $_) -Raw).Contains("desktopVersion")
+    }
+)
+Add-Check -Name "runtime trust gates require desktopVersion metadata" -Passed (
+  $runtimeMetadataMissing.Count -eq 0
+) -Details ([pscustomobject]@{
+  scripts = $runtimeMetadataScripts
+  missing = $runtimeMetadataMissing
+})
 
 $signatureBlocker = $normalResult.json.blockers | Where-Object { $_.name -eq "windows artifact signatures" } | Select-Object -First 1
 $signatureFailureText = @($signatureBlocker.failures) -join [Environment]::NewLine
@@ -274,3 +378,4 @@ $result | ConvertTo-Json -Depth 12
 if ($failures.Count -gt 0) {
   exit 1
 }
+exit 0

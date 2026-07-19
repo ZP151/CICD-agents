@@ -31,7 +31,7 @@ export function PrInsightDetailPanel({
     <div className="space-y-5">
       <header className="border-b border-[rgb(var(--app-border))] pb-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-[rgb(var(--app-accent-soft))] px-2 py-0.5 text-xs font-medium text-[rgb(var(--app-accent))] ring-1 ring-[rgb(var(--app-accent))]/30">
+          <span className="rounded-full bg-[rgb(var(--app-accent-soft))] px-2 py-0.5 text-xs font-medium text-[rgb(var(--app-accent-readable))] ring-1 ring-[rgb(var(--app-accent))]/30">
             {item.kind === "review_run" ? "full review" : "preview"}
           </span>
           {item.readiness && (
@@ -67,20 +67,20 @@ export function PrInsightDetailPanel({
 
       <section className="rounded-lg border border-[rgb(var(--app-accent))]/20 bg-[rgb(var(--app-accent-soft))]/60 p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-accent))]">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-accent-readable))]">
             Provenance
           </h3>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => onCopyArtifactId(item)}
-              className="rounded-md border border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-accent))] transition hover:border-[rgb(var(--app-accent))]"
+              className="rounded-md border border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-accent-readable))] transition hover:border-[rgb(var(--app-accent))]"
             >
               {copiedArtifactId === item.id ? "Copied" : "Copy artifact id"}
             </button>
           </div>
         </div>
-        <div className="grid gap-2 text-xs sm:grid-cols-2">
-          <p className="break-words font-mono text-[rgb(var(--app-text-subtle))] sm:col-span-2">
+        <div className={prInsightProvenanceGridClass()}>
+          <p className="col-span-full break-words font-mono text-[rgb(var(--app-text-subtle))]">
             {item.id}
           </p>
           <p className="text-[rgb(var(--app-text-muted))]">
@@ -95,7 +95,7 @@ export function PrInsightDetailPanel({
         </div>
       </section>
 
-      <section className="grid gap-3 text-sm sm:grid-cols-2">
+      <section className={prInsightMetadataGridClass()}>
         <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
           <p className="text-xs text-[rgb(var(--app-text-muted))]">Project Link</p>
           <p className="mt-1 text-[rgb(var(--app-text))]">{item.projectLinkName}</p>
@@ -119,7 +119,7 @@ export function PrInsightDetailPanel({
           </p>
         </div>
         {(item.iterationId || item.sourceCommit) && (
-          <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 sm:col-span-2">
+          <div className="col-span-full rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
             <p className="text-xs text-[rgb(var(--app-text-muted))]">Analysis baseline</p>
             <p className="mt-1 break-words font-mono text-[rgb(var(--app-text))]">
               {item.iterationId ? `iteration ${item.iterationId}` : "iteration n/a"}
@@ -152,7 +152,7 @@ export function PrInsightDetailPanel({
 function PrInsightSignalGrid({ item }: { item: PrInsightActivityItem }): JSX.Element | null {
   if (!item.signals && typeof item.findingCount !== "number") return null;
   return (
-    <section className="grid gap-3 text-sm sm:grid-cols-4 lg:grid-cols-6">
+    <section className={prInsightSignalGridClass()}>
       {item.signals && (
         <>
           <SignalMetric label="Files" value={item.signals.fileCount} />
@@ -167,6 +167,18 @@ function PrInsightSignalGrid({ item }: { item: PrInsightActivityItem }): JSX.Ele
       )}
     </section>
   );
+}
+
+export function prInsightSignalGridClass(): string {
+  return "grid gap-3 text-sm grid-cols-[repeat(auto-fit,minmax(min(100%,8.5rem),1fr))]";
+}
+
+export function prInsightProvenanceGridClass(): string {
+  return "grid gap-2 text-xs grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))]";
+}
+
+export function prInsightMetadataGridClass(): string {
+  return "grid gap-3 text-sm grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))]";
 }
 
 function SignalMetric({ label, value }: { label: string; value: number }): JSX.Element {
@@ -189,7 +201,7 @@ function PrInsightRisks({ item }: { item: PrInsightActivityItem }): JSX.Element 
         {item.risks.map((risk) => (
           <span
             key={risk}
-            className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:text-amber-300"
+            className="rounded-md border border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] px-2 py-1 text-xs text-[rgb(var(--app-warning))]"
           >
             {risk}
           </span>

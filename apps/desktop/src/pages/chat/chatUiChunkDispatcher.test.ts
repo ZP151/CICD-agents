@@ -175,6 +175,17 @@ describe("dispatchChatUiChunk", () => {
     ]);
   });
 
+  it("hides redundant project-context progress status text", () => {
+    const adapter = makeAdapter();
+
+    dispatchChatUiChunk({ type: "progress", message: "Refreshing project context" }, adapter);
+
+    expect(adapter.calls).toEqual([
+      "ui:true",
+      "status:null",
+    ]);
+  });
+
   it("ignores invalid internal approval and workflow payloads defensively", () => {
     const adapter = makeAdapter();
 

@@ -2,6 +2,7 @@ import { useTheme } from "../theme.js";
 import { AccountSettingsSection } from "./settings/AccountSettingsSection.js";
 import { AdditionalModelsSettingsSection } from "./settings/AdditionalModelsSettingsSection.js";
 import { AppearanceSettingsSection } from "./settings/AppearanceSettingsSection.js";
+import { RuntimeSettingsSection } from "./settings/RuntimeSettingsSection.js";
 import { useSettingsRuntime } from "./settings/useSettingsRuntime.js";
 
 export default function Settings(): JSX.Element {
@@ -18,11 +19,9 @@ export default function Settings(): JSX.Element {
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
-          {runtime.saved && <span className="text-xs text-emerald-500">Saved</span>}
+          {runtime.saved && <span className="text-xs text-[rgb(var(--app-success))]">Saved</span>}
         </div>
       </div>
-
-      <AppearanceSettingsSection theme={theme} onThemeChange={setTheme} />
 
       {runtime.settings.secretSource !== "local_env" && (runtime.daemonConfigKeyVaultError || runtime.health?.keyVaultSecretError) && (
         <p className="settings-message settings-message-warning">
@@ -30,35 +29,44 @@ export default function Settings(): JSX.Element {
         </p>
       )}
 
-      <AdditionalModelsSettingsSection
-        additionalModels={runtime.settings.additionalModels}
-        availableAdditionalModels={runtime.availableAdditionalModels}
-        editingModelId={runtime.editingModelId}
-        modelDraft={runtime.modelDraft}
-        testingModelId={runtime.testingModelId}
-        onAddModel={runtime.startAddingModel}
-        onCancelModelEdit={runtime.cancelModelEdit}
-        onDeleteModel={runtime.deleteModel}
-        onDisableModel={runtime.disableModel}
-        onEditModel={runtime.startEditingModel}
-        onModelDraftChange={runtime.updateModelDraft}
-        onModelDraftDirectChange={runtime.setModelDraft}
-        onSaveModelDraft={runtime.saveModelDraft}
-        onTestModel={(model, source) => void runtime.testModel(model, source)}
-      />
-
       {runtime.daemonStatus === "unreachable" && (
         <p className="settings-message settings-message-warning">
           Daemon is not reachable. Local preferences will still be saved.
         </p>
       )}
 
-      <AccountSettingsSection
-        authUser={runtime.authUser}
-        health={runtime.health}
-        settings={runtime.settings}
-        onSettingChange={runtime.set}
-      />
+      <div className="settings-grid">
+        <AppearanceSettingsSection
+          theme={theme}
+          onThemeChange={setTheme}
+        />
+
+        <RuntimeSettingsSection health={runtime.health} />
+
+        <AdditionalModelsSettingsSection
+          additionalModels={runtime.settings.additionalModels}
+          availableAdditionalModels={runtime.availableAdditionalModels}
+          editingModelId={runtime.editingModelId}
+          modelDraft={runtime.modelDraft}
+          testingModelId={runtime.testingModelId}
+          onAddModel={runtime.startAddingModel}
+          onCancelModelEdit={runtime.cancelModelEdit}
+          onDeleteModel={runtime.deleteModel}
+          onDisableModel={runtime.disableModel}
+          onEditModel={runtime.startEditingModel}
+          onModelDraftChange={runtime.updateModelDraft}
+          onModelDraftDirectChange={runtime.setModelDraft}
+          onSaveModelDraft={runtime.saveModelDraft}
+          onTestModel={(model, source) => void runtime.testModel(model, source)}
+        />
+
+        <AccountSettingsSection
+          authUser={runtime.authUser}
+          health={runtime.health}
+          settings={runtime.settings}
+          onSettingChange={runtime.set}
+        />
+      </div>
     </div>
   );
 }

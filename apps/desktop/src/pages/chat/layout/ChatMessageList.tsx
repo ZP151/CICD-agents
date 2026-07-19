@@ -9,6 +9,7 @@ import {
   type ConversationSourcePart,
 } from "../../../chatBubbles.js";
 import { ConversationPartRenderer } from "../../../components/conversation/ConversationPartRenderer.js";
+import { visibleConversationParts } from "../../../components/conversation/ConversationPartRenderer.js";
 import {
   ExecutionLog,
   PendingActionCard,
@@ -19,8 +20,12 @@ import type {
   SavedPrInsightSource,
 } from "../chat.types.js";
 import { imageAttachmentLabel } from "../chatAttachments.js";
-import { ChatAssistantMetaPanel } from "./ChatAssistantMetaPanel.js";
+import {
+  assistantMetaHasVisibleContent,
+  ChatAssistantMetaPanel,
+} from "./ChatAssistantMetaPanel.js";
 import { ChatEmptyState } from "./ChatEmptyState.js";
+import type { SuggestionReply } from "../../../components/conversation/SuggestionReplyBar.js";
 
 interface ChatMessageListProps {
   bubbles: Bubble[];
@@ -34,6 +39,7 @@ interface ChatMessageListProps {
   selectedArtifactId: string | null;
   createProjectLink: (data: ProjectLinkInput) => Promise<ProjectLink>;
   selectProjectLink: (projectLink: ProjectLink) => void;
+  onWelcomeSuggestion: (suggestion: SuggestionReply) => void;
   toggleTool: (id: string) => void;
   confirmPendingAction: (id: string) => void;
   cancelPendingAction: (id: string, feedback?: string) => void;
@@ -47,6 +53,7 @@ interface ChatMessageListProps {
 export function ChatMessageList({
   bubbles,
   renderItems,
+  busy,
   repoPath,
   availableProjectLinks,
   projectLinksLoading,
@@ -54,6 +61,7 @@ export function ChatMessageList({
   selectedArtifactId,
   createProjectLink,
   selectProjectLink,
+  onWelcomeSuggestion,
   toggleTool,
   confirmPendingAction,
   cancelPendingAction,
@@ -63,9 +71,10 @@ export function ChatMessageList({
   openPrInsightSourceInActivity,
   openPrInsightSourceInWorkspace,
 }: ChatMessageListProps) {
+  const hasVisibleTranscript = renderItems.some(hasVisibleRenderItem);
   return (
     <>
-      {bubbles.length === 0 && (
+      {!hasVisibleTranscript && (
         <ChatEmptyState
           repoPath={repoPath}
           availableProjectLinks={availableProjectLinks}
@@ -73,6 +82,7 @@ export function ChatMessageList({
           activeProjectLinkId={activeProjectLinkId}
           createProjectLink={createProjectLink}
           selectProjectLink={selectProjectLink}
+          onWelcomeSuggestion={onWelcomeSuggestion}
         />
       )}
 
@@ -107,6 +117,52 @@ export function ChatMessageList({
 
     </>
   );
+}
+
+function hasVisibleRenderItem(item: ChatRenderItem<Bubble>): boolean {
+  if (item.kind === "tool-group") {
+    return item.tools.length > 0 || Boolean(item.approval && isVisibleBubble(item.approval));
+  }
+  return isVisibleBubble(item.bubble);
+}
+
+function isVisibleBubble(bubble: Bubble): boolean {
+  if (bubble.kind === "pending_confirm") {
+    return bubble.pendingStatus !== "done" && bubble.pendingStatus !== "cancelled";
+  }
+  if (bubble.kind === "assistant") {
+    const visibleParts = visibleConversationParts(conversationPartsFromAssistantBubble(bubble));
+    return Boolean(
+      bubble.streaming ||
+        (bubble.meta && assistantMetaHasVisibleContent(bubble.meta)) ||
+        visibleParts.length > 0,
+    );
+  }
+  if (bubble.kind === "tool") {
+    return true;
+  }
+  if (bubble.kind === "system") {
+    return isVisibleSystemMessage(bubble.text);
+  }
+  if (bubble.kind === "user") {
+    return Boolean(
+      (bubble.text && bubble.text.trim()) ||
+        (bubble.transientImageAttachments && bubble.transientImageAttachments.length > 0),
+    );
+  }
+  if (bubble.kind === "error") {
+    return Boolean(bubble.text && bubble.text.trim());
+  }
+  if (bubble.kind === "confirm") {
+    return true;
+  }
+  return false;
+}
+
+function isVisibleSystemMessage(text: string | null | undefined): boolean {
+  const trimmed = text?.trim();
+  if (!trimmed) return false;
+  return trimmed !== "Session restored";
 }
 
 function ChatBubbleRow({
@@ -211,6 +267,7 @@ function ChatBubbleRow({
   }
 
   if (bubble.kind === "system") {
+    if (!isVisibleSystemMessage(bubble.text)) return null;
     return (
       <div className="mb-2 flex items-center justify-center gap-1">
         <span className="h-px w-8 bg-[rgb(var(--app-border))]" />
@@ -222,7 +279,7 @@ function ChatBubbleRow({
 
   if (bubble.kind === "error") {
     return (
-      <div className="mb-3 rounded-xl border border-red-800/50 bg-red-950/30 px-3 py-2 text-sm text-red-300">
+      <div className="mb-3 rounded-xl border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] px-3 py-2 text-sm text-[rgb(var(--app-danger))]">
         {bubble.text}
       </div>
     );

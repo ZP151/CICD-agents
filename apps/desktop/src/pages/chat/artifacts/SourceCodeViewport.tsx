@@ -157,8 +157,8 @@ export function SourceCodeViewport({
   }
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]">
-      <div className="flex shrink-0 items-center gap-2 border-b border-[rgb(var(--app-border))] px-3 py-1.5 text-[11px] text-[rgb(var(--app-text-subtle))]">
+    <div className={sourceCodeViewportShellClass()}>
+      <div className={sourceCodeViewportHeaderClass()}>
         <span className="min-w-0 flex-1 truncate font-mono" title={displayPath}>
           {displayPath}
         </span>
@@ -170,7 +170,7 @@ export function SourceCodeViewport({
             {targetLineLabel}
           </span>
         )}
-        <div className="flex shrink-0 items-center gap-1">
+        <div className={sourceCodeViewportActionsClass()}>
           <button
             type="button"
             onClick={() => void copyText("path", displayPath)}
@@ -189,7 +189,7 @@ export function SourceCodeViewport({
           </button>
         </div>
       </div>
-      <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+      <div className={sourceCodeViewportEditorClass()}>
         <CodeMirror
           value={content}
           height="100%"
@@ -228,6 +228,22 @@ function sourcePreviewErrorMessage(error: unknown): string {
   if (error instanceof WorkspaceFilePreviewError) return error.message;
   if (error instanceof Error) return error.message;
   return String(error);
+}
+
+export function sourceCodeViewportShellClass(): string {
+  return "flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]";
+}
+
+export function sourceCodeViewportHeaderClass(): string {
+  return "flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-[rgb(var(--app-border))] px-3 py-1.5 text-[11px] text-[rgb(var(--app-text-subtle))]";
+}
+
+export function sourceCodeViewportActionsClass(): string {
+  return "flex min-w-0 shrink-0 items-center gap-1";
+}
+
+export function sourceCodeViewportEditorClass(): string {
+  return "min-h-0 min-w-0 flex-1 overflow-hidden";
 }
 
 const sourcePreviewTheme = EditorView.theme({

@@ -149,6 +149,13 @@ const prInsightActivity = {
   risks: ["Exception handling needs human review."],
   findingCount: 3,
   discardedFindingCount: 0,
+  signals: {
+    fileCount: 4,
+    threadCount: 2,
+    failedBuildCount: 1,
+    failedPolicyCount: 0,
+    workItemCount: 1,
+  },
   tokensIn: 900,
   tokensOut: 260,
 };
@@ -358,10 +365,79 @@ test.describe("workspace route caching", () => {
     releaseProjectLinks?.();
   });
 
+  test("@smoke @mocked lays out saved Project Links as a responsive card grid", async ({
+    page,
+  }) => {
+    const thirdProjectLink = {
+      ...projectLink,
+      id: "tertiary-cache-project-link",
+      name: "Tertiary link",
+      repoPath: "C:\\Users\\15492\\Develop\\ThirdRepo",
+      adoRepoName: "ThirdRepo",
+      adoPipelineId: "119",
+      adoPipelineName: "ThirdRepo",
+    };
+    await mockBaseRuntime(page, {
+      projectLinks: [projectLink, secondaryProjectLink, thirdProjectLink],
+    });
+    await page.setViewportSize({ width: 1366, height: 760 });
+
+    await page.goto("/#/project-links", { waitUntil: "domcontentloaded" });
+
+    await expect(page.getByRole("heading", { name: "Project Links" })).toBeVisible();
+    const primaryRepoLabel = page.getByTitle(projectLink.repoPath);
+    const secondaryRepoLabel = page.getByTitle(secondaryProjectLink.repoPath);
+    const tertiaryRepoLabel = page.getByTitle(thirdProjectLink.repoPath);
+    const primaryCard = primaryRepoLabel.locator("xpath=ancestor::div[contains(@class,'group')][1]");
+    const secondaryCard = secondaryRepoLabel.locator("xpath=ancestor::div[contains(@class,'group')][1]");
+    const tertiaryCard = tertiaryRepoLabel.locator("xpath=ancestor::div[contains(@class,'group')][1]");
+    await expect(primaryCard).toBeVisible();
+    await expect(secondaryCard).toBeVisible();
+    await expect(tertiaryCard).toBeVisible();
+    await expect(primaryRepoLabel).toHaveText("ClaimBot_API");
+    await expect.poll(async () =>
+      primaryCard.evaluate((element) => element.textContent ?? ""),
+    ).not.toContain(projectLink.repoPath);
+    await expect.poll(async () =>
+      primaryCard.evaluate((element) => element.textContent ?? ""),
+    ).not.toContain(projectLink.adoOrgUrl);
+    await expect.poll(async () => {
+      const [primaryBox, secondaryBox, tertiaryBox] = await Promise.all([
+        primaryCard.boundingBox(),
+        secondaryCard.boundingBox(),
+        tertiaryCard.boundingBox(),
+      ]);
+      if (!primaryBox || !secondaryBox || !tertiaryBox) return false;
+      return (
+        secondaryBox.x > primaryBox.x + primaryBox.width - 8 &&
+        tertiaryBox.x > secondaryBox.x + secondaryBox.width - 8 &&
+        Math.abs(primaryBox.y - secondaryBox.y) <= 12 &&
+        Math.abs(primaryBox.y - tertiaryBox.y) <= 12
+      );
+    }).toBe(true);
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+
+    await page.setViewportSize({ width: 900, height: 760 });
+    await expect.poll(async () => {
+      const [primaryBox, secondaryBox] = await Promise.all([
+        primaryCard.boundingBox(),
+        secondaryCard.boundingBox(),
+      ]);
+      if (!primaryBox || !secondaryBox) return false;
+      return secondaryBox.y > primaryBox.y + primaryBox.height - 8;
+    }).toBe(true);
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+  });
+
   test("@smoke @mocked keeps New Chat empty state quiet without index-status preload", async ({
     page,
   }) => {
     await mockBaseRuntime(page);
+    await page.setViewportSize({ width: 1600, height: 920 });
     let indexStatusRequests = 0;
     await page.route("http://127.0.0.1:8787/chat/index-status", async (route) => {
       indexStatusRequests += 1;
@@ -385,13 +461,28 @@ test.describe("workspace route caching", () => {
     });
 
     await page.goto("/#/chat", { waitUntil: "domcontentloaded" });
-    await expect(page.getByText("Ask MergePilot anything")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Review my changes" })).toBeHidden();
+    await expect(page.getByText("Ask MergePilot anything")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
+    const welcomePanel = page.locator('[aria-label="New conversation welcome"]');
+    await expect(welcomePanel).toBeVisible();
+    await expect.poll(async () => {
+      const box = await welcomePanel.boundingBox();
+      return box ? Math.round(box.width) : 0;
+    }).toBeGreaterThan(760);
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
     await expect(page.locator(".animate-pulse")).toHaveCount(0);
     await page.waitForTimeout(120);
     expect(indexStatusRequests).toBe(0);
-    await expect(page.getByRole("button", { name: "Review my changes" })).toHaveCount(0);
-    await expect(page.getByText("Ask MergePilot anything")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
+    await expect(page.getByText("Ask MergePilot anything")).toBeVisible();
+    await page.setViewportSize({ width: 760, height: 760 });
+    await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
+    await expect(page.getByText("Ask MergePilot anything")).toBeVisible();
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
   });
 
   test("@smoke @mocked does not show stale New Chat prompts after Project Link switch", async ({
@@ -448,18 +539,14 @@ test.describe("workspace route caching", () => {
     });
 
     await page.goto("/#/chat");
-    await expect(
-      page.getByRole("button", { name: "Explain this project architecture" }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Understand this project" })).toBeVisible();
     await page.getByLabel("Composer Project Link").selectOption(secondaryProjectLink.id);
     await expect(page.getByLabel("Composer Project Link")).toHaveValue(secondaryProjectLink.id);
-    await expect(
-      page.getByRole("button", { name: "Explain this project architecture" }),
-    ).toBeHidden();
+    await expect(page.getByRole("button", { name: "Understand this project" })).toBeVisible();
     await expect(page.locator(".animate-pulse")).toHaveCount(0);
     await page.waitForTimeout(120);
     expect(secondaryIndexRequests).toBe(0);
-    await expect(page.getByRole("button", { name: "Understand this project" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Understand this project" })).toBeVisible();
   });
 
   test("@smoke @mocked keeps New Chat warm return free of skeleton pulses", async ({ page }) => {
@@ -485,7 +572,7 @@ test.describe("workspace route caching", () => {
     });
 
     await page.goto("/#/chat", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("button", { name: "Review my changes" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
     await expect(page.locator(".animate-pulse")).toHaveCount(0);
 
     await page.getByRole("link", { name: "Activity" }).click();
@@ -493,14 +580,158 @@ test.describe("workspace route caching", () => {
 
     await page.getByRole("link", { name: "New chat" }).click();
     await page.waitForTimeout(80);
-    await expect(page.getByRole("button", { name: "Review my changes" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
     await expect(page.locator(".animate-pulse")).toHaveCount(0);
+  });
+
+  test("@smoke @mocked keeps Settings rows responsive in a narrow desktop window", async ({
+    page,
+  }) => {
+    await mockBaseRuntime(page);
+    await page.setViewportSize({ width: 900, height: 760 });
+    await page.route(/http:\/\/(127\.0\.0\.1|localhost):8787\/daemon\/configure/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, llmConfigured: true }),
+      });
+    });
+
+    await page.goto("/#/settings", { waitUntil: "domcontentloaded" });
+
+    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+    await expect(page.getByText("Built-in model")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Additional Models" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "System" })).toBeVisible();
+    await expect(page.getByText("Daemon runtime")).toBeVisible();
+    await expect(page.getByText("Sidecar owner")).toBeVisible();
+    await expect(page.getByText("No runtime mode")).toBeVisible();
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+
+    await page.setViewportSize({ width: 1366, height: 760 });
+    await expect.poll(async () =>
+      page.evaluate(() => {
+        const settingsPage = document.querySelector(".settings-page");
+        return settingsPage ? Math.round(settingsPage.getBoundingClientRect().width) : 0;
+      }),
+    ).toBeGreaterThan(1030);
+    await expect.poll(async () =>
+      page.evaluate(() => {
+        const sections = Array.from(document.querySelectorAll(".settings-section")).map((section) => {
+          const title = section.querySelector(".settings-section-title")?.textContent?.trim();
+          const rect = section.getBoundingClientRect();
+          return { title, x: rect.x, y: rect.y, width: rect.width };
+        });
+        const appearance = sections.find((section) => section.title === "Appearance");
+        const system = sections.find((section) => section.title === "System");
+        return Boolean(
+          appearance &&
+            system &&
+            Math.abs(appearance.y - system.y) <= 12 &&
+            system.x > appearance.x + appearance.width - 8,
+        );
+      }),
+    ).toBe(true);
+    await expect.poll(async () =>
+      page.evaluate(() => {
+        const desktopRow = Array.from(document.querySelectorAll(".settings-row")).find((row) =>
+          row.textContent?.includes("Desktop build"),
+        );
+        const rowRect = desktopRow?.getBoundingClientRect();
+        const controlRect = desktopRow
+          ?.querySelector(".settings-row-control")
+          ?.getBoundingClientRect();
+        if (!rowRect || !controlRect) return false;
+        return controlRect.x > rowRect.x + rowRect.width * 0.45;
+      }),
+    ).toBe(true);
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+
+    await page.getByRole("button", { name: "Add model" }).click();
+    await expect(page.getByText("Azure OpenAI")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Test connection" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+  });
+
+  test("@smoke @mocked keeps Microsoft sign-in dialog responsive with long Azure errors", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await page.route("http://127.0.0.1:8787/healthz", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          llmConfigured: true,
+          cloudSessions: true,
+        }),
+      });
+    });
+    await page.route("http://127.0.0.1:8787/auth/status", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ authenticated: false }),
+      });
+    });
+    await page.route("http://127.0.0.1:8787/auth/me", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ authenticated: false }),
+      });
+    });
+    await page.route("http://127.0.0.1:8787/auth/accounts", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ accounts: [] }),
+      });
+    });
+    await page.route("http://127.0.0.1:8787/auth/login", async (route) => {
+      await route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({
+          message:
+            "invalid_client: AADSTS650057: Invalid resource. The client requested access to a resource which is not listed in the requested permissions in the client's application registration. Client app ID: 03da33ef-7161-4b27-ae80-3079313f131d.",
+        }),
+      });
+    });
+
+    await page.goto("/#/chat", { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Sign in with Microsoft" }).click();
+    const panel = page.getByTestId("login-modal-panel");
+    await expect(panel).toBeVisible();
+    await expect.poll(async () => {
+      const box = await panel.boundingBox();
+      return box ? Math.ceil(box.width) : 999;
+    }).toBeLessThanOrEqual(328);
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+
+    await panel.getByRole("button", { name: "Sign in with Microsoft" }).click();
+    await expect(panel.getByText("AADSTS650057")).toBeVisible();
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
   });
 
   test("@smoke @mocked keeps cached Pull Requests visible while refresh is pending", async ({
     page,
   }) => {
     await mockBaseRuntime(page);
+    await page.setViewportSize({ width: 900, height: 760 });
     let delayRefresh = false;
     let releaseRefresh: (() => void) | undefined;
     await page.route(
@@ -529,9 +760,89 @@ test.describe("workspace route caching", () => {
         });
       },
     );
+    await page.route(
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests\/\d+\/context/,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            source: "internal",
+            pullRequest: {
+              ...pullRequest,
+              description: "**Scope**\n\n- Review responsive context panel.",
+              codeReviewId: pullRequest.id,
+              project: projectLink.adoProject,
+              closedDate: "",
+              workItemRefs: [{ id: "42", url: "https://tebssg.visualstudio.com/workitems/42" }],
+            },
+            threads: [
+              {
+                id: 10,
+                status: "active",
+                comments: [
+                  {
+                    author: { displayName: "Reviewer", uniqueName: "reviewer@example.test" },
+                    content: "Please verify this layout in a resized window.",
+                  },
+                ],
+              },
+            ],
+            changes: {
+              iterationId: 1,
+              sourceCommit: "abc1234567",
+              targetCommit: "def5678",
+              commonCommit: "0000000",
+              fileCount: 1,
+              changes: [
+                {
+                  changeId: 1,
+                  changeType: "edit",
+                  path: "/src/pages/pullRequests/PullRequestContextPanel.tsx",
+                },
+              ],
+            },
+            builds: [
+              {
+                id: 4680,
+                buildNumber: "20260719.1",
+                definitionName: "ClaimBot_API",
+                status: "completed",
+                result: "succeeded",
+                sourceBranch: "refs/heads/main",
+                queueTime: "2026-07-19T06:00:00.000Z",
+                finishTime: "2026-07-19T06:02:00.000Z",
+                url: "https://tebssg.visualstudio.com/_build/results?buildId=4680",
+              },
+            ],
+          }),
+        });
+      },
+    );
 
     await page.goto("/#/pulls");
     await expect(page.getByText("Update CommonFunctions.cs and ClaimController.cs")).toBeVisible();
+    await expect(page.getByLabel("Pull Requests Project Link")).toBeVisible();
+    await expect(page.getByLabel("Pull Requests status")).toBeVisible();
+    await expect(page.getByText("Author")).toBeVisible();
+    await expect(page.getByText("Reviewers")).toBeVisible();
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+    await page.setViewportSize({ width: 760, height: 760 });
+    await expect(page.getByLabel("Pull Requests Project Link")).toBeVisible();
+    await expect(page.getByLabel("Pull Requests status")).toBeVisible();
+    await expect(page.getByText("Author")).toBeVisible();
+    await expect(page.getByText("Reviewers")).toBeVisible();
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+    await page.getByRole("button", { name: "Load details" }).click();
+    await expect(page.getByText("Recent Threads")).toBeVisible();
+    await expect(page.getByText("Build History")).toBeVisible();
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
     delayRefresh = true;
     await page.getByRole("button", { name: "Refresh" }).click();
     await expect(page.getByText("Refreshing pull requests...")).toBeVisible();
@@ -597,6 +908,101 @@ test.describe("workspace route caching", () => {
     await expect(page.getByText("Completed cache status pull request")).toBeVisible();
   });
 
+  test("@smoke @mocked lays out Pull Request cards as a responsive grid", async ({ page }) => {
+    await mockBaseRuntime(page);
+    await page.route(
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests.*/,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            pullRequests: [
+              pullRequest,
+              {
+                ...pullRequest,
+                id: 2671,
+                title: "Review README documentation updates",
+                sourceBranch: "codex/testing-autopr",
+              },
+            ],
+          }),
+        });
+      },
+    );
+    await page.route(
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pr-insights.*/,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ items: [], history: [] }),
+        });
+      },
+    );
+
+    await page.setViewportSize({ width: 1366, height: 760 });
+    await page.goto("/#/pulls");
+    await expect(page.locator("article")).toHaveCount(2);
+    await expect.poll(async () =>
+      page.locator("article").evaluateAll((cards) => {
+        if (cards.length < 2) return false;
+        const [first, second] = cards.map((card) => card.getBoundingClientRect().top);
+        return Math.abs((first ?? 0) - (second ?? 0)) < 4;
+      }),
+    ).toBe(true);
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+
+    await page.setViewportSize({ width: 760, height: 760 });
+    await expect.poll(async () =>
+      page.locator("article").evaluateAll((cards) => {
+        if (cards.length < 2) return false;
+        const [first, second] = cards.map((card) => card.getBoundingClientRect().top);
+        return Math.abs((first ?? 0) - (second ?? 0)) >= 4;
+      }),
+    ).toBe(true);
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+  });
+
+  test("@smoke @mocked keeps empty Pull Requests guidance responsive", async ({ page }) => {
+    await mockBaseRuntime(page);
+    await page.setViewportSize({ width: 760, height: 760 });
+    await page.route(
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests.*/,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ pullRequests: [] }),
+        });
+      },
+    );
+    await page.route(
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pr-insights.*/,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ items: [], history: [] }),
+        });
+      },
+    );
+
+    await page.goto("/#/pulls");
+
+    await expect(page.getByText("No pull requests found")).toBeVisible();
+    await expect(page.getByText("Microsoft sign-in")).toBeVisible();
+    await expect(page.getByText("Repository permissions")).toBeVisible();
+    await expect(page.getByText("Project Link branch scope")).toBeVisible();
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+  });
+
   test("@smoke @mocked does not show empty Pull Requests before Project Links resolve", async ({
     page,
   }) => {
@@ -624,7 +1030,9 @@ test.describe("workspace route caching", () => {
     );
 
     await page.goto("/#/pulls");
-    await expect(page.getByLabel("Preparing pull requests")).toBeVisible();
+    await expect(page.getByLabel("Loading Project Links")).toBeVisible();
+    await expect(page.getByText("Checking repository mappings")).toBeVisible();
+    await expect(page.getByLabel("Preparing pull requests")).toBeHidden();
     await expect(page.getByText("No pull requests found")).toBeHidden();
     releaseProjectLinks?.();
     await expect(page.getByText("Update CommonFunctions.cs and ClaimController.cs")).toBeVisible();
@@ -736,6 +1144,7 @@ test.describe("workspace route caching", () => {
     page,
   }) => {
     await mockBaseRuntime(page);
+    await page.setViewportSize({ width: 900, height: 760 });
     await page.route(
       /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests.*/,
       async (route) => {
@@ -782,12 +1191,45 @@ test.describe("workspace route caching", () => {
     const prCard = page.locator("article").filter({ hasText: pullRequest.title });
     const latestInsight = prCard.getByRole("button", { name: /Latest insight/ });
     await expect(latestInsight).toContainText("Status: Ready");
-    await expect(latestInsight.locator("li").filter({ hasText: "Risk: low" })).toBeVisible();
-    await expect(latestInsight.locator("code").filter({ hasText: "CommonFunctions.cs" })).toBeVisible();
+    await expect(latestInsight.locator("li")).toHaveCount(0);
+    await expect(latestInsight.locator("code")).toHaveCount(0);
+    await expect(latestInsight).not.toContainText("Risk: low");
+    await expect(latestInsight).not.toContainText("CommonFunctions.cs");
     await expect(latestInsight).not.toContainText("**Status:**");
+    await expect.poll(async () =>
+      prCard.evaluate((element) => Math.round(element.getBoundingClientRect().height)),
+    ).toBeLessThanOrEqual(280);
     await page.getByRole("button", { name: "Open insight" }).click();
     const sidePanel = page.locator("aside").filter({ hasText: "PR insight" });
     await expect(sidePanel).toBeVisible();
+    await expect.poll(async () =>
+      sidePanel.evaluate((element) => getComputedStyle(element).position),
+    ).toBe("fixed");
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+    await page.setViewportSize({ width: 1100, height: 760 });
+    await expect.poll(async () =>
+      sidePanel.evaluate((element) => getComputedStyle(element).position),
+    ).toBe("fixed");
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+    await page.setViewportSize({ width: 1366, height: 760 });
+    await expect.poll(async () =>
+      sidePanel.evaluate((element) => getComputedStyle(element).position),
+    ).toBe("fixed");
+    await expect.poll(async () => {
+      const box = await sidePanel.boundingBox();
+      return box ? Math.round(box.width) : 0;
+    }).toBeGreaterThanOrEqual(350);
+    await expect.poll(async () => {
+      const box = await sidePanel.boundingBox();
+      return box ? Math.round(box.width) : 999;
+    }).toBeLessThanOrEqual(490);
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
     await expect(sidePanel.getByText("AI insight")).toBeVisible();
     await expect(sidePanel.getByRole("button", { name: "Refresh insight" })).toBeVisible();
     await expect(sidePanel.getByRole("button", { name: "Generate insight" })).toBeHidden();
@@ -810,6 +1252,7 @@ test.describe("workspace route caching", () => {
     };
     let projectLinksResponse: Array<typeof projectLink> = [projectLink];
     await mockBaseRuntime(page, { projectLinks: projectLinksResponse });
+    await page.setViewportSize({ width: 900, height: 760 });
     await page.addInitScript(() => {
       localStorage.setItem("mergepilot_active_project_link_id", "cache-project-link");
     });
@@ -909,6 +1352,32 @@ test.describe("workspace route caching", () => {
     await page.goto("/#/project-links");
     await page.getByRole("button", { name: "Edit" }).click();
     await expect(page.getByRole("heading", { name: "Edit Project Link" })).toBeVisible();
+    const workspaceSection = page.locator("section").filter({ hasText: "Workspace" }).first();
+    const adoSection = page.locator("section").filter({ hasText: "Azure DevOps" }).first();
+    await page.setViewportSize({ width: 1366, height: 760 });
+    await expect.poll(async () => {
+      const [workspaceBox, adoBox] = await Promise.all([
+        workspaceSection.boundingBox(),
+        adoSection.boundingBox(),
+      ]);
+      if (!workspaceBox || !adoBox) return false;
+      return adoBox.x > workspaceBox.x + workspaceBox.width - 8 && Math.abs(workspaceBox.y - adoBox.y) <= 12;
+    }).toBe(true);
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+    await page.setViewportSize({ width: 900, height: 760 });
+    await expect.poll(async () => {
+      const [workspaceBox, adoBox] = await Promise.all([
+        workspaceSection.boundingBox(),
+        adoSection.boundingBox(),
+      ]);
+      if (!workspaceBox || !adoBox) return false;
+      return adoBox.y > workspaceBox.y + workspaceBox.height - 8 && Math.abs(workspaceBox.x - adoBox.x) <= 12;
+    }).toBe(true);
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
     await page.getByLabel("Repo path").fill(editedProjectLink.repoPath);
     await page.getByLabel("Repository name").fill(editedProjectLink.adoRepoName);
     await page.getByRole("button", { name: "Save Project Link" }).click();
@@ -1075,7 +1544,10 @@ test.describe("workspace route caching", () => {
     );
 
     await page.goto("/#/findings");
-    await expect(page.getByLabel("Preparing review queue")).toBeVisible();
+    await expect(page.getByLabel("Loading Project Links")).toBeVisible();
+    await expect(page.getByText("Checking repository mappings")).toBeVisible();
+    await expect(page.getByText("Auto-approved")).toBeHidden();
+    await expect(page.getByText("Recent activity")).toBeHidden();
     await expect(page.getByText("No review decisions found")).toBeHidden();
     releaseProjectLinks?.();
     await expect(page.getByText("Warnings need human review.")).toBeVisible();
@@ -1296,6 +1768,7 @@ test.describe("workspace route caching", () => {
     page,
   }) => {
     await mockBaseRuntime(page);
+    await page.setViewportSize({ width: 900, height: 760 });
     let delayDiscovery = false;
     let releaseDiscovery: (() => void) | undefined;
     await page.route("http://127.0.0.1:8787/pipeline-connections", async (route) => {
@@ -1325,16 +1798,54 @@ test.describe("workspace route caching", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ items: [{ id: "117", name: "ClaimBot_API" }] }),
+        body: JSON.stringify({
+          items: [
+            { id: "117", name: "ClaimBot_API" },
+            { id: "118", name: "ClaimBot_API secondary" },
+          ],
+        }),
       });
     });
 
     await page.goto("/#/pipelines");
-    await expect(page.getByRole("heading", { name: "ClaimBot_API" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "ClaimBot_API", exact: true })).toBeVisible();
+    await expect(page.getByLabel("Pipelines project filter")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Discovered\s+2/ })).toBeVisible();
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+    await page.setViewportSize({ width: 1366, height: 760 });
+    await expect(page.getByTestId("pipeline-row-card")).toHaveCount(2);
+    await expect
+      .poll(async () =>
+        page.getByTestId("pipeline-row-card").evaluateAll((cards) => {
+          if (cards.length < 2) return false;
+          const [first, second] = cards.map((card) => card.getBoundingClientRect().top);
+          return Math.abs((first ?? 0) - (second ?? 0)) < 4;
+        }),
+      )
+      .toBe(true);
+    await page.setViewportSize({ width: 760, height: 760 });
+    await expect(page.getByLabel("Pipelines project filter")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Discovered\s+2/ })).toBeVisible();
+    await expect
+      .poll(async () =>
+        page.getByTestId("pipeline-row-card").evaluateAll((cards) => {
+          if (cards.length < 2) return false;
+          const [first, second] = cards.map((card) => card.getBoundingClientRect().top);
+          return Math.abs((first ?? 0) - (second ?? 0)) >= 4;
+        }),
+      )
+      .toBe(true);
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
     delayDiscovery = true;
     await page.getByRole("button", { name: "Refresh" }).click();
     await expect(page.getByText("Refreshing pipeline discovery...")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "ClaimBot_API" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "ClaimBot_API", exact: true })).toBeVisible();
     releaseDiscovery?.();
     await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
   });
@@ -1380,7 +1891,7 @@ test.describe("workspace route caching", () => {
     });
 
     await page.goto("/#/pipelines");
-    await expect(page.getByLabel("Pipeline loading placeholders")).toBeVisible();
+    await expect(page.getByLabel("Loading pipelines")).toBeVisible();
     await expect(page.getByText("No Project Links available")).toBeHidden();
     await expect(page.getByText("No pipelines discovered yet")).toBeHidden();
     releaseProjectLinks?.();
@@ -1512,6 +2023,7 @@ test.describe("workspace route caching", () => {
     page,
   }) => {
     await mockBaseRuntime(page);
+    await page.setViewportSize({ width: 900, height: 760 });
     await page.route("http://127.0.0.1:8787/pipeline-connections", async (route) => {
       await route.fulfill({
         status: 200,
@@ -1585,10 +2097,37 @@ test.describe("workspace route caching", () => {
     await expect(card.getByText("Ready")).toBeVisible();
     await expect(card.getByText("AI analysis streaming")).toBeHidden();
     await expect(card.getByText("Status: Pipeline #117 latest run succeeded.")).toBeVisible();
-    await expect(card.locator("li").filter({ hasText: "Risk: low" })).toBeVisible();
-    await expect(card.locator("code").filter({ hasText: "20260706.1" })).toBeVisible();
+    await expect(card.getByRole("button", { name: "Open analysis" })).toBeVisible();
     await page.getByRole("button", { name: "Open analysis" }).click();
     const detailPanel = page.locator("aside").filter({ hasText: "Pipeline detail" });
+    await expect.poll(async () =>
+      detailPanel.evaluate((element) => getComputedStyle(element).position),
+    ).toBe("fixed");
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+    await page.setViewportSize({ width: 1100, height: 760 });
+    await expect.poll(async () =>
+      detailPanel.evaluate((element) => getComputedStyle(element).position),
+    ).toBe("fixed");
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+    await page.setViewportSize({ width: 1366, height: 760 });
+    await expect.poll(async () =>
+      detailPanel.evaluate((element) => getComputedStyle(element).position),
+    ).toBe("fixed");
+    await expect.poll(async () => {
+      const box = await detailPanel.boundingBox();
+      return box ? Math.round(box.width) : 0;
+    }).toBeGreaterThanOrEqual(350);
+    await expect.poll(async () => {
+      const box = await detailPanel.boundingBox();
+      return box ? Math.round(box.width) : 999;
+    }).toBeLessThanOrEqual(490);
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
     await expect(detailPanel.getByText("AI analysis")).toBeVisible();
     await expect(detailPanel.getByText("Status: Pipeline #117 latest run succeeded.")).toBeVisible();
     await expect(detailPanel.locator("li").filter({ hasText: "Evidence preserved" })).toBeVisible();
@@ -1682,6 +2221,7 @@ test.describe("workspace route caching", () => {
 
   test("@smoke @mocked presents Activity as scoped operational history sections", async ({ page }) => {
     await mockBaseRuntime(page);
+    await page.setViewportSize({ width: 1366, height: 900 });
     await page.route("http://127.0.0.1:8787/tasks", async (route) => {
       await route.fulfill({
         status: 200,
@@ -1727,7 +2267,15 @@ test.describe("workspace route caching", () => {
 
     await page.goto("/#/activity");
 
-    const sidebar = page.locator("section").filter({ hasText: "Operational history by source." }).first();
+    const sidebar = page.getByLabel("Activity sections").locator("xpath=ancestor::section[1]");
+    const detailPanel = page.locator("section").filter({ hasText: "Git checkpoint before confirmed action" }).first();
+    await expect.poll(async () => {
+      const box = await sidebar.boundingBox();
+      return box ? Math.round(box.width) : 0;
+    }).toBeLessThanOrEqual(390);
+    await expect.poll(() =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
     await expect(sidebar.getByRole("heading", { name: "Runs" })).toBeVisible();
     await expect(sidebar.getByRole("heading", { name: "Checkpoints" })).toBeVisible();
     await expect(sidebar.getByRole("heading", { name: "PR Insights" })).toBeVisible();
@@ -1741,7 +2289,7 @@ test.describe("workspace route caching", () => {
     await expect(sidebar.getByRole("button", { name: /#2670 · Review ClaimBot_API error handling/ })).toBeVisible();
     await expect(sidebar.getByRole("button", { name: /#2670 · Review run completed/ })).toBeVisible();
 
-    await sidebar.getByRole("button", { name: /^Checkpoints\s+1$/ }).click();
+    await sidebar.getByRole("button", { name: /^Git\s+1$/ }).click();
     await expect(sidebar.getByRole("heading", { name: "Checkpoints" })).toBeVisible();
     await expect(sidebar.getByRole("button", { name: /git_add/ })).toBeVisible();
     await expect(sidebar.getByRole("button", { name: /Pipeline submission:/ })).toBeHidden();
@@ -1751,18 +2299,48 @@ test.describe("workspace route caching", () => {
     await expect(page.getByText("Repository")).toBeVisible();
     await expect(page.getByText("Session")).toBeVisible();
 
+    await page.setViewportSize({ width: 1100, height: 760 });
+    await expect.poll(async () => {
+      const [sidebarBox, detailBox] = await Promise.all([
+        sidebar.boundingBox(),
+        detailPanel.boundingBox(),
+      ]);
+      if (!sidebarBox || !detailBox) return false;
+      return detailBox.y >= sidebarBox.y + sidebarBox.height - 1 && Math.abs(sidebarBox.x - detailBox.x) <= 4;
+    }).toBe(true);
+    await expect.poll(() =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+
     checkpointItems = [];
     await page.getByRole("button", { name: "Refresh" }).click();
     await expect(sidebar.getByText("No Git checkpoints yet.")).toBeVisible();
-    await expect(page.getByText("No operation selected")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Select an operation" })).toBeVisible();
+    await expect(page.getByText("No operation selected")).toBeHidden();
 
     await sidebar.getByRole("button", { name: /^All\s+3$/ }).click();
     await expect(sidebar.getByRole("button", { name: /Pipeline submission:/ })).toBeVisible();
     await expect(sidebar.getByRole("button", { name: /#2670 · Review ClaimBot_API error handling/ })).toBeVisible();
     await expect(sidebar.getByRole("button", { name: /#2670 · Review run completed/ })).toBeVisible();
-    await expect(sidebar.getByText("No Git checkpoints yet.")).toBeVisible();
+    await expect(sidebar.getByText("No Git checkpoints yet.")).toBeHidden();
+
+    await sidebar.getByRole("button", { name: /^PR\s+1$/ }).click();
+    await sidebar.getByRole("button", { name: /#2670 · Review ClaimBot_API error handling/ }).click();
+    await expect(page.getByText("Files")).toBeVisible();
+    await expect(page.getByText("Threads")).toBeVisible();
+    await expect(page.getByText("Failed builds")).toBeVisible();
+    await page.setViewportSize({ width: 760, height: 760 });
+    await expect(page.getByText("Findings")).toBeVisible();
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
 
     await expect(page.getByText('{"returncode":0')).toBeHidden();
+
+    await page.setViewportSize({ width: 900, height: 760 });
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
   });
 
   test("@smoke @mocked keeps checkpoint raw output collapsed by default", async ({ page }) => {
@@ -1775,7 +2353,7 @@ test.describe("workspace route caching", () => {
       });
     });
     await page.route(
-      `http://127.0.0.1:8787/chat/checkpoints/${checkpointActivity.id}/preview?maxDiffChars=12000`,
+      /http:\/\/127\.0\.0\.1:8787\/chat\/checkpoints\/[^/]+\/preview\?maxDiffChars=12000/,
       async (route) => {
         await route.fulfill({
           status: 200,
@@ -1799,7 +2377,7 @@ test.describe("workspace route caching", () => {
       },
     );
     await page.route(
-      `http://127.0.0.1:8787/chat/checkpoints/${checkpointActivity.id}/rollback-plan`,
+      /http:\/\/127\.0\.0\.1:8787\/chat\/checkpoints\/[^/]+\/rollback-plan/,
       async (route) => {
         await route.fulfill({
           status: 200,
@@ -1827,8 +2405,21 @@ test.describe("workspace route caching", () => {
     await page.goto("/#/activity");
     await page.getByRole("button", { name: /git_add/ }).click();
     await expect(page.getByText("Git checkpoint before confirmed action")).toBeVisible();
-    const toolResultSection = page.locator("section").filter({ hasText: "Tool Result" });
-    await expect(toolResultSection.getByText("M README.md", { exact: true })).toBeVisible();
+    const toolResultSection = page
+      .locator("section")
+      .filter({ has: page.locator("h3", { hasText: "Tool Result" }) });
+    await expect(
+      toolResultSection.locator("h3 + p").filter({ hasText: "M README.md" }),
+    ).toBeVisible();
+    await expect(page.getByText("Branch", { exact: true })).toBeVisible();
+    await expect(page.getByText("Files", { exact: true })).toBeVisible();
+    await expect(page.getByText("Diff", { exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 760, height: 760 });
+    await expect(page.getByText("Branch", { exact: true })).toBeVisible();
+    await expect(page.getByText("Diff", { exact: true })).toBeVisible();
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
     await expect(page.getByText('{"returncode":0')).toBeHidden();
     await page.getByText("Raw output").click();
     await expect(page.getByText('{"returncode":0')).toBeVisible();
@@ -1864,7 +2455,7 @@ test.describe("workspace route caching", () => {
     );
 
     await page.goto("/#/activity");
-    const sidebar = page.locator("section").filter({ hasText: "Operational history by source." }).first();
+    const sidebar = page.getByLabel("Activity sections").locator("xpath=ancestor::section[1]");
     await sidebar.getByRole("button", { name: /^Reviews\s+1$/ }).click();
     await sidebar.getByRole("button", { name: /#2670 · Review validation failed/ }).click();
 

@@ -13,7 +13,7 @@ export function PrInsightReadinessBlockers({
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">
         Readiness blockers
       </h3>
-      <div className="grid gap-3 text-sm sm:grid-cols-2">
+      <div className={prInsightReadinessBlockersGridClass()}>
         {groups.map((group) => (
           <div key={group.label} className="space-y-1">
             <p className="text-xs text-[rgb(var(--app-text-muted))]">{group.label}</p>
@@ -32,4 +32,8 @@ export function PrInsightReadinessBlockers({
       </div>
     </section>
   );
+}
+
+export function prInsightReadinessBlockersGridClass(): string {
+  return "grid gap-3 text-sm grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))]";
 }

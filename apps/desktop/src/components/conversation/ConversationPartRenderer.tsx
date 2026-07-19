@@ -31,7 +31,7 @@ export function ConversationPartRenderer({
   onArtifactSelect,
   onSourceSelect,
 }: ConversationPartRendererProps) {
-  const visibleParts = parts.filter((part) => part.type !== "metadata");
+  const visibleParts = visibleConversationParts(parts);
   if (visibleParts.length === 0 && !streaming) return null;
   const renderItems = groupReferenceParts(visibleParts);
 
@@ -55,6 +55,16 @@ export function ConversationPartRenderer({
       {streaming && typingIndicator}
     </div>
   );
+}
+
+export function visibleConversationParts(parts: ConversationPart[]): ConversationPart[] {
+  return parts.filter((part) => {
+    if (part.type === "metadata" || part.type === "suggested_reply") return false;
+    if (part.type === "text") return cleanAssistantTranscriptMarkdown(part.text).trim().length > 0;
+    if (part.type === "markdown") return cleanAssistantTranscriptMarkdown(part.markdown).trim().length > 0;
+    if (part.type === "code") return part.code.trim().length > 0;
+    return true;
+  });
 }
 
 function ConversationPartView({
@@ -127,7 +137,7 @@ function ConversationPartView({
       return (
         <div className={conversationPartCardClass}>
           <div className="flex items-center justify-between gap-3">
-            <span className="min-w-0 truncate font-mono text-[rgb(var(--app-accent))]">{part.toolName}</span>
+            <span className="min-w-0 truncate font-mono text-[rgb(var(--app-accent-readable))]">{part.toolName}</span>
             <span className={inlineStatePillClass(part.state === "error" ? "error" : part.state === "result" ? "ready" : "running")}>
               {part.state}
             </span>

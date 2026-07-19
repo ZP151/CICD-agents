@@ -43,7 +43,7 @@ export function ReviewOperationDetailPanel({
         <p className="mt-1 font-mono text-xs text-[rgb(var(--app-text-muted))]">{operation.id}</p>
       </header>
 
-      <section className="grid gap-3 text-sm sm:grid-cols-2">
+      <section className={reviewOperationFactGridClass()}>
         <ReviewOperationFact label="Project Link" value={operation.projectLinkName} />
         <ReviewOperationFact label="Repository" value={operation.repository} mono />
         <ReviewOperationFact
@@ -88,6 +88,10 @@ export function ReviewOperationDetailPanel({
       </section>
     </div>
   );
+}
+
+export function reviewOperationFactGridClass(): string {
+  return "grid gap-3 text-sm grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))]";
 }
 
 function ReviewOperationFact({

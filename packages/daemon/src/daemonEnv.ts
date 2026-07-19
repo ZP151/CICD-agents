@@ -294,7 +294,10 @@ function configToToml(config: MergePilotUserConfig): string {
   const secretSource = config.secretSource ?? LOCAL_ENV_SECRET_SOURCE;
   const azureApiKeyRef = secretSource === KEY_VAULT_SECRET_SOURCE
     ? config.azureApiKeyRef ?? SYSTEM_AZURE_OPENAI_API_KEY_REF
-    : config.azureApiKeyRef ?? "";
+    : "";
+  const openaiApiKeyRef = secretSource === KEY_VAULT_SECRET_SOURCE
+    ? config.openaiApiKeyRef ?? ""
+    : "";
   return [
     "# MergePilot user configuration",
     "# Secrets default to the local .env file. Enable Key Vault in Settings only when",
@@ -308,7 +311,7 @@ function configToToml(config: MergePilotUserConfig): string {
     "",
     "[openai]",
     `model = ${tomlString(config.openaiModel ?? "")}`,
-    `api_key_ref = ${tomlString(config.openaiApiKeyRef ?? "")}`,
+    `api_key_ref = ${tomlString(openaiApiKeyRef)}`,
     "",
     "[azure_openai]",
     `endpoint = ${tomlString(config.azureEndpoint ?? "")}`,
@@ -378,6 +381,13 @@ function keyVaultAccessMessage(action: "read" | "write", err: unknown): string {
     return `Azure Key Vault permission is missing. The signed-in Azure account needs secrets/${action === "read" ? "get" : "set"} access to ${SYSTEM_KEY_VAULT_URL}.`;
   }
   const message = err instanceof Error ? err.message : String(err);
+  if (
+    message.includes("AADSTS650057") ||
+    message.toLowerCase().includes("invalid_resource") ||
+    message.toLowerCase().includes("invalid client")
+  ) {
+    return `Azure Key Vault app permission is not configured. Keep Settings > Account > Secret source set to Local .env, or ask an Azure administrator to grant the MergePilot app delegated Key Vault access and secrets/${action === "read" ? "get" : "set"} permission to ${SYSTEM_KEY_VAULT_URL}.`;
+  }
   if (message.includes("AADSTS65001") || message.toLowerCase().includes("consent")) {
     return `Azure Key Vault consent is missing. Sign in again so MergePilot can request Key Vault access, then ensure the account has secrets/${action === "read" ? "get" : "set"} access to ${SYSTEM_KEY_VAULT_URL}.`;
   }

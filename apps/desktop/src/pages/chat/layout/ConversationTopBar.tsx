@@ -5,6 +5,7 @@ interface ConversationTopBarProps {
   historyWidth: number;
   onToggleHistory: () => void;
   rightPanelOpen: boolean;
+  rightPanelOverlay: boolean;
   rightWidth: number;
   onToggleRight: () => void;
   summaryPinnedAvailable: boolean;
@@ -44,6 +45,7 @@ export function ConversationTopBar({
   historyWidth,
   onToggleHistory,
   rightPanelOpen,
+  rightPanelOverlay,
   rightWidth,
   onToggleRight,
   summaryPinnedAvailable,
@@ -58,7 +60,13 @@ export function ConversationTopBar({
   onCancelTitle,
 }: ConversationTopBarProps) {
   const summaryVisible = summaryPinnedAvailable && summaryPinnedOpen;
-  const summaryButtonClass = `rounded p-1.5 transition-colors ${summaryVisible ? "bg-zinc-800 text-zinc-300" : "text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"}`;
+  const panelToggleClass = (active: boolean) =>
+    `rounded p-1.5 transition-colors ${
+      active
+        ? "bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text))]"
+        : "text-[rgb(var(--app-text-subtle))] hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))]"
+    }`;
+  const summaryButtonClass = panelToggleClass(summaryVisible);
   const summaryButton = summaryPinnedAvailable ? (
     <button
       type="button"
@@ -75,14 +83,14 @@ export function ConversationTopBar({
   ) : null;
 
   return (
-    <div className="relative flex min-h-[40px] shrink-0 items-center border-b border-zinc-800/80 bg-zinc-950/95">
+    <div className="relative flex min-h-[40px] shrink-0 items-center border-b border-[rgb(var(--app-border))] bg-[rgb(var(--app-bg))]">
       <div
         className="flex shrink-0 items-center overflow-hidden"
         style={{ width: historyOpen ? historyWidth : 40, transition: "width 180ms ease" }}
       >
         <button
           onClick={onToggleHistory}
-          className={`ml-1.5 rounded p-1.5 transition-colors ${historyOpen ? "bg-zinc-800 text-zinc-300" : "text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"}`}
+          className={`ml-1.5 ${panelToggleClass(historyOpen)}`}
           title={historyOpen ? "Collapse history" : "Expand history"}
         >
           <ToggleLeftPanelIcon active={historyOpen} />
@@ -94,7 +102,7 @@ export function ConversationTopBar({
           {titleEditing ? (
             <input
               ref={titleInputRef}
-              className="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-sm text-zinc-100 focus:border-zinc-500 focus:outline-none"
+              className="w-full rounded border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-0.5 text-sm text-[rgb(var(--app-text))] focus:border-[rgb(var(--app-accent))] focus:outline-none"
               defaultValue={customTitle ?? conversationTitle ?? ""}
               onBlur={(event) => onConfirmTitle(event.target.value)}
               onKeyDown={(event) => {
@@ -109,10 +117,12 @@ export function ConversationTopBar({
               title="Click to rename"
               onClick={onStartTitleEdit}
             >
-              <span className="truncate text-sm text-zinc-500 transition-colors group-hover:text-zinc-300">
-                {customTitle ?? conversationTitle ?? <span className="text-zinc-700">New conversation</span>}
+              <span className="truncate text-sm text-[rgb(var(--app-text-muted))] transition-colors group-hover:text-[rgb(var(--app-text))]">
+                {customTitle ?? conversationTitle ?? (
+                  <span className="text-[rgb(var(--app-text-subtle))]">New conversation</span>
+                )}
               </span>
-              <svg className="h-3 w-3 shrink-0 text-zinc-700 opacity-0 transition-opacity group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-3 w-3 shrink-0 text-[rgb(var(--app-text-subtle))] opacity-0 transition-opacity group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
             </button>
@@ -124,7 +134,7 @@ export function ConversationTopBar({
         className={[
           "relative flex h-full shrink-0 items-center justify-end overflow-visible",
         ].join(" ")}
-        style={{ width: rightPanelOpen ? rightWidth : 40 }}
+        style={{ width: conversationTopBarRightSlotWidth({ rightPanelOpen, rightPanelOverlay, rightWidth }) }}
       >
         {summaryButton && (
           <div className="absolute right-full top-1/2 z-30 mr-2 -translate-y-1/2">
@@ -134,7 +144,7 @@ export function ConversationTopBar({
         <button
           type="button"
           onClick={onToggleRight}
-          className={`mr-1.5 rounded p-1.5 transition-colors ${rightPanelOpen ? "bg-zinc-800 text-zinc-300" : "text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"}`}
+          className={`mr-1.5 ${panelToggleClass(rightPanelOpen)}`}
           title={rightPanelOpen ? "Collapse code panel" : "Expand code panel"}
           aria-pressed={rightPanelOpen}
         >
@@ -143,4 +153,17 @@ export function ConversationTopBar({
       </div>
     </div>
   );
+}
+
+export function conversationTopBarRightSlotWidth({
+  rightPanelOpen,
+  rightPanelOverlay,
+  rightWidth,
+}: {
+  rightPanelOpen: boolean;
+  rightPanelOverlay: boolean;
+  rightWidth: number;
+}): number {
+  if (!rightPanelOpen || rightPanelOverlay) return 40;
+  return rightWidth;
 }

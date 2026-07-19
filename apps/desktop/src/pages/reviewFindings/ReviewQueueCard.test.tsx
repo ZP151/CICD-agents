@@ -1,7 +1,13 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ReviewQueueItem } from "../../api.js";
-import { ReviewQueueCard } from "./ReviewQueueCard.js";
+import {
+  ReviewQueueCard,
+  reviewQueueCardActionsClass,
+  reviewQueueCardDetailTitle,
+  reviewQueueCardFooterClass,
+  reviewQueueCardMetricsGridClass,
+} from "./ReviewQueueCard.js";
 
 function queueItem(overrides: Partial<ReviewQueueItem> = {}): ReviewQueueItem {
   return {
@@ -57,6 +63,31 @@ function queueItem(overrides: Partial<ReviewQueueItem> = {}): ReviewQueueItem {
 }
 
 describe("ReviewQueueCard", () => {
+  it("uses compact wrapping metric chips so narrow queue cards keep data dense", () => {
+    const className = reviewQueueCardMetricsGridClass();
+
+    expect(className).toContain("flex-wrap");
+    expect(className).toContain("min-w-0");
+    expect(className).toContain("flex-1");
+    expect(className).toContain("text-[11px]");
+    expect(className).toContain("[&>span]:rounded-full");
+    expect(className).not.toContain("sm:grid-cols-4");
+    expect(className).not.toContain("auto-fit");
+  });
+
+  it("keeps queue actions in a compact wrapping action row", () => {
+    const footerClass = reviewQueueCardFooterClass();
+    const actionsClass = reviewQueueCardActionsClass();
+
+    expect(footerClass).toContain("min-w-0");
+    expect(footerClass).toContain("flex-wrap");
+    expect(footerClass).toContain("items-center");
+    expect(actionsClass).toContain("flex-wrap");
+    expect(actionsClass).toContain("justify-start");
+    expect(actionsClass).toContain("sm:justify-end");
+    expect(actionsClass).not.toContain("justify-end gap-1.5");
+  });
+
   it("renders review audit state and action controls without flattening semantic queue details", () => {
     const html = renderToStaticMarkup(
       <ReviewQueueCard
@@ -79,9 +110,13 @@ describe("ReviewQueueCard", () => {
     expect(html).toContain("Warnings or policy-sensitive files need human review.");
     expect(html).toContain("Attention:");
     expect(html).toContain("context whole file fallback");
+    expect(html).not.toContain(">Attention:");
     expect(html).toContain("Audit:");
     expect(html).toContain("Changes requested");
     expect(html).toContain("ADO pending");
+    expect(html).toContain("findings 3");
+    expect(html).toContain("hunks 0f/0l");
+    expect(html).toContain("fallback 2f");
     expect(html).toContain("View findings");
     expect(html).toContain("Retry ADO");
     expect(html).toContain("Request changes");
@@ -107,5 +142,17 @@ describe("ReviewQueueCard", () => {
     expect(html).toContain("Rerunning...");
     expect(html).toContain("Retrying...");
     expect(html).toContain("Saving...");
+  });
+
+  it("moves long decision detail into hover title text", () => {
+    const title = reviewQueueCardDetailTitle({
+      item: queueItem(),
+      attentionReasons: ["risk medium", "context whole file fallback"],
+      auditLabel: "Changes requested · ADO pending",
+      auditThreadId: "123",
+    });
+
+    expect(title).toContain("Attention: risk medium · context whole file fallback");
+    expect(title).toContain("Audit: Changes requested · ADO pending · thread 123");
   });
 });

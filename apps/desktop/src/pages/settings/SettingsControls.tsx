@@ -30,7 +30,7 @@ export function TextInput({
           <button
             type="button"
             onClick={() => setShow((value) => !value)}
-            className="absolute right-2.5 text-zinc-600 transition hover:text-zinc-400"
+            className="absolute right-2.5 text-[rgb(var(--app-text-subtle))] transition hover:text-[rgb(var(--app-text))]"
             title={show ? "Hide" : "Show"}
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,14 +78,14 @@ export function SettingsRow({
   title,
 }: {
   children?: ReactNode;
-  description?: string;
+  description?: ReactNode;
   title: string;
 }): JSX.Element {
   return (
     <div className="settings-row">
       <div className="min-w-0">
         <p className="settings-row-title">{title}</p>
-        {description && <p className="settings-row-copy">{description}</p>}
+        {description && <div className="settings-row-copy">{description}</div>}
       </div>
       {children && <div className="settings-row-control">{children}</div>}
     </div>

@@ -6,6 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+. (Join-Path $PSScriptRoot "msi-extract-helpers.ps1")
 if ([string]::IsNullOrWhiteSpace($MsiPath)) {
   $version = (Get-Content -LiteralPath (Join-Path $repoRoot "apps\desktop\package.json") -Raw | ConvertFrom-Json).version
   $MsiPath = Join-Path $repoRoot "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_$($version)_x64_en-US.msi"
@@ -19,30 +20,10 @@ $logPath = Join-Path $extractDir "msiexec.log"
 
 try {
   New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
-  $extract = $null
-  for ($attempt = 1; $attempt -le 4; $attempt++) {
-    $extract = Start-Process -FilePath msiexec.exe -ArgumentList @(
-      "/a",
-      (Resolve-Path $MsiPath).Path,
-      "/qn",
-      "TARGETDIR=$extractDir",
-      "/L*v",
-      $logPath
-    ) -Wait -PassThru
-    if ($extract.ExitCode -ne 1618) {
-      break
-    }
-    Start-Sleep -Seconds ([Math]::Min(8, 2 * $attempt))
-  }
-  if ($extract.ExitCode -ne 0) {
-    Get-Content -LiteralPath $logPath -Tail 80 -ErrorAction SilentlyContinue
-    throw "MSI administrative extraction failed with exit code $($extract.ExitCode)."
-  }
+  $extractMethod = Invoke-MergePilotMsiExtraction -PackagePath $MsiPath -Destination $extractDir -InstallerLogPath $logPath -RetryOnInstallerBusy
 
-  $daemon = Get-ChildItem -LiteralPath $extractDir -Recurse -Filter mergepilot-daemon.exe |
-    Select-Object -First 1
-  $desktop = Get-ChildItem -LiteralPath $extractDir -Recurse -Filter mergepilot-desktop.exe |
-    Select-Object -First 1
+  $daemon = Find-MergePilotExtractedDaemon -Root $extractDir
+  $desktop = Find-MergePilotExtractedDesktop -Root $extractDir
   if (-not $daemon) {
     throw "Extracted MSI did not contain mergepilot-daemon.exe under $extractDir."
   }
@@ -97,14 +78,28 @@ try {
   }
   $sidecarSmoke = $sidecarSmokeText.Substring($jsonStart, $jsonEnd - $jsonStart + 1) |
     ConvertFrom-Json
+  $missingRuntimeMetadata = @()
+  foreach ($field in @("runtimeMode", "desktopVersion", "pid", "execPath")) {
+    if (-not $sidecarSmoke.PSObject.Properties[$field] -or $null -eq $sidecarSmoke.$field -or $sidecarSmoke.$field -eq "") {
+      $missingRuntimeMetadata += $field
+    }
+  }
+  if ($missingRuntimeMetadata.Count -gt 0) {
+    throw "Extracted MSI daemon /healthz is missing runtime metadata fields: $($missingRuntimeMetadata -join ', ')."
+  }
 
   [pscustomobject]@{
     ok = $true
     msiPath = (Resolve-Path $MsiPath).Path
+    extractMethod = $extractMethod
     extractedDesktop = $desktop.FullName
     extractedDaemon = $daemon.FullName
     legacyCleanupWixValidated = (Test-Path -LiteralPath $wixSource)
     healthVersion = $sidecarSmoke.healthVersion
+    runtimeMode = $sidecarSmoke.runtimeMode
+    desktopVersion = $sidecarSmoke.desktopVersion
+    pid = $sidecarSmoke.pid
+    execPath = $sidecarSmoke.execPath
     refreshFilesSeen = $sidecarSmoke.refreshFilesSeen
     refreshFilesIndexed = $sidecarSmoke.refreshFilesIndexed
     workflowPhase = $sidecarSmoke.workflowPhase

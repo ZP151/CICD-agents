@@ -197,12 +197,12 @@ function renderLink(
   const source = sourceFromReferenceHref(href, sourceById);
   if (source) {
     return (
-      <button key={key} type="button" className="inline rounded-sm font-semibold text-[rgb(var(--app-accent))] underline decoration-[rgb(var(--app-accent))]/35 decoration-1 underline-offset-2" data-source-reference-id={source.sourceId} title={sourceReferenceTitle(source)} onClick={() => onSourceSelect?.(source)}>
+      <button key={key} type="button" className="inline rounded-sm font-semibold text-[rgb(var(--app-accent-readable))] underline decoration-[rgb(var(--app-accent))]/35 decoration-1 underline-offset-2" data-source-reference-id={source.sourceId} title={sourceReferenceTitle(source)} onClick={() => onSourceSelect?.(source)}>
         {label}
       </button>
     );
   }
-  return <a key={key} href={href} target="_blank" rel="noreferrer" className="text-blue-400 underline decoration-blue-400/40 underline-offset-2 transition hover:text-blue-300">{label}</a>;
+  return <a key={key} href={href} target="_blank" rel="noreferrer" className="text-[rgb(var(--app-accent-readable))] underline decoration-[rgb(var(--app-accent))]/40 underline-offset-2 transition hover:decoration-[rgb(var(--app-accent))]/70">{label}</a>;
 }
 
 function sourceFromReferenceHref(href: string, sourceById: Map<string, ReferencePart>): ReferencePart | null {

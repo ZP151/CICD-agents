@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAzureDevOpsOAuth } from "./auth.js";
-import { runChatWorkflowAction } from "./chat.js";
+import { chatCheckpointActivityFromResponse, fetchChatCheckpointActivity, runChatWorkflowAction } from "./chat.js";
 import { fetchHealth } from "./health.js";
-import { listPipelineConnections } from "./pipelines.js";
+import { listPipelineConnections, pipelineConnectionsFromResponse } from "./pipelines.js";
 import {
   createProjectLink,
   discoverAdoProjectLinkOptions,
@@ -10,7 +10,7 @@ import {
 } from "./projectLinks.js";
 import { fetchProjectLinkReviewQueue } from "./review.js";
 import { configureDaemon, testLlmConfig } from "./settings.js";
-import { fetchTask, fetchTasks } from "./tasks.js";
+import { fetchTask, fetchTasks, taskViewsFromResponse } from "./tasks.js";
 
 function mockAuthFailure(): void {
   vi.stubGlobal(
@@ -168,6 +168,39 @@ describe("user-facing API errors", () => {
     );
   });
 
+  it("accepts pipeline connection collection responses from current and wrapped daemon shapes", () => {
+    const connection = {
+      id: "pipeline-1",
+      projectLinkId: "project-link-1",
+      pipelineId: "117",
+      pipelineName: "ClaimBot_API",
+      purpose: "ci" as const,
+      isDefault: true,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    expect(pipelineConnectionsFromResponse([connection])).toEqual([connection]);
+    expect(pipelineConnectionsFromResponse({ items: [connection] })).toEqual([connection]);
+  });
+
+  it("rejects malformed pipeline connection responses with a product error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    await expect(listPipelineConnections()).rejects.toThrow(
+      "Pipeline connections could not be loaded",
+    );
+    await expect(listPipelineConnections()).rejects.not.toThrow("connections.filter");
+  });
+
   it("formats Settings save errors without daemon route noise", async () => {
     mockPlainTextFailure("Key Vault permission denied.", 403);
 
@@ -208,6 +241,70 @@ describe("user-facing API errors", () => {
     await expect(fetchTasks()).rejects.not.toThrow("/tasks");
     await expect(fetchTask("task-1")).rejects.toThrow("Activity service is unavailable.");
     await expect(fetchTask("task-1")).rejects.not.toThrow("/tasks/task-1");
+  });
+
+  it("accepts Git checkpoint collection responses from current and wrapped daemon shapes", () => {
+    const checkpoint = {
+      id: "checkpoint-1",
+      sessionId: "chat_1",
+      repoPath: "C:\\repo",
+      at: 1,
+      toolName: "git_add",
+      toolSummary: "M README.md",
+      toolOk: true,
+      checkpointId: "git-1",
+      checkpointPath: "C:\\Users\\15492\\.mergepilot\\checkpoints\\git-1.json",
+    };
+
+    expect(chatCheckpointActivityFromResponse([checkpoint])).toEqual([checkpoint]);
+    expect(chatCheckpointActivityFromResponse({ items: [checkpoint] })).toEqual([checkpoint]);
+  });
+
+  it("rejects malformed Git checkpoint responses with a product error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    await expect(fetchChatCheckpointActivity()).rejects.toThrow(
+      "Git checkpoints could not be loaded",
+    );
+    await expect(fetchChatCheckpointActivity()).rejects.not.toThrow("checkpointActivity.find");
+  });
+
+  it("accepts Activity run collection responses from current and wrapped daemon shapes", () => {
+    const task = {
+      id: "task-1",
+      kind: "submit-pipeline",
+      status: "succeeded",
+      steps: [],
+      result: {},
+      error: "",
+      createdAt: 1,
+    };
+
+    expect(taskViewsFromResponse([task])).toEqual([task]);
+    expect(taskViewsFromResponse({ items: [task] })).toEqual([task]);
+  });
+
+  it("rejects malformed Activity run responses with a product error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    await expect(fetchTasks()).rejects.toThrow("Activity runs could not be loaded");
+    await expect(fetchTasks()).rejects.not.toThrow("tasks.filter");
   });
 
   it("formats Review Queue cloud fallback warnings without Project Link route noise", async () => {

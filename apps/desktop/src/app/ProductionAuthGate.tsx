@@ -19,7 +19,7 @@ export function ProductionAuthGate({ children, info }: { children: ReactNode; in
 
   if (checking) {
     return (
-      <div className="flex h-screen w-screen flex-col items-center justify-center gap-3 bg-zinc-950 text-zinc-400">
+      <div className="flex h-screen w-screen flex-col items-center justify-center gap-3 bg-[rgb(var(--app-bg))] text-[rgb(var(--app-text-muted))]">
         <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
           <circle
             className="opacity-25"
@@ -42,9 +42,9 @@ export function ProductionAuthGate({ children, info }: { children: ReactNode; in
 
   if (!user.authenticated) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-zinc-950 px-6 text-zinc-200">
+      <div className="flex h-screen w-screen items-center justify-center bg-[rgb(var(--app-bg))] px-6 text-[rgb(var(--app-text))]">
         {loggingIn && <LoginModal onDone={handleLoginDone} onCancel={() => setLoggingIn(false)} />}
-        <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl">
+        <div className="w-full max-w-md rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-6 shadow-2xl">
           <div className="mb-5 flex items-center gap-3">
             <svg className="h-5 w-5 shrink-0" fill="currentColor" viewBox="0 0 21 21">
               <rect x="1" y="1" width="9" height="9" fill="#f25022" />
@@ -53,10 +53,10 @@ export function ProductionAuthGate({ children, info }: { children: ReactNode; in
               <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
             </svg>
             <div>
-              <h1 className="text-sm font-semibold text-zinc-100">
+              <h1 className="text-sm font-semibold text-[rgb(var(--app-text))]">
                 Corporate Microsoft sign-in required
               </h1>
-              <p className="mt-1 text-xs leading-5 text-zinc-500">
+              <p className="mt-1 text-xs leading-5 text-[rgb(var(--app-text-muted))]">
                 Your Azure identity is used to load your Project Links and chat data from the
                 company cloud store.
               </p>
@@ -65,7 +65,7 @@ export function ProductionAuthGate({ children, info }: { children: ReactNode; in
           <button
             type="button"
             onClick={() => setLoggingIn(true)}
-            className="flex w-full items-center justify-center rounded-md border border-blue-700/60 bg-blue-600/20 px-3 py-2 text-sm font-medium text-blue-200 transition hover:bg-blue-600/30"
+            className="flex w-full items-center justify-center rounded-md border border-[rgb(var(--app-accent))]/45 bg-[rgb(var(--app-accent-soft))] px-3 py-2 text-sm font-medium text-[rgb(var(--app-accent))] transition hover:border-[rgb(var(--app-accent))]/65 hover:bg-[rgb(var(--app-accent-soft))]/80"
           >
             Sign in with Microsoft
           </button>

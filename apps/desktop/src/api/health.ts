@@ -2,6 +2,12 @@ import { RUNTIME_URL, messageFromErrorResponse } from "./runtime.js";
 
 export interface HealthStatus {
   ok: boolean;
+  version?: string;
+  runtimeMode?: string;
+  desktopVersion?: string;
+  buildSha?: string;
+  pid?: number;
+  execPath?: string;
   uptimeSec?: number;
   llmConfigured?: boolean;
   llmProvider?: "azure" | "openai";

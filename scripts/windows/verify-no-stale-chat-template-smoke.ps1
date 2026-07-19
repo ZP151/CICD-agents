@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
-Smoke-tests the stale Chat template/preload verifier.
+Smoke-tests the stale Chat preload verifier.
 
 .DESCRIPTION
 Creates temporary clean and intentionally stale runtime payloads, then verifies
-that verify-no-stale-chat-template.ps1 accepts clean files, rejects removed New
-Chat welcome copy, rejects removed frontend preload helper names, and ignores
-source maps unless explicitly asked to include them.
+that verify-no-stale-chat-template.ps1 accepts clean files and current welcome
+copy, rejects removed frontend preload helper names, and ignores source maps
+unless explicitly asked to include them.
 #>
 
 param()
@@ -84,14 +84,14 @@ try {
     $cleanResult.json.patterns -contains "fetchChatIndexStatus"
   ) -Details $cleanResult.json
 
-  $welcomeDir = Join-Path $tempRoot "stale-welcome"
+  $welcomeDir = Join-Path $tempRoot "current-welcome"
   New-Item -ItemType Directory -Force -Path $welcomeDir | Out-Null
   Set-Content -LiteralPath (Join-Path $welcomeDir "app.js") -Value "const title = 'Ask MergePilot anything';" -Encoding UTF8
   $welcomeResult = Invoke-TemplateVerifier -Directory $welcomeDir
-  Add-Check -Name "rejects stale New Chat welcome copy" -Passed (
-    $welcomeResult.exitCode -ne 0 -and
-    $welcomeResult.json.ok -eq $false -and
-    ($welcomeResult.json.matches | Where-Object { $_.pattern -eq "Ask MergePilot anything" }).Count -gt 0
+  Add-Check -Name "accepts current New Chat welcome copy" -Passed (
+    $welcomeResult.exitCode -eq 0 -and
+    $welcomeResult.json.ok -eq $true -and
+    ($welcomeResult.json.matches | Where-Object { $_.pattern -eq "Ask MergePilot anything" }).Count -eq 0
   ) -Details $welcomeResult.json
 
   $preloadDir = Join-Path $tempRoot "stale-preload"
@@ -131,6 +131,7 @@ try {
   if ($failures.Count -gt 0) {
     exit 1
   }
+  exit 0
 } finally {
   Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
 }

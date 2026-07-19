@@ -105,6 +105,7 @@ export function buildChatShellProps({
     repoPath: pageState.repoPath,
     resolveConfirm: turnRuntime.resolveConfirm,
     rightPanelOpen: panelRuntime.rightPanelOpen,
+    rightPanelOverlay: panelRuntime.rightPanelOverlay,
     rightWidth: panelRuntime.rightWidth,
     runWorkspaceAction: workspaceRuntime.runWorkspaceAction,
     scrollContainerRef: scrollRuntime.scrollContainerRef,

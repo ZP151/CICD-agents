@@ -6,7 +6,7 @@ import {
   reviewOperationStatusClass,
 } from "./activityPresentation.js";
 import type { ReviewActivityItem } from "./activityTypes.js";
-import { operationDetailSummary } from "./operationDetailSummary.js";
+import { operationDetailPreview } from "./operationDetailSummary.js";
 import { ProjectLinkFilter } from "./ProjectLinkFilter.js";
 
 interface ReviewActivitySectionProps {
@@ -67,14 +67,14 @@ export function ReviewActivitySection({
           <option value="review_run">Review run</option>
         </select>
       </div>
-      <div className="max-h-[320px] overflow-y-auto space-y-1.5">
+      <div className="space-y-1.5">
         {!reviewLoading && reviewActivity.length === 0 && (
           <p className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text-muted))]">
             No review operations yet.
           </p>
         )}
         {reviewActivity.slice(0, 12).map((event) => {
-          const detailSummary = operationDetailSummary(event.details) ?? event.details;
+          const detailSummary = operationDetailPreview(event.details) ?? event.details;
           return (
             <button
               key={`${event.projectLinkId}-${event.id}`}
@@ -98,7 +98,10 @@ export function ReviewActivitySection({
               <p className="truncate text-sm font-medium text-[rgb(var(--app-text))]">
                 {event.pullRequestId > 0 ? `#${event.pullRequestId} · ${event.label}` : event.label}
               </p>
-              <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-muted))]">
+              <p
+                className="mt-1 truncate text-xs text-[rgb(var(--app-text-muted))]"
+                title={event.details}
+              >
                 {event.projectLinkName}
                 {detailSummary ? ` · ${detailSummary}` : ""}
               </p>

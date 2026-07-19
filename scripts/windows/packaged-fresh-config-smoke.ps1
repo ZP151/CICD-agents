@@ -6,6 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+. (Join-Path $PSScriptRoot "msi-extract-helpers.ps1")
 if ([string]::IsNullOrWhiteSpace($MsiPath)) {
   $version = (Get-Content -LiteralPath (Join-Path $repoRoot "apps\desktop\package.json") -Raw | ConvertFrom-Json).version
   $MsiPath = Join-Path $repoRoot "apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_$($version)_x64_en-US.msi"
@@ -22,28 +23,9 @@ $process = $null
 
 try {
   New-Item -ItemType Directory -Force -Path $extractDir, $homeDir, $dataDir | Out-Null
-  $extract = $null
-  for ($attempt = 1; $attempt -le 4; $attempt++) {
-    $extract = Start-Process -FilePath msiexec.exe -ArgumentList @(
-      "/a",
-      (Resolve-Path $MsiPath).Path,
-      "/qn",
-      "TARGETDIR=$extractDir",
-      "/L*v",
-      $logPath
-    ) -Wait -PassThru
-    if ($extract.ExitCode -ne 1618) {
-      break
-    }
-    Start-Sleep -Seconds ([Math]::Min(8, 2 * $attempt))
-  }
-  if ($extract.ExitCode -ne 0) {
-    Get-Content -LiteralPath $logPath -Tail 80 -ErrorAction SilentlyContinue
-    throw "MSI administrative extraction failed with exit code $($extract.ExitCode)."
-  }
+  $extractMethod = Invoke-MergePilotMsiExtraction -PackagePath $MsiPath -Destination $extractDir -InstallerLogPath $logPath -RetryOnInstallerBusy
 
-  $daemon = Get-ChildItem -LiteralPath $extractDir -Recurse -Filter mergepilot-daemon.exe |
-    Select-Object -First 1
+  $daemon = Find-MergePilotExtractedDaemon -Root $extractDir
   if (-not $daemon) {
     throw "Extracted MSI did not contain mergepilot-daemon.exe under $extractDir."
   }
@@ -100,6 +82,7 @@ try {
   [pscustomobject]@{
     ok = $failures.Count -eq 0
     msiPath = (Resolve-Path $MsiPath).Path
+    extractMethod = $extractMethod
     extractedDaemon = $daemon.FullName
     healthVersion = $health.version
     secretSource = $config.secretSource

@@ -6,7 +6,18 @@ import type {
 } from "../../../chatBubbles.js";
 import { ArtifactWorkspaceShell } from "./ArtifactWorkspace.js";
 import { ArtifactWorkspaceContent } from "./ArtifactWorkspaceContent.js";
-import { CodeSidePanel, sourceLineStartOffset } from "./SourceWorkspace.js";
+import {
+  CodeSidePanel,
+  sourceLineStartOffset,
+  sourceWorkspaceTabClass,
+  sourceWorkspaceTabsListClass,
+} from "./SourceWorkspace.js";
+import {
+  sourceCodeViewportEditorClass,
+  sourceCodeViewportHeaderClass,
+  sourceCodeViewportShellClass,
+} from "./SourceCodeViewport.js";
+import { sourcePreviewEmptyClass } from "./SourcePreviewEmpty.js";
 
 const markdownArtifact: ConversationArtifactPart = {
   type: "artifact",
@@ -133,7 +144,21 @@ describe("ArtifactWorkspace", () => {
     expect(html).toContain("README.md");
     expect(html).toContain("Close all files");
     expect(html).toContain("Clear");
-    expect(html).toContain("No file open");
+    expect(html).toContain("No file selected");
+  });
+
+  it("keeps source tabs responsive inside narrow code panels", () => {
+    expect(sourceWorkspaceTabsListClass()).toContain("min-w-0");
+    expect(sourceWorkspaceTabsListClass()).toContain("overflow-x-auto");
+    expect(sourceWorkspaceTabClass()).toContain("max-w-[min(14rem,60vw)]");
+    expect(sourceWorkspaceTabClass()).not.toContain("max-w-[14rem]");
+  });
+
+  it("keeps the source code preview chrome responsive", () => {
+    expect(sourceCodeViewportShellClass()).toContain("min-w-0");
+    expect(sourceCodeViewportHeaderClass()).toContain("flex-wrap");
+    expect(sourceCodeViewportEditorClass()).toContain("min-w-0");
+    expect(sourcePreviewEmptyClass()).toContain("min-w-0");
   });
 
   it("converts source line numbers to CodeMirror document offsets", () => {

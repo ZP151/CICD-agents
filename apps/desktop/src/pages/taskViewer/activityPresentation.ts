@@ -4,12 +4,12 @@ import { parseSortableDate } from "../../safeDate.js";
 
 export function statusClass(status: string): string {
   if (status === "succeeded")
-    return "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300";
-  if (status === "failed") return "bg-red-500/10 text-red-700 ring-red-500/30 dark:text-red-300";
+    return "bg-[rgb(var(--app-success-soft))] text-[rgb(var(--app-success))] ring-[rgb(var(--app-success-border))]";
+  if (status === "failed") return "bg-[rgb(var(--app-danger-soft))] text-[rgb(var(--app-danger))] ring-[rgb(var(--app-danger-border))]";
   if (status === "running")
-    return "bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent))] ring-[rgb(var(--app-accent))]/30";
+    return "bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent-readable))] ring-[rgb(var(--app-accent))]/30";
   if (status === "queued")
-    return "bg-amber-500/10 text-amber-800 ring-amber-500/30 dark:text-amber-300";
+    return "bg-[rgb(var(--app-warning-soft))] text-[rgb(var(--app-warning))] ring-[rgb(var(--app-warning-border))]";
   return "bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))] ring-[rgb(var(--app-border))]";
 }
 
@@ -71,6 +71,6 @@ export function reviewOperationKindLabel(kind: ReviewOperationEvent["kind"]): st
 
 export function reviewOperationStatusClass(ok: boolean): string {
   return ok
-    ? "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300"
-    : "bg-amber-500/10 text-amber-800 ring-amber-500/30 dark:text-amber-300";
+    ? "bg-[rgb(var(--app-success-soft))] text-[rgb(var(--app-success))] ring-[rgb(var(--app-success-border))]"
+    : "bg-[rgb(var(--app-warning-soft))] text-[rgb(var(--app-warning))] ring-[rgb(var(--app-warning-border))]";
 }

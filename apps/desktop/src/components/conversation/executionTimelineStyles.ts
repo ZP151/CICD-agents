@@ -11,12 +11,12 @@ export function timelineHeaderIconClass(
   hasApproval: boolean,
 ): string {
   const color = hasError
-    ? "bg-red-500"
+    ? "bg-[rgb(var(--app-danger))]"
     : hasApproval
-      ? "bg-amber-500"
+      ? "bg-[rgb(var(--app-warning))]"
       : running
         ? "bg-[rgb(var(--app-text-subtle))]"
-        : "bg-emerald-500";
+        : "bg-[rgb(var(--app-success))]";
   return `h-1.5 w-1.5 rounded-full ${color}`;
 }
 
@@ -26,59 +26,59 @@ export function timelineStatusPillClass(
   hasApproval: boolean,
 ): string {
   if (hasError) {
-    return "rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-danger))]";
+    return "rounded-full border border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-danger))]";
   }
   if (hasApproval) {
-    return "rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-warning))]";
+    return "rounded-full border border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-warning))]";
   }
   if (running) {
-    return "rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-400";
+    return "rounded-full border border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-accent-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-accent-readable))]";
   }
-  return "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-success))]";
+  return "rounded-full border border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-success))]";
 }
 
 export function timelineGroupRailClass(status: ExecutionGroupStatus): string {
   const color =
     status === "error"
-      ? "bg-red-500"
+      ? "bg-[rgb(var(--app-danger))]"
       : status === "approval"
-        ? "bg-amber-500"
+        ? "bg-[rgb(var(--app-warning))]"
         : status === "running"
-          ? "bg-blue-500"
-          : "bg-emerald-500";
+          ? "bg-[rgb(var(--app-accent))]"
+          : "bg-[rgb(var(--app-success))]";
   const motion = status === "running" ? " animate-pulse" : "";
   return `mt-1 h-8 w-1 shrink-0 rounded-full ${color}${motion}`;
 }
 
 export function timelineGroupPillClass(status: ExecutionGroupStatus): string {
   if (status === "error") {
-    return "rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-danger))]";
+    return "rounded-full border border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-danger))]";
   }
   if (status === "approval") {
-    return "rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-warning))]";
+    return "rounded-full border border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-warning))]";
   }
   if (status === "running") {
-    return "rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-400";
+    return "rounded-full border border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-accent-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-accent-readable))]";
   }
-  return "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-success))]";
+  return "rounded-full border border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-success))]";
 }
 
 export function timelineStatePillClass(state: ExecutionTimelineState, ok?: boolean): string {
   if (state === "error" || ok === false) {
-    return "rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-danger))]";
+    return "rounded-full border border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-danger))]";
   }
   if (isRunningState(state)) {
-    return "rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-400";
+    return "rounded-full border border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-accent-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-accent-readable))]";
   }
-  return "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-success))]";
+  return "rounded-full border border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-success))]";
 }
 
 export function timelineDotClass(item: ExecutionTimelineItem, pending: boolean): string {
   const color =
     item.state === "error" || item.ok === false
-      ? "bg-red-500"
+      ? "bg-[rgb(var(--app-danger))]"
       : pending
         ? "bg-[rgb(var(--app-text-subtle))] animate-pulse"
-        : "bg-emerald-500";
+        : "bg-[rgb(var(--app-success))]";
   return `mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${color}`;
 }

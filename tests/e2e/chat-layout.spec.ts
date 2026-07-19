@@ -1143,6 +1143,14 @@ async function mockWorkspaceFilePreview(page: Page): Promise<Array<{ repoPath?: 
   return previewRequests;
 }
 
+async function openPinnedSummary(page: Page): Promise<void> {
+  const environment = page.getByText("Environment").first();
+  if (!(await environment.isVisible().catch(() => false))) {
+    await page.getByTitle("Show pinned summary").click();
+  }
+  await expect(environment).toBeVisible();
+}
+
 test.describe("Chat layout", () => {
   test.beforeEach(async ({ page }) => {
     await mockRuntime(page);
@@ -1152,14 +1160,12 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
 
-    await expect(page.getByText("Ask MergePilot anything")).toHaveCount(0);
+    await expect(page.getByText("Ask MergePilot anything")).toBeVisible();
     await expect(page.getByPlaceholder(/Ask MergePilot/)).toBeVisible();
     await expect(page.getByTitle("Conversation model")).toContainText("GPT-4o");
     await expectNoVisibleHorizontalOverflow(page);
 
-    const expandContextPanel = page.getByTitle("Expand context panel");
-    if (await expandContextPanel.count()) await expandContextPanel.click();
-    await expect(page.getByText("Environment")).toBeVisible();
+    await openPinnedSummary(page);
     await expect(page.getByText("Commit or push")).toBeVisible();
     await expectNoVisibleHorizontalOverflow(page);
 
@@ -1169,14 +1175,45 @@ test.describe("Chat layout", () => {
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("keeps the onboarding form and input usable on narrow screens", async ({ page }) => {
+  test("@smoke @mocked gives the chat workspace usable width when maximized", async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 920 });
+    await page.goto("/chat?new=1");
+
+    await expect(page.getByText("Ask MergePilot anything")).toBeVisible();
+    await expect(page.getByPlaceholder(/Ask MergePilot/)).toBeVisible();
+    const transcriptColumn = page.locator(".middle-panel-inner");
+    const welcomePanel = page.locator('[aria-label="New conversation welcome"]');
+    await expect(transcriptColumn).toBeVisible();
+    await expect(welcomePanel).toBeVisible();
+
+    const columnBox = await transcriptColumn.boundingBox();
+    const welcomeBox = await welcomePanel.boundingBox();
+    expect(columnBox).not.toBeNull();
+    expect(welcomeBox).not.toBeNull();
+    expect(columnBox?.width ?? 0).toBeGreaterThan(760);
+    expect(columnBox?.width ?? 0).toBeLessThanOrEqual(1000);
+    expect(welcomeBox?.width ?? 0).toBeGreaterThan(760);
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("keeps the Project Link onboarding form usable on narrow screens", async ({ page }) => {
+    await page.route("http://127.0.0.1:8787/project-links", async (route) => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("mergepilot_project_links_v1", "[]");
+      localStorage.removeItem("mergepilot_active_project_link_id");
+    });
     await page.setViewportSize({ width: 836, height: 768 });
     await page.goto("/chat?new=1");
 
-    await expect(page.getByText("Ask MergePilot anything")).toHaveCount(0);
-    await expect(page.getByPlaceholder(/Ask MergePilot/)).toBeVisible();
-    await page.getByTitle("Conversation model").click();
-    await expect(page.getByText("Model", { exact: true })).toBeVisible();
+    await expect(page.getByText("Ask MergePilot anything")).toBeVisible();
+    await page.getByRole("button", { name: "Create Project Link" }).click();
+    await expect(page.getByPlaceholder("web-app production")).toBeVisible();
+    await expect(page.getByPlaceholder("C:\\projects\\my-app")).toBeVisible();
+    await expect(page.getByText("Default branch")).toBeVisible();
+    await expect(page.getByText("PR target branch")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Create and use" })).toBeVisible();
     await expectNoVisibleHorizontalOverflow(page);
   });
 
@@ -1220,11 +1257,11 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1100, height: 780 });
     await page.goto("/chat?new=1");
 
-    await expect(page.getByRole("button", { name: "Review my changes" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Explain this project architecture" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Analyze PR insight for this repo" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Open Pipelines workspace" })).toHaveCount(0);
-    await expect(page.getByText("Ask MergePilot anything")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Understand this project" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Analyze PR insight for this repo" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Open Pipelines workspace" })).toBeVisible();
+    await expect(page.getByText("Ask MergePilot anything")).toBeVisible();
     await expect(page.getByPlaceholder(/Ask MergePilot/)).toBeVisible();
     await expect.poll(() => workflowPayloads.length).toBe(0);
     await expectNoVisibleHorizontalOverflow(page);
@@ -1255,7 +1292,7 @@ test.describe("Chat layout", () => {
 
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
-    await expect(page.getByText("Environment")).toBeVisible();
+    await openPinnedSummary(page);
 
     await page.getByRole("button", { name: "Commit or push" }).click();
     await page.getByRole("button", { name: "Prepare commit", exact: true }).click();
@@ -1352,7 +1389,7 @@ test.describe("Chat layout", () => {
     const collapseCodePanel = page.getByTitle("Collapse code panel");
     if (await collapseCodePanel.count()) await collapseCodePanel.click();
 
-    await expect(page.getByText("Environment")).toBeVisible();
+    await openPinnedSummary(page);
     await page.getByRole("button", { name: "Commit or push" }).click();
     await expect(page.getByText("Diverged: 1 ahead, 2 behind")).toBeVisible();
     await expect(page.getByText("Include unstaged changes")).toBeVisible();
@@ -1436,6 +1473,7 @@ test.describe("Chat layout", () => {
     const collapseCodePanel = page.getByTitle("Collapse code panel");
     if (await collapseCodePanel.count()) await collapseCodePanel.click();
 
+    await openPinnedSummary(page);
     await page.getByRole("button", { name: "Progress" }).click();
     const refreshProgressStep = page
       .locator('button[data-workflow-step-state="idle"]')
@@ -1492,7 +1530,7 @@ test.describe("Chat layout", () => {
     await page.goto("/chat?new=1");
     const collapseCodePanel = page.getByTitle("Collapse code panel");
     if (await collapseCodePanel.count()) await collapseCodePanel.click();
-    await expect(page.getByText("Environment")).toBeVisible();
+    await openPinnedSummary(page);
 
     await page.getByRole("button", { name: "main" }).click();
     await expect(page.getByText("Refresh branch state")).toBeVisible();
@@ -1506,7 +1544,7 @@ test.describe("Chat layout", () => {
     await expect(page.getByText("Refresh branch state")).toBeHidden();
     await expect(page.getByText("Include unstaged changes")).toBeVisible();
 
-    await page.getByTitle("Project Link").click();
+    await page.getByLabel("Pinned Summary Project Link").click();
     await expect(page.getByText("Include unstaged changes")).toBeHidden();
   });
 
@@ -1529,10 +1567,10 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
 
-    await expect(page.getByText("Create a Project Link")).toBeVisible();
-    await expect(page.getByText("No Project Link yet — create one above")).toBeVisible();
-    await expect(page.getByPlaceholder("Create or select a Project Link first...")).toBeDisabled();
-    await expect(page.getByLabel("Send message")).toBeDisabled();
+    await expect(page.getByText("Connect a Project Link to run workspace actions")).toBeVisible();
+    await expect(page.getByText("No Project Link yet — create one above")).toHaveCount(0);
+    await expect(page.getByPlaceholder("Create or select a Project Link first...")).toHaveCount(0);
+    await expect(page.getByLabel("Send message")).toHaveCount(0);
     await expect(page.getByText("Environment")).toHaveCount(0);
     expect(chatPayloads).toHaveLength(0);
     await expectNoVisibleHorizontalOverflow(page);
@@ -1592,6 +1630,7 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
 
+    await page.getByRole("button", { name: /Create/ }).click();
     await page.getByPlaceholder("C:\\projects\\my-app").fill(repoPath);
     await expect(page.getByText("2 branches found")).toBeVisible({ timeout: 5_000 });
     await page.getByRole("button", { name: "Create and use" }).click();
@@ -1694,6 +1733,7 @@ test.describe("Chat layout", () => {
 
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
+    await page.getByRole("button", { name: /Create/ }).click();
     await page.getByPlaceholder("C:\\projects\\my-app").fill(repoPath);
     await expect(page.getByText("1 branches found")).toBeVisible({ timeout: 5_000 });
     await page.getByRole("button", { name: "Azure DevOps" }).click();
@@ -1952,12 +1992,13 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
 
-    await page.getByRole("button", { name: "PR insight" }).click();
+    await page.getByRole("button", { name: "Analyze PR insight for this repo" }).click();
     await expect.poll(() => workflowPayloads.length).toBe(1);
     expect(workflowPayloads[0]).toMatchObject({ action: "inspect_pr_insight" });
     expect(workflowPayloads[0]).not.toHaveProperty("pullRequestId");
 
-    await page.getByRole("button", { name: "Progress ›" }).click();
+    await openPinnedSummary(page);
+    await page.getByRole("button", { name: "Progress" }).click();
     await expect(page.getByRole("button", { name: "Review CI blockers" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Check policy blockers" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Review work items" })).toBeVisible();
@@ -2081,7 +2122,7 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
 
-    await page.getByRole("button", { name: "Pipeline" }).click();
+    await page.getByRole("button", { name: "Open Pipelines workspace" }).click();
     await expect.poll(() => workflowPayloads.length).toBe(1);
     expect(workflowPayloads[0]).toMatchObject({
       action: "inspect_pipeline",
@@ -2098,7 +2139,8 @@ test.describe("Chat layout", () => {
     await expect(page.getByText("images\\Gojek\\.DS_Store")).toBeVisible();
     await expect(page.getByText("Pipeline #117 run #4665 failure").first()).toBeVisible();
 
-    await page.getByRole("button", { name: "Progress ›" }).click();
+    await openPinnedSummary(page);
+    await page.getByRole("button", { name: "Progress" }).click();
     await expect(page.getByRole("button", { name: "Trigger pipeline" })).toBeVisible();
     await page.getByRole("button", { name: "Trigger pipeline" }).click();
     await expect.poll(() => workflowPayloads.length).toBe(2);
@@ -2202,7 +2244,7 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
 
-    await page.getByRole("button", { name: "Pipeline" }).click();
+    await page.getByRole("button", { name: "Open Pipelines workspace" }).click();
     await expect.poll(() => workflowPayloads.length).toBe(1);
     expect(workflowPayloads[0]).toMatchObject({
       action: "inspect_pipeline",
@@ -2520,6 +2562,7 @@ test.describe("Chat layout", () => {
     await seedLongWorkflowTranscriptDraft(page);
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat");
+    await openPinnedSummary(page);
 
     const transcriptColumn = page.locator(".middle-panel-inner");
     const environmentCard = page.locator(".pointer-events-auto.rounded-2xl").filter({ hasText: "Environment" }).first();
@@ -3025,6 +3068,7 @@ test.describe("Chat layout", () => {
     await seedRunningPrReadinessWorkflowDraft(page);
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat");
+    await openPinnedSummary(page);
     await page.getByRole("button", { name: "Progress ›" }).click();
 
     const runningStep = page
@@ -3912,7 +3956,7 @@ test.describe("Chat layout", () => {
     const rightPanel = page.locator(".right-panel");
     await expectRightShellSplitStartsAtTop(page);
     await expectSummaryToggleNearRightSplit(page);
-    await expect(rightPanel.getByText("No file open")).toBeVisible();
+    await expect(rightPanel.getByText("No file selected")).toBeVisible();
     await expect(rightPanel.getByText("Select a reference.")).toHaveCount(0);
     await expect(rightPanel.getByRole("button", { name: /Chat\.tsx/ })).toHaveCount(0);
     await expect(rightPanel.locator('button[aria-pressed="true"]').filter({ hasText: "chatContext.ts" })).toHaveCount(0);
@@ -3931,9 +3975,45 @@ test.describe("Chat layout", () => {
     await expect(rightPanel.getByRole("button", { name: /Chat\.tsx/ })).toHaveCount(0);
     await expect(rightPanel.getByText("300 lines")).toBeVisible();
     await expect(rightPanel.getByText("line 291")).toBeVisible();
+    const activeSourceTabBox = await rightPanel
+      .locator('button[aria-pressed="true"]')
+      .filter({ hasText: "chatContext.ts" })
+      .boundingBox();
+    const rightPanelBox = await rightPanel.boundingBox();
+    expect(activeSourceTabBox).not.toBeNull();
+    expect(rightPanelBox).not.toBeNull();
+    expect((activeSourceTabBox?.right ?? 0)).toBeLessThanOrEqual((rightPanelBox?.right ?? 0) + 1);
     await expect(rightPanel.locator(".cm-gutters")).toBeVisible();
     await expect(rightPanel.locator(".cm-lineNumbers .cm-gutterElement").filter({ hasText: "291" })).toBeVisible();
     await expect(rightPanel.locator(".cm-sourceTargetLine")).toContainText("previewLine291");
+    await expectNoVisibleHorizontalOverflow(page);
+  });
+
+  test("@smoke @mocked turns the code panel into an overlay when the chat workspace becomes narrow", async ({ page }) => {
+    await seedSourceReferenceDraft(page);
+    await mockWorkspaceFilePreview(page);
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("/chat");
+
+    const expandCodePanel = page.getByTitle("Expand code panel");
+    if (await expandCodePanel.count()) await expandCodePanel.click();
+    const hideSummary = page.getByTitle("Hide pinned summary");
+    if (await hideSummary.count()) await hideSummary.click();
+
+    const rightPanel = page.locator(".right-panel");
+    await page.getByRole("button", { name: /chatContext(\.ts)?/ }).click();
+    await expect(rightPanel.getByText("300 lines")).toBeVisible();
+
+    await page.setViewportSize({ width: 700, height: 820 });
+
+    await expect.poll(async () => {
+      const width = await rightPanel.evaluate((element) => element.getBoundingClientRect().width);
+      return Math.round(width);
+    }).toBeGreaterThan(0);
+    await expect(rightPanel).toHaveClass(/right-panel--overlay/);
+    await expect(page.getByTitle("Collapse code panel")).toBeVisible();
+    await expect(rightPanel.getByText("300 lines")).toBeVisible();
+    await expect(page.getByTestId("chat-message-panel")).toBeVisible();
     await expectNoVisibleHorizontalOverflow(page);
   });
 
@@ -3961,13 +4041,13 @@ test.describe("Chat layout", () => {
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain("previewLine291");
 
     await rightPanel.getByRole("button", { name: "Close chatContext.ts" }).click();
-    await expect(rightPanel.getByText("No file open")).toBeVisible();
+    await expect(rightPanel.getByText("No file selected")).toBeVisible();
     await expect(rightPanel.getByRole("button", { name: /chatContext\.ts/ })).toHaveCount(0);
 
     await page.getByRole("button", { name: /chatContext(\.ts)?/ }).click();
     await expect(rightPanel.getByRole("button", { name: "chatContext.ts", exact: true })).toBeVisible();
     await rightPanel.getByRole("button", { name: "Close all files" }).click();
-    await expect(rightPanel.getByText("No file open")).toBeVisible();
+    await expect(rightPanel.getByText("No file selected")).toBeVisible();
     await expect(rightPanel.getByRole("button", { name: /chatContext\.ts/ })).toHaveCount(0);
     await expectNoVisibleHorizontalOverflow(page);
   });

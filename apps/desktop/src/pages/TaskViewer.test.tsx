@@ -1,7 +1,15 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { PrInsightArtifactRecord } from "../api.js";
-import { PrInsightReadinessBlockers } from "./TaskViewer.js";
+import {
+  ActivityEmptyDetail,
+  activityEmptyDetailContent,
+  PrInsightReadinessBlockers,
+  taskViewerDetailClass,
+  taskViewerLayoutClass,
+} from "./TaskViewer.js";
+import { prInsightReadinessBlockersGridClass } from "./taskViewer/PrInsightReadinessBlockers.js";
+import { defaultActivitySelection } from "./taskViewer/useTaskViewerRuntime.js";
 
 function prInsightArtifact(
   overrides: Partial<PrInsightArtifactRecord> = {},
@@ -24,6 +32,14 @@ function prInsightArtifact(
 }
 
 describe("TaskViewer PR insight readiness blockers", () => {
+  it("uses an auto-fit blocker grid so detail groups reflow with panel width", () => {
+    const className = prInsightReadinessBlockersGridClass();
+
+    expect(className).toContain("auto-fit");
+    expect(className).toContain("minmax(min(100%,14rem),1fr)");
+    expect(className).not.toContain("sm:grid-cols-2");
+  });
+
   it("renders structured build, policy, thread, and work item blocker details", () => {
     const html = renderToStaticMarkup(
       <PrInsightReadinessBlockers
@@ -90,5 +106,89 @@ describe("TaskViewer PR insight readiness blockers", () => {
     expect(renderToStaticMarkup(<PrInsightReadinessBlockers item={prInsightArtifact()} />)).toBe(
       "",
     );
+  });
+});
+
+describe("ActivityEmptyDetail", () => {
+  it("uses a responsive activity workbench layout", () => {
+    const className = taskViewerLayoutClass();
+
+    expect(className).toContain("flex-col");
+    expect(className).toContain("xl:flex-row");
+    expect(className).not.toContain("lg:flex-row");
+    expect(className).toContain("items-stretch");
+    expect(className).toContain("max-w-[1600px]");
+    expect(className).toContain("mx-auto");
+    expect(className).not.toContain("ml-0");
+    expect(className).not.toContain("mr-auto");
+
+    const detailClass = taskViewerDetailClass();
+    expect(detailClass).toContain("min-w-0");
+    expect(detailClass).toContain("xl:basis-0");
+    expect(detailClass).not.toContain("lg:basis-0");
+    expect(detailClass).not.toContain("lg:max-w-[74rem]");
+    expect(detailClass).not.toContain("xl:max-w-[74rem]");
+  });
+
+  it("renders a visible right-panel placeholder before an operation is selected", () => {
+    const html = renderToStaticMarkup(<ActivityEmptyDetail />);
+
+    expect(html).toContain("Detail");
+    expect(html).toContain("Select an operation");
+    expect(html).toContain("inspect its source, result, and");
+    expect(html).toContain("border");
+    expect(html).not.toContain("No operation selected");
+  });
+
+  it("shows recovery guidance instead of repeating the source unavailable card", () => {
+    const html = renderToStaticMarkup(
+      <ActivityEmptyDetail activityCount={0} error="Failed to fetch" loading={false} />,
+    );
+
+    expect(html).toContain("Recovery needed");
+    expect(html).toContain("Refresh activity");
+    expect(html).toContain("source panel");
+    expect(html).not.toContain("Select an operation");
+  });
+
+  it("explains an empty operational history without implying a missing selection", () => {
+    expect(activityEmptyDetailContent({
+      activityCount: 0,
+      error: null,
+      loading: false,
+    })).toEqual({
+      title: "No activity recorded",
+      description:
+        "Runs, Git checkpoints, PR insights, and review operations will appear here after the agent performs workspace actions.",
+    });
+  });
+});
+
+describe("defaultActivitySelection", () => {
+  it("selects the newest available operational event for the Activity detail panel", () => {
+    expect(defaultActivitySelection({
+      tasks: [{ id: "task-old", createdAt: Date.parse("2026-07-17T08:00:00.000Z") }],
+      checkpoints: [{ id: "checkpoint-new", at: Date.parse("2026-07-17T10:00:00.000Z") }],
+      prInsights: [{ id: "insight-mid", at: "2026-07-17T09:00:00.000Z" }],
+      reviews: [{ id: "review-mid", at: "2026-07-17T09:30:00.000Z" }],
+    })).toEqual({ kind: "checkpoint", id: "checkpoint-new" });
+  });
+
+  it("normalizes second-based task and checkpoint timestamps before comparing activity", () => {
+    expect(defaultActivitySelection({
+      tasks: [{ id: "task-new", createdAt: 1_786_005_000 }],
+      checkpoints: [{ id: "checkpoint-old", at: 1_786_004_000 }],
+      prInsights: [],
+      reviews: [],
+    })).toEqual({ kind: "task", id: "task-new" });
+  });
+
+  it("returns null when there is no valid activity to open", () => {
+    expect(defaultActivitySelection({
+      tasks: [],
+      checkpoints: [{ id: "checkpoint-invalid", at: 0 }],
+      prInsights: [{ id: "insight-invalid", at: "not a date" }],
+      reviews: [],
+    })).toBeNull();
   });
 });

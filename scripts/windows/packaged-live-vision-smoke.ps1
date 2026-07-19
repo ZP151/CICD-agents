@@ -8,6 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+. (Join-Path $PSScriptRoot "msi-extract-helpers.ps1")
 if ([string]::IsNullOrWhiteSpace($SidecarPath) -and [string]::IsNullOrWhiteSpace($MsiPath)) {
   $SidecarPath = Join-Path $repoRoot "apps\desktop\src-tauri\binaries\mergepilot-daemon-x86_64-pc-windows-msvc.exe"
 }
@@ -19,21 +20,8 @@ if (-not [string]::IsNullOrWhiteSpace($MsiPath)) {
   }
   $extractDir = Join-Path $env:TEMP ("mergepilot-vision-msi-extract-" + [guid]::NewGuid().ToString("N"))
   $logPath = Join-Path $extractDir "msiexec.log"
-  New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
-  $process = Start-Process -FilePath msiexec.exe -ArgumentList @(
-    "/a",
-    (Resolve-Path $MsiPath).Path,
-    "/qn",
-    "TARGETDIR=$extractDir",
-    "/L*v",
-    $logPath
-  ) -Wait -PassThru
-  if ($process.ExitCode -ne 0) {
-    Get-Content -LiteralPath $logPath -Tail 80 -ErrorAction SilentlyContinue
-    throw "MSI administrative extraction failed with exit code $($process.ExitCode)."
-  }
-  $daemon = Get-ChildItem -LiteralPath $extractDir -Recurse -Filter mergepilot-daemon.exe |
-    Select-Object -First 1
+  $extractMethod = Invoke-MergePilotMsiExtraction -PackagePath $MsiPath -Destination $extractDir -InstallerLogPath $logPath -RetryOnInstallerBusy
+  $daemon = Find-MergePilotExtractedDaemon -Root $extractDir
   if (-not $daemon) {
     throw "Extracted MSI did not contain mergepilot-daemon.exe under $extractDir."
   }
@@ -205,6 +193,7 @@ try {
       healthVersion = $health.version
       sidecarPath = $SidecarPath
       msiPath = if ($MsiPath) { (Resolve-Path $MsiPath).Path } else { $null }
+      extractMethod = if ($MsiPath) { $extractMethod } else { $null }
       repoPath = $fixtureRepo
       imagePath = $imagePath
       imageBytes = $imageBytes.Length
@@ -237,6 +226,7 @@ try {
     healthVersion = $health.version
     sidecarPath = (Resolve-Path $SidecarPath).Path
     msiPath = if ($MsiPath) { (Resolve-Path $MsiPath).Path } else { $null }
+    extractMethod = if ($MsiPath) { $extractMethod } else { $null }
     repoPath = $fixtureRepo
     imagePath = $imagePath
     imageBytes = $imageBytes.Length

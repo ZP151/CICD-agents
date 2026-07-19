@@ -6,6 +6,7 @@ import { reduceChatEvent } from "./chatEventReducer.js";
 import {
   makeToolCallId,
 } from "./chatToolStreamState.js";
+import { visibleProgressStatusText } from "./chatStatusText.js";
 import {
   handleCancelledEvent,
   handleDoneEvent,
@@ -86,7 +87,7 @@ export function dispatchChatStreamEvent(
 
     case "progress":
       adapter.stopStreaming();
-      adapter.setStatusText(ev.message ?? "Working");
+      adapter.setStatusText(visibleProgressStatusText(ev.message));
       break;
 
     case "tool_start": {

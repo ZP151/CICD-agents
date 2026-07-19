@@ -10,8 +10,10 @@ DevOps. Failed checks are reported as structured blockers in JSON.
 #>
 
 param(
+  [Alias("ExpectedVersion")]
   [string]$Version = "",
   [string]$MsiPath = "",
+  [string]$NsisPath = "",
   [switch]$IncludePackageSmokes,
   [int]$FreshConfigPort = 19111,
   [int]$MsiPayloadPort = 19112,
@@ -45,6 +47,7 @@ function Get-FullPathForReport {
 function Get-WindowsArtifactSignaturePaths {
   param(
     [string]$MsiPath,
+    [string]$NsisPath,
     [string]$Version
   )
 
@@ -57,6 +60,11 @@ function Get-WindowsArtifactSignaturePaths {
     if ($siblingNsisPath -notin $paths) {
       $paths += $siblingNsisPath
     }
+  }
+  if (-not [string]::IsNullOrWhiteSpace($NsisPath)) {
+    $fullNsisPath = Get-FullPathForReport -Path $NsisPath
+    $paths = @($paths | Where-Object { $_ -ne $fullNsisPath })
+    $paths += $fullNsisPath
   }
   return $paths
 }
@@ -182,7 +190,11 @@ $msiPathForReport = Get-FullPathForReport -Path $MsiPath
 $checks += Invoke-JsonScript -Name "release workflow static" -ScriptName "verify-release-workflow-static.ps1"
 $checks += Invoke-JsonScript -Name "release workflow strict tracking" -ScriptName "verify-release-workflow-static.ps1" -Arguments @("-RequireTrackedScripts")
 $checks += Invoke-JsonScript -Name "windows script parser" -ScriptName "verify-windows-scripts-parse.ps1"
-$checks += Invoke-JsonScript -Name "windows installer metadata" -ScriptName "verify-windows-installer-metadata.ps1" -Arguments @("-Version", $Version, "-MsiPath", $msiPathForReport)
+$installerMetadataArgs = @("-Version", $Version, "-MsiPath", $msiPathForReport)
+if (-not [string]::IsNullOrWhiteSpace($NsisPath)) {
+  $installerMetadataArgs += @("-NsisSetupPath", (Get-FullPathForReport -Path $NsisPath))
+}
+$checks += Invoke-JsonScript -Name "windows installer metadata" -ScriptName "verify-windows-installer-metadata.ps1" -Arguments $installerMetadataArgs
 $checks += Invoke-JsonScript -Name "stale chat template scan" -ScriptName "verify-no-stale-chat-template.ps1" -Arguments @(
   "-MsiPath", $msiPathForReport,
   "-ExtractionTimeoutSec", [string]$StaleScanExtractionTimeoutSec
@@ -192,7 +204,7 @@ if ($IncludePackageSmokes) {
   $checks += Invoke-JsonScript -Name "packaged MSI payload" -ScriptName "packaged-msi-payload-smoke.ps1" -Arguments @("-MsiPath", $msiPathForReport, "-Port", [string]$MsiPayloadPort)
 }
 
-$signaturePaths = @(Get-WindowsArtifactSignaturePaths -MsiPath $msiPathForReport -Version $Version)
+$signaturePaths = @(Get-WindowsArtifactSignaturePaths -MsiPath $msiPathForReport -NsisPath $NsisPath -Version $Version)
 $signaturePathArgs = @()
 if ($signaturePaths.Count -gt 0) {
   $signaturePathArgs = @("-Paths", ($signaturePaths -join [System.IO.Path]::PathSeparator))
@@ -210,6 +222,11 @@ if ($signaturePaths.Count -gt 0) {
   $signatureArgs += $signaturePathArgs
 }
 $checks += Invoke-JsonScript -Name "windows artifact signatures" -ScriptName "verify-windows-artifact-signatures.ps1" -Arguments $signatureArgs
+$checks += Invoke-JsonScript -Name "installed runtime owner" -ScriptName "verify-installed-runtime-owner.ps1" -Arguments @(
+  "-ExpectedVersion", $Version,
+  "-RequireRuntime",
+  "-RequireDesktopSidecarMode"
+)
 $installedPackageCheck = Invoke-JsonScript -Name "installed package state" -ScriptName "verify-installed-windows-package-state.ps1" -Arguments @(
   "-ExpectedVersion", $Version,
   "-ExpectedDesktopBundleKind", "msi",
@@ -278,12 +295,26 @@ $nextActions = [pscustomobject]@{
   } else {
     $null
   }
+  fixInstalledRuntimeOwner = if ($blockerNames -contains "installed runtime owner") {
+    [pscustomobject]@{
+      reason = "The default runtime port is not owned by the installed MergePilot daemon, so the desktop can connect to the wrong backend."
+      inspectCommand = Get-RepoPowerShellCommand -ScriptRelativePath "scripts\windows\verify-installed-runtime-owner.ps1" -Arguments @(
+        "-ExpectedVersion", $Version,
+        "-RequireRuntime",
+        "-RequireDesktopSidecarMode"
+      )
+      recovery = "Close stale source/dev daemons, then reopen the installed desktop so it can start its bundled daemon."
+    }
+  } else {
+    $null
+  }
 }
 
 $result = [pscustomobject]@{
   ok = $blockers.Count -eq 0
   version = $Version
   msiPath = $msiPathForReport
+  nsisPath = if ([string]::IsNullOrWhiteSpace($NsisPath)) { $null } else { Get-FullPathForReport -Path $NsisPath }
   checkedAt = (Get-Date).ToString("o")
   checks = $checks | ForEach-Object {
     [pscustomobject]@{

@@ -29,12 +29,45 @@ afterEach(async () => {
 });
 
 describe("daemon basic and task routes", () => {
-  it("responds to /healthz", async () => {
-    app = await buildApp();
-    const r = await app.inject({ method: "GET", url: "/healthz" });
-    expect(r.statusCode).toBe(200);
-    const body = r.json() as { ok: boolean };
-    expect(body.ok).toBe(true);
+  it("responds to /healthz with runtime ownership metadata", async () => {
+    const previousRuntimeMode = process.env.MERGEPILOT_RUNTIME_MODE;
+    const previousDesktopVersion = process.env.MERGEPILOT_DESKTOP_VERSION;
+    const previousDaemonVersion = process.env.MERGEPILOT_DAEMON_VERSION;
+    const previousBuildSha = process.env.MERGEPILOT_BUILD_SHA;
+    process.env.MERGEPILOT_RUNTIME_MODE = "desktop-sidecar";
+    process.env.MERGEPILOT_DESKTOP_VERSION = "0.5.23-test";
+    process.env.MERGEPILOT_DAEMON_VERSION = "0.5.23-test";
+    process.env.MERGEPILOT_BUILD_SHA = "abc123-runtime";
+    try {
+      app = await buildApp();
+      const r = await app.inject({ method: "GET", url: "/healthz" });
+      expect(r.statusCode).toBe(200);
+      const body = r.json() as {
+        ok: boolean;
+        version: string;
+        runtimeMode: string;
+        desktopVersion: string;
+        buildSha: string;
+        pid: number;
+        execPath: string;
+      };
+      expect(body.ok).toBe(true);
+      expect(body.version).toBe("0.5.23-test");
+      expect(body.runtimeMode).toBe("desktop-sidecar");
+      expect(body.desktopVersion).toBe("0.5.23-test");
+      expect(body.buildSha).toBe("abc123-runtime");
+      expect(body.pid).toBe(process.pid);
+      expect(body.execPath).toBe(process.execPath);
+    } finally {
+      if (previousRuntimeMode === undefined) delete process.env.MERGEPILOT_RUNTIME_MODE;
+      else process.env.MERGEPILOT_RUNTIME_MODE = previousRuntimeMode;
+      if (previousDesktopVersion === undefined) delete process.env.MERGEPILOT_DESKTOP_VERSION;
+      else process.env.MERGEPILOT_DESKTOP_VERSION = previousDesktopVersion;
+      if (previousDaemonVersion === undefined) delete process.env.MERGEPILOT_DAEMON_VERSION;
+      else process.env.MERGEPILOT_DAEMON_VERSION = previousDaemonVersion;
+      if (previousBuildSha === undefined) delete process.env.MERGEPILOT_BUILD_SHA;
+      else process.env.MERGEPILOT_BUILD_SHA = previousBuildSha;
+    }
   });
 
   it("submits and observes a task", async () => {

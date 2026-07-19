@@ -18,9 +18,16 @@ export function CheckpointRollbackPlanSection({
           Rollback Plan
         </h3>
         {rollbackLoading && (
-          <span className="text-[11px] text-[rgb(var(--app-text-muted))]">Loading</span>
+          <span className="rounded-full bg-[rgb(var(--app-surface-raised))] px-2 py-0.5 text-[11px] text-[rgb(var(--app-text-muted))] ring-1 ring-[rgb(var(--app-border))]">
+            Preparing recovery
+          </span>
         )}
       </div>
+      {rollbackLoading && !rollbackPlan && (
+        <p className="text-sm text-[rgb(var(--app-text-muted))]">
+          Checking whether this checkpoint can be restored safely...
+        </p>
+      )}
       {!rollbackLoading && !rollbackPlan && (
         <p className="text-sm text-[rgb(var(--app-text-muted))]">
           No rollback plan available for this checkpoint.
@@ -32,8 +39,8 @@ export function CheckpointRollbackPlanSection({
             <span
               className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${
                 rollbackPlan.supported
-                  ? "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300"
-                  : "bg-amber-500/10 text-amber-800 ring-amber-500/30 dark:text-amber-300"
+                  ? "bg-[rgb(var(--app-success-soft))] text-[rgb(var(--app-success))] ring-[rgb(var(--app-success-border))]"
+                  : "bg-[rgb(var(--app-warning-soft))] text-[rgb(var(--app-warning))] ring-[rgb(var(--app-warning-border))]"
               }`}
             >
               {rollbackPlan.supported ? "proposal ready" : "planning only"}
@@ -92,7 +99,7 @@ export function CheckpointRollbackPlanSection({
           {rollbackPlan.warnings.length > 0 && (
             <div className="space-y-1">
               {rollbackPlan.warnings.map((warning) => (
-                <p key={warning} className="text-xs text-amber-800 dark:text-amber-300">
+                <p key={warning} className="text-xs text-[rgb(var(--app-warning))]">
                   {warning}
                 </p>
               ))}

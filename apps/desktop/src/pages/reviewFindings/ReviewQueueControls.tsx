@@ -49,81 +49,58 @@ export function ReviewQueueControls({
   onRerunStale,
 }: ReviewQueueControlsProps): JSX.Element {
   return (
-    <section className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {lanes.map((lane) => (
-          <div
-            key={lane.key}
-            role="button"
-            tabIndex={0}
-            onClick={() => onQueueFilterChange(lane.key)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onQueueFilterChange(lane.key);
-              }
-            }}
-            aria-pressed={queueFilter === lane.key}
-            className={`cursor-pointer rounded-lg border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 ${
-              queueFilter === lane.key
-                ? `${lane.tone} border-[rgb(var(--app-accent))] ring-2 ring-[rgb(var(--app-accent))]/25`
-                : lane.tone
-            }`}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-sm font-semibold">{lane.title}</p>
-              {lane.key === "auto_approved" && (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onToggleAutoApprove();
-                  }}
-                  disabled={autoApproveSaving}
-                  className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${
-                    autoApproveEnabled
-                      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                      : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))] hover:text-[rgb(var(--app-text))]"
-                  }`}
-                  title={autoApproveEnabled ? "Disable auto-approve" : "Enable auto-approve"}
-                  aria-label={autoApproveEnabled ? "Disable auto-approve" : "Enable auto-approve"}
-                  aria-pressed={autoApproveEnabled}
-                >
-                  {autoApproveEnabled ? (
-                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                  )}
-                </button>
-              )}
-            </div>
-            <p className="mt-2 text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">{lane.description}</p>
-            <div className="mt-4 flex items-end justify-between gap-2">
-              <p className="text-2xl font-semibold text-[rgb(var(--app-text))]">{counts[lane.key]}</p>
-              {lane.key === "auto_approved" && (
-                <p className="text-[10px] font-medium text-[rgb(var(--app-text-subtle))]">
-                  {autoApproveEnabled ? "Enabled" : "Disabled"}
-                </p>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[rgb(var(--app-border))] pt-3">
+    <section className="flex flex-col gap-1.5" aria-label="Review queue controls">
+      <div className={reviewQueueLaneGridClass()} aria-label="Review queue filters">
         <button
           type="button"
           onClick={() => onQueueFilterChange("all")}
-          className={`rounded-md px-2.5 py-1 text-xs transition ${
+          className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-[11px] transition ${
             queueFilter === "all"
-              ? "border border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text))]"
-              : "border border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+              ? "border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text))] ring-2 ring-[rgb(var(--app-accent))]/15"
+              : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
           }`}
+          title="All review decisions"
         >
           All
+          <span className="rounded-full bg-[rgb(var(--app-surface-raised))] px-1.5 text-[10px] font-semibold text-[rgb(var(--app-text-muted))]">
+            {totalCount}
+          </span>
+        </button>
+        {lanes.map((lane) => (
+          <button
+            key={lane.key}
+            type="button"
+            onClick={() => onQueueFilterChange(lane.key)}
+            aria-pressed={queueFilter === lane.key}
+            title={lane.description}
+            className={`inline-flex h-7 min-w-0 items-center gap-1.5 rounded-md border px-2 text-left text-[11px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 ${
+              queueFilter === lane.key
+                ? "border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text))] ring-2 ring-[rgb(var(--app-accent))]/15"
+                : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+            }`}
+          >
+            <span className="min-w-0 truncate font-medium">{reviewQueueCompactLaneLabel(lane.key)}</span>
+            <span className="shrink-0 rounded-full bg-[rgb(var(--app-surface-raised))] px-1.5 text-[10px] font-semibold text-[rgb(var(--app-text-muted))]">
+              {counts[lane.key]}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onToggleAutoApprove}
+          disabled={autoApproveSaving}
+          className={`rounded-md border px-2.5 py-1 text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
+            autoApproveEnabled
+              ? "border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft)_/_0.58)] text-[rgb(var(--app-success))] hover:bg-[rgb(var(--app-success-soft))]"
+              : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+          }`}
+          title={autoApproveEnabled ? "Disable auto-approve" : "Enable auto-approve"}
+          aria-label={autoApproveEnabled ? "Disable auto-approve" : "Enable auto-approve"}
+          aria-pressed={autoApproveEnabled}
+        >
+          Auto: {autoApproveEnabled ? "On" : "Off"}
         </button>
         <select
           className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1 text-xs text-[rgb(var(--app-text-muted))] outline-none focus:border-[rgb(var(--app-border-strong))]"
@@ -165,7 +142,7 @@ export function ReviewQueueControls({
           type="button"
           disabled={batchRerunning || staleCount === 0}
           onClick={onRerunStale}
-          className="rounded-md border border-amber-500/35 px-2.5 py-1 text-xs text-amber-800 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-300"
+          className="rounded-md border border-[rgb(var(--app-warning))]/35 px-2.5 py-1 text-xs text-[rgb(var(--app-warning))] transition hover:bg-[rgb(var(--app-warning)_/_0.10)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {batchRerunning && batchProgress && batchMode === "stale"
             ? `Rerun stale ${batchProgress.done}/${batchProgress.total}`
@@ -176,10 +153,25 @@ export function ReviewQueueControls({
             </span>
           )}
         </button>
-        <span className="ml-auto text-xs text-[rgb(var(--app-text-subtle))]">
-          {displayedCount} visible from {totalCount} decisions
+        <span className={reviewQueueFooterCountClass()}>
+          {displayedCount}/{totalCount}
         </span>
       </div>
     </section>
   );
+}
+
+export function reviewQueueLaneGridClass(): string {
+  return "flex flex-wrap gap-1.5";
+}
+
+export function reviewQueueFooterCountClass(): string {
+  return "rounded-md border border-transparent px-1.5 py-1 text-xs text-[rgb(var(--app-text-subtle))] sm:ml-auto sm:w-auto sm:text-right";
+}
+
+export function reviewQueueCompactLaneLabel(key: ReviewQueueItem["decisionQueue"]): string {
+  if (key === "auto_approved") return "Auto";
+  if (key === "needs_human_review") return "Human";
+  if (key === "blocked") return "Blocked";
+  return "Watch";
 }

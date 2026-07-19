@@ -62,8 +62,8 @@ export function AdditionalModelEditor({
         />
       </SettingsRow>
       <SettingsRow title="Actions">
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="settings-action-stack">
+          <div className="settings-action-row">
             <button
               type="button"
               className="settings-text-button"
@@ -80,10 +80,10 @@ export function AdditionalModelEditor({
             </button>
           </div>
           {modelDraft.available && (
-            <p className="text-[11px] text-emerald-500">Connection verified.</p>
+            <p className="settings-feedback-line text-[rgb(var(--app-success))]">Connection verified.</p>
           )}
           {modelDraft.testError && (
-            <p className="max-w-[360px] text-right text-[11px] text-red-500">
+            <p className="settings-feedback-line text-[rgb(var(--app-danger))]">
               {modelDraft.testError}
             </p>
           )}

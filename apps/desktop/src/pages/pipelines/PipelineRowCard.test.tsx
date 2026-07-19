@@ -1,6 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { PipelineRowCard } from "./PipelineRowCard.js";
+import {
+  PipelineRowCard,
+  pipelineAnalysisPreviewClass,
+  pipelineActionRowClass,
+  pipelineFieldGridClass,
+} from "./PipelineRowCard.js";
 import type { PipelineRow } from "./pipelineTypes.js";
 import { rowKey } from "./usePipelinesRuntime.js";
 
@@ -30,7 +35,7 @@ describe("PipelineRowCard", () => {
     );
   });
 
-  it("keeps missing latest run dates quiet and shows the latest run field fallback", () => {
+  it("keeps missing latest run dates quiet without repeating no-run fallback text", () => {
     const html = renderToStaticMarkup(
       <PipelineRowCard
         row={baseRow}
@@ -43,8 +48,16 @@ describe("PipelineRowCard", () => {
       />,
     );
 
-    expect(html).toContain("No run linked yet");
+    expect(html).toContain("No recent run");
+    expect(html).toContain('data-testid="pipeline-row-card"');
+    expect(html).not.toContain("No run linked yet");
     expect(html).not.toContain("Unknown");
+    expect(html).toContain("min-w-0 flex-1");
+    expect(html).toContain("Pipeline summary");
+    expect(html).toContain("Branches");
+    expect(html).toContain("main -&gt; main");
+    expect(html).toContain("title=\"Default branch: main; Target branch: main\"");
+    expect(html).not.toContain("Latest run");
   });
 
   it("renders pipeline AI analysis as Markdown with a stable ready state", () => {
@@ -74,6 +87,7 @@ describe("PipelineRowCard", () => {
 
     expect(html).toContain("AI analysis");
     expect(html).toContain("Ready");
+    expect(html).toContain("max-h-16");
     expect(html).toContain("<strong>Status:");
     expect(html).toContain("<li class=");
     expect(html).toContain("No failed runs.");
@@ -116,7 +130,37 @@ describe("PipelineRowCard", () => {
 
     expect(html).toContain("20260705.1");
     expect(html).toContain("Succeeded");
-    expect(html).toContain("text-emerald-700");
-    expect(html).toContain("ring-emerald-500/30");
+    expect(html).toContain("text-[rgb(var(--app-success))]");
+    expect(html).toContain("ring-[rgb(var(--app-success-border))]");
+  });
+
+  it("lets pipeline action buttons wrap naturally on narrow cards", () => {
+    const className = pipelineActionRowClass();
+
+    expect(className).toContain("justify-start");
+    expect(className).toContain("sm:justify-end");
+    expect(className).toContain("flex-wrap");
+    expect(className).not.toContain("justify-end gap-2");
+  });
+
+  it("keeps AI analysis preview compact inside pipeline cards", () => {
+    const className = pipelineAnalysisPreviewClass();
+
+    expect(className).toContain("max-h-16");
+    expect(className).toContain("overflow-hidden");
+    expect(className).toContain("[&_li]:truncate");
+    expect(className).not.toContain("max-h-36");
+  });
+
+  it("uses compact wrapping summary chips so branch and run fields do not form a tall grid", () => {
+    const className = pipelineFieldGridClass();
+
+    expect(className).toContain("flex");
+    expect(className).toContain("flex-wrap");
+    expect(className).toContain("gap-1.5");
+    expect(className).not.toContain("grid");
+    expect(className).not.toContain("auto-fit");
+    expect(className).not.toContain("sm:grid-cols-2");
+    expect(className).not.toContain("2xl:grid-cols-4");
   });
 });

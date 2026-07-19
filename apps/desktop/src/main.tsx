@@ -7,7 +7,6 @@ import { ThemeProvider } from "./theme.js";
 import "streamdown/styles.css";
 import "./index.css";
 import "./styles/base.css";
-import "./styles/theme-compat.css";
 import "./styles/settings.css";
 import "./styles/chat-workspace.css";
 import "./styles/conversation-markdown.css";

@@ -60,6 +60,7 @@ export function ChatWorkspaceLayout({
   repoPath,
   resolveConfirm,
   rightPanelOpen,
+  rightPanelOverlay,
   rightWidth,
   runWorkspaceAction,
   scrollContainerRef,
@@ -97,34 +98,43 @@ export function ChatWorkspaceLayout({
 }: ChatShellProps) {
   const summaryPinnedAvailable = Boolean(activeProjectLinkId || bubbles.length > 0);
   const summaryVisible = summaryPinnedAvailable && summaryPinnedOpen;
+  const codeSidePanelVisible = shouldRenderCodeSidePanel({ mini, rightPanelOpen });
+  const composerVisible = shouldShowChatComposer({
+    mini,
+    projectLinksLoading,
+    activeProjectLinkId,
+    bubbleCount: bubbles.length,
+  });
 
   return (
     <div ref={workspaceRef} className={mini ? "flex flex-1 flex-col overflow-hidden" : "chat-workspace"}>
       {!mini && (
         <>
-          <HistorySidebar
-            open={historyOpen}
-            width={historyWidth}
-            history={history}
-            activeSessionId={sessionId}
-            historyError={historyError}
-            expanded={historyExpanded}
-            loading={historyLoading}
-            page={historyPage}
-            menu={historyMenu}
-            renamingHistoryId={renamingHistoryId}
-            renamingHistoryValue={renamingHistoryValue}
-            onPageChange={setHistoryPage}
-            onExpandedChange={setHistoryExpanded}
-            onMenuChange={setHistoryMenu}
-            onRenameValueChange={setRenamingHistoryValue}
-            onCancelRename={cancelHistoryRename}
-            onLoadSession={(targetSessionId) => void loadSession(targetSessionId)}
-            onTogglePin={(entry) => void toggleHistoryPin(entry)}
-            onBeginRename={beginRenameHistory}
-            onCommitRename={(entry, value) => void commitHistoryRename(entry, value)}
-            onDeleteEntry={(entry) => { void deleteHistoryEntry(entry); }}
-          />
+          {historyOpen && (
+            <HistorySidebar
+              open={historyOpen}
+              width={historyWidth}
+              history={history}
+              activeSessionId={sessionId}
+              historyError={historyError}
+              expanded={historyExpanded}
+              loading={historyLoading}
+              page={historyPage}
+              menu={historyMenu}
+              renamingHistoryId={renamingHistoryId}
+              renamingHistoryValue={renamingHistoryValue}
+              onPageChange={setHistoryPage}
+              onExpandedChange={setHistoryExpanded}
+              onMenuChange={setHistoryMenu}
+              onRenameValueChange={setRenamingHistoryValue}
+              onCancelRename={cancelHistoryRename}
+              onLoadSession={(targetSessionId) => void loadSession(targetSessionId)}
+              onTogglePin={(entry) => void toggleHistoryPin(entry)}
+              onBeginRename={beginRenameHistory}
+              onCommitRename={(entry, value) => void commitHistoryRename(entry, value)}
+              onDeleteEntry={(entry) => { void deleteHistoryEntry(entry); }}
+            />
+          )}
           {historyOpen && (
             <div
               className="panel-resize-handle"
@@ -154,6 +164,7 @@ export function ChatWorkspaceLayout({
               selectedArtifactId={selectedArtifactId}
               createProjectLink={createProjectLink}
               selectProjectLink={(projectLink) => selectProjectLink(projectLink.id)}
+              onWelcomeSuggestion={handleSuggestionReply}
               toggleTool={toggleTool}
               confirmPendingAction={confirmPendingAction}
               cancelPendingAction={cancelPendingAction}
@@ -166,33 +177,35 @@ export function ChatWorkspaceLayout({
             <div ref={bottomRef} />
           </div>
 
-          <ComposerShell
-            mini={mini}
-            input={input}
-            textareaRef={textareaRef}
-            modelMenuRef={modelMenuRef}
-            modelMenuOpen={modelMenuOpen}
-            activeModel={activeModel}
-            activeCustomModel={activeCustomModel}
-            customModels={customModels}
-            availableProjectLinks={availableProjectLinks}
-            projectLinksLoading={projectLinksLoading}
-            activeProjectLinkId={activeProjectLinkId}
-            composerStateNotice={composerStateNotice}
-            composerInputState={composerInputState}
-            suggestionReplies={suggestionReplies}
-            busy={busy}
-            workflowState={workflowState}
-            queuedSuggestionId={queuedSuggestionId}
-            onInputChange={setInput}
-            onSend={send}
-            onStop={stopCurrentTurn}
-            onCancelQueuedSuggestion={cancelQueuedSuggestion}
-            onSuggestionPick={handleSuggestionReply}
-            onProjectLinkSelect={selectProjectLink}
-            onModelMenuOpenChange={setModelMenuOpen}
-            onActiveModelChange={setActiveModel}
-          />
+          {composerVisible && (
+            <ComposerShell
+              mini={mini}
+              input={input}
+              textareaRef={textareaRef}
+              modelMenuRef={modelMenuRef}
+              modelMenuOpen={modelMenuOpen}
+              activeModel={activeModel}
+              activeCustomModel={activeCustomModel}
+              customModels={customModels}
+              availableProjectLinks={availableProjectLinks}
+              projectLinksLoading={projectLinksLoading}
+              activeProjectLinkId={activeProjectLinkId}
+              composerStateNotice={composerStateNotice}
+              composerInputState={composerInputState}
+              suggestionReplies={suggestionReplies}
+              busy={busy}
+              workflowState={workflowState}
+              queuedSuggestionId={queuedSuggestionId}
+              onInputChange={setInput}
+              onSend={send}
+              onStop={stopCurrentTurn}
+              onCancelQueuedSuggestion={cancelQueuedSuggestion}
+              onSuggestionPick={handleSuggestionReply}
+              onProjectLinkSelect={selectProjectLink}
+              onModelMenuOpenChange={setModelMenuOpen}
+              onActiveModelChange={setActiveModel}
+            />
+          )}
         </div>
       </div>
 
@@ -219,28 +232,53 @@ export function ChatWorkspaceLayout({
       {!mini && (
         <>
           <aside
-            className="right-panel"
+            className={rightPanelClass(rightPanelOverlay)}
             style={{
               width: rightPanelOpen ? rightWidth : 0,
               opacity: rightPanelOpen ? 1 : 0,
               pointerEvents: rightPanelOpen ? "auto" : "none",
             }}
           >
-            <CodeSidePanel
-              repoPath={repoPath}
-              source={selectedSource}
-              sources={openSources}
-              artifact={selectedArtifact}
-              artifactLookupState={selectedArtifactLookupState}
-              artifactCount={artifactCount}
-              onSourceSelect={selectSource}
-              onSourceClose={closeSource}
-              onClearSources={clearSources}
-              onClearArtifact={clearArtifact}
-            />
+            {codeSidePanelVisible && (
+              <CodeSidePanel
+                repoPath={repoPath}
+                source={selectedSource}
+                sources={openSources}
+                artifact={selectedArtifact}
+                artifactLookupState={selectedArtifactLookupState}
+                artifactCount={artifactCount}
+                onSourceSelect={selectSource}
+                onSourceClose={closeSource}
+                onClearSources={clearSources}
+                onClearArtifact={clearArtifact}
+              />
+            )}
           </aside>
         </>
       )}
     </div>
   );
+}
+
+export function shouldShowChatComposer(options: {
+  mini: boolean;
+  projectLinksLoading: boolean;
+  activeProjectLinkId: string | null;
+  bubbleCount: number;
+}): boolean {
+  if (options.mini) return true;
+  if (options.activeProjectLinkId) return true;
+  return options.bubbleCount > 0;
+}
+
+export function shouldRenderCodeSidePanel(options: {
+  mini: boolean;
+  rightPanelOpen: boolean;
+}): boolean {
+  if (options.mini) return false;
+  return options.rightPanelOpen;
+}
+
+export function rightPanelClass(overlay: boolean): string {
+  return overlay ? "right-panel right-panel--overlay" : "right-panel";
 }

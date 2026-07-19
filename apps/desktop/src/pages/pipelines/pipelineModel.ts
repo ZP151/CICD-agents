@@ -36,19 +36,19 @@ export function runTone(run: PipelineRunSummary | undefined): RunTone {
   if (run.state && run.state !== "completed") {
     return {
       label: run.state,
-      tone: "text-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent-soft))] ring-[rgb(var(--app-accent))]/25",
+      tone: "text-[rgb(var(--app-accent-readable))] bg-[rgb(var(--app-accent-soft))] ring-[rgb(var(--app-accent))]/25",
     };
   }
   if (run.result === "succeeded") {
     return {
       label: "Succeeded",
-      tone: "text-emerald-700 bg-emerald-500/10 ring-emerald-500/30 dark:text-emerald-300",
+      tone: "text-[rgb(var(--app-success))] bg-[rgb(var(--app-success-soft))] ring-[rgb(var(--app-success-border))]",
     };
   }
   if (run.result === "failed" || run.result === "canceled") {
     return {
       label: run.result,
-      tone: "text-red-700 bg-red-500/10 ring-red-500/30 dark:text-red-300",
+      tone: "text-[rgb(var(--app-danger))] bg-[rgb(var(--app-danger-soft))] ring-[rgb(var(--app-danger-border))]",
     };
   }
   return {
@@ -158,13 +158,27 @@ export function buildPipelineRows(
       });
     }
   }
-  return rows.sort(
+  return dedupePipelineRows(rows).sort(
     (a, b) =>
       a.project.localeCompare(b.project) ||
       a.repository.localeCompare(b.repository) ||
       Number(b.source === "saved") - Number(a.source === "saved") ||
       a.pipelineName.localeCompare(b.pipelineName),
   );
+}
+
+export function dedupePipelineRows(rows: PipelineRow[]): PipelineRow[] {
+  const byPipeline = new Map<string, PipelineRow>();
+  for (const row of rows) {
+    const key = pipelineIdentityKey(row);
+    const existing = byPipeline.get(key);
+    if (!existing) {
+      byPipeline.set(key, row);
+      continue;
+    }
+    byPipeline.set(key, mergePipelineRows(pickPreferredPipelineRow(existing, row), existing, row));
+  }
+  return [...byPipeline.values()];
 }
 
 export function countPipelineRows(rows: PipelineRow[]): Record<PipelineStatusFilter, number> {
@@ -181,6 +195,51 @@ function compareRunsNewestFirst(a: PipelineRunSummary, b: PipelineRunSummary): n
   const left = parseSortableDate(b.finishedDate || b.createdDate);
   const right = parseSortableDate(a.finishedDate || a.createdDate);
   return left - right;
+}
+
+function pipelineIdentityKey(row: PipelineRow): string {
+  return [
+    row.orgUrl.trim().toLowerCase().replace(/\/+$/, ""),
+    row.project.trim().toLowerCase(),
+    row.repository.trim().toLowerCase(),
+    row.pipelineId.trim().toLowerCase(),
+  ].join("\u001f");
+}
+
+function pickPreferredPipelineRow(left: PipelineRow, right: PipelineRow): PipelineRow {
+  const score = (row: PipelineRow) =>
+    Number(row.source === "saved") * 100 +
+    Number(isHumanProjectLinkName(row.projectLinkName)) * 10 +
+    Number(Boolean(row.latestRun)) * 5 +
+    Number(Boolean(row.connectionId)) * 2;
+  const leftScore = score(left);
+  const rightScore = score(right);
+  if (leftScore !== rightScore) return leftScore > rightScore ? left : right;
+  return left.projectLinkName.localeCompare(right.projectLinkName) <= 0 ? left : right;
+}
+
+function isHumanProjectLinkName(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return Boolean(normalized) && !normalized.startsWith("mp-live-") && !normalized.startsWith("test-");
+}
+
+function mergePipelineRows(preferred: PipelineRow, left: PipelineRow, right: PipelineRow): PipelineRow {
+  const relatedPullRequests = dedupeRelatedPullRequests([
+    ...left.relatedPullRequests,
+    ...right.relatedPullRequests,
+  ]);
+  const latestRun = [left.latestRun, right.latestRun]
+    .filter((run): run is PipelineRunSummary => Boolean(run))
+    .sort(compareRunsNewestFirst)[0];
+  return {
+    ...preferred,
+    latestRun,
+    relatedPullRequests,
+  };
+}
+
+function dedupeRelatedPullRequests(prs: PullRequestSummary[]): PullRequestSummary[] {
+  return [...new Map(prs.map((pr) => [String(pr.id), pr])).values()];
 }
 
 function latestRunForPipeline(

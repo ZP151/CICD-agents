@@ -22,6 +22,37 @@ import {
   type PrInsightArtifact,
 } from "../prInsightArtifacts.js";
 
+export function pullRequestsWorkspaceLayoutClass(insightOpen: boolean): string {
+  void insightOpen;
+  return "flex flex-1 flex-col gap-3";
+}
+
+export function pullRequestsListGridClass(): string {
+  return [
+    "grid gap-3 items-start",
+    "grid-cols-[repeat(auto-fit,minmax(min(100%,34rem),1fr))]",
+  ].join(" ");
+}
+
+export function pullRequestsPageShellClass(): string {
+  return "mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-4";
+}
+
+export function pullRequestInsightPanelClass(): string {
+  return [
+    "fixed inset-y-0 right-0 z-40 min-w-0 w-[min(30rem,calc(100vw-2rem))]",
+    "overflow-y-auto border-l border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl",
+  ].join(" ");
+}
+
+export function pullRequestLoadingMetaGridClass(): string {
+  return "mt-3 grid gap-2 grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))]";
+}
+
+export function pullRequestEmptyChecklistGridClass(): string {
+  return "mt-3 grid gap-1.5 text-xs text-[rgb(var(--app-text-muted))] grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))]";
+}
+
 export default function PullRequests(): JSX.Element {
   const runtime = usePullRequestsRuntime();
   const {
@@ -72,10 +103,11 @@ export default function PullRequests(): JSX.Element {
     setSelectedInsightPrKey(null);
   }, [category, projectLinkId, status]);
 
-  const firstLoad = (projectLinksLoading && projectLinks.length === 0) || loading;
+  const projectLinkResolving = projectLinksLoading && projectLinks.length === 0 && !projectLinkId;
+  const firstLoad = !projectLinkResolving && loading;
 
   return (
-    <div className="flex min-h-full w-full flex-col gap-5">
+    <div className={pullRequestsPageShellClass()}>
       <PullRequestPageHeader
         projectLinks={projectLinks}
         projectLinksLoading={projectLinksLoading}
@@ -88,13 +120,13 @@ export default function PullRequests(): JSX.Element {
         onRefresh={() => void load()}
       />
 
-      {error && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">
+      {error && prs.length > 0 && (
+        <div className="rounded-lg border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] p-4 text-sm text-[rgb(var(--app-danger))]">
           {error}
         </div>
       )}
       {!error && pullRequestWarnings.length > 0 && (
-        <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+        <div className="rounded-lg border border-[rgb(var(--app-warning))]/25 bg-[rgb(var(--app-warning)_/_0.10)] p-3 text-sm text-[rgb(var(--app-warning))]">
           <p className="font-medium">Some Project Links could not refresh.</p>
           <ul className="mt-1 list-disc space-y-1 pl-4 text-xs leading-relaxed">
             {pullRequestWarnings.slice(0, 3).map((warning) => (
@@ -104,34 +136,33 @@ export default function PullRequests(): JSX.Element {
         </div>
       )}
 
+      {projectLinkResolving && <PullRequestProjectLinkResolvingState />}
       {firstLoad && <PullRequestLoadingSkeleton />}
       {!loading && refreshing && (
         <p className="text-xs text-[rgb(var(--app-text-subtle))]">Refreshing pull requests...</p>
       )}
 
-      {!firstLoad && !error && prs.length === 0 && (
-        <div className="flex flex-1 items-center justify-center rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-8 text-center">
-          <div>
-            <p className="text-sm font-medium text-[rgb(var(--app-text))]">
-              No pull requests found
-            </p>
-            <p className="mt-1 text-sm text-[rgb(var(--app-text-muted))]">
-              Try another Project Link or status filter.
-            </p>
-          </div>
-        </div>
+      {!projectLinkResolving && !firstLoad && error && prs.length === 0 && (
+        <PullRequestEmptyState
+          mode="error"
+          hasProjectLinks={projectLinks.length > 0}
+          message={error}
+          onRefresh={() => void load()}
+        />
+      )}
+
+      {!projectLinkResolving && !firstLoad && !error && prs.length === 0 && (
+        <PullRequestEmptyState
+          mode="empty"
+          hasProjectLinks={projectLinks.length > 0}
+          onRefresh={() => void load()}
+        />
       )}
 
       {prs.length > 0 && (
-        <div
-          className={
-            selectedInsightPr
-              ? "grid flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_26rem]"
-              : "flex flex-1 flex-col gap-3"
-          }
-        >
+        <div className={pullRequestsWorkspaceLayoutClass(Boolean(selectedInsightPr))}>
           <div className="flex min-w-0 flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2">
               <div className="flex flex-wrap gap-1.5">
                 {prCategories.map((item) => (
                   <button
@@ -164,27 +195,29 @@ export default function PullRequests(): JSX.Element {
               </div>
             )}
 
-            {paginatedPrs.pageItems.map((pr) => {
-              const prKey = pullRequestRuntimeKey(pr);
-              return (
-                <PullRequestCard
-                  key={prKey}
-                  pr={pr}
-                  projectLinkId={projectLinkId}
-                  queueState={queueing[prKey] ?? { phase: "idle" }}
-                  previewState={previews[prKey] ?? { phase: "idle" }}
-                  insightArtifacts={insightArtifacts}
-                  contextState={contexts[prKey]}
-                  isExpanded={expandedPrKey === prKey}
-                  highlighted={highlightedPrKey === prKey}
-                  onToggleContext={(target) => void toggleContext(target)}
-                  onPreviewInsight={(target) => void handlePreviewInsight(target)}
-                  onQueueForReview={(target) => void handleQueueForReview(target)}
-                  onOpenInsight={(target) => setSelectedInsightPrKey(pullRequestRuntimeKey(target))}
-                  onOpenSavedInsightInChat={openSavedInsightInChat}
-                />
-              );
-            })}
+            <div className={pullRequestsListGridClass()}>
+              {paginatedPrs.pageItems.map((pr) => {
+                const prKey = pullRequestRuntimeKey(pr);
+                return (
+                  <PullRequestCard
+                    key={prKey}
+                    pr={pr}
+                    projectLinkId={projectLinkId}
+                    queueState={queueing[prKey] ?? { phase: "idle" }}
+                    previewState={previews[prKey] ?? { phase: "idle" }}
+                    insightArtifacts={insightArtifacts}
+                    contextState={contexts[prKey]}
+                    isExpanded={expandedPrKey === prKey}
+                    highlighted={highlightedPrKey === prKey}
+                    onToggleContext={(target) => void toggleContext(target)}
+                    onPreviewInsight={(target) => void handlePreviewInsight(target)}
+                    onQueueForReview={(target) => void handleQueueForReview(target)}
+                    onOpenInsight={(target) => setSelectedInsightPrKey(pullRequestRuntimeKey(target))}
+                    onOpenSavedInsightInChat={openSavedInsightInChat}
+                  />
+                );
+              })}
+            </div>
             <PaginationControls
               page={page}
               pageCount={paginatedPrs.pageCount}
@@ -218,10 +251,26 @@ export default function PullRequests(): JSX.Element {
   );
 }
 
-function PullRequestLoadingSkeleton(): JSX.Element {
+export function PullRequestLoadingSkeleton(): JSX.Element {
   return (
-    <div className="grid gap-3" aria-label="Preparing pull requests">
-      <div className="h-14 animate-pulse rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]" />
+    <section
+      className="grid gap-3"
+      aria-label="Preparing pull requests"
+      aria-live="polite"
+    >
+      <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4">
+        <div className="flex max-w-xl items-center gap-3">
+          <span className="h-9 w-9 animate-pulse rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[rgb(var(--app-text))]">
+              Preparing pull requests
+            </p>
+            <p className="mt-1 text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
+              Keeping the workspace ready while Azure DevOps returns active PRs and saved insight.
+            </p>
+          </div>
+        </div>
+      </div>
       {Array.from({ length: 2 }).map((_, index) => (
         <div
           // eslint-disable-next-line react/no-array-index-key
@@ -233,14 +282,100 @@ function PullRequestLoadingSkeleton(): JSX.Element {
             <span className="h-5 w-24 animate-pulse rounded-full bg-[rgb(var(--app-surface-raised))]" />
           </div>
           <div className="h-4 w-2/3 animate-pulse rounded bg-[rgb(var(--app-surface-raised))]" />
-          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <div className={pullRequestLoadingMetaGridClass()}>
             <span className="h-8 animate-pulse rounded bg-[rgb(var(--app-surface-raised))]" />
             <span className="h-8 animate-pulse rounded bg-[rgb(var(--app-surface-raised))]" />
             <span className="h-8 animate-pulse rounded bg-[rgb(var(--app-surface-raised))]" />
           </div>
         </div>
       ))}
-    </div>
+    </section>
+  );
+}
+
+export function PullRequestProjectLinkResolvingState(): JSX.Element {
+  return (
+    <section
+      className="w-full max-w-5xl rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-5"
+      aria-label="Loading Project Links"
+    >
+      <div className="flex max-w-xl items-center gap-3">
+        <span className="h-9 w-9 animate-pulse rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]" />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[rgb(var(--app-text))]">
+            Loading Project Links
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
+            Checking repository mappings before loading pull requests.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function PullRequestEmptyState({
+  mode,
+  hasProjectLinks,
+  message,
+  onRefresh,
+}: {
+  mode: "empty" | "error";
+  hasProjectLinks: boolean;
+  message?: string;
+  onRefresh: () => void | Promise<void>;
+}): JSX.Element {
+  const isError = mode === "error";
+  const title = isError
+    ? "Pull requests unavailable"
+    : hasProjectLinks
+      ? "No pull requests found"
+      : "No Project Link available";
+  const description = isError
+    ? (message || "Azure DevOps could not refresh pull requests right now.")
+    : hasProjectLinks
+      ? "Try another Project Link or status filter, or refresh after creating a pull request."
+      : "Create a Project Link with Azure DevOps mapping before reviewing pull requests or generating PR insight.";
+  return (
+    <section
+      className={`w-full max-w-5xl rounded-lg border p-5 ${
+        isError
+          ? "border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.08)]"
+          : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]"
+      }`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-2xl">
+          <p className={`text-sm font-semibold ${isError ? "text-[rgb(var(--app-danger))]" : "text-[rgb(var(--app-text))]"}`}>
+            {title}
+          </p>
+          <p className={`mt-1 text-sm leading-relaxed ${isError ? "text-[rgb(var(--app-danger))]" : "text-[rgb(var(--app-text-muted))]"}`}>
+            {description}
+          </p>
+          <ul className={pullRequestEmptyChecklistGridClass()}>
+            <li>Microsoft sign-in</li>
+            <li>Repository permissions</li>
+            <li>Project Link branch scope</li>
+          </ul>
+        </div>
+        {!hasProjectLinks && !isError ? (
+          <a
+            href="#/project-links"
+            className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-1.5 text-sm font-medium text-[rgb(var(--app-text))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))]"
+          >
+            Open Project Links
+          </a>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void onRefresh()}
+            className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-1.5 text-sm text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+          >
+            Refresh
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -297,7 +432,7 @@ function PullRequestInsightSidePanel({
   const scopeLabel = pr.sourceProjectLinkName || pr.repository;
 
   return (
-    <aside className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto">
+    <aside className={pullRequestInsightPanelClass()}>
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase text-[rgb(var(--app-text-subtle))]">
@@ -348,12 +483,12 @@ function PullRequestInsightSidePanel({
 
       <div className="space-y-3">
         {previewState.phase === "error" && (
-          <p className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-xs leading-relaxed text-red-800 dark:text-red-200">
+          <p className="rounded-md border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] p-3 text-xs leading-relaxed text-[rgb(var(--app-danger))]">
             {previewState.message}
           </p>
         )}
         {queueState.phase === "error" && (
-          <p className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-xs leading-relaxed text-red-800 dark:text-red-200">
+          <p className="rounded-md border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] p-3 text-xs leading-relaxed text-[rgb(var(--app-danger))]">
             {queueState.message}
           </p>
         )}

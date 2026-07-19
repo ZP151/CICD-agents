@@ -67,7 +67,7 @@ export function StoredInsightPanel({
             ? onQueueForReview(pr)
             : onPreviewInsight(pr)}
           disabled={isRunning || previewLoading}
-          className="rounded-md border border-amber-500/35 px-2 py-1 text-xs text-amber-800 transition hover:bg-amber-500/10 disabled:cursor-wait disabled:opacity-60 dark:text-amber-300"
+          className="rounded-md border border-[rgb(var(--app-warning))]/35 px-2 py-1 text-xs text-[rgb(var(--app-warning))] transition hover:bg-[rgb(var(--app-warning)_/_0.10)] disabled:cursor-wait disabled:opacity-60"
         >
           Refresh insight
         </button>
@@ -90,7 +90,7 @@ export function StoredInsightPanel({
           </span>
         )}
         {storedInsight.risks.slice(0, 5).map((risk) => (
-          <span key={`stored-risk-${storedInsight.id}-${risk}`} className="rounded border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-800 dark:text-amber-300">
+          <span key={`stored-risk-${storedInsight.id}-${risk}`} className="rounded border border-[rgb(var(--app-warning))]/35 bg-[rgb(var(--app-warning)_/_0.10)] px-2 py-0.5 text-[10px] text-[rgb(var(--app-warning))]">
             {risk}
           </span>
         ))}
@@ -112,17 +112,27 @@ function FreshnessBadge({
 }: {
   freshness: NonNullable<ReturnType<typeof prInsightArtifactFreshness>>;
 }): JSX.Element {
+  const label = freshnessBadgeLabel(freshness);
   return (
     <span className={`rounded border px-2 py-0.5 text-[10px] ${
       freshness.state === "stale"
-        ? "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+        ? "border-[rgb(var(--app-warning))]/35 bg-[rgb(var(--app-warning)_/_0.10)] text-[rgb(var(--app-warning))]"
         : freshness.state === "fresh"
-          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+          ? "border-[rgb(var(--app-success))]/30 bg-[rgb(var(--app-success)_/_0.10)] text-[rgb(var(--app-success))]"
           : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))]"
     }`}>
-      {freshness.state}
+      {label}
     </span>
   );
+}
+
+export function freshnessBadgeLabel(
+  freshness: NonNullable<ReturnType<typeof prInsightArtifactFreshness>>,
+): string {
+  if (freshness.state === "fresh") return "Fresh";
+  if (freshness.state === "stale") return "Stale";
+  if (freshness.reasons.includes("missing_baseline")) return "No baseline";
+  return "Baseline unavailable";
 }
 
 function PreviousStoredInsights({

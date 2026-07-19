@@ -57,10 +57,10 @@ export function highlightCodeHtml(code: string, language: string): string {
 }
 
 function highlightToken(token: string, keywords: Set<string>): string {
-  if (/^(&quot;|'|`)/.test(token)) return `<span class="text-emerald-300">${token}</span>`;
-  if (/^(\/\/|#)/.test(token)) return `<span class="text-slate-500">${token}</span>`;
-  if (/^\d/.test(token)) return `<span class="text-amber-300">${token}</span>`;
-  if (keywords.has(token)) return `<span class="text-sky-300">${token}</span>`;
+  if (/^(&quot;|'|`)/.test(token)) return `<span class="syntax-token-string">${token}</span>`;
+  if (/^(\/\/|#)/.test(token)) return `<span class="syntax-token-comment">${token}</span>`;
+  if (/^\d/.test(token)) return `<span class="syntax-token-number">${token}</span>`;
+  if (keywords.has(token)) return `<span class="syntax-token-keyword">${token}</span>`;
   return token;
 }
 

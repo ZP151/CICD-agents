@@ -26,7 +26,7 @@ export function FindingsPanel({ item, findings, onClose }: FindingsPanelProps): 
       <aside className="relative z-10 flex h-full w-full max-w-xl flex-col border-l border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] shadow-2xl">
         <div className="flex items-start justify-between gap-3 border-b border-[rgb(var(--app-border))] p-4">
           <div className="min-w-0">
-            <p className="font-mono text-xs text-[rgb(var(--app-accent))]">#{item.pullRequestId}</p>
+            <p className="font-mono text-xs text-[rgb(var(--app-accent-readable))]">#{item.pullRequestId}</p>
             <h3 className="mt-1 truncate text-sm font-semibold text-[rgb(var(--app-text))]">
               Review Findings ({findings.length})
             </h3>
@@ -122,20 +122,20 @@ function WriteBackSummary({ audit }: { audit: AuditViewModel }): JSX.Element {
   if (!summary) return <></>;
   return (
     <div className="mt-3 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2 text-xs">
-      <p className={summary.ok ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-300"}>
+      <p className={summary.ok ? "text-[rgb(var(--app-success))]" : "text-[rgb(var(--app-warning))]"}>
         ADO write-back {summary.statusLabel}
         {summary.at ? ` · ${formatDate(summary.at)}` : ""}
         {summary.threadId ? ` · thread ${summary.threadId}` : ""}
       </p>
       {summary.error && (
-        <p className="mt-1 text-amber-800 dark:text-amber-300">{summary.error}</p>
+        <p className="mt-1 text-[rgb(var(--app-warning))]">{summary.error}</p>
       )}
       {summary.url && (
         <a
           href={summary.url}
           target="_blank"
           rel="noreferrer"
-          className="mt-1 inline-flex text-[rgb(var(--app-accent))] underline-offset-2 hover:underline"
+          className="mt-1 inline-flex text-[rgb(var(--app-accent-readable))] underline-offset-2 hover:underline"
         >
           Open Azure DevOps thread
         </a>
@@ -152,7 +152,7 @@ function WriteBackAttempts({ audit }: { audit: AuditViewModel }): JSX.Element {
         {audit.writeBackAttempts.map((event, index) => (
           <li key={`${event.at}-${event.dispositionLabel}-${index}`} className="rounded-md bg-[rgb(var(--app-surface))] p-2 text-xs">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className={event.ok ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-300"}>
+              <span className={event.ok ? "text-[rgb(var(--app-success))]" : "text-[rgb(var(--app-warning))]"}>
                 {event.statusLabel} · {event.dispositionLabel}
               </span>
               <span className="text-[11px] text-[rgb(var(--app-text-subtle))]">{event.at ? formatDate(event.at) : "Time not available"}</span>
@@ -162,13 +162,13 @@ function WriteBackAttempts({ audit }: { audit: AuditViewModel }): JSX.Element {
               {event.threadId ? ` · thread ${event.threadId}` : ""}
             </p>
             {event.note && <p className="mt-1 text-[rgb(var(--app-text-subtle))]">{event.note}</p>}
-            {event.error && <p className="mt-1 text-amber-800 dark:text-amber-300">{event.error}</p>}
+            {event.error && <p className="mt-1 text-[rgb(var(--app-warning))]">{event.error}</p>}
             {event.url && (
               <a
                 href={event.url}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-1 inline-flex text-[rgb(var(--app-accent))] underline-offset-2 hover:underline"
+                className="mt-1 inline-flex text-[rgb(var(--app-accent-readable))] underline-offset-2 hover:underline"
               >
                 Open attempt thread
               </a>

@@ -33,7 +33,7 @@ export function ProjectLinkAdoFields({
     <div className="grid min-w-0 gap-3 overflow-hidden rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3">
       <input
         aria-label="Azure DevOps organization URL"
-        className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
+        className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-[rgb(var(--app-accent))]"
         value={form.adoOrgUrl}
         onChange={(e) => {
           setDiscoveryError(null);
@@ -71,7 +71,7 @@ export function ProjectLinkAdoFields({
         setForm={setForm}
       />
       {discoveryError && (
-        <p className="rounded-md border border-red-900/40 bg-red-950/20 px-2.5 py-1.5 text-[11px] text-red-300">
+        <p className="rounded-md border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] px-2.5 py-1.5 text-[11px] text-[rgb(var(--app-danger))]">
           {discoveryError}
         </p>
       )}
@@ -102,7 +102,7 @@ function PipelineSelect({
     return (
       <select
         aria-label="Azure Pipeline"
-        className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
+        className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-[rgb(var(--app-accent))]"
         value={discovered.some((option) => option.id === form.adoPipelineId) ? form.adoPipelineId : ""}
         onChange={(e) => {
           const selected = discovered.find((option) => option.id === e.target.value);
@@ -121,7 +121,7 @@ function PipelineSelect({
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
       <input
         aria-label="Azure Pipeline name"
-        className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
+        className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-[rgb(var(--app-accent))]"
         value={form.adoPipelineName}
         onChange={(e) => {
           const value = e.target.value;
@@ -169,7 +169,7 @@ function ProjectSelect({
     return (
       <select
         aria-label="Azure DevOps project"
-        className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
+        className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-[rgb(var(--app-accent))]"
         value={discovered.some((option) => option.name === form.adoProject) ? form.adoProject : ""}
         onChange={(e) => {
           const selected = discovered.find((option) => option.name === e.target.value);
@@ -187,7 +187,7 @@ function ProjectSelect({
   return (
     <input
       aria-label="Azure DevOps project"
-      className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
+      className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-[rgb(var(--app-accent))]"
       value={form.adoProject}
       onChange={(e) => {
         const value = e.target.value;
@@ -227,7 +227,7 @@ function RepositorySelect({
     return (
       <select
         aria-label="Azure DevOps repository"
-        className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
+        className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-[rgb(var(--app-accent))]"
         value={discovered.some((option) => option.name === form.adoRepoName) ? form.adoRepoName : ""}
         onChange={(e) => {
           const selected = discovered.find((option) => option.name === e.target.value);
@@ -245,7 +245,7 @@ function RepositorySelect({
   return (
     <input
       aria-label="Azure DevOps repository"
-      className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-zinc-500"
+      className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-[rgb(var(--app-accent))]"
       value={form.adoRepoName}
       onChange={(e) => {
         const value = e.target.value;

@@ -20,8 +20,8 @@ interface CheckpointDetailPanelProps {
 
 function checkpointStatusClass(ok: boolean): string {
   return ok
-    ? "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300"
-    : "bg-amber-500/10 text-amber-800 ring-amber-500/30 dark:text-amber-300";
+    ? "bg-[rgb(var(--app-success-soft))] text-[rgb(var(--app-success))] ring-[rgb(var(--app-success-border))]"
+    : "bg-[rgb(var(--app-warning-soft))] text-[rgb(var(--app-warning))] ring-[rgb(var(--app-warning-border))]";
 }
 
 export function CheckpointDetailPanel({
@@ -60,26 +60,32 @@ export function CheckpointDetailPanel({
         </p>
       </header>
 
-      <section className="grid gap-3 text-sm sm:grid-cols-2">
-        <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
+      <section className={checkpointMetadataGridClass()}>
+        <div className="min-w-0 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
           <p className="text-xs text-[rgb(var(--app-text-muted))]">Repository</p>
-          <p className="mt-1 break-words font-mono text-[rgb(var(--app-text))]">
+          <p
+            className="mt-1 break-all font-mono text-[rgb(var(--app-text))]"
+            title={checkpoint.repoPath}
+          >
             {checkpoint.repoPath}
           </p>
         </div>
-        <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
+        <div className="min-w-0 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
           <p className="text-xs text-[rgb(var(--app-text-muted))]">Session</p>
-          <p className="mt-1 break-words font-mono text-[rgb(var(--app-text))]">
+          <p
+            className="mt-1 break-all font-mono text-[rgb(var(--app-text))]"
+            title={checkpoint.sessionId}
+          >
             {checkpoint.sessionId}
           </p>
         </div>
       </section>
 
-      <section className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
+      <section className="min-w-0 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
         <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">
           {checkpoint.targetCheckpointId ? "Safety Snapshot Path" : "Snapshot Path"}
         </h3>
-        <p className="break-words font-mono text-xs text-[rgb(var(--app-text))]">
+        <p className="break-all font-mono text-xs text-[rgb(var(--app-text))]">
           {checkpoint.checkpointPath}
         </p>
       </section>
@@ -114,6 +120,14 @@ export function CheckpointDetailPanel({
   );
 }
 
+export function checkpointMetadataGridClass(): string {
+  return "grid min-w-0 gap-3 text-sm grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))]";
+}
+
+export function checkpointApplySummaryGridClass(): string {
+  return "grid gap-3 text-sm grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))]";
+}
+
 function CheckpointApplySummary({
   checkpoint,
 }: {
@@ -124,7 +138,7 @@ function CheckpointApplySummary({
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">
         Checkpoint Apply
       </h3>
-      <div className="grid gap-3 text-sm sm:grid-cols-2">
+      <div className={checkpointApplySummaryGridClass()}>
         <div>
           <p className="text-xs text-[rgb(var(--app-text-muted))]">Restored Checkpoint</p>
           <p className="mt-1 break-words font-mono text-[rgb(var(--app-text))]">

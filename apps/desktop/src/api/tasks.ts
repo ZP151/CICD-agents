@@ -16,7 +16,22 @@ export interface TaskView {
 export async function fetchTasks(): Promise<TaskView[]> {
   const r = await fetch(`${RUNTIME_URL}/tasks`);
   if (!r.ok) throw new Error(await messageFromErrorResponse(`Activity runs HTTP ${r.status}`, r));
-  return (await r.json()) as TaskView[];
+  return taskViewsFromResponse(await r.json());
+}
+
+export function taskViewsFromResponse(value: unknown): TaskView[] {
+  if (Array.isArray(value)) return value as TaskView[];
+  if (
+    value &&
+    typeof value === "object" &&
+    "items" in value &&
+    Array.isArray((value as { items?: unknown }).items)
+  ) {
+    return (value as { items: TaskView[] }).items;
+  }
+  throw new Error(
+    "Activity runs could not be loaded because the desktop daemon returned an unexpected response.",
+  );
 }
 
 export async function fetchTask(taskId: string): Promise<TaskView> {

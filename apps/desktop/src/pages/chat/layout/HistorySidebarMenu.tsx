@@ -52,7 +52,7 @@ export function HistorySidebarMenu({
       <button
         type="button"
         onClick={() => onDeleteEntry(menuEntry)}
-        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-red-300 transition hover:bg-red-950/40"
+        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[rgb(var(--app-danger))] transition hover:bg-[rgb(var(--app-danger-soft))]"
       >
         <span className="w-3.5 text-center text-[11px]">x</span>
         Delete

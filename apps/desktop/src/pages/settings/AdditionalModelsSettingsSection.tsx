@@ -46,11 +46,7 @@ export function AdditionalModelsSettingsSection({
     <SettingsSection title="Additional Models">
       <SettingsRow
         title="Available in Chat"
-        description={
-          availableAdditionalModels.length > 0
-            ? availableAdditionalModels.map(additionalModelName).join(", ")
-            : "No custom models are available yet."
-        }
+        description={<AvailableModelsDescription models={availableAdditionalModels} />}
       />
       <SettingsRow title="Models" description="Optional model choices for Chat.">
         <button
@@ -73,8 +69,8 @@ export function AdditionalModelsSettingsSection({
           title={additionalModelName(model)}
           description={additionalModelDescription(model)}
         >
-          <div className="flex flex-col items-end gap-2">
-            <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="settings-action-stack">
+            <div className="settings-action-row">
               <ToggleSwitch
                 checked={model.enabled && model.available}
                 disabled={testingModelId === model.id}
@@ -110,7 +106,7 @@ export function AdditionalModelsSettingsSection({
               </button>
             </div>
             {model.testError && (
-              <p className="max-w-[360px] text-right text-[11px] text-red-500">{model.testError}</p>
+              <p className="settings-feedback-line text-[rgb(var(--app-danger))]">{model.testError}</p>
             )}
           </div>
         </SettingsRow>
@@ -129,5 +125,25 @@ export function AdditionalModelsSettingsSection({
         />
       )}
     </SettingsSection>
+  );
+}
+
+export function AvailableModelsDescription({
+  models,
+}: {
+  models: AdditionalModelConfig[];
+}): JSX.Element {
+  if (models.length === 0) {
+    return <span>No custom models are available yet.</span>;
+  }
+
+  return (
+    <span className="settings-model-badge-list" aria-label="Available Chat models">
+      {models.map((model) => (
+        <span key={model.id} className="settings-model-badge" title={additionalModelName(model)}>
+          {additionalModelName(model)}
+        </span>
+      ))}
+    </span>
   );
 }

@@ -170,6 +170,17 @@ describe("dispatchChatStreamEvent", () => {
     expect(adapter.refreshHistory).toHaveBeenCalledTimes(1);
   });
 
+  it("hides redundant project-context progress status text", () => {
+    const adapter = makeAdapter();
+
+    dispatchChatStreamEvent({
+      type: "progress",
+      message: "Reading project context",
+    } as ChatEventPayload, adapter);
+
+    expect(adapter.calls).toContain("status:null");
+  });
+
   it("releases busy state when a follow-up approval is required", () => {
     const adapter = makeAdapter();
     const approval = {

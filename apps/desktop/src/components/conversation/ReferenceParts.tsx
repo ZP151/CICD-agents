@@ -90,11 +90,10 @@ function ReferenceChip({
     ? source.file?.split(/[\\/]/).filter(Boolean).pop() || stripSourceLineSuffix(source.title) || "Source file"
     : source.title || source.domain || "Source";
   const label = truncateMiddle(title, 34);
-  const className = "inline-flex max-w-[13rem] items-center gap-1 rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] text-[rgb(var(--app-text-subtle))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text-muted))]";
   return (
     <button
       type="button"
-      className={className}
+      className={referenceChipClass()}
       title={sourceReferenceTitle(source)}
       onClick={() => onSourceSelect?.(source)}
     >
@@ -102,6 +101,10 @@ function ReferenceChip({
       <span className="min-w-0 truncate">{label}</span>
     </button>
   );
+}
+
+export function referenceChipClass(): string {
+  return "inline-flex max-w-[min(13rem,100%)] min-w-0 items-center gap-1 rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] text-[rgb(var(--app-text-subtle))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text-muted))]";
 }
 
 function referenceKey(part: ReferencePart, index: number): string {

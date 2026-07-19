@@ -10,13 +10,13 @@ export default function Dashboard(): JSX.Element {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-semibold">Dashboard</h2>
-      <section className="rounded border border-zinc-800 bg-zinc-900 p-4">
-        <h3 className="mb-2 text-lg font-medium">Runtime</h3>
-        {isLoading && <p>Loading...</p>}
-        {error && <p className="text-red-400">runtime unreachable: {String(error)}</p>}
+      <h2 className="text-2xl font-semibold text-[rgb(var(--app-text))]">Dashboard</h2>
+      <section className="rounded border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4">
+        <h3 className="mb-2 text-lg font-medium text-[rgb(var(--app-text))]">Runtime</h3>
+        {isLoading && <p className="text-[rgb(var(--app-text-muted))]">Loading...</p>}
+        {error && <p className="text-[rgb(var(--app-danger))]">runtime unreachable: {String(error)}</p>}
         {data && (
-          <dl className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
+          <dl className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm text-[rgb(var(--app-text-muted))]">
             <dt>Status</dt>
             <dd>{data.ok ? "ok" : "not ready"}</dd>
             <dt>Uptime (s)</dt>

@@ -45,12 +45,61 @@ export function resolveActiveProjectLinkId(
   currentId?: string | null,
 ): string {
   const current = currentId?.trim() ?? "";
-  if (current && projectLinks.some((projectLink) => projectLink.id === current)) return current;
+  if (current) {
+    const currentLink = projectLinks.find((projectLink) => projectLink.id === current);
+    if (currentLink) return preferredProjectLinkId(projectLinks, currentLink);
+  }
 
   const stored = loadStoredActiveProjectLinkId();
-  if (stored && projectLinks.some((projectLink) => projectLink.id === stored)) return stored;
+  if (stored) {
+    const storedLink = projectLinks.find((projectLink) => projectLink.id === stored);
+    if (storedLink) return preferredProjectLinkId(projectLinks, storedLink);
+  }
 
-  return projectLinks[0]?.id ?? "";
+  return preferredProjectLinkId(projectLinks, projectLinks[0]);
+}
+
+export function isTemporaryProjectLink(
+  link: Partial<Pick<ProjectLink, "name" | "repoPath">>,
+): boolean {
+  const name = link.name?.trim().toLowerCase() ?? "";
+  const repoPath = link.repoPath?.trim().toLowerCase() ?? "";
+  return (
+    name.startsWith("mp-live-") ||
+    name.startsWith("test-") ||
+    repoPath.includes("\\appdata\\local\\temp\\mergepilot-") ||
+    repoPath.includes("/appdata/local/temp/mergepilot-")
+  );
+}
+
+function preferredProjectLinkId(
+  projectLinks: ProjectLink[],
+  fallback: ProjectLink | undefined,
+): string {
+  if (!fallback) return projectLinks[0]?.id ?? "";
+  if (!isTemporaryProjectLink(fallback)) return fallback.id;
+  const sameAdoMapping = projectLinks
+    .filter((candidate) => candidate.id !== fallback.id)
+    .filter((candidate) => !isTemporaryProjectLink(candidate))
+    .filter((candidate) => projectLinkAdoMappingKey(candidate) === projectLinkAdoMappingKey(fallback))
+    .sort(compareProjectLinkPreference);
+  return sameAdoMapping[0]?.id ?? fallback.id;
+}
+
+function projectLinkAdoMappingKey(link: ProjectLink): string {
+  return [
+    link.adoOrgUrl.trim().toLowerCase().replace(/\/+$/, ""),
+    link.adoProject.trim().toLowerCase(),
+    link.adoRepoName.trim().toLowerCase(),
+  ].join("\u001f");
+}
+
+function compareProjectLinkPreference(a: ProjectLink, b: ProjectLink): number {
+  const score = (link: ProjectLink) =>
+    Number(Boolean(link.adoPipelineId.trim())) * 10 +
+    Number(Boolean(link.repoPath.trim())) * 5 +
+    Number(link.updatedAt ?? 0) / 1_000_000_000_000;
+  return score(b) - score(a) || a.name.localeCompare(b.name);
 }
 
 // In a Tauri context we invoke the native Rust command first (it uses cmd /c on

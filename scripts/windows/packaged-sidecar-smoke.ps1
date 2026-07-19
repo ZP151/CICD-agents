@@ -37,6 +37,9 @@ $startInfo.CreateNoWindow = $true
 $startInfo.Environment["RUNTIME_PORT"] = [string]$Port
 $startInfo.Environment["RUNTIME_HOST"] = "127.0.0.1"
 $startInfo.Environment["RUNTIME_DATA_DIR"] = $dataDir
+$startInfo.Environment["MERGEPILOT_RUNTIME_MODE"] = "desktop-sidecar"
+$startInfo.Environment["MERGEPILOT_DESKTOP_VERSION"] = $expectedVersion
+$startInfo.Environment["MERGEPILOT_DAEMON_VERSION"] = $expectedVersion
 $startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
 $process = [System.Diagnostics.Process]::Start($startInfo)
@@ -57,6 +60,22 @@ try {
   }
   if ($health.version -ne $expectedVersion) {
     throw "Packaged sidecar version mismatch. Expected $expectedVersion, got $($health.version)."
+  }
+  $healthFields = @($health.PSObject.Properties | ForEach-Object { $_.Name })
+  $missingHealthMetadata = @()
+  foreach ($field in @("runtimeMode", "desktopVersion", "pid", "execPath")) {
+    if ($healthFields -notcontains $field) {
+      $missingHealthMetadata += $field
+    }
+  }
+  if ($missingHealthMetadata.Count -gt 0) {
+    throw "Packaged sidecar /healthz is missing runtime metadata fields: $($missingHealthMetadata -join ', ')."
+  }
+  if ($health.runtimeMode -ne "desktop-sidecar") {
+    throw "Packaged sidecar runtime mode mismatch. Expected desktop-sidecar, got $($health.runtimeMode)."
+  }
+  if ($health.desktopVersion -ne $expectedVersion) {
+    throw "Packaged sidecar desktop version mismatch. Expected $expectedVersion, got $($health.desktopVersion)."
   }
 
   $indexPayload = @{ repoPath = $fixtureRepo; projectLink = $null } | ConvertTo-Json -Depth 8
@@ -87,6 +106,10 @@ try {
   [pscustomobject]@{
     ok = $true
     healthVersion = $health.version
+    runtimeMode = $health.runtimeMode
+    desktopVersion = $health.desktopVersion
+    pid = $health.pid
+    execPath = $health.execPath
     indexBeforeIndexed = $indexBefore.indexed
     refreshFilesSeen = $indexRefresh.refresh.filesSeen
     refreshFilesIndexed = $indexRefresh.refresh.filesIndexed

@@ -26,6 +26,18 @@ function AccountAvatar({ account }: { account: AuthCachedAccount }) {
   );
 }
 
+export function loginModalPanelClass(): string {
+  return [
+    "w-[min(460px,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-y-auto",
+    "space-y-4 rounded-xl border border-[rgb(var(--app-border))]",
+    "bg-[rgb(var(--app-surface))] p-5 shadow-2xl",
+  ].join(" ");
+}
+
+export function loginModalMessageClass(): string {
+  return "min-w-0 break-words text-xs leading-relaxed text-[rgb(var(--app-text-muted))]";
+}
+
 export function LoginModal({
   onDone,
   onCancel,
@@ -107,8 +119,8 @@ export function LoginModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-sm">
-      <div className="w-[460px] space-y-4 rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-5 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-4 backdrop-blur-sm">
+      <div className={loginModalPanelClass()} data-testid="login-modal-panel">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-[rgb(var(--app-text))]">
             Sign in with Microsoft
@@ -178,8 +190,8 @@ export function LoginModal({
         )}
 
         {(started || message) && (
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[rgb(var(--app-text-muted))]">{message}</span>
+          <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+            <span className={loginModalMessageClass()}>{message}</span>
             {started && !done && (
               <button
                 onClick={() => {

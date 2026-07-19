@@ -16,9 +16,16 @@ export function CheckpointPreviewSection({
           Snapshot Preview
         </h3>
         {previewLoading && (
-          <span className="text-[11px] text-[rgb(var(--app-text-muted))]">Loading</span>
+          <span className="rounded-full bg-[rgb(var(--app-surface-raised))] px-2 py-0.5 text-[11px] text-[rgb(var(--app-text-muted))] ring-1 ring-[rgb(var(--app-border))]">
+            Checking snapshot
+          </span>
         )}
       </div>
+      {previewLoading && !preview && (
+        <p className="text-sm text-[rgb(var(--app-text-muted))]">
+          Reading changed files and diff metadata...
+        </p>
+      )}
       {!previewLoading && !preview && (
         <p className="text-sm text-[rgb(var(--app-text-muted))]">
           No preview available for this checkpoint.
@@ -26,7 +33,7 @@ export function CheckpointPreviewSection({
       )}
       {preview && (
         <div className="space-y-3">
-          <div className="grid gap-3 text-sm sm:grid-cols-3">
+          <div className={checkpointPreviewMetricsGridClass()}>
             <div>
               <p className="text-xs text-[rgb(var(--app-text-muted))]">Branch</p>
               <p className="mt-1 break-words font-mono text-[rgb(var(--app-text))]">
@@ -65,6 +72,10 @@ export function CheckpointPreviewSection({
       )}
     </section>
   );
+}
+
+export function checkpointPreviewMetricsGridClass(): string {
+  return "grid gap-3 text-sm grid-cols-[repeat(auto-fit,minmax(min(100%,8.5rem),1fr))]";
 }
 
 function CheckpointChangedFiles({ files }: { files: string[] }): JSX.Element | null {

@@ -21,7 +21,7 @@
   overflow: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-right: 1px solid rgb(39 39 42);
+  border-right: 1px solid rgb(var(--app-border));
   transition: width 180ms ease, opacity 150ms ease;
   min-width: 0;
 }
@@ -48,8 +48,8 @@
 
 /* Middle panel wrapper: fills remaining space, centers inner */
 .middle-panel {
-  flex: 1 1 420px;    /* flex-basis = min; flex-grow fills the rest */
-  min-width: 420px;   /* hard floor: side panels cannot push below this */
+  flex: 1 1 320px;    /* flex-basis matches CHAT_PANEL_LAYOUT.middleMin */
+  min-width: 320px;   /* hard floor: side panels cannot push below this */
   display: flex;
   justify-content: center;
   overflow: hidden;
@@ -68,21 +68,18 @@
 
 .chat-shell-right-resize-handle:hover,
 .chat-shell-right-resize-handle:active {
-  background: rgba(99, 102, 241, 0.2);
+  background: rgba(var(--app-accent), 0.16);
 }
 
-/* Inner conversation column: width-capped, always centered */
-/*
-  max-width is intentionally narrow so justify-content:center has room to apply:
-    both collapsed  → middle ~910px  → inner=660, ±125px margin   ✓
-    one panel open  → middle ~670px  → inner=660, ±5px margin     ✓
-    both open       → middle ~450px  → inner fills 450px          ✓
-*/
+/* Inner conversation column: centered, but allowed to breathe on wide screens.
+   Prose remains capped inside message rows; the wider shell gives execution
+   groups, approval cards, the composer, and source/workflow controls enough
+   working width when the app is maximized. */
 .middle-panel-inner {
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 660px;
+  max-width: min(100%, clamp(660px, 72vw, 980px));
   min-width: 0;
   height: 100%;
 }
@@ -117,6 +114,16 @@
   min-width: 0;
 }
 
+.right-panel--overlay {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 42;
+  max-width: calc(100% - 16px);
+  border-left: 1px solid rgb(var(--app-border));
+  background: rgb(var(--app-bg));
+  box-shadow: -24px 0 48px rgb(0 0 0 / 0.16);
+}
+
 /* ── Resize drag handle ──────────────────────────────────────────────────── */
 .panel-resize-handle {
   width: 4px;
@@ -132,7 +139,7 @@
 }
 .panel-resize-handle:hover,
 .panel-resize-handle:active {
-  background: rgba(99, 102, 241, 0.45);
+  background: rgba(var(--app-accent), 0.24);
 }
 
 .right-panel-resize-handle::before {
@@ -149,5 +156,5 @@
 
 .right-panel-resize-handle:hover::before,
 .right-panel-resize-handle:active::before {
-  background: rgba(99, 102, 241, 0.75);
+  background: rgba(var(--app-accent), 0.72);
 }

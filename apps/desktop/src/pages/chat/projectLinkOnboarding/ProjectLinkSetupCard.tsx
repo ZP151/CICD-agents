@@ -10,16 +10,24 @@ export function ProjectLinkSetupCard({
   repoPath,
   onCreated,
   createProjectLink,
+  compact = false,
 }: {
   repoPath: string;
   onCreated: (projectLink: ProjectLink) => void;
   createProjectLink: (data: ProjectLinkInput) => Promise<ProjectLink>;
+  compact?: boolean;
 }) {
   const state = useProjectLinkSetupState({ repoPath, onCreated, createProjectLink });
 
   return (
-    <div className="w-full max-w-full overflow-hidden rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-5 text-left shadow-xl">
-      <ProjectLinkSetupHeader />
+    <div
+      className={`w-full max-w-full overflow-hidden bg-[rgb(var(--app-surface))] text-left ${
+        compact
+          ? "rounded-none border-0 p-0 shadow-none"
+          : "rounded-xl border border-[rgb(var(--app-border))] p-5 shadow-xl"
+      }`}
+    >
+      {!compact && <ProjectLinkSetupHeader />}
 
       <div className="grid gap-3">
         <ProjectLinkBasicFields
@@ -62,14 +70,18 @@ export function ProjectLinkSetupCard({
           />
         )}
 
-        {state.error && <p className="rounded-lg border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">{state.error}</p>}
+        {state.error && (
+          <p className="rounded-lg border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] px-3 py-2 text-xs text-[rgb(var(--app-danger))]">
+            {state.error}
+          </p>
+        )}
 
         <div className="flex items-center gap-2 pt-1">
           <button
             type="button"
             onClick={() => void state.save()}
             disabled={!state.canSave || state.saving}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-lg bg-[rgb(var(--app-accent))] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {state.saving ? "Creating..." : "Create and use"}
           </button>

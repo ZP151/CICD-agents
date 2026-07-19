@@ -66,6 +66,11 @@ export default function TaskViewer(): JSX.Element {
     setReviewProjectLinkFilter,
     setReviewKindFilter,
   } = runtime;
+  const visibleActivityCount =
+    tasks.length +
+    checkpointActivity.length +
+    filteredPrInsightActivity.length +
+    filteredReviewActivity.length;
 
   function openRollbackPlanInChat(): void {
     if (!selectedCheckpoint || !checkpointRollbackPlan?.proposal) return;
@@ -129,7 +134,7 @@ export default function TaskViewer(): JSX.Element {
   }
 
   return (
-    <div className="flex min-h-full w-full gap-5">
+    <div className={taskViewerLayoutClass()}>
       <ActivitySidebar
         projectLinks={projectLinks}
         tasks={tasks}
@@ -163,7 +168,7 @@ export default function TaskViewer(): JSX.Element {
         onReviewKindFilterChange={setReviewKindFilter}
       />
 
-      <section className="min-w-0 flex-1">
+      <section className={taskViewerDetailClass()}>
         {refreshing && (
           <p className="mb-3 text-xs text-[rgb(var(--app-text-subtle))]">
             Refreshing activity...
@@ -171,16 +176,11 @@ export default function TaskViewer(): JSX.Element {
         )}
 
         {!selected && !selectedReview && !selectedPrInsight && !selectedCheckpoint && (
-          <div className="flex h-full items-center justify-center text-center text-sm text-[rgb(var(--app-text-muted))]">
-            <div>
-              <p className="font-medium text-[rgb(var(--app-text-subtle))]">
-                No operation selected
-              </p>
-              <p className="mt-1">
-                Choose a run, checkpoint, PR insight, or review action to inspect what happened.
-              </p>
-            </div>
-          </div>
+          <ActivityEmptyDetail
+            activityCount={visibleActivityCount}
+            error={error}
+            loading={loading || checkpointLoading || prInsightLoading || reviewLoading}
+          />
         )}
 
         {selected && <TaskRunDetailPanel task={selected} />}
@@ -212,4 +212,78 @@ export default function TaskViewer(): JSX.Element {
       </section>
     </div>
   );
+}
+
+export function taskViewerLayoutClass(): string {
+  return "mx-auto flex min-h-full w-full min-w-0 max-w-[1600px] flex-col items-stretch gap-5 px-4 py-2 xl:flex-row";
+}
+
+export function taskViewerDetailClass(): string {
+  return "w-full min-w-0 flex-1 xl:basis-0";
+}
+
+export function ActivityEmptyDetail({
+  activityCount = 1,
+  error = null,
+  loading = false,
+}: {
+  activityCount?: number;
+  error?: string | null;
+  loading?: boolean;
+}): JSX.Element {
+  const content = activityEmptyDetailContent({ activityCount, error, loading });
+
+  return (
+    <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4">
+      <p className="text-xs font-semibold uppercase text-[rgb(var(--app-text-subtle))]">
+        Detail
+      </p>
+      <h3 className="mt-2 text-sm font-semibold text-[rgb(var(--app-text))]">
+        {content.title}
+      </h3>
+      <p className="mt-1 max-w-xl text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
+        {content.description}
+      </p>
+    </div>
+  );
+}
+
+export function activityEmptyDetailContent({
+  activityCount,
+  error,
+  loading,
+}: {
+  activityCount: number;
+  error: string | null;
+  loading: boolean;
+}): { title: string; description: string } {
+  if (error && activityCount === 0) {
+    return {
+      title: "Recovery needed",
+      description:
+        "The activity sources did not load. Use Refresh activity in the source panel, or open Settings to check the desktop daemon and account session.",
+    };
+  }
+
+  if (loading && activityCount === 0) {
+    return {
+      title: "Checking activity",
+      description:
+        "MergePilot is loading recent runs, checkpoints, PR insights, and review operations.",
+    };
+  }
+
+  if (activityCount === 0) {
+    return {
+      title: "No activity recorded",
+      description:
+        "Runs, Git checkpoints, PR insights, and review operations will appear here after the agent performs workspace actions.",
+    };
+  }
+
+  return {
+    title: "Select an operation",
+    description:
+      "Choose a run, checkpoint, PR insight, or review action to inspect its source, result, and recovery path.",
+  };
 }

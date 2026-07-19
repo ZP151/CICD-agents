@@ -10,7 +10,7 @@ export function ConfirmCard({ bubble, onConfirm, onCancel }: ConfirmCardProps) {
   if (bubble.confirmed !== null && bubble.confirmed !== undefined) {
     return (
       <div className="my-2 flex items-center gap-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2 text-xs text-[rgb(var(--app-text-muted))]">
-        <span className={`h-1.5 w-1.5 rounded-full ${bubble.confirmed ? "bg-emerald-500" : "bg-zinc-400"}`} />
+        <span className={`h-1.5 w-1.5 rounded-full ${bubble.confirmed ? "bg-[rgb(var(--app-success))]" : "bg-[rgb(var(--app-text-subtle))]"}`} />
         <span>{bubble.confirmed ? "Confirmed - executing..." : "Action not run."}</span>
       </div>
     );
@@ -28,7 +28,7 @@ export function ConfirmCard({ bubble, onConfirm, onCancel }: ConfirmCardProps) {
       <div className="flex gap-2">
         <button
           onClick={onConfirm}
-          className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 active:translate-y-px"
+          className="rounded-md bg-[rgb(var(--app-accent))] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:translate-y-px"
         >
           Yes, run this action
         </button>
@@ -44,7 +44,7 @@ export function ConfirmCard({ bubble, onConfirm, onCancel }: ConfirmCardProps) {
 }
 
 function legacyRiskColor(level = "low") {
-  if (level === "high") return "text-red-500";
-  if (level === "medium") return "text-amber-600";
-  return "text-emerald-600";
+  if (level === "high") return "text-[rgb(var(--app-danger))]";
+  if (level === "medium") return "text-[rgb(var(--app-warning))]";
+  return "text-[rgb(var(--app-success))]";
 }

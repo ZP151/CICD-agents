@@ -23,6 +23,8 @@ const projectLink = {
   updatedAt: 1,
 };
 
+const reviewActivityPanelStorageKey = "mergepilot_review_activity_panel_open_v2";
+
 const reviewQueueItem = {
   repository: "ClaimBot_API",
   pullRequestId: 84,
@@ -345,42 +347,128 @@ async function mockReviewQueueRuntime(
     },
   );
 
-  await page.addInitScript((seedProjectLink) => {
-    const reviewActivityPanelOpen = localStorage.getItem("mergepilot_review_activity_panel_open");
+  await page.addInitScript(({ seedProjectLink, storageKey }) => {
+    const reviewActivityPanelOpen = localStorage.getItem(storageKey);
     localStorage.clear();
     localStorage.setItem("mergepilot_project_links_v1", JSON.stringify([seedProjectLink]));
     localStorage.setItem("mergepilot_active_project_link_id", seedProjectLink.id);
     if (reviewActivityPanelOpen !== null) {
-      localStorage.setItem("mergepilot_review_activity_panel_open", reviewActivityPanelOpen);
+      localStorage.setItem(storageKey, reviewActivityPanelOpen);
     }
-  }, projectLink);
+  }, { seedProjectLink: projectLink, storageKey: reviewActivityPanelStorageKey });
 }
 
 test.describe("Review Queue", () => {
-  test("@smoke @mocked persists the Recent activity panel collapsed state", async ({ page }) => {
+  test("@smoke @mocked keeps Recent activity collapsed by default and persists user changes", async ({ page }) => {
     const dispositionPayloads: unknown[] = [];
     await mockReviewQueueRuntime(page, dispositionPayloads);
+    await page.setViewportSize({ width: 1366, height: 900 });
 
     await page.goto("/#/findings");
 
     await expect(page.getByRole("heading", { name: "Review Queue" })).toBeVisible();
-    await expect(page.getByText("Recent activity")).toBeVisible();
-    await page.getByRole("button", { name: "Hide" }).click();
     await expect(page.getByText("Recent activity")).toBeHidden();
     await expect(page.getByRole("button", { name: "Show activity" })).toBeVisible();
+    await expect(page.evaluate((key) => localStorage.getItem(key), reviewActivityPanelStorageKey)).resolves.toBe("false");
 
     await page.reload();
 
     await expect(page.getByRole("heading", { name: "Review Queue" })).toBeVisible();
     await expect(page.getByText("Recent activity")).toBeHidden();
     await expect(page.getByRole("button", { name: "Show activity" })).toBeVisible();
-    await expect(page.evaluate(() => localStorage.getItem("mergepilot_review_activity_panel_open"))).resolves.toBe("false");
+    await page.getByRole("button", { name: "Show activity" }).click();
+    await expect(page.getByText("Recent activity")).toBeVisible();
+    await expect(page.evaluate((key) => localStorage.getItem(key), reviewActivityPanelStorageKey)).resolves.toBe("true");
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+
+    await page.setViewportSize({ width: 1100, height: 760 });
+    await expect(page.getByText("Recent activity")).toBeVisible();
+    await expect.poll(async () =>
+      page.evaluate(() => {
+        const activityRail = Array.from(document.querySelectorAll("aside")).find((element) =>
+          element.textContent?.includes("Recent activity"),
+        );
+        if (!activityRail) return "";
+        return getComputedStyle(activityRail).position;
+      }),
+    ).toBe("fixed");
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+
+    await page.setViewportSize({ width: 1366, height: 760 });
+    await expect(page.getByText("Recent activity")).toBeVisible();
+    await expect.poll(async () =>
+      page.evaluate(() => {
+        const activityRail = Array.from(document.querySelectorAll("aside")).find((element) =>
+          element.textContent?.includes("Recent activity"),
+        );
+        const mainContent = document.querySelector("main");
+        if (!mainContent || !activityRail) return false;
+        const mainRect = mainContent.getBoundingClientRect();
+        const railRect = activityRail.getBoundingClientRect();
+        return railRect.right <= window.innerWidth + 1 && railRect.left > mainRect.left;
+      }),
+    ).toBe(true);
+    await expect.poll(async () =>
+      page.evaluate(() => {
+        const activityRail = Array.from(document.querySelectorAll("aside")).find((element) =>
+          element.textContent?.includes("Recent activity"),
+        );
+        if (!activityRail) return "";
+        return getComputedStyle(activityRail).position;
+      }),
+    ).toBe("fixed");
+    await expect.poll(async () =>
+      page.evaluate(() => {
+        const activityRail = Array.from(document.querySelectorAll("aside")).find((element) =>
+          element.textContent?.includes("Recent activity"),
+        );
+        if (!activityRail) return 0;
+        return Math.round(activityRail.getBoundingClientRect().width);
+      }),
+    ).toBeGreaterThanOrEqual(290);
+    await expect.poll(async () =>
+      page.evaluate(() => {
+        const activityRail = Array.from(document.querySelectorAll("aside")).find((element) =>
+          element.textContent?.includes("Recent activity"),
+        );
+        if (!activityRail) return 999;
+        return Math.round(activityRail.getBoundingClientRect().width);
+      }),
+    ).toBeLessThanOrEqual(390);
+
+    await page.setViewportSize({ width: 900, height: 760 });
+    await expect(page.getByText("Recent activity")).toBeVisible();
+    await expect(page.getByLabel("Review Queue Project Link")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+
+    await page.reload();
+
+    await expect(page.getByRole("heading", { name: "Review Queue" })).toBeVisible();
+    await expect(page.getByText("Recent activity")).toBeVisible();
+    await page.getByRole("button", { name: "Hide" }).click();
+    await expect(page.getByText("Recent activity")).toBeHidden();
+    await expect(page.evaluate((key) => localStorage.getItem(key), reviewActivityPanelStorageKey)).resolves.toBe("false");
+
+    await page.setViewportSize({ width: 760, height: 760 });
+    await expect(page.getByText(/hunks \d+f\/\d+l/).first()).toBeVisible();
+    await expect(page.getByText(/fallback \d+f/).first()).toBeVisible();
+    await expect.poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
   });
 
   test("@smoke @mocked keeps selected queue lane semantic instead of gray", async ({ page }) => {
     const dispositionPayloads: unknown[] = [];
     await mockReviewQueueRuntime(page, dispositionPayloads);
 
+    await page.setViewportSize({ width: 760, height: 760 });
     await page.goto("/#/findings");
 
     const needsHumanReviewLane = page.getByRole("button", { name: /Needs human review/ });
@@ -388,9 +476,17 @@ test.describe("Review Queue", () => {
     await needsHumanReviewLane.click();
 
     await expect(needsHumanReviewLane).toHaveAttribute("aria-pressed", "true");
-    await expect(needsHumanReviewLane).toHaveClass(/bg-amber-500\/10/);
+    await expect(needsHumanReviewLane).toHaveClass(/review-lane-human/);
+    await expect(needsHumanReviewLane).toHaveClass(/bg-\[rgb\(var\(--app-warning-soft\)_\/_0\.58\)\]/);
     await expect(needsHumanReviewLane).toHaveClass(/border-\[rgb\(var\(--app-accent\)\)\]/);
     await expect(needsHumanReviewLane).not.toHaveClass(/bg-(?:gray|slate|zinc)-/);
+    await expect(page.getByRole("button", { name: /Auto-approved/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Blocked/ })).toBeVisible();
+    await expect
+      .poll(async () =>
+        page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+      )
+      .toBe(true);
   });
 
   test("@smoke @mocked renders review-run queue evidence and records an acknowledged disposition", async ({ page }) => {

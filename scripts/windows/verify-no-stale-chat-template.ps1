@@ -1,12 +1,11 @@
 <#
 .SYNOPSIS
-Verifies that MergePilot runtime files do not contain removed New Chat template copy or preload hooks.
+Verifies that MergePilot runtime files do not contain removed New Chat preload hooks.
 
 .DESCRIPTION
 Scans the current desktop build output, an installed directory, a supplied
-directory, or an extracted MSI payload for stale New Chat welcome template
-strings and frontend preload helpers that should no longer be visible in the
-app or reachable from the shipped desktop bundle.
+directory, or an extracted MSI payload for frontend preload helpers that should
+no longer be reachable from the shipped desktop bundle.
 
 Source maps are skipped by default because they can contain historical source
 text without shipping it as runtime UI. Pass -IncludeSourceMaps only when
@@ -24,18 +23,10 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+. (Join-Path $PSScriptRoot "msi-extract-helpers.ps1")
 $tempExtractDir = $null
 
 $patterns = @(
-  "Ask MergePilot anything",
-  "`"help me review changes and go all the way to PR`"",
-  "`"what's changed since main?`"",
-  "`"run tests`"",
-  "`"create PR`"",
-  "Understand this project",
-  "Open Pipelines workspace",
-  "Stage and commit",
-  "Push and create PR",
   "WelcomeSuggestions",
   "useChatIndexStatus",
   "fetchChatIndexStatus"
@@ -49,7 +40,13 @@ function Should-ScanFile {
   if ($name.Equals("mergepilot-desktop.exe", [System.StringComparison]::OrdinalIgnoreCase)) {
     return $true
   }
+  if ($name.Equals("Path", [System.StringComparison]::OrdinalIgnoreCase) -and $File.VersionInfo.ProductName -eq "MergePilot") {
+    return $true
+  }
   if ($name.Equals("mergepilot-daemon.exe", [System.StringComparison]::OrdinalIgnoreCase)) {
+    return $false
+  }
+  if ($name -match "daemon.*\.exe$") {
     return $false
   }
   if ($name.Equals("uninstall.exe", [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -77,27 +74,7 @@ function Resolve-ScanRoot {
 
     $script:tempExtractDir = Join-Path $env:TEMP ("mergepilot-template-scan-" + [guid]::NewGuid().ToString("N"))
     $logPath = Join-Path $script:tempExtractDir "msiexec.log"
-    New-Item -ItemType Directory -Force -Path $script:tempExtractDir | Out-Null
-    $process = Start-Process -FilePath msiexec.exe -ArgumentList @(
-      "/a",
-      (Resolve-Path $MsiPath).Path,
-      "/qn",
-      "TARGETDIR=$script:tempExtractDir",
-      "/L*v",
-      $logPath
-    ) -PassThru
-    $exited = $process.WaitForExit([Math]::Max(1, $ExtractionTimeoutSec) * 1000)
-    if (-not $exited) {
-      Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-      $tail = (Get-Content -LiteralPath $logPath -Tail 40 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
-      $detail = if ($tail) { " Log tail: $tail" } else { "" }
-      throw "MSI administrative extraction timed out after $ExtractionTimeoutSec second(s).$detail"
-    }
-    if ($process.ExitCode -ne 0) {
-      $tail = (Get-Content -LiteralPath $logPath -Tail 80 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
-      $detail = if ($tail) { " Log tail: $tail" } else { "" }
-      throw "MSI administrative extraction failed with exit code $($process.ExitCode).$detail"
-    }
+    $script:extractMethod = Invoke-MergePilotMsiExtraction -PackagePath $MsiPath -Destination $script:tempExtractDir -InstallerLogPath $logPath -ExtractionTimeoutSec $ExtractionTimeoutSec -RetryOnInstallerBusy
 
     return $script:tempExtractDir
   }
@@ -184,6 +161,7 @@ try {
     scanRoot = $scanRoot
     fileCount = $files.Count
     includeSourceMaps = [bool]$IncludeSourceMaps
+    extractMethod = if ($MsiPath) { $script:extractMethod } else { $null }
     patterns = $patterns
     matches = $matches
   }
@@ -199,6 +177,7 @@ try {
     scanRoot = if ($tempExtractDir) { $tempExtractDir } else { $null }
     fileCount = 0
     includeSourceMaps = [bool]$IncludeSourceMaps
+    extractMethod = if ($MsiPath) { $script:extractMethod } else { $null }
     patterns = $patterns
     matches = @()
     failures = @($message)

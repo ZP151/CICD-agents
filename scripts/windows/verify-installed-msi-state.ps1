@@ -12,6 +12,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+. (Join-Path $PSScriptRoot "msi-extract-helpers.ps1")
 if ([string]::IsNullOrWhiteSpace($ExpectedVersion)) {
   $ExpectedVersion = (Get-Content -LiteralPath (Join-Path $repoRoot "packages\daemon\package.json") -Raw | ConvertFrom-Json).version
 }
@@ -89,6 +90,46 @@ function Get-TauriBundleKind([string]$Path) {
     return "nsis"
   }
   return "unknown"
+}
+
+function Get-WindowsInstallerProcesses {
+  return @(
+    Get-CimInstance Win32_Process -Filter "name='msiexec.exe'" -ErrorAction SilentlyContinue |
+      Select-Object ProcessId, ParentProcessId, CreationDate, CommandLine
+  )
+}
+
+function Get-InstallerBlockers {
+  $items = @()
+  $items += Get-CimInstance Win32_Process -Filter "name='msiexec.exe'" -ErrorAction SilentlyContinue |
+    ForEach-Object {
+      [pscustomobject]@{
+        kind = "windows-installer"
+        processId = $_.ProcessId
+        parentProcessId = $_.ParentProcessId
+        processName = $_.Name
+        creationDate = $_.CreationDate
+        commandLine = $_.CommandLine
+        windowTitle = $null
+        action = "Wait for this Windows Installer process to finish, or close the installer UI that owns it."
+      }
+    }
+
+  $items += Get-Process -Name consent -ErrorAction SilentlyContinue |
+    ForEach-Object {
+      [pscustomobject]@{
+        kind = "uac-consent"
+        processId = $_.Id
+        parentProcessId = $null
+        processName = $_.ProcessName
+        creationDate = $null
+        commandLine = $null
+        windowTitle = $_.MainWindowTitle
+        action = "Respond to the pending Windows UAC prompt before retrying the MergePilot installer."
+      }
+    }
+
+  return @($items)
 }
 
 function Get-ListeningProcessInfo([int]$TcpPort) {
@@ -217,6 +258,8 @@ if ($daemonProbeAutoStarted -and $daemonProbeStartedProcess) {
 
 $msiPayload = $null
 $msiPayloadError = $null
+$windowsInstallerProcesses = @(Get-WindowsInstallerProcesses)
+$installerBlockers = @(Get-InstallerBlockers)
 if ($RequireMsiPayloadMatch) {
   $extractDir = Join-Path $env:TEMP ("mergepilot-msi-verify-" + [guid]::NewGuid().ToString("N"))
   $logPath = Join-Path $extractDir "msiexec.log"
@@ -224,23 +267,10 @@ if ($RequireMsiPayloadMatch) {
     if (-not (Test-Path -LiteralPath $MsiPath)) {
       throw "MSI not found: $MsiPath"
     }
-    New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
-    $process = Start-Process -FilePath msiexec.exe -ArgumentList @(
-      "/a",
-      (Resolve-Path $MsiPath).Path,
-      "/qn",
-      "TARGETDIR=$extractDir",
-      "/L*v",
-      $logPath
-    ) -Wait -PassThru
-    if ($process.ExitCode -ne 0) {
-      throw "MSI administrative extraction failed with exit code $($process.ExitCode)."
-    }
+    $extractMethod = Invoke-MergePilotMsiExtraction -PackagePath $MsiPath -Destination $extractDir -InstallerLogPath $logPath -SkipMsiexecWhenInstallerActive
 
-    $payloadDesktop = Get-ChildItem -LiteralPath $extractDir -Recurse -Filter mergepilot-desktop.exe |
-      Select-Object -First 1
-    $payloadDaemon = Get-ChildItem -LiteralPath $extractDir -Recurse -Filter mergepilot-daemon.exe |
-      Select-Object -First 1
+    $payloadDesktop = Find-MergePilotExtractedDesktop -Root $extractDir
+    $payloadDaemon = Find-MergePilotExtractedDaemon -Root $extractDir
     if (-not $payloadDesktop) {
       throw "Extracted MSI did not contain mergepilot-desktop.exe."
     }
@@ -250,6 +280,7 @@ if ($RequireMsiPayloadMatch) {
 
     $msiPayload = [pscustomobject]@{
       msiPath = (Resolve-Path $MsiPath).Path
+      extractMethod = $extractMethod
       desktopHash = Get-Sha256OrNull $payloadDesktop.FullName
       daemonHash = Get-Sha256OrNull $payloadDaemon.FullName
       desktopBundleKind = Get-TauriBundleKind $payloadDesktop.FullName
@@ -282,6 +313,13 @@ if ($mergePilotEntries.Count -ne 1) {
 }
 if ($mergePilotEntries.Count -eq 1 -and $mergePilotEntries[0].displayVersion -ne $ExpectedVersion) {
   $failures += "Expected MergePilot version $ExpectedVersion; found $($mergePilotEntries[0].displayVersion)."
+  if ($installerBlockers.Count -gt 0) {
+    $blockerSummary = ($installerBlockers | ForEach-Object {
+      $title = if ([string]::IsNullOrWhiteSpace([string]$_.windowTitle)) { "" } else { " '$($_.windowTitle)'" }
+      "$($_.kind) PID $($_.processId)$title"
+    }) -join "; "
+    $failures += "Installer/UAC blocker is still active while the installed version is stale: $blockerSummary."
+  }
 }
 if (-not (Test-PathExists $installedDesktopPath)) {
   $failures += "Installed mergepilot-desktop.exe was not found."
@@ -351,6 +389,8 @@ $result = [pscustomobject]@{
   installedFiles = $installedFiles
   installedBundleKind = $installedBundleKind
   installedHashes = $installedHashes
+  windowsInstallerProcesses = $windowsInstallerProcesses
+  installerBlockers = $installerBlockers
   msiPayload = $msiPayload
   daemonProbe = [pscustomobject]@{
     port = $Port

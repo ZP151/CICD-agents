@@ -23,11 +23,14 @@ export function HistorySidebarPagination({
 }: HistorySidebarPaginationProps) {
   if (historyLength <= collapsedLimit) return null;
 
+  const iconButtonClass =
+    "flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-40";
+
   return (
-    <div className="mt-auto border-t border-zinc-800/80 px-3 py-2">
+    <div className="mt-auto border-t border-[rgb(var(--app-border))] px-3 py-2">
       {expanded ? (
         <div className="flex flex-col gap-2">
-          <p className="text-[10px] text-zinc-600">
+          <p className="text-[10px] text-[rgb(var(--app-text-subtle))]">
             Showing {showingStart}-{showingEnd} of {historyLength}
           </p>
           <div className="flex items-center gap-1.5">
@@ -37,13 +40,13 @@ export function HistorySidebarPagination({
               disabled={normalizedPage <= 1}
               title="Previous page"
               aria-label="Previous history page"
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-800 text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40"
+              className={iconButtonClass}
             >
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 6l-6 6 6 6" />
               </svg>
             </button>
-            <span className="min-w-10 text-center text-[11px] text-zinc-600">
+            <span className="min-w-10 text-center text-[11px] text-[rgb(var(--app-text-subtle))]">
               {normalizedPage}/{pageCount}
             </span>
             <button
@@ -52,7 +55,7 @@ export function HistorySidebarPagination({
               disabled={normalizedPage >= pageCount}
               title="Next page"
               aria-label="Next history page"
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-800 text-zinc-500 transition hover:border-zinc-700 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40"
+              className={iconButtonClass}
             >
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 6l6 6-6 6" />
@@ -64,7 +67,7 @@ export function HistorySidebarPagination({
                 onExpandedChange(false);
                 onPageChange(() => 1);
               }}
-              className="ml-auto rounded-md px-2 py-1 text-[11px] text-zinc-500 transition hover:bg-zinc-800 hover:text-zinc-300"
+              className="ml-auto rounded-md px-2 py-1 text-[11px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))]"
             >
               Show less
             </button>
@@ -77,7 +80,7 @@ export function HistorySidebarPagination({
             onExpandedChange(true);
             onPageChange(() => 1);
           }}
-          className="w-full rounded-md border border-zinc-800 px-2 py-1.5 text-left text-[11px] text-zinc-500 transition hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-300"
+          className="w-full rounded-md border border-[rgb(var(--app-border))] px-2 py-1.5 text-left text-[11px] text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))]"
         >
           Show more ({historyLength - collapsedLimit} more)
         </button>

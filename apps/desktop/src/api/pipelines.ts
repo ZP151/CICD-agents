@@ -30,7 +30,22 @@ export async function listPipelineConnections(projectLinkId?: string): Promise<P
   const query = projectLinkId ? `?projectLinkId=${encodeURIComponent(projectLinkId)}` : "";
   const r = await fetch(`${RUNTIME_URL}/pipeline-connections${query}`);
   if (!r.ok) throw new Error(await messageFromErrorResponse(`Pipeline connections HTTP ${r.status}`, r));
-  return (await r.json()) as PipelineConnection[];
+  return pipelineConnectionsFromResponse(await r.json());
+}
+
+export function pipelineConnectionsFromResponse(value: unknown): PipelineConnection[] {
+  if (Array.isArray(value)) return value as PipelineConnection[];
+  if (
+    value &&
+    typeof value === "object" &&
+    "items" in value &&
+    Array.isArray((value as { items?: unknown }).items)
+  ) {
+    return (value as { items: PipelineConnection[] }).items;
+  }
+  throw new Error(
+    "Pipeline connections could not be loaded because the desktop daemon returned an unexpected response.",
+  );
 }
 
 export async function createPipelineConnection(data: PipelineConnectionInput): Promise<PipelineConnection> {

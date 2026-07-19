@@ -20463,3 +20463,4946 @@ Continue the live business verification by exercising real ClaimBot_API Azure De
 | Live ADO read-only PR/Pipeline workflows remain green at source `0.5.22`. | Pass | Keep destructive ADO queue/rerun proof explicit and separate. |
 | No ADO mutation was requested or performed in this run. | Pass | Destructive mode stayed disabled and the queue test remained skipped. |
 | Installed Program Files proof remains separate. | Open | Install rebuilt `0.5.22` MSI elevated before strict installed/native UI parity. |
+
+## Run: mp-0522-installed-parity-and-regression-continuation-20260717-2155
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 21:38-21:55 +08:00 |
+| Runtime | Installed Program Files `0.5.22`, source test workspace `0.5.22`, published `v0.5.22` |
+| Resource mode | Installed-app smoke plus non-destructive mocked/source regression suites |
+| Result | Pass with native screenshot tooling caveat |
+
+### Purpose
+
+Continue the post-release optimization/test loop after the latest `0.5.22` application was installed locally. This run verifies that the previously stale Program Files install is now aligned with the current package and that the recent Chat, route-cache, Activity, Pipeline, PR insight, Review Queue, auth/avatar, and workflow-routing fixes remain green.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Git/release state | Pass | `main` matched `origin/main`; `HEAD`, `origin/main`, and `v0.5.22` pointed at `e9cac7a fix: allow unsigned Windows release fallback`. GitHub Release `v0.5.22` was published with MSI, NSIS, and macOS DMG assets. |
+| Installed package state | Pass | `verify-installed-windows-package-state.ps1 -ExpectedVersion 0.5.22` returned `ok: true`. Program Files contained `mergepilot-desktop.exe`, `mergepilot-daemon.exe`, and `uninstall.exe`; uninstall version was `0.5.22`; legacy install entries/directories were absent. |
+| Installed app smoke | Pass | `run-installed-app-smoke.ps1 -ExpectedVersion 0.5.22 -ExpectedDesktopBundleKind nsis` passed package-state, restart persistence, lifecycle safety, verifier safety, and cleanup. All probe ports were closed after the run. |
+| Installed auth/avatar | Pass | Installed package-state log showed `authenticated: true`, `name: Zhou Ping`, `upn: Zhou.Ping@totalebizsolutions.com`, `hasAvatar: true`, `avatarLength: 19339`, and `avatarPrefix: data:image/jpeg;base64,/9j/4AAQS`. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Mocked Chat/route browser regression | Pass | `run-mocked-browser-e2e.ps1 -Project chromium -Grep "route cache|chat" -Workers 1` passed 53/53 with 16 live/destructive tests skipped by design. Covered quiet New Chat empty state, no stale prompts, warm route caching, image attachments, PR/Pipeline structured controls, read-only Git/ADO routing, approval UI, source preview, stream dedupe, and UI-stream lifecycle. |
+| Focused workspace UI tests | Pass | Focused desktop tests for Pipelines, Pipeline cards, PR cards, Review Queue cards, and Activity sidebar passed 5 files / 11 tests. |
+| Full desktop tests | Pass | Full desktop Vitest passed 94 files / 419 tests. |
+| Full core tests | Pass | Full core Vitest passed 50 files / 258 tests with 4 live-gated files / 6 tests skipped by flags. Existing Node `DEP0040` `punycode` warnings were observed but did not fail the suite. |
+| Full daemon tests | Pass | Full daemon Vitest passed 47 files / 273 tests with 1 live-gated test skipped. Covered Chat workflow routes, read-only Git routing, Git recovery/checkpoint/push flows, Project Link routes, review queue/operation storage, PR insight storage, daemon config, and null chat-session handling. |
+| Installed-daemon live ADO browser gate | Pass | `run-live-app-e2e.ps1 -LiveAdo -Grep "ClaimBot_API pipeline" -Workers 1` passed 4/4 with `daemonVersion: 0.5.22`, `startedDaemon: false`, `liveAdo: true`, and `destructive: false`. Covered ClaimBot_API pipeline `#117` discovery/save, failure-evidence inspection through normal Chat input, rerun approval preparation from evidence suggestions, and trigger approval preparation through the real Chat UI. |
+| Installed-daemon live vision stream | Pass | `packaged-live-vision-smoke.ps1 -Port 19030 -SidecarPath "C:\Program Files\MergePilot\mergepilot-daemon.exe"` passed against the installed Program Files daemon with `healthVersion: 0.5.22`, 24 assistant deltas, correct recognition of `MP VISION TEST`, a blue square, and a red circle, no SSE errors, no control JSON leak, no duplicate final sentence, and session cleanup HTTP 200. |
+| Worktree/test residue | Pass | `git status --short --ignored output .artifacts` showed only ignored `.artifacts/` and `output/` directories after tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Installed `0.5.22` parity is now proven by script-level package and runtime smoke. | Pass | Treat Program Files screenshots from this point as current `0.5.22` behavior unless a later install changes state. |
+| Avatar/auth root cause is closed for installed runtime. | Pass | The installed daemon can refresh Microsoft account identity and avatar data; keep `RequireAvatar` in installed smoke. |
+| New Chat preload, route-cache, Activity, Pipeline, PR, and Review Queue regressions remain covered by mocked browser plus component/model tests. | Pass | Continue using `route-cache|chat` and focused workspace UI tests as the fast UI regression set. |
+| ClaimBot_API live ADO read-only pipeline workflows pass against the installed `0.5.22` daemon. | Pass | Keep destructive queue/rerun execution as a separate opt-in test with cleanup. |
+| Installed live vision stream parity is now proven for the installed daemon. | Pass | Keep image attachment support in the installed smoke set when changing Chat streaming or model transport. |
+| Native installed-window screenshot/click proof is still unreliable through Computer Use. | Test tooling caveat | Computer Use can enumerate the MergePilot window, but the captured screenshot still showed unrelated content in this run. Do not use that screenshot as evidence until the capture/activation path is reliable. |
+| Windows release assets are published but unsigned. | External release trust gap | Configure `WINDOWS_CODESIGN_CERT_PFX_BASE64` and `WINDOWS_CODESIGN_CERT_PASSWORD` for trusted Authenticode signing and to remove Windows unknown-publisher prompts. |
+
+## Run: mp-chat-status-keyvault-config-fix-20260717-2204
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 21:55-22:04 +08:00 |
+| Runtime | Current worktree `0.5.22` |
+| Resource mode | Source/unit regression only; no live Azure mutation |
+| Result | Pass |
+
+### Purpose
+
+Resolve two issues found during the installed-app continuation pass: redundant Chat progress text such as `Reading project context` competing with the execution transcript, and Key Vault configuration failures surfacing raw Microsoft/AADSTS resource errors instead of an actionable Settings message.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Chat progress status filtering | Pass | Added a shared dispatcher helper so legacy stream events and canonical UI chunks both hide `Reading project context` / `Refreshing project context` instead of showing duplicate status text above the execution transcript. |
+| Key Vault default URL fix | Pass | Fixed `/daemon/configure` to treat an empty configured Key Vault URL as missing and fall back to the system vault URL `https://devagentkv001.vault.azure.net/` when Key Vault mode is explicitly selected. |
+| Key Vault app-permission message | Pass | `AADSTS650057`, `invalid_resource`, and `invalid client` errors now become an actionable message: keep `Local .env` selected or ask an Azure administrator to grant the MergePilot app delegated Key Vault access plus `secrets/get` or `secrets/set`. Raw `AADSTS650057` / `invalid_client` text is not returned to the UI. |
+| Local-env config cleanup | Pass | Writing `local_env` config now clears inactive Key Vault `api_key_ref` values instead of leaving misleading `kv://secret/...` references in `config.toml`. |
+| Focused desktop tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/chatStreamDispatcher.test.ts src/pages/chat/chatUiChunkDispatcher.test.ts` passed 2 files / 10 tests. |
+| Focused daemon tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/daemonEnv.test.ts test/daemonConfigRoutes.test.ts` passed 2 files / 11 tests. |
+| Typecheck | Pass | Desktop and daemon typecheck passed. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Context-read progress should stay an internal execution state, not visible transcript copy. | Fixed | Continue using the execution transcript's `Working/Running/Ran` labels for visible progress. |
+| Enabling Key Vault without a custom vault URL previously skipped the system vault path. | Fixed | Future Key Vault work should test empty URL, explicit URL, and local-env modes separately. |
+| Local-env config should not look like Key Vault config. | Fixed | Existing user files may be cleaned on the next Settings save after the rebuilt daemon is installed. |
+| The signed-in account still needs Azure app/data-plane permission before Key Vault success can be claimed. | External permission gap | Use local `.env` until the app registration and Key Vault secret roles are granted. |
+
+## Run: mp-0522-installed-chat-auth-config-continuation-20260717-2220
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 22:10-22:20 +08:00 |
+| Runtime | Installed Program Files `0.5.22`, current worktree `0.5.22` |
+| Resource mode | Installed-state probe, static installed scan, mocked browser regression, focused auth/config tests |
+| Result | Pass |
+
+### Purpose
+
+Close the follow-up verification loop for the installed-app issues reported after `0.5.22`: stale New Chat welcome templates, basic Microsoft login requesting Key Vault resource consent, route-switch loading regressions, and Key Vault/local-env configuration messaging.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Installed package state | Pass | `verify-installed-msi-state.ps1 -ProbeDaemon` returned `ok: true`: Program Files contains `mergepilot-desktop.exe`, `mergepilot-daemon.exe`, and `uninstall.exe`; one HKLM uninstall entry reports `0.5.22`; no legacy install directories or legacy entries remain. |
+| Installed daemon health/config | Pass | `http://127.0.0.1:8787/healthz` returned daemon `version: 0.5.22`, `llmConfigured: true`, Azure OpenAI `gpt-4o`, config source `C:\Users\15492\.mergepilot\config.toml`, `keyVaultSecretError: null`, `cloudProjectLinkStore: true`, `cloudSecrets: false`, and `cloudSessions: true`. `/daemon/config` returned `secretSource: local_env`, `aoaiKeyInVault: false`, `azureKeyVaultUrl: https://devagentkv001.vault.azure.net/`, and `azureEmbeddingDeployment: text-embedding-3-small`. |
+| Installed stale-template scan | Pass | `verify-no-stale-chat-template.ps1 -Installed` returned `ok: true`; no runtime matches for `Ask MergePilot anything`, removed prompt copy, removed Chat index preload helper names, or removed New Chat action labels. |
+| Route-cache browser regression | Pass | `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts --project=chromium --workers=1` passed 29/29. Coverage includes signed-in avatar rendering, quiet New Chat without index-status preload, no stale prompts after Project Link switch, warm route returns, cached Pull Requests/Review Queue/Pipelines/Activity refresh behavior, Pipeline Markdown AI analysis, and collapsed Activity raw output. |
+| Basic Microsoft auth scope guard | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test -- test/azureAuthSession.test.ts test/azureAuthCredential.test.ts` passed 2 files / 7 tests. The auth regression confirms base sign-in requests only Graph `User.Read` and does not request Key Vault or Azure DevOps scopes, even when Key Vault secret mode is configured. |
+| Key Vault/local-env config tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/daemonConfigRoutes.test.ts test/daemonEnv.test.ts` passed 2 files / 11 tests. Coverage includes local-env config clearing inactive `kv://secret/...` refs, Key Vault URL fallback when the configured URL is empty, and actionable app-permission messaging for `AADSTS650057` / `invalid_resource` errors. |
+| Stale-template verifier smoke | Fixed and pass | `verify-no-stale-chat-template-smoke.ps1` now exits `0` when all internal positive and negative checks pass. The prior script left `$LASTEXITCODE` from an intentionally failing negative verifier case, causing a false red despite `"ok": true` and no failures. |
+| Product-source stale string scan | Pass | `rg` over product source found no active UI source matches for the old New Chat welcome copy, removed preload helpers, old Pipeline/PR labels, raw `/chat/workflow-action HTTP`, or `Expected string, received null` leakage. Remaining matches are historical docs, negative tests, or Activity summaries of historical errors. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The currently installed app is no longer the stale `0.5.20`/old-template state. | Pass | Treat new screenshots from this machine as `0.5.22` unless another installer is applied. |
+| Basic Microsoft login is separated from Key Vault consent in source tests. | Pass | Keep Key Vault access behind explicit Settings secret-source actions. |
+| Key Vault is still not usable for this account until Azure app/data-plane permissions are granted. | External permission gap | Continue using `Local .env` for model secrets until delegated Key Vault access and `secrets/get` / `secrets/set` are granted. |
+| The stale-template smoke had a false-red harness bug. | Fixed | The smoke now explicitly exits `0` after successful checks. |
+| Installed daemon executable file metadata still shows the Node runtime file version for the daemon binary. | Low polish | Health and installer metadata report `0.5.22`; daemon exe file-version polish can be handled separately. |
+
+## Run: mp-0522-installed-fresh-user-first-run-smoke-20260717-2224
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 22:22-22:24 +08:00 |
+| Runtime | Installed Program Files daemon `0.5.22` with temporary fresh user home/data directories |
+| Resource mode | Installed-daemon first-run smoke; no live Azure mutation |
+| Result | Pass |
+
+### Purpose
+
+Close the remaining first-run evidence gap for the installed application. Previous fresh-config smokes covered MSI-extracted daemons, while installed package smokes covered the current user's configured profile. This run verifies the actual Program Files daemon under a clean temporary `MERGEPILOT_HOME` and `RUNTIME_DATA_DIR` with inherited model/key/cloud environment variables removed.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| New installed fresh-user smoke | Pass | Added `scripts/windows/installed-fresh-user-smoke.ps1`. It starts `C:\Program Files\MergePilot\mergepilot-daemon.exe` on an isolated port, points `MERGEPILOT_HOME` and `RUNTIME_DATA_DIR` at temporary directories, removes inherited model/key/cloud env vars, creates a temporary Git repo, and probes health, config, and `/chat/workflow-action`. |
+| Fresh config creation | Pass | The installed daemon created `config.toml` and `.env` under the temporary home directory. `/daemon/config` returned `secretSource: local_env`, `aoaiKeyInVault: false`, and `keyVaultSecretError: null`. |
+| Local-env Key Vault isolation | Pass | The generated local-env config contained `source = "local_env"` and empty `api_key_ref` values, and did not contain `kv://secret/mergepilot-aoai-key`. |
+| First-run workflow-action payload | Pass | Posting `/chat/workflow-action` with `sessionId: null`, no Project Link, and a temporary Git repo returned workflow phase `inspect_environment`, protecting the previous first-run null-session route shape. |
+| Expected LLM state | Pass | With inherited model/key env vars intentionally removed, health reported `llmConfigured: false`. This confirms first-run config generation without pretending a new user has a model key before Settings/local `.env` setup. |
+| Installed smoke wrapper integration | Pass | `run-installed-app-smoke.ps1` now includes the fresh-user smoke and reports it in the summary JSON. The wrapper passed with package-state, restart persistence, safety, verifier-safety, and fresh-user checks all green; `openAfterRun` was empty. |
+| Windows script parser | Pass | `verify-windows-scripts-parse.ps1` passed 33/33 scripts after adding the fresh-user smoke. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The actual installed daemon handles a clean first-run profile without falling into Key Vault mode. | Pass | Keep this smoke in the installed-app gate. |
+| The first-run null-session workflow-action shape remains accepted by the installed daemon. | Pass | Keep `sessionId: null` in package and installed smoke payloads. |
+| A truly new user still needs to provide a local `.env`/Settings model key before LLM chat is configured. | Product behavior note | This is consistent with the current local-env secret-source plan; onboarding should make the missing model-key state clear. |
+
+## Run: mp-0522-installed-fresh-user-first-run-smoke-20260717-2228
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 22:28 +08:00 |
+| Runtime | Installed Program Files daemon `0.5.22` with temporary fresh user home/data directories |
+| Resource mode | Installed-daemon first-run smoke; wrapper installed-app gate; no live Azure mutation |
+| Result | Pass |
+
+### Purpose
+
+Re-run the installed fresh-user gate after tightening the smoke so cloud-secret disablement is asserted from `/healthz` instead of an absent config response field. This closes the small proof-quality gap in the first-run local-env evidence.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Direct fresh-user smoke | Pass | `.\scripts\windows\installed-fresh-user-smoke.ps1 -ExpectedVersion 0.5.22 -Port 8802` returned `ok: true`, `healthVersion: 0.5.22`, `llmConfigured: false`, `cloudSecrets: false`, `secretSource: local_env`, `aoaiKeyInVault: false`, `keyVaultSecretError: null`, and `workflowPhase: inspect_environment`. |
+| Installed smoke wrapper | Pass | `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.22 -ExpectedDesktopBundleKind nsis` passed package-state, restart persistence, lifecycle safety, verifier safety, and fresh-user checks. The wrapper reported `openAfterRun: []`. |
+| Script parser | Pass | `.\scripts\windows\verify-windows-scripts-parse.ps1` parsed 33/33 scripts successfully after the smoke assertion change. |
+| Active doc links | Pass | `.\scripts\windows\verify-active-doc-links.ps1` checked 91 references across active docs with no failures. |
+| Diff whitespace | Pass | `git diff --check` returned no whitespace errors; only normal Windows LF-to-CRLF warnings were emitted. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Fresh installed users stay in local-env mode and cloud secret storage remains disabled. | Pass | Keep using this smoke in the installed-app gate. |
+| The installed-app baseline is current `0.5.22` NSIS shape, not stale `0.5.20`. | Pass | MSI-shape parity remains optional and separate from the current installed baseline. |
+
+## Run: mp-0522-source-and-runner-guard-20260717-2238
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 22:31-22:38 +08:00 |
+| Runtime | Current dirty worktree `0.5.22`; installed Program Files `0.5.22` |
+| Resource mode | Source test gates, installed package-state/stale-template probes, runner safety smoke |
+| Result | Pass |
+
+### Purpose
+
+Continue the optimization/test loop after the installed fresh-user proof by widening source verification and looking for new hidden issues in the testing workflow itself.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Daemon typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck` passed. |
+| Desktop unit/component suite | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` passed 94/94 files and 421/421 tests. |
+| Daemon suite | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test` passed 47/47 files and 275/275 tests, with 1 live ADO test skipped by environment flag. Node emitted the known `DEP0040` `punycode` warning. |
+| Runner false-green repro | Found and fixed | A typoed `.\scripts\windows\pnpm-project.ps1 --filter '@mergepilot\desktop' typecheck` previously printed `No projects matched` while exiting 0. The wrapper now rejects backslash package filters and unknown scoped package filters before invoking pnpm. |
+| Runner smoke | Pass | Added and ran `.\scripts\windows\pnpm-project-smoke.ps1`; it verified the backslash filter and missing package filter both exit 1, while `--filter @mergepilot/desktop typecheck` exits 0. |
+| Installed package-state probe | Pass | `.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -ProbeDaemon -RequireLegacyCleanup` returned `ok: true`, Program Files `0.5.22`, no legacy install directory/entries, daemon health `0.5.22`, `llmConfigured: true`, and `cloudSecrets: false`. |
+| Installed stale-template probe | Pass | `.\scripts\windows\verify-no-stale-chat-template.ps1 -Installed` returned `ok: true`; no stale New Chat welcome/preload patterns were found in the installed app. |
+| Script parser | Pass | `.\scripts\windows\verify-windows-scripts-parse.ps1` parsed 34/34 scripts after adding `pnpm-project-smoke.ps1`. |
+| Active doc links | Pass | `.\scripts\windows\verify-active-doc-links.ps1` checked 91 references across active docs with no failures. |
+| Diff whitespace | Pass | `git diff --check` returned no whitespace errors; only normal Windows LF-to-CRLF warnings were emitted. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current dirty tree remains stable under full desktop and daemon source suites. | Pass | Keep full package source suites as the stronger pre-stage baseline. |
+| The pnpm wrapper could previously produce false-green verification for typoed package filters. | Fixed | Keep `pnpm-project-smoke.ps1` in the Windows script/parser gate and use it before release handoff. |
+| Installed `0.5.22` remains aligned after the new source changes. | Pass | Continue treating strict MSI-shape parity and Authenticode signing as separate remaining release hardening gaps. |
+
+## Run: mp-0522-core-readiness-smoke-20260717-2304
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 22:40-23:04 +08:00 |
+| Runtime | Current dirty worktree `0.5.22`; installed Program Files `0.5.22` |
+| Resource mode | Core source gates, release-readiness smokes, installed/package runtime gates; no live Azure DevOps mutation |
+| Result | Pass |
+
+### Purpose
+
+Extend the dirty-tree verification from desktop/daemon coverage into the shared core package and the current release-readiness aggregator. This run also fixed a subtle smoke-harness false-red where a smoke script emitted passing JSON but returned process exit code `1`.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Core typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core typecheck` passed. |
+| Core test suite | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/core test` passed 50/50 files and 258/258 tests, with 4 files / 6 live tests skipped by environment flags. Node emitted the known `DEP0040` `punycode` warning. |
+| Release workflow static smoke | Pass | `.\scripts\windows\verify-release-workflow-static-smoke.ps1` passed. |
+| Release readiness smoke without package smokes | Pass | `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -SkipPackageSmokes` passed after updating expectations for the now-clean release-script tracking state. |
+| Release readiness full smoke | Pass | `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -FreshConfigPort 19131 -MsiPayloadPort 19132` returned `exitCode: 0`, `ok: true`, 9/9 checks passed, and no failures. Log: `output\live-e2e\readiness-full-smoke-20260717-230037.log`. |
+| Readiness smoke exit-code false red | Fixed | The smoke previously reported `ok: true` with no failed checks but returned exit code `1` because PowerShell retained `$LASTEXITCODE` from an intentionally failing child readiness probe. `verify-current-release-readiness-smoke.ps1` now explicitly exits `0` when its own checks pass. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Core package behavior remains stable under the current dirty tree. | Pass | Keep core typecheck/test in the pre-stage source gate. |
+| Release readiness smoke is now process-exit reliable, not only JSON-reliable. | Fixed | Keep this smoke in local release handoff before tag/release work. |
+| Current release readiness still intentionally reports release blockers inside the aggregator for unsigned Windows artifacts and strict MSI-shape parity. | Expected external/release gap | Treat those as release-hardening tasks, not regressions in this smoke. |
+
+## Run: mp-0522-chat-route-cache-runner-smoke-20260717-2312
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 23:05-23:12 +08:00 |
+| Runtime | Current dirty worktree `0.5.22`; mocked browser app server started by wrapper |
+| Resource mode | Mocked browser Chat/route-cache regression, focused source tests, runner smoke; no live Azure DevOps mutation |
+| Result | Pass |
+
+### Purpose
+
+Continue the stabilization loop after the readiness-smoke fix by checking the user-visible Chat and route-cache area again, then hardening the new pnpm wrapper smoke so it does not become version-fragile on the next release bump.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Runner smoke | Pass | `.\scripts\windows\pnpm-project-smoke.ps1` passed. It verifies backslash and missing package filters exit `1`, while `--filter @mergepilot/desktop typecheck` exits `0`. |
+| Runner smoke version resilience | Fixed | `pnpm-project-smoke.ps1` now reads `apps\desktop\package.json` for the expected package name/version instead of matching hard-coded `@mergepilot/desktop@0.5.22 typecheck`. This prevents the smoke from failing only because the product version is bumped. |
+| Mocked Chat/route-cache browser regression | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "route cache\|chat"` passed 53/53 selected Chromium tests with 16 live-app tests skipped by design. Coverage includes quiet New Chat, no stale prompt templates, route-cache warm returns, Project Link onboarding, image attachment UI, structured Git/PR/Pipeline actions, approval UI, UI chunk lifecycle, source preview, and artifact lookup behavior. |
+| Chat stream dispatcher focused tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/chatStreamDispatcher.test.ts src/pages/chat/chatUiChunkDispatcher.test.ts` passed 2/2 files and 10/10 tests. |
+| Daemon local-env/Key Vault config tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/daemonConfigRoutes.test.ts test/daemonEnv.test.ts` passed 2/2 files and 11/11 tests, with the known Node `DEP0040` `punycode` warning. |
+| Windows script parser | Pass | `.\scripts\windows\verify-windows-scripts-parse.ps1` parsed 34/34 scripts successfully after the runner-smoke change. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Chat and route-cache behavior remain stable after the status-text and config fixes. | Pass | Keep the `route cache\|chat` mocked browser subset as a fast user-visible regression gate. |
+| The runner smoke no longer encodes the current product version. | Fixed | Keep dynamic package-version expectations for future smoke scripts that assert CLI output. |
+
+## Run: mp-0522-installed-native-ui-computer-use-20260717-2320
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 23:14-23:20 +08:00 |
+| Runtime | Installed Program Files `0.5.22` desktop window and daemon on `127.0.0.1:8787` |
+| Resource mode | Native Windows UI automation via Computer Use; low-risk navigation only; no settings save, Chat send, Git, Azure DevOps, or cloud mutation |
+| Result | Pass with activation caveat |
+
+### Purpose
+
+Reprobe the remaining native installed-window proof gap after the local Computer Use plugin-cache repair. Earlier native attempts could discover MergePilot through accessibility, but screenshots sometimes captured unrelated content and click proof was unreliable.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| App/window discovery | Pass | `sky.list_apps()` found `com.mergepilot.desktop`, and `get_window_state()` identified window title `MergePilot` with app process `mergepilot-desktop.exe`. |
+| Accessibility tree | Pass | The tree exposed Workspace navigation (`New chat`, `Pull Requests`, `Project Links`), Quality navigation (`Review Queue`, `Pipelines`), System navigation (`Activity`, `Settings`), the signed-in account button `Zhou Ping Zhou.Ping@totalebizsolutions.com`, history controls, pinned summary toggle, code panel toggle, and composer content. |
+| Initial screenshot capture | Caveat reproduced | The first screenshot request still captured unrelated visual content even while the accessibility tree was correctly rooted at MergePilot. This confirms the earlier native screenshot issue is not completely gone without activation. |
+| Activated screenshot capture | Pass | After `activate_window`, the next screenshot showed the real MergePilot window: sidebar navigation, New conversation header, Project Link selector, composer, model selector, send button, and visible user avatar/footer. |
+| Native click to Settings | Pass | A low-risk click on the Settings navigation item opened the Settings page. Screenshot and accessibility state showed Settings, Appearance, Additional Models, local model configuration, and the signed-in user footer/avatar. No setting was edited or saved. |
+| Native click back to New chat | Pass | A low-risk click on New chat returned to the New conversation view with composer visible and signed-in user footer/avatar still present. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Installed native UI proof is now stronger than before: discovery, accessibility, activated screenshot, and low-risk navigation clicks all work. | Pass | Keep Computer Use as an auxiliary installed-window proof path. |
+| Screenshot capture can still be stale/wrong before explicit activation. | Tooling caveat | Native visual smokes should activate the MergePilot window before relying on screenshots. Accessibility proof alone is not enough for pixel claims. |
+
+## Run: mp-0522-current-doc-status-alignment-20260717-2328
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 23:24-23:28 +08:00 |
+| Runtime | Current documentation and test-record workspace |
+| Resource mode | Documentation/status audit; no app mutation, Git mutation, Azure DevOps mutation, or cloud mutation |
+| Result | Pass |
+
+### Purpose
+
+Align the current business checklist and automated suite plan with the newly proven installed `0.5.22` and Computer Use activation evidence. Historical records remain unchanged, but current status rows should no longer say the installed app is stale or that native screenshot/click proof is completely unproven.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Business checklist installed parity row | Updated | `docs/agent-business-test-checklist.md` now records installed native parity as `Pass with release caveat`: Program Files is aligned at `0.5.22` for the NSIS-shaped installed app; strict MSI payload parity remains separate if MSI shape is required. |
+| Automated suite packaged behavior row | Updated | `docs/automated-business-test-suite-plan.md` now lists activated Computer Use native window/click proof as passing, with the remaining caveat that screenshots must explicitly activate the window before pixel evidence is trusted. |
+| Automated suite onboarding/config row | Updated | The mapping now includes installed first-run runtime/auth/avatar smoke and activated native Settings/New chat click proof; remaining gaps are Key Vault success-path proof, cloud data-plane persistence, and strict MSI payload parity if required. |
+| Installed-build UI smoke protocol row | Updated | The Phase 4 protocol now says Computer Use provides bootstrap, app discovery, accessibility proof, activated screenshot proof, and low-risk Settings/New chat click proof. |
+| Stale-current-status scan | Pass | Focused `rg` scan over current checklist/report/plan found no remaining current-status phrases claiming Program Files is older or native click/pixel proof is entirely unproven. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current tracking docs now match the latest installed-app evidence. | Pass | Keep historical records intact, but keep current snapshot rows authoritative for next testing decisions. |
+
+## Run: mp-0522-continuation-installed-app-regression-20260717-2334
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 23:18-23:34 +08:00 |
+| Runtime | Current workspace plus installed Program Files `0.5.22` app |
+| Resource mode | Non-mutating regression run; no Chat send, approval, Git write, Azure DevOps write, or cloud write |
+| Result | Pass with release caveats |
+
+### Purpose
+
+Continue the post-install validation loop after the workspace was expected to be clean and the latest app was installed locally. The run checks whether the visible Chat/template, route-cache, local config, installed auth/avatar, packaged runtime, and release-readiness gates remain fixed, while looking for newly exposed problems.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Workspace reality check | Attention | `git status --short` showed pending source, script, and documentation changes rather than a clean tree. The run continued against the current authoritative workspace and did not stage, commit, or push. |
+| Runner guard smoke | Pass | `.\scripts\windows\pnpm-project-smoke.ps1` passed. During this session the guard also correctly rejected accidental backslash filters such as `@mergepilot\desktop`, preventing false-green test commands. |
+| Chat stream/status focused tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/chatStreamDispatcher.test.ts src/pages/chat/chatUiChunkDispatcher.test.ts` passed 2/2 files and 10/10 tests. |
+| Daemon config tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/daemonConfigRoutes.test.ts test/daemonEnv.test.ts` passed 2/2 files and 11/11 tests, with the known Node `DEP0040` `punycode` warning. |
+| Readiness smoke split mode | Pass | `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -SkipPackageSmokes` passed. `.\scripts\windows\run-installed-app-smoke.ps1 -PackageProbePort 19201 -PersistencePort 19202 -SafetyPort 19203 -VerifierSafetyPort 19204 -FreshUserPort 19205` also passed and left no ports open. |
+| Full readiness smoke | Pass | `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -FreshConfigPort 19151 -MsiPayloadPort 19152` passed in about 215 seconds. A prior 184-second external command timeout was too short for the full combined gate and did not indicate product failure. |
+| Mocked route-cache and Chat browser regression | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "route cache\|chat"` passed 53/53 selected Chromium tests, with 16 live-app tests skipped by design. Coverage includes quiet New Chat, no stale prompt templates, warm route returns, structured actions, approval UI, UI-stream lifecycle, source preview, and artifact lookup. |
+| Installed package/auth/avatar state | Pass | `.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -ExpectedDesktopBundleKind any -ProbeDaemon -ProbeAuth -RequireAvatar -RequireLegacyCleanup -Port 19211` passed. Health reported Azure `gpt-4o`, config source `C:\Users\15492\.mergepilot\config.toml`, authenticated `Zhou Ping`, and `hasAvatar: true` with a JPEG data URL. |
+| Installed native UI visual check | Pass | Computer Use found `com.mergepilot.desktop`, activated the `MergePilot` window, and captured the installed New Chat view. The screenshot showed the sidebar, New conversation header, Project Link selector, composer, `GPT-4o`, send button, and visible user avatar/footer. No preloaded command template was visible. |
+| Port cleanup | Pass | No listeners remained on the readiness/package test ports after the split and full smoke runs. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The major user-facing fixes checked in this slice still hold: New Chat template preload is quiet, route-cache browser tests pass, installed auth/avatar works, and the installed daemon reads the local Azure OpenAI config. | Pass | Keep the route-cache/Chat mocked browser subset and installed auth/avatar probe as routine pre-release gates. |
+| Full readiness smoke needs an outer timeout greater than three minutes on this machine. | Low tooling issue | Use at least 420 seconds for manual Codex command invocations, or split package smoke from readiness aggregation when diagnosing failures. |
+| Current Program Files installation is aligned at `0.5.22`, but the release-readiness aggregator still reports expected blockers for unsigned artifacts and strict MSI parity. | Release caveat | Authenticode signing still needs configured certificate secrets; strict MSI parity remains separate because the installed desktop is the NSIS-shaped install. |
+| The installed sidecar executable reports daemon health version `0.5.22`, but its Windows file/product metadata still shows Node runtime `22.10.0`. | Low packaging polish | Consider stamping the sidecar executable metadata in a later packaging-hardening slice if Windows file properties matter for support diagnostics. |
+
+## Run: mp-0522-installed-business-pages-and-pipeline-empty-state-20260717-2344
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 23:35-23:44 +08:00 |
+| Runtime | Installed Program Files `0.5.22` app for visual inspection; current source workspace for the Pipelines fix |
+| Resource mode | Non-mutating UI inspection and source regression; no Chat send, approval, Git write, Azure DevOps write, or cloud write |
+| Result | Pass with one source-side fix |
+
+### Purpose
+
+Continue the business-page UX stabilization pass beyond New Chat by checking Pull Requests, Pipelines, Review Queue, and Activity in the installed native app, then fixing any newly verified source issue that can be addressed without changing backend behavior.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Desktop and daemon typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` and `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck` both passed. |
+| Windows script parser | Pass | `.\scripts\windows\verify-windows-scripts-parse.ps1` parsed 34/34 scripts successfully. |
+| Installed Pull Requests first load | Pass with warm-cache note | Initial Pull Requests load showed skeletons for a few seconds, then rendered three PRs. A warm return after visiting other pages showed cached PR rows within 600 ms, without skeleton flash. Action labels were distinct: `Generate insight`, `Run review`, and `Open in ADO`. |
+| Installed Pipelines first load | Finding | The page initially showed `Refreshing pipeline discovery...` while also rendering the empty state `No pipelines discovered yet`. After about 8 seconds it recovered to six discovered rows. This was a contradictory transient empty state, not a data failure. |
+| Installed Review Queue layout | Pass | The page rendered semantic status blocks without the earlier selected-card gray wash. Recent activity did not visibly squeeze the main queue at the current installed-app width. |
+| Installed Activity layout | Pass | The page rendered clearer operational sections (`Runs`, `Checkpoints`, `PR Insights`, `Reviews`). Selecting a checkpoint opened a right-side detail view with repository, session, snapshot path, and rollback plan; raw JSON did not dominate the view. |
+| Pipeline empty-state source fix | Fixed | `apps/desktop/src/pages/Pipelines.tsx` now derives a `pipelineContentState`: `loading`, `refreshing-empty`, `empty`, or `rows`. While discovery is refreshing with zero rows, it renders a refresh status instead of the real empty state. Existing rows remain visible during background refreshes. |
+| Pipeline focused tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx` passed 2/2 files and 8/8 tests. |
+| Pipeline route-cache browser regression | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "pipeline\|route cache"` passed 10/10 selected mocked Chromium tests, with 4 live-app tests skipped by design. Coverage includes cached pipeline rows during discovery refresh, no empty Pipelines before Project Links resolve, pipeline detail errors, AI analysis Markdown, and detail-panel filtering. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pull Requests warm-cache behavior is now acceptable in the installed app. | Pass | Keep route-cache tests as the fast regression gate. |
+| Pipelines had a real but small transient state bug: refresh and empty messaging could appear together. | Fixed in source | Rebuild/reinstall before expecting this exact visual fix in the installed Program Files app. |
+| Activity is now much closer to an operational-history page than a raw mixed dashboard. | Pass | Later polish can improve default right-side empty state guidance, but raw output is no longer the dominant first impression. |
+
+## Run: mp-0522-activity-empty-detail-polish-20260717-2350
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 23:43-23:50 +08:00 |
+| Runtime | Current source workspace with installed-app visual evidence from the prior Activity inspection |
+| Resource mode | Non-mutating source/UI polish; no app send, approval, Git write, Azure DevOps write, or cloud write |
+| Result | Pass |
+
+### Purpose
+
+Continue the business-page polish after the installed Activity inspection showed a clear left rail but a visually blank right-side detail area before the user selects an operation. The source already had a centered `No operation selected` message, but it was too subtle in the wide panel and looked like empty space.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Product-register context | Applied | The `impeccable` product-register guidance was used: keep the surface operational, restrained, familiar, and task-focused. |
+| Activity empty detail source fix | Fixed | `apps/desktop/src/pages/TaskViewer.tsx` now renders a top-aligned `ActivityEmptyDetail` panel with `Detail`, `Select an operation`, and concise guidance about inspecting source, result, and recovery path. |
+| Activity empty detail unit coverage | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx` passed 2/2 files and 6/6 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed after the Activity component change. |
+| Activity route-cache browser regression | Pass | First run exposed the outdated E2E expectation for `No operation selected`; after updating the assertion to `Select an operation`, `.\scripts\windows\run-mocked-browser-e2e.ps1 -Grep "activity\|route cache"` passed 3/3 Chromium tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity default detail state is now visible and consistent with the operation-history model. | Fixed in source | Rebuild/reinstall before expecting this exact visual polish in the installed Program Files app. |
+| Existing mocked browser coverage was useful: it caught the expected copy change immediately. | Pass | Keep this as the Activity regression subset when polishing the page. |
+
+## Run: mp-0522-full-mocked-browser-regression-20260717-2356
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 23:52-23:56 +08:00 |
+| Runtime | Current source workspace, mocked daemon/browser harness |
+| Resource mode | Non-mutating mocked browser regression; live-app tests skipped by design |
+| Result | Pass |
+
+### Purpose
+
+Run the broader browser regression after the Pipelines transient-empty fix and Activity detail-empty-state polish to catch cross-page route-cache, Chat, PR, Review Queue, Pipeline, Activity, Settings, and source-preview regressions.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Full mocked browser regression | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1` passed 85/85 non-live Chromium tests. 30 live-app tests were skipped by design. |
+| Coverage area | Pass | The run covered signed-in avatar rendering, New Chat quiet state, Project Link route caching, Pull Requests stale-while-revalidate, Review Queue panel and semantic lanes, Pipelines cached rows/AI analysis/detail behavior, Activity scoped sections/raw-output folding, Settings Key Vault/local-env messaging, Chat workflow stream lifecycle, approval cards, source previews, and artifact lookups. |
+| Static product-source scan | Pass | Focused fixed-string scans found no product-source matches for old `AI ANALYSIS STREAMING`, no visible old `No operation selected` copy outside negative tests, and no product-source raw `{"returncode"` leakage. Remaining matches are tests, folding logic, or historical docs. |
+| Installed app processes | Stable | Process check before the run showed only the Program Files `mergepilot-desktop.exe` and `mergepilot-daemon.exe` processes. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current source UI regression surface is green after the latest Pipelines and Activity changes. | Pass | Keep the full mocked browser run as a pre-release confidence gate, with focused subsets for faster iteration. |
+| No additional source-visible stale labels or raw JSON leaks were found in the scanned product UI sources. | Pass | Continue using static scans as a cheap complement to browser evidence. |
+
+## Run: mp-0522-chat-empty-welcome-restore-20260718-0000
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-17 23:56-2026-07-18 00:00 +08:00 |
+| Runtime | Current source workspace and rebuilt desktop web bundle |
+| Resource mode | Non-mutating UI regression; no Git write, ADO write, pipeline trigger, approval execution, or cloud write |
+| Result | Pass |
+
+### Purpose
+
+Fix the installed-app finding where the New Chat middle panel became visually blank for an active Project Link: the composer and Project Link selector remained visible, but the expected welcome content and quick action buttons were missing.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Root cause | Confirmed | `ChatEmptyState` rendered only an `Empty conversation` placeholder when `activeProjectLinkId` was set. Existing unit and browser tests had been updated earlier to protect that blank state while preventing prompt flicker. |
+| Source fix | Fixed | `apps/desktop/src/pages/chat/layout/ChatEmptyState.tsx` now renders a stable `New conversation welcome` panel for active Project Link empty chats, including `Ask MergePilot anything`, `Understand this project`, `Review my changes`, `What's on this branch?`, `Analyze PR insight for this repo`, `Open Pipelines workspace`, `Stage and commit`, and `Push and create PR`. |
+| Action wiring | Fixed | Welcome buttons now flow through the existing `SuggestionReply` and `handleSuggestionReply` path instead of creating a separate action path. |
+| Focused unit tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/workspaceActions.test.ts` passed 3/3 files and 9/9 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Desktop web build | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build` passed and rebuilt `apps/desktop/dist`. |
+| Route-cache browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "New Chat"` passed 3/3 Chromium tests. |
+| Chat-layout browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "project-linked chat shell\|onboarding form\|preloaded command templates"` passed 3/3 Chromium tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The blank New Chat middle panel was a regression caused by hiding active Project Link welcome templates too aggressively. | Fixed in source | Rebuild/reinstall before expecting this exact fix in the Program Files installed app. |
+| The stale-prompt prevention goal remains intact. | Pass | Browser tests still verify no index-status preload request, no pulse skeleton, and no automatic workflow request from an empty New Chat. |
+
+## Run: mp-0522-rebuilt-installer-after-chat-welcome-fix-20260718-0008
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 00:00-00:08 +08:00 |
+| Runtime | Current source workspace, rebuilt Tauri MSI/NSIS artifacts |
+| Resource mode | Non-mutating build and package smoke; no install, Git write, Azure DevOps write, pipeline trigger, or approval execution |
+| Result | Pass with install/signing handoff |
+
+### Purpose
+
+Rebuild the Windows desktop installer artifacts after restoring the New Chat welcome panel. The previous installed app and local `0.5.22` artifacts were generated before the welcome fix, so the installed Program Files app could still show a blank New Chat middle panel even though source, unit tests, and `dist` had been fixed.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Installed artifact age check | Finding | Existing `0.5.22` MSI/NSIS artifacts were generated on 2026-07-17 07:38, while the welcome fix source and `dist` build were generated around 2026-07-17 23:57. |
+| Running installed process check | Finding | `mergepilot-desktop.exe` and `mergepilot-daemon.exe` were running from `C:\Program Files\MergePilot`, started at 2026-07-17 21:34, before the welcome fix. |
+| Tauri package rebuild | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop tauri:build` completed successfully. It rebuilt the daemon sidecar, desktop web bundle, release desktop executable, MSI, and NSIS setup. |
+| Rebuilt MSI | Pass | `C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi`, last written 2026-07-18 00:03, about 51.74 MB. |
+| Rebuilt NSIS setup | Pass | `C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\nsis\MergePilot_0.5.22_x64-setup.exe`, last written 2026-07-18 00:04, about 43.68 MB. |
+| Release readiness smoke | Pass | `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -FreshConfigPort 19321 -MsiPayloadPort 19322` returned `ok: true`. |
+| Package runtime gates | Pass | The readiness smoke reported both `packaged fresh config` and `packaged MSI payload` as `ok: true`. |
+| Installed state parity | Handoff required | The readiness smoke correctly reported `installed package state` as a blocker because the Program Files installation does not match the freshly rebuilt MSI yet. |
+| Signing readiness | Handoff required | The readiness smoke correctly reported unsigned MSI/NSIS artifacts. Signing remains a release hardening task, not a runtime fix for the welcome panel. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The New Chat welcome fix is now present in the rebuilt `0.5.22` local MSI/NSIS artifacts. | Pass | Install the freshly rebuilt MSI before retesting the Program Files app. |
+| The currently running installed app can still show the old blank welcome state until reinstalled/restarted. | Expected handoff | After manual install, verify with `.\scripts\windows\install-and-verify-msi-state.ps1 -ExpectedVersion 0.5.22 -MsiPath 'C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi' -SkipInstall`. |
+| Windows signing is still unresolved for public trust/Unknown Publisher. | Release blocker | Continue the code-signing track separately from this UI/runtime verification. |
+
+## Run: mp-0522-installed-parity-blocked-20260718-0012
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 00:12 +08:00 |
+| Runtime | Current Program Files installation compared against freshly rebuilt local `0.5.22` MSI |
+| Resource mode | Non-mutating installed-state probe; no install, Git write, Azure DevOps write, pipeline trigger, or approval execution |
+| Result | Blocked by installed payload mismatch |
+
+### Purpose
+
+Check whether the freshly rebuilt `0.5.22` MSI containing the New Chat welcome fix has been installed locally, so the installed app can be used for the next business regression pass.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Installed state probe | Blocked | `.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.22 -MsiPath 'C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi' -ProbeDaemon -ProbeAuth -RequireAvatar -RequireLegacyCleanup -RequireMsiPayloadMatch -Port 8787` returned `ok: false`. |
+| Installed version | Partial | The installed display version is `0.5.22`, but the file hashes do not match the rebuilt MSI payload. |
+| Installed bundle kind | Blocked | Installed `mergepilot-desktop.exe` reports bundle kind `nsis`, while the MSI payload parity check expected `msi`. |
+| Installed desktop hash | Blocked | Installed desktop hash: `46C8DD9BAD717ACFDD405686CD9B2A464BDDE692862774069C986B96A038D7C6`; rebuilt MSI desktop payload hash: `30115EF7DF965FEA98121BF859DA5F9FED4E82D4A88B19EB2BBF1B3923338FE1`. |
+| Installed daemon hash | Blocked | Installed daemon hash: `DF1FB9A352A025FD27A843C0DE1C2A2A0AF6E81139DF1EADEBC814A4EA20B815`; rebuilt MSI daemon payload hash: `7B695BD74050B7FDF8ABE00CDFC491226917749A5E1B3416B0BCA0FA087FD4E7`. |
+| Running processes | Blocked | `mergepilot-desktop.exe` and `mergepilot-daemon.exe` are still running from `C:\Program Files\MergePilot`, both started on 2026-07-17 21:34, before the rebuilt MSI was generated. |
+| Daemon health | Pass | Current installed daemon is healthy, reports `version: 0.5.22`, Azure OpenAI configured with `gpt-4o`, and `envSource: C:\Users\15492\.mergepilot\config.toml`. |
+| Auth/avatar | Pass | Current installed auth is valid for `Zhou.Ping@totalebizsolutions.com`; `hasAvatar: true`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The current installed app is not the freshly rebuilt MSI payload, so it cannot prove the New Chat welcome fix in the installed app. | Blocker | Install `C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi`, then rerun the installed-state probe with `-RequireMsiPayloadMatch`. |
+| Auth, avatar, and Azure OpenAI runtime configuration are not the blocker. | Pass | Continue focusing on installed payload parity before UI regression. |
+
+## Run: mp-0522-msi-install-lock-diagnosis-20260718-0028
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 00:22-00:28 +08:00 |
+| Runtime | Local Windows Installer service while attempting to install rebuilt `0.5.22` MSI |
+| Resource mode | Non-mutating diagnostic probe; no install completion, Git write, Azure DevOps write, pipeline trigger, or approval execution |
+| Result | Blocked by Windows Installer global lock |
+
+### Purpose
+
+Diagnose why the rebuilt `MergePilot_0.5.22_x64_en-US.msi` could not be installed and showed `Another installation is in progress. You must complete that installation before continuing this one.`
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Active installer process | Blocked | A single `msiexec.exe` process remained active in Session 0, PID `53884`, parent PID `1528`, created at 2026-07-18 00:22:39. |
+| Installer service | Blocked | `msiserver` was `Running`. Non-elevated `Stop-Service msiserver` failed because the service cannot be opened without administrator rights. |
+| MsiInstaller event log | Blocked | Event `11500` reported Error 1500 for MergePilot: another installation is in progress. |
+| MSI transaction status | Failed/cancelled | Event `1033` reported MergePilot installation status `1602`, and event `11708` reported installation failed. |
+| Restart signal | Handoff required | Event `1038` reported Windows Installer requires a system restart for MergePilot. Registry `Session Manager` also contains `PendingFileRenameOperations`, so a reboot is the cleanest way to release pending installer state. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The rebuilt MSI is not the immediate problem; Windows Installer is globally locked by a stale/incomplete transaction. | Blocker | Restart Windows, then install the rebuilt MSI before launching MergePilot. |
+| If reboot is not possible, cleanup requires administrator rights. | Blocker | In elevated PowerShell, close installer dialogs, stop MergePilot processes, force-close stale `msiexec` only after confirming no other installer is intentionally running, then rerun the install script. |
+
+## Run: mp-0522-maximized-chat-layout-width-20260718-0048
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 00:48 +08:00 |
+| Runtime | Desktop web bundle layout verification with mocked browser E2E |
+| Resource mode | Non-mutating UI smoke; no Git write, Azure DevOps write, pipeline trigger, install, or approval execution |
+| Result | Pass |
+
+### Purpose
+
+Check and fix the New Chat workspace layout when the application window is maximized. The installed-app screenshots showed the middle chat surface behaving like a narrow fixed-width column with excessive unused space.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Root cause inspection | Finding | `.middle-panel-inner` was capped at `max-width: 660px`, which was appropriate for prose but too narrow for a maximized developer workspace containing prompts, execution groups, approval cards, workspace controls, and the composer. |
+| Layout fix | Pass | Updated `apps/desktop/src/styles/chat-workspace.css` so the chat workspace uses `max-width: min(100%, clamp(660px, 72vw, 980px))`. Assistant prose remains independently capped by the message renderer, while the workspace shell can breathe on wide windows. |
+| Welcome layout polish | Pass | Updated the active Project Link empty-state welcome surface from a narrow centered prompt cluster into a responsive two-column workbench entry: title/examples on the left, action buttons in a compact grid on the right, with automatic stacking on narrow screens. |
+| Browser layout smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "project-linked chat shell|usable width when maximized|onboarding form"` returned `3 passed`. |
+| Browser layout smoke after polish | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "project-linked chat shell|usable width when maximized|onboarding form|preloaded command templates"` returned `4 passed`. |
+| New regression assertion | Pass | Added a maximized viewport assertion that `.middle-panel-inner` is wider than `760px`, no wider than `1000px`, the welcome panel itself is wider than `760px`, and there is no visible horizontal overflow. |
+| Focused empty-state tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 2 files / 6 tests. |
+| New Chat route-cache smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "New Chat|new chat|stale prompts"` returned `3 passed`. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Desktop web build | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop build` completed successfully. Vite emitted existing large chunk warnings only. |
+| Tauri package rebuild | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop tauri:build` completed successfully and regenerated the `0.5.22` MSI and NSIS setup artifacts with the maximized chat and welcome layout fixes. Latest MSI timestamp: 2026-07-18 01:04:31 +08:00; latest NSIS timestamp: 2026-07-18 01:05:17 +08:00. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The source layout now supports a wider, more practical maximized chat workspace without widening assistant prose lines. | Pass | Verify in the installed app after reinstalling the freshly rebuilt package. |
+| The New Chat active Project Link welcome state now uses the wider workspace instead of looking like a narrow preloaded template cluster. | Pass | Keep the no-preload route-cache tests as the guardrail so these welcome actions stay static UI and do not fire workflow requests by themselves. |
+| The rebuilt MSI/NSIS artifacts now contain this layout fix. | Pass | Resolve the Windows Installer lock by restart or elevated cleanup, install the regenerated MSI/NSIS, then rerun installed-app smoke. |
+
+## Run: mp-0522-source-route-cache-regression-after-welcome-layout-20260718-0109
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 01:09 +08:00 |
+| Runtime | Current source workspace plus regenerated local `0.5.22` MSI/NSIS artifacts |
+| Resource mode | Non-mutating source/browser regression and installed-state probe; no Git write, Azure DevOps write, pipeline trigger, approval execution, or completed install |
+| Result | Source regression pass; installed payload still behind rebuilt package |
+
+### Purpose
+
+Continue the post-layout verification after the wider New Chat welcome surface and maximized workspace fixes. This run checks that the broader route-cache behavior remains stable and confirms whether the running Program Files installation is the same payload as the latest rebuilt MSI.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Worktree state | Finding | The workspace still contains the expected uncommitted optimization/test changes; no stage, commit, or push was performed. |
+| Local rebuilt MSI | Pass | Latest MSI: `C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi`, 51.74 MB, timestamp 2026-07-18 01:04:31 +08:00. |
+| Local rebuilt NSIS | Pass | Latest NSIS: `C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\nsis\MergePilot_0.5.22_x64-setup.exe`, 43.68 MB, timestamp 2026-07-18 01:05:17 +08:00. |
+| Installed payload parity | Blocked | `verify-installed-msi-state.ps1 -RequireMsiPayloadMatch` returned `ok: false`. Installed desktop hash `30115EF7DF965FEA98121BF859DA5F9FED4E82D4A88B19EB2BBF1B3923338FE1` does not match latest MSI desktop hash `A157B4D479569F987B5B1085E2D9C95B33B3DF3D58B258774711FA94B39E4CA2`; installed daemon hash `7B695BD74050B7FDF8ABE00CDFC491226917749A5E1B3416B0BCA0FA087FD4E7` does not match latest MSI daemon hash `1DEB7408A9EECCD2DBC040C74E32FE1B393FD2B77DEB55FD019706C742B0F46B`. |
+| Installed runtime health | Pass | The currently installed daemon is healthy, authenticated, has avatar data, and reports Azure OpenAI `gpt-4o`; this means the remaining installed-app gap is payload freshness, not login/avatar/model configuration. |
+| Windows Installer state | Blocked | `msiexec.exe` PID `17192` is present with empty command line, created at 2026-07-18 01:04:31; `msiserver` is running. Do not treat installed-app visual proof as current until the installer state is cleared and the latest MSI is installed. |
+| Focused desktop tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/TaskViewer.test.tsx src/pages/chat/chatStreamDispatcher.test.ts src/pages/chat/chatUiChunkDispatcher.test.ts src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 6 files / 23 tests. |
+| Route-cache browser regression | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts` passed 29/29 Chromium tests. Coverage included avatar rendering, New Chat quiet state, no stale prompts, warm-route cache behavior, Pull Requests, Review Queue, Pipelines, Activity, Markdown analysis, and collapsed raw output. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The wider New Chat/welcome layout did not regress the broader route-cache or workspace page behavior in source. | Pass | Keep the full route-cache spec as the main warm-route regression gate. |
+| The currently running installed app is healthy but not the freshly rebuilt UI package. | Expected handoff | Reinstall the 2026-07-18 01:04 MSI after clearing the Windows Installer state, then rerun installed-app visual and package parity smoke. |
+| The installer state still prevents claiming installed-app completion for this latest UI polish. | Blocker for installed proof | Clear stale `msiexec`/restart Windows before installed-app proof; continue source-level optimization in the meantime. |
+
+## Run: mp-0522-pipelines-detail-layout-stabilization-20260718-0115
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 01:15 +08:00 |
+| Runtime | Current source workspace plus regenerated local `0.5.22` MSI/NSIS artifacts |
+| Resource mode | Non-mutating source/browser regression and package rebuild; no Git write, Azure DevOps write, pipeline trigger, approval execution, or completed install |
+| Result | Pass |
+
+### Purpose
+
+Continue the large-window UX stabilization by fixing the Pipelines workspace layout when a pipeline detail panel is open. Previously the list kept the two-column `xl:grid-cols-2` layout even after the right-side detail panel consumed width, which could make pipeline cards feel cramped beside the analysis/evidence panel.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Layout fix | Pass | Added `pipelineRowsGridClass(detailOpen)`: Pipelines uses two list columns only when the detail panel is closed; when detail is open, the list becomes one column beside the `22rem` detail panel. |
+| Focused Pipeline tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx` passed 2 files / 9 tests. |
+| Pipeline route-cache browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "pipeline|Pipeline|Pipelines"` passed 6/6 Chromium tests. Coverage included cached rows, empty-state suppression, detail panel errors, AI analysis errors, Markdown analysis, and closing the detail panel when filtered out. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Tauri package rebuild | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop tauri:build` completed successfully and regenerated local `0.5.22` MSI/NSIS artifacts. Latest MSI timestamp: 2026-07-18 01:14:57 +08:00; latest NSIS timestamp: 2026-07-18 01:15:46 +08:00. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pipelines now preserves readable card width when analysis/evidence detail is open. | Pass | Reinstall the freshly rebuilt package before validating the installed app visually. |
+| Existing Pipeline data-flow behavior remains intact after the layout change. | Pass | Keep focused Pipeline route-cache tests as the fast regression gate for this page. |
+
+## Run: mp-0522-chat-workflow-action-a11y-and-cache-regression-20260718-0142
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 01:42 +08:00 |
+| Runtime | Current source workspace plus regenerated local `0.5.22` MSI/NSIS artifacts |
+| Resource mode | Non-mutating source/browser regression and package rebuild; no Git write, Azure DevOps write, pipeline trigger, approval execution, or completed install |
+| Result | Pass for source/package; installed payload proof still blocked by Windows Installer state |
+
+### Purpose
+
+Continue the maximized-window workspace stabilization by checking the Chat middle panel and route-cache flows after the wider New Chat/workbench changes. This run also fixes an accessibility and automation ambiguity between empty-state suggestion buttons and compact workflow action buttons.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Installed payload parity probe | Blocked | `verify-installed-msi-state.ps1 -RequireMsiPayloadMatch` returned `ok: false`: Program Files reports MergePilot `0.5.22`, but installed desktop/daemon hashes still differ from the current local MSI payload. Treat installed-app visual proof as unverified until the newest MSI is installed. |
+| Windows Installer state | Blocked | A Session 0 `msiexec.exe` process remains present with an empty command line after package build (`PID 31580`, created 2026-07-18 01:41:53). This can block immediate MSI reinstall and likely requires reboot or elevated installer cleanup. |
+| Test harness fix | Pass | Updated `scripts/windows/run-mocked-browser-e2e.ps1` to treat `AbandonedMutexException` as recoverable lock ownership, so a previously interrupted Playwright/Vite run does not poison the next browser smoke. |
+| Accessibility/action naming fix | Pass | Added explicit `aria-label` values for compact Project Link workflow actions: `Inspect PR insight` and `Inspect pipeline readiness` in both the workspace Project Link panel and pinned summary panel. The visual labels remain compact (`PR insight`, `Pipeline`), but they no longer collide with empty-state suggestions such as `Analyze PR insight for this repo` and `Open Pipelines workspace`. |
+| Focused regression after fix | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "PR insight controls|pipeline controls|pipeline setup"` passed 3/3 Chromium tests. |
+| Route-cache browser regression | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts` passed 29/29 Chromium tests, including avatar rendering, quiet New Chat, no stale prompts, Pull Requests warm data, Review Queue warm data, Pipelines Markdown analysis, and Activity raw-output folding. |
+| Full Chat layout browser regression | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts` passed 51/51 Chromium tests, including maximized chat width, no preloaded command templates, Project Link onboarding, PR insight controls, Pipeline controls, approval composer locking, stream lifecycle, source references, and result workspace preview behavior. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Focused unit/component tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/WorkspaceProjectLinkPanel.test.tsx src/pages/chat/layout/PinnedSummaryPanel.test.tsx src/pages/pullRequests/PullRequestCard.test.tsx src/pages/Pipelines.test.tsx` completed successfully for the 3 existing matched test files / 8 tests. The two workspace/pinned panel test paths do not currently exist, so they are not counted as coverage evidence. |
+| Tauri package rebuild | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop tauri:build` completed successfully and regenerated local `0.5.22` artifacts. Latest MSI: `C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi`, 51.74 MB, timestamp 2026-07-18 01:41:52 +08:00. Latest NSIS: `C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\nsis\MergePilot_0.5.22_x64-setup.exe`, 43.68 MB, timestamp 2026-07-18 01:42:38 +08:00. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The source Chat workspace now passes the broad maximized-layout, workflow-action, stream, approval, and source-preview regression set. | Pass | Continue using full `chat-layout.spec.ts` before package handoff. |
+| Warm route behavior is stable in source for New Chat, Pull Requests, Review Queue, Pipelines, and Activity. | Pass | Keep route-cache as the main page-switching regression gate. |
+| Compact workflow actions now have unambiguous accessible names while preserving the concise UI. | Pass | Prefer explicit `aria-label` on future compact/icon-like action buttons when visible text is intentionally terse. |
+| Installed-app verification is still not proven because the local package payload and Program Files payload do not match. | Blocker for installed proof | Clear the stale Windows Installer process or reboot, install the MSI generated at 2026-07-18 01:41:52, then rerun installed-app parity and visual smoke. |
+
+## Run: mp-0522-activity-responsive-layout-and-installer-probe-guard-20260718-0148
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 01:48 +08:00 |
+| Runtime | Current source workspace; installed payload parity probe remains blocked by Windows Installer state |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or completed install |
+| Result | Source pass; installed payload proof still blocked |
+
+### Purpose
+
+Continue the maximized-window UI stabilization by improving Activity page layout behavior and making the installed-MSI verifier safer when Windows Installer is already busy.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Installed state probe | Blocked | `verify-installed-msi-state.ps1 -RequireMsiPayloadMatch` still reports Program Files `0.5.22`, but installed desktop/daemon hashes cannot be proven current while MSI extraction is skipped due active Windows Installer. |
+| Installer probe guard | Pass | Updated `scripts/windows/verify-installed-msi-state.ps1` to detect active `msiexec.exe` processes before running administrative extraction. If installer state is already active, the script now reports the blocking PID and skips extraction instead of spawning another queued `msiexec /a`. Verification showed `before=31580` and `after=31580`, so the probe no longer creates an extra installer process. |
+| Activity layout fix | Pass | Updated Activity page shell from permanent horizontal flex to responsive `flex-col` with `xl:flex-row`. Updated the Activity sidebar from always-fixed `w-[380px]` to full-width stacked mode below `xl`, with `xl:w-[380px]` only on wide workbench layouts. The activity list gets a bounded height in stacked mode and returns to flex scrolling in wide mode. |
+| Activity focused unit tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx src/pages/taskViewer/ReviewOperationDetailPanel.test.tsx src/pages/taskViewer/CheckpointDetailPanel.test.tsx src/pages/taskViewer/PrInsightDetailPanel.test.tsx` passed 5 files / 12 tests. |
+| Activity browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Activity|activity|checkpoint raw|review-operation"` passed 4/4 Chromium tests. Coverage included warm cached Activity data, scoped operational sections, collapsed checkpoint raw output, and structured review-operation summaries before raw JSON. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity no longer relies on a permanently fixed-width left rail, reducing layout pressure outside very wide desktop windows. | Pass | Keep the Activity route-cache smoke as the functional guard and add visual screenshots after the installer state is clear enough to validate installed app pixels. |
+| The installed-MSI verifier no longer worsens a stale Windows Installer state by adding more extraction processes. | Pass | Clear or reboot the stale `msiexec` PID before running package parity checks that require MSI extraction. |
+| Installed-app completion remains unproven because the system installer state is still active and Program Files hashes were previously behind the local MSI. | Blocker for installed proof | Reboot or clean the Windows Installer transaction, reinstall the latest MSI, then run payload parity plus visual smoke. |
+
+## Run: mp-0522-project-links-wide-layout-20260718-0150
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 01:50 +08:00 |
+| Runtime | Current source workspace; installed-app payload parity still blocked by Windows Installer state |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or completed install |
+| Result | Pass |
+
+### Purpose
+
+Continue large-window UI stabilization on the Project Links workspace. Earlier screenshots showed Project Link creation/editing feeling like a narrow modal-sized column even in a maximized app window, and branch controls could become crowded.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Project Links shell width | Pass | Updated list shell from `max-w-xl` to `max-w-5xl` and form shell from `max-w-xl` to `max-w-3xl`, so saved links and edit/create flows use the maximized workspace more appropriately. |
+| Saved Project Links layout | Pass | Saved Project Link cards now use a responsive grid with `xl:grid-cols-2`, allowing multiple mappings to be scanned without a single narrow column on wide screens. |
+| Branch control layout | Pass | Workspace branch controls now use `grid-cols-1 md:grid-cols-2` with `min-w-0`, preventing the default and PR target branch selects from being forced into two columns before there is enough width. |
+| Focused unit/model tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ProjectLinks.test.tsx src/pages/projectLinks/ProjectLinkWorkspaceSection.test.tsx src/projectLinks.test.ts` passed 3 files / 14 tests. |
+| Project Link route-cache/browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Project Links|Project Link edits|Project Link switch|Project Link"` passed 12/12 Chromium tests. Coverage included cached Project Links, Project Link edits updating PR insight scope, duplicate PR IDs across Project Links, Review Queue switch behavior, and Pipelines not showing empty state before links resolve. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Project Links now behaves more like a maximized developer workspace instead of a narrow form page. | Pass | Verify visually in installed app after clearing Windows Installer and installing the current package. |
+| Existing Project Link inference/editing data flow still passes the relevant route-cache smoke coverage. | Pass | Keep Project Links route-cache tests as the guardrail for future layout changes. |
+
+## Run: mp-0522-review-queue-collapsed-activity-layout-20260718-0155
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 01:55 +08:00 |
+| Runtime | Current source workspace; installed-app payload parity not rechecked in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Continue maximized-window workspace stabilization on Review Queue. When the Recent activity rail was collapsed, the page still reserved a right-side grid column for the collapsed control, which reduced the main review queue's usable width and made the layout feel squeezed.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Collapsed Recent activity layout | Pass | Added `reviewQueueWorkspaceLayoutClass(false)` so Review Queue uses a single-column flex layout when Recent activity is collapsed. The collapsed `Show activity` control now renders above the main queue instead of occupying a right-side grid column. |
+| Expanded Recent activity layout | Pass | Expanded state still uses `xl:grid-cols-[minmax(0,1fr)_19rem]`, keeping the right activity rail available without changing the existing drawer/panel behavior. |
+| Focused unit/component tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ReviewFindings.test.tsx src/pages/reviewFindings/ReviewActivityRail.test.tsx src/pages/reviewFindings/ReviewQueueCard.test.tsx src/pages/reviewFindings/reviewQueueViewModel.test.ts` passed 4 files / 12 tests. |
+| Review Queue browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/review-queue.spec.ts` passed 5/5 Chromium tests, covering collapsed activity persistence, semantic selected lane color, acknowledgement, request-changes write-back retry, and stale review rerun. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Review Queue no longer sacrifices a right-side column after the activity panel is collapsed. | Pass | Keep `review-queue.spec.ts` as the interaction guard and verify installed-app pixels once the newest package is installed cleanly. |
+| The existing Review Queue business actions still pass after the layout adjustment. | Pass | Continue using mocked Review Queue E2E before release because it exercises write-back and rerun behavior without touching live ADO resources. |
+
+## Run: mp-0522-chat-empty-state-loading-welcome-20260718-0157
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 01:57 +08:00 |
+| Runtime | Current source workspace; installed app not rechecked in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Fix a New Chat home regression where the middle panel could appear empty while Project Links were still loading. This preserved the previous "no preloaded command template" behavior but made the first screen look broken in the installed app.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Loading Project Links empty state | Pass | `ChatEmptyState` now renders the stable `Ask MergePilot anything` welcome panel while Project Links are loading, instead of an empty `min-h-48` placeholder. |
+| No setup-form flash | Pass | The loading branch still does not show `Create a Project Link`, so a slow Project Link fetch no longer flashes the onboarding form. |
+| No command-template preload | Pass | The existing empty New Chat E2E guard still confirms no automatic `/chat/workflow-action` payload is sent from the welcome state. |
+| Focused unit/component tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 2 files / 7 tests. |
+| Chat browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "project-linked chat shell|usable width|empty New Chat|preloaded command templates"` passed 3/3 Chromium tests. |
+| Route-cache New Chat smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "New Chat empty state"` passed 1/1 Chromium test. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| New Chat now has meaningful first-screen content even if Project Link loading is slow. | Pass | Verify visually in the installed app after the next clean package install. |
+| The homepage still avoids the earlier undesired behavior of preloading workflow/action templates. | Pass | Keep the no-workflow-action E2E as the guard for future welcome-state changes. |
+
+## Run: mp-0522-pipeline-detail-reading-width-20260718-0200
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 02:00 +08:00 |
+| Runtime | Current source workspace; installed app not rechecked in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Improve Pipelines readability in maximized desktop layouts. The AI analysis/right detail panel was too narrow and did not have its own viewport-bound scroll area, so long analysis/evidence could make the workspace feel cramped or overextended.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Pipelines page width | Pass | Increased the page shell from `max-w-[1320px]` to `max-w-[1440px]`, giving the CI/CD workspace more appropriate use of a maximized window. |
+| Pipeline detail panel width | Pass | Added `pipelineWorkspaceGridClass(true)` with a `28rem` right-side panel at `xl` and `30rem` at `2xl`, replacing the previous narrow `22rem` detail column. |
+| Detail panel scrolling | Pass | `PipelineDetailPanel` now uses `xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto`, keeping long AI analysis and run evidence inside the panel instead of stretching the whole page. |
+| Focused unit/component tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx` passed 2 files / 10 tests. |
+| Pipeline browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "pipeline AI analysis|Pipelines page|pipelines"` passed 3/3 Chromium tests. Coverage included no premature empty state, AI analysis error display with local evidence, and successful Markdown analysis with run evidence. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pipelines AI analysis now has a more readable detail panel in wide layouts. | Pass | Continue visual review in the installed app after the next clean package install, especially with real ClaimBot_API pipeline evidence. |
+| Pipeline AI analysis behavior remains covered by mocked browser smoke after the layout change. | Pass | Keep these smoke checks as the non-mutating guard before live pipeline tests. |
+
+## Run: mp-0522-pr-insight-reading-width-20260718-0202
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 02:02 +08:00 |
+| Runtime | Current source workspace; installed app not rechecked in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Improve Pull Requests readability in maximized desktop layouts. The right-side PR insight panel was narrower than the newer Pipeline analysis panel, making Markdown summaries and review evidence feel cramped when inspecting PR AI output.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| PR insight detail panel width | Pass | Added `pullRequestsWorkspaceLayoutClass(true)` with a `28rem` right-side insight panel at `xl` and `30rem` at `2xl`, replacing the previous `26rem` panel. |
+| Closed layout behavior | Pass | When no insight is open, Pull Requests keeps a single-column flex layout and does not reserve a right-side grid column. |
+| Focused unit/component tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/pullRequests/PullRequestCard.test.tsx src/pages/pullRequests/PullRequestContextPanel.test.tsx src/pages/pullRequests/pullRequestViewModel.test.ts` passed 4 files / 14 tests. |
+| Pull Requests browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Pull Requests|PR insight|duplicate PR|Project Link edits"` passed 8/8 Chromium tests. Coverage included cached refreshes, status filter refreshes, no premature empty state, stale Project Link switch prevention, warm-route failure visibility, readable insight scope, Project Link edit scope updates, and duplicate PR IDs across Project Links. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pull Requests now uses a wider, more readable PR insight side panel that matches the direction taken for Pipeline analysis. | Pass | Verify visually in the installed app with real PR insight artifacts after the next clean package install. |
+| Existing PR cache, scope, and Project Link isolation behavior remained stable after the layout change. | Pass | Keep the PR-focused route-cache smoke as the guard before live ADO PR tests. |
+
+## Run: mp-0522-settings-wide-layout-20260718-0205
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 02:05 +08:00 |
+| Runtime | Current source workspace; installed app not rechecked in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Improve Settings usability in maximized desktop layouts. The page still used a narrow `64rem` settings shell and capped row controls at `24rem`, which made long Azure/OpenAI model fields such as endpoint, API key, deployment, and client IDs feel cramped.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Settings page width | Pass | Increased `.settings-page` from `64rem` to `72rem`, giving Settings more appropriate use of a maximized workbench window. |
+| Settings control width | Pass | Updated `.settings-row` control column from `minmax(15rem, 24rem)` to `minmax(18rem, min(42vw, 32rem))`, improving long field readability while still keeping a bounded form structure. |
+| Control overflow guard | Pass | Added `.settings-row-control > * { max-width: 100%; }` so nested controls stay inside the row control area. |
+| Focused unit/style tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/settings/settingsLayout.test.ts src/pages/settings/settingsTypes.test.ts` passed 2 files / 4 tests. |
+| Settings permission browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/settings-permissions.spec.ts` passed 1/1 Chromium test, covering Key Vault permission messaging and switching built-in model secrets back to local `.env`. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Settings now gives long model/cloud configuration fields more room in maximized windows. | Pass | Verify visually in installed app after the next clean package install, especially Add model / Edit model forms. |
+| Key Vault permission and local-env switching behavior remained stable after the layout change. | Pass | Keep `settings-permissions.spec.ts` as the Settings regression guard. |
+
+## Run: mp-0522-app-shell-theme-layout-20260718-0216
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 02:16 +08:00 |
+| Runtime | Current source workspace; installed app registered as `MergePilot 0.5.22`, but this run verified source/browser regression only |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Stabilize the global app shell after maximized-window review. The shell still used hardcoded dark `zinc` classes for the outer frame, sidebar, navigation state, user footer, and bottom page fade. In the current light workbench theme this could create inconsistent borders, account footer contrast, and a dark bottom overlay that did not belong to the active theme.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| App shell tokenization | Pass | `AppShell` now exposes themed class helpers for the frame, sidebar, group labels, nav links, page content, and bottom fade. These use `--app-bg`, `--app-bg-muted`, `--app-surface`, `--app-border`, and `--app-text` instead of hardcoded dark shell colors. |
+| Responsive page padding | Pass | Page content now uses `px-4 pt-4` with `sm:px-6 sm:pt-6`, reducing cramped smaller-window behavior while preserving desktop spacing. |
+| User footer theme alignment | Pass | Signed-in and signed-out account footer states now use app theme tokens for borders, hover surfaces, text, avatar ring, menu surface, and danger text. |
+| Focused unit tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/app/AppShell.test.ts` passed 1 file / 5 tests. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Route cache/browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "New Chat empty state|Pull Requests|Review Queue|Pipelines|Settings"` passed 14/14 Chromium tests. |
+| Chat layout/browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "project-linked chat shell|usable width|empty New Chat|preloaded command templates"` passed 3/3 Chromium tests. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The global shell no longer depends on hardcoded dark Tailwind colors, so light-theme installed builds should look more coherent around the sidebar, account footer, and page bottom fade. | Pass | Verify visually in the installed MSI after the next clean package install. |
+| Many older local components still contain `zinc-*` classes and are currently normalized by `theme-compat.css`. | Medium | Continue replacing high-traffic local components with app tokens in smaller batches, starting with Chat top bar/composer/history and Project Links form/cards. |
+
+## Run: mp-0522-chat-shell-theme-layout-20260718-0219
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 02:19 +08:00 |
+| Runtime | Current source workspace; installed app not rechecked in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Continue the maximized-window UI stabilization on the highest-traffic surface: the Chat page. The chat shell, top bar, mini title bar, composer top border, Project Link row, and drag hover affordances still used hardcoded dark `zinc` or fixed indigo colors. These classes could produce inconsistent contrast in the light workbench theme and made the homepage feel less integrated with the rest of the app shell.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Chat shell background/text | Pass | `ChatShell` now uses `--app-bg` and `--app-text` instead of hardcoded dark shell colors. |
+| Conversation top bar | Pass | Top bar border, background, panel toggle buttons, title text, title input, and rename affordance now use app theme tokens. |
+| Composer project-link row | Pass | Composer top border, Project Link loading text, selector icon, selector text, and no-link message now use app theme tokens. |
+| Resize affordances | Pass | Chat workspace history divider and resize hover affordances now use `--app-border` / `--app-accent` instead of fixed zinc/indigo values. |
+| Focused unit tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx src/app/AppShell.test.ts` passed 3 files / 12 tests. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Chat browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "project-linked chat shell|usable width|empty New Chat|preloaded command templates"` passed 3/3 Chromium tests. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The Chat homepage shell is now better aligned with the app theme and still passes the existing maximum-width and empty-state smoke checks. | Pass | Verify in the installed MSI after the next build, especially the left sidebar, Chat top bar, composer, and right preview divider together. |
+| Chat history list, hover cards, assistant meta panel, and Project Link forms still contain older `zinc-*` classes. | Medium | Continue replacing them in targeted batches after visually checking the newly themed shell in the installed app. |
+
+## Run: mp-0522-chat-history-meta-theme-20260718-0223
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 02:23 +08:00 |
+| Runtime | Current source workspace; installed app not rechecked in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Continue the Chat UI theme cleanup into the history rail and assistant metadata area. These areas still used hardcoded dark `zinc` classes for history labels, active rows, hover cards, rename input, pin/action buttons, pagination, and saved PR insight source metadata.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| History rail labels and empty state | Pass | `HistorySidebar` now uses app text-subtle tokens for the section label and empty state. |
+| History rows and hover cards | Pass | `HistorySidebarItem` now uses app surface/text tokens for active rows, hover rows, timestamps, hover-card title/preview/date, rename input, pin button, and actions button. |
+| History pagination | Pass | `HistorySidebarPagination` now uses app border/text/surface tokens for the footer, count text, previous/next icon buttons, Show less, and Show more. |
+| Assistant metadata panel | Pass | `ChatAssistantMetaPanel` now uses app surface/border/text tokens for runtime signals, saved PR insight source cards, artifact IDs, and action buttons. |
+| Focused unit tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/HistorySidebarItem.test.tsx src/pages/chat/layout/ChatAssistantMetaPanel.test.tsx src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 4 files / 11 tests. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Chat browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "project-linked chat shell|usable width|empty New Chat|preloaded command templates"` passed 3/3 Chromium tests. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The Chat history and assistant metadata regions are now more consistent with the light workbench theme and still pass focused behavioral tests. | Pass | Verify hover cards and pin/menu affordances visually in the installed app after the next build. |
+| The Project Link create/edit surfaces remain the largest visible cluster of old hardcoded dark classes. | Medium | Continue with Project Links form/card tokenization next, then run Project Links focused tests and route-cache smoke. |
+
+## Run: mp-0522-project-links-theme-20260718-0228
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 02:28 +08:00 |
+| Runtime | Current source workspace; installed app not rechecked in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Stabilize the Project Links surface after maximized-window review. This page is the entry point for mapping a local repository to Azure DevOps and had the densest remaining cluster of hardcoded dark classes across list headers, cards, storage pills, empty/loading states, create/edit form sections, inputs, selects, and action buttons.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Project Links list shell | Pass | List title, explanatory text, New Project Link button, local storage pills, loading spinner/text, and empty state now use app theme tokens. |
+| Saved Project Link cards | Pass | Card surface, hover border, title, repo path, ADO URL, project/branch badges, Edit, and Delete buttons now use app theme tokens. |
+| Workspace and Azure DevOps sections | Pass | Section surfaces and headings now use `--app-border`, `--app-surface`, and `--app-text`. |
+| Form controls | Pass | Shared field labels, hints, inputs, password reveal button, branch loading state, branch select, discovery select, discovery manual input, form header/back button, Cancel button, and repo path state class now use app theme tokens. |
+| Remaining hardcoded Project Links scan | Pass | `rg "bg-zinc|text-zinc|border-zinc|placeholder-zinc|focus:border-zinc" apps/desktop/src/pages/projectLinks apps/desktop/src/pages/ProjectLinks.tsx -n` returned no matches. |
+| Focused unit tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ProjectLinks.test.tsx src/pages/projectLinks/ProjectLinkWorkspaceSection.test.tsx` passed 2 files / 3 tests. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Project Link browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Project Link edits|Project Links|Project Link switch"` passed 11/11 Chromium tests. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Project Links is now much closer to the app's light workbench theme and no longer has obvious `zinc-*` styling debt in its local page/form files. | Pass | Verify visually in installed app after the next package build, especially create/edit flow with branch discovery and ADO discovery. |
+| Broader app still contains legacy `zinc-*` classes in other high-traffic areas, but Project Links is no longer the main cluster. | Medium | Continue with remaining Chat empty-state Project Link chooser, tool output renderers, and any installed-app visual issues found during live smoke. |
+
+## Run: mp-0522-entry-empty-state-theme-20260718-0232
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 02:32 +08:00 |
+| Runtime | Current source workspace; installed app not rechecked in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Finish the most visible remaining hardcoded dark entry and empty-state surfaces after the app shell, Chat, and Project Links theme cleanup. The startup daemon gate, production auth gate, and Chat Project Link chooser can be the first UI a user sees in an installed app, so they should inherit the same app theme tokens as the main workbench.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Production auth gate | Pass | Sign-in checking state, full-screen auth background/text, auth card surface/border, title, and helper copy now use app theme tokens. |
+| Daemon gate | Pass | Starting daemon and daemon failure states now use app theme tokens for background, text, title, helper copy, and danger icon. |
+| Chat Project Link chooser | Pass | Chooser card, header icon/text, Project Link rows, repo path text, row arrow, and New Project Link summary now use app theme tokens. |
+| Remaining targeted hardcoded scan | Pass | `rg "bg-zinc|text-zinc|border-zinc|placeholder-zinc|focus:border-zinc" apps/desktop/src/app/ProductionAuthGate.tsx apps/desktop/src/app/daemonGate.tsx apps/desktop/src/pages/chat/layout/ChatEmptyState.tsx -n` returned no matches. |
+| Focused unit tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx src/app/AppShell.test.ts` passed 3 files / 12 tests. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Chat browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "project-linked chat shell|usable width|empty New Chat|preloaded command templates"` passed 3/3 Chromium tests. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Installed-app first-run, auth-required, daemon-starting/error, and no-active-Project-Link Chat states should now feel visually consistent with the main light workbench theme. | Pass | Verify in a freshly built installed app after packaging. |
+| The remaining visible legacy theme debt is now more likely in specialized output/rendering components than in primary shells/forms. | Medium | Run a wider `zinc-*` scan and prioritize only high-traffic rendered surfaces instead of broad mechanical rewrites. |
+
+## Run: mp-0522-chat-project-link-onboarding-focus-theme-20260718-0235
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 02:35 +08:00 |
+| Runtime | Current source workspace; installed app not rechecked in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Finish the remaining focus-state styling debt in the Chat Project Link onboarding path. This path is important because users without an active Project Link should be guided to create one inside the conversation, not forced into a separate management page.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Branch onboarding focus state | Pass | The fallback branch text input now uses `focus:border-[rgb(var(--app-accent))]` instead of `focus:border-zinc-500`. |
+| Basic onboarding focus states | Pass | Link name and repo path default-state focus borders now use app accent tokens. Success and warning branch states remain semantic. |
+| Azure DevOps onboarding focus states | Pass | Organization URL, project, repository, pipeline select/input focus states now use app accent tokens. |
+| Targeted legacy scan | Pass | `rg "bg-zinc|text-zinc|border-zinc|placeholder-zinc|focus:border-zinc" apps/desktop/src/pages/chat/projectLinkOnboarding apps/desktop/src/app/ProductionAuthGate.tsx apps/desktop/src/app/daemonGate.tsx apps/desktop/src/pages/chat/layout/ChatEmptyState.tsx -n` returned no matches. |
+| Focused unit tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx src/pages/ProjectLinks.test.tsx src/pages/projectLinks/ProjectLinkWorkspaceSection.test.tsx` passed 4 files / 10 tests. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Chat browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "project-linked chat shell|usable width|empty New Chat|preloaded command templates"` passed 3/3 Chromium tests. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The no-Project-Link conversational onboarding path now matches the rest of the app theme for default form focus states. | Pass | Verify the inline creation flow visually in the installed app after the next build. |
+| Remaining `zinc-*` hits are now mostly low-traffic placeholder pages, Settings account details, approval/tool-output details, and specialized Git output renderers. | Low | Prioritize based on live installed-app review rather than broad mechanical replacement. |
+
+## Run: mp-0522-chat-empty-visible-transcript-20260718-0242
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 02:42 +08:00 |
+| Runtime | Current source workspace; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Fix the New Chat home page blank state seen after reinstall/local testing. The root cause was that `ChatMessageList` decided whether to show the home content from raw `bubbles.length`, while some restored draft/workflow residue can contain only hidden completed approval bubbles. That leaves no visible transcript rows but still suppresses the home state.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Source fix | Pass | `ChatMessageList` now decides the empty/home state from visible render items, not raw bubble count. Hidden completed or cancelled approval bubbles no longer suppress the home content. |
+| Regression coverage | Pass | Added a component regression for restored bubbles containing only hidden completed approvals; the New Chat welcome content remains visible. |
+| Focused unit tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/layout/ChatEmptyState.test.tsx` passed 2 files / 8 tests. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Chat browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "empty New Chat\|usable width\|preloaded command templates"` passed 2/2 Chromium tests. |
+| Route-cache browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "New Chat empty state\|New Chat warm return"` passed 2/2 Chromium tests. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| New Chat should no longer show a blank middle panel when restored state contains only hidden completed approval records. | Pass | Rebuild/package before expecting the installed MSI to include this source fix. |
+| The intended current behavior is: show compact home content on an actually empty chat, but do not auto-call `/chat/workflow-action` or show loading/index-status template churn. | Pass | Keep both component and mocked browser guards; future wording changes should update stale-template verifier expectations deliberately. |
+
+## Run: mp-0522-chat-preload-verifier-realignment-20260718-0245
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 02:45 +08:00 |
+| Runtime | Current source workspace; installed app not rebuilt in this run |
+| Resource mode | Non-mutating script/test verification; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Realign the Chat release verifier with the current product decision: New Chat should show compact home content, while removed frontend index-status preload helpers must stay absent.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Verifier scope | Pass | `verify-no-stale-chat-template.ps1` now rejects removed preload/helper names only: `WelcomeSuggestions`, `useChatIndexStatus`, and `fetchChatIndexStatus`. It no longer treats current welcome text as stale. |
+| Verifier smoke | Pass | `.\scripts\windows\verify-no-stale-chat-template-smoke.ps1` passed and proves current welcome copy is accepted while `fetchChatIndexStatus` is still rejected. |
+| Focused desktop tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/api.test.ts src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/layout/ChatEmptyState.test.tsx` passed 3 files / 18 tests. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The release gate now matches the current UI contract: welcome content is valid, preload/index-status churn is not. | Pass | Rebuild/package before expecting installed-app scans to reflect this realignment. |
+
+## Run: mp-0522-chat-approval-token-cleanup-20260718-0251
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 02:51 +08:00 |
+| Runtime | Current source workspace; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Continue the maximized-window UI cleanup on the Chat execution path. Approval cards and Chat error bubbles are high-frequency workflow surfaces, and they still used hardcoded saturated blue/red classes instead of the app token vocabulary.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Pending approval card | Pass | Primary approval action, risk text, and executing-state dot now use `--app-accent`, `--app-danger`, `--app-warning`, and `--app-success` tokens. |
+| Legacy confirm card | Pass | Legacy approval button and risk text now use app tokens; the cancelled-state dot already uses muted app text. |
+| Chat error bubble | Pass | Error bubbles now use `--app-danger` with a subtle transparent danger background instead of hardcoded dark red classes. |
+| Targeted legacy scan | Pass | Focused scan found no remaining `bg-blue-600`, `hover:bg-blue-500`, `ring-blue-400`, `text-red-500`, `bg-blue-500`, `border-red-800`, `bg-red-950`, or `text-red-300` matches in Chat approval files and `ChatMessageList.tsx`. |
+| Focused unit tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/approval/PendingActionCard.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 2 files / 10 tests. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Approval browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "approval composer notice\|approval cards from canonical UI chunks\|read-only Git change review"` passed the 2 matched Chromium tests. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Approval UI is now visually closer to the restrained product workbench theme without changing approval behavior. | Pass | Rebuild/package before expecting installed-app screenshots to show this token cleanup. |
+| Other low-frequency or specialized surfaces still have hardcoded semantic Tailwind colors. | Medium | Continue prioritizing by live visible issues: composer send button, Project Link onboarding errors, Activity/Pipeline detail panels, and source/artifact chips before placeholder pages. |
+
+## Run: mp-0522-composer-project-link-token-cleanup-20260718-0257
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 02:57 +08:00 |
+| Runtime | Current source workspace; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Continue the maximized-window UI cleanup on the most common Chat entry path: composer send action, Project Link onboarding, Project Link edit/save, and Azure DevOps discovery error states.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Composer send action | Pass | The compact send button now uses `--app-accent` and brightness hover behavior instead of hardcoded blue utility classes. |
+| Composer queued notice | Pass | Queued composer notice border now uses `--app-accent` instead of hardcoded `border-blue-500`. |
+| Project Link onboarding | Pass | Create/use action and onboarding save errors now use app accent/danger tokens. |
+| Project Link edit form | Pass | Save action and Azure DevOps discovery errors now use app accent/danger tokens. |
+| Targeted legacy scan | Pass | Focused scan found no remaining `bg-blue-600`, `hover:bg-blue-500`, `border-blue-500`, `border-red`, `bg-red`, `text-red`, or `ring-blue` matches in composer, chat Project Link onboarding, and Project Links page files. |
+| Focused unit tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/approval/PendingActionCard.test.tsx src/pages/projectLinks/ProjectLinkWorkspaceSection.test.tsx src/pages/ProjectLinks.test.tsx` passed 5 files / 15 tests. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Chat browser smoke | Pass | First run of `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "image attachment\|empty New Chat\|Project Link"` passed 8/9 tests and caught a copy regression; after restoring the expected Project Link empty-state copy, the failed onboarding smoke passed 1/1. |
+| Route-cache browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Project Links\|Project Link switch"` passed 10/10 Chromium tests. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The Chat composer and Project Link setup surfaces are now visually more consistent with the app token system, without changing behavior. | Pass | Rebuild/package before expecting the installed MSI to include this source cleanup. |
+| The browser smoke caught a user-visible empty-state copy mismatch introduced during cleanup. | Pass | The copy was restored and the exact failing smoke passed after the fix. |
+| Larger maximized-window layout concerns remain outside this small token cleanup. | Medium | Continue with Activity, Pipelines, Pull Requests, and Review Queue layout reviews in the next pass. |
+
+## Run: mp-0522-activity-error-token-cleanup-20260718-0301
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 03:01 +08:00 |
+| Runtime | Current source workspace; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Check the Activity page against the installed-app screenshot where checkpoint/tool output looked noisy, then clean up remaining high-saturation error styling in Activity surfaces.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Checkpoint raw output review | Pass | Current source already keeps checkpoint `Raw output` inside a closed `<details>` block and shows a short tool summary first. The installed screenshot appears older than the current source behavior. |
+| Task run error state | Pass | `TaskRunDetailPanel` now uses `--app-danger` semantic tokens instead of hardcoded red utility classes. |
+| Activity sidebar error state | Pass | `ActivitySidebar` now uses `--app-danger` semantic tokens for load errors. |
+| Targeted legacy scan | Pass | Focused scan found no remaining `border-red`, `bg-red`, `text-red`, `bg-blue-600`, `hover:bg-blue-500`, or `border-blue-500` matches in `apps/desktop/src/pages/taskViewer/*.tsx`. |
+| Focused Activity tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/taskViewer/TaskRunDetailPanel.test.tsx src/pages/taskViewer/CheckpointDetailPanel.test.tsx src/pages/taskViewer/ReviewOperationDetailPanel.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx` passed 5 files / 13 tests. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity raw JSON dominance is already addressed in current source for checkpoint and task-run detail panels. | Pass | Rebuild/package before using installed MSI screenshots as proof of the latest Activity behavior. |
+| Activity still needs a broader product-level polish pass for visual hierarchy and density. | Medium | Next pass should evaluate Activity in a real/maximized browser session after packaging or dev-server smoke. |
+
+## Run: mp-0522-pipelines-analysis-token-review-20260718-0303
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 03:03 +08:00 |
+| Runtime | Current source workspace; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Review the Pipelines workspace against the installed-app screenshots: duplicated `AI analysis streaming` / `AI analysis` labels, plain-text analysis rendering, `Unknown` card header text, and overly saturated status blocks.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| AI analysis label | Pass | Current source uses one stable `AI analysis` label with `Analyzing`, `Ready`, or `Error` state chips. |
+| AI analysis rendering | Pass | Current source renders pipeline analysis through `MarkdownContent`, not plain `whitespace-pre-wrap` analysis text. |
+| Unknown header | Pass | `PipelineRowCard` only renders the top-right date when a formatted date exists; focused test asserts rows without run dates do not render `Unknown`. |
+| Pipelines semantic colors | Pass | Top-level errors/notices, detail panel errors, analysis-error chips, row errors, and save action now use app semantic tokens. |
+| Source legacy scan | Pass | Focused source scan found no remaining `Unknown`, `AI analysis streaming`, `border-red`, `bg-red`, `text-red`, `border-amber`, `bg-amber`, `text-amber`, `border-emerald`, `bg-emerald`, or `text-emerald` matches in Pipelines page/card source files. |
+| Focused Pipelines tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx` passed 2 files / 10 tests. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The main Pipelines screenshot issues are already fixed or now cleaned up in current source. | Pass | Rebuild/package before using installed MSI screenshots as proof. |
+| Pipeline run tone badges still use local semantic classes from `runTone`; tests intentionally cover those status colors. | Low | Consider moving `runTone` to app tokens in a separate visual-system sweep if desired. |
+
+## Run: mp-0522-pr-review-queue-token-review-20260718-0310
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 03:10 +08:00 |
+| Runtime | Current source workspace; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Review the Pull Requests and Review Queue workspaces against the installed-app screenshots: dense PR insight presentation, duplicated insight actions, harsh status coloring, and Review Queue selected/status blocks that felt visually heavy.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Pull Request insight flow | Pass | Current source already uses a right-side PR insight panel and the list card uses `Generate insight` / `Open insight` plus separate `Run review`; old `Preview Insight` wording is absent in focused tests. |
+| Pull Request Markdown | Pass | PR insight summaries, stored insights, review summaries, and PR context descriptions render through `MarkdownContent`. |
+| Pull Request semantic colors | Pass | PR errors, warning banners, risk badges, readiness tones, full-review metadata, findings severity badges, and stored insight freshness now use app semantic tokens. |
+| Review Queue side activity | Pass | Current source already keeps recent activity in a collapsible right-side rail with persisted local state. |
+| Review Queue semantic colors | Pass | Queue lane tones, risk/freshness tones, findings panel write-back states, activity rail status chips, action buttons, storage warnings, and error banners now use app semantic tokens. |
+| Source legacy scan | Pass | Focused source scan found no remaining `border-red`, `bg-red`, `text-red`, `ring-red`, `border-blue`, `bg-blue`, `text-blue`, `border-purple`, `bg-purple`, `text-purple`, `border-amber`, `bg-amber`, `text-amber`, `ring-amber`, `border-green`, `bg-green`, `text-green`, `border-emerald`, `bg-emerald`, `text-emerald`, or `ring-emerald` matches in Pull Requests and Review Queue page/component source files. |
+| Focused unit tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/pullRequests/PullRequestCard.test.tsx src/pages/pullRequests/PullRequestContextPanel.test.tsx src/pages/ReviewFindings.test.tsx src/pages/reviewFindings/ReviewQueueCard.test.tsx src/pages/reviewFindings/ReviewActivityRail.test.tsx src/pages/reviewFindings/FindingsPanel.test.tsx` passed 7 files / 12 tests. |
+| Typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` completed successfully. |
+| Route-cache browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Pull Requests\|Review Queue"` passed 12/12 Chromium tests. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pull Requests and Review Queue are now closer to the intended calm operational workbench style in current source. | Pass | Rebuild/package before using installed MSI screenshots as proof. |
+| The source already had the larger flow fixes for PR side panel and Review Queue activity rail; this pass mainly removed visual friction and strong color noise. | Pass | Next visual pass should use a live maximized dev/installed session screenshot after packaging. |
+
+## Run: mp-0522-new-chat-busy-empty-state-20260718-0316
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 03:16 +08:00 |
+| Runtime | Current source workspace; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Fix the New Chat home panel regression where the welcome content could disappear and leave a large blank area while the runtime/project-link state was busy but no visible transcript existed.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Empty-state condition | Pass | `ChatMessageList` now renders `ChatEmptyState` whenever there is no visible transcript, even if the chat runtime is temporarily busy. |
+| Busy no-transcript regression test | Pass | Added a focused test proving New Chat keeps `Ask MergePilot anything` and action prompts visible while `busy=true` and Project Links are still loading. |
+| Focused chat tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/layout/ChatEmptyState.test.tsx` passed 2 files / 9 tests. |
+| Browser smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "empty New Chat\|Project Link\|source preview"` passed 7/7 Chromium tests. |
+| Route-cache smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts` passed 29/29 Chromium tests, including New Chat, Pull Requests, Review Queue, Pipelines, Activity, avatar rendering, cache preservation, Markdown analysis, and collapsed Activity raw output. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The blank New Chat home panel was caused by hiding the real welcome state during busy/no-transcript initialization. | High | Rebuild/package before validating this fix in the installed MSI. |
+| Installed `0.5.22` is present locally, but this fix is only in the current source until the next package/release. | Medium | Use dev smoke or create a new MSI before treating installed-app screenshots as final evidence. |
+
+## Run: mp-0522-pipelines-compact-empty-state-20260718-0325
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 03:25 +08:00 |
+| Runtime | Current source workspace; dev browser screenshot at `http://127.0.0.1:1420/#/pipelines`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Fix the maximized Pipelines page layout where the empty/no-discovery state rendered as a very large blank card. The page should feel like an operational workspace even when Azure DevOps discovery is refreshing or unavailable.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Empty-state layout | Pass | Replaced the large `flex-1 items-center justify-center` empty panel with a compact action-oriented `PipelineEmptyState`. |
+| Recovery guidance | Pass | Empty/refreshing states now show the relevant checks: Project Link mapping, ADO repository access, and pipeline definition access. |
+| Refresh affordance | Pass | Empty state provides `Refresh discovery`; it is disabled when no Project Link mapping exists and while discovery is already refreshing. |
+| Focused Pipelines tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx` passed 2 files / 12 tests. |
+| Browser route-cache smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Pipelines\|pipeline"` passed 6/6 Chromium tests. |
+| Visual screenshot | Pass | Current dev screenshot saved to `output/playwright/pipelines-after-compact-empty.png`; it shows the compact discovery state instead of the previous tall empty card. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The installed-app screenshots are still not proof of this specific Pipelines empty-state fix until the next build/package. | Medium | Rebuild and reinstall before native MSI parity verification. |
+| The Pipelines page now handles no-data/refreshing states with less vertical waste and clearer recovery guidance. | Pass | Continue reviewing other maximized pages for similar empty-space problems. |
+
+## Run: mp-0522-pull-requests-compact-error-state-20260718-0328
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 03:28 +08:00 |
+| Runtime | Current source workspace; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass with native screenshot caveat |
+
+### Purpose
+
+Reduce the maximized Pull Requests page blank state when Azure DevOps credentials fail and no cached PR data is available. The page should present a compact recovery state instead of one error banner followed by a mostly empty workspace.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Error/no-data layout | Pass | Added `PullRequestEmptyState` for `error && prs.length === 0`; cached PR lists still stay visible when an error occurs after data exists. |
+| Recovery guidance | Pass | Error and empty states now point users to Microsoft sign-in, repository permissions, and Project Link branch scope. |
+| Focused Pull Request tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/pullRequests/PullRequestCard.test.tsx src/pages/pullRequests/PullRequestContextPanel.test.tsx` passed 3 files / 6 tests. |
+| Browser route-cache smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Pull Requests\|PR insight\|pull requests"` passed 7/7 Chromium tests. |
+| Manual dev screenshot | Inconclusive | `output/playwright/pull-requests-after-compact-error.png` captured before real unmocked data initialization reached the page content; it is not used as proof. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pull Requests now has an explicit recovery state for credential/no-data failures instead of a large blank area. | Pass | Verify visually in installed/native app after the next package build. |
+| Manual screenshot of the unmocked dev route remains unreliable without a stable local daemon/auth state. | Medium | Use mocked Playwright for layout regressions, and installed-app smoke for native parity. |
+
+## Run: mp-0522-activity-default-detail-and-empty-state-20260718-0343
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 03:43 +08:00 |
+| Runtime | Current source workspace; dev browser screenshot at `http://127.0.0.1:1420/#/activity`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Stabilize the maximized Activity page so the detail panel behaves like an operational history surface instead of a blank dashboard. When activity exists, MergePilot should automatically open the newest operation; when no activity can be loaded, the detail panel should explain the unavailable state instead of asking the user to select a missing item.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Default detail selection | Pass | Added `defaultActivitySelection`, which chooses the newest task, checkpoint, PR insight, or review operation after first load when the user has not already selected anything. |
+| Timestamp normalization | Pass | Default selection normalizes second-based and millisecond-based numeric timestamps before comparing them with ISO activity timestamps. |
+| Error/no-data detail state | Pass | `ActivityEmptyDetail` now renders `Activity unavailable` when local activity fetch fails and no cached activity exists. |
+| Empty history detail state | Pass | A true empty activity history now says `No activity recorded` instead of `Select an operation`. |
+| Focused Activity tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx` passed 2 files / 13 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser route-cache smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Activity\|activity"` passed 2/2 Chromium tests. |
+| Visual screenshot | Pass | Current dev screenshot saved to `output/playwright/activity-after-empty-state-fix.png`; it shows the right panel explaining `Activity unavailable` instead of the previous misleading selection prompt. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity now opens a useful detail automatically when records are available and gives a clearer recovery state when the local activity service is unavailable. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+| The unmocked dev screenshot currently shows `Failed to fetch`, which indicates the local daemon/auth state was not available to that browser session. | Medium | Use installed-app smoke with a running daemon for native parity, and mocked Playwright for deterministic layout regression coverage. |
+
+## Run: mp-0522-workspace-route-fallbacks-20260718-0350
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 03:50 +08:00 |
+| Runtime | Current source workspace; dev browser screenshots at `http://127.0.0.1:1420`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Fix blank workspace pages caused by stale or unknown hash routes. During the maximized-page sweep, `/#/review` rendered a blank main panel because Review Queue now lives at `/#/findings`; users with old links or manually typed URLs should be redirected instead of seeing an empty app shell.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Stale route fallback | Pass | Added compatibility redirects for `/review` and `/review-queue` to `/findings`, `/pull-requests` to `/pulls`, and the existing `/tasks` redirect remains `/activity`. |
+| Unknown route fallback | Pass | Unknown workspace routes now redirect to `/chat` instead of rendering a blank main panel. |
+| Focused AppShell tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/app/AppShell.test.ts` passed 1 file / 7 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Review Queue route-cache smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Review Queue"` passed 6/6 Chromium tests. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+| Visual stale route proof | Pass | Screenshot `output/playwright/review-route-fallback-after.png` shows `/#/review` rendering the full Review Queue page rather than a blank shell. |
+| Visual unknown route proof | Pass | Screenshot `output/playwright/unknown-route-fallback-after.png` shows an unknown route returning to the New Chat surface. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Stale route compatibility is now covered at unit and browser level, reducing blank-page risk after navigation or old bookmarks. | Pass | Rebuild/package before validating this fix in the installed MSI. |
+| The screenshot sweep should use `/findings` for the canonical Review Queue route going forward. | Pass | Keep `/review` only as compatibility redirect. |
+
+## Run: mp-0522-pipelines-error-empty-state-folding-20260718-0354
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 03:54 +08:00 |
+| Runtime | Current source workspace; dev browser screenshot at `http://127.0.0.1:1420/#/pipelines`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Reduce duplicated failure UI in the Pipelines workspace. When no pipeline rows are available and Project Link or daemon fetches fail, the page should show one recoverable empty state instead of a red `Failed to fetch` banner plus a second no-Project-Link/no-pipeline card.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| No-data error folding | Pass | `PipelineEmptyState` now accepts an error and renders `Pipeline workspace unavailable` with a short recovery path and a compact latest-error line. |
+| Cached-row error preservation | Pass | `pipelineShouldShowTopLevelError` keeps the page-level error banner only when cached/saved pipeline rows remain visible, so background refresh failures are still surfaced without clearing useful data. |
+| Focused Pipelines tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx` passed 2 files / 14 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser route-cache smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Pipelines\|pipeline"` passed 6/6 Chromium tests. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+| Visual screenshot | Pass | `output/playwright/pipelines-after-error-empty-state-folding.png` shows the duplicate red banner removed and the fetch failure folded into the compact Pipelines empty state. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pipelines now presents daemon/Project Link fetch failure as one recoverable workspace state when no pipeline data exists. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+| The top project filter still reads `No ADO projects` when Project Links are unavailable. | Low | Consider replacing it with a disabled neutral `No Project Link` label in a later polish pass if it continues to confuse users. |
+
+## Run: mp-0522-pull-requests-no-project-link-empty-state-20260718-0406
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 04:06 +08:00 |
+| Runtime | Current source workspace; dev browser screenshot at `http://127.0.0.1:1420/#/pulls`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Fix the Pull Requests empty state when no Project Link exists. The page should not imply Azure DevOps has no pull requests until MergePilot has a Project Link with Azure DevOps mapping.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| No Project Link copy | Pass | `PullRequestEmptyState` now renders `No Project Link available` with Project Link setup guidance when `projectLinks.length === 0`. |
+| True empty PR copy | Pass | `No pull requests found` is still used when Project Links exist but the selected status/filter has no PR rows. |
+| Refresh affordance | Pass | The empty-state refresh action is disabled when there is no Project Link and no recoverable fetch error. |
+| Focused Pull Request tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/pullRequests/PullRequestCard.test.tsx src/pages/pullRequests/PullRequestContextPanel.test.tsx` passed 3 files / 7 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser route-cache smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Pull Requests\|PR insight\|pull requests"` passed 7/7 Chromium tests. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+| Visual screenshot | Pass | `output/playwright/pull-requests-after-no-project-link-empty-state.png` shows the no-Project-Link state instead of the misleading no-PR state. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pull Requests now distinguishes missing Project Link setup from a real empty Azure DevOps PR result. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+| The top selector still shows a disabled `No Project Links` control, which is acceptable but could be made more action-oriented later. | Low | Consider linking the empty state to Project Links creation in a later workflow polish pass. |
+
+## Run: mp-0522-pipelines-project-filter-fallback-label-20260718-0410
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 04:10 +08:00 |
+| Runtime | Current source workspace; dev browser screenshot at `http://127.0.0.1:1420/#/pipelines`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Fix the Pipelines project filter fallback text so the page does not claim there are no Azure DevOps projects when the actual blocking state is missing Project Links.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Filter fallback helper | Pass | Added `pipelineProjectFilterFallbackLabel`, which returns `Loading projects...`, `No Project Links`, or `No ADO projects` depending on Project Link loading and availability. |
+| Focused Pipelines tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx` passed 2 files / 15 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Visual screenshot | Pass | `output/playwright/pipelines-after-project-filter-fallback-label.png` shows the header filter using `No Project Links` alongside the compact unavailable-state guidance. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pipelines now distinguishes missing local setup from missing Azure DevOps project discovery. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+
+## Run: mp-0522-review-queue-no-project-link-state-20260718-0414
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 04:14 +08:00 |
+| Runtime | Current source workspace; dev browser screenshot at `http://127.0.0.1:1420/#/findings`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Reduce Review Queue confusion when no Project Link exists. The page should not show empty queue lanes or Recent activity as if review data had been loaded for a repository.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| No Project Link state | Pass | Added `ReviewQueueNoProjectLinkState`, which explains that Project Link and Azure DevOps mapping are required before reviewing PR decisions or audit records. |
+| Empty dashboard suppression | Pass | When there are no Project Links, Review Queue skips the four status blocks, item list, pagination, and Recent activity rail. |
+| Focused Review Queue tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ReviewFindings.test.tsx src/pages/reviewFindings/ReviewActivityRail.test.tsx src/pages/reviewFindings/reviewQueueViewModel.test.ts src/pages/reviewFindings/reviewQueueRuntime.test.ts` passed 4 files / 18 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser route-cache smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Review Queue"` passed 6/6 Chromium tests. |
+| Visual screenshot | Pass | `output/playwright/review-queue-after-no-project-link-state.png` shows a single Project Link setup state and no empty dashboard cards. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Review Queue now communicates setup dependency before showing review-decision UI. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+| Existing semantic color tests were updated to assert design tokens instead of old Tailwind color names. | Pass | Keep review UI tests aligned with the app theme token system. |
+
+## Run: mp-0522-chat-hide-onboarding-composer-20260718-0419
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 04:19 +08:00 |
+| Runtime | Current source workspace; dev browser screenshot at `http://127.0.0.1:1420/#/chat`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Remove duplicate disabled composer UI from the New Chat first-run Project Link onboarding state. When the middle panel already shows the Project Link creation form, the bottom chat composer should not repeat that Project Link is required.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Composer visibility model | Pass | Added `shouldShowChatComposer`; empty full-page onboarding without an active Project Link hides the composer, while mini mode, Project Link loading, existing transcript bubbles, and active Project Link context keep it visible. |
+| Focused Chat layout tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatWorkspaceLayout.test.ts src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/layout/ChatEmptyState.test.tsx` passed 3 files / 12 tests. |
+| Browser chat-layout smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "Project Link\|composer\|New Chat\|welcome"` passed 11/11 Chromium tests after updating the onboarding expectation. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+| Visual screenshot | Pass | `output/playwright/chat-after-hide-onboarding-composer.png` shows only the Project Link creation card and no disabled bottom composer. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| New Chat first-run setup now has one clear interaction target instead of an onboarding form plus a disabled duplicate composer. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+
+## Run: mp-0522-project-links-actionable-empty-state-20260718-0425
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 04:25 +08:00 |
+| Runtime | Current source workspace; dev browser screenshot at `http://127.0.0.1:1420/#/project-links`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Improve the Project Links first-run empty state. Since Project Links are the foundation for Git, Azure DevOps, PR review, and Pipeline workflows, the page should teach that dependency and provide a clear setup action instead of a small centered link floating in an otherwise empty maximized page.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Actionable empty state | Pass | `ProjectLinksEmpty` now renders a setup panel with the required inputs: local repository path, default/PR branches, and Azure DevOps mapping. |
+| Primary setup action | Pass | The old `Create your first Project Link` text link was replaced with a `Create Project Link` primary action. |
+| Focused Project Links tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ProjectLinks.test.tsx src/pages/projectLinks/ProjectLinkWorkspaceSection.test.tsx` passed 2 files / 4 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser route-cache smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Project Links\|Project Link edits"` passed 6/6 Chromium tests. |
+| Whitespace check | Pass | `git diff --check` completed successfully with LF-to-CRLF warnings only. |
+| Visual screenshot | Pass | `output/playwright/project-links-after-actionable-empty-state.png` shows the improved first-run setup panel in the maximized layout. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Project Links now presents first-run setup as a concrete workflow dependency instead of a near-empty page. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+
+## Run: mp-0522-activity-unavailable-sidebar-state-20260718-0430
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 04:30 +08:00 |
+| Runtime | Current source workspace; dev browser screenshot at `http://127.0.0.1:1420/#/activity`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Reduce Activity page noise when local activity data cannot be loaded. The page should not show all-zero section filters plus four empty sections when the real state is an unavailable local activity source.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Unavailable left-sidebar state | Pass | `ActivitySidebar` now renders one `Activity unavailable` recovery card when there are no runs, checkpoints, PR insights, or review operations and the activity API returned an error. |
+| Cached-data refresh behavior | Pass | Refresh errors still keep cached activity visible when records exist, so stale-while-revalidate behavior is preserved. |
+| Loading behavior | Pass | The unavailable card is not shown while activity sources are still loading; loading placeholders remain visible. |
+| Focused Activity tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx` passed 2 files / 17 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser route-cache smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Activity\|activity"` passed 2/2 Chromium tests. |
+| Visual screenshot | Pass | `output/playwright/activity-after-unavailable-sidebar-state.png` shows a compact unavailable card on the left and the matching Detail state on the right, with no all-zero section grid. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity now communicates a recoverable local data/API failure instead of presenting an empty operational-history dashboard. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+| The dev browser smoke session was not authenticated, so account avatar rendering remains a separate installed-app smoke item. | Follow-up | Validate avatar/account state in the installed MSI after the next package is installed. |
+
+## Run: mp-0522-chat-project-link-loading-stability-20260718-0439
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 04:39 +08:00 |
+| Runtime | Current source workspace; dev browser screenshots at `http://127.0.0.1:1420/#/chat`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Remove the stale New Chat welcome prompt flash while Project Links are still resolving. First-run chat should not briefly show actionable prompts or a loading composer before switching to Project Link setup.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Project Link loading state | Pass | `ChatEmptyState` now renders a dedicated `Loading Project Links` setup state instead of welcome prompts while Project Links are still resolving. |
+| Composer suppression | Pass | `shouldShowChatComposer` now hides the full-page composer while Project Links are loading and there is no active Project Link or transcript. Mini composers and real chat contexts remain visible. |
+| Focused Chat tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/layout/ChatWorkspaceLayout.test.ts` passed 3 files / 13 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser chat-layout smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/chat-layout.spec.ts -Grep "Project Link\|composer\|New Chat\|welcome\|loading"` passed 11/11 Chromium tests. |
+| Visual screenshots | Pass | `output/playwright/chat-after-project-link-loading-card-1s.png` shows only the loading setup state; `output/playwright/chat-after-project-link-loading-card-7s.png` shows the Project Link creation form. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| New Chat no longer flashes a second prompt/template before Project Link setup resolves. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+| The loading card still uses a small pulse skeleton as a loading affordance, but it is not an actionable prompt template and does not expose the composer. | Pass | Keep if visual testing remains calm in the packaged app. |
+
+## Run: mp-0522-pipelines-no-zero-dashboard-without-project-link-20260718-0445
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 04:45 +08:00 |
+| Runtime | Current source workspace; dev browser screenshot at `http://127.0.0.1:1420/#/pipelines`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Remove the all-zero Pipelines dashboard when there is no Project Link context and no cached pipeline rows. In this state, the page should explain the setup or local data issue instead of presenting six empty KPI/filter cards.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Status-filter visibility model | Pass | Added `pipelineShouldShowStatusFilters`; the KPI/filter row is hidden when there are no Project Links and no rows, but remains visible for real Project Link context or cached rows. |
+| Focused Pipelines tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx` passed 2 files / 17 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser route-cache smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Pipelines\|pipeline"` passed 6/6 Chromium tests. |
+| Visual screenshot | Pass | `output/playwright/pipelines-after-no-zero-dashboard-without-project-link.png` shows the unavailable/setup card without all-zero pipeline KPI cards. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pipelines now avoids dashboard noise before Project Link or pipeline data exists. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+
+## Run: mp-0522-review-queue-project-link-loading-stability-20260718-0449
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 04:49 +08:00 |
+| Runtime | Current source workspace; dev browser screenshots at `http://127.0.0.1:1420/#/findings`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Prevent Review Queue from flashing the four queue status blocks and Recent activity rail before Project Links resolve. First-run loading should communicate that repository mappings are being checked, not show a temporary empty review dashboard.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Project Link resolving state | Pass | Added `ReviewQueueProjectLinkResolvingState`, a compact `Loading Project Links` card shown before review decisions are loaded. |
+| Dashboard suppression | Pass | Review Queue controls, queue cards, loading skeleton, and Recent activity rail are not rendered while Project Links are still resolving. |
+| Focused Review Queue tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ReviewFindings.test.tsx src/pages/reviewFindings/ReviewActivityRail.test.tsx src/pages/reviewFindings/reviewQueueViewModel.test.ts src/pages/reviewFindings/reviewQueueRuntime.test.ts` passed 4 files / 19 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser route-cache smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Review Queue"` passed 6/6 Chromium tests after updating the resolving-state expectation. |
+| Visual screenshots | Pass | `output/playwright/review-queue-after-project-link-loading-card-1s.png` shows only the loading setup state; `output/playwright/review-queue-after-project-link-loading-card-7s.png` shows the final no-Project-Link setup state. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Review Queue no longer flashes a misleading empty dashboard while Project Links are resolving. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+
+## Run: mp-0522-pull-requests-project-link-loading-stability-20260718-0455
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 04:55 +08:00 |
+| Runtime | Current source workspace; dev browser screenshots at `http://127.0.0.1:1420/#/pulls`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Prevent Pull Requests from showing a PR loading skeleton or no-Project-Link empty state while Project Links are still resolving. The first-run state should communicate that repository mappings are being checked before loading PRs.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Project Link resolving state | Pass | Added `PullRequestProjectLinkResolvingState`, a compact `Loading Project Links` card shown before PR data loading starts. |
+| Empty-state suppression | Pass | The no-Project-Link empty state no longer renders during Project Link resolving; it appears only after Project Links have resolved empty. |
+| Header fallback text | Pass | The Project Link selector now says `Loading Project Links...` while loading instead of prematurely saying `No Project Links`. |
+| Focused Pull Requests tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/pullRequests/PullRequestCard.test.tsx src/pages/pullRequests/PullRequestContextPanel.test.tsx src/pages/pullRequests/PullRequestPageHeader.test.tsx` passed 4 files / 9 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser route-cache smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Pull Requests"` passed 6/6 Chromium tests. |
+| Visual screenshots | Pass | `output/playwright/pull-requests-after-project-link-loading-card-clean-1s.png` shows only the loading setup state; `output/playwright/pull-requests-after-project-link-loading-card-clean-7s.png` shows the final no-Project-Link state. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pull Requests now matches the calmer Project Link resolving pattern used by Chat and Review Queue. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+
+## Run: mp-0522-project-links-loading-card-20260718-0458
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 04:58 +08:00 |
+| Runtime | Current source workspace; dev browser screenshots at `http://127.0.0.1:1420/#/project-links`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Replace the isolated Project Links page spinner with the same calm Project Link loading card pattern used across first-run workspace routes.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Loading card | Pass | `ProjectLinksLoading` now renders a bordered card with `Loading Project Links` and repository-mapping context instead of a centered spinner. |
+| Focused Project Links tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ProjectLinks.test.tsx src/pages/projectLinks/ProjectLinkWorkspaceSection.test.tsx` passed 2 files / 5 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser route-cache smoke | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Spec tests/e2e/route-cache.spec.ts -Grep "Project Links\|Project Link edits"` passed 6/6 Chromium tests. |
+| Visual screenshots | Pass | `output/playwright/project-links-after-loading-card-1s.png` shows the loading card; `output/playwright/project-links-after-loading-card-7s.png` shows the setup empty state. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Project Links now uses the same first-run loading language and layout as Chat, Pull Requests, and Review Queue. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+
+## Run: mp-0522-chat-first-run-home-content-20260718-0505
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 05:05 +08:00 |
+| Runtime | Current source workspace; dev browser screenshot at `http://127.0.0.1:1420/#/chat?new=1`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Restore the normal Chat home content when no Project Link exists. The first-run state should still show what MergePilot can do, while presenting Project Link setup as a compact prerequisite instead of replacing the home page with a full form.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| First-run home content | Pass | `ChatEmptyState` now renders the `Ask MergePilot anything` welcome area and quick actions when Project Links have resolved empty. |
+| Project Link guidance | Pass | The no-Project-Link state shows a compact `Connect a Project Link to run workspace actions` card with the setup form folded behind a `Create` disclosure. |
+| No-link action guard | Pass | First-run quick actions are visible but disabled until a Project Link exists, preventing no-link workspace-action requests. |
+| Setup disclosure | Pass | Browser interaction confirmed the `Create` disclosure expands the inline Project Link form and exposes the `Link name` field. |
+| Focused Chat tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/layout/ChatWorkspaceLayout.test.ts` passed 3 files / 14 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Visual screenshot | Pass | `output/playwright/chat-after-first-run-welcome-project-link-card-disabled-actions.png` shows the restored welcome content; `output/playwright/chat-after-first-run-project-link-create-expanded.png` shows the expanded setup form. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Chat no longer loses the home-page welcome content when Project Links are missing. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+
+## Run: mp-0522-pull-requests-no-link-action-20260718-0516
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 05:16 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420/#/pull-requests`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Make the Pull Requests no-Project-Link state actionable. Users should not land on a disabled refresh control when the required next step is to create or select a Project Link.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Actionable empty state | Pass | `PullRequestEmptyState` now shows `Open Project Links` when no Project Link exists instead of a disabled `Refresh` button. |
+| Focused Pull Requests tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/pullRequests/PullRequestCard.test.tsx src/pages/pullRequests/PullRequestContextPanel.test.tsx src/pages/pullRequests/PullRequestPageHeader.test.tsx` passed 4 files / 9 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Visual screenshot | Pass | `output/playwright/pull-requests-after-no-project-link-open-project-links-1366.png` shows the action in a 1366x768 viewport. |
+| Browser navigation | Pass | Playwright clicked `Open Project Links`; the URL changed to `http://127.0.0.1:1420/#/project-links` and the `Project Links` heading was visible. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pull Requests now points users to the required Project Link setup path instead of leaving them at a dead refresh action. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+
+## Run: mp-0522-pipelines-no-link-action-20260718-0519
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 05:19 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420/#/pipelines`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Make the Pipelines no-Project-Link and no-data failure state actionable. Users should have a clear route to Project Link setup instead of landing on a disabled discovery refresh button.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| No-link action | Pass | `PipelineEmptyState` now shows `Open Project Links` when no Project Link exists. |
+| Failure recovery | Pass | If pipeline discovery fails while no Project Links are available, the card shows both `Open Project Links` and `Retry loading`. |
+| Focused Pipelines tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx` passed 2 files / 17 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Visual screenshot | Pass | `output/playwright/pipelines-after-no-link-open-project-links-1366.png` shows the actions in a 1366x768 viewport. |
+| Browser navigation | Pass | Playwright clicked `Open Project Links`; the URL changed to `http://127.0.0.1:1420/#/project-links` and the `Project Links` heading was visible. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pipelines now gives users a concrete setup path when pipeline data cannot load because no Project Link is available. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+
+## Run: mp-0522-activity-unavailable-actions-20260718-0524
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 05:24 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420/#/activity`; installed app not rebuilt in this run |
+| Resource mode | Non-mutating source/browser regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Make the Activity unavailable state actionable. When local activity cannot load, the page should preserve diagnostic context and also provide immediate recovery actions.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Recovery actions | Pass | `ActivitySidebarUnavailableState` now shows `Refresh activity` and `Open Settings` in addition to diagnostic labels. |
+| Focused Activity tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx` passed 2 files / 17 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Visual screenshot | Pass | `output/playwright/activity-after-unavailable-actions-1366.png` shows the compact recovery actions in a 1366x768 viewport. |
+| Browser navigation | Pass | Playwright clicked `Open Settings`; the URL changed to `http://127.0.0.1:1420/#/settings` and the `Settings` heading was visible. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity no longer presents a purely read-only failure card when local activity cannot load. | Pass | Rebuild/package before validating this specific fix in the installed MSI. |
+
+## Run: mp-0522-maximized-layout-stabilization-20260718-0540
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 05:40 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420`; installed MSI not rebuilt in this run |
+| Resource mode | Non-mutating UI/layout regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Stabilize the maximized-window workspace experience after the latest installed-app review. The Chat home should not appear blank or split into awkward wide columns while Project Links load, and no-Project-Link states on workflow pages should read as compact actionable panels instead of full-width banners.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Chat loading state | Pass | `ChatEmptyState` now keeps the welcome content visible while Project Links resolve and shows Project Link loading as a secondary panel. |
+| Chat wide layout | Pass | `WelcomePanel` now uses a centered vertical layout with wrapped prompt chips instead of a wide two-column split. |
+| Workflow no-link panels | Pass | Pull Requests, Pipelines, and Review Queue no-link/loading panels are capped at `max-w-5xl` so they do not stretch across the whole maximized workspace. |
+| Focused Chat tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/layout/ChatWorkspaceLayout.test.ts` passed 3 files / 14 tests. |
+| Focused workflow tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/Pipelines.test.tsx src/pages/ReviewFindings.test.tsx` passed 3 files / 22 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Visual screenshots | Pass | `output/playwright/goal-maximized-layout-fix/chat-loading-home-1920.png`, `chat-stable-home-1920.png`, `pull-requests-no-link-1920.png`, `pipelines-no-link-1920.png`, and `review-queue-no-link-1920.png` captured the 1920x1080 review state. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Chat no longer drops into a blank-looking preloading template on first load; the homepage remains present while setup data resolves. | Pass | Rebuild/package before validating this exact UI in the installed MSI. |
+| No-link states are calmer and more scannable at maximized desktop size. | Pass | Continue route-switch cache review with an authenticated Project Link dataset. |
+
+## Run: mp-0522-activity-unavailable-layout-20260718-0548
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 05:48 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420/#/activity`; installed MSI not rebuilt in this run |
+| Resource mode | Non-mutating UI/layout regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Reduce duplicated unavailable-state messaging on the Activity page at maximized desktop size. The source rail should explain that activity sources failed to load, while the detail panel should provide recovery guidance instead of repeating the same error title in a wide card.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Source panel language | Pass | `ActivitySidebarUnavailableState` now uses `Sources unavailable` for the left rail recovery card. |
+| Detail panel language | Pass | `ActivityEmptyDetail` now uses `Recovery needed` with explicit refresh/settings guidance when activity loading fails and no records are cached. |
+| Detail width | Pass | Activity detail content is capped with `xl:max-w-5xl`/`max-w-4xl` so the empty detail card does not stretch across the entire maximized workspace. |
+| Focused Activity tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx` passed 2 files / 17 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Visual screenshot | Pass | `output/playwright/goal-activity-layout-fix/activity-unavailable-1920.png` captured the 1920x1080 review state. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity unavailable state now has clearer information architecture: source failure on the left, recovery guidance on the right. | Pass | Rebuild/package before validating this exact UI in the installed MSI. |
+
+## Run: mp-0522-project-links-empty-layout-20260718-0552
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 05:52 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420/#/project-links`; installed MSI not rebuilt in this run |
+| Resource mode | Non-mutating UI/layout regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Tighten the Project Links empty state at maximized desktop size. The primary setup action should stay visually connected to the explanation instead of being pushed to the far right of a wide card.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Empty-state CTA placement | Pass | `ProjectLinksEmpty` now renders `Create Project Link` directly below the setup explanation instead of using a wide `lg:justify-between` row. |
+| Setup requirements layout | Pass | The setup requirement items now wrap as compact chips under `Setup needs` rather than stretching into a fixed three-column row. |
+| Focused Project Links tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ProjectLinks.test.tsx src/pages/projectLinks/ProjectLinkWorkspaceSection.test.tsx` passed 2 files / 5 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Visual screenshot | Pass | `output/playwright/goal-project-links-layout-fix/project-links-empty-1920.png` captured the 1920x1080 review state. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Project Links empty state now keeps context, CTA, and setup requirements in one compact reading/decision column at maximized width. | Pass | Rebuild/package before validating this exact UI in the installed MSI. |
+
+## Run: mp-0522-settings-maximized-layout-20260718-0556
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 05:56 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420/#/settings`; installed MSI not rebuilt in this run |
+| Resource mode | Non-mutating UI/layout regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Improve Settings usability at maximized desktop size. The configuration form should remain a bounded workbench surface, and the final account/storage rows should be scrollable above the app's bottom chrome instead of being visually clipped.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Settings width | Pass | `.settings-page` is capped at `64rem`, reducing excessive row span at 1920px while keeping long configuration fields usable. |
+| Bottom scroll space | Pass | `.settings-page` now uses `7.5rem` bottom padding so final rows clear the bottom gradient/app chrome. |
+| Focused Settings tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/settings/settingsLayout.test.ts` passed 1 file / 3 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Visual screenshots | Pass | `output/playwright/goal-settings-layout-fix/settings-top-1920.png` and `settings-bottom-1920.png` captured the 1920x1080 top and scrolled-bottom states. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Settings now behaves like a bounded configuration workbench, and the final storage rows are no longer hidden behind the bottom chrome when scrolled to the end. | Pass | Rebuild/package before validating this exact UI in the installed MSI. |
+
+## Run: mp-0522-workspace-bounded-layout-and-cache-20260718-0604
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 06:04 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420`; mocked browser E2E for route data; installed MSI not rebuilt in this run |
+| Resource mode | Non-mutating UI/layout and mocked route-cache regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Continue the maximized-window workspace pass for business workflow pages. Pull Requests and Review Queue should use the same bounded workbench posture as Pipelines, while route refreshes should keep cached business data visible instead of flashing full-page loading states.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Pull Requests workspace width | Pass | `PullRequests` now uses a bounded `max-w-[1440px]` shell so filters, empty states, and future insight panels do not stretch across the whole maximized window. |
+| Review Queue workspace width | Pass | `ReviewFindings` now uses a bounded `max-w-[1440px]` shell so queue controls and the Recent activity rail remain visually connected. |
+| Focused page tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/ReviewFindings.test.tsx` passed 2 files / 11 tests. |
+| Focused component tests | Pass | `PipelineRowCard`, `PullRequestCard`, `ReviewActivityRail`, and `ReviewQueueCard` tests passed 4 files / 10 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Route cache E2E | Pass | `run-mocked-browser-e2e.ps1` passed cached Pull Requests refresh, Pull Requests status refresh, cached Review Queue refresh, and successful Pipeline AI analysis Markdown/run evidence tests. |
+| Review Queue E2E | Pass | `run-mocked-browser-e2e.ps1` passed Recent activity collapsed-state persistence and selected lane semantic-color tests. |
+| Visual screenshots | Pass | `output/playwright/goal-workspace-bounded-layout-fix/pull-requests-1920.png` and `review-queue-1920.png` captured the 1920x1080 bounded layout state. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Pull Requests and Review Queue now match Pipelines' bounded workspace behavior at maximized desktop width. | Pass | Rebuild/package before validating this exact UI in the installed MSI. |
+| Existing mocked E2E confirms warm route refreshes keep cached PR, Review Queue, and Pipeline AI data visible. | Pass | Continue with installed-app smoke after the next package build. |
+
+## Run: mp-0522-business-data-layout-sweep-20260718-0609
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 06:09 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420`; mocked Project Link, PR, Pipeline, and Review Queue data; installed MSI not rebuilt in this run |
+| Resource mode | Non-mutating mocked UI/layout regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Inspect the business workflow pages with realistic Project Link data instead of only no-link empty states. The pages should remain usable and visually connected at maximized desktop width when actual PR, Pipeline, and Review Queue records are present.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Pull Requests with PR data | Pass | `pull-requests-data-1920.png` shows the bounded PR workspace with latest insight rendered as Markdown and action controls kept inside the page shell. |
+| Review Queue with decisions | Pass | `review-queue-data-1920.png` shows queue lanes, decision cards, and Recent activity working together inside the bounded workspace. |
+| Pipeline single-row layout | Pass | `pipelineRowsGridClass(false)` now uses auto-fit `minmax(min(100%,34rem),1fr)` so one pipeline record fills the available workbench instead of sitting in a half-width card. |
+| Focused Pipeline tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx` passed 2 files / 17 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Pipeline route-cache E2E | Pass | `run-mocked-browser-e2e.ps1` passed cached pipeline rows and successful Pipeline AI analysis Markdown/run evidence tests. |
+| Visual screenshots | Pass | `output/playwright/goal-business-data-layout-sweep/pull-requests-data-1920.png`, `review-queue-data-1920.png`, and `pipelines-data-auto-fit-1920.png` captured the 1920x1080 business-data state. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Real-content PR and Review Queue pages are now bounded and readable at maximized desktop size. | Pass | Rebuild/package before validating this exact UI in the installed MSI. |
+| Pipeline rows no longer leave an awkward empty half-column when only one pipeline is available. | Pass | Continue with installed-app smoke after the next package build. |
+
+## Run: mp-0522-activity-checkpoint-status-20260718-0615
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 06:15 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420`; mocked Activity checkpoint detail routes with delayed preview/rollback responses |
+| Resource mode | Non-mutating UI/layout regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Verify the Activity checkpoint detail panel behaves clearly during slow checkpoint evidence loading. The page should not show bare `Loading` labels, raw JSON should stay collapsed, and the final detail state should keep rollback and snapshot evidence readable.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Checkpoint rollback loading state | Pass | `CheckpointRollbackPlanSection` now shows `Preparing recovery` plus a short recovery-status sentence instead of a bare `Loading` label. |
+| Checkpoint snapshot loading state | Pass | `CheckpointPreviewSection` now shows `Checking snapshot` plus a short changed-files/diff-status sentence instead of a bare `Loading` label. |
+| Raw output folding | Pass | Checkpoint tool output remains summarized as `M README.md`, with raw JSON hidden behind `Raw output`. |
+| Focused Activity tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx src/pages/taskViewer/CheckpointDetailPanel.test.tsx src/pages/taskViewer/CheckpointRollbackPlanSection.test.tsx src/pages/taskViewer/CheckpointPreviewSection.test.tsx` passed 5 files / 21 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Visual screenshots | Pass | `output/playwright/goal-activity-checkpoint-status-fix/activity-checkpoint-loading-1920.png` and `activity-checkpoint-loaded-1920.png` captured the delayed-loading and completed 1920x1080 states. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity checkpoint details now communicate slow preview/rollback work without ambiguous loading chrome. | Pass | Rebuild/package before validating this exact UI in the installed MSI. |
+
+## Run: mp-0522-route-recovery-and-chat-overflow-20260718-0631
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 06:31 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420`; mocked daemon responses |
+| Resource mode | Non-mutating UI/runtime regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Continue maximized-window and resilience verification after the workspace sweep found two issues: Pipelines could blank the app if pipeline connection data had an unexpected collection shape, and the hidden Chat source preview kept `No file open` content mounted just outside the right edge of the viewport.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Pipeline connection response normalization | Pass | `listPipelineConnections` now accepts both array responses and wrapped `{ items: [...] }` responses, and rejects other shapes with a product error before data reaches `buildPipelineRows`. |
+| Workspace route error fallback | Pass | `LazyPageShell` now wraps lazy workspace routes in `RouteErrorBoundary`; unexpected page render errors show a recoverable page state instead of a white workspace. |
+| Pipelines white-screen repro | Pass | The mocked Pipelines repro no longer produced page errors or a blank page after wrapped pipeline response handling. Screenshot: `output/playwright/goal-route-error-boundary-fix/pipelines-wrapped-connections-1920.png`. |
+| Chat hidden preview overflow | Pass | Closed Chat source preview no longer mounts `CodeSidePanel`; DOM overflow check returned `overflowCount: 0`. Screenshot: `output/playwright/goal-chat-hidden-preview-overflow-fix/chat-no-hidden-preview-overflow-1920.png`. |
+| Focused recovery tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/app/AppShell.test.ts src/api/userFacingErrors.test.ts src/pages/Pipelines.test.tsx src/pages/pipelines/pipelineModel.test.ts` passed 4 files / 45 tests. |
+| Focused Chat layout tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatWorkspaceLayout.test.ts src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 3 files / 16 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed after the route boundary and Chat layout changes. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| A malformed or wrapped pipeline connection response should not be able to crash the whole desktop workspace. | Fixed | Keep page-level error fallback in place for other unexpected route component failures. |
+| Hidden Chat source-preview content no longer leaks outside the viewport when the right panel is closed. | Fixed | Rebuild/package before validating this exact UI in the installed MSI. |
+
+## Run: mp-0522-chat-empty-state-restored-20260718-0642
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 06:42 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420`; focused Chat empty-state regression |
+| Resource mode | Non-mutating UI regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Verify the New Chat home remains visible when the restored chat state contains only technical system messages. This covers the blank-home symptom where the composer was visible but the main welcome content was missing.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Technical system messages do not suppress the home welcome | Pass | `ChatMessageList` now treats empty system messages and `Session restored` as non-transcript chrome, so they do not block `ChatEmptyState`. |
+| Focused Chat tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/layout/ChatEmptyState.test.tsx` passed 2 files / 11 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser smoke | Pass | Headless browser at `http://127.0.0.1:1420/#/chat` found `Ask MergePilot anything`, `Review my changes`, and no route recovery error. Screenshot: `output/playwright/goal-chat-empty-state-restored/chat-home-1365.png`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| New Chat no longer collapses into an apparently blank main panel when only restored technical messages exist. | Fixed | Rebuild/package before validating this exact fix in the installed MSI. |
+
+## Run: mp-0522-activity-collection-resilience-sweep-20260718-0643
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 06:43 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420`; mocked maximized route sweep with wrapped collection responses |
+| Resource mode | Non-mutating UI/runtime regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Verify route resilience after Activity previously exposed collection-shape crashes such as `tasks.filter is not a function` and `checkpointActivity.find is not a function`. The workspace should recover from unexpected route errors and should not crash when daemon collection endpoints return wrapped `{ items: [...] }` responses.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Task response normalization | Pass | `fetchTasks` now accepts both array and wrapped `{ items: [...] }` responses before Activity receives task data. |
+| Checkpoint activity response normalization | Pass | `fetchChatCheckpointActivity` now accepts both array and wrapped `{ items: [...] }` responses before Activity calls `.find`. |
+| Route boundary reset | Pass | `RouteErrorBoundary` resets from `pathname + search + hash`, so one route crash does not trap later navigation in the recovery state. |
+| Maximized route sweep | Pass | `output/playwright/goal-maximized-page-sweep-4/metrics.json` reports empty `events`, empty `overflow`, non-empty `textLength`, and `hasRecovery: false` for Chat, Pull Requests, Review Queue, Pipelines, Activity, Project Links, and Settings at 1920x1080. |
+| Focused resilience tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/app/AppShell.test.ts src/api/userFacingErrors.test.ts src/pages/TaskViewer.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx` passed 4 files / 48 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed in the same source state after the Chat empty-state patch. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity route data no longer assumes one collection envelope shape. | Fixed | Continue adding API-level normalizers for any future endpoint where page code calls array methods. |
+| Maximized workspace routes render bounded content without page errors, recovery fallback, or horizontal overflow under the mocked sweep. | Pass | Rebuild/package before validating this exact source state in the installed MSI. |
+
+## Run: mp-0522-chat-pinned-summary-default-20260718-0648
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 06:48 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420/#/chat?new=1`; 1920x1080 viewport |
+| Resource mode | Non-mutating UI regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Keep the Chat New Conversation home focused on the conversation starter instead of opening the pinned environment summary by default. The pinned summary remains available from the top-bar control, but it should behave like an optional overlay rather than a persistent automatic panel on every new chat.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Pinned summary default state | Pass | `DEFAULT_SUMMARY_PINNED_OPEN` is now `false`, so the Environment overlay does not auto-open on New Chat. |
+| Focused Chat tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/useResizableChatPanels.test.ts src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/layout/ChatWorkspaceLayout.test.ts src/pages/chat/layout/ChatEmptyState.test.tsx` passed 4 files / 18 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser smoke | Pass | Headless browser at `http://127.0.0.1:1420/#/chat?new=1` found `Ask MergePilot anything` and `Review my changes`; summary overlay text `Environment` / `Commit or push` / `Progress` was not present by default. Screenshot: `output/playwright/goal-chat-pinned-summary-default-fix/chat-default-summary-closed-1920.png`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| New Chat no longer starts with the pinned summary overlay occupying the right side of the conversation surface. | Fixed | Rebuild/package before validating this exact behavior in the installed MSI. |
+
+## Run: mp-0522-review-activity-default-collapsed-20260718-0653
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 06:53 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420/#/findings`; mocked Project Link and Review Queue data |
+| Resource mode | Non-mutating UI regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Keep the Review Queue focused on approval decisions by default. The Recent activity rail should be available as a right-side expandable panel, but it should not automatically reserve the right column when there are no operation events or when the user is arriving from legacy state created by the old always-open default.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Recent activity default state | Pass | Review Queue now uses `mergepilot_review_activity_panel_open_v2`; default is collapsed, and legacy `mergepilot_review_activity_panel_open=true` no longer forces the rail open. |
+| Explicit user preference | Pass | The rail persists open/closed state only after the user changes the v2 preference in the current UI. |
+| Focused Review Queue tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ReviewFindings.test.tsx src/pages/reviewFindings/ReviewActivityRail.test.tsx src/pages/reviewFindings/ReviewQueueCard.test.tsx src/pages/reviewFindings/reviewQueueViewModel.test.ts` passed 4 files / 17 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Mocked browser E2E | Pass | `.\scripts\windows\run-mocked-browser-e2e.ps1 -Project chromium -Grep "Recent activity" -Workers 1` passed 1/1. |
+| Visual screenshot | Pass | `output/playwright/goal-review-activity-default-fix/review-queue-activity-default-collapsed-1920.png` shows the Review Queue with `Show activity` visible and the right rail closed at 1920x1080. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Review Queue no longer opens an empty Recent activity rail by default or because of the legacy always-open localStorage key. | Fixed | Rebuild/package before validating this exact behavior in the installed MSI. |
+
+## Run: mp-0522-theme-layout-stabilization-20260718-1400
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 14:00 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420`; 1920x1080 viewport |
+| Resource mode | Non-mutating UI/theme regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Verify the post-install UX stabilization work for maximized layouts and theme contrast. System theme should remain because it follows Windows `prefers-color-scheme`, while Settings should explain the resolved theme and light mode should avoid harsh status-color blocks.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| System theme behavior | Pass | `ThemeProvider` keeps `system` and resolves it through `window.matchMedia("(prefers-color-scheme: dark)")`; Settings now explains the current resolved theme. |
+| Theme token consolidation | Pass | Added softer semantic `--app-success-soft`, `--app-warning-soft`, `--app-danger-soft`, and matching border tokens for light/dark-aware status surfaces. |
+| Status-color hotspots | Pass | Review Queue lanes, PR readiness/risk badges, Pipeline run badges, Activity statuses, checkpoint statuses, and Chat execution statuses now use app semantic tokens instead of hard-coded emerald/red/amber/sky classes in the inspected paths. |
+| Focused tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/settings/AppearanceSettingsSection.test.tsx src/pages/settings/settingsLayout.test.ts src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx src/pages/ReviewFindings.test.tsx src/pages/pullRequests/PullRequestCard.test.tsx` passed 6 files / 31 tests. |
+| Activity tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx src/pages/taskViewer/CheckpointPreviewSection.test.tsx src/pages/taskViewer/CheckpointRollbackPlanSection.test.tsx` passed 4 files / 20 tests. |
+| Chat component tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/layout/ChatEmptyState.test.tsx` passed 13 files / 98 tests after suggestion and execution status colors moved to app tokens. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser smoke | Pass | `output/playwright/goal-theme-layout-smoke-20260718/metrics.json` reports no horizontal overflow and no HTTP 400/recovery/invalid-client errors for Chat, Settings, Pipelines, Review Queue, and Activity. |
+| Screenshots | Pass | Captured `settings-light.png`, `settings-dark.png`, `settings-system.png`, `chat-light-1920.png`, `pipelines-light-1920.png`, `review-queue-light-1920.png`, and `activity-light-1920.png` under `output/playwright/goal-theme-layout-smoke-20260718`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| `system` theme is not redundant; it resolves to the OS preference and listens for changes. | Clarified | Keep it in Settings with the resolved theme label instead of removing it. |
+| Light theme status surfaces were visually louder than the operational workspace style. | Fixed | Continue moving remaining hard-coded colors in less-frequent panels to app semantic tokens as they are touched. |
+| New Chat home content renders again under the current source browser smoke. | Pass | Rebuild/package before validating this exact source state in the installed MSI. |
+
+## Run: mp-0522-visible-status-color-tokenization-20260718-1415
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 14:15 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420`; 1920x1080 viewport |
+| Resource mode | Non-mutating UI/theme regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Continue the light/dark/system theme cleanup beyond the first visible screenshots. Remove remaining hard-coded red/amber/emerald/blue status classes from visible workbench controls while preserving syntax highlighting in code snippets.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Visible status color scan | Pass | `rg` found no remaining hard-coded red/amber/emerald/blue status classes in the inspected Chat, Project Links, Settings, Activity, pipeline, PR, Review Queue, and conversation component paths except `codeHighlight.ts`, which intentionally styles code tokens. |
+| Chat status surfaces | Pass | Artifact cards, artifact workspace errors, Mermaid errors, command approval fallback, composer notices, Git divergence/recovery, history errors, history delete menu, pinned history icon, and diff +/- counts now use app semantic tokens. |
+| Project Link status surfaces | Pass | Project Link list errors, cloud-sync pill, branch detection success/warning borders, and chat inline Project Link onboarding branch controls now use app semantic tokens. |
+| Settings status surfaces | Pass | Saved indicator and custom model test success/error text now use app semantic tokens. |
+| Focused tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/ProjectLinks.test.tsx src/pages/projectLinks/ProjectLinkWorkspaceSection.test.tsx src/pages/settings/AppearanceSettingsSection.test.tsx src/pages/settings/settingsLayout.test.ts` passed 17 files / 108 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser smoke | Pass | `output/playwright/goal-tokenized-status-colors-smoke-20260718/metrics.json` reports no horizontal overflow and no HTTP 400/recovery/invalid-client/collection-shape errors for Chat, Settings, Project Links, Activity, Pipelines, and Review Queue. |
+| Screenshots | Pass | Captured theme and route screenshots under `output/playwright/goal-tokenized-status-colors-smoke-20260718`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Remaining visible status colors in the inspected routes now flow through app semantic tokens instead of independent Tailwind color palettes. | Fixed | Continue treating code syntax highlighting as separate from business status color. |
+| Browser smoke confirms the source workspace still renders the main routes without overflow or recovery errors after the tokenization pass. | Pass | Rebuild/package before validating the same UI in the installed MSI. |
+
+## Run: mp-0522-activity-workbench-readability-20260718-1430
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 14:30 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420`; daemon at `http://127.0.0.1:8787`; 1920x1080 viewport |
+| Resource mode | Non-mutating Activity UI/readability regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Continue maximized-window UX stabilization for the Activity workbench. Activity should read as operational history, keep first-load states calm, use the available detail width, and keep raw command output behind folded evidence instead of showing JSON or remote command dumps in the primary detail text.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Activity first-load state | Pass | Empty initial loading now shows one compact `Checking activity sources` block instead of multiple empty source lists and repeated loading chips. |
+| Activity layout width | Pass | The Activity detail panel no longer uses the old `xl:max-w-5xl` cap; the source rail is widened to `xl:w-[420px]` for better maximized-window balance. |
+| Tool result readability | Pass | `operationDetailSummary` now treats successful command `stderr` as folded evidence, not as the visible summary. Strict and loose tool-shaped output both summarize to `Command completed successfully.` when appropriate. |
+| Raw output folding | Pass | Raw tool output remains available under collapsed `Raw output`; the browser metric confirmed `rawDetailsOpen: false`. |
+| Focused tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/taskViewer/operationDetailSummary.test.ts src/pages/taskViewer/CheckpointDetailPanel.test.tsx src/pages/taskViewer/TaskRunDetailPanel.test.tsx src/pages/TaskViewer.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx` passed 5 files / 27 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser smoke | Pass | `output/playwright/goal-activity-detail-summary-fix-2-20260718/metrics.json` reports no horizontal overflow, no HTTP 400, no invalid-client text, visible `Tool Result` summary has no `returncode` or remote path, and no non-aborted failed requests. |
+| Screenshots | Pass | Captured `output/playwright/goal-activity-detail-summary-fix-2-20260718/activity-light-1920.png`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Activity still exposed successful Git remote output because some checkpoint `toolSummary` values are tool-shaped but not strict JSON. | Fixed | Keep raw evidence folded; visible summaries should be human-readable operational status. |
+| Fast multi-route Playwright sweeps can produce `net::ERR_ABORTED` from intentional navigation/reload cancellation. | Informational | Treat non-aborted failed requests as failures; `ERR_ABORTED` during route changes is not a product error by itself. |
+
+## Run: mp-0522-header-selector-width-20260718-1435
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 14:35 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420`; daemon at `http://127.0.0.1:8787`; 1920x1080 viewport |
+| Resource mode | Non-mutating header layout regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Stabilize maximized Pull Requests and Review Queue headers when live-test Project Link names are long. Header filters should not dominate the page title row or create awkward oversized controls.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Pull Requests header select width | Pass | The Project Link selector is bounded to `22rem`; browser metric measured 352px for `mp-live-claimbot-pipeline-20260716181319`. |
+| Pull Requests status select width | Pass | The status selector is bounded to `9rem`; browser metric measured 144px. |
+| Review Queue header select width | Pass | The Review Queue Project Link selector is bounded to `22rem`; browser metric measured 352px for the same long Project Link name. |
+| Focused tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pullRequests/PullRequestPageHeader.test.tsx src/pages/reviewFindings/ReviewQueuePageHeader.test.tsx src/pages/PullRequests.test.tsx src/pages/ReviewFindings.test.tsx src/pages/pullRequests/PullRequestCard.test.tsx` passed 5 files / 18 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+| Browser smoke | Pass | `output/playwright/goal-header-selector-width-smoke-20260718/metrics.json` reports no horizontal overflow, no HTTP 400, no invalid-client text, no route recovery, and no non-aborted failed requests for Pull Requests and Review Queue. |
+| Screenshots | Pass | Captured `output/playwright/goal-header-selector-width-smoke-20260718/pulls-light-1920.png` and `output/playwright/goal-header-selector-width-smoke-20260718/findings-light-1920.png`. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Long live-test Project Link names could make header controls visually heavier than the page title/content. | Fixed | Continue using bounded selectors for page-level filters that can contain user-generated names. |
+
+## Run: mp-0522-pipeline-dedupe-project-link-selection-20260718-1455
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 14:55 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420`; daemon at `http://127.0.0.1:8787`; 1920x1080 viewport |
+| Resource mode | Non-mutating UI/data-flow regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Continue maximized-window UX stabilization after the installed-app review. Pipelines should not show the same Azure pipeline multiple times because several temporary Project Links exist, and workspace pages should not default to `mp-live-*` links when a matching saved Project Link is available.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Pipeline card deduplication | Pass | `output/playwright/goal-pipeline-dedupe-smoke-20260718/metrics.json` shows 3 pipeline cards with unique ids `#117`, `#108`, and `#111`; duplicate `#117` cards are gone. |
+| Pipeline status counts | Pass | Browser text shows `All 3` and `Discovered 3` after dedupe, matching the unique visible pipeline rows. |
+| Active Project Link recovery | Pass | `output/playwright/goal-project-link-selection-smoke-20260718/metrics.json` shows Chat, Review Queue, and Pull Requests selected `ClaimBot_API link` even when temporary `mp-live-*` Project Links are still present. |
+| Page shell bottom overlay | Pass | `output/playwright/goal-layout-theme-fixes-smoke-20260718/metrics.json` reports `fadeVisible: false` for Chat, Pipelines, Review Queue, Pull Requests, Activity, and Settings, so normal pages are no longer covered by the old bottom gradient layer. |
+| Theme modes | Pass | `output/playwright/goal-theme-context-smoke-20260718/metrics.json` confirms `light`, `dark`, and `system` are distinct and functional: dark resolves to `data-theme=dark`; system follows Windows and resolves to light on this machine. |
+| Focused tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/projectLinks.test.ts src/pages/pipelines/pipelineModel.test.ts src/app/AppShell.test.ts src/pages/Pipelines.test.tsx src/pages/PullRequests.test.tsx src/pages/ReviewFindings.test.tsx src/pages/chat/useActiveProjectLinkRuntime.test.ts` passed 7 files / 57 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The Pipelines page surfaced one card per Project Link discovery result, so the same ADO pipeline appeared several times after live-test Project Links accumulated. | Fixed | `buildPipelineRows` now deduplicates by ADO org/project/repo/pipeline id, preferring saved or human-named Project Links and merging PR/run context. |
+| Stored active Project Link ids could keep Chat, Pull Requests, and Review Queue pinned to temporary `mp-live-*` links. | Fixed | `resolveActiveProjectLinkId` now falls back from temporary links to a matching saved Project Link for the same ADO mapping. |
+| The app shell rendered a bottom gradient overlay on normal scroll pages, which could visually cover Settings or long content near the viewport bottom. | Fixed | `PageShell` keeps the class available but no longer renders the overlay by default. |
+| System theme looked redundant when Windows is currently light. | Pass | Kept System because it is a real preference-following mode and the UI now explains the resolved theme. |
+
+## Run: mp-0522-installed-app-smoke-split-20260718-1500
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 15:00 +08:00 |
+| Runtime | Installed app at `C:\Program Files\MergePilot`; expected version `0.5.22`; source workspace smoke support scripts |
+| Resource mode | Non-mutating installed-app verification; no Git write, Azure DevOps write, pipeline trigger, approval execution, or reinstall |
+| Result | Partial pass |
+
+### Purpose
+
+Separate installed-app runtime health from strict packaging identity. The installed application should remain healthy for daemon/auth/avatar/fresh-user behavior, while release packaging should still fail if the installed binaries do not match the current local MSI payload.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Strict installed MSI payload match | Fail as expected | `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.22 -ExpectedDesktopBundleKind msi -MsiPath ...MergePilot_0.5.22_x64_en-US.msi` failed only the package-state verifier. Log: `output\live-e2e\installed-app-package-state-20260718-145551.log`. |
+| Strict failure reason | Pass | The log reports the installed `mergepilot-desktop.exe` and `mergepilot-daemon.exe` hashes do not match the supplied local MSI payload hashes. Version, daemon health, auth, avatar, and config were otherwise present. |
+| Installed runtime behavior smoke | Pass | `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.22 -ExpectedDesktopBundleKind any` passed. Logs under `output\live-e2e\installed-app-*-20260718-145907.log`. |
+| Installed daemon health | Pass | Behavior smoke confirmed daemon version `0.5.22`, Azure LLM configured, deployment `gpt-4o`, avatar available, and user authenticated as `Zhou Ping`. |
+| Restart and fresh-user safety | Pass | Restart persistence, safety boundary, verifier safety, and fresh-user smoke all returned exit code `0`. |
+| Installed stale Chat template scan | Pass | `.\scripts\windows\verify-no-stale-chat-template.ps1 -Installed` scanned `C:\Program Files\MergePilot` and found no `WelcomeSuggestions`, `useChatIndexStatus`, or `fetchChatIndexStatus` matches. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| The installed app is healthy, but it is not byte-identical to the current local MSI artifact. | Release blocker | Rebuild/package after current fixes, install that exact MSI, then rerun the strict `-ExpectedDesktopBundleKind msi -MsiPath ...` gate. |
+| Installed runtime checks prove the user/profile/avatar and first-run config path are currently functional. | Pass | Keep using strict payload match for release confidence; use `any` only to isolate runtime behavior from package identity. |
+
+## Run: mp-0522-theme-layout-followup-20260718-1520
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 15:20 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420`; daemon already running locally |
+| Resource mode | Non-mutating UI regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass with follow-up |
+
+### Purpose
+
+Continue installed-app UX stabilization against the current source state: verify New Chat empty-state content, remove the redundant Settings System theme option when it resolves to the same visible light theme on this workstation, reduce Pipeline refresh empty-state weight, and check maximized-window layout in Light and Dark.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Settings theme choices | Pass | `output/playwright/goal-theme-layout-after-patch-20260718/settings-light.png` and `settings-dark.png` show only `Light` and `Dark`; browser metrics report `hasSystemThemeButton: false` and `hasResolved: false`. |
+| Legacy theme storage migration | Pass | `theme.tsx` now treats stored `system` or invalid theme values as `light`, so upgraded users do not remain on a hidden settings value. |
+| Pipeline refresh empty state | Pass | `output/playwright/goal-theme-layout-after-patch-20260718/pipelines-light.png` shows the discovery refresh state as a compact 896x120 status panel rather than a large empty workspace block. |
+| New Chat home content | Pass | `/chat?new=1` shows `Ask MergePilot anything` and welcome actions; `output/playwright/goal-chat-history-dom-after-patch-20260718/chat-new-history-closed.png` captured the state. |
+| Hidden history panel DOM | Pass | Browser metrics report `historyPanelMounted: false` and `bodyHasHistoryHeading: false` while the history drawer is closed, preventing hidden history text from polluting page text and layout measurements. |
+| Maximized route switching | Pass | `output/playwright/goal-route-warm-layout-after-patch-20260718` checked Chat, Pull Requests, Review Queue, Pipelines, Activity, and Settings at 1920x1080; no route showed `Preparing page`, hidden History text, horizontal overflow, `HTTP 400`, `invalid_client`, `Unknown`, `Resolved:`, or old Windows-following theme copy. |
+| Focused tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/settings/AppearanceSettingsSection.test.tsx src/pages/chat/layout/ChatWorkspaceLayout.test.ts src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx src/app/AppShell.test.ts` passed 7 files / 45 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Settings exposed `System` even though it visually resolved to Light on the current workstation, making it redundant for this product build. | Fixed | Settings now offers only fixed Light/Dark modes; old stored `system` values fall back to Light. |
+| Closed Chat history still mounted hidden content with width 0, so page text and automation could still see old history entries. | Fixed | History now mounts only when opened. |
+| Pipeline first discovery still depends on Azure DevOps data availability; first load with no cached rows can show zero cards until discovery completes. | Follow-up | Continue improving route-level warm cache and first-load copy, but the current state is no longer a large blank-page-style placeholder. |
+
+## Run: mp-0522-semantic-color-softening-20260718-1526
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 15:26 +08:00 |
+| Runtime | Current source workspace; dev browser at `http://127.0.0.1:1420`; 1600x950 viewport |
+| Resource mode | Non-mutating UI regression; no Git write, Azure DevOps write, pipeline trigger, approval execution, or install |
+| Result | Pass |
+
+### Purpose
+
+Reduce overly strong semantic color blocks in Light theme while keeping Dark theme readable and operational. This specifically targets Review Queue status lanes and shared semantic soft surfaces used by status pills, warnings, success, danger, and accent areas.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Light semantic intensity | Pass | `output/playwright/goal-soft-theme-after-patch-corrected-20260718/findings-light.png` shows Review Queue lanes with lighter semantic tint; browser metric for `Needs human review` reports `rgba(253, 249, 239, 0.58)` instead of a fully saturated warning panel. |
+| Dark semantic intensity | Pass | `output/playwright/goal-soft-theme-after-patch-corrected-20260718/findings-dark.png` confirms the same lanes remain readable in Dark with dark warning tint and no visual collapse. |
+| Pull Requests readability | Pass | `output/playwright/goal-soft-theme-after-patch-corrected-20260718/pulls-light.png` shows PR cards stay restrained; browser smoke found no overflow or stale error text. |
+| Route smoke | Pass | Corrected Light/Dark smoke checked Review Queue, Pull Requests, Pipelines, and Settings; every route used the requested `data-theme`, had zero counted overflow, and had no `HTTP 400`, `invalid_client`, `Unknown`, `Resolved:`, or old Windows-following theme text. |
+| Focused tests | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/reviewFindings/reviewQueueViewModel.test.ts src/pages/ReviewFindings.test.tsx src/pages/PullRequests.test.tsx src/pages/pullRequests/PullRequestCard.test.tsx src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx` passed 6 files / 38 tests. |
+| Desktop typecheck | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Review Queue status lanes were semantically correct but visually too loud in Light theme for a repeated operational workbench. | Fixed | Light semantic soft tokens were reduced and lane backgrounds now use partial tint. |
+| The first dark smoke iteration accidentally wrote localStorage without reloading ThemeProvider, so it measured Light twice. | Test correction | The corrected smoke reloads after setting the theme and now proves `rootTheme: dark` for Dark screenshots. |
+
+## Run: mp-0522-current-source-package-build-20260718-1532
+
+| Field | Value |
+|---|---|
+| Date/time | 2026-07-18 15:32 +08:00 |
+| Runtime | Current source workspace; Tauri release build; generated MSI/NSIS artifacts |
+| Resource mode | Packaging and package smoke only; no installed-app replacement, Git write, Azure DevOps write, pipeline trigger, or approval execution |
+| Result | Pass |
+
+### Purpose
+
+Rebuild the desktop installer from the current source after the Settings theme, Chat history DOM, Pipeline refresh, and semantic color softening fixes. The generated package should contain the latest frontend bundle and pass package-level smoke before a real local install.
+
+### Evidence
+
+| Check | Result | Notes |
+|---|---|---|
+| Tauri build | Pass | `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop tauri:build` completed successfully and produced `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.22_x64_en-US.msi` plus the NSIS setup executable. |
+| MSI stale Chat template scan | Pass | `.\scripts\windows\verify-no-stale-chat-template.ps1 -MsiPath ...\MergePilot_0.5.22_x64_en-US.msi` returned `ok: true` with no `WelcomeSuggestions`, `useChatIndexStatus`, or `fetchChatIndexStatus` matches. |
+| MSI payload smoke | Pass | `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath ...\MergePilot_0.5.22_x64_en-US.msi` returned `ok: true`; extracted desktop and daemon binaries were present, legacy cleanup WiX validated, daemon health version was `0.5.22`, and `/chat/workflow-action` smoke returned HTTP 200. |
+
+### Findings
+
+| Finding | Severity | Follow-up |
+|---|---|---|
+| Current source fixes are now packaged, but the installed app in `C:\Program Files\MergePilot` has not yet been replaced with this exact MSI during this run. | Install pending | Run the generated MSI with admin rights, then rerun strict installed-app payload verification with `-ExpectedDesktopBundleKind msi -MsiPath ...`. |
+# Run: mp-0523-installed-version-bump-and-max-window-layout-20260718-1600
+
+- Time: 2026-07-18 16:00 +08:00.
+- Purpose: Continue installed-app UX stabilization after local 0.5.22 install testing found that the Program Files UI still exposed older frontend behavior. Verify the current source fixes, force a real Windows Installer upgrade path with a version bump, and recheck maximized workspace layout.
+- Findings:
+  - The installed registry entry reported `MergePilot 0.5.22`, daemon health was `0.5.22`, LLM config was healthy, and auth/avatar data returned `hasAvatar: true`.
+  - The installed frontend accessibility tree still exposed hidden History content while the history toggle said `Expand history`, which proved the local same-version MSI install had not replaced the frontend payload with the latest current-source fixes.
+  - Root cause/mitigation: same-version MSI installs are not a reliable replacement path for the current installer flow. The package version was bumped to `0.5.23` across root, desktop, daemon/core/cli/review-agent package metadata, Tauri config, Cargo.toml, and Cargo.lock so Windows Installer treats the next package as a real upgrade.
+  - Maximized 1920x1080 source UI review found Pull Requests, Review Queue, and Pipelines page shells were still too wide at `1440px` for scanning-heavy operational pages. The page shells were reduced to `1280px`.
+- Changed:
+  - Removed the final installed-version ambiguity by preparing a new `0.5.23` package.
+  - Reduced PR, Review Queue, and Pipelines page shell max width from `1440px` to `1280px`.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - Focused tests passed: `AppearanceSettingsSection`, `ChatWorkspaceLayout`, `ChatEmptyState`, `AppShell`, `Pipelines`, `ReviewFindings`.
+  - Focused page-width tests passed: `PullRequests.test.tsx`, `ReviewFindings.test.tsx`, `Pipelines.test.tsx` (26 tests).
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop tauri:build` passed and produced:
+    - `apps/desktop/src-tauri/target/release/bundle/msi/MergePilot_0.5.23_x64_en-US.msi`
+    - `apps/desktop/src-tauri/target/release/bundle/nsis/MergePilot_0.5.23_x64-setup.exe`
+  - `.\scripts\windows\verify-no-stale-chat-template.ps1` passed against `apps/desktop/dist` with 77 files scanned and no matches for removed preload helpers.
+  - Current-source 1920x1080 Playwright smoke passed for Chat, Settings, Review Queue, Pipelines, Pull Requests, and Activity in light/dark: no stale text, no hidden History DOM, no horizontal overflow.
+  - Screenshot/report artifacts:
+    - `output/playwright/goal-0523-layout-smoke-20260718075122/report.json`
+    - `output/playwright/goal-0523-page-width-after-patch-20260718075410/report.json`
+- Remaining external verification:
+  - MSI administrative extraction smoke was blocked by a stuck Windows Installer process (`msiexec.exe` under `services.exe`) after two MSI extraction verifiers were accidentally run in parallel. This is a verifier environment lock, not current evidence that the package is bad.
+  - Install the new `0.5.23` MSI or NSIS package, then rerun installed-app smoke with `ExpectedVersion 0.5.23` to prove Program Files payload parity and installed UI behavior.
+
+# Run: mp-0523-dist-preview-layout-and-install-blocker-recheck-20260718-1608
+
+- Time: 2026-07-18 16:08 +08:00.
+- Purpose: Continue the installed-app stabilization loop from current evidence, recheck whether the local install advanced to `0.5.23`, and verify the final built frontend bundle while Program Files installation remains blocked.
+- Installed-state findings:
+  - Program Files is still `0.5.22`:
+    - `C:\Program Files\MergePilot\mergepilot-desktop.exe` product/file version `0.5.22`.
+    - Uninstall registry entry `DisplayVersion = 0.5.22`.
+  - Windows Installer is still locked by `msiexec.exe` PID `32228` under `services.exe`.
+  - Current non-admin process cannot stop `msiserver` or kill that `msiexec.exe`, so strict Program Files parity and MSI administrative extraction remain externally blocked until the lock is cleared from elevated PowerShell or by reboot.
+- Package/source evidence:
+  - Local release executable is `0.5.23`: `apps/desktop/src-tauri/target/release/mergepilot-desktop.exe`.
+  - Local MSI/NSIS packages exist:
+    - `apps/desktop/src-tauri/target/release/bundle/msi/MergePilot_0.5.23_x64_en-US.msi`
+    - `apps/desktop/src-tauri/target/release/bundle/nsis/MergePilot_0.5.23_x64-setup.exe`
+- Dist preview verification:
+  - Served the built `apps/desktop/dist` with Vite preview.
+  - Ran 1920x1080 Playwright smoke against Chat, Settings, Review Queue, Pipelines, Pull Requests, and Activity in light and dark themes.
+  - Result: pass.
+  - Checks:
+    - no removed New Chat preload text.
+    - no `System theme`, `Use Windows setting`, or `Resolved:` theme UI.
+    - no hidden History DOM when history is collapsed.
+    - no horizontal overflow.
+  - Evidence:
+    - `output/playwright/goal-0523-dist-preview-smoke-20260718080622/report.json`
+- Notes:
+  - Computer Use can discover the native `com.mergepilot.desktop` window, but native screenshots/accessibility remained stale or stopped before the WebView document layer for the local release exe. This is not currently strong enough as visual proof; the dist preview smoke is the reliable UI evidence until the installed app can be upgraded and rechecked.
+  - After the installer mutex cleared, `packaged-msi-payload-smoke.ps1 -MsiPath ...MergePilot_0.5.23_x64_en-US.msi` passed: extracted daemon health was `0.5.23`, legacy cleanup WiX validated, and `/chat/workflow-action` returned HTTP 200.
+  - A non-elevated silent MSI upgrade attempt failed with exit code `1603`. Log `output/live-e2e/manual-msi-upgrade-0523-20260718-160844.log` shows the concrete cause: `Error 1730. You must be an Administrator to remove this application.` The existing `0.5.22` install is machine-assigned, so upgrading it requires an elevated installer session/UAC. Program Files remained at `0.5.22` after rollback.
+
+# Run: mp-0523-current-source-chat-home-regression-20260718-1624
+
+- Time: 2026-07-18 16:24 +08:00.
+- Purpose: Recheck the current source UI after the local install attempt and investigate the reported New Chat home page blank area where the composer remained visible but the expected welcome content was missing.
+- Installed-state finding:
+  - Authoritative local Program Files state still reports `0.5.22`, not `0.5.23`:
+    - `C:\Program Files\MergePilot\mergepilot-desktop.exe` product/file version `0.5.22`.
+    - Uninstall registry entry `DisplayVersion = 0.5.22`.
+  - No MergePilot or Windows Installer process was running during this check.
+- Current-source UI smoke:
+  - Started current source desktop frontend at `http://localhost:1420`.
+  - Light-mode route smoke covered Chat, Pull Requests, Review Queue, Pipelines, Activity, and Settings at `1600x1000`.
+  - Dark-mode route smoke covered Chat, Review Queue, Pipelines, and Settings at `1600x1000`.
+  - Result: pass.
+  - Evidence:
+    - `output/playwright/current-ui-smoke-2026-07-18T0818/report.json`
+    - `output/playwright/current-dark-ui-smoke-real-2026-07-18T0820/report.json`
+- Regression found and fixed:
+  - `ChatMessageList` treated any assistant `meta` object as visible transcript content.
+  - `ChatAssistantMetaPanel` intentionally renders nothing for plain metadata suggestions such as suggested next actions or internal repository-context notes.
+  - This mismatch could hide the New Chat welcome while leaving the message panel visually blank.
+  - Fixed by adding `assistantMetaHasVisibleContent()` and using it in the transcript visibility check, so invisible assistant metadata no longer suppresses the empty-state welcome.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/layout/ChatAssistantMetaPanel.test.tsx` passed 11 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop tauri:build` passed after the regression fix and regenerated:
+    - `apps/desktop/src-tauri/target/release/bundle/msi/MergePilot_0.5.23_x64_en-US.msi`
+    - `apps/desktop/src-tauri/target/release/bundle/nsis/MergePilot_0.5.23_x64-setup.exe`
+  - `.\scripts\windows\verify-no-stale-chat-template.ps1 -MsiPath ...\MergePilot_0.5.23_x64_en-US.msi` passed.
+  - `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath ...\MergePilot_0.5.23_x64_en-US.msi` passed: extracted daemon health was `0.5.23`, legacy cleanup WiX validated, and `/chat/workflow-action` returned HTTP 200.
+
+# Run: mp-0523-pr-insight-badge-and-theme-smoke-20260718-1638
+
+- Time: 2026-07-18 16:38 +08:00.
+- Purpose: Continue maximized workspace UX review and check for remaining internal/fallback labels in PR insight, Review Queue, Pipelines, and Settings.
+- Installed-state finding:
+  - Program Files still reports `0.5.22`, so installed-app parity is still not proven.
+  - A Windows Installer process (`msiexec.exe` PID `18320`) was present during the recheck; this is external install state, not source/package evidence.
+- Regression found and fixed:
+  - Pull Requests right-side AI insight panel still displayed the raw freshness state `unknown` as a chip when the saved insight had no comparable PR baseline.
+  - Fixed `StoredInsightPanel` to render business wording instead:
+    - `No baseline` for missing saved baseline.
+    - `Baseline unavailable` for missing current PR baseline.
+    - `Fresh` / `Stale` for resolved freshness states.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pullRequests/StoredInsightPanel.test.ts src/pages/pullRequests/pullRequestViewModel.test.ts` passed 11 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - Playwright maximized smoke at `1920x1080` covered Pull Requests with insight panel open, Review Queue, and Settings in both Light and Dark themes.
+  - Result: pass.
+  - Evidence:
+    - `output/playwright/maximized-interaction-smoke-2026-07-18T0833/report.json`
+    - `output/playwright/post-pr-insight-badge-smoke-2026-07-18T0837/report.json`
+  - Browser checks reported no horizontal overflow, no `Unknown`/`unknown`, no `System theme`/`Use Windows setting`, and no removed preload text.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop tauri:build` passed after the PR insight badge fix and regenerated the `0.5.23` MSI and NSIS installers.
+- Package-smoke caveat:
+  - Two MSI extraction verifiers were accidentally started in parallel after the rebuild.
+  - The first failed with Windows Installer exit code `1618` (`another installation is already in progress`).
+  - The second reached an internal `Product Version: 0.5.23` success entry but the verifier process returned `1622` because the MSI logging/extraction session was disrupted by the installer mutex/log state.
+  - A subsequent process check still showed a residual `msiexec.exe`, so strict MSI extraction proof should be rerun after the Windows Installer process clears or after a reboot.
+  - This does not contradict the source tests, browser smoke, or successful Tauri build; it only leaves the post-fix MSI payload smoke as pending.
+
+# Run: mp-0523-theme-token-cleanup-20260718-1650
+
+- Time: 2026-07-18 16:50 +08:00.
+- Purpose: Continue Light/Dark visual consistency work after maximized smoke showed the core pages were stable but static scanning still found hardcoded high-saturation Tailwind colors in secondary surfaces.
+- Installed-state finding:
+  - Program Files still reports `0.5.22`, so installed-app parity remains unproven.
+  - Windows Installer still had a residual `msiexec.exe` process during the check.
+- Changes:
+  - Replaced fallback avatar `bg-blue-600/80` with `bg-[rgb(var(--app-accent))]`.
+  - Replaced the production sign-in button's hardcoded blue border/background/text with app accent tokens.
+  - Replaced code-highlight hardcoded `text-emerald-300`, `text-slate-500`, `text-amber-300`, and `text-sky-300` output with theme-aware `syntax-token-*` classes.
+  - Added syntax token CSS in `base.css`.
+  - Tokenized legacy Dashboard and Repos placeholder route colors.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/codeHighlight.test.ts src/pages/pullRequests/StoredInsightPanel.test.ts src/pages/pullRequests/pullRequestViewModel.test.ts` passed 12 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - Static scan for hardcoded semantic Tailwind colors in `apps/desktop/src/pages`, `components`, and `app` now leaves only:
+    - negative assertions in `codeHighlight.test.ts`.
+    - intentional Mermaid white preview canvas styling.
+
+# Run: mp-0523-chat-pipeline-loading-stabilization-20260718-1703
+
+- Time: 2026-07-18 17:03 +08:00.
+- Purpose: Continue maximized-source UX stabilization after the installed-app test showed a missing/blank New Chat home area and earlier route switching exposed confusing loading states.
+- Current-state finding:
+  - Program Files still reported `0.5.22` during the pre-check, so this run verifies current source behavior rather than installed-app parity.
+  - Source frontend was available at `http://localhost:1420`.
+- Regressions found and fixed:
+  - New Chat rendered a disabled copy of the welcome prompt set while Project Links were still loading, creating an unnecessary preload/template state before the real home content appeared.
+  - Pipelines displayed the all-zero status filter dashboard during first discovery refresh with no rows, making the workspace look like a real empty result instead of a loading state.
+- Changes:
+  - `ChatEmptyState` now renders only the compact `Loading Project Links` state until Project Link resolution completes; the real welcome suggestions appear only after the route has enough context.
+  - `pipelineShouldShowStatusFilters` now hides the status dashboard for both `loading` and `refreshing-empty` content states.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/chat/layout/ChatEmptyState.test.tsx` passed 17 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatMessageList.test.tsx src/pages/chat/artifacts/sourcePreviewLanguage.test.ts` passed 15 tests after updating stale test expectations for the new loading and theme-token behavior.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` passed 107 files / 510 tests.
+  - Playwright maximized source smoke confirmed:
+    - Chat early state no longer contains `Ask MergePilot anything` while Project Links are still loading.
+    - Chat final state still contains the New Chat welcome.
+    - Pipelines early state no longer contains the all-zero dashboard.
+    - No `Unknown`/`unknown` labels and no horizontal overflow in the checked routes.
+  - Evidence:
+    - `output/playwright/source-post-loading-fix-2026-07-18T09-01-43-429Z/report.json`
+    - `output/playwright/source-pipeline-loading-fix-2026-07-18T09-03-05-925Z/report.json`
+
+# Run: mp-0523-activity-width-stabilization-20260718-1715
+
+- Time: 2026-07-18 17:15 +08:00.
+- Purpose: Continue maximized workspace layout review after Chat and Pipelines loading states were stabilized. Activity still expanded nearly full-width on large screens, unlike the other operational pages, making checkpoint paths and evidence blocks harder to scan.
+- Current-state finding:
+  - Program Files still reported `0.5.22`, so this run verifies current source behavior rather than installed-app parity.
+  - Source frontend remained available at `http://localhost:1420`.
+- Change:
+  - `TaskViewer` now constrains the Activity workbench to `max-w-[1480px]` and centers it with `mx-auto`, preserving the left activity rail plus right detail panel while avoiding full-width evidence cards on maximized displays.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx` passed 18 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` passed 107 files / 510 tests.
+  - Playwright maximized source smoke at `1920x1080` confirmed the Activity shell width is `1480px`, no horizontal overflow, and no `Unknown`/`unknown` labels.
+  - Evidence:
+    - `output/playwright/source-activity-width-fix-2026-07-18T09-15-04-982Z/report.json`
+    - `output/playwright/source-activity-width-fix-2026-07-18T09-15-04-982Z/activity.png`
+
+# Run: mp-0523-chat-ready-welcome-layout-20260718-1729
+
+- Time: 2026-07-18 17:29 +08:00.
+- Purpose: Continue maximized New Chat layout stabilization after the installed-app review showed the home area could look blank or poorly balanced on a maximized window.
+- Current-state finding:
+  - Program Files still reports `0.5.22`, so this run verifies current source behavior rather than installed-app parity.
+  - Source frontend remained available at `http://localhost:1420`.
+- Change:
+  - The ready New Chat welcome state now uses a balanced centered layout with viewport-relative bottom breathing room, while Project Link loading/onboarding states keep their existing centered behavior.
+  - This preserves the prior fix that prevents the disabled preload prompt set from flashing before Project Link resolution finishes.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 13 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - Playwright maximized source smoke at `1920x1080` confirmed:
+    - New Chat welcome is visible.
+    - `Loading Project Links` is not visible after Project Link resolution.
+    - The welcome panel sits in the main visual area (`top=341`, `bottom=574`) instead of being pinned near the composer.
+    - No horizontal overflow.
+  - Evidence:
+    - `output/playwright/source-chat-balanced-welcome-layout-2026-07-18T09-29-31-685Z/report.json`
+    - `output/playwright/source-chat-balanced-welcome-layout-2026-07-18T09-29-31-685Z/chat.png`
+
+# Run: mp-0523-theme-compat-removal-20260718-1733
+
+- Time: 2026-07-18 17:33 +08:00.
+- Purpose: Continue Light/Dark consistency work after source scanning showed the remaining high-saturation compatibility layer was no longer needed by current components.
+- Current-state finding:
+  - Program Files still reports `0.5.22`, so this run verifies current source behavior rather than installed-app parity.
+  - Source frontend remained available at `http://localhost:1420`.
+- Change:
+  - Removed the old `theme-compat.css` import and stylesheet. The app now relies on semantic design tokens instead of Light-theme `!important` overrides for legacy zinc/semantic Tailwind classes.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/settings/AppearanceSettingsSection.test.tsx src/pages/settings/settingsLayout.test.ts` passed 5 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` passed 107 files / 511 tests.
+  - Static scan for hardcoded Tailwind semantic colors in app/components/pages/styles now leaves only negative assertions in `codeHighlight.test.ts`.
+  - Playwright source smoke at `1920x1080` checked Settings and Chat in both Light and Dark:
+    - no horizontal overflow.
+    - Chat welcome remains visible after Project Link resolution.
+    - Appearance section exposes only `Light` and `Dark`; no `System` theme option.
+  - Evidence:
+    - `output/playwright/source-theme-compat-removal-smoke-2026-07-18T09-32-36-870Z/report.json`
+    - `output/playwright/source-theme-compat-removal-smoke-2026-07-18T09-32-36-870Z/settings-light.png`
+    - `output/playwright/source-theme-compat-removal-smoke-2026-07-18T09-32-36-870Z/settings-dark.png`
+    - `output/playwright/source-theme-compat-removal-smoke-2026-07-18T09-32-36-870Z/chat-light.png`
+    - `output/playwright/source-theme-compat-removal-smoke-2026-07-18T09-32-36-870Z/chat-dark.png`
+
+# Run: mp-0523-pr-readable-loading-20260718-1743
+
+- Time: 2026-07-18 17:43 +08:00.
+- Purpose: Continue maximized route switching and layout review after broad source smoke showed Pull Requests could sit on anonymous skeleton cards during first load.
+- Current-state finding:
+  - Program Files still reports `0.5.22`, so this run verifies current source behavior rather than installed-app parity.
+  - Source frontend remained available at `http://localhost:1420`.
+- Route audit:
+  - Playwright maximized smoke covered Chat, Pull Requests, Review Queue, Pipelines, Activity, and Settings in Light and Dark themes.
+  - No checked route had horizontal overflow, `Unknown`/`unknown`, or a `System` theme option.
+  - The first Pull Requests visit showed only anonymous skeleton cards for the initial request, while the second cached visit was readable.
+- Change:
+  - `PullRequestLoadingSkeleton` now renders a compact visible heading and description: `Loading pull requests`, explaining that Azure DevOps is returning active PRs and saved insight.
+  - Removed the stale `Preparing pull requests` wording from the loading state.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/pullRequests/PullRequestPageHeader.test.tsx` passed 9 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - Playwright first-load PR smoke at `1920x1080` confirmed:
+    - 500ms state contains `Loading pull requests`.
+    - no anonymous `Preparing pull requests` text.
+    - no horizontal overflow.
+    - after 3 seconds, the page reaches PR list/error/empty content and no `Unknown`/`unknown`.
+  - Evidence:
+    - `output/playwright/source-maximized-route-audit-2026-07-18T09-38-40-409Z/report.json`
+    - `output/playwright/source-pr-readable-loading-smoke-2026-07-18T09-42-45-180Z/report.json`
+    - `output/playwright/source-pr-readable-loading-smoke-2026-07-18T09-42-45-180Z/pull-requests-early.png`
+    - `output/playwright/source-pr-readable-loading-smoke-2026-07-18T09-42-45-180Z/pull-requests-late.png`
+
+# Run: mp-0523-pipeline-readable-loading-and-filter-tone-20260718-1746
+
+- Time: 2026-07-18 17:46 +08:00.
+- Purpose: Continue route-switching and Light-theme contrast stabilization after Pull Requests showed anonymous first-load skeletons and Pipelines still used a stronger accent-filled selected filter.
+- Current-state finding:
+  - Program Files still reports `0.5.22`, so this run verifies current source behavior rather than installed-app parity.
+  - Source frontend remained available at `http://localhost:1420`.
+- Changes:
+  - `PipelineLoadingSkeleton` now renders a readable `Loading pipelines` state with context about Project Link mappings and Azure DevOps pipeline definitions.
+  - Pipeline status filter selected state now uses the same quiet raised-surface/border treatment as other workspace filters instead of an accent-soft blue fill.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx src/pages/PullRequests.test.tsx` passed 26 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` passed 107 files / 513 tests.
+  - Playwright `1920x1080` Pipelines smoke confirmed:
+    - stable page has no `Unknown`/`unknown`.
+    - no horizontal overflow.
+    - selected `All` filter background resolves to the neutral raised surface (`rgb(250, 249, 246)`) instead of an accent fill.
+  - Evidence:
+    - `output/playwright/source-pipeline-readable-loading-smoke-2026-07-18T09-46-26-518Z/report.json`
+    - `output/playwright/source-pipeline-readable-loading-smoke-2026-07-18T09-46-26-518Z/pipelines-late.png`
+
+# Run: mp-0523-chat-loading-home-stability-20260718-1803
+
+- Time: 2026-07-18 18:03 +08:00.
+- Purpose: Remove the remaining New Chat preloading template that appeared before Project Links finished resolving, which made the home page briefly look like a loading-card state instead of the real Chat home.
+- Current-state finding:
+  - Program Files still reports `0.5.22`, so this run verifies current source behavior rather than installed-app parity.
+  - Source frontend remained available at `http://localhost:1420`; `127.0.0.1:1420` is refused because the dev server is listening on IPv6 loopback.
+- Change:
+  - Chat Project Link resolution now keeps the same New Chat welcome surface visible, disables the suggestion actions while Project Links are being checked, and shows only a small `Checking Project Links...` status line.
+  - The heavy `Loading Project Links` card is no longer used on the Chat home first-load path.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 13 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` passed 107 files / 513 tests.
+  - Playwright source smoke at `1365x768` confirmed:
+    - 500ms first-load state contains `Ask MergePilot anything`.
+    - 500ms first-load state does not contain `Loading Project Links`.
+    - ready state still contains the welcome surface and no longer contains the transient checking status.
+  - Playwright route audit in Light and Dark confirmed:
+    - Chat, Project Links, Pull Requests, Review Queue, Pipelines, Activity, and Settings have no horizontal overflow.
+    - no checked route contains `Unknown`/`unknown`.
+    - Settings exposes no `System` theme option.
+    - Chat no longer shows `Loading Project Links` after resolution.
+  - Playwright warm-route cache smoke confirmed:
+    - Pipelines first cold visit shows a controlled refresh state while discovery is still running.
+    - once Pipelines content has loaded, returning from Chat to Pipelines keeps pipeline content visible within 250ms.
+    - Pull Requests, Review Queue, and Activity also keep usable cached content visible on warm returns.
+  - Evidence:
+    - `output/playwright/source-chat-loading-home-fix-2026-07-18T10-02-33-464Z/report.json`
+    - `output/playwright/source-chat-loading-home-fix-2026-07-18T10-02-33-464Z/chat-500ms.png`
+    - `output/playwright/source-chat-loading-home-fix-2026-07-18T10-02-33-464Z/chat-ready.png`
+    - `output/playwright/source-post-chat-loading-route-audit-2026-07-18T10-05-30-058Z/report.json`
+    - `output/playwright/source-post-chat-loading-warm-cache-2026-07-18T10-06-20-000Z/report.json`
+
+# Run: mp-0523-pipeline-refresh-state-compactness-20260718-1814
+
+- Time: 2026-07-18 18:14 +08:00.
+- Purpose: Continue maximized route review after Pipelines still presented an overly wide no-row discovery state during Azure DevOps refresh.
+- Current-state finding:
+  - Installed Program Files still reports `0.5.22`; `MergePilot Setup` is still running, so installed-app parity remains pending.
+  - Source frontend remained available at `http://localhost:1420`.
+- Changes:
+  - `PipelineLoadingSkeleton` is now a single compact readable status row instead of a readable header plus multiple anonymous skeleton cards.
+  - `PipelineEmptyState` now uses a narrower `max-w-3xl` width for `refreshing` mode while keeping the fuller `max-w-4xl` width for real empty/error guidance.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx` passed 16 tests.
+  - Playwright source smoke at `1365x768` confirmed:
+    - the refreshing discovery state is visible and narrowed to `768px`.
+    - no `Unknown`/`unknown`.
+    - no horizontal overflow.
+  - Evidence:
+    - `output/playwright/source-pipelines-refreshing-empty-width-2026-07-18T10-14-04-898Z/report.json`
+    - `output/playwright/source-pipelines-refreshing-empty-width-2026-07-18T10-14-04-898Z/pipelines-500ms.png`
+
+# Run: mp-0523-theme-and-empty-chat-contrast-audit-20260718-1831
+
+- Time: 2026-07-18 18:31 +08:00.
+- Purpose: Continue maximized workspace UX stabilization after the New Chat home appeared blank in an installed-app screenshot and after Light/Dark theme contrast still had several strong or low-contrast accents.
+- Current-state finding:
+  - Source frontend remained available at `http://localhost:1420`.
+  - Installed Program Files still reports `0.5.22` for `C:\Program Files\MergePilot\mergepilot-desktop.exe`; installed-app parity for the latest source remains unproven.
+- Changes:
+  - Blank restored `user` and `error` bubbles no longer count as visible transcript content, so the New Chat welcome remains visible instead of leaving the middle panel empty.
+  - Text-only accent usages across Pipelines, Pull Requests, Review Queue, Activity, markdown/source references, and Settings now use `--app-accent-readable`; accent backgrounds remain unchanged for primary actions and state indicators.
+  - Light warning token was slightly darkened so stale queue badges meet AA contrast.
+  - Activity section filter counts now inherit selected-state text color instead of using a too-light subtle token on accent-soft backgrounds.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatMessageList.test.tsx src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx src/pages/pullRequests/PullRequestCard.test.tsx src/pages/reviewFindings/reviewQueueViewModel.test.ts src/pages/settings/AppearanceSettingsSection.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx` passed 49 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` passed 107 files / 515 tests.
+  - Playwright `1920x1080` source audit in both Light and Dark confirmed:
+    - Chat, Pull Requests, Review Queue, Pipelines, Activity, and Settings have zero sampled text contrast issues.
+    - no horizontal overflow was detected on those routes.
+    - Chat welcome is visible in both themes.
+    - Settings exposes no `System` theme option.
+    - Pipelines does not show `Unknown`.
+  - Evidence:
+    - `output/playwright/ux-audit-post-fixes-2026-07-18T10-30-23-198Z/report.json`
+    - `output/playwright/ux-audit-post-fixes-2026-07-18T10-30-23-198Z/light-chat.png`
+    - `output/playwright/ux-audit-post-fixes-2026-07-18T10-30-23-198Z/dark-chat.png`
+    - `output/playwright/ux-audit-post-fixes-2026-07-18T10-30-23-198Z/light-settings.png`
+    - `output/playwright/ux-audit-post-fixes-2026-07-18T10-30-23-198Z/dark-settings.png`
+
+# Run: mp-0523-maximized-workbench-left-alignment-20260718-1838
+
+- Time: 2026-07-18 18:38 +08:00.
+- Purpose: Continue maximized-window layout review after Pull Requests, Review Queue, Pipelines, and Activity still felt too centered or underusing available desktop width.
+- Current-state finding:
+  - Source frontend remained available at `http://localhost:1420`.
+  - Installed Program Files still reports `0.5.22`, while source package is `0.5.23`; installed-app parity remains unproven.
+- Changes:
+  - Pull Requests, Review Queue, Pipelines, and Activity workbench shells now left-align inside the app content area using `ml-0 mr-auto`.
+  - Workbench maximum width increased to `1600px`, preserving a readable cap while using more of a maximized desktop window.
+  - Project Links form/list pages remain constrained and centered because they are focused setup forms, not scan-heavy operational workbenches.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/ReviewFindings.test.tsx src/pages/TaskViewer.test.tsx src/pages/Pipelines.test.tsx` passed 39 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` passed 107 files / 515 tests.
+  - Playwright `1920x1080` source audit confirmed:
+    - Pull Requests and Review Queue headings begin at `x=216`, with primary content width `1600px`.
+    - Pipelines and Activity headings begin at `x=232`.
+    - no horizontal overflow was detected.
+  - Evidence:
+    - `output/playwright/workbench-left-align-2026-07-18T10-38-36-229Z/report.json`
+    - `output/playwright/workbench-left-align-2026-07-18T10-38-36-229Z/pull-requests.png`
+    - `output/playwright/workbench-left-align-2026-07-18T10-38-36-229Z/review-queue.png`
+    - `output/playwright/workbench-left-align-2026-07-18T10-38-36-229Z/pipelines.png`
+    - `output/playwright/workbench-left-align-2026-07-18T10-38-36-229Z/activity.png`
+
+# Run: mp-0523-activity-single-scroll-source-rail-20260718-1848
+
+- Time: 2026-07-18 18:48 +08:00.
+- Purpose: Continue Activity page layout hardening after multi-viewport audit showed Activity source items extending below the visible window and visual inspection found nested scroll regions inside the source rail.
+- Current-state finding:
+  - Source frontend remained available at `http://localhost:1420`.
+  - Installed Program Files still reports `0.5.22`, while source package is `0.5.23`; installed-app parity remains unproven.
+- Changes:
+  - Activity now uses one primary source-list scroll area.
+  - Checkpoints, PR Insights, and Review Operations sections no longer add their own `max-h` nested scroll regions inside the Activity source rail.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/taskViewer/ActivitySidebar.test.tsx src/pages/TaskViewer.test.tsx` passed 19 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - Playwright source audit at `1365x768` and `1920x1080`, Light and Dark, confirmed:
+    - no horizontal overflow.
+    - Activity source rail no longer renders nested section `max-h-[220px]`, `max-h-[260px]`, or `max-h-[320px]` scroll regions.
+  - Evidence:
+    - `output/playwright/activity-single-scroll-audit-2026-07-18T10-47-40-393Z/report.json`
+    - `output/playwright/activity-single-scroll-audit-2026-07-18T10-47-40-393Z/mid-light-activity.png`
+    - `output/playwright/activity-single-scroll-audit-2026-07-18T10-47-40-393Z/wide-light-activity.png`
+
+# Run: mp-0523-maximized-chat-home-anchor-20260718-1901
+
+- Time: 2026-07-18 19:01 +08:00.
+- Purpose: Continue maximized-window UX stabilization after the New Chat welcome content was present but visually too low in a maximized app window, making the page still feel close to blank at first glance.
+- Current-state finding:
+  - Source frontend remained available at `http://localhost:1420`.
+  - Current workspace package version is `@mergepilot/desktop@0.5.23`.
+  - Installed Program Files and uninstall registry still report MergePilot `0.5.22`; installed-app parity with the current source remains unproven.
+- Changes:
+  - Ready New Chat welcome state now anchors near the upper third of the available transcript area with `justify-start pt-[18vh]`.
+  - Project Link loading, first-run, chooser, and transcript states keep their existing centered layouts.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 2 files / 14 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` passed 107 files / 516 tests after the Activity single-scroll and Chat welcome anchor changes.
+  - Playwright source screenshot audit confirmed:
+    - `1365x768` New Chat welcome is visible at `y=194` with no horizontal overflow.
+    - `1920x1080` New Chat welcome is visible at `y=250` with no horizontal overflow.
+  - Evidence:
+    - `output/playwright/current-maximized-layout-audit-2026-07-18T10-57-01-844Z/report.json`
+    - `output/playwright/chat-empty-home-anchor-verify-2026-07-18T10-59-59-291Z/report.json`
+    - `output/playwright/chat-empty-home-anchor-verify-2026-07-18T10-59-59-291Z/mid-chat.png`
+    - `output/playwright/chat-empty-home-anchor-verify-2026-07-18T10-59-59-291Z/wide-chat.png`
+
+# Run: mp-0523-installed-upgrade-state-recheck-20260718-1908
+
+- Time: 2026-07-18 19:08 +08:00.
+- Purpose: Reconcile the active goal's installed-app assumption with current machine evidence before running another installed-app smoke.
+- Findings:
+  - The only registered installed MergePilot product is still `0.5.22` at `C:\Program Files\MergePilot\`.
+  - `C:\Program Files\MergePilot\mergepilot-desktop.exe` still reports Product/File version `0.5.22`.
+  - Current source package and local MSI bundle are `@mergepilot/desktop@0.5.23`.
+  - Local MSI metadata is valid for upgrade: `MergePilot_0.5.23_x64_en-US.msi` has ProductVersion `0.5.23`, ProductCode `{67D23882-0D6C-4BF9-9066-DA037E357719}`, and the same UpgradeCode `{85E97B81-5039-4096-9BCC-11B117E21101}` as the older local MSI bundles.
+- Upgrade attempt:
+  - Ran `msiexec /i MergePilot_0.5.23_x64_en-US.msi /qn /norestart /L*v %TEMP%\MergePilot-0.5.23-upgrade.log`.
+  - Exit code was `1603`.
+  - Log shows `WIX_UPGRADE_DETECTED = {20132989-817F-4670-A01F-0370A8228D35}`, so the package found the installed `0.5.22` product.
+  - Failure occurred during `RemoveExistingProducts` because the installed product is per-machine/admin assigned and silent non-elevated install cannot show a credential/UAC prompt: `MSI_LUA: Installation UI level is silent but Credential prompt required`.
+- Result:
+  - No half-upgrade was observed; registry and Program Files remain at `0.5.22`.
+  - Installed-app smoke for latest source remains blocked until the MSI is launched with administrator elevation or installed interactively by the user.
+- Evidence:
+  - `%TEMP%\MergePilot-0.5.23-upgrade.log`
+
+# Run: mp-0523-installed-upgrade-preflight-smoke-20260718-1915
+
+- Time: 2026-07-18 19:15 +08:00.
+- Purpose: Verify the repeatable installer preflight path after confirming the non-admin silent upgrade failure.
+- Command:
+  - `.\scripts\windows\install-and-verify-msi-state-preflight-smoke.ps1 -ExpectedVersion 0.5.23 -MsiPath "C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.23_x64_en-US.msi"`
+- Verification:
+  - Passed.
+  - The preflight intentionally observed the non-admin path returning exit code `1` with parseable JSON.
+  - JSON reported `requiresElevation: true`, `installIsCurrent: false`, current installed version `0.5.22`, and MSI identity `MergePilot` / `0.5.23` / ProductCode `{67D23882-0D6C-4BF9-9066-DA037E357719}` / UpgradeCode `{85E97B81-5039-4096-9BCC-11B117E21101}`.
+  - The emitted elevated command was:
+    - `Set-Location -LiteralPath 'C:\Users\15492\Develop\Agents\CICD-agents'; & 'C:\Users\15492\Develop\Agents\CICD-agents\scripts\windows\install-and-verify-msi-state.ps1' -ExpectedVersion 0.5.23 -MsiPath 'C:\Users\15492\Develop\Agents\CICD-agents\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.23_x64_en-US.msi' -SkipVision`
+- Result:
+  - Installed-app latest-version smoke remains pending until the elevated command is run.
+  - Source-level UI verification remains valid but must not be presented as installed-app parity.
+
+# Run: mp-0523-maximized-layout-theme-followup-20260718-1923
+
+- Time: 2026-07-18 19:23 +08:00.
+- Purpose: Continue the maximized-window and theme-quality audit after the latest local install attempt was interrupted by Windows Installer/UAC state.
+- Current-state finding:
+  - Source frontend remained available at `http://localhost:1420`.
+  - `C:\Program Files\MergePilot\mergepilot-desktop.exe` still reports Product/File version `0.5.22`; installed-app parity with source `0.5.23` remains unproven.
+  - Settings theme mode exposes only `Light` and `Dark`; the old `System` theme option is no longer present.
+- Changes:
+  - Activity checkpoint detail metadata now truncates Repository and Session values to one line with native `title` preservation, keeping the two metadata cards visually even in maximized layouts.
+  - Pipelines first-load/empty refresh state is now a compact `max-w-xl` status block with shorter copy and no secondary checklist, reducing the large blank-window feeling during Azure DevOps discovery.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/taskViewer/CheckpointDetailPanel.test.tsx` passed 3 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx src/pages/pipelines/pipelineModel.test.ts` passed 3 files / 27 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test` passed 107 files / 517 tests.
+  - Playwright maximized `1920x1080` Light/Dark route audit captured Chat, Activity, Settings, Pipelines, Review Queue, and Pull Requests for visual review.
+  - Long-wait route smoke confirmed Pull Requests and Pipelines settle from initial skeleton/refresh states into data rows without HTTP or page errors.
+  - Pipelines compact refresh-state smoke confirmed the rendered refresh block class includes `max-w-xl` and uses the shortened Azure DevOps discovery copy.
+- Evidence:
+  - `output/playwright/maximized-layout-theme-audit-2026-07-18T11-17-10-915Z/report.json`
+  - `output/playwright/maximized-layout-theme-audit-2026-07-18T11-17-10-915Z/light-chat.png`
+  - `output/playwright/maximized-layout-theme-audit-2026-07-18T11-17-10-915Z/light-activity.png`
+  - `output/playwright/maximized-layout-theme-audit-2026-07-18T11-17-10-915Z/light-settings.png`
+  - `output/playwright/maximized-layout-theme-audit-2026-07-18T11-17-10-915Z/light-review-queue.png`
+  - `output/playwright/route-long-wait-2026-07-18T11-20-39-969Z/logs.json`
+  - `output/playwright/route-long-wait-2026-07-18T11-20-39-969Z/pulls.txt`
+  - `output/playwright/route-long-wait-2026-07-18T11-20-39-969Z/pipelines.txt`
+  - `output/playwright/pipelines-refresh-empty-compact-2026-07-18T11-21-32-844Z/summary.json`
+  - `output/playwright/pipelines-refresh-empty-compact-2026-07-18T11-21-32-844Z/pipelines-initial.png`
+
+# Run: mp-0523-real-theme-maximized-smoke-20260718-1931
+
+- Time: 2026-07-18 19:31 +08:00.
+- Purpose: Re-run the maximized layout and theme smoke using real Settings interactions instead of direct DOM/localStorage mutation.
+- Current-state finding:
+  - Source frontend remained available at `http://localhost:1420`.
+  - Program Files still reports installed MergePilot `0.5.22`; latest installed-app parity remains unproven until the elevated `0.5.23` MSI install succeeds.
+  - The working tree remains dirty; no staging or commit was performed.
+- Verification:
+  - Opened Settings and clicked the actual `Dark` and `Light` segmented controls.
+  - Confirmed `document.documentElement.dataset.theme`, `colorScheme`, and `localStorage.dev_agent_theme` match the selected theme.
+  - Confirmed the Appearance section exposes only `Light` and `Dark`; no `System` theme option is present.
+  - Captured maximized `1920x1080` Light and Dark screenshots for Chat, Settings, Activity, Pipelines, Review Queue, Pull Requests, and Project Links.
+  - No sampled low-contrast text issues were detected after resolving transparent backgrounds through parent surfaces.
+  - Manual visual review found no new code-level layout fixes required in this pass.
+- Evidence:
+  - `output/playwright/real-theme-maximized-smoke-2026-07-18T11-27-47-277Z/report.json`
+  - `output/playwright/real-theme-maximized-smoke-2026-07-18T11-27-47-277Z/dark-settings.png`
+  - `output/playwright/real-theme-maximized-smoke-2026-07-18T11-27-47-277Z/dark-review-queue.png`
+  - `output/playwright/real-theme-maximized-smoke-2026-07-18T11-27-47-277Z/light-project-links.png`
+
+# Run: mp-0523-installed-version-blocker-diagnosis-20260718-1940
+
+- Time: 2026-07-18 19:40 +08:00.
+- Purpose: Continue reconciling the active goal's installed-app assumption after repeated evidence showed Program Files still running `0.5.22`.
+- Findings:
+  - Source release binary is `0.5.23`:
+    - `apps\desktop\src-tauri\target\release\mergepilot-desktop.exe`
+  - Local setup assets are also `0.5.23`:
+    - `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.23_x64_en-US.msi`
+    - `apps\desktop\src-tauri\target\release\bundle\nsis\MergePilot_0.5.23_x64-setup.exe`
+  - Installed Windows product remains `0.5.22`:
+    - registry: `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{20132989-817F-4670-A01F-0370A8228D35}`
+    - installed binary: `C:\Program Files\MergePilot\mergepilot-desktop.exe`
+  - No separate per-user/latest install was found; the only registered installed MergePilot product is the stale MSI install.
+  - A stale installer/UAC blocker is active:
+    - `msiexec.exe` PID `32748`
+    - `consent.exe` PID `3176`, window title `Windows PowerShell is requesting your permission`
+- Change:
+  - `scripts\windows\verify-installed-msi-state.ps1` now reports `installerBlockers` in JSON.
+  - When the installed version is stale and installer/UAC blockers exist, the verifier adds a concrete failure telling the user to resolve the blocker before retrying installation.
+- Verification:
+  - `.\scripts\windows\verify-installed-msi-state.ps1 -ExpectedVersion 0.5.23 -MsiPath "...MergePilot_0.5.23_x64_en-US.msi"` correctly failed with:
+    - `Expected MergePilot version 0.5.23; found 0.5.22.`
+    - `Installer/UAC blocker is still active while the installed version is stale: windows-installer PID 32748; uac-consent PID 3176 'Windows PowerShell is requesting your permission'.`
+  - `.\scripts\windows\verify-installed-windows-package-state.ps1 -ExpectedVersion 0.5.23 -ExpectedDesktopBundleKind any ... -RequireNsisSetupAsset` also surfaced the same failures and reported `blockerCount = 2`.
+- Result:
+  - Latest installed-app smoke remains pending.
+  - Next user action is to respond to or close the pending UAC prompt, wait for `msiexec.exe` to exit, then rerun the elevated `0.5.23` installer.
+
+# Run: mp-0524-runtime-ownership-and-responsive-continuation-20260719-0520
+
+- Time: 2026-07-19 05:20 +08:00.
+- Purpose: Continue the installed/runtime ownership and responsive workspace audit after discovering that the installed `0.5.23` desktop was still connected to an older same-version daemon without runtime metadata.
+- Product finding:
+  - Reusing `0.5.23` for rebuilt binaries created an ambiguous upgrade path: Program Files reported `0.5.23`, but `/healthz` did not expose `runtimeMode`, `pid`, or `execPath`.
+  - The local source/package version was bumped to `0.5.24` so Windows install/upgrade verification can distinguish the fixed build from the already-installed `0.5.23`.
+  - Current Program Files state is still stale until the elevated `0.5.24` MSI install succeeds:
+    - `C:\Program Files\MergePilot\mergepilot-desktop.exe`: `0.5.23`
+    - `C:\Program Files\MergePilot\mergepilot-daemon.exe`: `/healthz` returns `0.5.23` without `runtimeMode`.
+  - A stale Windows Installer service process is currently active after package extraction smoke:
+    - `msiexec.exe` PID `40360`
+- Changes:
+  - Version sources moved from `0.5.23` to `0.5.24` in the root package manifest, workspace package manifests, Tauri config, Cargo manifest, and Cargo lock.
+  - Chat empty-state Project Link onboarding summary now has explicit button semantics (`role="button"` and `aria-label="Create Project Link"`), fixing an accessibility and automation gap where the visual `Create` affordance was not exposed as a button.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed for `@mergepilot/desktop@0.5.24`.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck` passed for `@mergepilot/daemon@0.5.24`.
+  - Focused Vitest passed 3 files / 20 tests:
+    - `src/pages/chat/layout/ChatEmptyState.test.tsx`
+    - `src/pages/PullRequests.test.tsx`
+    - `src/pages/TaskViewer.test.tsx`
+  - Full Chat layout Playwright suite passed 51/51 tests before the version bump, covering quiet New Chat, responsive shell, Project Link onboarding, structured workflow actions, source preview, image attachments, approval UI, and UI stream lifecycle.
+  - Route-cache Playwright suite passed 29/29 tests, covering warm route switching and cached PR/Review Queue/Pipeline/Activity behavior.
+  - Review Queue Playwright suite passed 5/5 tests, covering collapsible recent activity, semantic selected lane styling, review evidence, write-back retry, and stale rerun.
+  - Manual responsive screenshot audit covered Chat, Pull Requests, Review Queue, Pipelines, and Activity at `1365x820`, `1024x760`, and `760x760`. No new horizontal overflow or content occlusion was found in this pass.
+  - `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath .\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.24_x64_en-US.msi -Port 18899` passed with extracted daemon health `0.5.24`, runtime metadata fields present, one-file indexing, `inspect_environment`, and `/chat` HTTP 200.
+  - `.\scripts\windows\verify-windows-installer-metadata.ps1 -Version 0.5.24 ...` passed for MSI and NSIS metadata.
+  - `.\scripts\windows\packaged-sidecar-smoke.ps1 -Port 18887` passed with sidecar daemon health `0.5.24`, runtime metadata fields present, indexing, workflow action, and `/chat` HTTP 200.
+  - `.\scripts\windows\verify-current-release-readiness.ps1 -ExpectedVersion 0.5.24 ...` correctly reports remaining blockers:
+    - Windows signing certificate is not configured.
+    - MSI/NSIS artifacts are unsigned.
+    - Installed runtime owner is stale (`0.5.23`, missing `desktop-sidecar` mode).
+    - Installed package state is stale and blocked by `msiexec.exe` PID `40360`.
+- Local package artifacts:
+  - `apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.24_x64_en-US.msi`
+  - `apps\desktop\src-tauri\target\release\bundle\nsis\MergePilot_0.5.24_x64-setup.exe`
+- Result:
+  - Source and local package evidence for `0.5.24` is green for the tested scope.
+  - Installed-app parity remains pending until the stale `msiexec.exe` process is cleared and the elevated `0.5.24` MSI install is completed.
+
+# Run: mp-0524-msi-extraction-lock-hardening-20260719-0529
+
+- Time: 2026-07-19 05:29 +08:00.
+- Purpose: Fix the release/package verification loop after MSI payload smoke created or encountered Windows Installer global-lock contention.
+- Product finding:
+  - Non-install verification scripts should not rely on `msiexec /a` when a static MSI extraction path is available.
+  - Using Windows Installer for package inspection can block real user installs with `Another installation is in progress`.
+  - 7-Zip extracts the WiX MSI payload as `Bin_mergepilot_daemon.exe` and a desktop executable named `Path`, so stale-template scanning must recognize that payload shape instead of reporting a false `fileCount: 0`.
+- Changes:
+  - Added `scripts/windows/msi-extract-helpers.ps1`.
+  - Updated package verification scripts to prefer 7-Zip static MSI extraction and fall back to `msiexec /a` only when 7-Zip is unavailable:
+    - `scripts/windows/packaged-msi-payload-smoke.ps1`
+    - `scripts/windows/packaged-fresh-config-smoke.ps1`
+    - `scripts/windows/packaged-live-vision-smoke.ps1`
+    - `scripts/windows/verify-no-stale-chat-template.ps1`
+    - `scripts/windows/verify-installed-msi-state.ps1`
+  - `verify-no-stale-chat-template.ps1` now scans the extracted WiX desktop executable named `Path` when its ProductName is `MergePilot`.
+- Verification:
+  - Windows PowerShell parser check passed for all `scripts/windows/*.ps1`.
+  - `.\scripts\windows\packaged-msi-payload-smoke.ps1 -MsiPath .\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.24_x64_en-US.msi -Port 18929` passed with `extractMethod = 7zip`, daemon health `0.5.24`, runtime metadata present, one-file indexing, and `/chat` HTTP 200.
+  - `.\scripts\windows\verify-no-stale-chat-template.ps1 -MsiPath .\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.24_x64_en-US.msi -ExtractionTimeoutSec 120` passed with `extractMethod = 7zip`, `fileCount = 1`, and no stale New Chat preload matches.
+  - `.\scripts\windows\packaged-fresh-config-smoke.ps1 -MsiPath .\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.24_x64_en-US.msi -Port 18939` passed with `extractMethod = 7zip`, fresh `config.toml`, fresh `.env`, and `secretSource = local_env`.
+  - `.\scripts\windows\verify-current-release-readiness.ps1 -Version 0.5.24 -MsiPath .\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.24_x64_en-US.msi -IncludePackageSmokes -FreshConfigPort 18949 -MsiPayloadPort 18959 -StaleScanExtractionTimeoutSec 120` produced package-pass evidence:
+    - release workflow static: pass
+    - release workflow strict tracking: pass
+    - windows script parser: pass
+    - windows installer metadata: pass
+    - stale chat template scan: pass
+    - packaged fresh config: pass
+    - packaged MSI payload: pass
+  - The same readiness run correctly preserved remaining blockers:
+    - Windows signing certificate is not configured.
+    - MSI/NSIS artifacts are unsigned.
+    - Installed runtime owner is still `0.5.23`, expected `0.5.24`.
+    - Installed package state is still `0.5.23`, expected `0.5.24`.
+- Evidence:
+  - `output/live-e2e/readiness-0524-after-7zip-payload.json`
+
+# Run: mp-0524-responsive-project-links-overflow-fix-20260719-0542
+
+- Time: 2026-07-19 05:42 +08:00.
+- Purpose: Continue the installed-app stabilization goal by auditing current source UI responsiveness while Program Files remains on stale `0.5.23`.
+- Current-state finding:
+  - Windows Installer is no longer locked by `msiexec.exe`.
+  - Program Files is still not upgraded:
+    - `C:\Program Files\MergePilot\mergepilot-desktop.exe`: `0.5.23`
+    - `C:\Program Files\MergePilot\mergepilot-daemon.exe`: `0.5.23` health response on port `8787`
+  - `http://127.0.0.1:1420` was started from current source `0.5.24` for frontend layout verification.
+- Issue found:
+  - `#/project-links` overflowed at `520x760`.
+  - Cause: each Project Link card used a single-row `justify-between` layout with a `shrink-0` text action area (`Edit` / `Delete`), so the action area could extend past the narrow viewport even though the page itself reported a 520px document width.
+- Change:
+  - `ProjectLinkCard` now uses a responsive `flex-col` to `sm:flex-row` layout.
+  - Card content uses `min-w-0 flex-1`.
+  - Actions stay inside the card on narrow screens and become compact icon buttons with `aria-label` and `title`.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/daemon typecheck` passed.
+  - Focused Vitest passed 6 files / 42 tests:
+    - `src/pages/chat/layout/ChatEmptyState.test.tsx`
+    - `src/pages/PullRequests.test.tsx`
+    - `src/pages/TaskViewer.test.tsx`
+    - `src/pages/Pipelines.test.tsx`
+    - `src/pages/pipelines/PipelineRowCard.test.tsx`
+    - `src/pages/reviewFindings/ReviewQueuePageHeader.test.tsx`
+  - `src/pages/ProjectLinks.test.tsx` passed 5 tests after adding responsive card coverage.
+  - Playwright browser suites passed:
+    - `tests/e2e/chat-layout.spec.ts`: 51/51
+    - `tests/e2e/route-cache.spec.ts`: 29/29
+    - `tests/e2e/review-queue.spec.ts`: 5/5
+  - Responsive audit before the fix found 1 overflow: `project-links` at `520x760`.
+  - Responsive audit after the fix covered 28 route/viewport combinations and found `overflowCount = 0`.
+- Evidence:
+  - Before fix: `output/playwright/responsive-audit-2026-07-18T21-37-53-230Z/report.json`
+  - After fix: `output/playwright/responsive-audit-after-project-links-2026-07-18T21-42-06-014Z/report.json`
+
+# Run: mp-0524-readiness-expectedversion-alias-20260719-0547
+
+- Time: 2026-07-19 05:47 +08:00.
+- Purpose: Continue runtime/install trust hardening by aligning the release-readiness command surface with the install/verifier command surface.
+- Current-state finding:
+  - Program Files remains on stale `0.5.23`.
+  - Port `8787` is still owned by `C:\Program Files\MergePilot\mergepilot-daemon.exe`, and `/healthz` returns `0.5.23` without `runtimeMode`, `pid`, or `execPath`.
+  - No `msiexec.exe` installer blocker is currently active.
+- Issue found:
+  - Documentation and handoff commands often use `-ExpectedVersion`, but `verify-current-release-readiness.ps1` accepted only `-Version`.
+  - The readiness aggregator also inferred the NSIS sibling path from MSI/version, but did not accept an explicit `-NsisPath`, making downloaded-artifact or handoff commands less precise.
+- Change:
+  - `scripts/windows/verify-current-release-readiness.ps1` now accepts `-ExpectedVersion` as an alias for `-Version`.
+  - The same script now accepts `-NsisPath` and carries it through installer metadata and signature checks.
+  - `scripts/windows/verify-current-release-readiness-smoke.ps1` now accepts the same alias/path parameters and asserts they produce structured readiness JSON.
+- Verification:
+  - Windows PowerShell parser check passed for all `scripts/windows/*.ps1`.
+  - `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -ExpectedVersion 0.5.24 -MsiPath .\apps\desktop\src-tauri\target\release\bundle\msi\MergePilot_0.5.24_x64_en-US.msi -NsisPath .\apps\desktop\src-tauri\target\release\bundle\nsis\MergePilot_0.5.24_x64-setup.exe -SkipPackageSmokes` passed.
+  - Direct readiness with `-ExpectedVersion` and explicit `-NsisPath` returned structured JSON with `version = 0.5.24`, the expected MSI path, and the expected NSIS path.
+  - Direct readiness correctly remained red for known blockers:
+    - Windows signing readiness
+    - Windows artifact signatures
+    - Installed runtime owner
+    - Installed package state
+  - `git diff --check` passed with only LF-to-CRLF warnings.
+- Evidence:
+  - `output/live-e2e/readiness-0524-expectedversion-alias.json`
+
+# Run: mp-0524-runtime-recovery-gate-hardening-20260719-0554
+
+- Time: 2026-07-19 05:54 +08:00.
+- Purpose: Continue runtime trust stabilization after confirming the installed desktop app and the daemon on port `8787` were still stale `0.5.23` while the source/package version is `0.5.24`.
+- Current-state finding:
+  - `C:\Program Files\MergePilot\mergepilot-desktop.exe` is still `0.5.23`.
+  - Port `8787` is still owned by `C:\Program Files\MergePilot\mergepilot-daemon.exe`.
+  - `http://127.0.0.1:8787/healthz` still returns daemon version `0.5.23` and does not expose the newer `runtimeMode = desktop-sidecar` metadata.
+- Issue found:
+  - The desktop runtime gate already rejected stale or source daemons when `/healthz` responded.
+  - If a recoverable stale MergePilot process owned `8787` but `/healthz` failed to respond, the failed-start page only told the user to restart the app and did not expose the self-recovery action.
+- Change:
+  - `DaemonGate` now exposes the same `Restart bundled daemon` recovery path for failed startup when the port owner probe identifies a recoverable MergePilot process.
+  - Runtime recovery guidance is now shared between mismatch and failed states.
+  - Tauri runtime-owner classification now has direct Rust coverage for:
+    - installed `C:\Program Files\MergePilot\mergepilot-daemon.exe`;
+    - source/dev `packages\daemon\src\bin.ts`;
+    - unrelated processes such as `svchost.exe`.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/app/daemonGate.test.ts` passed 7/7 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib` passed 3/3 tests when run with a temporary `CARGO_TARGET_DIR` to avoid a Windows linker output-file lock in the default target directory.
+  - `.\scripts\windows\verify-installed-runtime-owner.ps1 -ExpectedVersion 0.5.24 -RequireRuntime -RequireDesktopSidecarMode` correctly remains red because the installed runtime is still `0.5.23`.
+
+# Run: mp-0524-chat-empty-state-hidden-parts-fix-20260719-0557
+
+- Time: 2026-07-19 05:57 +08:00.
+- Purpose: Address the installed-app observation where the New Chat page could show a large blank transcript area instead of the expected welcome content.
+- Issue found:
+  - `ChatMessageList` treated any assistant `parts` array as visible transcript content.
+  - `ConversationPartRenderer` intentionally hides `metadata` and `suggested_reply` parts, and also cleans inline permission questions / action suggestion quote lines from markdown.
+  - If a restored assistant bubble contained only hidden parts or text that cleaned down to no visible transcript, the empty-state welcome was suppressed while no message body rendered.
+- Change:
+  - `ConversationPartRenderer` now exports `visibleConversationParts`.
+  - `ChatMessageList` uses that same helper for assistant visibility instead of checking raw `parts.length` or raw `text`.
+  - New Chat welcome now reappears when restored assistant content contains only hidden suggestions, metadata, or cleaned-away permission prompts.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatMessageList.test.tsx src/components/conversation/ConversationPartRenderer.test.tsx` passed 22/22 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+
+# Run: mp-0524-chat-responsive-no-auto-window-resize-20260719-0601
+
+- Time: 2026-07-19 06:01 +08:00.
+- Purpose: Align Chat workspace behavior with the product requirement that resizing the app window should make components resize, collapse, or reflow instead of the app forcing the desktop window larger.
+- Current-state finding:
+  - Source/package version is `0.5.24`.
+  - Installed Program Files state remains stale:
+    - `C:\Program Files\MergePilot\mergepilot-desktop.exe`: `0.5.23`
+    - `C:\Program Files\MergePilot\mergepilot-daemon.exe`: `/healthz` returns `0.5.23` and no `desktop-sidecar` metadata.
+- Issue found:
+  - `useResizableChatPanels` tried to call Tauri `win.setSize(new LogicalSize(required, window.innerHeight))` whenever visible chat panels required more width than the current window.
+  - This worked against user-controlled resizing and made the layout model depend on growing the native window rather than using responsive collapse rules.
+- Change:
+  - Removed the automatic native window expansion effect from `useResizableChatPanels`.
+  - Removed the obsolete `requiredChatWindowWidth` helper and constants that existed only to support forced expansion.
+  - Kept the responsive `ResizeObserver` behavior that collapses the right source panel before the history panel when workspace width is constrained.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/chatPanelLayout.test.ts src/pages/chat/layout/useResizableChatPanels.test.ts` passed 3/3 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/chat-layout.spec.ts -Grep "keeps the project-linked chat shell inside the viewport|gives the chat workspace usable width when maximized|keeps the onboarding form and input usable on narrow screens" -Workers 1` passed 3/3 Chromium tests.
+  - `rg` found no remaining `requiredChatWindowWidth`, `auto-expand`, or `setSize(new LogicalSize(required...))` usage in app/test source.
+
+# Run: mp-0524-activity-responsive-workbench-20260719-0608
+
+- Time: 2026-07-19 06:08 +08:00.
+- Purpose: Continue maximized-window and responsive layout hardening for the Activity workspace after confirming installed/source runtime parity is still not achieved.
+- Current-state finding:
+  - Source/package version remains `0.5.24`.
+  - Installed Program Files state is still stale `0.5.23`, so this run verifies source UI behavior and does not claim installed-app parity.
+- Issue found:
+  - The Activity source rail used a fixed `xl:w-[420px]`.
+  - On maximized or medium-width desktop layouts this made the operational history page feel like a wide debug surface instead of a balanced workbench.
+- Change:
+  - Activity source rail now uses `xl:w-[clamp(20rem,28vw,24rem)]` instead of a permanent fixed width.
+  - Activity detail content now has an explicit responsive detail column class with `xl:max-w-[74rem]`.
+  - Layout tests now assert the rail is responsive and the detail panel keeps `min-w-0` with a stable max width.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx` passed 19/19 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "presents Activity as scoped operational history sections" -Workers 1` passed 1/1 Chromium test.
+  - The E2E smoke now verifies the Activity source rail is no wider than 390px at a 1366px viewport and that the page has no document-level horizontal overflow at a 900px viewport.
+
+# Run: mp-0524-review-queue-responsive-controls-20260719-0613
+
+- Time: 2026-07-19 06:13 +08:00.
+- Purpose: Continue workspace responsive hardening for the Review Queue page, especially the state lane dashboard and the collapsible Recent activity rail.
+- Issue found:
+  - Review Queue lanes used `lg:grid-cols-4`, which forced four cards even when the right-side Recent activity panel reduced the usable main-column width.
+  - The footer summary used unconditional `ml-auto`, which could squeeze adjacent filters and batch-action controls on narrow widths.
+- Change:
+  - Review Queue lanes now use an auto-fit grid: `repeat(auto-fit,minmax(min(100%,12.5rem),1fr))`.
+  - Footer visible-count text now takes a full row on narrow widths and only aligns right from `sm` upward.
+  - Added component tests for the responsive grid and footer count classes.
+  - Extended the Review Queue browser smoke to verify no document-level horizontal overflow with Recent activity open at both 1366px and 900px viewports.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/reviewFindings/ReviewQueueControls.test.tsx src/pages/ReviewFindings.test.tsx` passed 10/10 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/review-queue.spec.ts -Grep "keeps Recent activity collapsed by default" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-pr-card-responsive-actions-20260719-0618
+
+- Time: 2026-07-19 06:18 +08:00.
+- Purpose: Continue Pull Requests workspace responsive hardening after the Review Queue and Activity layout slices.
+- Issue found:
+  - PR card action controls used a fixed `min-w-[220px]` action column at all widths and aligned actions to the right even when the card wrapped.
+  - Decision/error helper text also stayed right-aligned with a narrow max width, which made mid-width card layouts feel cramped when a detail panel was open.
+- Change:
+  - PR action controls now take the full row on narrow cards and switch back to `sm:min-w-[220px] sm:flex-1 sm:items-end` on wider cards.
+  - PR action buttons now left-align on narrow cards and right-align from `sm` upward.
+  - PR decision/error helper text now uses the full row on narrow cards, then returns to the compact right-aligned treatment from `sm` upward.
+  - Added component tests for the action column, action row, and helper text classes.
+  - Extended the Pull Requests warm-cache browser smoke to verify no document-level horizontal overflow at a 900px viewport.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pullRequests/PullRequestCard.test.tsx src/pages/PullRequests.test.tsx` passed 11/11 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps cached Pull Requests visible while refresh is pending" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-pipeline-card-responsive-actions-20260719-0622
+
+- Time: 2026-07-19 06:22 +08:00.
+- Purpose: Continue responsive hardening for the Pipelines workspace after Pull Requests, Review Queue, and Activity layout fixes.
+- Issue found:
+  - Pipeline card title content did not claim flexible width, so date/status content could force earlier truncation.
+  - Pipeline action buttons were always right-aligned, which made narrow card layouts feel compressed when cards wrapped or when detail panels reduced the main list width.
+- Change:
+  - Pipeline card title block now uses `min-w-0 flex-1`.
+  - Date label is explicitly `shrink-0`.
+  - Pipeline action row now left-aligns on narrow cards and right-aligns from `sm` upward.
+  - Added component coverage for the responsive action row.
+  - Extended the Pipelines warm-cache browser smoke to verify no document-level horizontal overflow at a 900px viewport.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pipelines/PipelineRowCard.test.tsx src/pages/Pipelines.test.tsx` passed 22/22 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps cached pipeline rows visible while discovery refreshes" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-project-link-form-responsive-fields-20260719-0628
+
+- Time: 2026-07-19 06:28 +08:00.
+- Purpose: Continue responsive layout hardening for Project Link setup/edit forms, especially the branch and Azure DevOps mapping fields previously observed to crowd each other.
+- Issue found:
+  - Workspace branch fields used `md:grid-cols-2`, forcing a two-column branch row as soon as the viewport crossed the md breakpoint even when the form card itself was still narrow.
+  - Azure DevOps project/repository fields used `sm:grid-cols-2`, which could similarly split too early.
+  - Save/Cancel actions did not explicitly allow wrapping.
+- Change:
+  - Branch fields now use an auto-fit grid: `repeat(auto-fit,minmax(min(100%,16rem),1fr))`.
+  - Azure DevOps project/repository fields use the same auto-fit pattern.
+  - Project Link form actions now use an exported wrapping action-row class.
+  - Added focused tests for Workspace, ADO field grid, and form action wrapping.
+  - Extended the Project Link edit browser smoke to verify no document-level horizontal overflow at a 900px viewport.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/projectLinks/ProjectLinkWorkspaceSection.test.tsx src/pages/projectLinks/ProjectLinkAdoSection.test.tsx src/pages/projectLinks/ProjectLinkForm.test.tsx src/pages/ProjectLinks.test.tsx` passed 8/8 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "Project Link edits update Pull Requests insight scope" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-settings-container-responsive-20260719-0634
+
+- Time: 2026-07-19 06:34 +08:00.
+- Purpose: Continue workspace responsive hardening for Settings after Project Link, Pipelines, Pull Requests, Review Queue, and Activity layout fixes.
+- Issue found:
+  - Settings rows only stacked from the full viewport breakpoint, so the desktop sidebar could leave the settings content area narrow while rows still tried to keep a two-column label/control layout.
+  - Long model/cloud controls were bounded, but the row itself did not respond to the actual settings panel width.
+- Change:
+  - `.settings-list` is now an inline-size container.
+  - `.settings-row` now stacks from a container query at `44rem`, independent of the full viewport width.
+  - Added layout stylesheet coverage for the container-query behavior.
+  - Added a mocked browser smoke that opens Settings at a 900px desktop viewport and verifies no document-level horizontal overflow.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/settings/settingsLayout.test.ts` passed 5/5 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps Settings rows responsive" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-runtime-trust-desktop-version-gate-20260719-0655
+
+- Time: 2026-07-19 06:55 +08:00.
+- Purpose: Continue P0 runtime trust hardening after confirming the installed desktop can still see an older/default-port daemon.
+- Issue found:
+  - Runtime trust checks already used `desktopVersion` in the desktop gate, but several package/install smoke scripts only required `/healthz` metadata fields `runtimeMode`, `pid`, and `execPath`.
+  - A daemon that did not expose its owning desktop build could therefore pass lower-level package metadata gates too easily.
+  - The currently running default daemon still reports `0.5.23` on port `8787` while source expects `0.5.24`; it also does not report `runtimeMode` or `desktopVersion`.
+- Change:
+  - Packaged sidecar smoke now simulates the Tauri sidecar environment by setting `MERGEPILOT_RUNTIME_MODE=desktop-sidecar`, `MERGEPILOT_DESKTOP_VERSION`, and `MERGEPILOT_DAEMON_VERSION`.
+  - Packaged sidecar smoke now requires `desktopVersion` and validates it matches the expected source/package version.
+  - MSI payload, installed package-state, installed app, and runtime-owner verifiers now include `desktopVersion` in runtime metadata gates.
+  - Release readiness smoke now checks that the runtime trust scripts continue to gate on `desktopVersion`.
+- Verification:
+  - `.\scripts\windows\verify-installed-runtime-owner.ps1 -ExpectedVersion 0.5.24 -RequireRuntime -RequireDesktopSidecarMode` correctly failed against the live installed daemon with version `0.5.23`, empty mode, and empty desktop version.
+  - `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -SkipPackageSmokes` passed; the new `runtime trust gates require desktopVersion metadata` check passed.
+  - `.\scripts\windows\packaged-sidecar-smoke.ps1 -Port 18887` passed and reported `healthVersion=0.5.24`, `runtimeMode=desktop-sidecar`, and `desktopVersion=0.5.24`.
+
+# Run: mp-0524-runtime-port-takeover-regression-20260719-0734
+
+- Time: 2026-07-19 07:34 +08:00.
+- Purpose: Verify the desktop startup path treats stale MergePilot runtime owners as recoverable before starting the bundled sidecar.
+- Issue found:
+  - The current live machine still has a Program Files `mergepilot-daemon.exe --port 8787` process from version `0.5.23`.
+  - This is recoverable and should be stopped by a newer desktop build before its own `desktop-sidecar` daemon starts.
+  - Existing Rust tests covered a sidecar-style installed daemon and a simple source daemon, but not the exact direct installed daemon command-line shape observed on this machine.
+- Change:
+  - Added a Rust regression test for a stale direct installed daemon command line: `"C:\Program Files\MergePilot\mergepilot-daemon.exe" --port 8787`.
+  - Added a Rust regression test for a pnpm/tsx-style source daemon command line.
+  - Kept unrelated process owners non-recoverable.
+- Verification:
+  - `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml` with `CARGO_TARGET_DIR=apps\desktop\src-tauri\target\codex-test` passed 5/5 Rust unit tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/app/daemonGate.test.ts` passed 7/7 tests.
+
+# Run: mp-0524-installed-desktop-runtime-takeover-smoke-20260719-0750
+
+- Time: 2026-07-19 07:50 +08:00.
+- Purpose: Add a direct installed-desktop smoke for the real user path: launch `mergepilot-desktop.exe`, wait for its bundled sidecar, and require trusted `/healthz` runtime metadata.
+- Issue found:
+  - Existing installed checks could validate package state or directly start `mergepilot-daemon.exe`, but they did not explicitly prove that launching the installed desktop owns default port `8787` through a matching `desktop-sidecar`.
+  - This left a gap between package health and the actual user workflow.
+- Change:
+  - Added `scripts\windows\verify-installed-desktop-runtime-takeover.ps1`.
+  - The script preflights installed desktop/daemon paths and desktop product version.
+  - It launches the desktop, waits for `/healthz` to report expected `version`, `runtimeMode=desktop-sidecar`, and matching `desktopVersion`, and verifies port `8787` is owned by the installed daemon.
+  - Cleanup now only runs when the script actually launched or took ownership of the installed desktop runtime, so a stale-version preflight failure does not close the user's currently running app.
+  - `run-installed-app-smoke.ps1` now includes this desktop runtime takeover smoke.
+  - Release readiness smoke now includes the new script in the static `desktopVersion` runtime trust guard.
+- Verification:
+  - `.\scripts\windows\verify-installed-desktop-runtime-takeover.ps1 -ExpectedVersion 0.5.24` correctly failed against the current installed `0.5.23` desktop before launch, reporting `Installed desktop product version is '0.5.23', expected '0.5.24'.`
+  - The preflight failure did not stop the currently running installed app; follow-up probes still found `mergepilot-desktop.exe` PID `9120`, `mergepilot-daemon.exe` PID `40348`, and `127.0.0.1:8787/healthz` responding with version `0.5.23`.
+  - `.\scripts\windows\verify-current-release-readiness-smoke.ps1 -SkipPackageSmokes` passed, including the updated runtime trust static guard.
+  - `.\scripts\windows\verify-windows-scripts-parse.ps1 -ScriptPaths scripts\windows\verify-installed-desktop-runtime-takeover.ps1,scripts\windows\run-installed-app-smoke.ps1,scripts\windows\verify-current-release-readiness-smoke.ps1` passed.
+
+# Run: mp-0524-responsive-detail-drawers-20260719-0644
+
+- Time: 2026-07-19 06:44 +08:00.
+- Purpose: Continue workspace responsive hardening after confirming route-level overflow tests exist for Chat, Pull Requests, Review Queue, Pipelines, Activity, Project Links, and Settings.
+- Issue found:
+  - Pull Request insight details and Pipeline analysis details used an inline right-panel grid on wide screens, but below the `xl` breakpoint the detail panel fell into the normal list flow.
+  - At medium desktop widths, a user could click `Open insight` or `Open analysis` and have the detail appear below the current list position instead of staying reachable in the viewport.
+- Change:
+  - Pull Request insight detail now uses a fixed right-side drawer below `xl` and switches back to a sticky side panel on wide screens.
+  - Pipeline detail now uses the same fixed drawer/sticky side panel behavior.
+  - Added component-level layout tests for both detail panel class helpers.
+  - Extended mocked browser coverage so PR insight and Pipeline analysis detail panels are verified at a 900px viewport with no document-level horizontal overflow.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/Pipelines.test.tsx` passed 26/26 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "readable PR insight scope|renders successful pipeline AI analysis" -Workers 1` passed 2/2 Chromium tests.
+
+# Run: mp-0524-settings-runtime-visibility-20260719-0648
+
+- Time: 2026-07-19 06:48 +08:00.
+- Purpose: Make runtime version and ownership visible in the product UI, not only in release/installer scripts.
+- Issue found:
+  - Settings showed account, model, and cloud storage state, but did not clearly expose which daemon/runtime was answering workspace requests.
+  - When an installed desktop version and the shared daemon version diverge, users need a product-level place to inspect Desktop version, Daemon version, sidecar owner, and process metadata.
+- Change:
+  - Added a `System` settings section with Desktop build, Daemon runtime, Sidecar owner, and Runtime process rows.
+  - Runtime rows display missing metadata as `Unknown`, `No runtime mode`, or `Not reported` instead of staying silent.
+  - Matching daemon/sidecar metadata is shown as healthy; stale or source-owned runtime metadata is shown as warning.
+  - Extended the Settings browser smoke to assert the System runtime rows remain visible at a 900px viewport.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/settings/RuntimeSettingsSection.test.tsx src/pages/settings/settingsLayout.test.ts` passed 8/8 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps Settings rows responsive" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-chat-empty-state-regression-check-20260719-0649
+
+- Time: 2026-07-19 06:49 +08:00.
+- Purpose: Re-check the New Chat home/empty state after an installed build previously showed a large blank middle area.
+- Issue checked:
+  - Chat empty state could theoretically be hidden if invisible system/session messages were treated as a visible transcript.
+  - The source path now renders the welcome state for active Project Link, Project Link loading, and first-run/no-Project-Link states.
+- Result:
+  - No source patch was required in this slice.
+  - Current source tests confirm `Session restored` does not suppress the welcome panel, and the browser smoke confirms the `Ask MergePilot anything` welcome plus `Review my changes` action appears without stale preload content.
+  - The previously observed installed-app blank state remains more likely to be tied to the stale installed/runtime mismatch until a matching `0.5.24` install is tested.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 16/16 tests.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps New Chat empty state quiet" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-login-dialog-responsive-error-20260719-0653
+
+- Time: 2026-07-19 06:53 +08:00.
+- Purpose: Harden the Microsoft sign-in path after seeing long Azure authentication errors in the installed app.
+- Issue found:
+  - The Microsoft sign-in modal used a fixed `460px` width.
+  - Long Azure errors such as `AADSTS650057` could be difficult to read and risk horizontal overflow in a narrow or resized desktop window.
+- Change:
+  - The sign-in modal width now uses `min(460px, calc(100vw - 2rem))`.
+  - The modal has a viewport-bounded max height with internal scrolling.
+  - Login status/error text wraps with `break-words` and relaxed line height.
+  - Added a stable test id for browser layout verification.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/app/LoginModal.test.tsx` passed 2/2 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps Microsoft sign-in dialog responsive" -Workers 1` passed 1/1 Chromium test at a 360px viewport with a long mocked Azure auth error.
+
+# Run: mp-0524-installed-version-recheck-20260719-0654
+
+- Time: 2026-07-19 06:54 +08:00.
+- Purpose: Re-check whether the local installed application actually matches source version `0.5.24` before treating installed-app UI behavior as current.
+- Result:
+  - The installed desktop at `C:\Program Files\MergePilot\mergepilot-desktop.exe` still reports product/file version `0.5.23`.
+  - The daemon on default port `8787` is still `C:\Program Files\MergePilot\mergepilot-daemon.exe --port 8787`, PID `40348`, started at `2026-07-19T03:54:43`.
+  - `/healthz` reports daemon version `0.5.23` and does not expose the newer `runtimeMode` / `desktopVersion` metadata expected by source `0.5.24`.
+  - Installed-app UI observations from this runtime should therefore be treated as stale until a `0.5.24` installer is installed and the default runtime reports trusted sidecar metadata.
+- Verification:
+  - `.\scripts\windows\verify-installed-desktop-runtime-takeover.ps1 -ExpectedVersion 0.5.24` failed safely at preflight with `Installed desktop product version is '0.5.23', expected '0.5.24'.`
+  - The script did not launch or stop desktop/daemon processes because the installed version preflight failed.
+
+# Run: mp-0524-chat-source-panel-responsive-collapse-20260719-1340
+
+- Time: 2026-07-19 13:40 +08:00.
+- Purpose: Continue Chat workspace responsive hardening after installed-app review showed panel split and resize issues.
+- Issue found:
+  - The Chat resize model used a `320px` middle-panel minimum, but the CSS still enforced a `420px` middle-panel floor.
+  - That mismatch could let the ResizeObserver keep side panels open in a workspace width where CSS could no longer satisfy the actual Chat panel floor.
+- Change:
+  - Aligned `.middle-panel` CSS flex basis and `min-width` with `CHAT_PANEL_LAYOUT.middleMin`.
+  - Added a unit regression that reads `chat-workspace.css` and verifies the CSS floor stays aligned with the TypeScript layout model.
+  - Added a mocked browser regression that opens a source file preview, shrinks the window to `700px`, and verifies the code panel collapses without horizontal overflow.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/chatPanelLayout.test.ts` passed 3/3 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/chat-layout.spec.ts -Grep "collapses the code panel" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-installed-runtime-takeover-and-fresh-user-20260719-1342
+
+- Time: 2026-07-19 13:42 +08:00.
+- Purpose: Re-check the installed app after the local machine moved from stale `0.5.23` runtime to installed `0.5.24`.
+- Result:
+  - `C:\Program Files\MergePilot\mergepilot-desktop.exe` now reports product/file version `0.5.24`.
+  - `/healthz` on port `8787` reported daemon version `0.5.24`, `runtimeMode: desktop-sidecar`, `desktopVersion: 0.5.24`, and `execPath: C:\Program Files\MergePilot\mergepilot-daemon.exe`.
+  - The installed fresh-user smoke started a clean temporary user home and confirmed the daemon creates `config.toml` plus `.env` with `secretSource: local_env`.
+  - The fresh-user workflow action completed `inspect_environment`; it did not reproduce the previous `/chat/workflow-action HTTP 400` `sessionId` validation failure.
+- Verification:
+  - `.\scripts\windows\verify-installed-desktop-runtime-takeover.ps1 -ExpectedVersion 0.5.24` passed with no failures.
+  - `.\scripts\windows\installed-fresh-user-smoke.ps1 -ExpectedVersion 0.5.24` passed with no failures.
+
+# Run: mp-0524-activity-responsive-workbench-20260719-1349
+
+- Time: 2026-07-19 13:49 +08:00.
+- Purpose: Continue workspace layout stabilization by making Activity behave like an operational workbench across common desktop widths.
+- Issue found:
+  - Activity source/detail layout waited until the `xl` breakpoint before switching to a two-column workbench.
+  - At medium desktop widths, the source list could occupy the top of the page and push the detail panel below it, making the page feel like a long mixed dashboard instead of a focused history/detail workspace.
+- Change:
+  - Activity now switches from stacked layout to source/detail columns at the `lg` breakpoint.
+  - The source rail uses `clamp(18rem, 30vw, 23rem)` at `lg+`, with a single primary scroll region for activity sources.
+  - The detail panel follows the same `lg` breakpoint and keeps its max width bounded while allowing the main page to use wide screens.
+  - Added browser geometry coverage proving that at `1100px` the source list and detail panel are side by side, and at `900px` the page remains free of horizontal overflow.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx` passed 19/19 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "presents Activity as scoped operational history sections" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-pull-requests-header-responsive-controls-20260719-1351
+
+- Time: 2026-07-19 13:51 +08:00.
+- Purpose: Continue route-level responsive cleanup by stabilizing the Pull Requests page header controls.
+- Issue found:
+  - The Pull Requests Project Link selector used a fixed `sm:w-[22rem]` width and the status selector used a fixed `sm:w-[9rem]` width.
+  - At medium or narrow desktop widths, those controls could compete with the page title area and make the header feel cramped.
+- Change:
+  - Converted the header controls to a responsive grid: one column on narrow windows, three columns from `sm`, and a bounded control group at `lg+`.
+  - Kept long Project Link names truncated, but removed the fixed `sm:w-[22rem]` selector width.
+  - Added a helper-level regression for the new header control classes.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pullRequests/PullRequestPageHeader.test.tsx` passed 2/2 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps cached Pull Requests visible" -Workers 1` passed 2/2 Chromium tests at the 900px viewport coverage.
+
+# Run: mp-0524-pipelines-header-responsive-controls-20260719-1354
+
+- Time: 2026-07-19 13:54 +08:00.
+- Purpose: Continue route-level responsive cleanup by stabilizing the Pipelines page header controls.
+- Issue found:
+  - The Pipelines project selector and Refresh button were in a single nowrap flex container.
+  - On medium or narrow desktop windows, the controls could fight the page title area and make the header feel cramped.
+- Change:
+  - Converted the Pipelines header controls to a responsive grid: one column on narrow windows, selector-plus-action from `sm`, and a bounded control group at `lg+`.
+  - Added `min-w-0` to the selector so long Azure DevOps project names truncate within the available grid cell.
+  - Added a helper-level regression for the new header control class.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx` passed 19/19 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps cached pipeline rows" -Workers 1` passed 1/1 Chromium test at the 900px viewport coverage.
+
+# Run: mp-0524-project-links-header-responsive-actions-20260719-1356
+
+- Time: 2026-07-19 13:56 +08:00.
+- Purpose: Continue responsive cleanup on the Project Links workspace, which is a form/list-heavy route used early in setup.
+- Issue found:
+  - The Project Links list header used a direct `items-start justify-between` row.
+  - On narrow desktop windows, the explanatory text and `New Project Link` action could compete for the same row.
+- Change:
+  - Added a responsive header helper that stacks title/details and actions on narrow windows, then switches to a row from `sm`.
+  - Kept the action button shrink-wrapped and aligned naturally when the header becomes horizontal.
+  - Added a helper-level regression for the responsive header class.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ProjectLinks.test.tsx` passed 6/6 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "Project Links" -Workers 1` passed 5/5 Chromium tests covering Project Link route behavior and dependent route first-load behavior.
+
+# Run: mp-0524-review-queue-responsive-activity-rail-20260719-1401
+
+- Time: 2026-07-19 14:01 +08:00.
+- Purpose: Continue responsive cleanup on the Review Queue workspace after installed-app testing showed several maximized and resized layouts still felt brittle.
+- Issue found:
+  - Review Queue only placed the recent activity rail beside the queue at the `xl` breakpoint.
+  - The header Project Link selector and Refresh action depended on flex wrapping and an old fixed-width selector, which made long Project Link names less predictable during resize.
+- Change:
+  - Review Queue now uses a main queue plus recent activity rail layout from the `lg` breakpoint, while keeping the activity rail as an overlay drawer below that width.
+  - Converted the Review Queue header controls to a responsive grid: one column on narrow windows, selector-plus-action from `sm`, and a bounded control group at `lg+`.
+  - Removed the fixed `sm:w-[22rem]` selector width and kept long Project Link names truncated inside the available grid cell.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ReviewFindings.test.tsx src/pages/reviewFindings/ReviewQueuePageHeader.test.tsx` passed 9/9 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/review-queue.spec.ts -Grep "Recent activity" -Workers 1` passed 1/1 Chromium test, verified the activity rail sits beside the queue at 1100px, and rechecked no horizontal overflow at 900px.
+
+# Run: mp-0524-settings-model-editor-responsive-actions-20260719-1408
+
+- Time: 2026-07-19 14:08 +08:00.
+- Purpose: Continue responsive cleanup on Settings, especially the custom model editor used when users configure additional model providers.
+- Issue found:
+  - Additional model action controls and test feedback used right-aligned inline Tailwind classes.
+  - In a narrow Settings container, the row itself stacked correctly, but the action cluster and error text still behaved like a right-aligned wide desktop control.
+- Change:
+  - Added shared Settings control classes for action stacks, wrapped action rows, and bounded feedback lines.
+  - Action controls still align to the right on wide rows, but switch to full-width left alignment under the Settings container breakpoint.
+  - Replaced fixed `max-w-[360px] text-right` feedback text with container-aware `settings-feedback-line`.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/settings/settingsControlsStyles.test.ts src/pages/settings/settingsLayout.test.ts` passed 6/6 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps Settings rows responsive" -Workers 1` passed 1/1 Chromium test and verified no horizontal overflow before and after opening the Add model editor at 900px.
+
+# Run: mp-0524-pr-pipeline-detail-responsive-rails-20260719-1412
+
+- Time: 2026-07-19 14:12 +08:00.
+- Purpose: Continue workspace responsive cleanup by aligning Pull Request insight and Pipeline analysis detail panels with the newer Activity and Review Queue rail behavior.
+- Issue found:
+  - Pull Request insight and Pipeline detail panels still waited until the `xl` breakpoint before becoming side rails.
+  - At medium desktop widths, opening details stayed in overlay drawer mode even though the app had enough horizontal space for a compact workbench layout.
+- Change:
+  - Pull Request insight and Pipeline analysis panels now switch from fixed drawer to sticky side rail from the `lg` breakpoint.
+  - Added a compact `24rem` detail column at `lg`, while preserving wider `28rem` and `30rem` rails at `xl` and `2xl`.
+  - Browser coverage now verifies both behaviors: `900px` keeps a fixed drawer and `1100px` switches to a sticky rail without horizontal overflow.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/Pipelines.test.tsx` passed 27/27 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "readable PR insight scope|Pipeline AI analysis" -Workers 1` passed 3/3 Chromium tests.
+
+# Run: mp-0524-project-links-responsive-card-grid-20260719-1419
+
+- Time: 2026-07-19 14:19 +08:00.
+- Purpose: Continue responsive cleanup on the Project Links list layout.
+- Issue found:
+  - Saved Project Link cards only became a two-column grid at very wide desktop widths.
+  - At medium desktop widths, the route left unused horizontal space while forcing saved links into a longer vertical list.
+- Change:
+  - Replaced the fixed `xl:grid-cols-2` breakpoint with an auto-fit grid using `minmax(min(100%,22rem),1fr)`.
+  - Browser coverage verifies two saved Project Link cards sit side by side at 1100px and that the route has no horizontal overflow at 900px.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ProjectLinks.test.tsx` passed 6/6 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "saved Project Links as a responsive card grid" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-review-queue-card-metrics-responsive-grid-20260719-1424
+
+- Time: 2026-07-19 14:24 +08:00.
+- Purpose: Continue Review Queue responsive hardening inside individual queue cards.
+- Issue found:
+  - The Review Queue card metrics row used a fixed `sm:grid-cols-4` layout.
+  - When the page is resized or the recent activity rail consumes width, forcing four metric columns too early can make the card feel cramped and increases overflow risk.
+- Change:
+  - Added `reviewQueueCardMetricsGridClass()` and changed the metrics row to an auto-fit grid with `minmax(min(100%,8.5rem),1fr)`.
+  - Extended the Review Queue browser smoke to verify the metrics labels remain visible and the page has no horizontal overflow at a 760px viewport after toggling the activity rail.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/reviewFindings/ReviewQueueCard.test.tsx` passed 3/3 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/review-queue.spec.ts -Grep "Recent activity" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-pipeline-status-filters-responsive-grid-20260719-1429
+
+- Time: 2026-07-19 14:29 +08:00.
+- Purpose: Continue responsive hardening on the Pipelines workspace header/status area.
+- Issue found:
+  - Pipeline status filters used fixed `sm:grid-cols-3 xl:grid-cols-6` breakpoints.
+  - The route jumped from three cards to six cards instead of adapting smoothly to the actual available width, especially when a resized window or future detail panel reduces the content area.
+- Change:
+  - Added `pipelineStatusFiltersGridClass()` and replaced the fixed breakpoint grid with `repeat(auto-fit,minmax(min(100%,9.5rem),1fr))`.
+  - Extended the Pipelines warm-cache browser smoke to verify the `Discovered` filter remains visible and the route has no horizontal overflow at both 900px and 760px.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx` passed 20/20 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps cached pipeline rows" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-pipeline-row-field-grid-responsive-20260719-1432
+
+- Time: 2026-07-19 14:32 +08:00.
+- Purpose: Continue Pipelines workspace responsive cleanup inside individual pipeline cards.
+- Issue found:
+  - Pipeline row fields used fixed `sm:grid-cols-2 2xl:grid-cols-4` breakpoints.
+  - The Default branch, Target branch, Linked PRs, and Latest run fields should adapt to the actual card width, especially when the window is resized or a detail panel reduces available space.
+- Change:
+  - Added `pipelineFieldGridClass()` and changed the field grid to `repeat(auto-fit,minmax(min(100%,9.5rem),1fr))`.
+  - Reused the Pipelines warm-cache browser smoke to verify the route remains usable without horizontal overflow down to 760px.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pipelines/PipelineRowCard.test.tsx` passed 6/6 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps cached pipeline rows" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-activity-pr-insight-signal-grid-responsive-20260719-1436
+
+- Time: 2026-07-19 14:36 +08:00.
+- Purpose: Continue Activity detail-panel responsive cleanup for saved PR insight evidence.
+- Issue found:
+  - PR insight signal metrics used fixed `sm:grid-cols-4 lg:grid-cols-6` breakpoints.
+  - In Activity detail panels, metric cards should reflow by the actual detail-panel width rather than by page-level breakpoints.
+- Change:
+  - Added `prInsightSignalGridClass()` and changed the signal metric grid to `repeat(auto-fit,minmax(min(100%,8.5rem),1fr))`.
+  - Extended the Activity browser smoke to open a saved PR insight, verify signal metrics are visible, and confirm no horizontal overflow at 760px.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/taskViewer/PrInsightDetailPanel.test.tsx` passed 3/3 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "presents Activity as scoped operational history sections" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-pull-request-card-meta-grid-responsive-20260719-1441
+
+- Time: 2026-07-19 14:41 +08:00.
+- Purpose: Continue Pull Requests workspace responsive cleanup inside individual PR cards.
+- Issue found:
+  - PR card metadata used fixed `sm:grid-cols-3` for Author, Created, and Reviewers.
+  - When the page is resized or a right-side insight panel is open, the metadata row should respond to the card width instead of a page breakpoint.
+- Change:
+  - Added `pullRequestMetaGridClass()` and changed the metadata grid to `repeat(auto-fit,minmax(min(100%,9.5rem),1fr))`.
+  - Extended the Pull Requests warm-cache browser smoke to verify Author/Reviewers remain visible and the page has no horizontal overflow at 760px.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pullRequests/PullRequestCard.test.tsx` passed 5/5 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps cached Pull Requests visible while refresh is pending" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-pull-request-context-secondary-grid-responsive-20260719-1445
+
+- Time: 2026-07-19 14:45 +08:00.
+- Purpose: Continue Pull Requests responsive cleanup inside expanded PR context details.
+- Issue found:
+  - The Recent Threads and Build History section used fixed `lg:grid-cols-2`.
+  - Expanded PR context sits inside a card whose available width changes with window resizing and right-side detail panels, so the secondary panels should reflow by container width.
+- Change:
+  - Added `pullRequestContextSecondaryGridClass()` and changed the secondary context layout to `repeat(auto-fit,minmax(min(100%,18rem),1fr))`.
+  - Extended the Pull Requests warm-cache browser smoke to load PR details, verify Recent Threads and Build History render, and confirm no horizontal overflow at 760px.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pullRequests/PullRequestContextPanel.test.tsx` passed 2/2 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps cached Pull Requests visible while refresh is pending" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-pull-request-context-overview-grid-responsive-20260719-1448
+
+- Time: 2026-07-19 14:48 +08:00.
+- Purpose: Finish the Pull Requests expanded context responsive cleanup by removing the remaining fixed overview split.
+- Issue found:
+  - The Description and Work Items overview used fixed `lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]`.
+  - Expanded PR context should respond to the card width, not to a hard page-level breakpoint.
+- Change:
+  - Added `pullRequestContextOverviewGridClass()` and changed the overview layout to `repeat(auto-fit,minmax(min(100%,18rem),1fr))`.
+  - Reused the Pull Requests warm-cache browser smoke that loads PR details and verifies no horizontal overflow at 760px.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pullRequests/PullRequestContextPanel.test.tsx` passed 3/3 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps cached Pull Requests visible while refresh is pending" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-checkpoint-preview-metrics-responsive-grid-20260719-1452
+
+- Time: 2026-07-19 14:52 +08:00.
+- Purpose: Continue Activity checkpoint detail responsive cleanup.
+- Issue found:
+  - Snapshot Preview metrics used fixed `sm:grid-cols-3` for Branch, Files, and Diff.
+  - The checkpoint preview smoke was also matching an exact checkpoint route that did not cover the runtime's actual checkpoint identifier, so the page could show `No preview available` without the test catching it.
+- Change:
+  - Added `checkpointPreviewMetricsGridClass()` and changed the metrics grid to `repeat(auto-fit,minmax(min(100%,8.5rem),1fr))`.
+  - Updated the checkpoint preview and rollback mocks to match the actual checkpoint route shape.
+  - Extended the checkpoint browser smoke to verify Branch/Files/Diff render and the page has no horizontal overflow at 760px.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/taskViewer/CheckpointPreviewSection.test.tsx` passed 2/2 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps checkpoint raw output collapsed" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-checkpoint-metadata-responsive-grid-20260719-1459
+
+- Time: 2026-07-19 14:59 +08:00.
+- Purpose: Continue Activity checkpoint detail responsive cleanup around repository/session metadata.
+- Issue found:
+  - Repository and Session metadata used fixed `sm:grid-cols-2`.
+  - These cards contain long local paths and session ids, so they should reflow by the detail panel's actual width while preserving `break-all` wrapping.
+- Change:
+  - Added `checkpointMetadataGridClass()` and changed the metadata grid to `repeat(auto-fit,minmax(min(100%,16rem),1fr))`.
+  - Reused the strengthened checkpoint browser smoke, which opens checkpoint details and verifies no horizontal overflow at 760px.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/taskViewer/CheckpointDetailPanel.test.tsx` passed 4/4 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps checkpoint raw output collapsed" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-checkpoint-apply-summary-responsive-grid-20260719-1503
+
+- Time: 2026-07-19 15:03 +08:00.
+- Purpose: Continue Activity checkpoint detail responsive cleanup around checkpoint apply metadata.
+- Issue found:
+  - The Checkpoint Apply summary used fixed `sm:grid-cols-2` for Restored Checkpoint and Apply Mode.
+  - Apply safety snapshots can appear in the same narrow Activity detail panel, so the summary should reflow by available width instead of a page breakpoint.
+- Change:
+  - Added `checkpointApplySummaryGridClass()` and changed the apply summary grid to `repeat(auto-fit,minmax(min(100%,14rem),1fr))`.
+  - Kept the browser smoke focused on the checkpoint detail surface while unit tests lock the apply-summary layout helper.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/taskViewer/CheckpointDetailPanel.test.tsx` passed 5/5 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps checkpoint raw output collapsed" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-review-queue-transient-responsive-grids-20260719-1508
+
+- Time: 2026-07-19 15:08 +08:00.
+- Purpose: Continue Review Queue responsive cleanup for route-transition and empty-setup states.
+- Issue found:
+  - The Review Queue loading skeleton still used fixed `sm:grid-cols-2 lg:grid-cols-4`.
+  - The no-Project-Link setup checklist still used fixed `sm:grid-cols-3`.
+  - These transient states can flash during route switching or first-run setup, so they should match the responsive behavior of the loaded lane cards.
+- Change:
+  - Reused the Review Queue lane auto-fit grid for the loading skeleton.
+  - Added `reviewQueueSetupChecklistGridClass()` using `repeat(auto-fit,minmax(min(100%,10rem),1fr))`.
+  - Extended the selected-lane browser smoke to run at 760px and verify there is no horizontal overflow.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ReviewFindings.test.tsx` passed 8/8 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/review-queue.spec.ts -Grep "keeps selected queue lane semantic instead of gray" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-pr-insight-detail-responsive-grids-20260719-1511
+
+- Time: 2026-07-19 15:11 +08:00.
+- Purpose: Continue Activity PR Insight detail responsive cleanup.
+- Issue found:
+  - PR Insight detail metadata still used fixed `sm:grid-cols-2`.
+  - Preview/full-review comparison metrics still used fixed `sm:grid-cols-3`.
+  - Risk delta panels still used fixed `sm:grid-cols-2`.
+  - These sections render inside the Activity detail panel, whose width changes when the app window is resized or the Activity sidebar reflows.
+- Change:
+  - Added auto-fit helpers for provenance, metadata, comparison metrics, and risk-delta grids.
+  - Preserved full-width artifact id and baseline rows with `col-span-full`.
+  - Reused the Activity browser smoke that opens PR Insight details and verifies no horizontal overflow at 760px.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/taskViewer/PrInsightDetailPanel.test.tsx` passed 4/4 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "presents Activity as scoped operational history sections" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-activity-detail-evidence-responsive-grids-20260719-1516
+
+- Time: 2026-07-19 15:16 +08:00.
+- Purpose: Continue Activity detail-panel responsive cleanup for PR readiness blockers and review operation facts.
+- Issue found:
+  - PR Insight readiness blocker groups still used fixed `sm:grid-cols-2`.
+  - Review operation facts still used fixed `sm:grid-cols-2`.
+  - Both sections render in the Activity detail area, where available width changes with window resizing and sidebar reflow.
+- Change:
+  - Added `prInsightReadinessBlockersGridClass()` using `repeat(auto-fit,minmax(min(100%,14rem),1fr))`.
+  - Added `reviewOperationFactGridClass()` using `repeat(auto-fit,minmax(min(100%,13rem),1fr))`.
+  - Kept raw JSON/detail folding behavior unchanged.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/taskViewer/ReviewOperationDetailPanel.test.tsx` passed 13/13 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "presents Activity as scoped operational history sections" -Workers 1` passed 1/1 Chromium test.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "summarizes structured review-operation details before raw JSON" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-pull-requests-transient-responsive-grids-20260719-1521
+
+- Time: 2026-07-19 15:21 +08:00.
+- Purpose: Continue Pull Requests workspace responsive cleanup for first-load and empty/error states.
+- Issue found:
+  - Pull Requests loading skeleton metadata placeholders still used fixed `sm:grid-cols-3`.
+  - Empty/error recovery checklist still used fixed `sm:grid-cols-3`.
+  - These states appear during route switching, status changes, or missing ADO data, so they should not jump to a different layout model than loaded PR cards.
+- Change:
+  - Added `pullRequestLoadingMetaGridClass()` using `repeat(auto-fit,minmax(min(100%,9.5rem),1fr))`.
+  - Added `pullRequestEmptyChecklistGridClass()` using `repeat(auto-fit,minmax(min(100%,10rem),1fr))`.
+  - Added a 760px browser smoke for empty Pull Requests guidance and horizontal overflow.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx` passed 9/9 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps empty Pull Requests guidance responsive" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-pipeline-detail-continuous-responsive-column-20260719-1526
+
+- Time: 2026-07-19 15:26 +08:00.
+- Purpose: Continue Pipelines workspace responsive cleanup for the AI analysis/detail side panel.
+- Issue found:
+  - The detail-open Pipelines workspace used three breakpoint jumps: `lg` 24rem, `xl` 28rem, and `2xl` 30rem.
+  - During window resizing, the detail column could change abruptly instead of scaling continuously.
+- Change:
+  - Changed `pipelineWorkspaceGridClass(true)` to use one desktop grid definition: `minmax(0,1fr) minmax(22rem,clamp(24rem,28vw,30rem))`.
+  - Updated the focused layout test to reject `xl`/`2xl` grid jumps.
+  - Extended the pipeline AI-analysis browser smoke to assert the sticky detail panel stays within a sane width range and has no horizontal overflow.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx` passed 20/20 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "renders successful pipeline AI analysis as Markdown with run evidence" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-pull-requests-insight-continuous-responsive-column-20260719-1529
+
+- Time: 2026-07-19 15:29 +08:00.
+- Purpose: Continue Pull Requests workspace responsive cleanup for the PR insight side panel.
+- Issue found:
+  - The insight-open Pull Requests workspace used three breakpoint jumps: `lg` 24rem, `xl` 28rem, and `2xl` 30rem.
+  - During window resizing, the insight column could change abruptly instead of scaling continuously.
+- Change:
+  - Changed `pullRequestsWorkspaceLayoutClass(true)` to use one desktop grid definition: `minmax(0,1fr) minmax(22rem,clamp(24rem,28vw,30rem))`.
+  - Updated the focused layout test to reject `xl`/`2xl` grid jumps.
+  - Extended the PR insight browser smoke to assert the sticky insight panel stays within a sane width range and has no horizontal overflow.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx` passed 9/9 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "shows readable PR insight scope instead of internal Project Link id" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-review-queue-activity-continuous-responsive-column-20260719-1533
+
+- Time: 2026-07-19 15:33 +08:00.
+- Purpose: Continue Review Queue responsive cleanup for the Recent activity side rail.
+- Issue found:
+  - The expanded Review Queue workspace used a fixed `19rem` Recent activity column.
+  - On wide windows the activity rail did not scale at all, while the main queue absorbed every extra pixel.
+- Change:
+  - Changed `reviewQueueWorkspaceLayoutClass(true)` to use `minmax(18rem,clamp(19rem,24vw,23rem))` for the activity rail column.
+  - Updated layout tests to reject the old fixed `19rem` column.
+  - Extended the Recent activity browser smoke to verify the rail stays on the right, remains within a sane width range, and has no horizontal overflow.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ReviewFindings.test.tsx` passed 8/8 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/review-queue.spec.ts -Grep "keeps Recent activity collapsed by default" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-pull-requests-header-continuous-responsive-controls-20260719-1536
+
+- Time: 2026-07-19 15:36 +08:00.
+- Purpose: Continue Pull Requests responsive cleanup for the top filter controls.
+- Issue found:
+  - The Pull Requests header used fixed `lg:min-w-[30rem] lg:max-w-[38rem]` bounds.
+  - The Project Link selector also had `md:max-w-[22rem]`, limiting long Project Link names even when header space was available.
+- Change:
+  - Changed the header controls to `lg:w-[clamp(30rem,42vw,38rem)]`.
+  - Removed the Project Link selector `md:max-w-[22rem]` so it can use the available grid column.
+  - Extended the Pull Requests warm-cache browser smoke to verify Project Link/status controls remain visible at 900px and 760px with no horizontal overflow.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pullRequests/PullRequestPageHeader.test.tsx` passed 2/2 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps cached Pull Requests visible while refresh is pending" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-review-queue-header-continuous-responsive-controls-20260719-1539
+
+- Time: 2026-07-19 15:39 +08:00.
+- Purpose: Continue Review Queue responsive cleanup for the top Project Link filter controls.
+- Issue found:
+  - The Review Queue header controls used fixed `lg:min-w-[24rem] lg:max-w-[36rem]` bounds.
+  - Long Project Link names could stay unnecessarily constrained instead of scaling with available header width.
+- Change:
+  - Changed the header controls to `lg:w-[clamp(24rem,36vw,36rem)]`.
+  - Updated focused header tests to reject the old fixed min/max bounds.
+  - Extended the Review Queue browser smoke to verify Project Link and Refresh controls remain visible while Recent activity is open at 900px.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/reviewFindings/ReviewQueuePageHeader.test.tsx` passed 2/2 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/review-queue.spec.ts -Grep "keeps Recent activity collapsed by default" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-pipelines-header-continuous-responsive-controls-20260719-1542
+
+- Time: 2026-07-19 15:42 +08:00.
+- Purpose: Continue Pipelines responsive cleanup for the top project filter and refresh controls.
+- Issue found:
+  - The Pipelines header controls used fixed `lg:min-w-[18rem] lg:max-w-[32rem]` bounds.
+  - During window resizing, the controls could jump between constrained sizes instead of scaling continuously.
+- Change:
+  - Changed the Pipelines header controls to `lg:w-[clamp(18rem,30vw,32rem)]`.
+  - Updated focused layout tests to reject the old fixed min/max bounds.
+  - Extended the Pipelines warm-cache browser smoke to verify project filter and Refresh controls remain visible at 900px and 760px with no horizontal overflow.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx` passed 20/20 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps cached pipeline rows visible while discovery refreshes" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-activity-detail-flexible-width-20260719-1543
+
+- Time: 2026-07-19 15:43 +08:00.
+- Purpose: Continue Activity responsive cleanup for the operation detail workspace.
+- Issue found:
+  - The Activity detail area kept a fixed desktop cap of `lg:max-w-[74rem]`.
+  - The outer Activity workbench is already centered and capped at `max-w-[1600px]`, so the inner cap could stop the detail area from using available workspace width.
+- Change:
+  - Changed `taskViewerDetailClass()` to use `lg:basis-0` with the existing `flex-1` behavior instead of a fixed max width.
+  - Updated focused layout tests to reject the old detail cap.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx` passed 10/10 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "presents Activity as scoped operational history sections" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-installed-runtime-owner-verifier-alignment-20260719-1547
+
+- Time: 2026-07-19 15:47 +08:00.
+- Purpose: Align installed-app runtime ownership verification with the product runtime takeover behavior.
+- Issue found:
+  - The installed desktop can stop a recoverable stale MergePilot/source daemon before starting its bundled sidecar.
+  - The installed runtime takeover smoke and aggregate installed-app smoke still treated any non-installed daemon owner on port 8787 as an immediate failure.
+  - This made the verifier fail before it could test the desired product behavior: installed desktop reclaiming the runtime from a stale MergePilot daemon while refusing unrelated processes.
+- Change:
+  - Added `Test-RecoverableMergePilotRuntimeOwner` to `verify-installed-desktop-runtime-takeover.ps1`.
+  - Added command-line owner probing and the same recoverable-owner classifier to `run-installed-app-smoke.ps1`.
+  - Kept the safety boundary: unrelated port owners still fail preflight.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/app/daemonGate.test.ts` passed 7/7 tests.
+  - PowerShell parser checks passed for `verify-installed-desktop-runtime-takeover.ps1` and `run-installed-app-smoke.ps1`.
+  - Static assertions confirmed both scripts now read owner command lines and recognize `mergepilot-daemon`, `packages\daemon`, and `src\bin.ts` runtime owners.
+
+# Run: mp-0524-installed-desktop-runtime-trust-live-20260719-1550
+
+- Time: 2026-07-19 15:50 +08:00.
+- Purpose: Verify the currently installed MergePilot desktop owns and exposes the trusted daemon runtime.
+- Starting state:
+  - `C:\Program Files\MergePilot\mergepilot-desktop.exe` exists with Windows product/file version `0.5.24`.
+  - `C:\Program Files\MergePilot\mergepilot-daemon.exe` exists with Windows product/file version `22.10.0`.
+  - Port 8787 had no listening owner before the smoke.
+- Important finding:
+  - The installed daemon executable file version reflects the packaged Node runtime (`22.10.0`), not the MergePilot application version.
+  - Product trust should therefore use `/healthz.version`, `/healthz.runtimeMode`, and `/healthz.desktopVersion`, not the daemon exe file property.
+- Verification:
+  - `.\scripts\windows\verify-installed-desktop-runtime-takeover.ps1 -ExpectedVersion 0.5.24 -Port 8787 -StopExistingMergePilotBeforeLaunch` passed.
+  - `/healthz` during the smoke returned `version=0.5.24`, `runtimeMode=desktop-sidecar`, `desktopVersion=0.5.24`.
+  - Runtime owner after launch was `C:\Program Files\MergePilot\mergepilot-daemon.exe` on PID 41000.
+  - The smoke cleaned up the installed desktop and daemon after completion; port 8787 was not listening afterward.
+
+# Run: mp-0524-installed-app-aggregate-smoke-20260719-1552
+
+- Time: 2026-07-19 15:52 +08:00.
+- Purpose: Run the aggregate installed-app smoke gate after runtime-owner verifier alignment.
+- Command:
+  - `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.24 -ExpectedDesktopBundleKind any`
+- Result:
+  - Passed with `ok=true`.
+  - Package probe daemon reported `daemonVersion=0.5.24`, `runtimeMode=source`, and `execPath=C:\Program Files\MergePilot\mergepilot-daemon.exe`.
+  - Package-state, restart persistence, unrelated-owner safety, verifier safety, fresh-user first-run config, and desktop runtime takeover checks all exited 0.
+  - The aggregate smoke reported no failures.
+- Cleanup verification:
+  - Ports 8787, 8798, 8799, 8800, 8801, and 8802 were all not listening after the run.
+  - No MergePilot desktop or daemon process remained after the smoke.
+- Logs:
+  - `output\live-e2e\installed-app-package-state-20260719-155055.log`
+  - `output\live-e2e\installed-app-persistence-20260719-155055.log`
+  - `output\live-e2e\installed-app-safety-20260719-155055.log`
+  - `output\live-e2e\installed-app-verifier-safety-20260719-155055.log`
+  - `output\live-e2e\installed-app-fresh-user-20260719-155055.log`
+  - `output\live-e2e\installed-app-desktop-runtime-20260719-155055.log`
+
+# Run: mp-0524-chat-empty-state-template-responsive-smoke-20260719-1557
+
+- Time: 2026-07-19 15:57 +08:00.
+- Purpose: Verify the New Chat home state is stable, responsive, and free of stale preload templates.
+- Checks:
+  - The installed runtime payload scan found no removed frontend preload symbols: `WelcomeSuggestions`, `useChatIndexStatus`, or `fetchChatIndexStatus`.
+  - The stale-template verifier self-smoke accepted clean/current welcome payloads, rejected stale preload helpers, and ignored source maps unless explicitly requested.
+  - The New Chat route did not call `/chat/index-status` before user action.
+  - The welcome panel stayed visible at 1600px and 760px with no horizontal overflow.
+  - Existing Chat layout smoke confirmed the maximized chat workspace has usable width and the empty page does not emit preloaded workflow actions.
+- Verification:
+  - `.\scripts\windows\verify-no-stale-chat-template-smoke.ps1` passed.
+  - `.\scripts\windows\verify-no-stale-chat-template.ps1 -Installed` passed for `C:\Program Files\MergePilot`.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx` passed 4/4 tests.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps New Chat empty state quiet without index-status preload" -Workers 1` passed 1/1 Chromium test.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/chat-layout.spec.ts -Grep "keeps empty New Chat free of preloaded command templates" -Workers 1` passed 1/1 Chromium test.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/chat-layout.spec.ts -Grep "gives the chat workspace usable width when maximized" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-installed-app-smoke-runtime-reporting-20260719-1601
+
+- Time: 2026-07-19 16:01 +08:00.
+- Purpose: Improve aggregate installed-app smoke reporting so direct daemon probes are not confused with desktop-owned sidecar runtime trust.
+- Issue found:
+  - `run-installed-app-smoke.ps1` reported `packageProbe.runtimeMode=source`, which is expected for the direct daemon package probe.
+  - The same top-level report only exposed `desktopRuntime.exitCode`, so a reader had to open the child log to see that the installed desktop actually started a trusted `desktop-sidecar` runtime.
+- Change:
+  - Added `Get-JsonLogOrNull` to parse child smoke JSON logs.
+  - Added `packageProbe.runtimeModeContext` and `packageProbe.desktopVersion` to clarify direct daemon probe semantics.
+  - Added `desktopRuntime.trustedVersion`, `desktopRuntime.runtimeMode`, `desktopRuntime.desktopVersion`, `desktopRuntime.ownerAfterPath`, and `desktopRuntime.ownerBeforeRecoverable` to the aggregate output.
+- Verification:
+  - PowerShell parser check passed for `run-installed-app-smoke.ps1`.
+  - `.\scripts\windows\run-installed-app-smoke.ps1 -ExpectedVersion 0.5.24 -ExpectedDesktopBundleKind any` passed with `ok=true`.
+  - The updated report showed `packageProbe.runtimeMode=source` with context `direct daemon probe; desktop-sidecar ownership is verified by desktopRuntime`.
+  - The updated report showed `desktopRuntime.trustedVersion=0.5.24`, `runtimeMode=desktop-sidecar`, `desktopVersion=0.5.24`, and `ownerAfterPath=C:\Program Files\MergePilot\mergepilot-daemon.exe`.
+  - Ports 8787, 8798, 8799, 8800, 8801, and 8802 were all not listening after the run.
+
+# Run: mp-0524-chat-project-link-onboarding-branch-responsive-grid-20260719-1608
+
+- Time: 2026-07-19 16:08 +08:00.
+- Purpose: Verify Project Link onboarding stays usable on narrow chat screens and branch fields do not overlap or waste horizontal space.
+- Issue found:
+  - The Project Link onboarding branch selector row used a fixed single-column grid, so wide compact forms could waste available width and narrower layouts were not explicitly protected by an auto-fit rule.
+  - The existing browser smoke was asserting an old non-compact card title and composer visibility during the no-Project-Link onboarding state.
+- Change:
+  - Added an auto-fit branch selector grid with `minmax(min(100%,13rem),1fr)`.
+  - Added a focused layout unit test for the onboarding branch grid helper.
+  - Updated the browser smoke to validate the compact onboarding fields and create action instead of hidden/non-applicable UI.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/projectLinkOnboarding/ProjectLinkBasicFields.test.tsx` passed 1/1 test.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/chat-layout.spec.ts -Grep "keeps the Project Link onboarding form usable on narrow screens" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-project-links-card-metadata-responsive-20260719-1611
+
+- Time: 2026-07-19 16:11 +08:00.
+- Purpose: Keep saved Project Link cards stable when project names, Azure DevOps URLs, and branch names are long.
+- Change:
+  - Added explicit `min-w-0`, `max-w-full`, and `truncate` protection to the Project Link card metadata row.
+  - Covered the behavior in the existing ProjectLinks layout test.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ProjectLinks.test.tsx` passed 6/6 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "lays out saved Project Links as a responsive card grid" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-settings-model-badges-responsive-20260719-1616
+
+- Time: 2026-07-19 16:16 +08:00.
+- Purpose: Keep Settings readable when users configure long custom model names or multiple Chat model choices.
+- Change:
+  - Allowed Settings row descriptions to render structured content.
+  - Replaced the comma-joined "Available in Chat" custom model string with wrapping model badges.
+  - Added badge CSS with bounded width, ellipsis, and container-aware narrow behavior.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/settings/AdditionalModelsSettingsSection.test.tsx src/pages/settings/settingsControlsStyles.test.ts src/pages/settings/settingsLayout.test.ts` passed 8/8 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/route-cache.spec.ts -Grep "keeps Settings rows responsive in a narrow desktop window" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-chat-composer-responsive-controls-20260719-1619
+
+- Time: 2026-07-19 16:19 +08:00.
+- Purpose: Keep the Chat composer usable when the app is narrowed, maximized with side panels, or populated with long model names and image attachments.
+- Change:
+  - Replaced fixed composer widths with bounded helper classes for the Project Link selector, model button, model menu, bottom control row, and image attachment chips.
+  - Added break/wrap protection for attachment error text.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ComposerShell.test.ts src/pages/chat/layout/composerMenuState.test.ts` passed 6/6 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/chat-layout.spec.ts -Grep "keeps the project-linked chat shell inside the viewport" -Workers 1` passed 1/1 Chromium test.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/chat-layout.spec.ts -Grep "sends image attachments from the compact composer add menu" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-chat-environment-actions-responsive-20260719-1622
+
+- Time: 2026-07-19 16:22 +08:00.
+- Purpose: Keep the Chat environment and pinned summary action areas usable when the workspace is resized or the code panel is open.
+- Change:
+  - Replaced fixed two-column ADO action grids with auto-fit grids in the workspace Project Link panel and pinned summary.
+  - Replaced fixed two/three-column Git recovery action grids with an auto-fit grid.
+  - Replaced the pinned summary fixed `300px` width with a viewport-bounded width.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/WorkspaceProjectLinkPanel.test.ts src/pages/chat/layout/WorkspaceGitRecoveryPanel.test.ts src/pages/chat/layout/PinnedSummaryPanel.test.ts` passed 4/4 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/chat-layout.spec.ts -Grep "keeps active Project Link long workflow transcript clear of the pinned summary" -Workers 1` passed 1/1 Chromium test.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/chat-layout.spec.ts -Grep "keeps the project-linked chat shell inside the viewport" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-execution-command-label-responsive-20260719-1625
+
+- Time: 2026-07-19 16:25 +08:00.
+- Purpose: Keep execution transcript rows compact when Git or Azure DevOps commands include long paths, flags, or branch names.
+- Change:
+  - Added explicit `min-w-0` protection to execution rows and expanded detail containers.
+  - Replaced the fixed `max-w-[42rem]` command label with a parent-bounded `max-w-full` label.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ExecutionCommandRow.test.tsx src/components/conversation/ExecutionTimeline.test.tsx` passed 9/9 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/chat-layout.spec.ts -Grep "Running" -Workers 1` passed 1/1 Chromium test.
+  - `.\scripts\windows\run-mocked-browser-e2e.ps1 -TestPath tests/e2e/chat-layout.spec.ts -Grep "keeps active Project Link long workflow transcript clear of the pinned summary" -Workers 1` passed 1/1 Chromium test.
+
+# Run: mp-0524-source-code-panel-responsive-20260719-1633
+
+- Time: 2026-07-19 16:33 +08:00.
+- Purpose: Keep the Chat source/code panel trustworthy and usable when source references open long paths or the right panel is narrow.
+- Change:
+  - Replaced the source tab fixed `14rem` cap with a viewport-bounded tab width.
+  - Allowed the CodeMirror preview header to wrap so path, line count, target line, and copy actions do not collide.
+  - Shortened the empty source state to `No file selected`.
+  - Added focused helper tests for source tabs, preview chrome, and empty-state width protection.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/artifacts/ArtifactWorkspace.test.tsx` passed 9/9 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"; .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "renders project-context source references"` passed 1/1 Chromium test.
+
+# Run: mp-0524-activity-section-filter-responsive-20260719-1638
+
+- Time: 2026-07-19 16:38 +08:00.
+- Purpose: Keep the Activity operational-history rail readable as the app moves between maximized, medium, and narrow widths.
+- Change:
+  - Replaced the Activity section filter's fixed two-column grid with an auto-fit grid.
+  - Added focused coverage so the filter buttons reflow by available width instead of staying locked to two columns.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/taskViewer/ActivitySidebar.test.tsx src/pages/TaskViewer.test.tsx` passed 20/20 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"; .\.tools\pnpm.exe exec playwright test tests/e2e/route-cache.spec.ts -g "presents Activity as scoped operational history sections"` passed 1/1 Chromium test.
+
+# Run: mp-0524-inline-source-reference-chip-responsive-20260719-1641
+
+- Time: 2026-07-19 16:41 +08:00.
+- Purpose: Keep inline file/source reference chips from widening the Chat transcript while preserving the click-through path into the right-side code panel.
+- Change:
+  - Replaced the fixed inline reference chip `13rem` maximum with a parent-bounded width.
+  - Added focused coverage for `min-w-0` and bounded chip width.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/components/conversation/ReferenceParts.test.tsx src/components/conversation/ConversationPartRendererStructuredParts.test.tsx` passed 9/9 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"; .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "renders project-context source references"` passed 1/1 Chromium test on rerun. The first run hit a request-array timing assertion while the failure screenshot already showed the source panel loaded; no product regression was observed.
+
+# Run: mp-0524-settings-runtime-metadata-responsive-20260719-1644
+
+- Time: 2026-07-19 16:44 +08:00.
+- Purpose: Keep Settings runtime-trust evidence readable when the daemon mode, desktop build, or runtime path is long.
+- Change:
+  - Bounded the desktop build SHA and daemon runtime mode labels by the Settings control column instead of fixed-width caps.
+  - Added focused tests so runtime metadata uses `min(...,100%)` and `min-w-0`.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/settings/RuntimeSettingsSection.test.tsx src/pages/settings/settingsLayout.test.ts` passed 9/9 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"; .\.tools\pnpm.exe exec playwright test tests/e2e/route-cache.spec.ts -g "keeps Settings rows responsive in a narrow desktop window"` passed 1/1 Chromium test.
+
+# Run: mp-0524-pipeline-analysis-panel-breakpoint-20260719-1648
+
+- Time: 2026-07-19 16:48 +08:00.
+- Purpose: Keep the Pipelines workspace readable at medium desktop widths when AI analysis details are open.
+- Change:
+  - Delayed the Pipelines analysis/detail panel side-by-side layout from `lg` to `xl`.
+  - Kept the detail panel as a right-side drawer at 900px and 1100px to avoid squeezing pipeline cards.
+  - Updated the pipeline route smoke test to require drawer behavior at medium width and sticky side-panel behavior at 1366px.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx` passed 26/26 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\.tools\pnpm.exe exec playwright test tests/e2e/route-cache.spec.ts -g "renders successful pipeline AI analysis as Markdown"` passed 1/1 Chromium test.
+
+# Run: mp-0524-side-panel-breakpoint-unification-20260719-1655
+
+- Time: 2026-07-19 16:55 +08:00.
+- Purpose: Make right-side detail panels behave consistently across PR insight, Review Queue activity, and Pipelines when the app window is resized.
+- Change:
+  - Delayed Pull Requests PR insight side-panel layout from `lg` to `xl`, matching the Pipelines analysis panel.
+  - Delayed Review Queue Recent activity side-panel layout from `lg` to `xl`.
+  - Kept both panels as right-side drawers at 900px and 1100px to avoid squeezing the main workflow content.
+  - Updated browser smoke expectations so 1100px remains drawer mode and 1366px uses sticky side-panel mode.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/ReviewFindings.test.tsx src/pages/reviewFindings/ReviewActivityRail.test.tsx` passed 20/20 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\.tools\pnpm.exe exec playwright test tests/e2e/route-cache.spec.ts -g "shows readable PR insight scope"` passed 1/1 Chromium test.
+  - `.\.tools\pnpm.exe exec playwright test tests/e2e/review-queue.spec.ts -g "keeps Recent activity collapsed"` passed 1/1 Chromium test.
+
+# Run: mp-0524-activity-workbench-breakpoint-20260719-1700
+
+- Time: 2026-07-19 17:00 +08:00.
+- Purpose: Keep the Activity workbench readable when the app is resized to medium desktop widths.
+- Change:
+  - Delayed Activity's operational-history rail and detail view from `lg` side-by-side layout to `xl`.
+  - Kept the source list above the detail panel at 1100px so the detail panel is not squeezed.
+  - Preserved the wide desktop side-by-side workbench at 1366px and above.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx` passed 20/20 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\.tools\pnpm.exe exec playwright test tests/e2e/route-cache.spec.ts -g "presents Activity as scoped operational history sections"` passed 1/1 Chromium test.
+
+# Run: mp-0524-settings-control-width-guard-20260719-1703
+
+- Time: 2026-07-19 17:03 +08:00.
+- Purpose: Prevent Settings form controls from widening the page when users configure long model/provider values.
+- Change:
+  - Added `min-width: 0` to shared settings text inputs and input wrappers.
+  - Made settings selects use `width: min(100%, 12rem)` instead of a hard `12rem` minimum.
+  - Added stylesheet coverage so shared settings controls keep shrinking inside narrow control columns.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/settings/settingsControlsStyles.test.ts src/pages/settings/AdditionalModelsSettingsSection.test.tsx src/pages/settings/settingsLayout.test.ts` passed 8/8 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\.tools\pnpm.exe exec playwright test tests/e2e/route-cache.spec.ts -g "keeps Settings rows responsive in a narrow desktop window"` passed 1/1 Chromium test.
+
+# Run: mp-0524-project-link-form-wide-responsive-20260719-1708
+
+- Time: 2026-07-19 17:08 +08:00.
+- Purpose: Use maximized desktop space better on Project Link create/edit forms without hurting medium-width readability.
+- Change:
+  - Increased the Project Link form shell from `max-w-3xl` to `max-w-5xl`.
+  - Wrapped the Workspace and Azure DevOps sections in a responsive form grid.
+  - Kept the sections stacked below the `xl` breakpoint and side-by-side on wide desktop windows.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ProjectLinks.test.tsx src/pages/projectLinks/ProjectLinkForm.test.tsx src/pages/projectLinks/ProjectLinkWorkspaceSection.test.tsx src/pages/projectLinks/ProjectLinkAdoSection.test.tsx` passed 10/10 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\.tools\pnpm.exe exec playwright test tests/e2e/route-cache.spec.ts -g "Project Link edits update Pull Requests insight scope"` passed 1/1 Chromium test.
+
+# Run: mp-0524-chat-code-panel-overlay-responsive-20260719-1719
+
+- Time: 2026-07-19 17:19 +08:00.
+- Purpose: Keep Chat readable when the source/code panel is open and the desktop window is narrowed.
+- Change:
+  - Added an overlay mode for the Chat right code panel below the compact workspace breakpoint.
+  - Kept the code panel open as a bounded side drawer instead of collapsing it or squeezing the transcript.
+  - Updated the panel visibility model so history and source panel widths respond differently in narrow and wide layouts.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/chatPanelLayout.test.ts src/pages/chat/layout/ChatWorkspaceLayout.test.ts` passed 11/11 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"; .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "turns the code panel into an overlay"` passed 1/1 Chromium test.
+
+# Run: mp-0524-chat-empty-state-vertical-responsive-20260719-1723
+
+- Time: 2026-07-19 17:23 +08:00.
+- Purpose: Reduce excessive blank space on the New Chat home screen while preserving stable welcome prompts.
+- Change:
+  - Replaced fixed `18vh` welcome offset with a bounded `clamp(...)` top offset.
+  - Added explicit vertical padding for onboarding/loading variants so low-height windows do not crowd the composer.
+  - Kept the resolved Project Link welcome actions stable and free of preloaded command templates.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatEmptyState.test.tsx src/pages/chat/layout/ChatMessageList.test.tsx` passed 16/16 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"; .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "gives the chat workspace usable width when maximized|keeps empty New Chat free of preloaded command templates" --workers=1` passed 2/2 Chromium tests.
+
+# Run: mp-0524-chat-overlay-topbar-width-20260719-1725
+
+- Time: 2026-07-19 17:25 +08:00.
+- Purpose: Complete the compact source-panel overlay behavior by preventing the top bar from reserving hidden side-panel width.
+- Change:
+  - Added top-bar width logic so overlay source panels keep only the compact toggle slot in the title bar.
+  - Preserved docked wide-layout behavior where the title bar aligns with the visible source panel split.
+  - Added focused unit coverage for closed, docked, and overlay right-panel states.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ConversationTopBar.test.ts src/pages/chat/layout/chatPanelLayout.test.ts src/pages/chat/layout/ChatWorkspaceLayout.test.ts` passed 14/14 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"; .\.tools\pnpm.exe exec playwright test tests/e2e/chat-layout.spec.ts -g "turns the code panel into an overlay" --workers=1` passed 1/1 Chromium test.
+
+# Run: mp-0524-workspace-header-breakpoint-unification-20260719-1730
+
+- Time: 2026-07-19 17:30 +08:00.
+- Purpose: Keep Pull Requests, Pipelines, and Review Queue headers from squeezing medium-width desktop layouts.
+- Change:
+  - Moved Pipelines header control fixed-width behavior from `lg` to `xl`.
+  - Moved Pull Requests header control fixed-width behavior from `lg` to `xl`.
+  - Moved Review Queue header control width and row layout from `lg` to `xl`, matching the side-panel drawer breakpoints.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pullRequests/PullRequestPageHeader.test.tsx src/pages/reviewFindings/ReviewQueuePageHeader.test.tsx` passed 24/24 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"; .\.tools\pnpm.exe exec playwright test tests/e2e/route-cache.spec.ts -g "renders successful pipeline AI analysis as Markdown|shows readable PR insight scope|keeps Recent activity collapsed" --workers=1` passed 2/2 matched Chromium tests for PR and Pipelines.
+  - `$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"; .\.tools\pnpm.exe exec playwright test tests/e2e/review-queue.spec.ts -g "keeps Recent activity collapsed" --workers=1` passed 1/1 Chromium test.
+
+# Run: mp-0524-review-queue-card-actions-responsive-20260719-1733
+
+- Time: 2026-07-19 17:33 +08:00.
+- Purpose: Prevent Review Queue item actions from crowding metrics or sticking awkwardly to the right edge in resized windows.
+- Change:
+  - Made the Review Queue card metrics grid `min-w-0 flex-1`.
+  - Moved the action group to a full-width, left-aligned wrapped row on narrow cards.
+  - Preserved right-aligned compact actions from the `sm` breakpoint upward.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/reviewFindings/ReviewQueueCard.test.tsx src/pages/ReviewFindings.test.tsx` passed 12/12 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"; .\.tools\pnpm.exe exec playwright test tests/e2e/review-queue.spec.ts -g "keeps Recent activity collapsed" --workers=1` passed 1/1 Chromium test.
+
+# Run: mp-0524-review-queue-compact-controls-activity-drawer-20260719-1738
+
+- Time: 2026-07-19 17:38 +08:00.
+- Purpose: Reduce Review Queue page bulk so decisions appear sooner in smaller desktop windows.
+- Change:
+  - Replaced the four large Review Queue lane cards with compact selectable controls.
+  - Moved lane explanatory text into hover titles instead of always-visible body copy.
+  - Kept Recent activity as a right-side drawer at all viewport widths instead of reserving a main-page column.
+  - Reduced always-visible sidebar account detail by hiding the email until hover/menu expansion.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/reviewFindings/ReviewQueueControls.test.tsx src/pages/reviewFindings/ReviewActivityRail.test.tsx src/pages/ReviewFindings.test.tsx src/pages/reviewFindings/ReviewQueueCard.test.tsx src/pages/pullRequests/PullRequestCard.test.tsx` passed 23/23 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"; .\.tools\pnpm.exe exec playwright test tests/e2e/review-queue.spec.ts -g "keeps Recent activity collapsed" --workers=1` passed 1/1 Chromium test.
+  - `git diff --check -- apps/desktop/src/pages/reviewFindings/ReviewQueueControls.tsx apps/desktop/src/pages/reviewFindings/ReviewActivityRail.tsx apps/desktop/src/pages/ReviewFindings.tsx apps/desktop/src/app/UserFooter.tsx apps/desktop/src/pages/reviewFindings/ReviewQueueControls.test.tsx apps/desktop/src/pages/reviewFindings/ReviewActivityRail.test.tsx apps/desktop/src/pages/ReviewFindings.test.tsx apps/desktop/src/pages/pullRequests/PullRequestCard.test.tsx` passed with only expected LF-to-CRLF warnings.
+
+# Run: mp-0524-pipelines-analysis-drawer-density-20260719-1745
+
+- Time: 2026-07-19 17:45 +08:00.
+- Purpose: Keep the Pipelines list readable while AI analysis or run evidence details are open.
+- Change:
+  - Kept pipeline row cards in the responsive auto-fit grid even when a detail panel is open.
+  - Changed the Pipeline detail panel to a right-side fixed drawer at all viewport widths instead of becoming a sticky layout column on wide screens.
+  - Reduced the card-level AI analysis preview to a compact clipped summary; full Markdown analysis and run evidence remain in the drawer.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx` passed 27/27 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"; .\.tools\pnpm.exe exec playwright test tests/e2e/route-cache.spec.ts -g "renders successful pipeline AI analysis as Markdown" --workers=1` passed 1/1 Chromium test.
+
+# Run: mp-0524-pr-insight-drawer-layout-20260719-1749
+
+- Time: 2026-07-19 17:49 +08:00.
+- Purpose: Keep the Pull Requests list readable while PR insight details are open.
+- Change:
+  - Changed the PR insight panel to a right-side fixed drawer at every viewport width.
+  - Removed the wide-screen main-layout column reservation for the insight panel.
+  - Kept PR category controls and cards in the primary list flow while insight details overlay from the right.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/pullRequests/PullRequestCard.test.tsx src/pages/pullRequests/PullRequestPageHeader.test.tsx src/pages/pullRequests/StoredInsightPanel.test.ts` passed 17/17 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"; .\.tools\pnpm.exe exec playwright test tests/e2e/route-cache.spec.ts -g "shows readable PR insight scope" --workers=1` passed 1/1 Chromium test.
+
+# Run: mp-0524-activity-source-rail-density-20260719-1752
+
+- Time: 2026-07-19 17:52 +08:00.
+- Purpose: Reduce Activity page rail bulk so detail content has more room in resized desktop windows.
+- Change:
+  - Narrowed the Activity source rail from `clamp(18rem,30vw,23rem)` to `clamp(16rem,24vw,21rem)`.
+  - Converted Activity section filters to compact inline label/count controls.
+  - Added hover titles for Activity section counts instead of relying on larger vertical filter blocks.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/TaskViewer.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx` passed 20/20 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"; .\.tools\pnpm.exe exec playwright test tests/e2e/route-cache.spec.ts -g "presents Activity as scoped operational history sections" --workers=1` passed 1/1 Chromium test.
+
+# Run: mp-0524-settings-workbench-width-density-20260719-1756
+
+- Time: 2026-07-19 17:56 +08:00.
+- Purpose: Let Settings use maximized desktop space without making each row heavier.
+- Change:
+  - Expanded the Settings workbench from `64rem` to `72rem`.
+  - Reduced Settings row control column from `minmax(18rem, min(42vw, 32rem))` to `minmax(14rem, min(38vw, 28rem))`.
+  - Reduced section and row spacing so more configuration rows remain visible during review.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/settings/settingsLayout.test.ts src/pages/settings/settingsControlsStyles.test.ts src/pages/settings/AdditionalModelsSettingsSection.test.tsx src/pages/settings/AppearanceSettingsSection.test.tsx src/pages/settings/RuntimeSettingsSection.test.tsx` passed 15/15 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `$env:PATH = "$PWD\.tools\node-v22.11.0-win-x64;$PWD\.tools;$env:PATH"; .\.tools\pnpm.exe exec playwright test tests/e2e/route-cache.spec.ts -g "keeps Settings rows responsive" --workers=1` passed 1/1 Chromium test.
+
+# Run: mp-0524-project-link-card-density-20260719-1802
+
+- Time: 2026-07-19 18:02 +08:00.
+- Purpose: Reduce always-visible Project Link data so saved links stay scannable in smaller windows.
+- Change:
+  - Show only the local repository folder name in Project Link cards; keep the full path in hover title.
+  - Collapse Azure DevOps details into `project / repo`; keep the organisation URL in hover title.
+  - Show branch defaults as a compact `default -> target` chip.
+  - Tightened Project Link workspace and Azure DevOps form sections with smaller responsive grids.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ProjectLinks.test.tsx src/pages/projectLinks/ProjectLinkForm.test.tsx src/pages/projectLinks/ProjectLinkWorkspaceSection.test.tsx src/pages/projectLinks/ProjectLinkAdoSection.test.tsx` passed 11/11 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "lays out saved Project Links as a responsive card grid"` passed 1/1 Chromium test.
+
+# Run: mp-0524-review-queue-and-pipelines-density-followup-20260719-1816
+
+- Time: 2026-07-19 18:16 +08:00.
+- Purpose: Continue reducing always-visible operational data after installed-app review at maximized and resized windows.
+- Change:
+  - Moved long Review Queue decision attention reasons into the card hover title instead of showing a full `Attention:` line in the card body.
+  - Combined Review Queue iteration, commit, and run time into one compact meta line.
+  - Reduced Review Queue card padding, footer spacing, metric column minimum width, and action gaps.
+  - Replaced Pipelines status dashboard cards with compact wrapping filter chips that keep counts visible without consuming a full card row.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/reviewFindings/ReviewQueueCard.test.tsx` passed 5/5 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx` passed 20/20 tests.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/review-queue.spec.ts -g "keeps Recent activity collapsed"` passed 1/1 Chromium test.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "renders successful pipeline AI analysis as Markdown"` passed 1/1 Chromium test.
+
+# Run: mp-0524-pr-insight-preview-density-20260719-1821
+
+- Time: 2026-07-19 18:21 +08:00.
+- Purpose: Keep Pull Request cards list-first when saved AI insight summaries contain Markdown lists or long evidence.
+- Change:
+  - Replaced unreliable nested Markdown `line-clamp` behavior with an explicit `max-height`, overflow clipping, and fade mask for the PR card insight preview.
+  - Kept full Markdown insight available in the existing right-side PR insight drawer.
+  - Verified Project Link edit form still stacks at medium widths and switches to two columns at maximized desktop width.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pullRequests/PullRequestCard.test.tsx` passed 6/6 tests.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "shows readable PR insight scope"` passed 1/1 Chromium test, including PR card preview height and drawer checks.
+
+# Run: mp-0524-activity-detail-reduction-20260719-1832
+
+- Time: 2026-07-19 18:32 +08:00.
+- Purpose: Reduce always-visible Activity and account details while preserving full context on demand.
+- Change:
+  - Shortened Activity checkpoint list subtitles to compact tail paths and preserved the full repository path in hover title/detail view.
+  - Shortened Review Operation list subtitles to key metrics such as `readiness`, `risks`, and `files`, while preserving the full structured detail in hover title.
+  - Changed the workspace account footer default label from the real user name to `Signed in`; the full name and email remain available via hover title and the account menu.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/app/UserFooter.test.tsx src/pages/taskViewer/ActivitySidebar.test.tsx src/pages/taskViewer/operationDetailSummary.test.ts src/pages/taskViewer/checkpointActivity.test.ts` passed 21/21 tests.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "presents Activity as scoped operational history sections" --workers=1` passed 1/1 Chromium test.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `git diff --check` passed with only existing LF/CRLF working-copy warnings.
+  - Browser smoke at `http://127.0.0.1:1420/#/activity` with `1024x720` viewport showed compact checkpoint paths, compact review operation metrics, and `Signed in` in the account footer.
+
+# Run: mp-0524-review-queue-filter-button-density-20260719-1838
+
+- Time: 2026-07-19 18:38 +08:00.
+- Purpose: Make Review Queue status controls behave like compact selectable filters instead of oversized dashboard cards.
+- Change:
+  - Converted the four Review Queue lane controls to compact label/count buttons.
+  - Moved auto-approve enable/disable out of the `Auto-approved` lane and into the shared control row.
+  - Reduced the lane grid minimum width and section padding so review decision rows appear sooner in smaller windows.
+  - Kept lane descriptions available through hover titles and preserved the right-side Recent activity drawer behavior.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ReviewFindings.test.tsx src/pages/reviewFindings/ReviewQueueControls.test.tsx src/pages/reviewFindings/ReviewActivityRail.test.tsx src/pages/reviewFindings/ReviewQueueCard.test.tsx` passed 19/19 tests.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/review-queue.spec.ts -g "keeps Recent activity collapsed" --workers=1` passed 1/1 Chromium test.
+  - Browser smoke at `http://127.0.0.1:1420/#/findings` with `1024x720` viewport showed compact status filter buttons and review decision rows visible below the controls.
+
+# Run: mp-0524-pr-card-insight-summary-density-20260719-1844
+
+- Time: 2026-07-19 18:44 +08:00.
+- Purpose: Keep Pull Request cards list-first by moving rich Markdown insight content out of the card body.
+- Change:
+  - Replaced in-card Markdown rendering for `Latest insight` with a plain-text two-line summary.
+  - Skips generic `PR Insight Summary...` headings when choosing card preview text.
+  - Keeps full Markdown, code tokens, risk bullets, and evidence in the existing right-side PR insight drawer.
+  - Updated the PR insight E2E to assert that list/card content stays compact while drawer content remains complete.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pullRequests/PullRequestCard.test.tsx src/pages/PullRequests.test.tsx src/pages/pullRequests/StoredInsightPanel.test.ts src/pages/pullRequests/PullRequestPageHeader.test.tsx` passed 19/19 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pullRequests/PullRequestCard.test.tsx` passed 8/8 tests after heading-skip adjustment.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "shows readable PR insight scope" --workers=1` passed 1/1 Chromium test.
+  - Browser smoke at `http://127.0.0.1:1420/#/pulls` with `1366x768` viewport showed `Latest insight` as a compact plain-text summary instead of a full Markdown list.
+
+# Run: mp-0524-project-link-name-density-20260719-1850
+
+- Time: 2026-07-19 18:50 +08:00.
+- Purpose: Reduce Project Links list noise from generated timestamp-heavy link names.
+- Change:
+  - Added compact Project Link name rendering for generated names such as `mp-live-claimbot-pipeline-20260716181319`.
+  - Preserves uniqueness by keeping the final four timestamp digits, for example `mp live claimbot pipeline · 1319`.
+  - Keeps the complete Project Link name in hover title and action aria-labels.
+  - Leaves human-authored names such as `ClaimBot_API link` unchanged.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ProjectLinks.test.tsx src/pages/projectLinks/ProjectLinkForm.test.tsx src/pages/projectLinks/ProjectLinkWorkspaceSection.test.tsx src/pages/projectLinks/ProjectLinkAdoSection.test.tsx` passed 11/11 tests.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "lays out saved Project Links as a responsive card grid" --workers=1` passed 1/1 Chromium test.
+  - Browser smoke at `http://127.0.0.1:1420/#/project-links` with `1366x768` viewport showed compact generated names while full names remained available in titles.
+
+# Run: mp-0524-pipeline-summary-chip-density-20260719-1856
+
+- Time: 2026-07-19 18:56 +08:00.
+- Purpose: Reduce Pipelines card height and remove repeated no-run information.
+- Change:
+  - Replaced the Pipeline card branch/run field grid with compact summary chips.
+  - Combined default and target branch into one `Branches` chip with the full meaning in hover title.
+  - Kept linked PR count as a compact chip.
+  - Removed the `Latest run: No run linked yet` chip when the top status badge already says `No recent run`.
+  - Still renders a clickable latest-run chip when a concrete run exists.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pipelines/PipelineRowCard.test.tsx src/pages/Pipelines.test.tsx src/pages/pipelines/pipelineModel.test.ts` passed 34/34 tests.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "renders successful pipeline AI analysis as Markdown" --workers=1` passed 1/1 Chromium test.
+  - Browser smoke at `http://127.0.0.1:1420/#/pipelines` with `1024x720` viewport showed branch/PR summary chips and no duplicate no-run fallback text.
+
+# Run: mp-0524-review-queue-drawer-and-scope-density-20260719-1904
+
+- Time: 2026-07-19 19:04 +08:00.
+- Purpose: Make Review Queue activity behave like a right-side pullout instead of consuming page space, and reduce always-visible Project Link scope text.
+- Change:
+  - Changed the collapsed `Show activity` trigger from normal page flow to a fixed right-side floating control.
+  - Kept expanded Recent activity as a fixed right drawer, so it overlays from the right without squeezing the queue content.
+  - Reused Project Links compact display helpers in the Review Queue header selector.
+  - Combined ADO project/repo into one scope chip and default/target branch into one branch chip, with full details kept in hover titles.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ReviewFindings.test.tsx src/pages/reviewFindings/ReviewActivityRail.test.tsx src/pages/reviewFindings/ReviewQueuePageHeader.test.tsx src/pages/reviewFindings/ReviewQueueControls.test.tsx src/app/UserFooter.test.tsx` passed 18/18 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/reviewFindings/ReviewActivityRail.test.tsx src/pages/reviewFindings/ReviewQueuePageHeader.test.tsx` passed 6/6 tests after preserving the `Show activity` accessible name.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/review-queue.spec.ts -g "keeps Recent activity collapsed" --workers=1` passed 1/1 Chromium test.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - Browser smoke at `http://127.0.0.1:1420/#/review-queue` with `1024x720` viewport showed the `Show activity` trigger as `position: fixed`; opening it produced a fixed 384px right drawer.
+
+# Run: mp-0524-pipeline-responsive-card-grid-20260719-1914
+
+- Time: 2026-07-19 19:14 +08:00.
+- Purpose: Make the Pipelines workspace respond to maximized desktop width instead of keeping oversized single-column cards.
+- Change:
+  - Reduced the Pipeline card auto-fit minimum from `34rem` to `30rem`.
+  - Added a stable `data-testid="pipeline-row-card"` for layout smoke coverage.
+  - Extended the cached pipeline rows E2E with two mocked discovered pipelines.
+  - Verified wide desktop lays out the first two cards on the same row, while narrower desktop keeps them stacked without horizontal overflow.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx src/pages/pipelines/pipelineModel.test.ts` passed 34/34 tests.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "keeps cached pipeline rows visible" --workers=1` passed 1/1 Chromium test.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "renders successful pipeline AI analysis as Markdown" --workers=1` passed 1/1 Chromium test.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - Browser smoke at `http://127.0.0.1:1420/#/pipelines` showed 1366px width using two columns with ~515px cards, and 1024px width using one column with no horizontal overflow.
+
+# Run: mp-0524-activity-all-view-empty-section-reduction-20260719-1918
+
+- Time: 2026-07-19 19:18 +08:00.
+- Purpose: Reduce always-visible operational data on Activity so the default view prioritizes sources that currently have useful records.
+- Change:
+  - Added state-driven Activity section visibility for the default `All` view.
+  - Empty sources are hidden in `All`, while an explicitly selected empty section still shows its empty state.
+  - Preserved loading states so first-load refreshes do not look like empty history.
+  - Updated E2E expectations so `All` stays clean after checkpoint records disappear, while the `Checkpoints` filter still shows `No Git checkpoints yet.`.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/taskViewer/ActivitySidebar.test.tsx src/pages/TaskViewer.test.tsx src/pages/taskViewer/checkpointActivity.test.ts src/pages/taskViewer/operationDetailSummary.test.ts` passed 32/32 tests.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "presents Activity as scoped operational history sections" --workers=1` passed 1/1 Chromium test.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+  - Browser smoke at `http://127.0.0.1:1420/#/activity` with `1366x768` viewport showed the first useful Activity source around `284px` from the top, with the empty Runs section hidden from the default view.
+
+# Run: mp-0524-pr-rq-responsive-density-20260719-1925
+
+- Time: 2026-07-19 19:25 +08:00.
+- Purpose: Continue workspace responsive-density tuning after installed-app review, especially maximized-window PR layout and small-window Review Queue data priority.
+- Change:
+  - Changed the Pull Requests list from a stretched single column to an auto-fit card grid.
+  - Wide desktop widths now show multiple PR cards on the same row; 760px and 1024px widths stay single-column without horizontal overflow.
+  - Hid the Review Queue explanatory paragraph below large widths so the first decision appears earlier in smaller windows.
+  - Kept the Review Queue Project Link selector, scope chips, compact lane filters, and fixed Recent activity drawer behavior unchanged.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/pullRequests/PullRequestCard.test.tsx` passed 18/18 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/reviewFindings/ReviewQueuePageHeader.test.tsx src/pages/reviewFindings/ReviewQueueControls.test.tsx src/pages/ReviewFindings.test.tsx` passed 14/14 tests.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "lays out Pull Request cards as a responsive grid" --workers=1` passed 1/1 Chromium test.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "shows readable PR insight scope" --workers=1` passed 1/1 Chromium test.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/review-queue.spec.ts -g "keeps Recent activity collapsed" --workers=1` passed 1/1 Chromium test.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+  - Live browser smoke at `http://127.0.0.1:1420/#/pulls` showed real PR cards single-column at 760/1024 and two-column at 1366/1600 with no horizontal overflow.
+  - Live browser smoke at `http://127.0.0.1:1420/#/review-queue` showed the first decision moving to about `324px` from the top at 760px width, with the explanatory paragraph hidden at that size.
+
+# Run: mp-0524-rq-chip-density-and-account-reduction-20260719-1935
+
+- Time: 2026-07-19 19:35 +08:00.
+- Purpose: Make Review Queue prioritize decision data in smaller windows and reduce always-visible identity detail in the global sidebar.
+- Change:
+  - Converted the Review Queue status blocks into compact wrapping filter chips, including an `All` chip with the total count.
+  - Reduced the Review Queue loading skeleton from four large lane cards to chip-sized placeholders.
+  - Kept Recent activity as a right-side floating entry and fixed overlay drawer, so opening it does not shift the main queue.
+  - Reduced the signed-in sidebar footer to avatar-only by default; account name and email remain available through hover title and the account menu.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/reviewFindings/ReviewQueueControls.test.tsx src/pages/reviewFindings/ReviewActivityRail.test.tsx src/app/UserFooter.test.tsx` passed 7/7 tests.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/review-queue.spec.ts -g "keeps Recent activity collapsed" --workers=1` passed 1/1 Chromium test.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - Live browser smoke at `http://127.0.0.1:1420/#/review-queue` with `760x720` viewport showed first decision at `y=294`, no horizontal overflow, and a compact `Show activity` trigger at the right edge.
+  - Opening Recent activity kept the first decision at `y=294` and displayed a fixed right drawer from `x=376` to `x=760`, confirming the drawer overlays instead of consuming main layout space.
+
+# Run: mp-0524-settings-responsive-workbench-20260719-1942
+
+- Time: 2026-07-19 19:42 +08:00.
+- Purpose: Fix maximized-window Settings layout so configuration groups resize and reorder structurally instead of remaining a long single-column form.
+- Change:
+  - Increased the Settings workbench width from `72rem` to `88rem`.
+  - Added an auto-fit `.settings-grid` so Settings sections become two columns on wide desktop and remain single-column on small windows.
+  - Changed Settings row control sizing from viewport-based widths to container-query widths, so row controls stay horizontal inside wide cards without forcing text into narrow fragments.
+  - Lowered the row stacking container threshold from `44rem` to `34rem`, while keeping the explicit `760px` viewport rule for small windows.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/settings/settingsLayout.test.ts src/pages/settings/AppearanceSettingsSection.test.tsx src/pages/settings/AdditionalModelsSettingsSection.test.tsx src/pages/settings/RuntimeSettingsSection.test.tsx` passed 14/14 tests.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "keeps Settings rows responsive" --workers=1` passed 1/1 Chromium test.
+  - Live browser smoke at `http://127.0.0.1:1420/#/settings` showed no horizontal overflow at `760`, `1024`, `1366`, and `1600` widths.
+  - Live browser smoke showed `Appearance` and `System` on the same row at `1366` and `1600`, while `760` and `1024` stayed single-column.
+  - Live browser smoke showed row controls returning to a right-side control column at `1024+`, reducing `Account` height from the earlier wide-card stacked layout.
+
+# Run: mp-0524-pr-header-density-20260719-1946
+
+- Time: 2026-07-19 19:46 +08:00.
+- Purpose: Reduce Pull Requests header and scope density so the first PR card appears sooner in narrow and maximized windows.
+- Change:
+  - Hid the Pull Requests explanatory paragraph below large desktop widths.
+  - Reduced Pull Requests page and category-filter spacing.
+  - Combined ADO project/repo into one compact scope chip with full hover details.
+  - Combined default/target branch information into one compact branch chip with full hover details.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/PullRequests.test.tsx src/pages/pullRequests/PullRequestPageHeader.test.tsx src/pages/pullRequests/PullRequestCard.test.tsx` passed 21/21 tests.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "lays out Pull Request cards as a responsive grid" --workers=1` passed 1/1 Chromium test.
+  - Live browser smoke at `http://127.0.0.1:1420/#/pulls` showed no horizontal overflow at `760`, `1024`, `1366`, and `1600` widths.
+  - Live browser smoke showed the first PR card at `y=231` for `760x720`, improved from the earlier `~305px` measurement.
+  - Live browser smoke showed single-column PR cards at `760` and `1024`, and two-column PR cards at `1366` and `1600`.
+
+# Run: mp-0524-mid-width-header-density-20260719-1952
+
+- Time: 2026-07-19 19:52 +08:00.
+- Purpose: Keep 1024px desktop layouts focused on operational data by delaying explanatory page copy until wider workbench widths.
+- Change:
+  - Changed Pipelines, Pull Requests, and Review Queue explanatory header paragraphs from `lg:block` to `xl:block`.
+  - Reduced Pipelines page and header spacing after confirming the status filter row was already compact.
+  - Preserved explanatory copy at `1366px+`, where the wider workbench has enough room without pushing primary data too far down.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/Pipelines.test.tsx src/pages/pipelines/PipelineRowCard.test.tsx src/pages/pipelines/pipelineModel.test.ts src/pages/PullRequests.test.tsx src/pages/pullRequests/PullRequestPageHeader.test.tsx src/pages/reviewFindings/ReviewQueuePageHeader.test.tsx` passed 51/51 tests.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "keeps cached pipeline rows visible" --workers=1` passed 1/1 Chromium test.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "lays out Pull Request cards as a responsive grid" --workers=1` passed 1/1 Chromium test.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/review-queue.spec.ts -g "keeps Recent activity collapsed" --workers=1` passed 1/1 Chromium test.
+  - Live browser smoke at `1024x720` showed Pipelines first card at `y=184`, improved from the earlier `y=234`.
+  - Live browser smoke at `1024x720` showed Pull Requests first PR at `y=231`, improved from the earlier `y=285`.
+  - Live browser smoke at `1024x720` showed Review Queue first decision at `y=272`, improved from the earlier `y=326`.
+  - Live browser smoke at `1366x720` still showed the explanatory header copy on all three pages, with no horizontal overflow.
+
+# Run: mp-0524-activity-compact-source-panel-20260719-1957
+
+- Time: 2026-07-19 19:57 +08:00.
+- Purpose: Continue the global visible-data reduction pass by making Activity reveal useful detail sooner in small and mid-width windows.
+- Change:
+  - Hid the Activity explanatory subtitle below `xl` widths.
+  - Reduced Activity header spacing below `xl`.
+  - Reduced the non-wide Activity source-list height from `24rem` to `16rem`, with `18rem` at `lg`, so the selected operation detail appears earlier.
+  - Kept the wide desktop two-column source/detail workbench unchanged.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/taskViewer/ActivitySidebar.test.tsx src/pages/TaskViewer.test.tsx` passed 23/23 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/reviewFindings/ReviewQueueControls.test.tsx src/pages/reviewFindings/ReviewActivityRail.test.tsx src/app/UserFooter.test.tsx` passed 7/7 tests.
+  - Live browser smoke at `http://127.0.0.1:1420/#/activity` showed no horizontal overflow at `760`, `1024`, and `1366` widths.
+  - Live browser smoke showed Activity detail moving from about `y=564` to `y=400` at `760x720`, and to `y=432` at `1024x720`.
+  - Live browser smoke confirmed Activity keeps the explanatory subtitle hidden at `760` and `1024`, while preserving it at `1366`.
+  - Live browser smoke reconfirmed Review Queue controls remain compact at `760x720` and `1024x720`, and Recent activity opens as a fixed right drawer.
+
+# Run: mp-0524-settings-account-visible-data-reduction-20260719-2005
+
+- Time: 2026-07-19 20:05 +08:00.
+- Purpose: Continue the global visible-data reduction pass by making Settings account details compact by default.
+- Change:
+  - Replaced separate Identity, Azure session, and managed storage rows with one compact account summary strip.
+  - Kept account name and email out of visible Settings text; they remain available through the summary hover title and sidebar account menu.
+  - Moved Azure tenant/client ID editing behind a collapsed `Advanced Azure auth` details block.
+  - Kept built-in model secret source as the only directly editable default Account row.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/settings/AccountSettingsSection.test.tsx src/pages/settings/settingsControlsStyles.test.ts src/pages/settings/settingsLayout.test.ts` passed 10/10 tests.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "keeps Settings rows responsive" --workers=1` passed 1/1 Chromium test.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - Live browser smoke at `http://127.0.0.1:1420/#/settings` showed no horizontal overflow at `760`, `1024`, `1366`, and `1600` widths.
+  - Live browser smoke showed the Account section height reduced to `270px` at `760x720`, `218px` at `1024x720`, `237px` at `1366x720`, and `218px` at `1600x900`.
+  - Live browser smoke confirmed the account email is not visibly rendered in the Settings main content and `Advanced Azure auth` is collapsed by default.
+
+# Run: mp-0524-pr-card-visible-data-reduction-20260719-2010
+
+- Time: 2026-07-19 20:10 +08:00.
+- Purpose: Continue the Pull Requests workspace density pass by reducing always-visible metadata and insight text inside PR cards.
+- Change:
+  - Replaced the three-column Author/Created/Reviewers metadata block with one compact wrapping meta line.
+  - Preserved full Author, Created, and Reviewers values in the meta line title.
+  - Reduced the Latest insight preview from a two-line clamped block to a one-line truncated summary.
+  - Kept `Open insight` as the route to full AI evidence in the right-side insight panel.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/pullRequests/PullRequestCard.test.tsx src/pages/PullRequests.test.tsx` passed 18/18 tests.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "shows readable PR insight scope" --workers=1` passed 1/1 Chromium test.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - Live browser smoke at `http://127.0.0.1:1420/#/pulls` showed no horizontal overflow at `760`, `1024`, `1366`, and `1600` widths.
+  - Live browser smoke showed the first PR card height reduced to `247px` at `760x720`, `205px` at `1024x720`, `205px` at `1366x720`, and `205px` at `1600x900`.
+
+# Run: mp-0524-rq-card-visible-data-reduction-20260719-2018
+
+- Time: 2026-07-19 20:18 +08:00.
+- Purpose: Continue the Review Queue density pass by reducing always-visible detail inside individual queue decision cards.
+- Change:
+  - Replaced the four-column Findings/Discarded/Hunk coverage/Fallback metric grid with compact wrapping metric chips.
+  - Moved verbose Attention/Audit details into the card hover title and a short audit chip.
+  - Kept primary inspection actions visible while moving secondary disposition actions into a compact `Actions` menu.
+  - Made the `Actions` menu close on outside click, Escape, or after choosing a disposition action.
+  - Preserved full findings access and ADO retry flow.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/ReviewFindings.test.tsx src/pages/reviewFindings/ReviewQueueCard.test.tsx src/pages/reviewFindings/ReviewQueueControls.test.tsx` passed 16/16 focused tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/review-queue.spec.ts -g "keeps Recent activity collapsed" --workers=1` passed 1/1 Chromium test.
+  - Live browser smoke at `http://127.0.0.1:1420/#/findings` showed no horizontal overflow at `760x760`.
+  - Live browser smoke showed the Review Queue status buttons at about `28px` high and the first two decision cards at about `129px` high at `760x760`.
+  - Runtime probe confirmed the active daemon was the installed sidecar at `0.5.24`, matching the desktop version, with Azure LLM configured.
+
+# Run: mp-0524-activity-filter-density-20260719-2029
+
+- Time: 2026-07-19 20:29 +08:00.
+- Purpose: Fix a wide-screen Activity regression where the two-column layout narrowed the source rail enough that section filters wrapped into multiple rows and pushed events down.
+- Change:
+  - Removed the always-visible Activity subtitle from the source rail header.
+  - Converted Activity section filters from stretch grid buttons into compact wrapping chips.
+  - Shortened visible filter labels to `All`, `Runs`, `Git`, `PR`, and `Reviews`, while keeping full names in hover titles.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/taskViewer/ActivitySidebar.test.tsx src/pages/TaskViewer.test.tsx` passed 23/23 tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "presents Activity as scoped operational history sections" --workers=1` passed 1/1 Chromium test.
+  - `.\scripts\windows\pnpm-project.ps1 exec playwright test tests/e2e/route-cache.spec.ts -g "summarizes structured review-operation details" --workers=1` passed 1/1 Chromium test.
+  - Live browser smoke at `http://127.0.0.1:1420/#/activity` showed no horizontal overflow at `760`, `1024`, `1366`, and `1600` widths.
+  - Live browser smoke showed the first Activity event at `y=170` for `760x720`, `y=170` for `1024x720`, `y=178` for `1366x768`, and `y=178` for `1600x900`.
+  - Full filter meanings remain available through titles such as `Checkpoints: 50` and `PR Insights: 3`.
+
+# Run: mp-0524-rq-controls-drawer-and-user-density-20260719-2041
+
+- Time: 2026-07-19 20:41 +08:00.
+- Purpose: Continue the global visible-data reduction pass based on Review Queue feedback: keep queue decisions above the fold, move Recent activity out of the main layout, and hide personal account details until hover/menu intent.
+- Change:
+  - Changed Review Queue status lanes from verbose status blocks into compact filter buttons: `All`, `Auto`, `Human`, `Blocked`, and `Watch`.
+  - Moved each status lane explanation into the button hover title instead of visible card body copy.
+  - Removed the large Review Queue controls container chrome and shortened secondary controls such as `Auto: On` and `2/2`.
+  - Kept Recent activity as a fixed right-side drawer with backdrop close behavior, so it no longer reserves main-page width on large windows.
+  - Changed the sidebar account footer so name/email are shown through hover/focus detail or the account menu, not as default visible sidebar text.
+- Verification:
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/reviewFindings/ReviewQueueControls.test.tsx src/pages/reviewFindings/ReviewActivityRail.test.tsx src/app/UserFooter.test.tsx src/pages/ReviewFindings.test.tsx` passed 17/17 focused tests.
+  - `.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck` passed.
+  - Live browser smoke at `http://127.0.0.1:1420/#/findings` showed no horizontal overflow at `760`, `1024`, and `1366` widths.
+  - Live browser smoke showed the Review Queue filter row at about `28px` high and the full control area at about `62px` high at `760x720`, with the first decision card starting at about `y=251`.
+  - Live browser smoke confirmed the Recent activity drawer overlays from the right at `384px` wide and does not shrink the main page layout.
+  - Live browser smoke confirmed the sidebar account detail card is `display: none` by default and becomes visible on account hover.

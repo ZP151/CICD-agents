@@ -11,7 +11,7 @@ export function initialsFromText(value: string | undefined, fallback = "?"): str
 export function InitialsAvatar({ label, className }: { label?: string; className: string }) {
   return (
     <span
-      className={`flex shrink-0 items-center justify-center rounded-full bg-blue-600/80 font-semibold text-white ${className}`}
+      className={`flex shrink-0 items-center justify-center rounded-full bg-[rgb(var(--app-accent))] font-semibold text-white ${className}`}
     >
       {initialsFromText(label)}
     </span>

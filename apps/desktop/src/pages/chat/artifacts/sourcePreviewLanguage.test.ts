@@ -45,15 +45,19 @@ describe("source preview language helpers", () => {
   });
 
   it("uses a stable neutral badge for shell-like operational files", () => {
-    expect(sourceBadgeTone("PS")).toContain("slate");
-    expect(sourceBadgeTone("DOCK")).toContain("slate");
-    expect(sourceBadgeTone("DIFF")).toContain("slate");
+    expect(sourceBadgeTone("PS")).toContain("--app-text-subtle");
+    expect(sourceBadgeTone("DOCK")).toContain("--app-text-subtle");
+    expect(sourceBadgeTone("DIFF")).toContain("--app-text-subtle");
+    expect(sourceBadgeTone("PS")).not.toContain("slate");
   });
 
   it("uses stable tones for .NET-specific badges", () => {
-    expect(sourceBadgeTone("CSPJ")).toContain("indigo");
-    expect(sourceBadgeTone("SLN")).toContain("indigo");
-    expect(sourceBadgeTone("RAZR")).toContain("violet");
-    expect(sourceBadgeTone("CFG")).toContain("emerald");
+    expect(sourceBadgeTone("CSPJ")).toContain("--app-text-muted");
+    expect(sourceBadgeTone("SLN")).toContain("--app-text-muted");
+    expect(sourceBadgeTone("RAZR")).toContain("--app-text");
+    expect(sourceBadgeTone("CFG")).toContain("--app-success");
+    expect(sourceBadgeTone("CSPJ")).not.toContain("indigo");
+    expect(sourceBadgeTone("RAZR")).not.toContain("violet");
+    expect(sourceBadgeTone("CFG")).not.toContain("emerald");
   });
 });

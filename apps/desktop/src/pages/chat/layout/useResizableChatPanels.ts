@@ -2,16 +2,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   constrainHistoryPanelWidth,
   constrainRightPanelWidth,
+  effectiveRightPanelWidth,
   nextPanelVisibilityForWorkspace,
-  requiredChatWindowWidth,
+  shouldOverlayRightPanel,
 } from "./chatPanelLayout.js";
+
+export const DEFAULT_SUMMARY_PINNED_OPEN = false;
 
 export function useResizableChatPanels({ mini }: { mini: boolean }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
-  const [summaryPinnedOpen, setSummaryPinnedOpen] = useState(true);
+  const [summaryPinnedOpen, setSummaryPinnedOpen] = useState(DEFAULT_SUMMARY_PINNED_OPEN);
   const [historyWidth, setHistoryWidth] = useState(220);
   const [rightWidth, setRightWidth] = useState(420);
+  const [workspaceWidth, setWorkspaceWidth] = useState(0);
   const historyDragRef = useRef<{ startX: number; startW: number } | null>(null);
   const rightDragRef = useRef<{ startX: number; startW: number } | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -60,32 +64,11 @@ export function useResizableChatPanels({ mini }: { mini: boolean }) {
 
   useEffect(() => {
     if (mini) return;
-
-    const required = requiredChatWindowWidth({
-      historyOpen,
-      historyWidth,
-      rightPanelOpen,
-      rightWidth,
-    });
-    if (window.innerWidth >= required) return;
-
-    void (async () => {
-      try {
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        const { LogicalSize } = await import("@tauri-apps/api/dpi");
-        const win = getCurrentWindow();
-        await win.setSize(new LogicalSize(required, window.innerHeight));
-      } catch (err) {
-        console.warn("[auto-expand]", err);
-      }
-    })();
-  }, [mini, historyOpen, rightPanelOpen, historyWidth, rightWidth]);
-
-  useEffect(() => {
-    if (mini) return;
     const checkFit = () => {
+      const nextWorkspaceWidth = workspaceRef.current?.clientWidth ?? 0;
+      setWorkspaceWidth(nextWorkspaceWidth);
       const next = nextPanelVisibilityForWorkspace({
-        workspaceWidth: workspaceRef.current?.clientWidth ?? 0,
+        workspaceWidth: nextWorkspaceWidth,
         historyOpen,
         rightPanelOpen,
         historyWidth,
@@ -112,7 +95,8 @@ export function useResizableChatPanels({ mini }: { mini: boolean }) {
     summaryPinnedOpen,
     setSummaryPinnedOpen,
     historyWidth,
-    rightWidth,
+    rightWidth: effectiveRightPanelWidth({ rightWidth, workspaceWidth }),
+    rightPanelOverlay: shouldOverlayRightPanel(workspaceWidth),
     workspaceRef,
     startHistoryDrag,
     startRightDrag,

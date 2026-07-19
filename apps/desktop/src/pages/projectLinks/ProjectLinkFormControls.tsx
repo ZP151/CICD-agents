@@ -28,7 +28,7 @@ export function Field({
   return (
     <label className="flex flex-col gap-1">
       {label && (
-        <span className={`text-xs font-medium ${disabled ? "text-zinc-600" : "text-zinc-400"}`}>
+        <span className={`text-xs font-medium ${disabled ? "text-[rgb(var(--app-text-faint))]" : "text-[rgb(var(--app-text-muted))]"}`}>
           {label}
         </span>
       )}
@@ -40,17 +40,17 @@ export function Field({
             onChange={(event) => onChange?.(event.target.value)}
             placeholder={placeholder}
             disabled={disabled}
-            className={`w-full rounded-lg border px-3 py-2 pr-8 text-sm placeholder-zinc-600 outline-none transition ${
+            className={`w-full rounded-lg border px-3 py-2 pr-8 text-sm placeholder:text-[rgb(var(--app-text-subtle))] outline-none transition ${
               disabled
-                ? "cursor-not-allowed border-zinc-800 bg-zinc-900/30 text-zinc-600"
-                : "border-zinc-700/60 bg-zinc-900 text-zinc-200 focus:border-zinc-600 focus:outline-none"
+                ? "cursor-not-allowed border-[rgb(var(--app-border))] bg-[rgb(var(--app-bg-muted))] text-[rgb(var(--app-text-faint))]"
+                : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text))] focus:border-[rgb(var(--app-accent))] focus:outline-none"
             }`}
           />
           {isSecret && !disabled && (
             <button
               type="button"
               onClick={() => setShow((visible) => !visible)}
-              className="absolute right-2.5 text-zinc-600 transition hover:text-zinc-400"
+              className="absolute right-2.5 text-[rgb(var(--app-text-subtle))] transition hover:text-[rgb(var(--app-text))]"
             >
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 {show ? (
@@ -74,7 +74,7 @@ export function Field({
         </div>
       )}
       {hint && (
-        <p className={`text-[10px] ${disabled ? "text-zinc-700" : "text-zinc-600"}`}>{hint}</p>
+        <p className={`text-[10px] ${disabled ? "text-[rgb(var(--app-text-faint))]" : "text-[rgb(var(--app-text-subtle))]"}`}>{hint}</p>
       )}
     </label>
   );
@@ -96,8 +96,8 @@ export function BranchSelect({
   if (branchLoading) {
     return (
       <div className="flex min-w-0 flex-col gap-1">
-        <span className="text-xs font-medium text-zinc-400">{label}</span>
-        <div className="flex items-center gap-2 rounded-lg border border-zinc-700/60 bg-zinc-900 px-3 py-2 text-sm text-zinc-500">
+        <span className="text-xs font-medium text-[rgb(var(--app-text-muted))]">{label}</span>
+        <div className="flex items-center gap-2 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text-muted))]">
           <svg className="h-3 w-3 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none">
             <circle
               cx="12"
@@ -116,11 +116,11 @@ export function BranchSelect({
   if (branches.length > 0) {
     return (
       <label className="flex min-w-0 flex-col gap-1">
-        <span className="text-xs font-medium text-zinc-400">{label}</span>
+        <span className="text-xs font-medium text-[rgb(var(--app-text-muted))]">{label}</span>
         <select
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="w-full min-w-0 rounded-lg border border-emerald-700/60 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 outline-none transition focus:border-emerald-500"
+          className="w-full min-w-0 rounded-lg border border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-[rgb(var(--app-success))]"
         >
           {branches.map((branch) => (
             <option key={branch} value={branch}>
@@ -163,7 +163,7 @@ export function ProjectDiscoveryField({
             const selected = options.find((option) => option.name === event.target.value);
             if (selected) onApply(kind, selected);
           }}
-          className="w-full min-w-0 rounded-lg border border-zinc-700/60 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 outline-none transition focus:border-zinc-600"
+          className="w-full min-w-0 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-[rgb(var(--app-accent))]"
         >
           <option value="">
             {discovering === kind ? `Discovering ${kind}...` : `Select ${kind.slice(0, -1)}`}
@@ -179,7 +179,7 @@ export function ProjectDiscoveryField({
           value={value}
           onChange={(event) => onManualChange(event.target.value)}
           placeholder={discovering === kind ? `Discovering ${kind}...` : placeholder}
-          className="w-full min-w-0 rounded-lg border border-zinc-700/60 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 outline-none transition focus:border-zinc-600"
+          className="w-full min-w-0 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] placeholder:text-[rgb(var(--app-text-subtle))] outline-none transition focus:border-[rgb(var(--app-accent))]"
         />
       )}
     </Field>

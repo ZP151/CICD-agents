@@ -62,18 +62,42 @@ interface ComposerShellProps {
 
 function composerNoticeClass(tone: ComposerStateNotice["tone"]): string {
   if (tone === "approval") {
-    return "border-amber-500/30 bg-amber-500/10 text-[rgb(var(--app-warning))]";
+    return "border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] text-[rgb(var(--app-warning))]";
   }
   if (tone === "queued") {
-    return "border-blue-500/30 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text-muted))]";
+    return "border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text-muted))]";
   }
   return "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))]";
 }
 
 function composerNoticeDotClass(tone: ComposerStateNotice["tone"]): string {
-  if (tone === "approval") return "bg-amber-500";
+  if (tone === "approval") return "bg-[rgb(var(--app-warning))]";
   if (tone === "queued") return "bg-[rgb(var(--app-accent))]";
   return "bg-[rgb(var(--app-text-subtle))]";
+}
+
+export function composerProjectLinkSelectorClass(): string {
+  return "flex min-w-0 w-full flex-1 items-center gap-1.5 sm:min-w-[12rem]";
+}
+
+export function composerBottomControlsClass(): string {
+  return "relative mt-2 flex min-w-0 items-center gap-2";
+}
+
+export function composerAttachmentChipClass(): string {
+  return "inline-flex max-w-[min(220px,100%)] min-w-0 items-center gap-1.5 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-1.5 py-1 text-xs text-[rgb(var(--app-text-muted))]";
+}
+
+export function composerModelButtonClass(): string {
+  return "flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-md px-2 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[rgb(var(--app-text-muted))]";
+}
+
+export function composerModelLabelClass(): string {
+  return "min-w-0 max-w-[min(12rem,45vw)] truncate";
+}
+
+export function composerModelMenuClass(): string {
+  return "absolute bottom-9 left-0 z-40 w-[min(16rem,calc(100vw-2rem))] rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2 shadow-2xl";
 }
 
 export function ComposerShell({
@@ -200,20 +224,22 @@ export function ComposerShell({
   }, [attachmentMenuOpen]);
 
   return (
-    <div className="input-panel border-t border-zinc-800/80 px-3 py-2">
+    <div className="input-panel border-t border-[rgb(var(--app-border))] px-3 py-2">
       {!mini && (
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-1 pb-1.5">
-          <div className="flex min-w-[180px] flex-1 items-center gap-1.5">
+          <div className={composerProjectLinkSelectorClass()}>
             {projectLinksLoading && availableProjectLinks.length === 0 ? (
-              <span className="text-[11px] text-zinc-700">Loading Project Link...</span>
+              <span className="text-[11px] text-[rgb(var(--app-text-subtle))]">
+                Loading Project Link...
+              </span>
             ) : availableProjectLinks.length > 0 ? (
               <>
-                <svg className="h-3 w-3 shrink-0 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-3 w-3 shrink-0 text-[rgb(var(--app-text-subtle))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
                 <select
                   aria-label="Composer Project Link"
-                  className="min-w-0 flex-1 cursor-pointer bg-transparent text-[11px] text-zinc-500 transition hover:text-zinc-300 focus:outline-none"
+                  className="min-w-0 flex-1 cursor-pointer bg-transparent text-[11px] text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))] focus:outline-none"
                   value={activeProjectLinkId ?? ""}
                   onChange={(event) => onProjectLinkSelect(event.target.value)}
                 >
@@ -224,7 +250,9 @@ export function ComposerShell({
                 </select>
               </>
             ) : (
-              <span className="text-[11px] text-zinc-700">No Project Link yet — create one above</span>
+              <span className="text-[11px] text-[rgb(var(--app-text-subtle))]">
+                No Project Link yet — create one above
+              </span>
             )}
           </div>
         </div>
@@ -318,7 +346,7 @@ export function ComposerShell({
             {imageAttachments.map((attachment) => (
               <span
                 key={attachment.id}
-                className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-1.5 py-1 text-xs text-[rgb(var(--app-text-muted))]"
+                className={composerAttachmentChipClass()}
                 title={imageAttachmentLabel(attachment)}
               >
                 <img
@@ -337,10 +365,10 @@ export function ComposerShell({
                 </button>
               </span>
             ))}
-            {attachmentError && <span className="text-xs text-[rgb(var(--app-warning))]">{attachmentError}</span>}
+            {attachmentError && <span className="min-w-0 break-words text-xs text-[rgb(var(--app-warning))]">{attachmentError}</span>}
           </div>
         )}
-        <div className="relative mt-2 flex items-center gap-2">
+        <div className={composerBottomControlsClass()}>
           <div ref={attachmentMenuRef} className="relative">
             <input
               id={imageInputId}
@@ -409,13 +437,13 @@ export function ComposerShell({
               type="button"
               onClick={toggleModelMenu}
               disabled={effectiveComposerInputState.controlsDisabled}
-              className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[rgb(var(--app-text-muted))]"
+              className={composerModelButtonClass()}
               title={effectiveComposerInputState.controlsDisabled ? effectiveComposerInputState.inputTitle : "Conversation model"}
             >
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M13 3L6 13h5l-1 8 7-11h-5l1-7z" />
               </svg>
-              <span className="max-w-[190px] truncate">
+              <span className={composerModelLabelClass()}>
                 {activeCustomModel ? activeCustomModel.label : DEFAULT_CONVERSATION_MODEL_LABEL}
               </span>
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -423,7 +451,7 @@ export function ComposerShell({
               </svg>
             </button>
             {modelMenuOpen && (
-              <div className="absolute bottom-9 left-0 z-40 w-64 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2 shadow-2xl">
+              <div className={composerModelMenuClass()}>
                 <p className="px-2 pb-1.5 text-xs text-[rgb(var(--app-text-muted))]">Model</p>
                 <button
                   type="button"
@@ -467,7 +495,7 @@ export function ComposerShell({
               disabled={sendDisabled}
               title={sendTitle}
               aria-label="Send message"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[rgb(var(--app-accent))] text-white transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 19V5m0 0-6 6m6-6 6 6" />

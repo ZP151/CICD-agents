@@ -53,6 +53,12 @@ export function HistorySidebarItem({
   const title = chatHistoryTitle(entry);
   const preview = chatHistoryPreview(entry);
   const createdAtLabel = formatHistoryTimestamp(entry.createdAt);
+  const itemClass = active
+    ? "bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text))]"
+    : "text-[rgb(var(--app-text-muted))] hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))]";
+  const subtleTextClass = "text-[rgb(var(--app-text-subtle))]";
+  const iconButtonClass =
+    "rounded p-1 text-[rgb(var(--app-text-subtle))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]";
 
   return (
     <div
@@ -60,7 +66,7 @@ export function HistorySidebarItem({
         event.preventDefault();
         onBeginMenu({ sessionId: entry.sessionId, x: event.clientX, y: event.clientY });
       }}
-      className={`group/history relative flex items-start gap-1 px-2 py-1.5 transition-colors ${active ? "bg-zinc-900 text-zinc-200" : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"}`}
+      className={`group/history relative flex items-start gap-1 px-2 py-1.5 transition-colors ${itemClass}`}
     >
       <button
         type="button"
@@ -71,21 +77,25 @@ export function HistorySidebarItem({
         aria-label={`Open chat ${title}`}
       >
         <span className="flex min-w-0 items-center gap-1.5">
-          {entry.pinned && <span className="shrink-0 text-blue-400"><PinIcon filled /></span>}
+          {entry.pinned && <span className="shrink-0 text-[rgb(var(--app-accent-readable))]"><PinIcon filled /></span>}
           <span className="truncate">{title}</span>
         </span>
-        <span className="block text-[10px] text-zinc-600">
+        <span className={`block text-[10px] ${subtleTextClass}`}>
           {createdAtLabel}
         </span>
         <span className="history-hover-card">
-          <span className="block text-[11px] font-medium leading-snug text-zinc-200">{title}</span>
-          {preview && <span className="mt-1.5 block text-[11px] leading-relaxed text-zinc-400">{preview}</span>}
-          <span className="mt-2 block text-[10px] text-zinc-600">{createdAtLabel}</span>
+          <span className="block text-[11px] font-medium leading-snug text-[rgb(var(--app-text))]">{title}</span>
+          {preview && (
+            <span className="mt-1.5 block text-[11px] leading-relaxed text-[rgb(var(--app-text-muted))]">
+              {preview}
+            </span>
+          )}
+          <span className={`mt-2 block text-[10px] ${subtleTextClass}`}>{createdAtLabel}</span>
         </span>
       </button>
       {renamingHistoryId === entry.sessionId ? (
         <input
-          className="absolute inset-x-2 top-1.5 z-20 rounded-md border border-[rgb(var(--app-accent))]/60 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 shadow-xl focus:outline-none"
+          className="absolute inset-x-2 top-1.5 z-20 rounded-md border border-[rgb(var(--app-accent))]/60 bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-text))] shadow-xl focus:outline-none"
           value={renamingHistoryValue}
           onChange={(event) => onRenameValueChange(event.target.value)}
           onClick={(event) => event.stopPropagation()}
@@ -107,7 +117,11 @@ export function HistorySidebarItem({
               event.stopPropagation();
               onTogglePin(entry);
             }}
-            className={`rounded p-1 transition ${entry.pinned ? "text-blue-400 hover:bg-blue-500/10" : "text-zinc-600 hover:bg-zinc-700 hover:text-zinc-300"}`}
+            className={`rounded p-1 transition ${
+              entry.pinned
+                ? "text-[rgb(var(--app-accent-readable))] hover:bg-[rgb(var(--app-accent-soft))]"
+                : iconButtonClass
+            }`}
             aria-label={entry.pinned ? "Unpin chat" : "Pin chat"}
           >
             {entry.pinned ? <UnpinIcon /> : <PinIcon />}
@@ -121,7 +135,7 @@ export function HistorySidebarItem({
               const rect = event.currentTarget.getBoundingClientRect();
               onBeginMenu({ sessionId: entry.sessionId, x: rect.right - 8, y: rect.bottom + 4 });
             }}
-            className="rounded p-1 text-zinc-600 transition hover:bg-zinc-700 hover:text-zinc-300"
+            className={iconButtonClass}
             aria-label="Open chat actions"
           >
             <MoreIcon />

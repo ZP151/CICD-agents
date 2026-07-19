@@ -24,18 +24,18 @@ export function WorkspaceGitRecoveryPanel({
   if (!gitRecovery) return null;
 
   return (
-    <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2">
-      <p className="mb-2 truncate text-xs text-amber-700 dark:text-amber-300">
+    <div className="mt-2 rounded-lg border border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] p-2">
+      <p className="mb-2 truncate text-xs text-[rgb(var(--app-warning))]">
         {gitRecovery.label} needs attention
       </p>
-      <div className={`grid gap-1 ${gitRecovery.actions.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+      <div className={workspaceGitRecoveryActionsGridClass()}>
         {gitRecovery.actions.map((action) => (
           <button
             key={action.type}
             type="button"
             onClick={() => runAction({ type: action.type })}
             disabled={busy}
-            className="truncate whitespace-nowrap rounded-md border border-amber-500/30 px-1.5 py-1 text-[10px] text-amber-800 transition hover:bg-amber-500/15 disabled:cursor-wait disabled:opacity-50 dark:text-amber-200"
+            className="truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-warning-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-warning))] transition hover:bg-[rgb(var(--app-surface))] disabled:cursor-wait disabled:opacity-50"
             title={action.title}
           >
             {action.label}
@@ -44,4 +44,8 @@ export function WorkspaceGitRecoveryPanel({
       </div>
     </div>
   );
+}
+
+export function workspaceGitRecoveryActionsGridClass(): string {
+  return "grid min-w-0 gap-1 grid-cols-[repeat(auto-fit,minmax(min(100%,5.75rem),1fr))]";
 }

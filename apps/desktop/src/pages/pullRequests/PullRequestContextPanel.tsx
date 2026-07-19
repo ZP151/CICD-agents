@@ -13,7 +13,7 @@ export function PullRequestContextPanel({ state }: { state: ContextState | undef
 
   if (state.phase === "error") {
     return (
-      <div className="mt-4 border-t border-[rgb(var(--app-border))] pt-4 text-sm text-red-700 dark:text-red-300">
+      <div className="mt-4 border-t border-[rgb(var(--app-border))] pt-4 text-sm text-[rgb(var(--app-danger))]">
         {state.message}
       </div>
     );
@@ -26,7 +26,7 @@ export function PullRequestContextPanel({ state }: { state: ContextState | undef
 
   return (
     <div className="mt-4 space-y-4 border-t border-[rgb(var(--app-border))] pt-4">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
+      <div className={pullRequestContextOverviewGridClass()}>
         <section className="min-w-0">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">Description</h4>
@@ -53,7 +53,7 @@ export function PullRequestContextPanel({ state }: { state: ContextState | undef
               {pullRequest.workItemRefs.map((item) => (
                 item.url ? (
                   <a key={`${item.id}-${item.url}`} href={item.url} target="_blank" rel="noreferrer"
-                    className="rounded border border-[rgb(var(--app-border))] px-2 py-1 text-xs text-[rgb(var(--app-accent))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))]">
+                    className="rounded border border-[rgb(var(--app-border))] px-2 py-1 text-xs text-[rgb(var(--app-accent-readable))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))]">
                     #{item.id || "work item"}
                   </a>
                 ) : (
@@ -88,7 +88,7 @@ export function PullRequestContextPanel({ state }: { state: ContextState | undef
         )}
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={pullRequestContextSecondaryGridClass()}>
         <section className="min-w-0">
           <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">Recent Threads</h4>
           {visibleThreads.length === 0 ? (
@@ -131,7 +131,7 @@ export function PullRequestContextPanel({ state }: { state: ContextState | undef
                     </p>
                   </div>
                   {build.url ? (
-                    <a href={build.url} target="_blank" rel="noreferrer" className="text-[rgb(var(--app-accent))] transition hover:underline">
+                    <a href={build.url} target="_blank" rel="noreferrer" className="text-[rgb(var(--app-accent-readable))] transition hover:underline">
                       {build.result || build.status || "open"}
                     </a>
                   ) : (
@@ -145,4 +145,12 @@ export function PullRequestContextPanel({ state }: { state: ContextState | undef
       </div>
     </div>
   );
+}
+
+export function pullRequestContextSecondaryGridClass(): string {
+  return "grid gap-4 grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))]";
+}
+
+export function pullRequestContextOverviewGridClass(): string {
+  return "grid gap-4 grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))]";
 }

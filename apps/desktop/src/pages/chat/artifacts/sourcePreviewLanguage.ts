@@ -98,13 +98,13 @@ export function sourceTypeLabel(path: string): string {
 }
 
 export function sourceBadgeTone(label: string): string {
-  if (label === "MD") return "border-blue-500/35 bg-blue-500/10 text-blue-600";
-  if (["CS", "C", "C++", "GO", "JAVA", "RS", "RAZR", "VB", "F#"].includes(label)) return "border-violet-500/35 bg-violet-500/10 text-violet-600";
-  if (["JS", "JSX", "TS", "TSX"].includes(label)) return "border-amber-500/35 bg-amber-500/10 text-amber-600";
-  if (["HTML", "CSS"].includes(label)) return "border-sky-500/35 bg-sky-500/10 text-sky-600";
-  if (["JSON", "TOML", "YML", "XML", "CFG", "RESX"].includes(label)) return "border-emerald-500/35 bg-emerald-500/10 text-emerald-600";
-  if (["SLN", "CSPJ", "VBPJ", "FSPJ", "MSB"].includes(label)) return "border-indigo-500/35 bg-indigo-500/10 text-indigo-600";
-  if (["DIFF", "DOCK", "PS", "SH"].includes(label)) return "border-slate-500/35 bg-slate-500/10 text-slate-600";
+  if (label === "MD") return "border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent-readable))]";
+  if (["CS", "C", "C++", "GO", "JAVA", "RS", "RAZR", "VB", "F#"].includes(label)) return "border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text))]";
+  if (["JS", "JSX", "TS", "TSX"].includes(label)) return "border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] text-[rgb(var(--app-warning))]";
+  if (["HTML", "CSS"].includes(label)) return "border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent-readable))]";
+  if (["JSON", "TOML", "YML", "XML", "CFG", "RESX"].includes(label)) return "border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft))] text-[rgb(var(--app-success))]";
+  if (["SLN", "CSPJ", "VBPJ", "FSPJ", "MSB"].includes(label)) return "border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))]";
+  if (["DIFF", "DOCK", "PS", "SH"].includes(label)) return "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-subtle))]";
   return "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))]";
 }
 

@@ -20,7 +20,7 @@ export function PrInsightComparisonCard({
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">
         Preview vs Full Review
       </h3>
-      <div className="grid gap-3 text-sm sm:grid-cols-3">
+      <div className={prInsightComparisonMetricGridClass()}>
         <div>
           <p className="text-xs text-[rgb(var(--app-text-muted))]">Readiness</p>
           <p className="mt-1 text-[rgb(var(--app-text))]">
@@ -71,7 +71,7 @@ export function PrInsightRefreshComparisonCard({
           compared with {formatIsoTime(comparison.previousAt)}
         </span>
       </div>
-      <div className="grid gap-3 text-sm sm:grid-cols-3">
+      <div className={prInsightComparisonMetricGridClass()}>
         <div>
           <p className="text-xs text-[rgb(var(--app-text-muted))]">Readiness</p>
           <p className="mt-1 text-[rgb(var(--app-text))]">
@@ -118,7 +118,7 @@ function RiskDeltaGrid({
 }): JSX.Element | null {
   if (addedRisks.length === 0 && resolvedRisks.length === 0) return null;
   return (
-    <div className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
+    <div className={prInsightRiskDeltaGridClass()}>
       <div>
         <p className="mb-1 text-[rgb(var(--app-text-muted))]">{addedLabel}</p>
         <div className="flex flex-wrap gap-1.5">
@@ -128,7 +128,7 @@ function RiskDeltaGrid({
           {addedRisks.map((risk) => (
             <span
               key={`added-${risk}`}
-              className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-amber-800 dark:text-amber-300"
+              className="rounded border border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] px-2 py-1 text-[rgb(var(--app-warning))]"
             >
               {risk}
             </span>
@@ -144,7 +144,7 @@ function RiskDeltaGrid({
           {resolvedRisks.map((risk) => (
             <span
               key={`resolved-${risk}`}
-              className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-700 dark:text-emerald-300"
+              className="rounded border border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft))] px-2 py-1 text-[rgb(var(--app-success))]"
             >
               {risk}
             </span>
@@ -153,4 +153,12 @@ function RiskDeltaGrid({
       </div>
     </div>
   );
+}
+
+export function prInsightComparisonMetricGridClass(): string {
+  return "grid gap-3 text-sm grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))]";
+}
+
+export function prInsightRiskDeltaGridClass(): string {
+  return "mt-3 grid gap-3 text-xs grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))]";
 }

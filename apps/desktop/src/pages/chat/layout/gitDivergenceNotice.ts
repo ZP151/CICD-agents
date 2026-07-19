@@ -33,6 +33,6 @@ export function gitDivergenceNotice(gitStatus: GitStatusData | null): GitDiverge
 
 export function gitDivergenceNoticeClass(tone: GitDivergenceNotice["tone"]): string {
   return tone === "warning"
-    ? "border-amber-500/35 bg-amber-500/10 text-amber-700"
-    : "border-blue-500/25 bg-blue-500/10 text-blue-700";
+    ? "border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] text-[rgb(var(--app-warning))]"
+    : "border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent-readable))]";
 }

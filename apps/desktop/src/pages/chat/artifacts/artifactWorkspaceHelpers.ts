@@ -49,9 +49,9 @@ export function artifactWorkspaceStatusLabel(status: ConversationArtifactPart["s
 
 export function artifactWorkspaceStatusClass(status: ConversationArtifactPart["status"]): string {
   const classes: Record<ConversationArtifactPart["status"], string> = {
-    error: "rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 font-mono text-[10px] text-[rgb(var(--app-danger))]",
-    ready: "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] text-[rgb(var(--app-success))]",
-    streaming: "rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 font-mono text-[10px] text-blue-400",
+    error: "rounded-full border border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] px-2 py-0.5 font-mono text-[10px] text-[rgb(var(--app-danger))]",
+    ready: "rounded-full border border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft))] px-2 py-0.5 font-mono text-[10px] text-[rgb(var(--app-success))]",
+    streaming: "rounded-full border border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-accent-soft))] px-2 py-0.5 font-mono text-[10px] text-[rgb(var(--app-accent-readable))]",
   };
   return classes[status];
 }

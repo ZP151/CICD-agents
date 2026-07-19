@@ -28,6 +28,20 @@ const rollbackPlan: ChatCheckpointRollbackPlan = {
 };
 
 describe("CheckpointRollbackPlanSection", () => {
+  it("uses a specific recovery status while loading", () => {
+    const html = renderToStaticMarkup(
+      <CheckpointRollbackPlanSection
+        rollbackPlan={null}
+        rollbackLoading={true}
+        onOpenRollbackPlanInChat={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Preparing recovery");
+    expect(html).toContain("Checking whether this checkpoint can be restored safely");
+    expect(html).not.toContain(">Loading<");
+  });
+
   it("shows the proposal summary before folded raw proposal details", () => {
     const html = renderToStaticMarkup(
       <CheckpointRollbackPlanSection

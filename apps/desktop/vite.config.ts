@@ -1,5 +1,22 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+
+const desktopPackage = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+) as { version: string };
+
+function buildSha(): string {
+  if (process.env["GITHUB_SHA"]) return process.env["GITHUB_SHA"];
+  try {
+    return execSync("git rev-parse --short=12 HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+  } catch {
+    return "";
+  }
+}
 
 function nodePackageName(id: string): string | undefined {
   const normalized = id.replace(/\\/g, "/");
@@ -64,6 +81,8 @@ export default defineConfig(() => {
       // Bake the resolved URL into the bundle so api.ts always talks to the
       // right port regardless of how the app was built.
       "import.meta.env.VITE_RUNTIME_URL": JSON.stringify(runtimeUrl),
+      __MERGEPILOT_DESKTOP_VERSION__: JSON.stringify(desktopPackage.version),
+      __MERGEPILOT_BUILD_SHA__: JSON.stringify(buildSha()),
     },
   };
 });

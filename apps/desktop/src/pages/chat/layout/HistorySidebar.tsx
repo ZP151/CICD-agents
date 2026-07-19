@@ -80,7 +80,7 @@ export function HistorySidebar({
         pointerEvents: open ? "auto" : "none",
       }}
     >
-      <p className="shrink-0 px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-zinc-600">
+      <p className="shrink-0 px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-subtle))]">
         History
       </p>
       {loading && history.length === 0 ? (
@@ -94,10 +94,10 @@ export function HistorySidebar({
           ))}
         </div>
       ) : history.length === 0 && (
-        <p className="px-3 py-2 text-xs text-zinc-700">No sessions yet.</p>
+        <p className="px-3 py-2 text-xs text-[rgb(var(--app-text-subtle))]">No sessions yet.</p>
       )}
       {historyError && (
-        <p className="mx-3 mb-2 rounded-md border border-red-900/50 bg-red-950/30 px-2 py-1.5 text-[11px] text-red-300">
+        <p className="mx-3 mb-2 rounded-md border border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] px-2 py-1.5 text-[11px] text-[rgb(var(--app-danger))]">
           {historyError}
         </p>
       )}

@@ -1,7 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ReviewActivityItem } from "./activityTypes.js";
-import { ReviewOperationDetailPanel } from "./ReviewOperationDetailPanel.js";
+import {
+  ReviewOperationDetailPanel,
+  reviewOperationFactGridClass,
+} from "./ReviewOperationDetailPanel.js";
 
 function operation(details: string): ReviewActivityItem {
   return {
@@ -20,6 +23,14 @@ function operation(details: string): ReviewActivityItem {
 }
 
 describe("ReviewOperationDetailPanel", () => {
+  it("uses an auto-fit fact grid so operation metadata reflows with panel width", () => {
+    const className = reviewOperationFactGridClass();
+
+    expect(className).toContain("auto-fit");
+    expect(className).toContain("minmax(min(100%,13rem),1fr)");
+    expect(className).not.toContain("sm:grid-cols-2");
+  });
+
   it("summarizes and folds JSON-like operation details by default", () => {
     const html = renderToStaticMarkup(
       <ReviewOperationDetailPanel

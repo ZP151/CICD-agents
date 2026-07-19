@@ -91,7 +91,12 @@ export function registerHealthRoutes(
     const cloudProjectLinkStore = !!settings.azureStorageAccount;
     return {
       ok: true,
-      version: process.env.npm_package_version ?? "0.1.0",
+      version: process.env.MERGEPILOT_DAEMON_VERSION ?? process.env.npm_package_version ?? "0.1.0",
+      runtimeMode: process.env.MERGEPILOT_RUNTIME_MODE ?? "source",
+      desktopVersion: process.env.MERGEPILOT_DESKTOP_VERSION ?? "",
+      buildSha: process.env.MERGEPILOT_BUILD_SHA ?? process.env.GITHUB_SHA ?? "",
+      pid: process.pid,
+      execPath: process.execPath,
       uptimeSec: (Date.now() - startedAt) / 1000,
       llmConfigured: settings.llmConfigured,
       llmProvider: settings.llmProvider,

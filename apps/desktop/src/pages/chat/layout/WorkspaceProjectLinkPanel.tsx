@@ -52,12 +52,13 @@ export function WorkspaceProjectLinkPanel({
           <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-subtle))]">
             {activeProjectLink?.adoProject} / {activeProjectLink?.adoRepoName}
           </p>
-          <div className="mt-2 grid grid-cols-2 gap-1">
+          <div className={workspaceProjectLinkActionsGridClass()}>
             <button
               type="button"
               onClick={() => runAction({ type: "inspect_pr_insight" })}
               disabled={busy}
               className="truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
+              aria-label="Inspect PR insight"
               title="Inspect the latest active pull request insight"
             >
               PR insight
@@ -85,6 +86,7 @@ export function WorkspaceProjectLinkPanel({
               onClick={() => runAction({ type: "inspect_pipeline" })}
               disabled={busy}
               className="truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
+              aria-label="Inspect pipeline readiness"
               title="Inspect Azure DevOps pipeline readiness for this project link"
             >
               Pipeline
@@ -93,7 +95,7 @@ export function WorkspaceProjectLinkPanel({
               type="button"
               onClick={() => runAction({ type: "trigger_pipeline", branch: branchName || undefined })}
               disabled={busy}
-              className="col-span-2 truncate whitespace-nowrap rounded-md border border-amber-500/30 px-1.5 py-1 text-[10px] text-amber-700 transition hover:bg-amber-500/10 disabled:cursor-wait disabled:opacity-50 dark:text-amber-300"
+              className="col-span-full truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-warning-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-warning))] transition hover:bg-[rgb(var(--app-warning-soft))] disabled:cursor-wait disabled:opacity-50"
               title="Prepare approval before triggering the configured Azure DevOps pipeline"
             >
               Run pipeline
@@ -103,4 +105,8 @@ export function WorkspaceProjectLinkPanel({
       )}
     </div>
   );
+}
+
+export function workspaceProjectLinkActionsGridClass(): string {
+  return "mt-2 grid min-w-0 gap-1 grid-cols-[repeat(auto-fit,minmax(min(100%,5.75rem),1fr))]";
 }

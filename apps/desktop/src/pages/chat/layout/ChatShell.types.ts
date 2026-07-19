@@ -95,6 +95,7 @@ export interface ChatShellProps {
   repoPath: string;
   resolveConfirm: (id: string, confirmed: boolean) => Promise<void>;
   rightPanelOpen: boolean;
+  rightPanelOverlay: boolean;
   rightWidth: number;
   runWorkspaceAction: (action: WorkspaceAction) => void;
   scrollContainerRef: RefObject<HTMLDivElement>;

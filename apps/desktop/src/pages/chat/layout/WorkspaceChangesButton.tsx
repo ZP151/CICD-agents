@@ -36,13 +36,13 @@ export function WorkspaceChangesButton({
       </span>
       <span className="shrink-0 whitespace-nowrap text-right font-mono text-xs">
         {busy && statusText ? (
-          <span className="text-blue-500">running</span>
+          <span className="text-[rgb(var(--app-accent-readable))]">running</span>
         ) : !gitKnown ? (
           <span className="text-[rgb(var(--app-text-subtle))]">not checked</span>
         ) : hasChanges ? (
           <>
-            <span className="text-emerald-500">+{added}</span>
-            <span className="ml-1 text-red-500">-{removed}</span>
+            <span className="text-[rgb(var(--app-success))]">+{added}</span>
+            <span className="ml-1 text-[rgb(var(--app-danger))]">-{removed}</span>
           </>
         ) : (
           <span className="text-[rgb(var(--app-text-subtle))]">clean</span>

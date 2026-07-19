@@ -35,7 +35,7 @@ export function ExecutionCommandRow({
   const commandLabel = executionItemTranscriptLabel(item);
 
   return (
-    <div className="overflow-hidden">
+    <div className="min-w-0 overflow-hidden">
       <button
         type="button"
         onClick={hasDetails ? (event) => {
@@ -52,7 +52,7 @@ export function ExecutionCommandRow({
             ? `${item.open ? "Collapse" : "Expand"} ${toolName} details`
             : `${toolName} has no details`
         }
-        className={`flex w-full items-start gap-2 rounded-md px-0 py-1.5 text-left text-[rgb(var(--app-text-subtle))] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--app-accent))]/35 ${
+        className={`flex w-full min-w-0 items-start gap-2 rounded-md px-0 py-1.5 text-left text-[rgb(var(--app-text-subtle))] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--app-accent))]/35 ${
           hasDetails
             ? "cursor-pointer hover:bg-[rgb(var(--app-bg-muted))] active:bg-[rgb(var(--app-surface-raised))]"
             : "cursor-default"
@@ -63,7 +63,7 @@ export function ExecutionCommandRow({
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-2">
-            <span className="max-w-[42rem] truncate">
+            <span className={executionCommandLabelClass()}>
               {commandLabel}
             </span>
             {exitCode !== undefined && (
@@ -82,9 +82,9 @@ export function ExecutionCommandRow({
       </button>
 
       {item.open && hasDetails && (
-        <div className="pb-2 pl-6">
+        <div className="min-w-0 pb-2 pl-6">
           {command && (
-            <div className="mb-2 overflow-hidden rounded-md bg-[rgb(var(--app-bg-muted))]">
+            <div className="mb-2 min-w-0 overflow-hidden rounded-md bg-[rgb(var(--app-bg-muted))]">
               <div className="px-2.5 py-1.5 text-[11px] text-[rgb(var(--app-text-subtle))]">
                 Shell
               </div>
@@ -124,7 +124,7 @@ export function ExecutionCommandRow({
       {item.approval && (
         <div className="py-2 pl-6">
           {renderApproval?.(item) ?? (
-            <div className="rounded-md border border-amber-500/30 bg-[rgb(var(--app-surface))] p-2 text-xs text-[rgb(var(--app-warning))]">
+            <div className="rounded-md border border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] p-2 text-xs text-[rgb(var(--app-warning))]">
               <p className="font-medium text-[rgb(var(--app-text))]">Approval pending</p>
               {item.approval.description && <p className="mt-1">{item.approval.description}</p>}
               {item.approval.riskLevel && (
@@ -138,4 +138,8 @@ export function ExecutionCommandRow({
       )}
     </div>
   );
+}
+
+export function executionCommandLabelClass(): string {
+  return "min-w-0 max-w-full truncate";
 }

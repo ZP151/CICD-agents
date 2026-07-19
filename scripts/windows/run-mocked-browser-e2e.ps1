@@ -40,7 +40,14 @@ $mutex = [System.Threading.Mutex]::new($false, $mutexName)
 $hasLock = $false
 
 try {
-  $hasLock = $mutex.WaitOne([TimeSpan]::FromSeconds($LockTimeoutSeconds))
+  try {
+    $hasLock = $mutex.WaitOne([TimeSpan]::FromSeconds($LockTimeoutSeconds))
+  } catch [System.Threading.AbandonedMutexException] {
+    # A previous browser smoke run was interrupted after taking the lock.
+    # The OS grants ownership to this process in that case, so continue and
+    # release it normally in finally.
+    $hasLock = $true
+  }
   if (-not $hasLock) {
     throw "Timed out waiting for mocked browser E2E lock '$mutexName' after $LockTimeoutSeconds seconds. Another Playwright/Vite run may still be using 127.0.0.1:1420."
   }

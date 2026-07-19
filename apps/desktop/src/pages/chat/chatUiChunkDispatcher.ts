@@ -8,6 +8,7 @@ import {
   workflowStateFromApprovalRequired,
   type WorkflowStateUpdate,
 } from "./chatWorkflowStreamState.js";
+import { visibleProgressStatusText } from "./chatStatusText.js";
 
 export interface ChatUiChunkDispatcherAdapter {
   setUiChunkStreamAvailable: (available: boolean) => void;
@@ -61,7 +62,7 @@ export function dispatchChatUiChunk(
       adapter.stopStreaming(chunk.id);
       break;
     case "progress":
-      adapter.setStatusText(chunk.message || "Working");
+      adapter.setStatusText(visibleProgressStatusText(chunk.message));
       break;
     case "finish":
       finishUiChunk(adapter);

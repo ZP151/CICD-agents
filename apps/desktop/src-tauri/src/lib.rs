@@ -1,5 +1,7 @@
+use std::{process::Command, thread, time::Duration};
 use std::sync::{Mutex, OnceLock};
 use tauri::{
+    AppHandle,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
@@ -13,6 +15,61 @@ static DAEMON_PORT: OnceLock<u16> = OnceLock::new();
 #[tauri::command]
 fn get_daemon_port() -> u16 {
     *DAEMON_PORT.get().unwrap_or(&8787)
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimePortOwner {
+    port: u16,
+    pid: Option<u32>,
+    path: Option<String>,
+    command_line: Option<String>,
+    recoverable: bool,
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeRecoveryResult {
+    ok: bool,
+    port: u16,
+    stopped_pid: Option<u32>,
+    owner_before: RuntimePortOwner,
+    owner_after: RuntimePortOwner,
+}
+
+#[tauri::command]
+fn inspect_runtime_port_owner() -> RuntimePortOwner {
+    inspect_runtime_port_owner_for_port(get_daemon_port())
+}
+
+#[tauri::command]
+fn recover_daemon_runtime(app: AppHandle) -> Result<RuntimeRecoveryResult, String> {
+    let port = get_daemon_port();
+    let owner_before = inspect_runtime_port_owner_for_port(port);
+    let mut stopped_pid = None;
+
+    if let Some(pid) = owner_before.pid {
+        if !owner_before.recoverable {
+            return Err(format!(
+                "Port {port} is owned by an unexpected process. Close it manually before restarting MergePilot."
+            ));
+        }
+        stop_process_by_id(pid)?;
+        stopped_pid = Some(pid);
+        thread::sleep(Duration::from_millis(700));
+    }
+
+    kill_daemon(&app);
+    start_daemon_sidecar(&app, port)?;
+    thread::sleep(Duration::from_millis(500));
+
+    Ok(RuntimeRecoveryResult {
+        ok: true,
+        port,
+        stopped_pid,
+        owner_before,
+        owner_after: inspect_runtime_port_owner_for_port(port),
+    })
 }
 
 /// Resolve the git executable path.  On Windows the Tauri process may inherit
@@ -92,6 +149,100 @@ fn list_git_branches(repo_path: String) -> Vec<String> {
     }
 }
 
+fn inspect_runtime_port_owner_for_port(port: u16) -> RuntimePortOwner {
+    #[cfg(target_os = "windows")]
+    {
+        return inspect_runtime_port_owner_windows(port);
+    }
+
+    #[allow(unreachable_code)]
+    RuntimePortOwner {
+        port,
+        pid: None,
+        path: None,
+        command_line: None,
+        recoverable: false,
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn inspect_runtime_port_owner_windows(port: u16) -> RuntimePortOwner {
+    let script = format!(
+        "$c = Get-NetTCPConnection -LocalPort {port} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1; \
+         if ($null -eq $c) {{ [pscustomobject]@{{ pid = $null; path = $null; commandLine = $null }} | ConvertTo-Json -Compress; exit 0 }}; \
+         $p = Get-CimInstance Win32_Process -Filter \"ProcessId=$($c.OwningProcess)\" -ErrorAction SilentlyContinue; \
+         [pscustomobject]@{{ pid = [int]$c.OwningProcess; path = $p.ExecutablePath; commandLine = $p.CommandLine }} | ConvertTo-Json -Compress"
+    );
+
+    let output = Command::new("powershell.exe")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
+        .output();
+
+    let value = output
+        .ok()
+        .and_then(|out| String::from_utf8(out.stdout).ok())
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(text.trim()).ok());
+
+    let pid = value
+        .as_ref()
+        .and_then(|v| v.get("pid"))
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32);
+    let path = value
+        .as_ref()
+        .and_then(|v| v.get("path"))
+        .and_then(|v| v.as_str())
+        .map(|v| v.to_string());
+    let command_line = value
+        .as_ref()
+        .and_then(|v| v.get("commandLine"))
+        .and_then(|v| v.as_str())
+        .map(|v| v.to_string());
+
+    RuntimePortOwner {
+        port,
+        pid,
+        recoverable: runtime_owner_is_recoverable(path.as_deref(), command_line.as_deref()),
+        path,
+        command_line,
+    }
+}
+
+fn runtime_owner_is_recoverable(path: Option<&str>, command_line: Option<&str>) -> bool {
+    let combined = format!("{} {}", path.unwrap_or(""), command_line.unwrap_or(""))
+        .to_ascii_lowercase()
+        .replace('/', "\\");
+
+    combined.contains("mergepilot-daemon")
+        || combined.contains("@mergepilot\\daemon")
+        || combined.contains("packages\\daemon")
+        || ((combined.contains("\\cicd-agents\\") || combined.contains("\\mergepilot\\"))
+            && combined.contains("src\\bin.ts"))
+}
+
+fn stop_process_by_id(pid: u32) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let status = Command::new("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                &format!("Stop-Process -Id {pid} -Force -ErrorAction Stop"),
+            ])
+            .status()
+            .map_err(|err| format!("Failed to stop process {pid}: {err}"))?;
+        if status.success() {
+            return Ok(());
+        }
+        return Err(format!("Failed to stop process {pid}: exit code {:?}", status.code()));
+    }
+
+    #[allow(unreachable_code)]
+    Err(format!("Runtime recovery is not supported on this platform for PID {pid}."))
+}
+
 /// Holds the running daemon child process so we can kill it on exit.
 struct DaemonProcess(Mutex<Option<CommandChild>>);
 
@@ -100,7 +251,12 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(DaemonProcess(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![list_git_branches, get_daemon_port])
+        .invoke_handler(tauri::generate_handler![
+            list_git_branches,
+            get_daemon_port,
+            inspect_runtime_port_owner,
+            recover_daemon_runtime
+        ])
         // Hide windows instead of quitting when the user closes them
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -146,56 +302,9 @@ pub fn run() {
             // constant never needs to change between builds.
             let daemon_port_num: u16 = 8787;
             let _ = DAEMON_PORT.set(daemon_port_num);
-            let daemon_port_str = daemon_port_num.to_string();
-            let daemon_port = daemon_port_str.as_str();
-            match app.shell().sidecar("mergepilot-daemon") {
-                Ok(cmd) => match cmd
-                    // Pass port both ways: CLI arg is the most reliable mechanism for
-                    // sidecar processes; env var is the existing fallback.
-                    .args(["--port", daemon_port])
-                    .env("RUNTIME_PORT", daemon_port)
-                    .spawn() {
-                    Ok((mut rx, child)) => {
-                        *app.state::<DaemonProcess>().0.lock().unwrap() = Some(child);
-                        log::info!("mergepilot-daemon started on port {daemon_port}");
-
-                        // Consume the output receiver on a background thread so
-                        // stdout/stderr are logged and early exits are detected.
-                        let handle = app.handle().clone();
-                        tauri::async_runtime::spawn(async move {
-                            while let Some(event) = rx.recv().await {
-                                match event {
-                                    CommandEvent::Stdout(line) => {
-                                        log::info!("[daemon] {}", String::from_utf8_lossy(&line));
-                                    }
-                                    CommandEvent::Stderr(line) => {
-                                        log::warn!("[daemon] {}", String::from_utf8_lossy(&line));
-                                    }
-                                    CommandEvent::Terminated(payload) => {
-                                        let code = payload.code.unwrap_or(-1);
-                                        log::error!("mergepilot-daemon exited with code {code}");
-                                        if code != 0 {
-                                            show_daemon_error(
-                                                &handle,
-                                                &format!("The daemon process exited unexpectedly (code {code}). Check that your LLM settings are configured in Settings."),
-                                            );
-                                        }
-                                        break;
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        });
-                    }
-                    Err(e) => {
-                        log::error!("Failed to spawn mergepilot-daemon: {e}");
-                        show_daemon_error(&app.handle(), &e.to_string());
-                    }
-                },
-                Err(e) => {
-                    log::error!("Failed to create sidecar command: {e}");
-                    show_daemon_error(&app.handle(), &e.to_string());
-                }
+            if let Err(e) = start_daemon_sidecar(&app.handle(), daemon_port_num) {
+                log::error!("Failed to start mergepilot-daemon: {e}");
+                show_daemon_error(&app.handle(), &e);
             }
 
             Ok(())
@@ -214,6 +323,88 @@ fn kill_daemon(app: &tauri::AppHandle) {
         let _ = child.kill();
         log::info!("mergepilot-daemon stopped");
     }
+}
+
+fn start_daemon_sidecar(app: &AppHandle, port: u16) -> Result<(), String> {
+    if let Some(stopped_pid) = ensure_runtime_port_available(port)? {
+        log::warn!("stopped stale MergePilot runtime on port {port} before starting sidecar: pid {stopped_pid}");
+    }
+
+    let daemon_port = port.to_string();
+    let cmd = app
+        .shell()
+        .sidecar("mergepilot-daemon")
+        .map_err(|err| format!("Failed to create sidecar command: {err}"))?;
+
+    let (mut rx, child) = cmd
+        // Pass port both ways: CLI arg is the most reliable mechanism for
+        // sidecar processes; env var is the existing fallback.
+        .args(["--port", daemon_port.as_str()])
+        .env("RUNTIME_PORT", daemon_port.as_str())
+        .env("MERGEPILOT_RUNTIME_MODE", "desktop-sidecar")
+        .env("MERGEPILOT_DESKTOP_VERSION", env!("CARGO_PKG_VERSION"))
+        .env("MERGEPILOT_DAEMON_VERSION", env!("CARGO_PKG_VERSION"))
+        .env("MERGEPILOT_BUILD_SHA", option_env!("GITHUB_SHA").unwrap_or(""))
+        .spawn()
+        .map_err(|err| format!("Failed to spawn mergepilot-daemon: {err}"))?;
+
+    *app.state::<DaemonProcess>().0.lock().unwrap() = Some(child);
+    log::info!("mergepilot-daemon started on port {port}");
+
+    // Consume the output receiver on a background thread so stdout/stderr are
+    // logged and early exits are detected.
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line) => {
+                    log::info!("[daemon] {}", String::from_utf8_lossy(&line));
+                }
+                CommandEvent::Stderr(line) => {
+                    log::warn!("[daemon] {}", String::from_utf8_lossy(&line));
+                }
+                CommandEvent::Terminated(payload) => {
+                    let code = payload.code.unwrap_or(-1);
+                    log::error!("mergepilot-daemon exited with code {code}");
+                    if code != 0 {
+                        show_daemon_error(
+                            &handle,
+                            &format!("The daemon process exited unexpectedly (code {code}). Check that your LLM settings are configured in Settings."),
+                        );
+                    }
+                    break;
+                }
+                _ => {}
+            }
+        }
+    });
+
+    Ok(())
+}
+
+fn ensure_runtime_port_available(port: u16) -> Result<Option<u32>, String> {
+    let owner = inspect_runtime_port_owner_for_port(port);
+    let Some(pid) = owner.pid else {
+        return Ok(None);
+    };
+
+    if !owner.recoverable {
+        return Err(format!(
+            "Port {port} is already used by an unexpected process. Close it manually before starting MergePilot."
+        ));
+    }
+
+    stop_process_by_id(pid)?;
+    thread::sleep(Duration::from_millis(700));
+
+    let owner_after = inspect_runtime_port_owner_for_port(port);
+    if let Some(after_pid) = owner_after.pid {
+        return Err(format!(
+            "Port {port} is still owned by process {after_pid} after stopping stale MergePilot runtime {pid}."
+        ));
+    }
+
+    Ok(Some(pid))
 }
 
 fn toggle_main_window(app: &tauri::AppHandle) {
@@ -236,5 +427,50 @@ fn show_daemon_error(app: &tauri::AppHandle, msg: &str) {
             "console.error('MergePilot: daemon failed to start — {escaped}')"
         ));
         let _ = win.show();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn treats_installed_mergepilot_daemon_as_recoverable() {
+        assert!(runtime_owner_is_recoverable(
+            Some(r"C:\Program Files\MergePilot\mergepilot-daemon.exe"),
+            Some(r#""\\?\C:\Program Files\MergePilot\mergepilot-daemon.exe" --port 8787"#),
+        ));
+    }
+
+    #[test]
+    fn treats_stale_direct_installed_daemon_as_recoverable() {
+        assert!(runtime_owner_is_recoverable(
+            Some(r"C:\Program Files\MergePilot\mergepilot-daemon.exe"),
+            Some(r#""C:\Program Files\MergePilot\mergepilot-daemon.exe" --port 8787"#),
+        ));
+    }
+
+    #[test]
+    fn treats_source_daemon_as_recoverable() {
+        assert!(runtime_owner_is_recoverable(
+            Some(r"C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64\node.exe"),
+            Some(r#"node packages\daemon\src\bin.ts --port 8787"#),
+        ));
+    }
+
+    #[test]
+    fn treats_pnpm_source_daemon_as_recoverable() {
+        assert!(runtime_owner_is_recoverable(
+            Some(r"C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64\node.exe"),
+            Some(r#""C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64\node.exe" "C:\Users\15492\Develop\Agents\CICD-agents\node_modules\tsx\dist\cli.mjs" src\bin.ts"#),
+        ));
+    }
+
+    #[test]
+    fn rejects_unrelated_port_owner() {
+        assert!(!runtime_owner_is_recoverable(
+            Some(r"C:\Windows\System32\svchost.exe"),
+            Some("svchost.exe"),
+        ));
     }
 }

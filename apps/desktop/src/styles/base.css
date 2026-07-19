@@ -8,13 +8,20 @@
   --app-border-strong: 68 76 90;
   --app-text: 236 238 242;
   --app-text-muted: 165 172 184;
-  --app-text-subtle: 119 128 145;
+  --app-text-subtle: 133 143 160;
   --app-text-faint: 86 96 112;
   --app-accent: 72 113 184;
+  --app-accent-readable: 108 154 228;
   --app-accent-soft: 29 45 74;
-  --app-success: 68 157 118;
+  --app-success: 76 173 130;
+  --app-success-soft: 18 47 36;
+  --app-success-border: 51 112 86;
   --app-warning: 205 143 66;
-  --app-danger: 214 99 99;
+  --app-warning-soft: 52 39 20;
+  --app-warning-border: 142 99 46;
+  --app-danger: 224 116 116;
+  --app-danger-soft: 58 28 30;
+  --app-danger-border: 139 65 68;
 }
 
 :root[data-theme="light"] {
@@ -26,13 +33,20 @@
   --app-border-strong: 203 199 190;
   --app-text: 39 43 48;
   --app-text-muted: 91 96 105;
-  --app-text-subtle: 126 128 132;
+  --app-text-subtle: 105 109 116;
   --app-text-faint: 163 162 156;
   --app-accent: 56 103 168;
-  --app-accent-soft: 226 237 250;
-  --app-success: 66 128 85;
-  --app-warning: 149 100 0;
+  --app-accent-readable: 45 91 154;
+  --app-accent-soft: 238 244 252;
+  --app-success: 49 111 69;
+  --app-success-soft: 242 248 244;
+  --app-success-border: 198 224 205;
+  --app-warning: 140 92 0;
+  --app-warning-soft: 253 249 239;
+  --app-warning-border: 226 207 163;
   --app-danger: 159 47 45;
+  --app-danger-soft: 253 244 244;
+  --app-danger-border: 231 199 198;
 }
 
 html,
@@ -60,3 +74,19 @@ body {
 *::-webkit-scrollbar-thumb  { background-color: rgba(var(--app-border-strong), 0.8); border-radius: 9999px; }
 *::-webkit-scrollbar-thumb:hover { background-color: rgba(var(--app-text-faint), 0.9); }
 *::-webkit-scrollbar-corner { background: transparent; }
+
+.syntax-token-string {
+  color: rgb(var(--app-success));
+}
+
+.syntax-token-comment {
+  color: rgb(var(--app-text-faint));
+}
+
+.syntax-token-number {
+  color: rgb(var(--app-warning));
+}
+
+.syntax-token-keyword {
+  color: rgb(var(--app-accent));
+}

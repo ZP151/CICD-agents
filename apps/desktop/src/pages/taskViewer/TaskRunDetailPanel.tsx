@@ -94,11 +94,11 @@ export function TaskRunDetailPanel({ task }: { task: TaskView }): JSX.Element {
       </section>
 
       {task.error && (
-        <section className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
-          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">
+        <section className="rounded-lg border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] p-3">
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-danger))]">
             Error
           </h3>
-          <p className="break-words font-mono text-xs text-red-700 dark:text-red-300">
+          <p className="break-words font-mono text-xs text-[rgb(var(--app-danger))]">
             {task.error}
           </p>
         </section>
