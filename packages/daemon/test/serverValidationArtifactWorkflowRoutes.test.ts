@@ -387,9 +387,10 @@ describe("daemon validation artifact workflow routes", () => {
       workflowPhase: "architecture_context_inspected",
     });
     expect(body.workflowState.pendingApproval).toBeUndefined();
-    expect(body.summary).toContain("Repository context:");
+    expect(body.summary).toContain("Architecture context prepared.");
     expect(body.summary).toContain("Project Link settings:");
     expect(body.summary).toContain("Build command: npm run build");
+    expect(body.summary).not.toContain("# Test project");
     expect(body.summary).toContain("Test command: npm test");
     expect(body.summary).toContain("Project structure signals:");
     expect(body.summary).toContain("README.md");

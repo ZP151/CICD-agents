@@ -9,6 +9,47 @@ import { streamPlannerAndPersist } from "../src/chatPlannerPersistence.js";
 import type { StoredSession } from "../src/chatHistoryStore.js";
 
 describe("chat planner persistence image attachments", () => {
+  it("keeps internal context notes out of user-facing suggestions", async () => {
+    const appendedBubbles: StoredBubble[] = [];
+    const events: ChatEvent[] = [];
+    const planner = {
+      async *run(): AsyncGenerator<ChatEvent> {
+        yield {
+          type: "done",
+          result: {
+            ...plannerResult("The project has one API service."),
+            suggestions: ["Review the changed files"],
+          },
+        };
+      },
+    };
+
+    for await (const event of streamPlannerAndPersist({
+      sessionId: "s1",
+      message: "Understand this project",
+      history: [],
+      repoPath: "C:\\repo",
+      planner,
+      waitForConfirm: async () => false,
+      contextNotes: ["Repository context: 97 files indexed; raw file list follows..."],
+      contextSources: [],
+      adapters: {
+        appendBubble: async (_sessionId, bubble) => { appendedBubbles.push(bubble); },
+        appendMessage: async () => {},
+        getBubbles: async () => [],
+        loadSession: async () => null,
+        saveSession: async () => {},
+      },
+    })) {
+      events.push(event);
+    }
+
+    const done = events.find((event) => event.type === "done");
+    expect(done?.type === "done" && done.result.suggestions).toEqual(["Review the changed files"]);
+    expect(appendedBubbles.find((bubble) => bubble.role === "assistant")?.suggestions)
+      .toEqual(["Review the changed files"]);
+  });
+
   it("passes image attachments through to the planner without persisting image data", async () => {
     const imageAttachments: ChatImageAttachment[] = [
       {

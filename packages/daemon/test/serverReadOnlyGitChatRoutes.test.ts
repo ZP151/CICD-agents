@@ -60,6 +60,20 @@ describe("daemon read-only Git chat routing", () => {
     expect(finalWorkflow?.state?.completedTools).toEqual(
       expect.arrayContaining(["git_current_branch", "git_status"]),
     );
+
+    const turnStartedIndex = events.findIndex((entry) => entry.event === "turn.started");
+    const preparingIndex = events.findIndex(
+      (entry) => entry.event === "progress" && (entry.data as { message?: string }).message === "Preparing conversation",
+    );
+    const turnCompletedIndex = events.findIndex((entry) => entry.event === "turn.completed");
+    expect(turnStartedIndex).toBeGreaterThanOrEqual(0);
+    expect(preparingIndex).toBeGreaterThan(turnStartedIndex);
+    expect(turnCompletedIndex).toBeGreaterThan(preparingIndex);
+    const started = events[turnStartedIndex]?.data as { turnId?: string; sequence?: number };
+    const completed = events[turnCompletedIndex]?.data as { turnId?: string; status?: string };
+    expect(started.turnId).toMatch(/^turn_/);
+    expect(started.sequence).toBe(0);
+    expect(completed).toMatchObject({ turnId: started.turnId, status: "completed" });
   });
 
   it("routes review-only change requests to local change inspection without staging approval", async () => {

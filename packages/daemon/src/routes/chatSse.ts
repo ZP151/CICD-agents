@@ -4,6 +4,7 @@ import { chatEventToSseEvents, sessionStartedEvent } from "../chatEvents.js";
 
 export interface ChatSseWriter {
   send(event: string, payload: unknown): void;
+  startTurn(turnId: string): void;
   sendChatEvent(event: ChatEvent): void;
   end(): void;
 }
@@ -17,6 +18,7 @@ export function createChatSseWriter(reply: FastifyReply, sessionId?: string): Ch
   reply.raw.flushHeaders();
 
   const uiAdapter = new ChatUiChunkAdapter();
+  let activeTurn: { id: string; nextSequence: number; startedAt: number } | undefined;
 
   const send = (event: string, payload: unknown): void => {
     reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
@@ -30,12 +32,72 @@ export function createChatSseWriter(reply: FastifyReply, sessionId?: string): Ch
 
   return {
     send,
+    startTurn(turnId) {
+      activeTurn = { id: turnId, nextSequence: 1, startedAt: Date.now() };
+      send("turn.started", {
+        type: "turn.started",
+        turnId,
+        sequence: 0,
+        emittedAt: activeTurn.startedAt,
+        sessionId,
+      });
+    },
     sendChatEvent(event) {
-      for (const sse of chatEventToSseEvents(event)) send(sse.event, sse.payload);
-      for (const chunk of uiAdapter.push(event)) sendUiChunk(chunk);
+      const enriched = enrichTurnEvent(event, activeTurn);
+      for (const sse of chatEventToSseEvents(enriched)) send(sse.event, sse.payload);
+      for (const chunk of uiAdapter.push(enriched)) sendUiChunk(chunk);
+      const terminal = turnTerminalEvent(enriched, activeTurn);
+      if (terminal) send(terminal.type, terminal.payload);
     },
     end() {
       reply.raw.end();
+    },
+  };
+}
+
+function enrichTurnEvent(
+  event: ChatEvent,
+  turn: { id: string; nextSequence: number; startedAt: number } | undefined,
+): ChatEvent {
+  if (!turn) return event;
+  const emittedAt = Date.now();
+  return {
+    ...event,
+    turnId: turn.id,
+    sequence: turn.nextSequence++,
+    emittedAt,
+    elapsedMs: emittedAt - turn.startedAt,
+  } as unknown as ChatEvent;
+}
+
+function turnTerminalEvent(
+  event: ChatEvent,
+  turn: { id: string; startedAt: number } | undefined,
+): { type: string; payload: Record<string, unknown> } | undefined {
+  const enriched = event as ChatEvent & {
+    turnId?: string;
+    sequence?: number;
+    emittedAt?: number;
+    elapsedMs?: number;
+  };
+  if (!enriched.turnId) return undefined;
+  const status = event.type === "done"
+    ? "completed"
+    : event.type === "cancelled"
+      ? "cancelled"
+      : event.type === "error"
+        ? "failed"
+        : undefined;
+  if (!status) return undefined;
+  return {
+    type: `turn.${status}`,
+    payload: {
+      type: `turn.${status}`,
+      turnId: enriched.turnId,
+      sequence: enriched.sequence,
+      emittedAt: enriched.emittedAt,
+      elapsedMs: turn ? Date.now() - turn.startedAt : enriched.elapsedMs,
+      status,
     },
   };
 }

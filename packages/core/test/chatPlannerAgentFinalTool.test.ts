@@ -359,4 +359,76 @@ describe("ChatPlanner agent_final tool finalization", () => {
       expect(done.result.toolCallsMade).toEqual([{ name: "git_status", args: {}, ok: true }]);
     }
   });
+
+  it("defers batched tools until the next planning decision", async () => {
+    const called: string[] = [];
+    const executor = createToolExecutor();
+    executor.register({
+      name: "git_status",
+      description: "Inspect repository state",
+      parameters: { type: "object", properties: {} },
+      handler: async () => {
+        called.push("git_status");
+        return { ok: true, summary: "clean" };
+      },
+    });
+    executor.register({
+      name: "git_diff",
+      description: "Inspect workspace diff",
+      parameters: { type: "object", properties: {} },
+      handler: async () => {
+        called.push("git_diff");
+        return { ok: true, summary: "diff" };
+      },
+    });
+    const calls: Array<{ messages?: unknown[] }> = [];
+    const planner = new ChatPlanner(
+      fakeSequenceLlm([
+        [
+          {
+            type: "tool_call",
+            toolCalls: [
+              { id: "call_status", name: "git_status", arguments: "{}" },
+              { id: "call_diff", name: "git_diff", arguments: "{}" },
+            ],
+          },
+          { type: "done", finishReason: "tool_calls" },
+        ],
+        [
+          {
+            type: "tool_call",
+            toolCalls: [{
+              id: "call_final",
+              name: CHAT_FINAL_TOOL_NAME,
+              arguments: JSON.stringify({
+                response: "Repository state is clean.",
+                risk_level: "low",
+                actions_taken: ["git_status"],
+                suggestions: [],
+              }),
+            }],
+          },
+          { type: "done", finishReason: "tool_calls" },
+        ],
+      ], calls),
+      executor,
+      { maxSteps: 2 },
+    );
+    const events = [];
+
+    for await (const event of planner.run("inspect this repository", [], ".", async () => true)) {
+      events.push(event);
+    }
+
+    expect(called).toEqual(["git_status"]);
+    expect(events.filter((event) => event.type === "tool_start").map((event) =>
+      event.type === "tool_start" ? event.name : "",
+    )).toEqual(["git_status"]);
+    expect(JSON.stringify(calls[1]?.messages)).toContain("intentionally deferred");
+    const done = events.find((event) => event.type === "done");
+    expect(done?.type).toBe("done");
+    if (done?.type === "done") {
+      expect(done.result.toolCallsMade).toEqual([{ name: "git_status", args: {}, ok: true }]);
+    }
+  });
 });
