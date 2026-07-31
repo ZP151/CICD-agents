@@ -53,9 +53,9 @@ export function UserFooter() {
       {loggingIn && <LoginModal onDone={handleLoginDone} onCancel={handleLoginCancel} />}
 
       {!user.authenticated ? (
-        <div className="border-t border-[rgb(var(--app-border))] p-2.5 max-[760px]:p-2">
+        <div className="flex justify-center border-t border-[rgb(var(--app-sidebar-border))] p-2.5">
           <button
-            className="flex w-full items-center gap-2 rounded-md border border-[rgb(var(--app-border))] px-2 py-1.5 text-left transition-colors hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface))] max-[760px]:justify-center max-[760px]:px-0"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-transparent p-2 text-left transition-colors hover:bg-[rgb(var(--app-sidebar-hover))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/60"
             onClick={handleLogin}
             title="Sign in with Microsoft"
             aria-label="Sign in with Microsoft"
@@ -70,57 +70,31 @@ export function UserFooter() {
               <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
               <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
             </svg>
-            <span className="text-[12px] text-[rgb(var(--app-text-muted))] max-[760px]:sr-only">
+            <span className="sr-only">
               Sign in with Microsoft
             </span>
           </button>
         </div>
       ) : (
-        <div ref={menuRef} className="relative border-t border-[rgb(var(--app-border))] p-2.5 max-[760px]:p-2">
+        <div ref={menuRef} className="relative flex justify-center border-t border-[rgb(var(--app-sidebar-border))] p-2.5">
           <button
-            className="group/account flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-[rgb(var(--app-surface))] max-[760px]:justify-center max-[760px]:px-0"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-transparent p-1 text-left transition-colors hover:bg-[rgb(var(--app-sidebar-hover))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/60"
             onClick={() => setMenuOpen((value) => !value)}
             title={accountTitle}
             aria-label={`Account: ${displayName}`}
+            aria-expanded={menuOpen}
           >
-            <div className="flex min-w-0 items-center gap-2">
-              <SafeAvatar
-                src={user.avatarDataUrl}
-                label={displayName}
-                imageClassName="h-7 w-7 shrink-0 rounded-full bg-[rgb(var(--app-accent))] object-cover ring-1 ring-[rgb(var(--app-border-strong))]"
-                fallbackClassName="h-7 w-7 text-xs ring-1 ring-[rgb(var(--app-border-strong))]"
-              />
-              <span className="sr-only">Signed in as {accountTitle}</span>
-            </div>
-            {!menuOpen && (
-              <span className={userFooterHoverCardClass()} aria-hidden="true">
-                <span className="block truncate text-[11px] font-medium text-[rgb(var(--app-text))]">
-                  {user.name ?? user.upn}
-                </span>
-                {user.upn && (
-                  <span className="mt-0.5 block truncate text-[10px] text-[rgb(var(--app-text-subtle))]">
-                    {user.upn}
-                  </span>
-                )}
-              </span>
-            )}
-            <svg
-              className="h-3 w-3 shrink-0 text-[rgb(var(--app-text-subtle))] max-[760px]:hidden"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
+            <SafeAvatar
+              src={user.avatarDataUrl}
+              label={displayName}
+              imageClassName="h-9 w-9 shrink-0 rounded-full bg-[rgb(var(--app-accent))] object-cover ring-1 ring-[rgb(var(--app-border-strong))]"
+              fallbackClassName="h-9 w-9 text-sm ring-1 ring-[rgb(var(--app-border-strong))]"
+            />
+            <span className="sr-only">Signed in as {accountTitle}</span>
           </button>
 
           {menuOpen && (
-            <div className="absolute bottom-full left-2.5 right-2.5 mb-1 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] py-1 shadow-xl max-[760px]:left-2 max-[760px]:right-auto max-[760px]:w-56">
+            <div className="absolute bottom-full left-2 z-40 mb-2 w-56 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] py-1 shadow-xl">
               <div className="border-b border-[rgb(var(--app-border))] px-3 py-2">
                 <p className="truncate text-[11px] font-medium text-[rgb(var(--app-text))]">
                   {user.name ?? user.upn}
@@ -142,13 +116,4 @@ export function UserFooter() {
       )}
     </>
   );
-}
-
-export function userFooterHoverCardClass(): string {
-  return [
-    "pointer-events-none absolute bottom-full left-2.5 right-2.5 z-40 mb-1 hidden",
-    "rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2 shadow-xl",
-    "group-hover/account:block group-focus-visible/account:block",
-    "max-[760px]:left-2 max-[760px]:right-auto max-[760px]:w-56",
-  ].join(" ");
 }

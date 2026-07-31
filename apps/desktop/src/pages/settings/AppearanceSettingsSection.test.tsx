@@ -3,15 +3,16 @@ import { describe, expect, it } from "vitest";
 import { AppearanceSettingsSection } from "./AppearanceSettingsSection.js";
 
 describe("AppearanceSettingsSection", () => {
-  it("offers only fixed visual modes", () => {
+  it("offers the three fixed visual modes", () => {
     const html = renderToStaticMarkup(
       <AppearanceSettingsSection
-        theme="light"
+        theme="standard"
         onThemeChange={() => undefined}
       />,
     );
 
-    expect(html).toContain("Choose a fixed visual mode for MergePilot.");
+    expect(html).toContain("Standard keeps blue and soft violet cues");
+    expect(html).toContain("Standard");
     expect(html).toContain("Light");
     expect(html).toContain("Dark");
     expect(html).not.toContain("System");
@@ -26,7 +27,7 @@ describe("AppearanceSettingsSection", () => {
       />,
     );
 
-    expect(html).toContain("Choose a fixed visual mode for MergePilot.");
+    expect(html).toContain("Standard keeps blue and soft violet cues");
     expect(html).not.toContain("Resolved:");
   });
 });

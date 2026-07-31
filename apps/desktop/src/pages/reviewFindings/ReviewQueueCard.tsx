@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { ReviewQueueItem } from "../../api.js";
 import { buildReviewAuditCardSummary, dispositionLabel } from "../../reviewAudit.js";
 import { loadFindingsLocal, reviewQueuePriorityReasons } from "../../reviewHistoryLocal.js";
@@ -11,6 +11,13 @@ import {
   riskTone,
   shortCommit,
 } from "./reviewQueueViewModel.js";
+import { StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../components/ui/DropdownMenu.js";
 
 export interface ReviewQueueCardProps {
   item: ReviewQueueItem;
@@ -62,22 +69,22 @@ export function ReviewQueueCard({
         <div className="min-w-0 flex-1">
           <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
             <span className="font-mono text-xs text-[rgb(var(--app-accent-readable))]">#{item.pullRequestId}</span>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${riskTone(item.decisionRiskLevel)}`}>
+            <StatusBadge className={riskTone(item.decisionRiskLevel)}>
               {item.decisionRiskLevel}
-            </span>
-            <span className="rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
+            </StatusBadge>
+            <StatusBadge>
               {item.decisionQueue.replace(/_/g, " ")}
-            </span>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] ring-1 ${
+            </StatusBadge>
+            <StatusBadge className={
               freshness.stale
                 ? "bg-[rgb(var(--app-warning)_/_0.10)] text-[rgb(var(--app-warning))] ring-[rgb(var(--app-warning))]/30"
                 : "bg-[rgb(var(--app-success)_/_0.10)] text-[rgb(var(--app-success))] ring-[rgb(var(--app-success))]/30"
-            }`}>
+            }>
               {freshness.label}
-            </span>
+            </StatusBadge>
             {auditSummary.hasAudit && (
-              <span
-                className={`max-w-[14rem] truncate rounded-full px-2 py-0.5 text-[10px] ring-1 ${
+              <StatusBadge
+                className={`max-w-[14rem] truncate ${
                   auditSummary.tone === "success"
                     ? "bg-[rgb(var(--app-success)_/_0.10)] text-[rgb(var(--app-success))] ring-[rgb(var(--app-success))]/30"
                     : auditSummary.tone === "warning"
@@ -87,7 +94,7 @@ export function ReviewQueueCard({
                 title={`Audit: ${auditSummary.label}${auditSummary.threadId ? ` · thread ${auditSummary.threadId}` : ""}`}
               >
                 {auditSummary.label}
-              </span>
+              </StatusBadge>
             )}
           </div>
           <p className="truncate text-sm font-medium text-[rgb(var(--app-text))]">{item.decisionReason || "No decision reason recorded."}</p>
@@ -190,30 +197,6 @@ function ReviewQueueCardActions({
   onApplyDisposition: (item: ReviewQueueItem, disposition: ReviewQueueItem["manualDisposition"]) => void;
 }): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (target instanceof Node && menuRef.current?.contains(target)) return;
-      setMenuOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMenuOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointerDown, true);
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [menuOpen]);
-
-  const applyDisposition = (disposition: ReviewQueueItem["manualDisposition"]) => {
-    setMenuOpen(false);
-    onApplyDisposition(item, disposition);
-  };
 
   return (
     <div className={reviewQueueCardActionsClass()}>
@@ -251,53 +234,45 @@ function ReviewQueueCardActions({
             {isRetryingWriteBack ? "Retrying..." : "Retry ADO"}
           </button>
         )}
-      <div ref={menuRef} className="relative">
-        <button
-          type="button"
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen((open) => !open)}
-          className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
-        >
-          Actions
-        </button>
-        <div
-          hidden={!menuOpen}
-          className="absolute right-0 z-20 mt-1 flex min-w-[10rem] flex-col gap-1 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-1.5 shadow-lg"
-        >
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+        <DropdownMenuTrigger asChild>
           <button
             type="button"
+            className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+          >
+            Actions
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" aria-label="Review disposition actions">
+          <DropdownMenuItem
             disabled={isDispositionSaving}
-            onClick={() => applyDisposition("acknowledged")}
-            className="rounded-md px-2.5 py-1 text-left text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-50"
+            onSelect={() => onApplyDisposition(item, "acknowledged")}
           >
             {isDispositionSaving ? "Saving..." : "Acknowledge"}
-          </button>
-          <button
-            type="button"
+          </DropdownMenuItem>
+          <DropdownMenuItem
             disabled={isDispositionSaving}
-            onClick={() => applyDisposition("marked_safe")}
-            className="rounded-md px-2.5 py-1 text-left text-xs text-[rgb(var(--app-success))] transition hover:bg-[rgb(var(--app-success)_/_0.10)] disabled:cursor-not-allowed disabled:opacity-50"
+            onSelect={() => onApplyDisposition(item, "marked_safe")}
+            className="text-[rgb(var(--app-success))] data-[highlighted]:bg-[rgb(var(--app-success-soft))] data-[highlighted]:text-[rgb(var(--app-success))]"
           >
             Mark safe
-          </button>
-          <button
-            type="button"
+          </DropdownMenuItem>
+          <DropdownMenuItem
             disabled={isDispositionSaving}
-            onClick={() => applyDisposition("marked_blocked")}
-            className="rounded-md px-2.5 py-1 text-left text-xs text-[rgb(var(--app-danger))] transition hover:bg-[rgb(var(--app-danger)_/_0.10)] disabled:cursor-not-allowed disabled:opacity-50"
+            onSelect={() => onApplyDisposition(item, "marked_blocked")}
+            className="text-[rgb(var(--app-danger))] data-[highlighted]:bg-[rgb(var(--app-danger-soft))] data-[highlighted]:text-[rgb(var(--app-danger))]"
           >
             Block
-          </button>
-          <button
-            type="button"
+          </DropdownMenuItem>
+          <DropdownMenuItem
             disabled={isDispositionSaving}
-            onClick={() => applyDisposition("changes_requested")}
-            className="rounded-md px-2.5 py-1 text-left text-xs text-[rgb(var(--app-warning))] transition hover:bg-[rgb(var(--app-warning)_/_0.10)] disabled:cursor-not-allowed disabled:opacity-50"
+            onSelect={() => onApplyDisposition(item, "changes_requested")}
+            className="text-[rgb(var(--app-warning))] data-[highlighted]:bg-[rgb(var(--app-warning-soft))] data-[highlighted]:text-[rgb(var(--app-warning))]"
           >
             Request changes
-          </button>
-        </div>
-      </div>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

@@ -1,7 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 
-export type AppTheme = "dark" | "light";
-export type ResolvedTheme = "dark" | "light";
+export type AppTheme = "standard" | "light" | "dark";
+export type ResolvedTheme = AppTheme;
 
 const THEME_STORAGE_KEY = "dev_agent_theme";
 
@@ -13,8 +14,8 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: "light",
-  resolvedTheme: "light",
+  theme: "standard",
+  resolvedTheme: "standard",
   setTheme: () => {},
   toggleTheme: () => {},
 });
@@ -22,9 +23,9 @@ const ThemeContext = createContext<ThemeContextValue>({
 function readStoredTheme(): AppTheme {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return stored === "dark" || stored === "light" ? stored : "light";
+    return stored === "standard" || stored === "dark" || stored === "light" ? stored : "standard";
   } catch {
-    return "light";
+    return "standard";
   }
 }
 
@@ -32,30 +33,66 @@ function resolveTheme(theme: AppTheme): ResolvedTheme {
   return theme;
 }
 
+function applyDocumentTheme(theme: ResolvedTheme): void {
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.style.colorScheme = theme === "dark" ? "dark" : "light";
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined"
+    && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }): JSX.Element {
   const [theme, setThemeState] = useState<AppTheme>(readStoredTheme);
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => resolveTheme(readStoredTheme()));
 
   useEffect(() => {
-    const applyTheme = () => {
-      const next = resolveTheme(theme);
-      setResolvedTheme(next);
-      document.documentElement.dataset.theme = next;
-      document.documentElement.style.colorScheme = next;
+    const next = resolveTheme(theme);
+    setResolvedTheme(next);
+    applyDocumentTheme(next);
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  const setTheme = useCallback((nextTheme: AppTheme) => {
+    if (nextTheme === theme || typeof document === "undefined") {
+      return;
+    }
+
+    const commit = () => {
+      applyDocumentTheme(resolveTheme(nextTheme));
+      flushSync(() => setThemeState(nextTheme));
     };
 
-    applyTheme();
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
+    const transitionDocument = document as Document & {
+      startViewTransition?: (callback: () => void) => { finished: Promise<void> };
+    };
+
+    if (transitionDocument.startViewTransition && !prefersReducedMotion()) {
+      document.documentElement.dataset.themeTransition = "true";
+      const transition = transitionDocument.startViewTransition(commit);
+      void transition.finished.finally(() => {
+        delete document.documentElement.dataset.themeTransition;
+      });
+      return;
+    }
+
+    if (!prefersReducedMotion()) {
+      document.documentElement.dataset.themeTransition = "true";
+      window.setTimeout(() => {
+        delete document.documentElement.dataset.themeTransition;
+      }, 360);
+    }
+
+    commit();
   }, [theme]);
 
   const value = useMemo<ThemeContextValue>(() => ({
     theme,
     resolvedTheme,
-    setTheme: setThemeState,
-    toggleTheme: () => setThemeState((current) => {
-      return current === "dark" ? "light" : "dark";
-    }),
-  }), [resolvedTheme, theme]);
+    setTheme,
+    toggleTheme: () => setTheme(theme === "standard" ? "dark" : "standard"),
+  }), [resolvedTheme, setTheme, theme]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

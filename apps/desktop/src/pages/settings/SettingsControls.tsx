@@ -93,22 +93,25 @@ export function SettingsRow({
 }
 
 export function SegmentedChoice<T extends string>({
+  ariaLabel,
   options,
   value,
   onChange,
 }: {
+  ariaLabel?: string;
   options: Array<{ label: string; value: T }>;
   value: T;
   onChange: (value: T) => void;
 }): JSX.Element {
   return (
-    <div className="settings-segmented">
+    <div className="settings-segmented" role="group" aria-label={ariaLabel}>
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
           onClick={() => onChange(option.value)}
           className={option.value === value ? "is-active" : ""}
+          data-state={option.value === value ? "active" : "inactive"}
           aria-pressed={option.value === value}
         >
           {option.label}

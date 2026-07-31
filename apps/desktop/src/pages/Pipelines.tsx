@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppData } from "../App.js";
 import { PaginationControls } from "../components/PaginationControls.js";
 import { MarkdownContent } from "../components/conversation/ConversationPartRenderer.js";
+import { ActionButton, InlineNotice, WorkbenchHeader, WorkbenchPage } from "../components/workbench/WorkbenchPrimitives.js";
 import { PipelineRowCard } from "./pipelines/PipelineRowCard.js";
 import { PipelineStatusFilters } from "./pipelines/PipelineStatusFilters.js";
 import { runTone } from "./pipelines/pipelineModel.js";
@@ -39,16 +40,11 @@ export default function Pipelines(): JSX.Element {
   });
 
   return (
-    <div className={pipelinesPageShellClass()}>
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[rgb(var(--app-border))] pb-3">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-2xl font-semibold text-[rgb(var(--app-text))]">Pipelines</h2>
-          <p className={pipelineHeaderDescriptionClass()}>
-            CI/CD execution workspace for Azure Pipeline discovery, saved pipeline connections,
-            recent run state, controlled triggers, and AI-assisted run analysis.
-          </p>
-        </div>
-        <div className={pipelineHeaderControlsClass()}>
+    <WorkbenchPage className={pipelinesPageShellClass()}>
+      <WorkbenchHeader
+        title="Pipelines"
+        description="Pipeline discovery, recent run state, controlled triggers, and AI-assisted run analysis."
+        actions={<div className={pipelineHeaderControlsClass()}>
           <select
             aria-label="Pipelines project filter"
             className="min-w-0 rounded-md border border-transparent bg-[rgb(var(--app-surface-raised))] px-3 py-1.5 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-[rgb(var(--app-accent))]"
@@ -71,29 +67,24 @@ export default function Pipelines(): JSX.Element {
               </option>
             ))}
           </select>
-          <button
+          <ActionButton
             onClick={() => {
               void runtime.loadConnections();
               void runtime.loadRelatedPullRequests();
               void runtime.discoverPipelines();
             }}
-            className="rounded-md px-3 py-1.5 text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
           >
             Refresh
-          </button>
-        </div>
-      </header>
+          </ActionButton>
+        </div>}
+      />
 
       {showTopLevelError && (
-        <div className="rounded-lg border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] p-4 text-sm text-[rgb(var(--app-danger))]">
-          {runtime.error}
-        </div>
+        <InlineNotice tone="danger" title="Pipeline data unavailable">{runtime.error}</InlineNotice>
       )}
 
       {runtime.notice && (
-        <div className="rounded-lg border border-[rgb(var(--app-warning))]/30 bg-[rgb(var(--app-warning)_/_0.10)] px-3 py-2 text-sm text-[rgb(var(--app-warning))]">
-          {runtime.notice}
-        </div>
+        <InlineNotice tone="warning">{runtime.notice}</InlineNotice>
       )}
 
       {showStatusFilters && (
@@ -188,14 +179,14 @@ export default function Pipelines(): JSX.Element {
           />
         </div>
       )}
-    </div>
+    </WorkbenchPage>
   );
 }
 
 export type PipelineContentState = "loading" | "refreshing-empty" | "empty" | "rows";
 
 export function pipelinesPageShellClass(): string {
-  return "mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-3 px-4 py-2";
+  return "gap-3";
 }
 
 export function pipelineHeaderDescriptionClass(): string {

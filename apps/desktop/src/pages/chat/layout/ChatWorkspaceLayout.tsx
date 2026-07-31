@@ -1,4 +1,5 @@
 import { CodeSidePanel } from "../artifacts/SourceWorkspace.js";
+import { MergePilotAssistantRuntimeProvider } from "../assistantUi/MergePilotAssistantRuntimeProvider.js";
 import { ChatMessageList } from "./ChatMessageList.js";
 import { ComposerShell } from "./ComposerShell.js";
 import {
@@ -152,28 +153,30 @@ export function ChatWorkspaceLayout({
             onScroll={handleContainerScroll}
             className="message-panel flex flex-col px-4 py-4"
           >
-            <ChatMessageList
-              bubbles={bubbles}
-              renderItems={renderItems}
-              busy={busy}
-              statusText={statusText}
-              repoPath={repoPath}
-              availableProjectLinks={availableProjectLinks}
-              projectLinksLoading={projectLinksLoading}
-              activeProjectLinkId={activeProjectLinkId}
-              selectedArtifactId={selectedArtifactId}
-              createProjectLink={createProjectLink}
-              selectProjectLink={(projectLink) => selectProjectLink(projectLink.id)}
-              onWelcomeSuggestion={handleSuggestionReply}
-              toggleTool={toggleTool}
-              confirmPendingAction={confirmPendingAction}
-              cancelPendingAction={cancelPendingAction}
-              resolveConfirm={resolveConfirm}
-              selectArtifact={selectArtifact}
-              selectSource={selectSource}
-              openPrInsightSourceInActivity={openPrInsightSourceInActivity}
-              openPrInsightSourceInWorkspace={openPrInsightSourceInWorkspace}
-            />
+            <MergePilotAssistantRuntimeProvider bubbles={bubbles}>
+              <ChatMessageList
+                bubbles={bubbles}
+                renderItems={renderItems}
+                busy={busy}
+                statusText={statusText}
+                repoPath={repoPath}
+                availableProjectLinks={availableProjectLinks}
+                projectLinksLoading={projectLinksLoading}
+                activeProjectLinkId={activeProjectLinkId}
+                selectedArtifactId={selectedArtifactId}
+                createProjectLink={createProjectLink}
+                selectProjectLink={(projectLink) => selectProjectLink(projectLink.id)}
+                onWelcomeSuggestion={handleSuggestionReply}
+                toggleTool={toggleTool}
+                confirmPendingAction={confirmPendingAction}
+                cancelPendingAction={cancelPendingAction}
+                resolveConfirm={resolveConfirm}
+                selectArtifact={selectArtifact}
+                selectSource={selectSource}
+                openPrInsightSourceInActivity={openPrInsightSourceInActivity}
+                openPrInsightSourceInWorkspace={openPrInsightSourceInWorkspace}
+              />
+            </MergePilotAssistantRuntimeProvider>
             <div ref={bottomRef} />
           </div>
 

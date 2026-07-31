@@ -10,7 +10,7 @@ const cssPath = resolve(
 
 describe("settings controls stylesheet", () => {
   it("only stretches compound controls on narrow workbench widths", () => {
-    const css = readFileSync(cssPath, "utf8");
+    const css = readFileSync(cssPath, "utf8").replace(/\r\n/g, "\n");
 
     expect(css).toContain("@media (max-width: 760px)");
     expect(css).toContain(".settings-segmented");

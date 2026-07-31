@@ -1,4 +1,5 @@
 import { useTheme } from "../theme.js";
+import { InlineNotice, StatusBadge, WorkbenchHeader, WorkbenchPage } from "../components/workbench/WorkbenchPrimitives.js";
 import { AccountSettingsSection } from "./settings/AccountSettingsSection.js";
 import { AdditionalModelsSettingsSection } from "./settings/AdditionalModelsSettingsSection.js";
 import { AppearanceSettingsSection } from "./settings/AppearanceSettingsSection.js";
@@ -10,29 +11,23 @@ export default function Settings(): JSX.Element {
   const runtime = useSettingsRuntime();
 
   return (
-    <div className="settings-page">
-      <div className="settings-hero">
-        <div>
-          <h2 className="settings-title">Settings</h2>
-          <p className="settings-subtitle">
-            Tune the local workspace, identity context, and optional custom model providers.
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          {runtime.saved && <span className="text-xs text-[rgb(var(--app-success))]">Saved</span>}
-        </div>
-      </div>
+    <WorkbenchPage className="settings-page">
+      <WorkbenchHeader
+        title="Settings"
+        description="Tune the local workspace, identity context, and optional custom model providers."
+        actions={runtime.saved && <StatusBadge tone="success">Saved</StatusBadge>}
+      />
 
       {runtime.settings.secretSource !== "local_env" && (runtime.daemonConfigKeyVaultError || runtime.health?.keyVaultSecretError) && (
-        <p className="settings-message settings-message-warning">
+        <InlineNotice tone="warning" title="Secret storage needs attention">
           {runtime.daemonConfigKeyVaultError || runtime.health?.keyVaultSecretError}
-        </p>
+        </InlineNotice>
       )}
 
       {runtime.daemonStatus === "unreachable" && (
-        <p className="settings-message settings-message-warning">
-          Daemon is not reachable. Local preferences will still be saved.
-        </p>
+        <InlineNotice tone="warning" title="Daemon is not reachable">
+          Local preferences will still be saved.
+        </InlineNotice>
       )}
 
       <div className="settings-grid">
@@ -67,6 +62,6 @@ export default function Settings(): JSX.Element {
           onSettingChange={runtime.set}
         />
       </div>
-    </div>
+    </WorkbenchPage>
   );
 }

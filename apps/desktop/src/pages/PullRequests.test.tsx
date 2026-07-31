@@ -16,8 +16,6 @@ describe("PullRequests layout", () => {
   it("centers the Pull Requests workspace at maximized desktop widths", () => {
     const className = pullRequestsPageShellClass();
 
-    expect(className).toContain("mx-auto");
-    expect(className).toContain("max-w-[1600px]");
     expect(className).toContain("gap-4");
     expect(className).not.toContain("gap-5");
     expect(className).not.toContain("ml-0");
@@ -36,14 +34,14 @@ describe("PullRequests layout", () => {
     expect(openClassName).not.toContain("grid-cols-[minmax(0,1fr)_26rem]");
   });
 
-  it("lays out PR cards as an auto-fit grid at wide desktop sizes", () => {
+  it("keeps PRs in a scan-friendly continuous worklist at desktop sizes", () => {
     const className = pullRequestsListGridClass();
 
-    expect(className).toContain("grid");
-    expect(className).toContain("auto-fit");
-    expect(className).toContain("minmax(min(100%,34rem),1fr)");
-    expect(className).toContain("items-start");
-    expect(className).not.toContain("flex-col");
+    expect(className).toContain("flex-col");
+    expect(className).toContain("overflow-hidden");
+    expect(className).toContain("rounded-xl");
+    expect(className).toContain("border-[rgb(var(--app-border))]");
+    expect(className).not.toContain("auto-fit");
     expect(className).not.toContain("grid-cols-1");
   });
 
