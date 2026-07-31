@@ -625,9 +625,9 @@ function architectureContextInspectionFromBundle(bundle: ChatContextBundle): Arc
 function architectureContextSummary(inspection: ArchitectureContextInspection): string {
   if (!inspection.found) return "No repository context could be inspected for this Project Link.";
   const lines: string[] = [
-    inspection.contextSummary,
+    "Architecture context prepared.",
   ];
-  if (inspection.repoSummary) lines.push(inspection.repoSummary);
+  if (inspection.repoSummary) lines.push(`- ${inspection.repoSummary}`);
   if (
     inspection.projectLink?.targetBranch
     || inspection.projectLink?.buildCommand
@@ -642,12 +642,12 @@ function architectureContextSummary(inspection: ArchitectureContextInspection): 
   }
   if (inspection.projectStructure.length > 0) {
     lines.push("", "Project structure signals:");
-    lines.push(...inspection.projectStructure.map((item) => `- ${item.path} (${item.kind}): ${item.reason}`));
+    lines.push(...inspection.projectStructure.slice(0, 6).map((item) => `- ${item.path} (${item.kind}): ${item.reason}`));
   }
   if (inspection.relevantChunks.length > 0) {
     lines.push("", "Relevant code and docs:");
-    lines.push(...inspection.relevantChunks.map((chunk) =>
-      `- ${chunk.path}:${chunk.startLine}-${chunk.endLine} (${chunk.reason}) - ${chunk.text}`,
+    lines.push(...inspection.relevantChunks.slice(0, 6).map((chunk) =>
+      `- ${chunk.path}:${chunk.startLine}-${chunk.endLine} (${chunk.reason})`,
     ));
   }
   if (inspection.sources.length > 0) {
@@ -659,9 +659,7 @@ function architectureContextSummary(inspection: ArchitectureContextInspection): 
       return `- ${source.domain ? `${source.domain}: ` : ""}${source.title}`;
     }));
   }
-  lines.push("", "Suggested next reads:");
-  lines.push("- Use the file preview pane for line-level inspection of the listed sources.");
-  lines.push("- Use source context follow-ups when you want only the cited file and URL evidence.");
+  lines.push("", "Next: ask a focused question about a listed source to inspect its line-level evidence.");
   return lines.join("\n");
 }
 

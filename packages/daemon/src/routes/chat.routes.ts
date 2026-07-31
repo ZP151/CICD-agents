@@ -391,13 +391,16 @@ export function registerChatRoutes(
     const { imageAttachments, message, repoPath, sessionId: existingId, llmConfig } = parsed.data;
     const projectLinkId = projectLinkIdFromChatPayload(parsed.data);
     const inlineProjectLink = inlineProjectLinkFromPayload(parsed.data);
+    const sessionId = existingId ?? chatSessions.createSession(repoPath, projectLinkId);
+    const sseWriter = createChatSseWriter(reply, sessionId);
+    const turnId = `turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    sseWriter.startTurn(turnId);
+    sseWriter.sendChatEvent({ type: "progress", message: "Preparing conversation" });
     const projectLink = await resolveProjectLinkForChat(
       projectLinkId,
       inlineProjectLink,
       projectLinkStore,
     );
-    const sessionId = existingId ?? chatSessions.createSession(repoPath, projectLinkId);
-    const sseWriter = createChatSseWriter(reply, sessionId);
     const directWorkflow = runWorkflowAction
       ? readonlyWorkflowFromMessage(message, projectLink)
       : undefined;

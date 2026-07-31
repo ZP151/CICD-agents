@@ -153,7 +153,20 @@ export class ChatPlanner {
           })),
         });
 
-        for (const tc of executableToolCalls) {
+        for (const [toolCallIndex, tc] of executableToolCalls.entries()) {
+          if (toolCallIndex > 0) {
+            messages.push({
+              role: "tool",
+              tool_call_id: tc.id,
+              content: JSON.stringify({
+                ok: false,
+                deferred: true,
+                guidance:
+                  "This command was intentionally deferred. Re-evaluate after the preceding tool result and call at most one next executable tool.",
+              }),
+            });
+            continue;
+          }
           const args = parseToolArguments(tc.arguments);
           const capability = capabilitiesByName.get(tc.name);
           const outOfScope = outOfScopeWriteMessage(tc.name, message, history);

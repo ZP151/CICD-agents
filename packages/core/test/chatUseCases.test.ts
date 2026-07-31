@@ -36,6 +36,8 @@ describe("Chat agent use-case coverage", () => {
     expect(CHAT_SYSTEM_PROMPT).toContain("Core Chat Agent Use Cases");
     expect(CHAT_SYSTEM_PROMPT).toContain("commit-workflow");
     expect(CHAT_SYSTEM_PROMPT).toContain("ado_trigger_pipeline");
+    expect(CHAT_SYSTEM_PROMPT).toContain("Execute progressively");
+    expect(CHAT_SYSTEM_PROMPT).toContain("only one executable tool in each planning decision");
   });
 });
 

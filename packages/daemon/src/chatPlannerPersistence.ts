@@ -32,6 +32,7 @@ export interface StreamPlannerAndPersistArgs {
   waitForConfirm: () => Promise<boolean>;
   contextPrompt?: string;
   imageAttachments?: ChatImageAttachment[];
+  /** Internal diagnostic context; deliberately never exposed as suggested replies. */
   contextNotes?: string[];
   contextSources?: ChatPlannerResult["sources"];
   adapters: PlannerPersistenceAdapters;
@@ -40,7 +41,6 @@ export interface StreamPlannerAndPersistArgs {
 export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs): AsyncGenerator<ChatEvent> {
   const {
     adapters,
-    contextNotes = [],
     contextPrompt,
     imageAttachments = [],
     contextSources = [],
@@ -84,10 +84,8 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
             workflowPhase: doneWorkflowPhaseFromRunning(storedBeforeDone.workflowState.workflowPhase),
           }
         : {};
-      const suggestions = [...(enrichedResult.suggestions ?? []), ...contextNotes];
       const enrichedWithContext: ChatPlannerResult = {
         ...enrichedResult,
-        suggestions,
         sources: mergePlannerSources(enrichedResult.sources, contextSources),
       };
       const userFacingResult: ChatPlannerResult = {
