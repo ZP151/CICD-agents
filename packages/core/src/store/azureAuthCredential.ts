@@ -19,6 +19,12 @@ import { getCachedUser, hydrateCachedUser } from "./azureAuthSessionCache.js";
 
 let pluginRegistered = false;
 
+export function shouldUsePersistentAzureTokenCache(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return env.CI !== "true" && env.NODE_ENV !== "test" && env.VITEST !== "true";
+}
+
 function registerCachePersistence(): void {
   if (pluginRegistered) return;
   useIdentityPlugin(cachePersistencePlugin);
@@ -32,7 +38,8 @@ export function getAzureCredential(opts: {
   const clientId = desktopClientId();
 
   if (tenantId || clientId || opts.interactive) {
-    registerCachePersistence();
+    const persistTokenCache = shouldUsePersistentAzureTokenCache();
+    if (persistTokenCache) registerCachePersistence();
     return new InteractiveBrowserCredential({
       tenantId,
       clientId,
@@ -49,10 +56,14 @@ export function getAzureCredential(opts: {
           tone: "error",
         }),
       },
-      tokenCachePersistenceOptions: {
-        enabled: true,
-        name: TOKEN_CACHE_NAME,
-      },
+      ...(persistTokenCache
+        ? {
+            tokenCachePersistenceOptions: {
+              enabled: true,
+              name: TOKEN_CACHE_NAME,
+            },
+          }
+        : {}),
     });
   }
 

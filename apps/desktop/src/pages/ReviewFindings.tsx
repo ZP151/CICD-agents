@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAppData } from "../App.js";
 import { PaginationControls } from "../components/PaginationControls.js";
+import { WorkbenchPage } from "../components/workbench/WorkbenchPrimitives.js";
 import {
   loadStoredActiveProjectLinkId,
   resolveActiveProjectLinkId,
@@ -28,7 +29,7 @@ export function reviewQueueWorkspaceLayoutClass(activityRailOpen: boolean): stri
 }
 
 export function reviewQueuePageShellClass(): string {
-  return "mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-6";
+  return "gap-4";
 }
 
 export function reviewQueueSetupChecklistGridClass(): string {
@@ -124,7 +125,7 @@ export default function ReviewFindings(): JSX.Element {
   } = reviewQueue;
 
   return (
-    <div className={reviewQueuePageShellClass()}>
+    <WorkbenchPage className={reviewQueuePageShellClass()}>
       {selectedItem && (
         <FindingsPanel item={selectedItem} findings={panelFindings} onClose={closePanel} />
       )}
@@ -270,7 +271,7 @@ export default function ReviewFindings(): JSX.Element {
           </div>
         </div>
       )}
-    </div>
+    </WorkbenchPage>
   );
 }
 

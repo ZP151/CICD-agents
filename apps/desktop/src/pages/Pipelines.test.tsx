@@ -39,8 +39,6 @@ describe("Pipelines layout", () => {
   it("centers the Pipelines workspace at maximized desktop widths", () => {
     const className = pipelinesPageShellClass();
 
-    expect(className).toContain("mx-auto");
-    expect(className).toContain("max-w-[1600px]");
     expect(className).toContain("gap-3");
     expect(className).not.toContain("gap-4");
     expect(className).not.toContain("ml-0");

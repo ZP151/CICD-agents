@@ -7,11 +7,12 @@ import {
   type ErrorInfo,
   type ReactNode,
 } from "react";
-import Chat from "../pages/Chat.js";
 import { UserFooter } from "./UserFooter.js";
+import { Tooltip, TooltipProvider } from "../components/ui/Tooltip.js";
 
 type RouteModuleLoader = () => Promise<unknown>;
 
+const loadChat = () => import("../pages/Chat.js");
 const loadDashboard = () => import("../pages/Dashboard.js");
 const loadRepos = () => import("../pages/Repos.js");
 const loadTaskViewer = () => import("../pages/TaskViewer.js");
@@ -32,6 +33,7 @@ const routeModuleLoaders: RouteModuleLoader[] = [
   loadProjectLinks,
 ];
 
+const Chat = lazy(loadChat);
 const Dashboard = lazy(loadDashboard);
 const Repos = lazy(loadRepos);
 const TaskViewer = lazy(loadTaskViewer);
@@ -68,23 +70,23 @@ export function appShellFrameClass(): string {
 }
 
 export function appShellSidebarClass(): string {
-  return "flex w-48 shrink-0 flex-col overflow-hidden border-r border-[rgb(var(--app-border))] bg-[rgb(var(--app-bg-muted))] max-[760px]:w-16";
+  return "app-shell-sidebar flex shrink-0 flex-col overflow-hidden border-r border-[rgb(var(--app-sidebar-border))] bg-[rgb(var(--app-sidebar))]";
 }
 
 export function appShellGroupLabelClass(): string {
-  return "mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-[rgb(var(--app-text-subtle))] max-[760px]:sr-only";
+  return "app-shell-group-label mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[rgb(var(--app-sidebar-muted))]";
 }
 
 export function appShellNavLinkClass(active: boolean): string {
-  return `flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors max-[760px]:justify-center max-[760px]:px-0 ${
+  return `app-shell-nav-link rounded-lg border border-transparent text-[13px] font-medium leading-5 transition-[background-color,border-color,color,box-shadow] duration-[var(--app-motion-fast)] ${
     active
-      ? "bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text))] shadow-sm"
-      : "text-[rgb(var(--app-text-muted))] hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))]"
+      ? "border-white/10 bg-[rgb(var(--app-sidebar-active))] text-[rgb(var(--app-sidebar-text))] shadow-[0_3px_8px_rgb(8_15_38_/_0.22)]"
+      : "text-[rgb(var(--app-sidebar-muted))] hover:bg-[rgb(var(--app-sidebar-hover))] hover:text-[rgb(var(--app-sidebar-text))]"
   }`;
 }
 
 export function appShellNavLabelClass(): string {
-  return "min-w-0 truncate max-[760px]:sr-only";
+  return "app-shell-nav-label min-w-0 truncate";
 }
 
 export function workspaceRouteFallbackTarget(pathname: string): string {
@@ -105,7 +107,7 @@ export function routeErrorBoundaryResetKey(location: {
 
 function IconChat() {
   return (
-    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -118,7 +120,7 @@ function IconChat() {
 
 function IconRepos() {
   return (
-    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -131,7 +133,7 @@ function IconRepos() {
 
 function IconPR() {
   return (
-    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -144,7 +146,7 @@ function IconPR() {
 
 function IconReview() {
   return (
-    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -157,7 +159,7 @@ function IconReview() {
 
 function IconActivity() {
   return (
-    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -170,7 +172,7 @@ function IconActivity() {
 
 function IconProjectLinks() {
   return (
-    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -183,7 +185,7 @@ function IconProjectLinks() {
 
 function IconSettings() {
   return (
-    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -202,7 +204,7 @@ function IconSettings() {
 
 function IconPipeline() {
   return (
-    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -241,7 +243,7 @@ const NAV_GROUPS = [
 export function MiniLayout() {
   return (
     <div className="flex h-screen w-screen overflow-hidden">
-      <Chat mini />
+      <Suspense fallback={<PageLoadingFallback />}><Chat mini /></Suspense>
     </div>
   );
 }
@@ -380,34 +382,47 @@ export function FullLayout() {
   return (
     <div className={appShellFrameClass()}>
       <aside className={appShellSidebarClass()}>
-        <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
-          {NAV_GROUPS.map((group) => (
-            <div key={group.label}>
-              <p className={appShellGroupLabelClass()}>{group.label}</p>
-              {group.items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  title={item.label}
-                  aria-label={item.label}
-                  className={({ isActive }) =>
-                    appShellNavLinkClass(item.match ? location.pathname === item.match : isActive)
-                  }
-                >
-                  <item.Icon />
-                  <span className={appShellNavLabelClass()}>{item.label}</span>
-                </NavLink>
-              ))}
-            </div>
-          ))}
-        </nav>
-        <UserFooter />
+        <TooltipProvider>
+          <div className="app-shell-brand flex h-14 shrink-0 items-center gap-2 border-b border-[rgb(var(--app-sidebar-border))] px-3">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-[rgb(var(--app-accent))] text-[11px] font-bold tracking-[-0.08em] text-white shadow-[0_3px_8px_rgb(8_15_38_/_0.26)]">
+              MP
+            </span>
+            <span className="app-shell-brand-name min-w-0 truncate text-sm font-semibold tracking-[-0.01em] text-[rgb(var(--app-sidebar-text))]">
+              MergePilot
+            </span>
+          </div>
+          <nav className="app-shell-navigation flex-1 space-y-4 overflow-y-auto px-2 py-3">
+            {NAV_GROUPS.map((group) => (
+              <div key={group.label}>
+                <p className={appShellGroupLabelClass()}>{group.label}</p>
+                {group.items.map((item) => (
+                  <Tooltip key={item.to} content={item.label} contentClassName="app-shell-compact-tooltip">
+                    <NavLink
+                      to={item.to}
+                      title={item.label}
+                      aria-label={item.label}
+                      className={appShellNavLinkClass(
+                        item.match ? location.pathname === item.match : location.pathname === item.to,
+                      )}
+                    >
+                      <span aria-hidden="true" className="app-shell-nav-icon">
+                        <item.Icon />
+                      </span>
+                      <span className={appShellNavLabelClass()}>{item.label}</span>
+                    </NavLink>
+                  </Tooltip>
+                ))}
+              </div>
+            ))}
+          </nav>
+          <UserFooter />
+        </TooltipProvider>
       </aside>
 
       <main className="flex min-w-0 flex-1 overflow-hidden">
         <Routes>
           <Route path="/" element={<Navigate to="/chat" replace />} />
-          <Route path="/chat" element={<Chat />} />
+          <Route path="/chat" element={<Suspense fallback={<PageLoadingFallback />}><Chat /></Suspense>} />
           <Route
             path="/dashboard"
             element={

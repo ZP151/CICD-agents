@@ -3,6 +3,7 @@ import {
   type PrInsightArtifact,
 } from "../../prInsightArtifacts.js";
 import { PullRequestContextPanel } from "./PullRequestContextPanel.js";
+import { InlineNotice, StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
 import {
   formatDate,
   insightReadinessTone,
@@ -91,33 +92,33 @@ export function PullRequestCard({
     : "border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent-readable))]"
     : "";
 
-  const buttonClass = `rounded-md border px-3 py-1.5 text-xs transition disabled:opacity-60 ${
+  const buttonClass = `rounded-md border px-3 py-1.5 text-xs font-medium transition disabled:opacity-60 ${
     isDone ? `${decisionTone} cursor-default`
     : isError ? "border-[rgb(var(--app-danger))]/35 text-[rgb(var(--app-danger))] hover:bg-[rgb(var(--app-danger)_/_0.10)]"
     : isRunning ? "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-subtle))] cursor-wait"
-    : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+    : "border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent))] text-white hover:brightness-110"
   }`;
 
   return (
     <article
-      className={`rounded-lg border p-4 transition ${
+      className={`border-b border-[rgb(var(--app-border))] px-4 py-4 transition-colors last:border-b-0 ${
         highlighted
-          ? "border-[rgb(var(--app-accent))]/60 bg-[rgb(var(--app-accent-soft))] shadow-[0_0_0_1px_rgba(var(--app-accent),0.22)]"
-          : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]"
+          ? "bg-[rgb(var(--app-accent-soft))]"
+          : "bg-[rgb(var(--app-surface))] hover:bg-[rgb(var(--app-surface-raised))]"
       }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <span className="font-mono text-xs text-[rgb(var(--app-accent-readable))]">#{pr.id}</span>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${state.tone}`}>
+            <StatusBadge className={state.tone}>
               {state.label}
-            </span>
-            <span className="rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">{pr.status}</span>
+            </StatusBadge>
+            <StatusBadge>{pr.status}</StatusBadge>
             {!projectLinkId && pr.sourceProjectLinkName && (
-              <span className="rounded-full border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
+              <StatusBadge>
                 {pr.sourceProjectLinkName}
-              </span>
+              </StatusBadge>
             )}
           </div>
           <h3 className="truncate text-sm font-semibold text-[rgb(var(--app-text))]">{pr.title || "(untitled)"}</h3>
@@ -129,7 +130,7 @@ export function PullRequestCard({
           <div className={pullRequestActionRowClass()}>
             <button
               onClick={() => onToggleContext(pr)}
-              className="rounded-md border border-[rgb(var(--app-border))] px-3 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+              className="rounded-md px-2.5 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-control-hover))] hover:text-[rgb(var(--app-text))]"
             >
               {isExpanded ? "Hide details" : contextState?.phase === "loaded" ? "Show details" : "Load details"}
             </button>
@@ -143,7 +144,7 @@ export function PullRequestCard({
                 onPreviewInsight(pr);
               }}
               disabled={previewState.phase === "loading"}
-              className="rounded-md border border-[rgb(var(--app-border))] px-3 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60"
+              className="rounded-md px-2.5 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-control-hover))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60"
             >
               {previewState.phase === "loading" ? "Generating..." : hasInsight ? "Open insight" : "Generate insight"}
             </button>
@@ -163,7 +164,7 @@ export function PullRequestCard({
                 href={pr.url}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-md border border-[rgb(var(--app-border))] px-3 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+                className="rounded-md px-2.5 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-control-hover))] hover:text-[rgb(var(--app-text))]"
               >
                 Open in ADO
               </a>
@@ -204,14 +205,14 @@ export function PullRequestCard({
         <button
           type="button"
           onClick={() => onOpenInsight(pr)}
-          className="mt-4 block w-full border-t border-[rgb(var(--app-border))] pt-3 text-left transition hover:border-[rgb(var(--app-border-strong))]"
+          className="mt-3 block w-full rounded-lg bg-[rgb(var(--app-surface-raised))] px-3 py-2.5 text-left transition hover:bg-[rgb(var(--app-control-hover))]"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-semibold text-[rgb(var(--app-text-muted))]">Latest insight</p>
             {(reviewTone || insightTone || storedInsightTone) && (
-              <span className={`rounded border px-2 py-0.5 text-[10px] ${(reviewTone ?? insightTone ?? storedInsightTone)!.tone}`}>
+              <StatusBadge className={(reviewTone ?? insightTone ?? storedInsightTone)!.tone}>
                 {(reviewTone ?? insightTone ?? storedInsightTone)!.label}
-              </span>
+              </StatusBadge>
             )}
           </div>
           <p className={pullRequestInsightPreviewClass()} title={latestInsightSummary}>
@@ -221,9 +222,7 @@ export function PullRequestCard({
       )}
 
       {previewState.phase === "error" && (
-        <p className="mt-3 rounded-md border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] px-3 py-2 text-xs text-[rgb(var(--app-danger))]">
-          {previewState.message}
-        </p>
+        <div className="mt-3"><InlineNotice tone="danger" title="Insight generation failed">{previewState.message}</InlineNotice></div>
       )}
       {isExpanded && <PullRequestContextPanel state={contextState} />}
     </article>

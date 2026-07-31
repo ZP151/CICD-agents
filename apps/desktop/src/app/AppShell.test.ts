@@ -113,16 +113,16 @@ describe("AppShell themed layout classes", () => {
   });
 
   it("collapses the workspace navigation into an icon rail on narrow windows", () => {
-    expect(appShellSidebarClass()).toContain("max-[760px]:w-16");
-    expect(appShellGroupLabelClass()).toContain("max-[760px]:sr-only");
-    expect(appShellNavLinkClass(false)).toContain("max-[760px]:justify-center");
-    expect(appShellNavLabelClass()).toContain("max-[760px]:sr-only");
+    expect(appShellSidebarClass()).toContain("app-shell-sidebar");
+    expect(appShellGroupLabelClass()).toContain("app-shell-group-label");
+    expect(appShellNavLinkClass(false)).toContain("app-shell-nav-link");
+    expect(appShellNavLabelClass()).toContain("app-shell-nav-label");
   });
 
   it("keeps active and inactive navigation visually distinct", () => {
-    expect(appShellNavLinkClass(true)).toContain("--app-surface-raised");
+    expect(appShellNavLinkClass(true)).toContain("--app-sidebar-active");
     expect(appShellNavLinkClass(false)).toContain("hover:bg");
-    expect(appShellNavLinkClass(false)).toContain("--app-text-muted");
+    expect(appShellNavLinkClass(false)).toContain("--app-sidebar-muted");
   });
 });
 
@@ -135,6 +135,9 @@ describe("AppShell workspace routes", () => {
       );
 
       expect(html).toContain("overflow-auto");
+      expect(html).toContain("app-shell-nav-icon");
+      expect(html).toContain("app-shell-nav-link");
+      expect(html).not.toContain("({ isActive })");
     } finally {
       consoleError.mockRestore();
     }

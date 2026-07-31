@@ -1,6 +1,12 @@
 import { useCallback, useState } from "react";
 import type { ProjectLink, ProjectLinkInput } from "../api";
 import { useAppData } from "../App";
+import {
+  ActionButton,
+  InlineNotice,
+  WorkbenchHeader,
+  WorkbenchPage,
+} from "../components/workbench/WorkbenchPrimitives.js";
 import { ProjectLinkCard } from "./projectLinks/ProjectLinkCard.js";
 import { BLANK_PROJECT_LINK, ProjectLinkForm } from "./projectLinks/ProjectLinkForm.js";
 
@@ -55,11 +61,9 @@ export default function ProjectLinks(): JSX.Element {
 
   if (mode === "new" || (typeof mode === "object" && "editing" in mode)) {
     return (
-      <div className={projectLinkFormShellClass()}>
+      <WorkbenchPage className={projectLinkFormShellClass()}>
         {error && (
-          <div className="mb-4 rounded-lg border border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] px-4 py-2 text-sm text-[rgb(var(--app-danger))]">
-            {error}
-          </div>
+          <InlineNotice tone="danger" title="Project Link was not saved">{error}</InlineNotice>
         )}
         <ProjectLinkForm
           initial={typeof mode === "object" ? mode.editing : BLANK_PROJECT_LINK}
@@ -68,29 +72,18 @@ export default function ProjectLinks(): JSX.Element {
           saving={saving}
           isNew={mode === "new"}
         />
-      </div>
+      </WorkbenchPage>
     );
   }
 
   return (
-    <div className={projectLinksListShellClass()}>
-      <div className={projectLinksHeaderClass()}>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-xl font-semibold text-[rgb(var(--app-text))]">Project Links</h2>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <p className="text-sm text-[rgb(var(--app-text-muted))]">
-              Each Project Link maps one local repo to Azure DevOps, branch defaults, and validation
-              commands.
-            </p>
-          </div>
-          <div className="mt-1.5 flex items-center gap-2">
-            <ProjectLinkStoragePill cloudSync={cloudSync} usingDaemon={usingDaemon} />
-          </div>
-        </div>
-        {projectLinks.length > 0 && (
-          <button
+    <WorkbenchPage className={projectLinksListShellClass()}>
+      <WorkbenchHeader
+        title="Project Links"
+        description="Map one local repository to Azure DevOps, branch defaults, and validation commands."
+        actions={projectLinks.length > 0 && (
+          <ActionButton
             onClick={() => setMode("new")}
-            className="flex shrink-0 items-center gap-1.5 self-start rounded-md border border-[rgb(var(--app-border))] bg-transparent px-3 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))] sm:self-auto"
           >
             <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
               <path
@@ -101,14 +94,14 @@ export default function ProjectLinks(): JSX.Element {
               />
             </svg>
             New Project Link
-          </button>
+          </ActionButton>
         )}
-      </div>
+      >
+        <ProjectLinkStoragePill cloudSync={cloudSync} usingDaemon={usingDaemon} />
+      </WorkbenchHeader>
 
       {error && (
-        <div className="rounded-lg border border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] px-4 py-2 text-sm text-[rgb(var(--app-danger))]">
-          {error}
-        </div>
+        <InlineNotice tone="danger" title="Project Link operation failed">{error}</InlineNotice>
       )}
 
       {projectLinksLoading && projectLinks.length === 0 ? (
@@ -127,16 +120,16 @@ export default function ProjectLinks(): JSX.Element {
           ))}
         </div>
       )}
-    </div>
+    </WorkbenchPage>
   );
 }
 
 export function projectLinkFormShellClass(): string {
-  return "mx-auto w-full max-w-5xl";
+  return "max-w-5xl";
 }
 
 export function projectLinksListShellClass(): string {
-  return "mx-auto w-full max-w-7xl space-y-6";
+  return "max-w-7xl gap-6";
 }
 
 export function projectLinksHeaderClass(): string {
