@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetSettingsForTests } from "../src/settings.js";
-import { getAzureCachedScopeCredential } from "../src/store/azureAuthCredential.js";
+import {
+  getAzureCachedScopeCredential,
+  shouldUsePersistentAzureTokenCache,
+} from "../src/store/azureAuthCredential.js";
 import { resetUserCache, setCachedUser } from "../src/store/azureAuthSessionCache.js";
 
 const acquireTokenSilent = vi.fn();
@@ -35,6 +38,13 @@ describe("azureAuthCredential", () => {
     vi.useRealTimers();
     resetSettingsForTests();
     resetUserCache();
+  });
+
+  it("keeps the persistent token cache out of CI and test processes", () => {
+    expect(shouldUsePersistentAzureTokenCache({})).toBe(true);
+    expect(shouldUsePersistentAzureTokenCache({ CI: "true" })).toBe(false);
+    expect(shouldUsePersistentAzureTokenCache({ NODE_ENV: "test" })).toBe(false);
+    expect(shouldUsePersistentAzureTokenCache({ VITEST: "true" })).toBe(false);
   });
 
   it("preserves MSAL consent errors instead of falling back to disabled automatic auth", async () => {
