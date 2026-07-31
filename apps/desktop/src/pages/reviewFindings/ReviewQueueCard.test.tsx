@@ -119,10 +119,12 @@ describe("ReviewQueueCard", () => {
     expect(html).toContain("fallback 2f");
     expect(html).toContain("View findings");
     expect(html).toContain("Retry ADO");
-    expect(html).toContain("Request changes");
+    expect(html).toContain("Actions");
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain("Request changes");
   });
 
-  it("shows in-progress labels for queued review actions", () => {
+  it("keeps queued review progress visible without exposing a closed disposition menu", () => {
     const item = queueItem();
     const html = renderToStaticMarkup(
       <ReviewQueueCard
@@ -141,7 +143,8 @@ describe("ReviewQueueCard", () => {
 
     expect(html).toContain("Rerunning...");
     expect(html).toContain("Retrying...");
-    expect(html).toContain("Saving...");
+    expect(html).toContain("Actions");
+    expect(html).not.toContain("Saving...");
   });
 
   it("moves long decision detail into hover title text", () => {

@@ -1,5 +1,11 @@
 import type { ProjectLink } from "../../api.js";
 import {
+  ActionButton,
+  StatusBadge,
+  WorkbenchHeader,
+  WorkbenchToolbar,
+} from "../../components/workbench/WorkbenchPrimitives.js";
+import {
   compactProjectLinkAdoScope,
   compactProjectLinkBranchScope,
   compactProjectLinkName,
@@ -41,15 +47,11 @@ export function ReviewQueuePageHeader({
 
   return (
     <>
-      <header className="flex min-w-0 flex-col items-start justify-between gap-2 xl:flex-row">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-2xl font-semibold text-[rgb(var(--app-text))]">Review Queue</h2>
-          <p className="mt-2 hidden max-w-2xl text-sm leading-relaxed text-[rgb(var(--app-text-muted))] xl:block">
-            Approval and quality queue for the selected Project Link. Decisions come from
-            Review Agent history, including auto-approval audit records.
-          </p>
-        </div>
-        <div className={reviewQueueHeaderControlsClass()}>
+      <WorkbenchHeader
+        title="Review Queue"
+        description="Approval and quality decisions from Review Agent history, including persisted audit records."
+        descriptionClassName="hidden max-w-2xl xl:block"
+        actions={<div className={reviewQueueHeaderControlsClass()}>
           <select
             aria-label="Review Queue Project Link"
             className={projectLinkSelectClass}
@@ -65,18 +67,13 @@ export function ReviewQueuePageHeader({
               </option>
             ))}
           </select>
-          <button
-            onClick={onRefresh}
-            className="rounded-md border border-[rgb(var(--app-border))] px-3 py-1.5 text-sm text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
-          >
-            Refresh
-          </button>
-        </div>
-      </header>
+          <ActionButton onClick={onRefresh}>Refresh</ActionButton>
+        </div>}
+      />
 
       {selectedProjectLink && (
-        <div className="flex flex-wrap gap-2 text-xs text-[rgb(var(--app-text-muted))]">
-          <span
+        <WorkbenchToolbar className="text-xs text-[rgb(var(--app-text-muted))]">
+          <StatusBadge
             className="max-w-full truncate rounded-full border border-[rgb(var(--app-border))] px-2 py-1"
             title={[
               selectedProjectLink.adoOrgUrl,
@@ -87,14 +84,14 @@ export function ReviewQueuePageHeader({
               .join(" / ")}
           >
             {selectedAdoScope || "No ADO mapping"}
-          </span>
-          <span
+          </StatusBadge>
+          <StatusBadge
             className="max-w-full truncate rounded-full border border-[rgb(var(--app-border))] px-2 py-1"
             title={`Default branch: ${selectedProjectLink.defaultBranch || "not set"}; PR target: ${selectedProjectLink.targetBranch || "main"}`}
           >
             {selectedBranchScope || "target: main"}
-          </span>
-        </div>
+          </StatusBadge>
+        </WorkbenchToolbar>
       )}
     </>
   );

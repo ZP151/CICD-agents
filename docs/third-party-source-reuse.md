@@ -29,6 +29,7 @@ exact upstream commit.
 | `microsoft/azure-devops-mcp` / `@azure-devops/mcp` | MIT | Copied; selected behavior now being ported internally; optional external bridge kept as fallback | Vendored source plus internal TypeScript ports | `third_party/azure-devops-mcp` | Upstream commit `1ddc03970864bcd28521cd4bef7402f0dcfcb3a1`. Package version `2.7.0`; uses `@modelcontextprotocol/sdk@1.29.0`, `azure-devops-node-api@15.1.2`, and `zod@3.25.63`. Strong Phase 4 source for repositories, PRs, pipelines, work items, auth, and MCP tool registration. Product code should prefer internal ports; local stdio MCP bridge remains compatibility/fallback infrastructure only. |
 | `qodo-ai/pr-agent` / `The-PR-Agent/pr-agent` | Apache-2.0 | Copied; selected behavior now being ported internally | Vendored source plus selected TypeScript ports | `third_party/pr-agent` | Upstream commit `31d7dd027968e5fad1f9cbb074be047c4869058e`. Candidate source for PR diff compression, review prompts, finding categories, readiness/risk signals, and Review Queue policy logic. Current product code ports selected insight/readiness behavior into the local daemon rather than invoking PR-Agent as an external service. |
 | `Aider-AI/aider` | Apache-2.0 | Port candidate | Port selected behavior to TypeScript | None yet | Candidate for repo map and Git checkpoint discipline. |
+| `assistant-ui/assistant-ui` / `@assistant-ui/react` | MIT | Dependency | React message/runtime primitives behind a local adapter | `apps/desktop/src/pages/chat/assistantUi` | Pinned to `0.15.1`. Reuses the upstream `ThreadMessageLike` protocol first; the existing daemon SSE contract and approved-action gate remain canonical. |
 | `aaif-goose/goose` | Apache-2.0 | Reference only for now | Selective source study or port | None yet | Useful for desktop/CLI/API runtime architecture. |
 | `anomalyco/opencode` | MIT | Reference only for now | Selective source study or port | None yet | Useful for coding agent session and UX patterns. |
 | `lastmile-ai/mcp-agent` | Apache-2.0 | Reference only for now | Port concepts | None yet | Useful for MCP-first orchestration and persistent state concepts. |
@@ -46,13 +47,9 @@ When source files are copied, add a row here:
 
 ## Dependency Additions
 
-No new upstream dependencies have been added for the roadmap work yet.
-
-When a dependency is added, add a row here:
-
 | Date | Package | Version | License | Added To | Reason | Compatibility Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| - | - | - | - | - | - | - |
+| 2026-07-31 | `@assistant-ui/react` | `0.15.1` | MIT | `apps/desktop` | Progressive reuse of desktop-agent Thread, Composer, tool-call, and approval primitives. | Wrapped through `assistantUi/mergepilotThreadMessages.ts`; MergePilot's current SSE events, tool policy, and approval gate are unchanged. |
 
 ## Evaluation Notes
 

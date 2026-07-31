@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { PaginationControls } from "../components/PaginationControls.js";
+import { WorkbenchPage } from "../components/workbench/WorkbenchPrimitives.js";
 import { PullRequestCard } from "./pullRequests/PullRequestCard.js";
 import { PullRequestPageHeader } from "./pullRequests/PullRequestPageHeader.js";
 import {
@@ -28,14 +29,11 @@ export function pullRequestsWorkspaceLayoutClass(insightOpen: boolean): string {
 }
 
 export function pullRequestsListGridClass(): string {
-  return [
-    "grid gap-3 items-start",
-    "grid-cols-[repeat(auto-fit,minmax(min(100%,34rem),1fr))]",
-  ].join(" ");
+  return "flex min-w-0 flex-col overflow-hidden rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] shadow-[0_1px_2px_rgb(var(--app-overlay)_/_0.04)]";
 }
 
 export function pullRequestsPageShellClass(): string {
-  return "mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-4";
+  return "gap-4";
 }
 
 export function pullRequestInsightPanelClass(): string {
@@ -107,7 +105,7 @@ export default function PullRequests(): JSX.Element {
   const firstLoad = !projectLinkResolving && loading;
 
   return (
-    <div className={pullRequestsPageShellClass()}>
+    <WorkbenchPage className={pullRequestsPageShellClass()}>
       <PullRequestPageHeader
         projectLinks={projectLinks}
         projectLinksLoading={projectLinksLoading}
@@ -162,7 +160,7 @@ export default function PullRequests(): JSX.Element {
       {prs.length > 0 && (
         <div className={pullRequestsWorkspaceLayoutClass(Boolean(selectedInsightPr))}>
           <div className="flex min-w-0 flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2.5">
               <div className="flex flex-wrap gap-1.5">
                 {prCategories.map((item) => (
                   <button
@@ -171,8 +169,8 @@ export default function PullRequests(): JSX.Element {
                     onClick={() => setCategory(item.key)}
                     className={`rounded-md px-2.5 py-1 text-xs transition ${
                       category === item.key
-                        ? "border border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text))] ring-1 ring-[rgb(var(--app-border))]"
-                        : "border border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+                        ? "bg-[rgb(var(--app-accent))] text-white shadow-sm"
+                        : "text-[rgb(var(--app-text-muted))] hover:bg-[rgb(var(--app-control-hover))] hover:text-[rgb(var(--app-text))]"
                     }`}
                   >
                     {item.label}
@@ -247,7 +245,7 @@ export default function PullRequests(): JSX.Element {
           )}
         </div>
       )}
-    </div>
+    </WorkbenchPage>
   );
 }
 

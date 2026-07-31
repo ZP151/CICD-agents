@@ -76,7 +76,7 @@ describe("PullRequestCard", () => {
     expect(html).toContain("Reviewers:");
     expect(html).toContain('title="Author: Zhou Ping; Created:');
     expect(html).toContain("Latest insight");
-    expect(html).toContain("border-t");
+    expect(html).toContain("rounded-lg bg-[rgb(var(--app-surface-raised))]");
     expect(html).toContain("max-w-[72ch]");
     expect(html).toContain("truncate");
     expect(html).toContain("Ready: only documentation changed.");

@@ -24,7 +24,7 @@ const baseApproval: Bubble = {
 };
 
 describe("PendingActionCard", () => {
-  it("renders compact approval decision controls without duplicate evidence copy", () => {
+  it("renders a scoped approval decision with command, risk, and workflow context", () => {
     const html = renderToStaticMarkup(
       <PendingActionCard
         bubble={baseApproval}
@@ -35,16 +35,20 @@ describe("PendingActionCard", () => {
 
     expect(html).toContain("Approval required");
     expect(html).toContain("MEDIUM risk");
-    expect(html).toContain("Approve this command?");
-    expect(html).not.toContain("Stage selected files for commit");
+    expect(html).toContain("Stage selected files for commit");
+    expect(html).toContain("git_add");
+    expect(html).toContain("commit workflow");
+    expect(html).toContain("Nothing runs until you approve.");
+    expect(html).toContain("Command to execute");
     expect(html).not.toContain("Continue to commit after staging.");
-    expect(html).not.toContain("Review scope");
+    expect(html).toContain("Change request");
     expect(html).toContain("Tell MergePilot what to do differently...");
-    expect(html).toContain("Yes, run this action");
-    expect(html).toContain("No, don&#x27;t run it");
+    expect(html).toContain("Approve and run");
+    expect(html).toContain("Skip action");
+    expect(html).toContain('data-testid="pending-action-card"');
+    expect(html).toContain('data-risk-level="medium"');
     expect(html).toContain("git add --dry-run --");
     expect(html).toContain("apps/desktop/src/pages/Chat.tsx");
-    expect(html).not.toContain("git_add");
   });
 
   it("shows an explicit stage-all command when no paths are scoped", () => {
@@ -102,7 +106,7 @@ describe("PendingActionCard", () => {
 
     expect(executing).toContain("Executing approved action");
     expect(executing).not.toContain("animate-bounce");
-    expect(executing).not.toContain("Yes, run this action");
+    expect(executing).not.toContain("Approve and run");
     expect(done).toBe("");
     expect(cancelled).toBe("");
   });

@@ -15,8 +15,7 @@ describe("ReviewFindings layout", () => {
   it("centers the Review Queue workspace at maximized desktop widths", () => {
     const className = reviewQueuePageShellClass();
 
-    expect(className).toContain("mx-auto");
-    expect(className).toContain("max-w-[1600px]");
+    expect(className).toContain("gap-4");
     expect(className).not.toContain("ml-0");
     expect(className).not.toContain("mr-auto");
   });

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppData } from "../App.js";
+import { WorkbenchPage } from "../components/workbench/WorkbenchPrimitives.js";
 import {
   CHAT_HANDOFF_KEY,
   PULL_REQUESTS_HANDOFF_KEY,
@@ -134,7 +135,7 @@ export default function TaskViewer(): JSX.Element {
   }
 
   return (
-    <div className={taskViewerLayoutClass()}>
+    <WorkbenchPage className={taskViewerLayoutClass()}>
       <ActivitySidebar
         projectLinks={projectLinks}
         tasks={tasks}
@@ -210,12 +211,12 @@ export default function TaskViewer(): JSX.Element {
 
         {selectedReview && <ReviewOperationDetailPanel operation={selectedReview} />}
       </section>
-    </div>
+    </WorkbenchPage>
   );
 }
 
 export function taskViewerLayoutClass(): string {
-  return "mx-auto flex min-h-full w-full min-w-0 max-w-[1600px] flex-col items-stretch gap-5 px-4 py-2 xl:flex-row";
+  return "min-w-0 items-stretch gap-4 xl:flex-row";
 }
 
 export function taskViewerDetailClass(): string {

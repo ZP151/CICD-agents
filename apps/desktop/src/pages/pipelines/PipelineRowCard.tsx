@@ -1,6 +1,7 @@
 import { formatDate, runTone } from "./pipelineModel.js";
 import type { PipelineInspectState, PipelineRow } from "./pipelineTypes.js";
 import { MarkdownContent } from "../../components/conversation/ConversationPartRenderer.js";
+import { ActionButton, InlineNotice, StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
 
 interface PipelineRowCardProps {
   row: PipelineRow;
@@ -42,17 +43,15 @@ export function PipelineRowCard({
             <span className="font-mono text-xs text-[rgb(var(--app-accent-readable))]">
               #{row.pipelineId}
             </span>
-            <span className="rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
+            <StatusBadge>
               {row.source === "saved" ? "saved" : "discovered"}
-            </span>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${tone.tone}`}
-            >
+            </StatusBadge>
+            <StatusBadge className={tone.tone}>
               {tone.label}
-            </span>
-            <span className="rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
+            </StatusBadge>
+            <StatusBadge>
               {row.projectLinkName}
-            </span>
+            </StatusBadge>
           </div>
           <h3 className="truncate text-sm font-medium text-[rgb(var(--app-text))]">
             {row.pipelineName || row.pipelineId}
@@ -93,11 +92,9 @@ export function PipelineRowCard({
                     <span className="min-w-0 truncate text-[rgb(var(--app-text-muted))]">
                       {run.name || `Run ${run.id}`}
                     </span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${inspectedTone.tone}`}
-                    >
+                    <StatusBadge className={inspectedTone.tone}>
                       {inspectedTone.label}
-                    </span>
+                    </StatusBadge>
                   </div>
                 );
               })}
@@ -142,65 +139,61 @@ export function PipelineRowCard({
       )}
 
       {state.phase === "approval" && (
-        <div className="mt-3 rounded-md border border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-accent-soft))] p-3 text-xs text-[rgb(var(--app-text-muted))]">
+        <InlineNotice tone="info" title="Approval required">
           {state.result.summary}. Open Chat to review and confirm the approval proposal.
-        </div>
+        </InlineNotice>
       )}
 
       {state.phase === "error" && (
-        <div className="mt-3 rounded-md border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] p-3 text-xs text-[rgb(var(--app-danger))]">
-          {state.message}
-        </div>
+        <div className="mt-3"><InlineNotice tone="danger" title="Pipeline action failed">{state.message}</InlineNotice></div>
       )}
 
       <div className={pipelineActionRowClass()}>
         {row.source === "discovered" && (
-          <button
+          <ActionButton
             type="button"
             disabled={state.phase === "loading"}
             onClick={() => onSave(row)}
-            className="rounded-md border border-[rgb(var(--app-success))]/40 px-2.5 py-1.5 text-xs text-[rgb(var(--app-success))] transition hover:bg-[rgb(var(--app-success)_/_0.10)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             Save connection
-          </button>
+          </ActionButton>
         )}
         {(state.phase === "done" ||
           state.phase === "analyzing" ||
           state.phase === "analysis_done" ||
           state.phase === "analysis_error" ||
           state.phase === "error") && (
-          <button
+          <ActionButton
             type="button"
             onClick={() => onOpenDetails(row)}
-            className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
           >
             Details
-          </button>
+          </ActionButton>
         )}
-        <button
+        <ActionButton
           type="button"
           disabled={state.phase === "loading" || state.phase === "analyzing"}
           onClick={() => onInspect(row)}
-          className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-50"
+          loading={state.phase === "loading"}
         >
           {state.phase === "loading" ? "Working..." : "Inspect runs"}
-        </button>
-        <button
+        </ActionButton>
+        <ActionButton
           type="button"
           disabled={state.phase === "loading" || state.phase === "analyzing"}
           onClick={() => onAnalyze(row)}
-          className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-accent))]/35 hover:bg-[rgb(var(--app-accent-soft))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-50"
+          loading={state.phase === "analyzing"}
         >
           AI analyze
-        </button>
-        <button
+        </ActionButton>
+        <ActionButton
+          tone="primary"
           type="button"
           disabled={state.phase === "loading" || state.phase === "analyzing"}
           onClick={() => onTrigger(row)}
-          className="rounded-md border border-[rgb(var(--app-accent))]/35 px-2.5 py-1.5 text-xs text-[rgb(var(--app-accent-readable))] transition hover:bg-[rgb(var(--app-accent-soft))] disabled:cursor-not-allowed disabled:opacity-50"
         >
           Trigger pipeline
-        </button>
+        </ActionButton>
       </div>
     </article>
   );

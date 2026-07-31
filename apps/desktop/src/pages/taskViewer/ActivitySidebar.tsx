@@ -19,6 +19,7 @@ import { checkpointActivityDetail, checkpointActivityKindLabel } from "./checkpo
 import { PrInsightActivitySection } from "./PrInsightActivitySection.js";
 import type { PrInsightActivityItem } from "./prInsightActivity.js";
 import { ReviewActivitySection } from "./ReviewActivitySection.js";
+import { ActionButton, InlineNotice, StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
 
 interface ActivitySidebarProps {
   projectLinks: ProjectLink[];
@@ -238,24 +239,15 @@ export function ActivitySidebar({
         <div>
           <h2 className="text-lg font-semibold text-[rgb(var(--app-text))] xl:text-xl">Activity</h2>
         </div>
-        <button
-          onClick={onRefreshAll}
-          className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:text-[rgb(var(--app-text))]"
-        >
-          Refresh
-        </button>
+        <ActionButton onClick={onRefreshAll}>Refresh</ActionButton>
       </div>
 
       {activeCount > 0 && (
-        <div className="mb-3 rounded-md border border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-accent-soft))] px-3 py-2 text-xs text-[rgb(var(--app-accent-readable))]">
-          {activeCount} active run{activeCount === 1 ? "" : "s"}
-        </div>
+        <InlineNotice tone="info">{activeCount} active run{activeCount === 1 ? "" : "s"}</InlineNotice>
       )}
 
       {error && !activityUnavailable && (
-        <div className="mb-3 rounded-md border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] px-3 py-2 text-xs text-[rgb(var(--app-danger))]">
-          {error}
-        </div>
+        <InlineNotice tone="danger" title="Activity refresh failed">{error}</InlineNotice>
       )}
 
       {activityUnavailable ? (
@@ -374,12 +366,7 @@ export function ActivitySidebarUnavailableState({
       </p>
       <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Activity recovery checks">
         {["Daemon activity API", "Local data folder", "Account session"].map((label) => (
-          <span
-            key={label}
-            className="rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-0.5 text-[11px] text-[rgb(var(--app-text-subtle))]"
-          >
-            {label}
-          </span>
+          <StatusBadge key={label}>{label}</StatusBadge>
         ))}
       </div>
       <p className="mt-3 truncate text-[11px] text-[rgb(var(--app-danger))]" title={error}>
@@ -387,13 +374,7 @@ export function ActivitySidebarUnavailableState({
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {onRefresh && (
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs font-medium text-[rgb(var(--app-text))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-bg-muted))]"
-          >
-            Refresh activity
-          </button>
+          <ActionButton type="button" onClick={onRefresh}>Refresh activity</ActionButton>
         )}
         <a
           href="#/settings"
