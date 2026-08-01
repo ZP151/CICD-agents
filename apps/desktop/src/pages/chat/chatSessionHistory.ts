@@ -17,7 +17,7 @@ export function chatMessagesToBubbles(
   const messages = Array.isArray(payload) ? payload : payload.bubbles;
   const restored = Array.isArray(payload)
     ? undefined
-    : restoreCanonicalTimeline(messages, payload.timelineEvents, options);
+    : restoreTimelineAwareHistory(messages, payload.timelineEvents, options);
   if (restored) return restored;
   return legacyChatMessagesToBubbles(messages, options);
 }
@@ -103,7 +103,7 @@ function legacyChatMessagesToBubbles(
   return bubbles;
 }
 
-function restoreCanonicalTimeline(
+function restoreTimelineAwareHistory(
   messages: ChatMessageEntry[],
   timelineEvents: ChatSessionMessages["timelineEvents"],
   options: ChatMessageBubbleOptions,
@@ -121,43 +121,137 @@ function restoreCanonicalTimeline(
     .map((turnEvents) => [...turnEvents].sort((left, right) => left.sequence - right.sequence))
     .filter((turnEvents) => turnEvents.some((event) => event.type === "turn.started"))
     .sort((left, right) => left[0]!.emittedAt - right[0]!.emittedAt);
-  const userMessages = messages.filter((message) => message.role === "user");
-
-  // Only use the deterministic replay if every saved user request has a
-  // Timeline. Mixed legacy sessions retain the old safe reconstruction.
-  if (turns.length === 0 || turns.length !== userMessages.length) return undefined;
+  if (turns.length === 0) return undefined;
 
   const makeId = options.makeId ?? uid;
+  const canonicalTurnsByUserIndex = matchTurnsToUserMessages(messages, turns);
   const bubbles: Bubble[] = [];
-  for (const [index, turnEvents] of turns.entries()) {
-    const user = userMessages[index]!;
-    const started = turnEvents.find((event) => event.type === "turn.started")!;
-    const timestamp = normalizeTimestamp(user.timestamp);
-    bubbles.push({ id: makeId(), kind: "user", text: user.content, timestamp });
+  let restoredTurn: { id: string; startedAt: number; activityIndex?: number } | null = null;
+  let latestTranscriptIndex: number | undefined;
+  let canonicalTurnOwnsFollowingMessages = false;
 
-    let turnBubbles = upsertTurnStartedTranscript([], started as ChatEventPayload, makeId);
-    for (const event of turnEvents) {
-      if (event.type === "turn.started") continue;
-      turnBubbles = applyTurnTimelineEvent(turnBubbles, event as ChatEventPayload);
+  for (const [index, message] of messages.entries()) {
+    const timestamp = normalizeTimestamp(message.timestamp);
+    const base = { id: makeId(), timestamp };
+    if (message.role === "user") {
+      canonicalTurnOwnsFollowingMessages = false;
+      bubbles.push({ ...base, kind: "user", text: message.content });
+      const turnEvents = canonicalTurnsByUserIndex.get(index);
+      if (turnEvents) {
+        appendCanonicalTurn(bubbles, turnEvents, makeId);
+        canonicalTurnOwnsFollowingMessages = true;
+        restoredTurn = null;
+        latestTranscriptIndex = undefined;
+      } else {
+        restoredTurn = { id: `restored-turn-${index}-${timestamp}`, startedAt: timestamp };
+      }
+      continue;
     }
-    bubbles.push(...turnBubbles);
 
-    const final = [...turnEvents].reverse().find((event) => event.type === "turn.final.completed");
-    const finalText = final?.finalText?.trim();
-    if (finalText) {
-      const finalTimestamp = final?.emittedAt ?? started.emittedAt;
-      const meta = { timestamp: finalTimestamp };
-      bubbles.push({
-        id: makeId(),
-        kind: "assistant",
-        text: finalText,
-        timestamp: finalTimestamp,
-        parts: conversationPartsFromAssistantBubble({ text: finalText, meta }),
-        meta,
-      });
+    // Current daemons persist bubbles for compatibility as well as Timeline
+    // events. A canonical Turn owns those compatibility records so the
+    // command list and final response cannot appear twice after restore.
+    if (canonicalTurnOwnsFollowingMessages) continue;
+
+    const activityIndex = ensureRestoredTurnActivity(bubbles, restoredTurn, makeId);
+    if (activityIndex !== undefined) latestTranscriptIndex = activityIndex;
+    if (message.role === "tool") {
+      appendRestoredToolToTranscript(bubbles, activityIndex ?? latestTranscriptIndex, message);
+      continue;
     }
+    if (message.role === "system") {
+      bubbles.push({ ...base, kind: "system", text: message.content });
+      if (isRestoredTurnTerminal(message)) {
+        finalizeRestoredTurn(bubbles, activityIndex, restoredTurn, "cancelled", timestamp);
+        restoredTurn = null;
+      }
+      continue;
+    }
+    if (message.role === "error") {
+      bubbles.push({ ...base, kind: "error", text: message.content });
+      finalizeRestoredTurn(bubbles, activityIndex, restoredTurn, "failed", timestamp);
+      restoredTurn = null;
+      continue;
+    }
+
+    const meta: NonNullable<Bubble["meta"]> = {
+      riskLevel: message.riskLevel,
+      finalizationMode: message.finalizationMode,
+      actionsTaken: message.actionsTaken,
+      suggestions: message.suggestions,
+      sources: message.sources,
+      artifacts: message.artifacts,
+      timestamp,
+    };
+    bubbles.push({
+      ...base,
+      kind: "assistant",
+      text: message.content,
+      parts: conversationPartsFromAssistantBubble({ text: message.content, meta }),
+      meta,
+    });
+    finalizeRestoredTurn(bubbles, activityIndex, restoredTurn, "completed", timestamp);
+    restoredTurn = null;
+  }
+
+  if (restoredTurn) {
+    const activityIndex = ensureRestoredTurnActivity(bubbles, restoredTurn, makeId);
+    finalizeRestoredTurn(bubbles, activityIndex, restoredTurn, "failed", restoredTurn.startedAt);
   }
   return bubbles;
+}
+
+function matchTurnsToUserMessages(
+  messages: ChatMessageEntry[],
+  turns: Array<NonNullable<ChatSessionMessages["timelineEvents"]>>,
+): Map<number, NonNullable<ChatSessionMessages["timelineEvents"]>> {
+  const users = messages
+    .map((message, index) => ({ message, index }))
+    .filter(({ message }) => message.role === "user")
+    .map(({ message, index }) => ({ index, at: normalizeTimestamp(message.timestamp) }));
+  const unmatched = new Set(users.map((user) => user.index));
+  const byUserIndex = new Map<number, NonNullable<ChatSessionMessages["timelineEvents"]>>();
+
+  for (const turnEvents of turns) {
+    const startedAt = turnEvents.find((event) => event.type === "turn.started")!.emittedAt;
+    const preceding = users
+      .filter((user) => unmatched.has(user.index) && user.at <= startedAt)
+      .at(-1);
+    const user = preceding ?? users.find((candidate) => unmatched.has(candidate.index));
+    if (!user) continue;
+    unmatched.delete(user.index);
+    byUserIndex.set(user.index, turnEvents);
+  }
+  return byUserIndex;
+}
+
+function appendCanonicalTurn(
+  bubbles: Bubble[],
+  turnEvents: NonNullable<ChatSessionMessages["timelineEvents"]>,
+  makeId: () => string,
+): void {
+  const started = turnEvents.find((event) => event.type === "turn.started")!;
+  let turnBubbles = upsertTurnStartedTranscript([], started as ChatEventPayload, makeId);
+  for (const event of turnEvents) {
+    if (event.type === "turn.started") continue;
+    turnBubbles = applyTurnTimelineEvent(turnBubbles, event as ChatEventPayload);
+  }
+  bubbles.push(...turnBubbles);
+
+  const final = [...turnEvents].reverse().find((event) => event.type === "turn.final.completed");
+  const finalText = final?.finalText?.trim();
+  if (finalText) {
+    const finalTimestamp = final?.emittedAt ?? started.emittedAt;
+    const meta = { timestamp: finalTimestamp };
+    bubbles.push({
+      id: makeId(),
+      kind: "assistant",
+      text: finalText,
+      timestamp: finalTimestamp,
+      parts: conversationPartsFromAssistantBubble({ text: finalText, meta }),
+      meta,
+    });
+  }
 }
 
 function ensureRestoredTurnActivity(

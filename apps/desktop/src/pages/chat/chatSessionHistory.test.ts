@@ -70,6 +70,46 @@ describe("chat session history", () => {
     expect(bubbles[1]?.turnTranscript).toMatchObject({ status: "completed", executionSealed: true });
   });
 
+  it("replays canonical and legacy Turns independently in a mixed session", () => {
+    const bubbles = chatMessagesToBubbles({
+      bubbles: [
+        { role: "user", content: "Inspect the first project", timestamp: 1 },
+        { role: "tool", content: "", timestamp: 2, toolName: "git_status", toolArgs: { short: true }, toolOk: true },
+        { role: "assistant", content: "The first project is clean.", timestamp: 3 },
+        { role: "user", content: "Inspect the second project", timestamp: 10 },
+        // Compatibility records written alongside the Timeline must not
+        // become a second command group or final message on restore.
+        { role: "tool", content: "", timestamp: 11, toolName: "git_status", toolArgs: { short: true }, toolOk: true },
+        { role: "assistant", content: "stale compatibility final", timestamp: 12 },
+      ],
+      timelineEvents: [
+        { type: "turn.started", turnId: "turn-2", sequence: 0, emittedAt: 10_050 },
+        { type: "turn.narrative.delta", turnId: "turn-2", sequence: 1, emittedAt: 10_060, blockId: "opening", message: "Checking the second project's branch." },
+        { type: "turn.tool.started", turnId: "turn-2", sequence: 2, emittedAt: 10_070, groupId: "branch", commandId: "branch-1", name: "git_current_branch", args: {} },
+        { type: "turn.tool.completed", turnId: "turn-2", sequence: 3, emittedAt: 10_080, groupId: "branch", commandId: "branch-1", ok: true, summary: "main" },
+        { type: "turn.execution.completed", turnId: "turn-2", sequence: 4, emittedAt: 10_090, elapsedMs: 40 },
+        { type: "turn.final.completed", turnId: "turn-2", sequence: 5, emittedAt: 10_100, finalText: "The second project is on main." },
+        { type: "turn.finished", turnId: "turn-2", sequence: 6, emittedAt: 10_110, elapsedMs: 60, status: "completed" },
+      ],
+    }, { makeId: (() => { let id = 0; return () => `mixed-${++id}`; })() });
+
+    expect(bubbles.filter((bubble) => bubble.kind === "user").map((bubble) => bubble.text)).toEqual([
+      "Inspect the first project",
+      "Inspect the second project",
+    ]);
+    expect(bubbles.filter((bubble) => bubble.turnTranscript)).toHaveLength(2);
+    expect(bubbles.filter((bubble) => bubble.kind === "assistant").map((bubble) => bubble.text)).toEqual([
+      "The first project is clean.",
+      "The second project is on main.",
+    ]);
+    expect(bubbles.some((bubble) => bubble.text === "stale compatibility final")).toBe(false);
+    const canonical = bubbles.find((bubble) => bubble.turnId === "turn-2");
+    expect(canonical?.turnTranscript?.blocks).toEqual([
+      expect.objectContaining({ kind: "statement", text: "Checking the second project's branch." }),
+      expect.objectContaining({ kind: "tool_group", commands: [expect.objectContaining({ name: "git_current_branch" })] }),
+    ]);
+  });
+
   it("restores persisted messages into renderable bubbles", () => {
     let nextId = 0;
     const bubbles = chatMessagesToBubbles([
