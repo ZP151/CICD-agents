@@ -130,7 +130,14 @@ export function createChatSseWriter(
       // now confined to history migration adapters on the desktop.
     },
     end() {
-      void timelinePersistence.finally(() => reply.raw.end());
+      // Persistence is deliberately fire-and-forget relative to the network
+      // response. Waiting for a slow session store here keeps an otherwise
+      // complete Turn's SSE connection open, so the desktop never receives a
+      // terminal stream boundary (and therefore cannot show the footer).
+      // `sendTimeline` already serializes and absorbs persistence failures.
+      // Let that chain finish in the background after closing the live stream.
+      reply.raw.end();
+      void timelinePersistence;
     },
   };
 }

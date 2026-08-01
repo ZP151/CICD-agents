@@ -108,4 +108,26 @@ describe("chat SSE timeline projection", () => {
     });
     expect(persisted.some((event) => event.type === "turn.waiting")).toBe(false);
   });
+
+  it("closes the live stream without waiting for a slow transcript store", async () => {
+    let endCalls = 0;
+    let releasePersistence: (() => void) | undefined;
+    const persistence = new Promise<void>((resolve) => { releasePersistence = resolve; });
+    const reply = {
+      raw: {
+        setHeader: () => undefined,
+        flushHeaders: () => undefined,
+        write: () => undefined,
+        end: () => { endCalls += 1; },
+      },
+    } as never;
+    const writer = createChatSseWriter(reply, undefined, () => persistence);
+
+    writer.startTurn("turn-1");
+    await Promise.resolve();
+    writer.end();
+
+    expect(endCalls).toBe(1);
+    releasePersistence?.();
+  });
 });
