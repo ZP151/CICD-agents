@@ -116,6 +116,12 @@ describe("chatPlannerGuards", () => {
     expect(guarded.suggestions).toEqual(["Inspect the diff"]);
   });
 
+  it("keeps an explicitly requested pull in scope when a negative clause only forbids later actions", () => {
+    const request = "Pull latest from origin main with rebase. Do not push, stage, commit, or create a PR.";
+
+    expect(isExplicitReadOnlyRequest(request)).toBe(false);
+  });
+
   it("requires direct Git evidence before indexing a live working-tree request", () => {
     const request = "Read-only: inspect the current working tree and uncommitted changes. Do not modify files.";
 

@@ -108,12 +108,22 @@ export function isReviewOnlyChangeRequest(message: string): boolean {
  * tools but never propose an approval-gated action for a read-only turn.
  */
 export function isExplicitReadOnlyRequest(message: string): boolean {
-  return /\b(?:read[-\s]?only|only\s+(?:inspect|review|check)|do not\s+(?:modify|change|write|stage|commit|push|merge|pull|rebase|checkout|switch|stash|restore|delete)|without\s+(?:modifying|changing|writing))\b/i.test(message);
+  const lower = message.toLowerCase();
+  const hasReadOnlyBoundary = /\b(?:read[-\s]?only|only\s+(?:inspect|review|check)|do not\s+(?:modify|change|write|stage|commit|push|merge|pull|rebase|checkout|switch|stash|restore|delete)|without\s+(?:modifying|changing|writing))\b/.test(lower);
+  if (!hasReadOnlyBoundary) return false;
+
+  // A negative clause can limit one operation without invalidating a
+  // different, explicitly requested mutation. For example, "pull origin
+  // main with rebase; do not push" must allow the approval-gated pull while
+  // still preventing the later push. Remove the negated operations first,
+  // then see whether a positive mutable action remains in scope.
+  const requestedChanges = stripNegatedWriteIntents(lower).replace(/\bpull\s+request\b/g, "");
+  return !/\b(?:stage|git add|commit|push|publish|create pr|open pull request|pull\b(?!\s+request)|rebase|merge|checkout|switch|stash|restore|delete)\b/.test(requestedChanges);
 }
 
 function stripNegatedWriteIntents(text: string): string {
   const writePhrase =
-    "(?:stage|staging|stage all|stage selected|git add|commit|committing|commit these|commit all|commit my|make a commit|prepare commit|push|pushing|publish|publishing|create pr|create a pr|open pull request|pull request|run tests?|build)";
+    "(?:stage|staging|stage all|stage selected|git add|commit|committing|commit these|commit all|commit my|make a commit|prepare commit|push|pushing|publish|publishing|create pr|create a pr|open pull request|pull request|pull|rebase|merge|checkout|switch|stash|restore|delete|run tests?|build)";
   const negatedWriteList = new RegExp(
     `\\b(?:do not|don't|dont|without|no)\\s+${writePhrase}(?:\\s*,\\s*${writePhrase})*(?:\\s*,?\\s*(?:or|and)\\s*${writePhrase})?`,
     "gi",
