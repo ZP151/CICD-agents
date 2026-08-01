@@ -2,13 +2,13 @@ import type { ChatCompletionMessageParam } from "openai/resources/chat/completio
 import type { LLMClient } from "./llm.js";
 import type { ChatEvent } from "./chatPlannerTypes.js";
 
-const MAX_ACTION_NARRATIVE_CHARS = 180;
 // GPT-5 counts reasoning and visible tokens against max_completion_tokens.
 // A 40-token cap regularly finishes before any public token is available;
 // 128 remains deliberately small while leaving enough room for low-effort
-// reasoning plus the one-sentence visible action narrative.
+// reasoning plus a one- or two-sentence visible action narrative.
 const MAX_ACTION_NARRATIVE_TOKENS = 128;
 const MIN_INITIAL_VISIBLE_NARRATIVE_CHARS = 12;
+const MAX_PUBLIC_ACTION_SENTENCES = 2;
 
 export interface ActionNarrativeRequest {
   /** The user's original request, not a synthetic progress label. */
@@ -41,7 +41,8 @@ export async function* streamActionNarrative(
       content: [
         "Write the public action narrative for a desktop coding agent.",
         "Always respond in English; this product has one English conversation path regardless of the input language.",
-        "Write one compact natural sentence: current basis or the immediate permitted action.",
+        "Write one or two concise natural sentences. State the current evidence or the precise facts to establish, then state what this immediate action will clarify or decide.",
+        "The second sentence, when useful, must add a decision-relevant reason rather than repeat the request or list commands. Stop after two sentences.",
         "Do not repeat the user's request verbatim or use labels such as Scope, Goal, Uncertainty, Evidence, Plan, or Next step.",
         "Start directly with the check or decision; never use generic framing such as 'Based on the request', 'The goal is', or 'I will perform'. Do not widen the requested scope.",
         "Use supplied evidence only; do not claim unobserved project facts.",
@@ -73,10 +74,10 @@ export async function* streamActionNarrative(
 
   let text = "";
   let emittedText = "";
-  // This is the public decision boundary before a tool group, not a second
-  // long-form answer. End at the first complete useful sentence so the
-  // planner can move on to the first real action without waiting for an
-  // optional second sentence or a model's verbose continuation.
+  // This is the public decision boundary before a tool group, not a
+  // long-form answer. Keep up to two complete sentences: that is enough to
+  // make the activity legible (basis → action → purpose) without exposing a
+  // private chain of thought or delaying the command group indefinitely.
   const models = [llm.actionNarrativeModel?.()];
   const fallbackModel = llm.actionNarrativeFallbackModel?.();
   if (fallbackModel && fallbackModel !== models[0]) models.push(fallbackModel);
@@ -96,18 +97,18 @@ export async function* streamActionNarrative(
         text = appendNarrativeDelta(text, event.delta);
         if (!text || !shouldEmitNarrative(text, emittedText)) continue;
         const visibleText = text.trimEnd();
-        const bounded = visibleText.length > MAX_ACTION_NARRATIVE_CHARS
-          ? `${visibleText.slice(0, MAX_ACTION_NARRATIVE_CHARS - 1).trimEnd()}…`
-          : visibleText;
-        input.onText?.(bounded);
-        emittedText = bounded;
+        // Never turn a genuine streamed sentence into an ellipsized fragment.
+        // The narrator's token budget and two-sentence contract are the
+        // bounds; a visual character clamp makes an agent look interrupted.
+        input.onText?.(visibleText);
+        emittedText = visibleText;
         yield {
           type: "work_statement",
           blockId: input.blockId ?? "opening",
-          text: bounded,
+          text: visibleText,
           replace: true,
         };
-        if (text.length >= MAX_ACTION_NARRATIVE_CHARS || hasCompleteActionNarrative(text)) return;
+        if (hasCompleteActionNarrative(text)) return;
       }
       break;
     } catch (err) {
@@ -122,11 +123,8 @@ export async function* streamActionNarrative(
   // not meet the incremental word-boundary rule above.
   const finalText = text.trimEnd();
   if (finalText && finalText !== emittedText) {
-    const bounded = finalText.length > MAX_ACTION_NARRATIVE_CHARS
-      ? `${finalText.slice(0, MAX_ACTION_NARRATIVE_CHARS - 1).trimEnd()}…`
-      : finalText;
-    input.onText?.(bounded);
-    yield { type: "work_statement", blockId: input.blockId ?? "opening", text: bounded, replace: true };
+    input.onText?.(finalText);
+    yield { type: "work_statement", blockId: input.blockId ?? "opening", text: finalText, replace: true };
   }
 }
 
@@ -143,12 +141,9 @@ function shouldEmitNarrative(text: string, emittedText: string): boolean {
 }
 
 function hasCompleteActionNarrative(text: string): boolean {
-  // A sentence that describes the missing fact and immediate action is the
-  // public hand-off to tool selection. Its next sentence is not a reason to
-  // delay the actual command group; later evidence can create another real
-  // narrative block if a fresh decision is required.
-  return text.trim().length >= MIN_INITIAL_VISIBLE_NARRATIVE_CHARS
-    && /[.!?。！？]\s*$/.test(text);
+  if (text.trim().length < MIN_INITIAL_VISIBLE_NARRATIVE_CHARS) return false;
+  const sentenceEndings = text.match(/[.!?。！？](?:\s|$)/g)?.length ?? 0;
+  return sentenceEndings >= MAX_PUBLIC_ACTION_SENTENCES;
 }
 
 function appendNarrativeDelta(previous: string, delta: string): string {

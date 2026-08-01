@@ -84,7 +84,7 @@ describe("streamActionNarrative", () => {
     expect(events.at(-1)).toMatchObject({ text: "I will inspect the selected target first." });
   });
 
-  it("hands off after the first complete action sentence instead of waiting for a verbose continuation", async () => {
+  it("keeps a second decision-relevant sentence but stops before a third", async () => {
     const llm = {
       configured: true,
       async *chatStream() {
@@ -97,9 +97,25 @@ describe("streamActionNarrative", () => {
     const events = [];
     for await (const event of streamActionNarrative(llm, { request: "Review the change" })) events.push(event);
 
-    expect(events.at(-1)).toMatchObject({ text: "I will verify the changed files first." });
-    expect(JSON.stringify(events)).not.toContain("Then I will run");
+    expect(events.at(-1)).toMatchObject({ text: "I will verify the changed files first. Then I will run the smallest read-only check." });
+    expect(JSON.stringify(events)).toContain("Then I will run");
     expect(JSON.stringify(events)).not.toContain("third sentence");
+  });
+
+  it("does not ellipsize a complete public action sentence above the former 180-character cap", async () => {
+    const fullSentence = "Check the active branch, the complete working-tree state, and the latest commit metadata so the summary distinguishes local edits from committed work and can answer the request without an unnecessary diff.";
+    const llm = {
+      configured: true,
+      async *chatStream() {
+        yield { type: "delta" as const, delta: fullSentence };
+      },
+    } as Pick<LLMClient, "configured" | "chatStream">;
+
+    const events = [];
+    for await (const event of streamActionNarrative(llm, { request: "Inspect the project state" })) events.push(event);
+
+    expect(events.at(-1)).toMatchObject({ text: fullSentence });
+    expect(JSON.stringify(events)).not.toContain("…");
   });
 
   it("preserves normal word boundaries from token-sized streamed deltas", async () => {
