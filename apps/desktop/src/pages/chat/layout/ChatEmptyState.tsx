@@ -4,6 +4,7 @@ import type {
 } from "../../../api.js";
 import type { SuggestionReply } from "../../../components/conversation/SuggestionReplyBar.js";
 import { ProjectLinkSetupCard } from "../projectLinkOnboarding/ProjectLinkSetupCard.js";
+import { PromptParticleDeck } from "./PromptParticleDeck.js";
 
 interface ChatEmptyStateProps {
   repoPath: string;
@@ -221,31 +222,7 @@ function WelcomePanel({
           </p>
         </div>
       </div>
-      <div
-        className="grid w-full max-w-[44rem] min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,12.75rem),1fr))] gap-2"
-        role="group"
-        aria-label="Suggested prompt drafts"
-      >
-        {welcomeSuggestions.map((suggestion) => (
-          <button
-            key={suggestion.id}
-            type="button"
-            onClick={() => {
-              if (!disabled) onPick(suggestion);
-            }}
-            disabled={disabled}
-            title={disabled ? "Create a Project Link first" : undefined}
-            className={`group max-w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2.5 text-left text-xs leading-snug text-[rgb(var(--app-text-muted))] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/30 ${
-              disabled
-                ? "cursor-not-allowed opacity-60"
-                : "hover:border-[rgb(var(--app-accent))]/45 hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
-            }`}
-          >
-            <span className="block whitespace-normal font-medium text-[rgb(var(--app-text))]">{suggestion.label}</span>
-            <span className="mt-0.5 block text-[10px] text-[rgb(var(--app-text-subtle))] group-hover:text-[rgb(var(--app-text-muted))]">Edit before sending</span>
-          </button>
-        ))}
-      </div>
+      <PromptParticleDeck suggestions={welcomeSuggestions} disabled={disabled} onPick={onPick} />
     </section>
   );
 }

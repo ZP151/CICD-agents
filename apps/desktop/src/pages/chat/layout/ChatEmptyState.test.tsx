@@ -55,14 +55,12 @@ describe("ChatEmptyState", () => {
 
     expect(html).toContain("New conversation welcome");
     expect(html).toContain("max-w-[58rem]");
-    expect(html).toContain("max-w-[44rem]");
-    expect(html).toContain("repeat(auto-fit,minmax(min(100%,12.75rem),1fr))");
+    expect(html).toContain("prompt-particle-deck");
     expect(html).toContain("Start with a focused prompt");
     expect(html).toContain("Suggested prompt drafts");
-    expect(html).toContain("Edit before sending");
+    expect(html).toContain('aria-label="Suggested prompt drafts"');
+    expect(html).toContain("Choose a starting point, then edit the prompt before MergePilot does any work.");
     expect(html).toContain("Understand this project");
-    expect(html).toContain("Review my changes");
-    expect(html).toContain("Push and create PR");
     expect(html).not.toContain("animate-pulse");
   });
 
@@ -90,7 +88,6 @@ describe("ChatEmptyState", () => {
 
     expect(html).toContain("New conversation welcome");
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Review my changes");
     expect(html).toContain("Checking Project Links...");
     expect(html).toContain("Create a Project Link first");
     expect(html).toContain("disabled=\"\"");
@@ -114,7 +111,6 @@ describe("ChatEmptyState", () => {
 
     expect(html).toContain("New conversation welcome");
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Review my changes");
     expect(html).toContain("Connect a Project Link to run workspace actions");
     expect(html).toContain("Create and use");
     expect(html).toContain("Create a Project Link first");

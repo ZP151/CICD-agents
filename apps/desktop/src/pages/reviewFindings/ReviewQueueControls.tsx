@@ -1,4 +1,5 @@
 import type { ReviewQueueItem } from "../../api.js";
+import { WorkbenchFilterTabs } from "../../components/workbench/WorkbenchPrimitives.js";
 import { lanes } from "./reviewQueueViewModel.js";
 
 export interface ReviewQueueControlsProps {
@@ -50,42 +51,21 @@ export function ReviewQueueControls({
 }: ReviewQueueControlsProps): JSX.Element {
   return (
     <section className="flex flex-col gap-1.5" aria-label="Review queue controls">
-      <div className={reviewQueueLaneGridClass()} aria-label="Review queue filters">
-        <button
-          type="button"
-          onClick={() => onQueueFilterChange("all")}
-          className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-[11px] transition ${
-            queueFilter === "all"
-              ? "border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text))] ring-2 ring-[rgb(var(--app-accent))]/15"
-              : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
-          }`}
-          title="All review decisions"
-        >
-          All
-          <span className="rounded-full bg-[rgb(var(--app-surface-raised))] px-1.5 text-[10px] font-semibold text-[rgb(var(--app-text-muted))]">
-            {totalCount}
-          </span>
-        </button>
-        {lanes.map((lane) => (
-          <button
-            key={lane.key}
-            type="button"
-            onClick={() => onQueueFilterChange(lane.key)}
-            aria-pressed={queueFilter === lane.key}
-            title={lane.description}
-            className={`inline-flex h-7 min-w-0 items-center gap-1.5 rounded-md border px-2 text-left text-[11px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 ${
-              queueFilter === lane.key
-                ? "border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text))] ring-2 ring-[rgb(var(--app-accent))]/15"
-                : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
-            }`}
-          >
-            <span className="min-w-0 truncate font-medium">{reviewQueueCompactLaneLabel(lane.key)}</span>
-            <span className="shrink-0 rounded-full bg-[rgb(var(--app-surface-raised))] px-1.5 text-[10px] font-semibold text-[rgb(var(--app-text-muted))]">
-              {counts[lane.key]}
-            </span>
-          </button>
-        ))}
-      </div>
+      <WorkbenchFilterTabs
+        ariaLabel="Review queue filters"
+        className={reviewQueueLaneGridClass()}
+        options={[
+          { value: "all", label: "All", count: totalCount, title: "All review decisions" },
+          ...lanes.map((lane) => ({
+            value: lane.key,
+            label: reviewQueueCompactLaneLabel(lane.key),
+            count: counts[lane.key],
+            title: lane.description,
+          })),
+        ]}
+        value={queueFilter}
+        onValueChange={onQueueFilterChange}
+      />
       <div className="flex flex-wrap items-center gap-1.5">
         <button
           type="button"
@@ -162,7 +142,7 @@ export function ReviewQueueControls({
 }
 
 export function reviewQueueLaneGridClass(): string {
-  return "flex flex-wrap gap-1.5";
+  return "flex min-w-0 flex-wrap items-center gap-1.5";
 }
 
 export function reviewQueueFooterCountClass(): string {

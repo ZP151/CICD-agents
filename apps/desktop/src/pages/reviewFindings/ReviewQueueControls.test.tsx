@@ -64,7 +64,7 @@ describe("ReviewQueueControls responsive layout", () => {
     expect(html).toContain("title=\"Low-risk PRs approved by the Review Agent with an audit record.\"");
     expect(html).toContain("Auto: On");
     expect(html).toContain('aria-label="Disable auto-approve"');
-    expect(html).toContain(">All<span");
+    expect(html).toContain(">All</span><span");
     expect(html).toContain(">Human</span>");
     expect(html).not.toContain(">Needs human review<span");
     expect(html).toContain("h-7");

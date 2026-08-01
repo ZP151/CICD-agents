@@ -11,13 +11,13 @@ import {
 } from "../projectLinks/ProjectLinkCard.js";
 
 const pageSelectClass =
-  "min-w-0 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-[rgb(var(--app-focus))] focus:ring-2 focus:ring-[rgb(var(--app-focus))]/20 disabled:cursor-not-allowed disabled:opacity-60";
+  "min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-1.5 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-[rgb(var(--app-focus))] focus:ring-2 focus:ring-[rgb(var(--app-focus))]/20 disabled:cursor-not-allowed disabled:opacity-60";
 const projectLinkSelectClass = `${pageSelectClass} w-full truncate sm:min-w-[14rem]`;
 const statusSelectClass = `${pageSelectClass} w-full sm:w-[9rem]`;
 
 export function pullRequestHeaderControlsClass(): string {
   return [
-    "grid w-full min-w-0 grid-cols-1 gap-2 rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2",
+    "grid w-full min-w-0 grid-cols-1 gap-2",
     "sm:grid-cols-[minmax(0,1fr)_9rem_auto]",
     "xl:w-[clamp(30rem,42vw,38rem)]",
   ].join(" ");

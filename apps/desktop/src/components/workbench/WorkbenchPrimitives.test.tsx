@@ -6,6 +6,7 @@ import {
   StatusBadge,
   WorkbenchEmptyState,
   WorkbenchHeader,
+  WorkbenchFilterTabs,
   WorkbenchPage,
   WorkbenchSkeleton,
   WorkbenchSidePanel,
@@ -45,6 +46,26 @@ describe("WorkbenchPrimitives", () => {
     expect(html).toContain("No pull requests");
     expect(html).toContain("workbench-loading-indicator");
     expect(html).toContain("workbench-skeleton-block");
+  });
+
+  it("uses one compact, labelled filter control across worklists", () => {
+    const html = renderToStaticMarkup(
+      <WorkbenchFilterTabs
+        ariaLabel="Pipeline status filters"
+        options={[
+          { value: "all", label: "All", count: 7 },
+          { value: "failed", label: "Failed", count: 2 },
+        ]}
+        value="failed"
+        onValueChange={() => undefined}
+      />,
+    );
+
+    expect(html).toContain('role="toolbar"');
+    expect(html).toContain('aria-label="Pipeline status filters"');
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain(">Failed</span><span");
+    expect(html).toContain("focus-visible:ring");
   });
 
   it("provides a labelled details panel for route-level evidence", () => {

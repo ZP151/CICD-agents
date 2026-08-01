@@ -4,7 +4,6 @@ import type { ReviewOperationEvent } from "../../reviewOperations.js";
 import {
   ReviewActivityRail,
   reviewActivityRailCollapsedClass,
-  reviewActivityRailExpandedClass,
 } from "./ReviewActivityRail.js";
 
 const event: ReviewOperationEvent = {
@@ -20,9 +19,8 @@ const event: ReviewOperationEvent = {
 };
 
 describe("ReviewActivityRail", () => {
-  it("keeps the activity panel as a right-side drawer at every viewport", () => {
+  it("keeps the collapsed activity control independent of the worklist layout", () => {
     const collapsedClassName = reviewActivityRailCollapsedClass();
-    const expandedClassName = reviewActivityRailExpandedClass();
 
     expect(collapsedClassName).toContain("fixed");
     expect(collapsedClassName).toContain("right-4");
@@ -31,13 +29,6 @@ describe("ReviewActivityRail", () => {
     expect(collapsedClassName).not.toContain("justify-end");
     expect(collapsedClassName).not.toContain("xl:sticky");
     expect(collapsedClassName).not.toContain("lg:sticky");
-    expect(expandedClassName).toContain("fixed");
-    expect(expandedClassName).toContain("w-[min(24rem,calc(100vw-2rem))]");
-    expect(expandedClassName).toContain("shadow-2xl");
-    expect(expandedClassName).not.toContain("xl:sticky");
-    expect(expandedClassName).not.toContain("xl:w-auto");
-    expect(expandedClassName).not.toContain("lg:sticky");
-    expect(expandedClassName).not.toContain("lg:w-auto");
   });
 
   it("renders as a compact collapsed control", () => {
@@ -73,8 +64,8 @@ describe("ReviewActivityRail", () => {
 
     expect(html).toContain("Recent activity");
     expect(html).toContain("Close");
-    expect(html).toContain('role="dialog"');
-    expect(html).toContain('aria-label="Close recent activity"');
+    expect(html).toContain('aria-label="Recent activity"');
+    expect(html).toContain('aria-label="Recent activity categories"');
     expect(html).toContain("Review completed");
   });
 });

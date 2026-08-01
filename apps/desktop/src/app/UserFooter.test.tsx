@@ -28,6 +28,8 @@ describe("UserFooter", () => {
     expect(html).not.toContain("<p ");
     expect(html).toContain('title="Zhou Ping (Zhou.Ping@totalebizsolutions.com)"');
     expect(html).toContain("h-9 w-9");
+    expect(html).toContain("app-shell-account-footer");
+    expect(html).toContain("justify-start");
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain("group-hover/account:block");
     expect(html).not.toContain("h-3 w-3 shrink-0");
