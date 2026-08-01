@@ -20,6 +20,8 @@ describe("streamActionNarrative", () => {
       expect(JSON.stringify(options.messages)).toContain("Do not reveal private reasoning");
       expect(JSON.stringify(options.messages)).toContain("terminal syntax, tool names, flags");
       expect(JSON.stringify(options.messages)).toContain("Never ask the user to run a command or provide command output");
+      expect(JSON.stringify(options.messages)).toContain("use a direct action declaration");
+      expect(JSON.stringify(options.messages)).toContain("name the whole small evidence set");
       expect(JSON.stringify(options.messages)).toContain("ask permission for a clearly read-only action");
       expect(JSON.stringify(options.messages)).toContain("do not propose cloning, fetching, remote metadata, setup, or a repository-existence check");
       expect(JSON.stringify(options.messages)).not.toContain("Working directory");
