@@ -276,6 +276,8 @@ export class LLMClient {
     model?: string;
     /** Use a bounded reasoning mode only where the caller explicitly opts in. */
     reasoningEffort?: "minimal" | "low" | "medium" | "high";
+    /** GPT-5 output-density control; use only for a latency-sensitive public stream. */
+    verbosity?: "low" | "medium" | "high";
   }): AsyncGenerator<ChatStreamEvent, void, unknown> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), STREAM_REQUEST_TIMEOUT_MS);
@@ -291,6 +293,9 @@ export class LLMClient {
           ...completionTokenLimit(model, opts.maxTokens ?? 1024),
           ...(opts.reasoningEffort && isReasoningDeployment(model)
             ? { reasoning_effort: opts.reasoningEffort }
+            : {}),
+          ...(opts.verbosity && isReasoningDeployment(model)
+            ? { verbosity: opts.verbosity }
             : {}),
           tools: opts.tools && opts.tools.length > 0 ? opts.tools : undefined,
           tool_choice: opts.tools && opts.tools.length > 0 ? "auto" : undefined,
