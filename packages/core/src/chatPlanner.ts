@@ -82,7 +82,15 @@ export class ChatPlanner {
       return;
     }
 
-    const registeredTools = this.executor.list();
+    const allRegisteredTools = this.executor.list();
+    // An explicit read-only request is a hard safety boundary. Narrowing the
+    // tool schema to that boundary also removes dozens of irrelevant write
+    // descriptions from the first model request, making Project Link
+    // inspections faster without relying on keyword-derived commands.
+    const allCapabilities = buildToolCapabilitiesByName(allRegisteredTools);
+    const registeredTools = isExplicitReadOnlyRequest(message)
+      ? allRegisteredTools.filter((tool) => allCapabilities.get(tool.name)?.readOnly)
+      : allRegisteredTools;
     const messages = buildPlannerMessages({
       message,
       history,
@@ -198,6 +206,35 @@ export class ChatPlanner {
         for (const [toolCallIndex, tc] of executableToolCalls.entries()) {
           const args = parseToolArguments(tc.arguments);
           const capability = capabilitiesByName.get(tc.name);
+          // A provider can emit a stale or hallucinated tool name even when
+          // it was not present in this request's schema. Treat the advertised
+          // capability set as an execution boundary, especially after a
+          // read-only turn narrowed the available tools for latency.
+          if (!capability) {
+            if (isExplicitReadOnlyRequest(message)) {
+              const result: ChatPlannerResult = {
+                response: "This turn is explicitly read-only, so I will not propose or run a repository-changing action. I will stop after the evidence collected so far.",
+                finalizationMode: "none",
+                riskLevel: "low",
+                actionsTaken: toolCallsMade.map((t) => t.name),
+                suggestions: [],
+                toolCallsMade,
+                usedLlm: true,
+              };
+              yield { type: "done", result };
+              return;
+            }
+            messages.push({
+              role: "tool",
+              tool_call_id: tc.id,
+              content: JSON.stringify({
+                ok: false,
+                unavailable: true,
+                guidance: `The requested tool ${tc.name} was not available for this decision. Choose an advertised tool instead.`,
+              }),
+            });
+            continue;
+          }
           // One planner decision may safely run several read-only tools. They
           // share one public statement and one transcript group, but the first
           // write/unknown tool after it is deferred for a fresh decision.

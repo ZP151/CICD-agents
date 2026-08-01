@@ -454,6 +454,49 @@ describe("ChatPlanner agent_final tool finalization", () => {
     }
   });
 
+  it("sends only read-only tool schemas for an explicit read-only request", async () => {
+    const executor = createToolExecutor();
+    executor.register({
+      name: "git_status",
+      description: "Inspect working tree",
+      parameters: { type: "object", properties: {} },
+      handler: async () => ({ ok: true, stdout: "" }),
+    });
+    executor.register({
+      name: "git_add",
+      description: "Stage files",
+      parameters: { type: "object", properties: {} },
+      handler: async () => ({ ok: true }),
+    });
+    const calls: Array<{ messages?: unknown[]; tools?: unknown }> = [];
+    const planner = new ChatPlanner(
+      fakeSequenceLlm([[
+        {
+          type: "tool_call",
+          toolCalls: [{
+            id: "final",
+            name: CHAT_FINAL_TOOL_NAME,
+            arguments: JSON.stringify({ response: "No changes were made.", risk_level: "low", actions_taken: [], suggestions: [] }),
+          }],
+        },
+        { type: "done", finishReason: "tool_calls" },
+      ]], calls),
+      executor,
+      { maxSteps: 1 },
+    );
+
+    for await (const _event of planner.run("Read-only: inspect the working tree.", [], ".", async () => true)) {
+      // Consume the full Planner turn; the captured tool schemas are the
+      // assertion subject for this latency/safety optimisation.
+    }
+
+    const toolNames = ((calls[0]?.tools as Array<{ function?: { name?: string } }> | undefined) ?? [])
+      .map((tool) => tool.function?.name);
+    expect(toolNames).toContain("git_status");
+    expect(toolNames).toContain(CHAT_FINAL_TOOL_NAME);
+    expect(toolNames).not.toContain("git_add");
+  });
+
   it("adds a later public narrative only after the next real command batch is selected", async () => {
     const executor = createToolExecutor();
     executor.register({

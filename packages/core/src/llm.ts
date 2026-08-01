@@ -7,6 +7,12 @@ import type {
 import { getSettings, type Settings } from "./settings.js";
 import { logger } from "./logger.js";
 
+// A streaming Turn cannot leave its Working canvas open indefinitely when a
+// provider accepts a connection but never emits its first chunk. The desktop
+// shows a truthful waiting diagnostic after five seconds; this bounded request
+// turns a persistent transport failure into the canonical failed Turn.
+const STREAM_REQUEST_TIMEOUT_MS = 15_000;
+
 export class LLMUnavailableError extends Error {}
 
 export interface ChatToolCall {
@@ -201,16 +207,19 @@ export class LLMClient {
     maxTokens?: number;
     model?: string;
   }): AsyncGenerator<ChatStreamEvent, void, unknown> {
-    const stream = await this.get().chat.completions.create({
-      model: opts.model || this.chatModel(),
-      messages: opts.messages,
-      temperature: opts.temperature ?? 0.2,
-      max_tokens: opts.maxTokens ?? 1024,
-      tools: opts.tools && opts.tools.length > 0 ? opts.tools : undefined,
-      tool_choice: opts.tools && opts.tools.length > 0 ? "auto" : undefined,
-      stream: true,
-      stream_options: { include_usage: true },
-    });
+    const stream = await this.get().chat.completions.create(
+      {
+        model: opts.model || this.chatModel(),
+        messages: opts.messages,
+        temperature: opts.temperature ?? 0.2,
+        max_tokens: opts.maxTokens ?? 1024,
+        tools: opts.tools && opts.tools.length > 0 ? opts.tools : undefined,
+        tool_choice: opts.tools && opts.tools.length > 0 ? "auto" : undefined,
+        stream: true,
+        stream_options: { include_usage: true },
+      },
+      { timeout: STREAM_REQUEST_TIMEOUT_MS, maxRetries: 0 },
+    );
 
     const assembler = new ToolCallAssembler();
     let finishReason = "";
