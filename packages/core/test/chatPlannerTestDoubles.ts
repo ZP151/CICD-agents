@@ -58,13 +58,13 @@ export function fakeStreamingToolCallLlm(name: string, argumentChunks: string[])
 
 export function fakeSequenceLlm(
   sequences: ChatStreamEvent[][],
-  calls?: Array<{ messages?: unknown[] }>,
+  calls?: Array<{ messages?: unknown[]; tools?: unknown }>,
 ): LLMClient {
   let index = 0;
   return {
     configured: true,
-    async *chatStream(opts: { messages?: unknown[] }): AsyncGenerator<ChatStreamEvent> {
-      calls?.push({ messages: opts.messages });
+    async *chatStream(opts: { messages?: unknown[]; tools?: unknown }): AsyncGenerator<ChatStreamEvent> {
+      calls?.push({ messages: opts.messages, tools: opts.tools });
       const events = sequences[index++] ?? [];
       for (const event of events) yield event;
     },

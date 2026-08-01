@@ -10,8 +10,6 @@ import {
   mergePilotUserConfigFile,
   keyVaultSecretError,
   readMergePilotUserConfig,
-  SYSTEM_AZURE_OPENAI_API_KEY_REF,
-  SYSTEM_KEY_VAULT_URL,
   USER_AZURE_OPENAI_API_KEY_REF,
   KEY_VAULT_SECRET_SOURCE,
   LOCAL_ENV_SECRET_SOURCE,
@@ -25,10 +23,12 @@ const LlmConfigSchema = z.object({
   azureEndpoint:   z.string().optional(),
   azureApiKey:     z.string().optional(),
   azureDeployment: z.string().optional(),
+  azureNarrativeDeployment: z.string().optional(),
   azureEmbeddingDeployment: z.string().optional(),
   azureApiVersion: z.string().optional(),
   openaiApiKey:    z.string().optional(),
   openaiModel:     z.string().optional(),
+  openaiNarrativeModel: z.string().optional(),
 }).optional();
 
 const TestLlmConfigSchema = z.object({
@@ -43,10 +43,12 @@ const DaemonConfigureSchema = z.object({
   azureEndpoint:   z.string().optional(),
   azureApiKey:     z.string().optional(),
   azureDeployment: z.string().optional(),
+  azureNarrativeDeployment: z.string().optional(),
   azureEmbeddingDeployment: z.string().optional(),
   azureApiVersion: z.string().optional(),
   openaiApiKey:    z.string().optional(),
   openaiModel:     z.string().optional(),
+  openaiNarrativeModel: z.string().optional(),
   azureStorageAccount: z.string().optional(),
   azureKeyVaultUrl:    z.string().optional(),
   azureCosmosEndpoint: z.string().optional(),
@@ -66,10 +68,12 @@ function configValueFromEnv(): Record<string, unknown> {
                    : process.env["OPENAI_API_KEY"]            ? "openai"
                    : "",
     azureDeployment:          process.env["AZURE_OPENAI_CHAT_DEPLOYMENT"] ?? process.env["AZURE_OPENAI_DEPLOYMENT"] ?? "",
+    azureNarrativeDeployment: process.env["AZURE_OPENAI_NARRATIVE_DEPLOYMENT"] ?? "",
     azureEmbeddingDeployment: process.env["AZURE_OPENAI_EMBEDDING_DEPLOYMENT"] ?? "",
     azureApiVersion:          process.env["AZURE_OPENAI_API_VERSION"] ?? "",
     azureEndpoint:            process.env["AZURE_OPENAI_ENDPOINT"] ?? "",
     openaiModel:              process.env["OPENAI_MODEL"] ?? "",
+    openaiNarrativeModel:     process.env["OPENAI_NARRATIVE_MODEL"] ?? "",
     secretSource:    userConfig.secretSource ?? LOCAL_ENV_SECRET_SOURCE,
     aoaiKeyInVault:   (userConfig.secretSource === KEY_VAULT_SECRET_SOURCE) && (userConfig.azureApiKeyRef ?? "").startsWith("kv://"),
     azureTenantId:       azureAuthConfig.tenantId ?? "",
@@ -85,7 +89,7 @@ function keyVaultAccessMessage(action: "read" | "write", err: unknown): string {
   const status = (err as { statusCode?: number; status?: number })?.statusCode
     ?? (err as { statusCode?: number; status?: number })?.status;
   if (status === 401 || status === 403) {
-    return `Azure Key Vault permission is missing. The signed-in Azure account needs secrets/${action === "read" ? "get" : "set"} access to ${SYSTEM_KEY_VAULT_URL}.`;
+    return `Azure Key Vault permission is missing. The signed-in Azure account needs secrets/${action === "read" ? "get" : "set"} access to the Key Vault configured locally.`;
   }
   const message = err instanceof Error ? err.message : String(err);
   if (
@@ -93,13 +97,13 @@ function keyVaultAccessMessage(action: "read" | "write", err: unknown): string {
     message.toLowerCase().includes("invalid_resource") ||
     message.toLowerCase().includes("invalid client")
   ) {
-    return `Azure Key Vault app permission is not configured. Keep Settings > Account > Secret source set to Local .env, or ask an Azure administrator to grant the MergePilot app delegated Key Vault access and secrets/${action === "read" ? "get" : "set"} permission to ${SYSTEM_KEY_VAULT_URL}.`;
+    return `Azure Key Vault app permission is not configured. Keep Settings > Account > Secret source set to Local .env, or ask an Azure administrator to grant the MergePilot app delegated Key Vault access and secrets/${action === "read" ? "get" : "set"} permission to the configured vault.`;
   }
   if (message.includes("AADSTS65001") || message.toLowerCase().includes("consent")) {
-    return `Azure Key Vault consent is missing. Sign in again so MergePilot can request Key Vault access, then ensure the account has secrets/${action === "read" ? "get" : "set"} access to ${SYSTEM_KEY_VAULT_URL}.`;
+    return `Azure Key Vault consent is missing. Sign in again so MergePilot can request Key Vault access, then ensure the account has secrets/${action === "read" ? "get" : "set"} access to the configured vault.`;
   }
   if (message.includes("Automatic authentication has been disabled")) {
-    return `Azure Key Vault sign-in is required. Sign in again so MergePilot can request Key Vault access, then ensure the account has secrets/${action === "read" ? "get" : "set"} access to ${SYSTEM_KEY_VAULT_URL}.`;
+    return `Azure Key Vault sign-in is required. Sign in again so MergePilot can request Key Vault access, then ensure the account has secrets/${action === "read" ? "get" : "set"} access to the configured vault.`;
   }
   return `Azure Key Vault secret ${action} failed: ${message}`;
 }
@@ -108,8 +112,11 @@ async function persistAoaiKeyIfPossible(
   cfg: z.infer<typeof DaemonConfigureSchema>,
   settings: Settings,
 ): Promise<{ ok: true; ref?: string } | { ok: false; statusCode: number; message: string }> {
-  const effectiveKvUrl = cfg.azureKeyVaultUrl || settings.azureKeyVaultUrl || SYSTEM_KEY_VAULT_URL;
-  if (!cfg.azureApiKey || !effectiveKvUrl) return { ok: true };
+  const effectiveKvUrl = cfg.azureKeyVaultUrl || settings.azureKeyVaultUrl;
+  if (!cfg.azureApiKey) return { ok: true };
+  if (!effectiveKvUrl) {
+    return { ok: false, statusCode: 400, message: "A Key Vault URL is required when Key Vault is selected as the secret source." };
+  }
   try {
     const tempKv = new KeyVaultSecrets(effectiveKvUrl);
     await tempKv.setAoaiKey(cfg.azureApiKey);
@@ -143,9 +150,7 @@ async function persistModelSecretRefs(
   return {
     ok: true,
     refs: {
-      azureApiKeyRef: storedInKeyVault.ref ?? (
-        cfg.llmProvider === "azure" ? SYSTEM_AZURE_OPENAI_API_KEY_REF : undefined
-      ),
+      azureApiKeyRef: storedInKeyVault.ref,
     },
   };
 }
@@ -160,16 +165,18 @@ function mergeUserConfig(
     llmProvider: cfg.llmProvider ?? existing.llmProvider,
     secretSource: cfg.secretSource ?? existing.secretSource ?? LOCAL_ENV_SECRET_SOURCE,
     openaiModel: cfg.openaiModel ?? existing.openaiModel,
+    openaiNarrativeModel: cfg.openaiNarrativeModel ?? existing.openaiNarrativeModel,
     openaiApiKeyRef: secretRefs.openaiApiKeyRef ?? existing.openaiApiKeyRef,
     azureEndpoint: cfg.azureEndpoint ?? existing.azureEndpoint,
     azureDeployment: cfg.azureDeployment ?? existing.azureDeployment,
+    azureNarrativeDeployment: cfg.azureNarrativeDeployment ?? existing.azureNarrativeDeployment,
     azureEmbeddingDeployment: cfg.azureEmbeddingDeployment ?? existing.azureEmbeddingDeployment,
     azureApiVersion: cfg.azureApiVersion ?? existing.azureApiVersion,
     azureApiKeyRef: secretRefs.azureApiKeyRef ?? existing.azureApiKeyRef,
     azureTenantId: cfg.azureTenantId ?? existing.azureTenantId,
     azureClientId: cfg.azureClientId ?? existing.azureClientId,
     azureStorageAccount: cfg.azureStorageAccount ?? existing.azureStorageAccount,
-    azureKeyVaultUrl: cfg.azureKeyVaultUrl ?? existing.azureKeyVaultUrl ?? SYSTEM_KEY_VAULT_URL,
+    azureKeyVaultUrl: cfg.azureKeyVaultUrl ?? existing.azureKeyVaultUrl,
     azureCosmosEndpoint: cfg.azureCosmosEndpoint ?? existing.azureCosmosEndpoint,
     reviewAutoApproveEnabled: cfg.reviewAutoApproveEnabled ?? existing.reviewAutoApproveEnabled,
     reviewStaleAgeHours: cfg.reviewStaleAgeHours ?? existing.reviewStaleAgeHours,
@@ -182,12 +189,14 @@ function patchLiveProcessEnv(
 ): void {
   if (cfg.llmProvider !== undefined) process.env["LLM_PROVIDER"] = cfg.llmProvider;
   if (cfg.openaiModel !== undefined) process.env["OPENAI_MODEL"] = cfg.openaiModel;
+  if (cfg.openaiNarrativeModel !== undefined) process.env["OPENAI_NARRATIVE_MODEL"] = cfg.openaiNarrativeModel;
   if (cfg.secretSource !== undefined) process.env["MERGEPILOT_SECRET_SOURCE"] = cfg.secretSource;
   if (cfg.openaiApiKey !== undefined) process.env["OPENAI_API_KEY"] = cfg.openaiApiKey;
   else if (secretRefs.openaiApiKeyRef) process.env["OPENAI_API_KEY"] = secretRefs.openaiApiKeyRef;
 
   if (cfg.azureEndpoint !== undefined) process.env["AZURE_OPENAI_ENDPOINT"] = cfg.azureEndpoint;
   if (cfg.azureDeployment !== undefined) process.env["AZURE_OPENAI_CHAT_DEPLOYMENT"] = cfg.azureDeployment;
+  if (cfg.azureNarrativeDeployment !== undefined) process.env["AZURE_OPENAI_NARRATIVE_DEPLOYMENT"] = cfg.azureNarrativeDeployment;
   if (cfg.azureEmbeddingDeployment !== undefined) process.env["AZURE_OPENAI_EMBEDDING_DEPLOYMENT"] = cfg.azureEmbeddingDeployment;
   if (cfg.azureApiVersion !== undefined) process.env["AZURE_OPENAI_API_VERSION"] = cfg.azureApiVersion;
   if (cfg.azureApiKey !== undefined) process.env["AZURE_OPENAI_API_KEY"] = cfg.azureApiKey;
@@ -200,7 +209,6 @@ function patchLiveProcessEnv(
 
   if (cfg.azureStorageAccount !== undefined) process.env["AZURE_STORAGE_ACCOUNT"] = cfg.azureStorageAccount;
   if (cfg.azureKeyVaultUrl !== undefined) process.env["AZURE_KEYVAULT_URL"] = cfg.azureKeyVaultUrl;
-  else if (secretRefs.azureApiKeyRef) process.env["AZURE_KEYVAULT_URL"] = SYSTEM_KEY_VAULT_URL;
   if (cfg.azureCosmosEndpoint !== undefined) process.env["AZURE_COSMOS_ENDPOINT"] = cfg.azureCosmosEndpoint;
   if (cfg.azureTenantId !== undefined) process.env["MERGEPILOT_AZURE_TENANT_ID"] = cfg.azureTenantId;
   if (cfg.azureClientId !== undefined) process.env["MERGEPILOT_AZURE_CLIENT_ID"] = cfg.azureClientId;
@@ -223,12 +231,14 @@ function patchLiveSettings(settings: Settings, cfg: z.infer<typeof DaemonConfigu
   if (cfg.azureEndpoint !== undefined) target["azureOpenAiEndpoint"] = cfg.azureEndpoint;
   if (cfg.azureApiKey !== undefined) target["azureOpenAiApiKey"] = cfg.azureApiKey || settings.azureOpenAiApiKey;
   if (cfg.azureDeployment !== undefined) target["azureOpenAiChatDeployment"] = cfg.azureDeployment || settings.azureOpenAiChatDeployment;
+  if (cfg.azureNarrativeDeployment !== undefined) target["azureOpenAiNarrativeDeployment"] = cfg.azureNarrativeDeployment;
   if (cfg.azureEmbeddingDeployment !== undefined) {
     target["azureOpenAiEmbeddingDeployment"] = cfg.azureEmbeddingDeployment || settings.azureOpenAiEmbeddingDeployment;
   }
   if (cfg.azureApiVersion !== undefined) target["azureOpenAiApiVersion"] = cfg.azureApiVersion || settings.azureOpenAiApiVersion;
   if (cfg.openaiApiKey !== undefined) target["openAiApiKey"] = cfg.openaiApiKey;
   if (cfg.openaiModel !== undefined) target["openAiModel"] = cfg.openaiModel;
+  if (cfg.openaiNarrativeModel !== undefined) target["openAiNarrativeModel"] = cfg.openaiNarrativeModel;
   if (cfg.azureStorageAccount !== undefined) target["azureStorageAccount"] = cfg.azureStorageAccount;
   if (cfg.azureKeyVaultUrl !== undefined) target["azureKeyVaultUrl"] = cfg.azureKeyVaultUrl;
   if (cfg.azureCosmosEndpoint !== undefined) target["azureCosmosEndpoint"] = cfg.azureCosmosEndpoint;

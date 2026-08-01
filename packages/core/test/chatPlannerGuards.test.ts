@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { guardReviewOnlyFinalResult } from "../src/chatPlannerGuards.js";
+import {
+  guardReviewOnlyFinalResult,
+  isExplicitReadOnlyRequest,
+  requiredRepositoryStateEvidenceGuidance,
+} from "../src/chatPlannerGuards.js";
 import type { ChatPlannerResult } from "../src/chatPlannerTypes.js";
 
 describe("chatPlannerGuards", () => {
@@ -90,5 +94,41 @@ describe("chatPlannerGuards", () => {
     expect(guarded.approvalProposal).toBeUndefined();
     expect(guarded.response).not.toContain("Would you like me to stage");
     expect(guarded.suggestions).toEqual(["Review exception handling"]);
+  });
+
+  it("treats explicit read-only instructions as a hard no-write boundary", () => {
+    const result: ChatPlannerResult = {
+      response: "I inspected the target repository. Shall I merge the branch?",
+      riskLevel: "medium",
+      actionsTaken: ["git_status"],
+      suggestions: ["Merge the branch", "Inspect the diff"],
+      toolCallsMade: [{ name: "git_status", args: { short: true }, ok: true }],
+      usedLlm: true,
+      approvalProposal: { tool: "git_merge", args: { ref: "branch" }, description: "Merge branch" },
+    };
+
+    const request = "Only inspect the current Project Link repository branch and uncommitted changes. Do not modify any files.";
+    const guarded = guardReviewOnlyFinalResult(result, request);
+
+    expect(isExplicitReadOnlyRequest(request)).toBe(true);
+    expect(guarded.approvalProposal).toBeUndefined();
+    expect(guarded.response).not.toContain("Shall I merge");
+    expect(guarded.suggestions).toEqual(["Inspect the diff"]);
+  });
+
+  it("keeps an explicitly requested pull in scope when a negative clause only forbids later actions", () => {
+    const request = "Pull latest from origin main with rebase. Do not push, stage, commit, or create a PR.";
+
+    expect(isExplicitReadOnlyRequest(request)).toBe(false);
+  });
+
+  it("requires direct Git evidence before indexing a live working-tree request", () => {
+    const request = "Read-only: inspect the current working tree and uncommitted changes. Do not modify files.";
+
+    expect(requiredRepositoryStateEvidenceGuidance("repo_refresh_index", request, [], [])).toContain("Run git_status");
+    expect(requiredRepositoryStateEvidenceGuidance("repo_refresh_index", request, [], [
+      { name: "git_status", args: { short: true }, ok: true },
+    ])).toBe("");
+    expect(requiredRepositoryStateEvidenceGuidance("repo_refresh_index", "Explain this project architecture", [], [])).toBe("");
   });
 });

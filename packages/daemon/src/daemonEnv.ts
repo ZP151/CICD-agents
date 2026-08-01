@@ -6,8 +6,6 @@ import { KeyVaultSecrets } from "@mergepilot/core";
 let activeConfigFile: string | null = null;
 let loaded = false;
 
-export const SYSTEM_KEY_VAULT_URL = "https://devagentkv001.vault.azure.net/";
-export const SYSTEM_AZURE_OPENAI_API_KEY_REF = "kv://secret/mergepilot-aoai-key";
 export const USER_AZURE_OPENAI_API_KEY_REF = "kv://aoai-key";
 export const LOCAL_ENV_SECRET_SOURCE = "local_env";
 export const KEY_VAULT_SECRET_SOURCE = "key_vault";
@@ -26,9 +24,11 @@ source = "local_env"
 
 [azure_openai]
 endpoint = ""
-chat_deployment = "mergepilot-chat"
+chat_deployment = "gpt-5-mini"
+# Optional low-latency deployment used only for the public action narrative.
+narrative_deployment = ""
 embedding_deployment = "text-embedding-3-small"
-api_version = "2024-08-01-preview"
+api_version = "2025-04-01-preview"
 api_key_ref = ""
 
 [azure_auth]
@@ -37,7 +37,7 @@ client_id = ""
 
 [cloud]
 storage_account = ""
-key_vault_url = "https://devagentkv001.vault.azure.net/"
+key_vault_url = ""
 cosmos_endpoint = ""
 
 [review]
@@ -49,9 +49,11 @@ export interface MergePilotUserConfig {
   llmProvider?: "azure" | "openai" | "";
   secretSource?: "key_vault" | "local_env";
   openaiModel?: string;
+  openaiNarrativeModel?: string;
   openaiApiKeyRef?: string;
   azureEndpoint?: string;
   azureDeployment?: string;
+  azureNarrativeDeployment?: string;
   azureEmbeddingDeployment?: string;
   azureApiVersion?: string;
   azureApiKeyRef?: string;
@@ -176,9 +178,11 @@ function applyUserConfigToEnv(config: MergePilotUserConfig, explicitProcessEnv: 
   const entries: Array<[string, string | number | boolean | undefined]> = [
     ["LLM_PROVIDER", config.llmProvider],
     ["OPENAI_MODEL", wantsOpenAi ? config.openaiModel : undefined],
+    ["OPENAI_NARRATIVE_MODEL", wantsOpenAi ? config.openaiNarrativeModel : undefined],
     ["OPENAI_API_KEY", localEnvSecrets ? undefined : wantsOpenAi ? config.openaiApiKeyRef : undefined],
     ["AZURE_OPENAI_ENDPOINT", wantsAzure ? config.azureEndpoint : undefined],
     ["AZURE_OPENAI_CHAT_DEPLOYMENT", wantsAzure ? config.azureDeployment : undefined],
+    ["AZURE_OPENAI_NARRATIVE_DEPLOYMENT", wantsAzure ? config.azureNarrativeDeployment : undefined],
     ["AZURE_OPENAI_EMBEDDING_DEPLOYMENT", wantsAzure ? config.azureEmbeddingDeployment : undefined],
     ["AZURE_OPENAI_API_VERSION", wantsAzure ? config.azureApiVersion : undefined],
     ["AZURE_OPENAI_API_KEY", localEnvSecrets ? undefined : wantsAzure ? config.azureApiKeyRef : undefined],
@@ -241,7 +245,10 @@ async function hydrateSecretEnvKey(
 
 async function readKeyVaultSecret(ref: string, config: MergePilotUserConfig): Promise<string | null> {
   if (!ref.startsWith("kv://")) return null;
-  const vaultUrl = config.azureKeyVaultUrl || SYSTEM_KEY_VAULT_URL;
+  const vaultUrl = config.azureKeyVaultUrl;
+  if (!vaultUrl) {
+    throw new Error("A Key Vault URL is required when Key Vault is selected as the secret source.");
+  }
   const kv = new KeyVaultSecrets(vaultUrl);
   const reader = kv as KeyVaultSecrets & {
     getAoaiKeyByRef?: (secretRef: string) => Promise<string | null>;
@@ -274,9 +281,11 @@ function configFromToml(content: string): MergePilotUserConfig {
     llmProvider: providerValue(sections["llm"]?.["provider"]),
     secretSource: secretSourceValue(sections["secrets"]?.["source"]),
     openaiModel: sections["openai"]?.["model"],
+    openaiNarrativeModel: sections["openai"]?.["narrative_model"],
     openaiApiKeyRef: sections["openai"]?.["api_key_ref"],
     azureEndpoint: sections["azure_openai"]?.["endpoint"],
     azureDeployment: sections["azure_openai"]?.["chat_deployment"],
+    azureNarrativeDeployment: sections["azure_openai"]?.["narrative_deployment"],
     azureEmbeddingDeployment: sections["azure_openai"]?.["embedding_deployment"],
     azureApiVersion: sections["azure_openai"]?.["api_version"],
     azureApiKeyRef: sections["azure_openai"]?.["api_key_ref"],
@@ -293,7 +302,7 @@ function configFromToml(content: string): MergePilotUserConfig {
 function configToToml(config: MergePilotUserConfig): string {
   const secretSource = config.secretSource ?? LOCAL_ENV_SECRET_SOURCE;
   const azureApiKeyRef = secretSource === KEY_VAULT_SECRET_SOURCE
-    ? config.azureApiKeyRef ?? SYSTEM_AZURE_OPENAI_API_KEY_REF
+    ? config.azureApiKeyRef ?? ""
     : "";
   const openaiApiKeyRef = secretSource === KEY_VAULT_SECRET_SOURCE
     ? config.openaiApiKeyRef ?? ""
@@ -311,13 +320,15 @@ function configToToml(config: MergePilotUserConfig): string {
     "",
     "[openai]",
     `model = ${tomlString(config.openaiModel ?? "")}`,
+    `narrative_model = ${tomlString(config.openaiNarrativeModel ?? "")}`,
     `api_key_ref = ${tomlString(openaiApiKeyRef)}`,
     "",
     "[azure_openai]",
     `endpoint = ${tomlString(config.azureEndpoint ?? "")}`,
-    `chat_deployment = ${tomlString(config.azureDeployment ?? "mergepilot-chat")}`,
+    `chat_deployment = ${tomlString(config.azureDeployment ?? "gpt-5-mini")}`,
+    `narrative_deployment = ${tomlString(config.azureNarrativeDeployment ?? "")}`,
     `embedding_deployment = ${tomlString(config.azureEmbeddingDeployment ?? "text-embedding-3-small")}`,
-    `api_version = ${tomlString(config.azureApiVersion ?? "2024-08-01-preview")}`,
+    `api_version = ${tomlString(config.azureApiVersion ?? "2025-04-01-preview")}`,
     `api_key_ref = ${tomlString(azureApiKeyRef)}`,
     "",
     "[azure_auth]",
@@ -326,7 +337,7 @@ function configToToml(config: MergePilotUserConfig): string {
     "",
     "[cloud]",
     `storage_account = ${tomlString(config.azureStorageAccount ?? "")}`,
-    `key_vault_url = ${tomlString(config.azureKeyVaultUrl ?? SYSTEM_KEY_VAULT_URL)}`,
+    `key_vault_url = ${tomlString(config.azureKeyVaultUrl ?? "")}`,
     `cosmos_endpoint = ${tomlString(config.azureCosmosEndpoint ?? "")}`,
     "",
     "[review]",
@@ -378,7 +389,7 @@ function keyVaultAccessMessage(action: "read" | "write", err: unknown): string {
   const status = (err as { statusCode?: number; status?: number })?.statusCode
     ?? (err as { statusCode?: number; status?: number })?.status;
   if (status === 401 || status === 403) {
-    return `Azure Key Vault permission is missing. The signed-in Azure account needs secrets/${action === "read" ? "get" : "set"} access to ${SYSTEM_KEY_VAULT_URL}.`;
+    return `Azure Key Vault permission is missing. The signed-in Azure account needs secrets/${action === "read" ? "get" : "set"} access to the Key Vault configured locally.`;
   }
   const message = err instanceof Error ? err.message : String(err);
   if (
@@ -386,13 +397,13 @@ function keyVaultAccessMessage(action: "read" | "write", err: unknown): string {
     message.toLowerCase().includes("invalid_resource") ||
     message.toLowerCase().includes("invalid client")
   ) {
-    return `Azure Key Vault app permission is not configured. Keep Settings > Account > Secret source set to Local .env, or ask an Azure administrator to grant the MergePilot app delegated Key Vault access and secrets/${action === "read" ? "get" : "set"} permission to ${SYSTEM_KEY_VAULT_URL}.`;
+    return `Azure Key Vault app permission is not configured. Keep Settings > Account > Secret source set to Local .env, or ask an Azure administrator to grant the MergePilot app delegated Key Vault access and secrets/${action === "read" ? "get" : "set"} permission to the configured vault.`;
   }
   if (message.includes("AADSTS65001") || message.toLowerCase().includes("consent")) {
-    return `Azure Key Vault consent is missing. Sign in again so MergePilot can request Key Vault access, then ensure the account has secrets/${action === "read" ? "get" : "set"} access to ${SYSTEM_KEY_VAULT_URL}.`;
+    return `Azure Key Vault consent is missing. Sign in again so MergePilot can request Key Vault access, then ensure the account has secrets/${action === "read" ? "get" : "set"} access to the configured vault.`;
   }
   if (message.includes("Automatic authentication has been disabled")) {
-    return `Azure Key Vault sign-in is required. Sign in again so MergePilot can request Key Vault access, then ensure the account has secrets/${action === "read" ? "get" : "set"} access to ${SYSTEM_KEY_VAULT_URL}.`;
+    return `Azure Key Vault sign-in is required. Sign in again so MergePilot can request Key Vault access, then ensure the account has secrets/${action === "read" ? "get" : "set"} access to the configured vault.`;
   }
   return `Azure Key Vault secret ${action} failed: ${message}`;
 }

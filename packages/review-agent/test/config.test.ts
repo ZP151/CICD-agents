@@ -14,4 +14,8 @@ describe("loadConfig", () => {
 
     expect(loadConfig().dataDir).toBe("C:/mergepilot-data");
   });
+
+  it("defaults its GPT-5 Chat Completions API version", () => {
+    expect(loadConfig().azureOpenAiApiVersion).toBe("2025-04-01-preview");
+  });
 });

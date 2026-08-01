@@ -54,12 +54,17 @@ describe("chatStream", () => {
       null,
       (event) => events.push(event),
       "project-link-1",
+      "built_in",
+      [],
+      undefined,
+      "local-turn-1",
     );
     await waitFor(() => fetchMock.mock.calls.length === 1 && streamControllerRef.current !== undefined);
     expect(firstRequestBody(fetchMock)).toMatchObject({
       message: "stream a long answer",
       repoPath: "C:\\repo",
       projectLinkId: "project-link-1",
+      clientTurnId: "local-turn-1",
     });
 
     const streamController = streamControllerRef.current;
@@ -93,6 +98,23 @@ describe("chatStream", () => {
 
     await waitFor(() => events.some((event) => event.type === "done"));
     expect(events.at(-1)?.result?.response).toBe("First visible chunk. Final answer.");
+  });
+
+  it("does not turn a user cancellation into a transport error", async () => {
+    let rejectFetch: ((error: Error) => void) | undefined;
+    const fetchMock = vi.fn(() => new Promise<Response>((_resolve, reject) => {
+      rejectFetch = reject;
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const events: ChatEventPayload[] = [];
+    const { cancel } = chatStream("inspect the Project Link", "C:\\repo", null, (event) => events.push(event));
+    await waitFor(() => fetchMock.mock.calls.length === 1 && rejectFetch !== undefined);
+    cancel();
+    rejectFetch?.(new Error("read ECONNRESET"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(events).toEqual([]);
   });
 
   it("buffers partial SSE lines across arbitrary response chunk boundaries", async () => {
@@ -141,6 +163,41 @@ describe("chatStream", () => {
       delta: "Split chunk text.",
     });
     streamController.close();
+  });
+
+  it("preserves result metadata on canonical final completion events", async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(sse("turn.final.completed", {
+          type: "turn.final.completed",
+          turnId: "turn-1",
+          sequence: 7,
+          finalText: "Done.",
+          result: {
+            response: "Done.",
+            finalizationMode: "agent_final",
+            riskLevel: "low",
+            actionsTaken: ["git_status"],
+            suggestions: [],
+          },
+        })));
+        controller.close();
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(stream, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    })));
+
+    const events: ChatEventPayload[] = [];
+    chatStream("finish", "C:\\repo", null, (event) => events.push(event));
+    await waitFor(() => events.length === 1);
+
+    expect(events[0]).toMatchObject({
+      type: "turn.final.completed",
+      result: { response: "Done.", actionsTaken: ["git_status"] },
+    });
   });
 
   it("sends image attachment payloads with chat requests", async () => {
@@ -411,5 +468,51 @@ describe("confirmAction", () => {
     expect(request?.method).toBe("POST");
     expect(request?.headers).toEqual({ "content-type": "application/json" });
     expect(request?.body).toBe("{}");
+  });
+
+  it("continues an approval with the original Turn identity and clock", async () => {
+    const stream = new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } });
+    const fetchMock = vi.fn(async () => new Response(stream, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    confirmAction("chat-approval-session", () => undefined, {
+      turnId: "turn-1",
+      startedAt: 1_000,
+      lastSequence: 8,
+    });
+    await waitFor(() => fetchMock.mock.calls.length === 1);
+
+    expect(firstRequestBody(fetchMock)).toEqual({ turnId: "turn-1", startedAt: 1_000, lastSequence: 8 });
+  });
+});
+
+describe("declineAction", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("continues the original Turn instead of opening a no-message turn", async () => {
+    const stream = new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } });
+    const fetchMock = vi.fn(async () => new Response(stream, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { declineAction } = await import("./api/chat.js");
+    declineAction("chat-approval-session", () => undefined, {
+      turnId: "turn-1",
+      startedAt: 1_000,
+      lastSequence: 8,
+    });
+    await waitFor(() => fetchMock.mock.calls.length === 1);
+
+    const calls = fetchMock.mock.calls as unknown as Array<[RequestInfo | URL, RequestInit?]>;
+    expect(String(calls[0]?.[0])).toContain("/chat/chat-approval-session/decline-action");
+    expect(firstRequestBody(fetchMock)).toEqual({ turnId: "turn-1", startedAt: 1_000, lastSequence: 8 });
   });
 });

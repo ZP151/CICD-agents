@@ -130,6 +130,14 @@ function AzureModelFields({
           onChange={(value) => onDraftChange("azureDeployment", value)}
         />
       </SettingsRow>
+      <SettingsRow title="Fast action narration" description="Optional low-latency deployment for the first public action narrative. Planning and execution stay on the main deployment.">
+        <TextInput
+          label="Narration deployment"
+          placeholder="optional low-latency deployment"
+          value={modelDraft.azureNarrativeDeployment}
+          onChange={(value) => onDraftChange("azureNarrativeDeployment", value)}
+        />
+      </SettingsRow>
       <SettingsRow title="API version">
         <TextInput
           label="API version"
@@ -169,6 +177,14 @@ function OpenAiModelFields({
           placeholder="model name"
           value={modelDraft.openaiModel}
           onChange={(value) => onDraftChange("openaiModel", value)}
+        />
+      </SettingsRow>
+      <SettingsRow title="Fast action narration" description="Optional low-latency model for the first public action narrative. Planning and execution stay on the main model.">
+        <TextInput
+          label="Narration model"
+          placeholder="optional low-latency model"
+          value={modelDraft.openaiNarrativeModel}
+          onChange={(value) => onDraftChange("openaiNarrativeModel", value)}
         />
       </SettingsRow>
     </>

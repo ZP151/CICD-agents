@@ -21,9 +21,10 @@ export function browserCompletionTemplate(opts: {
   const buttonAction = returnUri
     ? `window.location.href = ${JSON.stringify(returnUri)}`
     : "window.close()";
+  const buttonLabel = returnUri ? `Return to ${appName}` : "Close this tab";
   const helper = returnUri
     ? `If your browser asks for permission, choose Open to return to ${appName}.`
-    : `You can close this tab and return to ${appName}.`;
+    : `Sign-in has been handed back to ${appName}. You can close this tab.`;
 
   return `<!doctype html>
 <html lang="en">
@@ -53,7 +54,7 @@ export function browserCompletionTemplate(opts: {
     </div>
     <h1>${opts.title}</h1>
     <p>${opts.message}</p>
-    <button onclick="${buttonAction}">Return to ${appName}</button>
+    <button onclick="${buttonAction}">${buttonLabel}</button>
     <div class="helper">${helper}</div>
   </main>
   <script>

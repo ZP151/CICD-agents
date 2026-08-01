@@ -205,12 +205,12 @@ describe("daemon PR creation workflow routes", () => {
 
     expect(confirmed.statusCode, confirmed.body).toBe(200);
     const events = parseSse(confirmed.body);
-    const toolEnd = events.find((entry) => entry.event === "tool_end")?.data as
-      | { name?: string; ok?: boolean; result?: { pull_request_id?: number; url?: string } }
+    const toolEnd = events.find((entry) => entry.event === "turn.tool.completed")?.data as
+      | { name?: string; ok?: boolean; summary?: string }
       | undefined;
-    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
+    const workflowEvent = events.findLast((entry) => entry.event === "turn.workflow.updated")?.data as
       | {
-          state?: {
+          workflow?: {
             status?: string;
             workflowKind?: string;
             workflowPhase?: string;
@@ -219,29 +219,21 @@ describe("daemon PR creation workflow routes", () => {
           };
         }
       | undefined;
-    const done = events.find((entry) => entry.event === "done")?.data as
-      | { result?: { response?: string; usedLlm?: boolean; suggestions?: string[] } }
+    const done = events.find((entry) => entry.event === "turn.final.completed")?.data as
+      | { finalText?: string }
       | undefined;
     expect(toolEnd).toMatchObject({
       name: "ado_create_pr",
       ok: true,
-      result: {
-        pull_request_id: 42,
-        url: "https://dev.azure.com/demo-org/Agents/_git/mergepilot/pullrequest/42",
-      },
     });
-    expect(workflowEvent?.state).toMatchObject({
+    expect(workflowEvent?.workflow).toMatchObject({
       status: "done",
       workflowKind: "pr",
       workflowPhase: "created",
       currentStep: "Pull request #42 created",
     });
-    expect(workflowEvent?.state?.pendingApproval).toBeUndefined();
-    expect(done?.result?.usedLlm).toBe(false);
-    expect(done?.result?.response).toContain("Pull request #42 is created");
-    expect(done?.result?.suggestions).toEqual(
-      expect.arrayContaining(["Inspect PR insight", "Check policy status"]),
-    );
+    expect(workflowEvent?.workflow?.pendingApproval).toBeUndefined();
+    expect(done?.finalText).toContain("Pull request #42 is created");
     expect(events.some((entry) => entry.event === "approval_required")).toBe(false);
   });
 });

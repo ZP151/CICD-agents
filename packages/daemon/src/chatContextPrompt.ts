@@ -38,18 +38,23 @@ export class ChatContextPromptBuilder {
         args;
       const notes: string[] = [];
       const projectLinkContext = inlineProjectLinkToChatContextProjectLink(inlineProjectLink);
-      const bundle = await buildChatContext({
+      // These reads have no dependency on one another. Starting them together
+      // shortens the pre-planner gap while preserving the same final prompt.
+      const bundlePromise = buildChatContext({
         repoPath,
         message,
         llm,
         projectLink: projectLinkContext,
       });
+      const branchInfoPromise = currentBranchContext(repoPath, inlineProjectLink);
+      const sessionBubblesPromise = sessionId && getBubbles ? getBubbles(sessionId) : undefined;
+      const bundle = await bundlePromise;
       this.refreshContextIndexInBackground(repoPath, llm, projectLinkContext);
       notes.push(describeChatContext(bundle));
       const sources = chatContextSources(bundle);
       let prompt = chatContextToPrompt(bundle) ?? "";
 
-      const branchInfo = await currentBranchContext(repoPath, inlineProjectLink);
+      const branchInfo = await branchInfoPromise;
       if (branchInfo) {
         prompt = prompt ? `${prompt}\n${branchInfo}` : branchInfo;
       }
@@ -65,8 +70,8 @@ export class ChatContextPromptBuilder {
         notes.push(...insightContext.notes);
       }
 
-      if (sessionId && getBubbles) {
-        const sessionBubbles = await getBubbles(sessionId);
+      if (sessionBubblesPromise) {
+        const sessionBubbles = await sessionBubblesPromise;
         const validationPrompt = formatValidationArtifactsForChat(sessionBubbles, message);
         if (validationPrompt) {
           prompt = prompt ? `${prompt}\n${validationPrompt}` : validationPrompt;
@@ -90,6 +95,11 @@ export class ChatContextPromptBuilder {
     llm: LLMClient,
     projectLink?: ChatContextProjectLink,
   ): void {
+    // Test requests use throwaway repositories which are removed immediately
+    // after the response. A detached SQLite refresh can still hold index.db on
+    // Windows at that point; it is not part of the response contract, so keep
+    // integration tests deterministic and leave explicit refresh routes intact.
+    if (process.env.VITEST || process.env.NODE_ENV === "test") return;
     const nowMs = Date.now();
     const last = this.indexRefreshAt.get(repoPath) ?? 0;
     if (nowMs - last < 5 * 60 * 1000) return;

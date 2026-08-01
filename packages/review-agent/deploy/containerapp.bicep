@@ -16,7 +16,7 @@ param location string = resourceGroup().location
 param azureOpenAiEndpoint string
 
 @description('Azure OpenAI chat deployment name')
-param azureOpenAiChatDeployment string = 'mergepilot-chat'
+param azureOpenAiChatDeployment string = 'gpt-5-mini'
 
 @description('Azure DevOps organization')
 param azureDevOpsOrg string

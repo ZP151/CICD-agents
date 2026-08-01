@@ -371,20 +371,19 @@ describe("daemon push workflow routes", () => {
     });
     expect(confirmed.statusCode, confirmed.body).toBe(200);
     const events = parseSse(confirmed.body);
-    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
-      | { state?: { status?: string; workflowKind?: string; workflowPhase?: string; pendingApproval?: unknown } }
+    const workflowEvent = events.findLast((entry) => entry.event === "turn.workflow.updated")?.data as
+      | { workflow?: { status?: string; workflowKind?: string; workflowPhase?: string; pendingApproval?: unknown } }
       | undefined;
-    const done = events.find((entry) => entry.event === "done")?.data as
-      | { result?: { response?: string; suggestions?: string[] } }
+    const done = events.find((entry) => entry.event === "turn.final.completed")?.data as
+      | { finalText?: string }
       | undefined;
-    expect(workflowEvent?.state).toMatchObject({
+    expect(workflowEvent?.workflow).toMatchObject({
       status: "done",
       workflowKind: "git",
       workflowPhase: "synced",
     });
-    expect(workflowEvent?.state?.pendingApproval).toBeUndefined();
-    expect(done?.result?.response).toContain("Branch main has been updated with rebase");
-    expect(done?.result?.suggestions).toContain("Refresh branch status");
+    expect(workflowEvent?.workflow?.pendingApproval).toBeUndefined();
+    expect(done?.finalText).toContain("Branch main has been updated with rebase");
   });
 
   it("creates and completes a structured fetch-remotes approval", async () => {
@@ -461,20 +460,19 @@ describe("daemon push workflow routes", () => {
     });
     expect(confirmed.statusCode, confirmed.body).toBe(200);
     const events = parseSse(confirmed.body);
-    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
-      | { state?: { status?: string; workflowKind?: string; workflowPhase?: string; pendingApproval?: unknown } }
+    const workflowEvent = events.findLast((entry) => entry.event === "turn.workflow.updated")?.data as
+      | { workflow?: { status?: string; workflowKind?: string; workflowPhase?: string; pendingApproval?: unknown } }
       | undefined;
-    const done = events.find((entry) => entry.event === "done")?.data as
-      | { result?: { response?: string; suggestions?: string[] } }
+    const done = events.find((entry) => entry.event === "turn.final.completed")?.data as
+      | { finalText?: string }
       | undefined;
-    expect(workflowEvent?.state).toMatchObject({
+    expect(workflowEvent?.workflow).toMatchObject({
       status: "done",
       workflowKind: "git",
       workflowPhase: "fetched",
     });
-    expect(workflowEvent?.state?.pendingApproval).toBeUndefined();
-    expect(done?.result?.response).toContain("Fetched latest refs from origin");
-    expect(done?.result?.suggestions).toContain("Refresh branch status");
+    expect(workflowEvent?.workflow?.pendingApproval).toBeUndefined();
+    expect(done?.finalText).toContain("Fetched latest refs from origin");
 
     const afterFetch = spawnSync("git", ["branch", "-r"], { cwd: repo, encoding: "utf8" });
     expect(afterFetch.stdout).toContain("origin/feature/remote-only");

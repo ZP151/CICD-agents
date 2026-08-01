@@ -1,5 +1,5 @@
 import type { ChatToolCall } from "./llm.js";
-import { summarizeToolResult, toolResultIndicatesSuccess } from "./chatPlannerControl.js";
+import { publicToolOutput, summarizeToolResult, toolResultIndicatesSuccess } from "./chatPlannerControl.js";
 import type { ToolExecutor } from "./tools/executor.js";
 import type { ChatEvent, ChatPlannerResult } from "./chatPlannerTypes.js";
 
@@ -7,6 +7,7 @@ export interface PlannerToolExecutionResult {
   ok: boolean;
   toolResult: unknown;
   summary: string;
+  output?: string;
 }
 
 export interface ToolFailureTracker {
@@ -43,15 +44,17 @@ export async function* executePlannerToolCall(
 
   ok = toolResultIndicatesSuccess(toolResult, ok);
   const summary = summarizeToolResult(toolResult, ok);
+  const output = publicToolOutput(toolResult, ok);
   yield {
     type: "tool_end",
     name: toolCall.name,
     ok,
     summary,
+    output,
     result: toolResult,
     toolCallId: toolCall.id,
   };
-  return { ok, toolResult, summary };
+  return { ok, toolResult, summary, output };
 }
 
 export function updateToolFailureTracker(

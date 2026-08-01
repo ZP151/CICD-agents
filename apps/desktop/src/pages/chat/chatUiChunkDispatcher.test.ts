@@ -54,6 +54,10 @@ function makeAdapter(): UiChunkAdapterTestDouble {
       adapter.workflowState = typeof update === "function" ? update(adapter.workflowState) : update;
       adapter.calls.push(`workflow:${adapter.workflowState?.status ?? "null"}`);
     }),
+    updateBubbles: vi.fn((updater) => {
+      updater([]);
+      adapter.calls.push("updateBubbles");
+    }),
     showApprovalRequest: vi.fn(() => {
       adapter.calls.push("approval");
     }),
@@ -122,6 +126,25 @@ describe("dispatchChatUiChunk", () => {
       "ui:true",
       "tool:tool-1:result:true",
     ]);
+  });
+
+  it("keeps the source turn correlation on every tool projection", () => {
+    const adapter = makeAdapter();
+
+    dispatchChatUiChunk({
+      type: "tool-input-available",
+      toolCallId: "tool-1",
+      toolName: "git_status",
+      input: {},
+    }, adapter, { turnId: "turn-1", sequence: 7, emittedAt: 1234 });
+
+    expect(adapter.upsertToolBubble).toHaveBeenCalledWith(expect.objectContaining({
+      toolCallId: "tool-1",
+    }), expect.objectContaining({
+      turnId: "turn-1",
+      sequence: 7,
+      timestamp: 1234,
+    }));
   });
 
   it("dispatches canonical approval and workflow chunks without relying on legacy events", () => {

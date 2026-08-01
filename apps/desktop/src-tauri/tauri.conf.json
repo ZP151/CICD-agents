@@ -57,5 +57,11 @@
       }
     }
   },
-  "plugins": {}
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["mergepilot"]
+      }
+    }
+  }
 }

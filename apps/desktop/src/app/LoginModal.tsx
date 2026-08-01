@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import {
   authLoginStream,
   fetchAuthAccounts,
+  fetchAuthStatus,
   type AuthBrowserChoice,
   type AuthCachedAccount,
   type AuthLoginEvent,
@@ -51,6 +53,16 @@ export function LoginModal({
   const [done, setDone] = useState(false);
   const [started, setStarted] = useState(false);
   const cancelRef = useRef<(() => void) | null>(null);
+  const completionHandledRef = useRef(false);
+
+  const complete = useCallback((user: AuthUser) => {
+    if (completionHandledRef.current) return;
+    completionHandledRef.current = true;
+    setDone(true);
+    setStarted(false);
+    setMessage("Sign-in complete.");
+    onDone(user);
+  }, [onDone]);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +77,7 @@ export function LoginModal({
 
   const startLogin = (account?: AuthCachedAccount) => {
     cancelRef.current?.();
+    completionHandledRef.current = false;
     setStarted(true);
     setDone(false);
     setMessage(
@@ -83,12 +96,8 @@ export function LoginModal({
         } else if (event.type === "status") {
           setMessage(event.message);
         } else if (event.type === "done") {
-          setDone(true);
-          setMessage(
-            event.authenticated ? "Sign-in complete." : "Sign-in did not return a verified user.",
-          );
           if (event.authenticated) {
-            onDone({
+            complete({
               authenticated: true,
               oid: event.oid,
               upn: event.upn,
@@ -96,6 +105,8 @@ export function LoginModal({
               avatarDataUrl: event.avatarDataUrl,
             });
           } else {
+            setDone(true);
+            setMessage("Sign-in did not return a verified user.");
             onCancel();
           }
         } else if (event.type === "error") {
@@ -110,6 +121,49 @@ export function LoginModal({
       },
     );
   };
+
+  useEffect(() => {
+    if (!started || done) return;
+
+    let cancelled = false;
+    const checkForCompletedSignIn = async () => {
+      const user = await fetchAuthStatus();
+      if (!cancelled && user.authenticated) complete(user);
+    };
+
+    void checkForCompletedSignIn();
+    const interval = window.setInterval(() => {
+      void checkForCompletedSignIn();
+    }, 750);
+
+    // The deep-link return is the fast path.  Focus/visibility checks are
+    // deliberate fallbacks for development, where an OS can focus the WebView
+    // before the deep-link event listener is registered.
+    let unlisten: (() => void) | undefined;
+    void listen("mergepilot-auth-complete", () => {
+      void checkForCompletedSignIn();
+    }).then((dispose) => {
+      if (cancelled) dispose();
+      else unlisten = dispose;
+    }).catch(() => {
+      // Browser-only development does not expose Tauri's event bridge; the
+      // interval and focus fallbacks above remain active there.
+    });
+    const onWindowFocus = () => void checkForCompletedSignIn();
+    const onVisibilityChange = () => {
+      if (!document.hidden) void checkForCompletedSignIn();
+    };
+    window.addEventListener("focus", onWindowFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onWindowFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      unlisten?.();
+    };
+  }, [complete, done, started]);
 
   useEffect(
     () => () => {
@@ -195,6 +249,7 @@ export function LoginModal({
             {started && !done && (
               <button
                 onClick={() => {
+                  completionHandledRef.current = true;
                   cancelRef.current?.();
                   onCancel();
                 }}

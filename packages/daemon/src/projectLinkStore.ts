@@ -46,11 +46,29 @@ async function withLocalProjectLinkFallback<T>(
   cloudOperation: () => Promise<T>,
   localFallback: () => T | Promise<T>,
 ): Promise<T> {
+  // Project Links are selected on the first interactive screen and therefore
+  // cannot wait indefinitely for Azure Table authentication/container
+  // discovery. Preserve a healthy cloud store as the source of truth, but
+  // fall back to the local cache after a short fixed budget.
+  const localPromise = Promise.resolve(localFallback());
   try {
-    return await cloudOperation();
+    const cloud = await withinCloudProjectLinkBudget(cloudOperation());
+    return cloud ?? await localPromise;
   } catch (err) {
     if (!isCloudProjectLinkStoreUnavailable(err)) throw err;
-    return localFallback();
+    return localPromise;
+  }
+}
+
+async function withinCloudProjectLinkBudget<T>(promise: Promise<T>, budgetMs = 350): Promise<T | undefined> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<undefined>((resolve) => { timer = setTimeout(() => resolve(undefined), budgetMs); }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -71,15 +89,6 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
     if (kvCache?.url !== url) kvCache = { url, kv: new KeyVaultSecrets(url) };
     return kvCache.kv;
   };
-
-  async function resolveAdoPat(projectLinkId: string, bodyPat: string): Promise<string> {
-    const kv = getKvSecrets();
-    if (kv && bodyPat) {
-      await kv.setAdoPat(projectLinkId, bodyPat);
-      return "";
-    }
-    return bodyPat;
-  }
 
   async function injectAdoPat<T extends { id: string; adoPat: string }>(projectLink: T): Promise<T> {
     const kv = getKvSecrets();
@@ -150,19 +159,9 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
   async function createProjectLinkForStore(
     data: ProjectLinkInput,
   ): Promise<Awaited<ReturnType<typeof createProjectLink>>> {
-    const tableStore = getTableStore();
-    if (tableStore) {
-      return withLocalProjectLinkFallback(
-        async () => {
-          const safePat = await resolveAdoPat("__new__", data.adoPat);
-          const projectLink = await tableStore.create({ ...data, adoPat: safePat });
-          const kv = getKvSecrets();
-          if (kv && data.adoPat) await kv.setAdoPat(projectLink.id, data.adoPat);
-          return injectAdoPat(projectLink);
-        },
-        () => createProjectLink(settings.dataDir, data),
-      );
-    }
+    // Create locally first. A remote create generates a second id and cannot
+    // safely be left running after a timeout; explicit migration owns that
+    // durable cloud synchronization path.
     return createProjectLink(settings.dataDir, data);
   }
 

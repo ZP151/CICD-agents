@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CHAT_FINAL_TOOL_NAME, ChatPlanner } from "../src/chatPlanner.js";
+import { publicToolOutput, summarizeToolResult } from "../src/chatPlannerControl.js";
 import {
   createToolExecutor,
   fakeSequenceLlm,
@@ -7,6 +8,36 @@ import {
 } from "./chatPlannerTestDoubles.js";
 
 describe("ChatPlanner agent_final tool finalization", () => {
+  it("keeps a bounded real command response while omitting provider-shaped data", () => {
+    expect(publicToolOutput({ stdout: "## feature\n M src/chat.ts", returncode: 0 }, true)).toBe(
+      "## feature\n M src/chat.ts",
+    );
+    expect(publicToolOutput({ stderr: "fatal: not a git repository", returncode: 128 }, false)).toBe(
+      "fatal: not a git repository",
+    );
+    expect(publicToolOutput({ providerPayload: { hidden: true } }, true)).toBeUndefined();
+  });
+
+  it("redacts connector output again before it becomes public command-card evidence", () => {
+    const output = publicToolOutput({
+      stdout: "endpoint ready\napi_key=local-secret-value-12345\naccess_token: abcdefghijklmnop",
+    }, true);
+
+    expect(output).toContain("endpoint ready");
+    expect(output).toContain("api_key=***REDACTED***");
+    expect(output).toContain("access_token: ***REDACTED***");
+    expect(output).not.toContain("local-secret-value-12345");
+    expect(output).not.toContain("abcdefghijklmnop");
+  });
+
+  it("redacts a failed connector summary before it can reach Timeline metadata", () => {
+    const summary = summarizeToolResult({ error: "request rejected: bearer abcdefghijklmnop" }, false);
+
+    expect(summary).toContain("error:");
+    expect(summary).toContain("***REDACTED***");
+    expect(summary).not.toContain("abcdefghijklmnop");
+  });
+
   it("accepts structured finalization through the internal agent_final tool", async () => {
     const planner = new ChatPlanner(
       fakeToolCallLlm(CHAT_FINAL_TOOL_NAME, {
@@ -360,7 +391,7 @@ describe("ChatPlanner agent_final tool finalization", () => {
     }
   });
 
-  it("defers batched tools until the next planning decision", async () => {
+  it("runs one decided batch of read-only tools in a single public command group", async () => {
     const called: string[] = [];
     const executor = createToolExecutor();
     executor.register({
@@ -420,15 +451,136 @@ describe("ChatPlanner agent_final tool finalization", () => {
       events.push(event);
     }
 
-    expect(called).toEqual(["git_status"]);
+    expect(called).toEqual(["git_status", "git_diff"]);
     expect(events.filter((event) => event.type === "tool_start").map((event) =>
       event.type === "tool_start" ? event.name : "",
-    )).toEqual(["git_status"]);
-    expect(JSON.stringify(calls[1]?.messages)).toContain("intentionally deferred");
+    )).toEqual(["git_status", "git_diff"]);
+    const groupEvents = events.filter((event) => event.type === "tool_group_start" || event.type === "tool_group_end");
+    expect(groupEvents).toEqual([
+      { type: "tool_group_start", groupId: "call_status" },
+      { type: "tool_group_end", groupId: "call_status" },
+    ]);
+    // Public narrative is now an ordinary text stream produced before the
+    // planner call by TurnRuntime; it is never modeled as a pseudo-tool.
+    expect(events.some((event) => event.type === "work_statement")).toBe(false);
+    expect(JSON.stringify(calls[1]?.messages)).not.toContain("intentionally deferred");
     const done = events.find((event) => event.type === "done");
     expect(done?.type).toBe("done");
     if (done?.type === "done") {
-      expect(done.result.toolCallsMade).toEqual([{ name: "git_status", args: {}, ok: true }]);
+      expect(done.result.toolCallsMade).toEqual([
+        { name: "git_status", args: {}, ok: true },
+        { name: "git_diff", args: {}, ok: true },
+      ]);
     }
+  });
+
+  it("sends only read-only tool schemas for an explicit read-only request", async () => {
+    const executor = createToolExecutor();
+    executor.register({
+      name: "git_status",
+      description: "Inspect working tree",
+      parameters: { type: "object", properties: {} },
+      handler: async () => ({ ok: true, stdout: "" }),
+    });
+    executor.register({
+      name: "git_add",
+      description: "Stage files",
+      parameters: { type: "object", properties: {} },
+      handler: async () => ({ ok: true }),
+    });
+    const calls: Array<{ messages?: unknown[]; tools?: unknown }> = [];
+    const planner = new ChatPlanner(
+      fakeSequenceLlm([[
+        {
+          type: "tool_call",
+          toolCalls: [{
+            id: "final",
+            name: CHAT_FINAL_TOOL_NAME,
+            arguments: JSON.stringify({ response: "No changes were made.", risk_level: "low", actions_taken: [], suggestions: [] }),
+          }],
+        },
+        { type: "done", finishReason: "tool_calls" },
+      ]], calls),
+      executor,
+      { maxSteps: 1 },
+    );
+
+    for await (const _event of planner.run("Read-only: inspect the working tree.", [], ".", async () => true)) {
+      // Consume the full Planner turn; the captured tool schemas are the
+      // assertion subject for this latency/safety optimisation.
+    }
+
+    const toolNames = ((calls[0]?.tools as Array<{ function?: { name?: string } }> | undefined) ?? [])
+      .map((tool) => tool.function?.name);
+    expect(toolNames).toContain("git_status");
+    expect(toolNames).toContain(CHAT_FINAL_TOOL_NAME);
+    expect(toolNames).not.toContain("git_add");
+  });
+
+  it("adds a later public narrative only after the next real command batch is selected", async () => {
+    const executor = createToolExecutor();
+    executor.register({
+      name: "git_status",
+      description: "Inspect repository state",
+      parameters: { type: "object", properties: {} },
+      handler: async () => ({ ok: true, stdout: " M src/app.ts" }),
+    });
+    executor.register({
+      name: "git_diff",
+      description: "Inspect the working-tree diff",
+      parameters: { type: "object", properties: {} },
+      handler: async () => ({ ok: true, stdout: "diff --git a/src/app.ts" }),
+    });
+    const planner = new ChatPlanner(
+      fakeSequenceLlm([
+        [
+          { type: "tool_call", toolCalls: [{ id: "status", name: "git_status", arguments: "{}" }] },
+          { type: "done", finishReason: "tool_calls" },
+        ],
+        [
+          { type: "tool_call", toolCalls: [{ id: "diff", name: "git_diff", arguments: "{}" }] },
+          { type: "done", finishReason: "tool_calls" },
+        ],
+        [
+          { type: "delta", delta: "The status shows a changed file, so I will inspect its diff. " },
+          { type: "done", finishReason: "stop" },
+        ],
+        [
+          {
+            type: "tool_call",
+            toolCalls: [{
+              id: "final",
+              name: CHAT_FINAL_TOOL_NAME,
+              arguments: JSON.stringify({ response: "The inspection is complete.", risk_level: "low", actions_taken: ["git_status", "git_diff"], suggestions: [] }),
+            }],
+          },
+          { type: "done", finishReason: "tool_calls" },
+        ],
+      ]),
+      executor,
+      { maxSteps: 3 },
+    );
+    const events = [];
+
+    for await (const event of planner.run(
+      "Inspect the repository",
+      [],
+      ".",
+      async () => true,
+      undefined,
+      [],
+      "I will check the working tree first.",
+      true,
+    )) events.push(event);
+
+    const secondNarrativeIndex = events.findIndex((event) => event.type === "work_statement" && event.blockId === "narrative-1");
+    const firstGroupEnd = events.findIndex((event) => event.type === "tool_group_end" && event.groupId === "status");
+    const secondGroupStart = events.findIndex((event) => event.type === "tool_group_start" && event.groupId === "diff");
+
+    expect(secondNarrativeIndex).toBeGreaterThan(firstGroupEnd);
+    expect(secondNarrativeIndex).toBeLessThan(secondGroupStart);
+    expect(events.filter((event) => event.type === "work_statement")).toEqual([
+      expect.objectContaining({ blockId: "narrative-1", text: "The status shows a changed file, so I will inspect its diff." }),
+    ]);
   });
 });

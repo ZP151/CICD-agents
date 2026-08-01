@@ -50,3 +50,33 @@ export interface ChatMessageEntry {
   sources?: ChatSource[];
   artifacts?: ChatArtifact[];
 }
+
+export interface ChatSessionMessages {
+  bubbles: ChatMessageEntry[];
+  /** Serialized public Timeline events returned with a stored session. */
+  timelineEvents?: Array<{
+    type: string;
+    turnId: string;
+    sequence: number;
+    emittedAt: number;
+    elapsedMs?: number;
+    blockId?: string;
+    groupId?: string;
+    commandId?: string;
+    connector?: { kind: "built-in" | "mcp"; id: string; label: string };
+    message?: string;
+    delta?: string;
+    finalText?: string;
+    command?: string;
+    name?: string;
+    args?: Record<string, unknown>;
+    ok?: boolean;
+    summary?: string;
+    output?: string;
+    durationMs?: number;
+    approvalId?: string;
+    approved?: boolean;
+    approval?: unknown;
+    status?: "completed" | "cancelled" | "failed";
+  }>;
+}

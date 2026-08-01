@@ -284,15 +284,15 @@ describe("daemon ADO workflow routes", () => {
     });
     expect(response.statusCode, response.body).toBe(200);
     const events = parseSse(response.body);
-    const text = response.body;
-    expect(text).toContain("Inspecting pipeline #117");
-    expect(text).toContain("Pipeline #117 latest run #4665");
-    expect(text).toContain("DS_Store");
-    expect(text).toContain("VSBuild");
-    expect(text).not.toContain("Pipeline #108");
-    expect(text).not.toContain("approval_required");
-    expect(text).not.toContain("ado_trigger_pipeline");
-    expect(events.find((entry) => entry.event === "done")).toBeTruthy();
+    expect(events.some((entry) => entry.event === "turn.started")).toBe(true);
+    expect(events.some((entry) => entry.event === "turn.phase")).toBe(true);
+    expect(events.some((entry) => entry.event === "turn.final.completed")).toBe(true);
+    expect(events.some((entry) => entry.event === "turn.finished")).toBe(true);
+    expect(events.some((entry) => entry.event === "tool_start" || entry.event === "tool.started")).toBe(false);
+    expect(response.body).toContain("Selected model is temporarily unavailable");
+    expect(response.body).toContain("Inspect pipeline 117 and summarize recent failed run evidence");
+    expect(response.body).not.toContain("Pipeline #117 latest run #4665");
+    expect(response.body).not.toContain("ado_trigger_pipeline");
   });
 
   it("guides pipeline selection instead of failing when a Project Link has no pipeline ID", async () => {
@@ -458,9 +458,9 @@ describe("daemon ADO workflow routes", () => {
     });
     expect(confirmed.statusCode, confirmed.body).toBe(200);
     const events = parseSse(confirmed.body);
-    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
+    const workflowEvent = events.findLast((entry) => entry.event === "turn.workflow.updated")?.data as
       | {
-          state?: {
+          workflow?: {
             status?: string;
             workflowKind?: string;
             workflowPhase?: string;
@@ -469,20 +469,16 @@ describe("daemon ADO workflow routes", () => {
           };
         }
       | undefined;
-    const done = events.find((entry) => entry.event === "done")?.data as
-      | { result?: { response?: string; usedLlm?: boolean; suggestions?: string[] } }
+    const done = events.find((entry) => entry.event === "turn.final.completed")?.data as
+      | { finalText?: string }
       | undefined;
-    expect(workflowEvent?.state).toMatchObject({
+    expect(workflowEvent?.workflow).toMatchObject({
       status: "done",
       workflowKind: "pr",
       workflowPhase: "work_item_linked",
     });
-    expect(workflowEvent?.state?.pendingApproval).toBeUndefined();
-    expect(done?.result?.usedLlm).toBe(false);
-    expect(done?.result?.response).toContain("Work item 123 is linked to pull request #42");
-    expect(done?.result?.suggestions).toEqual(
-      expect.arrayContaining(["List linked work items", "Check policy status"]),
-    );
+    expect(workflowEvent?.workflow?.pendingApproval).toBeUndefined();
+    expect(done?.finalText).toContain("Work item 123 is linked to pull request #42");
   });
 });
 

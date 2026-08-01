@@ -29,9 +29,11 @@ export interface AdditionalModelConfig {
   azureEndpoint: string;
   azureApiKey: string;
   azureDeployment: string;
+  azureNarrativeDeployment: string;
   azureApiVersion: string;
   openaiApiKey: string;
   openaiModel: string;
+  openaiNarrativeModel: string;
 }
 
 export const DEFAULTS: AppSettings = {
@@ -62,9 +64,11 @@ export function createEmptyAdditionalModel(): AdditionalModelConfig {
     azureEndpoint: "",
     azureApiKey: "",
     azureDeployment: "",
+    azureNarrativeDeployment: "",
     azureApiVersion: "",
     openaiApiKey: "",
     openaiModel: "",
+    openaiNarrativeModel: "",
   };
 }
 
@@ -83,9 +87,11 @@ export function normalizeAdditionalModels(value: unknown): AdditionalModelConfig
       azureEndpoint: cleanString(raw.azureEndpoint),
       azureApiKey: cleanString(raw.azureApiKey),
       azureDeployment: cleanString(raw.azureDeployment),
+      azureNarrativeDeployment: cleanString(raw.azureNarrativeDeployment),
       azureApiVersion: cleanString(raw.azureApiVersion),
       openaiApiKey: cleanString(raw.openaiApiKey),
       openaiModel: cleanString(raw.openaiModel),
+      openaiNarrativeModel: cleanString(raw.openaiNarrativeModel),
     };
   });
 }
@@ -123,12 +129,14 @@ export function llmConfigFromModel(model: AdditionalModelConfig): LlmProviderCon
         llmProvider: "openai",
         openaiApiKey: model.openaiApiKey.trim(),
         openaiModel: model.openaiModel.trim(),
+        openaiNarrativeModel: model.openaiNarrativeModel.trim(),
       }
     : {
         llmProvider: "azure",
         azureEndpoint: model.azureEndpoint.trim(),
         azureApiKey: model.azureApiKey.trim(),
         azureDeployment: model.azureDeployment.trim(),
+        azureNarrativeDeployment: model.azureNarrativeDeployment.trim(),
         azureApiVersion: model.azureApiVersion.trim(),
       };
 }

@@ -12,15 +12,12 @@ import type {
   ProjectLink,
   ProjectLinkInput,
 } from "../../api.js";
-import { workspaceActionFromSuggestion } from "./workspaceActionSuggestions.js";
-import type { WorkspaceAction } from "./workflowTaskState.js";
 
 interface UseChatSuggestionRuntimeArgs {
   activeProjectLinkId: string | null;
   busy: boolean;
   focusComposer: () => void;
   queuedSuggestion: SuggestionReply | null;
-  runWorkspaceAction: (action: WorkspaceAction) => void;
   setInput: Dispatch<SetStateAction<string>>;
   setQueuedSuggestion: Dispatch<SetStateAction<SuggestionReply | null>>;
   setStatusText: Dispatch<SetStateAction<string | null>>;
@@ -34,12 +31,20 @@ export interface ChatSuggestionRuntime {
   queuePrompt: (prompt: string) => void;
 }
 
+/**
+ * Suggestion chips express an intent, rather than granting permission to run
+ * a workflow. Project Link edits are the sole exception: they modify only the
+ * explicitly selected local configuration and have their own confirmation UI.
+ */
+export function suggestionReplyExecutionMode(suggestion: SuggestionReply): "prompt" | "project_link_update" {
+  return suggestion.action.kind === "project_link_update" ? "project_link_update" : "prompt";
+}
+
 export function useChatSuggestionRuntime({
   activeProjectLinkId,
   busy,
   focusComposer,
   queuedSuggestion,
-  runWorkspaceAction,
   setInput,
   setQueuedSuggestion,
   setStatusText,
@@ -57,7 +62,7 @@ export function useChatSuggestionRuntime({
       setStatusText(`Queued follow-up: ${suggestion.label}`);
       return;
     }
-    if (suggestion.action.kind === "project_link_update") {
+    if (suggestionReplyExecutionMode(suggestion) === "project_link_update") {
       void saveProjectLinkUpdate({
         activeProjectLinkId,
         suggestion,
@@ -66,20 +71,15 @@ export function useChatSuggestionRuntime({
       });
       return;
     }
-    const action = workspaceActionFromSuggestion(suggestion);
-    if (action) {
-      void runWorkspaceAction(action);
-      return;
-    }
     queuePrompt(suggestion.message);
-  }, [activeProjectLinkId, busy, queuePrompt, runWorkspaceAction, setStatusText, updateProjectLink, workflowStatus]);
+  }, [activeProjectLinkId, busy, queuePrompt, setStatusText, updateProjectLink, workflowStatus]);
 
   useEffect(() => {
     if (!queuedSuggestion) return;
     if (shouldQueueSuggestionReply({ busy, workflowStatus })) return;
     const next = queuedSuggestion;
     setQueuedSuggestion(null);
-    if (next.action.kind === "project_link_update") {
+    if (suggestionReplyExecutionMode(next) === "project_link_update") {
       void saveProjectLinkUpdate({
         activeProjectLinkId,
         suggestion: next,
@@ -88,14 +88,9 @@ export function useChatSuggestionRuntime({
       });
       return;
     }
-    const action = workspaceActionFromSuggestion(next);
-    if (action) {
-      void runWorkspaceAction(action);
-      return;
-    }
     queuePrompt(next.message);
     setStatusText(null);
-  }, [activeProjectLinkId, busy, queuePrompt, queuedSuggestion, runWorkspaceAction, setStatusText, updateProjectLink, workflowStatus]);
+  }, [activeProjectLinkId, busy, queuePrompt, queuedSuggestion, setStatusText, updateProjectLink, workflowStatus]);
 
   const cancelQueuedSuggestion = useCallback(() => {
     setQueuedSuggestion(null);

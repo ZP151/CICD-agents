@@ -29,6 +29,7 @@ export interface CosmosStoredSession {
   projectLinkId?: string;
   messages: unknown[];
   bubbles: unknown[];
+  timelineEvents?: unknown[];
   approvalProposal?: unknown;
   /** @deprecated Use approvalProposal. */
   pendingAction?: unknown;

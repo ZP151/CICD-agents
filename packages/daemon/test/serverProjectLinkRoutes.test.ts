@@ -236,9 +236,63 @@ describe("daemon Project Link routes", () => {
     expect(listed.json()).toEqual(expect.arrayContaining([expect.objectContaining({ id: local.id })]));
   });
 
+  it("creates a local Project Link without waiting for configured cloud storage", async () => {
+    process.env.AZURE_STORAGE_ACCOUNT = "demoaccount";
+    resetSettingsForTests();
+    const cloudCreate = vi.spyOn(AzureTableProjectLinkStore.prototype, "create").mockImplementation(
+      () => new Promise(() => undefined),
+    );
+    app = await buildApp();
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/project-links",
+      payload: projectLinkPayload(process.cwd()),
+    });
+
+    expect(created.statusCode, created.body).toBe(201);
+    expect(created.json()).toMatchObject({ name: "Official Project Link" });
+    expect(cloudCreate).not.toHaveBeenCalled();
+  });
+
+  it("uses cached Project Links when a cloud list never settles", async () => {
+    const local = createProjectLink(tmpDataDir, {
+      name: "Cached Project Link",
+      repoPath: process.cwd(),
+      defaultBranch: "main",
+      targetBranch: "main",
+      adoOrgUrl: "",
+      adoProject: "",
+      adoRepoName: "",
+      adoPat: "",
+      adoPipelineId: "",
+      adoPipelineName: "",
+      adoMcpEnabled: false,
+      adoMcpCommand: "",
+      adoMcpAuthentication: "",
+      adoMcpDomains: "repositories,pipelines,work-items",
+      projectTemplate: "",
+      buildCommand: "",
+      testCommand: "",
+    });
+    process.env.AZURE_STORAGE_ACCOUNT = "demoaccount";
+    resetSettingsForTests();
+    vi.spyOn(AzureTableProjectLinkStore.prototype, "list").mockImplementation(
+      () => new Promise(() => undefined),
+    );
+    app = await buildApp();
+
+    const startedAt = Date.now();
+    const listed = await app.inject({ method: "GET", url: "/project-links" });
+
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+    expect(listed.statusCode, listed.body).toBe(200);
+    expect(listed.json()).toEqual(expect.arrayContaining([expect.objectContaining({ id: local.id })]));
+  });
+
   it("does not require Key Vault PAT lookup when local env secrets are selected", async () => {
     process.env.AZURE_STORAGE_ACCOUNT = "demoaccount";
-    process.env.AZURE_KEYVAULT_URL = "https://devagentkv001.vault.azure.net/";
+    process.env.AZURE_KEYVAULT_URL = "https://example.vault.azure.net/";
     process.env.MERGEPILOT_SECRET_SOURCE = "local_env";
     resetSettingsForTests();
     vi.spyOn(AzureTableProjectLinkStore.prototype, "list").mockResolvedValue([

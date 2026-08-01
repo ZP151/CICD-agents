@@ -172,10 +172,21 @@ export interface ChatWorkflowState {
 
 export type ChatEvent =
   | { type: "assistant_delta"; delta: string }
+  | { type: "work_statement"; blockId: string; text: string; replace?: boolean }
+  | {
+      type: "tool_group_start";
+      groupId: string;
+      connector?: { kind: "built-in" | "mcp"; id: string; label: string };
+    }
+  | { type: "tool_group_end"; groupId: string }
+  | { type: "final_delta"; delta: string }
+  | { type: "turn_phase"; phase: "starting" | "context" | "planning" | "executing" | "adjusting"; label: string }
+  | { type: "turn_plan"; title: string; items: string[] }
+  | { type: "turn_step"; stepId: string; status: "started" | "completed" | "blocked"; label: string }
   | { type: "progress"; message: string }
   | { type: "tool_start"; name: string; args: Record<string, unknown>; toolCallId?: string }
   | { type: "tool_output_delta"; name: string; stream: "stdout" | "stderr"; delta: string; toolCallId?: string }
-  | { type: "tool_end"; name: string; ok: boolean; summary: string; result: unknown; toolCallId?: string }
+  | { type: "tool_end"; name: string; ok: boolean; summary: string; output?: string; result: unknown; toolCallId?: string }
   | { type: "confirm_required"; riskLevel: string; plan: string }
   | { type: "workflow_state"; state: ChatWorkflowState }
   | { type: "approval_required"; approval: ChatApprovalRequest }

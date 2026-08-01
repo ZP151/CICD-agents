@@ -7,6 +7,7 @@ import {
 import { resetUserCache, setCachedUser } from "../src/store/azureAuthSessionCache.js";
 
 const acquireTokenSilent = vi.fn();
+const originalAzureClientId = process.env.MERGEPILOT_AZURE_CLIENT_ID;
 
 vi.mock("../src/store/azureAuthMsal.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/store/azureAuthMsal.js")>();
@@ -29,6 +30,7 @@ vi.mock("../src/store/azureAuthMsal.js", async (importOriginal) => {
 
 describe("azureAuthCredential", () => {
   beforeEach(() => {
+    process.env.MERGEPILOT_AZURE_CLIENT_ID = "client-test";
     resetSettingsForTests();
     resetUserCache();
     acquireTokenSilent.mockReset();
@@ -36,6 +38,11 @@ describe("azureAuthCredential", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    if (originalAzureClientId === undefined) {
+      delete process.env.MERGEPILOT_AZURE_CLIENT_ID;
+    } else {
+      process.env.MERGEPILOT_AZURE_CLIENT_ID = originalAzureClientId;
+    }
     resetSettingsForTests();
     resetUserCache();
   });

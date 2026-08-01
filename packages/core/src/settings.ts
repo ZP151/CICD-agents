@@ -3,18 +3,29 @@ import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 
-export const PROJECT_CHAT_DEPLOYMENT = "mergepilot-chat";
+/**
+ * A fresh desktop installation targets the GPT-5 mini deployment name, but
+ * contains no endpoint or credential. Users can replace this with their own
+ * Azure deployment in their local MergePilot config.
+ */
+export const PROJECT_CHAT_DEPLOYMENT = "gpt-5-mini";
 export const PROJECT_EMBEDDING_DEPLOYMENT = "mergepilot-embeddings";
+/** Azure Chat Completions data-plane preview that supports GPT-5 tool use. */
+export const GPT5_AZURE_CHAT_API_VERSION = "2025-04-01-preview";
 
 const SettingsSchema = z.object({
   llmProvider: z.enum(["azure", "openai"]).default("azure"),
   azureOpenAiEndpoint: z.string().default(""),
-  azureOpenAiApiVersion: z.string().default("2024-08-01-preview"),
+  azureOpenAiApiVersion: z.string().default(GPT5_AZURE_CHAT_API_VERSION),
   azureOpenAiApiKey: z.string().default(""),
   azureOpenAiChatDeployment: z.string().default(PROJECT_CHAT_DEPLOYMENT),
+  /** Optional low-latency deployment used only for public action narration. */
+  azureOpenAiNarrativeDeployment: z.string().default(""),
   azureOpenAiEmbeddingDeployment: z.string().default(PROJECT_EMBEDDING_DEPLOYMENT),
   openAiApiKey: z.string().default(""),
   openAiModel: z.string().default(""),
+  /** Optional low-latency model used only for public action narration. */
+  openAiNarrativeModel: z.string().default(""),
   openAiEmbeddingModel: z.string().default("text-embedding-3-small"),
   secretSource: z.enum(["key_vault", "local_env"]).default("local_env"),
   azureDevOpsOrg: z.string().default(""),
@@ -58,9 +69,11 @@ function readEnv(): Record<string, string | undefined> {
     azureOpenAiApiVersion: process.env.AZURE_OPENAI_API_VERSION,
     azureOpenAiApiKey: process.env.AZURE_OPENAI_API_KEY,
     azureOpenAiChatDeployment: process.env.AZURE_OPENAI_CHAT_DEPLOYMENT,
+    azureOpenAiNarrativeDeployment: process.env.AZURE_OPENAI_NARRATIVE_DEPLOYMENT,
     azureOpenAiEmbeddingDeployment: process.env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
     openAiApiKey: process.env.OPENAI_API_KEY,
     openAiModel: process.env.OPENAI_MODEL,
+    openAiNarrativeModel: process.env.OPENAI_NARRATIVE_MODEL,
     openAiEmbeddingModel: process.env.OPENAI_EMBEDDING_MODEL,
     secretSource: process.env.MERGEPILOT_SECRET_SOURCE,
     azureDevOpsOrg: process.env.AZURE_DEVOPS_ORG,

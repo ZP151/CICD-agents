@@ -392,10 +392,12 @@ describe("daemon validation artifact workflow routes", () => {
     expect(body.summary).toContain("Build command: npm run build");
     expect(body.summary).not.toContain("# Test project");
     expect(body.summary).toContain("Test command: npm test");
-    expect(body.summary).toContain("Project structure signals:");
-    expect(body.summary).toContain("README.md");
-    expect(body.summary).toContain("src/server.ts");
-    expect(body.summary).toContain("Inspectable sources:");
+    expect(body.summary).toContain("Repository context is ready for focused follow-up questions.");
+    expect(body.summary).toContain("project structure signal");
+    expect(body.summary).toContain("relevant source reference");
+    expect(body.summary).toContain("source references available for follow-up.");
+    expect(body.summary).not.toContain("README.md");
+    expect(body.summary).not.toContain("src/server.ts");
     expect(body.tools).toHaveLength(1);
     expect(body.tools[0]).toMatchObject({
       name: "repository_context",

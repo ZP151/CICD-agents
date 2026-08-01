@@ -14,12 +14,13 @@ export async function* collectPlannerStepStream(
   messages: ChatCompletionMessageParam[],
   tools: ChatCompletionTool[],
   initialEmittedVisibleResponse = "",
+  reasoningEffort: "low" | "medium" = "medium",
 ): AsyncGenerator<ChatEvent, PlannerStepStreamResult> {
   let accumulated = "";
   let emittedVisibleResponse = initialEmittedVisibleResponse;
   let toolFromStream: ChatToolCall[] = [];
 
-  for await (const ev of llm.chatStream({ messages, tools, maxTokens: 2000 })) {
+  for await (const ev of llm.chatStream({ messages, tools, maxTokens: 2000, reasoningEffort })) {
     if (ev.type === "delta" && ev.delta) {
       accumulated += ev.delta;
       const visibleResponse = dedupeVisibleResponse(
@@ -49,7 +50,11 @@ export async function* collectPlannerStepStream(
     }
   }
 
-  return { accumulated, emittedVisibleResponse, toolFromStream };
+  return {
+    accumulated,
+    emittedVisibleResponse,
+    toolFromStream,
+  };
 }
 
 function dedupeVisibleResponse(visibleResponse: string, emittedVisibleResponse: string): string {

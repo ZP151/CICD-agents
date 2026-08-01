@@ -29,6 +29,36 @@ afterEach(async () => {
 });
 
 describe("daemon chat history routes", () => {
+  it("returns public Timeline records with stored bubbles for exact Transcript restoration", async () => {
+    app = await buildApp();
+    const storePath = path.join(getSettings().dataDir, "chat-history.json");
+    fs.mkdirSync(path.dirname(storePath), { recursive: true });
+    fs.writeFileSync(storePath, JSON.stringify({
+      "chat-timeline": {
+        id: "chat-timeline",
+        createdAt: 1,
+        updatedAt: 2,
+        repoPath: process.cwd(),
+        messages: [],
+        bubbles: [{ role: "user", content: "Inspect the branch", timestamp: 1 }],
+        timelineEvents: [{
+          type: "turn.started",
+          turnId: "turn-1",
+          sequence: 0,
+          emittedAt: 1_000,
+        }],
+      },
+    }), "utf8");
+
+    const response = await app.inject({ method: "GET", url: "/chat/chat-timeline/messages" });
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toMatchObject({
+      bubbles: [{ role: "user", content: "Inspect the branch" }],
+      timelineEvents: [{ type: "turn.started", turnId: "turn-1", sequence: 0 }],
+    });
+  });
+
   it("lists pinned chat history before regular sessions", async () => {
     app = await buildApp();
     const storePath = path.join(getSettings().dataDir, "chat-history.json");

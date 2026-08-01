@@ -32,7 +32,7 @@ export function deriveComposerStateNotice(context: ComposerStateNoticeContext): 
   if (context.busy || workflowBusy) {
     return {
       tone: "busy",
-      label: "Working",
+      label: "Thinking",
       detail: context.statusText ?? "You can queue a follow-up while the current action finishes.",
     };
   }
@@ -57,8 +57,8 @@ export function deriveComposerInputState(context: ComposerInputStateContext): Co
       inputDisabled: true,
       sendDisabled: true,
       controlsDisabled: true,
-      placeholder: "MergePilot is working...",
-      inputTitle: "MergePilot is working.",
+      placeholder: "MergePilot is thinking...",
+      inputTitle: "MergePilot is thinking.",
       sendTitle: "Stop or wait for the current response before sending another request.",
     };
   }

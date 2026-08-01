@@ -49,9 +49,13 @@ describe("azureAuthSession", () => {
   const originalSecretSource = process.env.MERGEPILOT_SECRET_SOURCE;
   const originalAzureKeyVaultUrl = process.env.AZURE_KEYVAULT_URL;
   const originalAzureOpenAiApiKey = process.env.AZURE_OPENAI_API_KEY;
+  const originalAzureTenantId = process.env.MERGEPILOT_AZURE_TENANT_ID;
+  const originalAzureClientId = process.env.MERGEPILOT_AZURE_CLIENT_ID;
   const roots: string[] = [];
 
   beforeEach(() => {
+    process.env.MERGEPILOT_AZURE_TENANT_ID = "tenant-test";
+    process.env.MERGEPILOT_AZURE_CLIENT_ID = "client-test";
     resetUserCache();
     resetSettingsForTests();
     acquireTokenSilent.mockReset();
@@ -96,6 +100,16 @@ describe("azureAuthSession", () => {
       delete process.env.AZURE_OPENAI_API_KEY;
     } else {
       process.env.AZURE_OPENAI_API_KEY = originalAzureOpenAiApiKey;
+    }
+    if (originalAzureTenantId === undefined) {
+      delete process.env.MERGEPILOT_AZURE_TENANT_ID;
+    } else {
+      process.env.MERGEPILOT_AZURE_TENANT_ID = originalAzureTenantId;
+    }
+    if (originalAzureClientId === undefined) {
+      delete process.env.MERGEPILOT_AZURE_CLIENT_ID;
+    } else {
+      process.env.MERGEPILOT_AZURE_CLIENT_ID = originalAzureClientId;
     }
     for (const root of roots.splice(0)) {
       fs.rmSync(root, { recursive: true, force: true });
@@ -196,9 +210,41 @@ describe("azureAuthSession", () => {
     }));
   });
 
+  it("returns the signed-in user without waiting for the optional Graph avatar request", async () => {
+    acquireTokenInteractive.mockResolvedValue({
+      accessToken: jwt({
+        oid: "user-1",
+        preferred_username: "user@example.test",
+        name: "Example User",
+      }),
+      idToken: jwt({
+        oid: "user-1",
+        preferred_username: "user@example.test",
+        name: "Example User",
+      }),
+      account: {
+        homeAccountId: "home-1",
+        tenantId: "tenant-1",
+        username: "user@example.test",
+      },
+    });
+    global.fetch = vi.fn(() => new Promise<Response>(() => {}));
+
+    const outcome = await Promise.race([
+      loginWithBrowser("default"),
+      new Promise<"timed-out">((resolve) => setTimeout(() => resolve("timed-out"), 40)),
+    ]);
+
+    expect(outcome).not.toBe("timed-out");
+    expect(outcome).toMatchObject({
+      oid: "user-1",
+      username: "user@example.test",
+    });
+  });
+
   it("keeps basic Microsoft sign-in identity-only even when Key Vault secret mode is configured", async () => {
     process.env.MERGEPILOT_SECRET_SOURCE = "key_vault";
-    process.env.AZURE_KEYVAULT_URL = "https://devagentkv001.vault.azure.net/";
+    process.env.AZURE_KEYVAULT_URL = "https://example.vault.azure.net/";
     process.env.AZURE_OPENAI_API_KEY = "kv://secret/mergepilot-aoai-key";
     acquireTokenInteractive.mockResolvedValue({
       accessToken: jwt({

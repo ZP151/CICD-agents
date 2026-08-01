@@ -46,5 +46,10 @@ describe("reduceChatEvent", () => {
       { uiChunkStreamAvailable: true },
       { type: "done" } as ChatEventPayload,
     ).nextState.uiChunkStreamAvailable).toBe(false);
+
+    expect(reduceChatEvent(
+      { uiChunkStreamAvailable: true },
+      { type: "turn.completed" } as ChatEventPayload,
+    ).nextState.uiChunkStreamAvailable).toBe(false);
   });
 });

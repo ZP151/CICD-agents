@@ -11,6 +11,8 @@ dist/
 .venv/
 venv/
 .env
+/.mergepilot/
+/config.toml
 *.db
 *.db-journal
 *.log

@@ -7,9 +7,7 @@ import {
   chatHistoryEntryFromSession,
   listStoredSessionsForActivity,
   loadSession,
-  loadStoreSync,
   saveSession as saveStoredSession,
-  saveStoreSync,
   storedSessionProjectLinkId,
   type ChatHistoryEntry,
   type StoredBubble,
@@ -39,11 +37,9 @@ export async function saveSession(session: StoredSession): Promise<void> {
 }
 
 export function saveNewSessionWithLocalFallback(session: StoredSession): void {
-  saveSession(session).catch(() => {
-    const store = loadStoreSync();
-    store[session.id] = session;
-    saveStoreSync(store);
-  });
+  // saveSession writes the local record before scheduling its cloud mirror.
+  // Keep this detached because session creation is on the immediate SSE path.
+  void saveSession(session);
 }
 
 export async function getHistory(sessionId: string, limit = 40): Promise<ChatMessage[]> {

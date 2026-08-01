@@ -2,6 +2,8 @@ import {
   type ChatEvent,
   type PendingToolAction,
   type ToolExecutor,
+  publicToolOutput,
+  summarizeToolResult,
   toolResultIndicatesSuccess,
 } from "@mergepilot/core";
 
@@ -9,6 +11,7 @@ export interface ConfirmedToolExecutionResult {
   ok: boolean;
   result: unknown;
   summary: string;
+  output?: string;
 }
 
 export interface ChatCheckpointApplyMetadata {
@@ -23,6 +26,12 @@ export async function* streamConfirmedToolExecution(args: {
   toolCallId: string;
 }): AsyncGenerator<ChatEvent, ConfirmedToolExecutionResult> {
   const { actionExecutor, pending, toolCallId } = args;
+  // The approved action and its model-authored rationale already exist in
+  // the active Turn. Do not insert a canned "I'll …" sentence at execution
+  // time: it would masquerade as fresh agent reasoning and break the
+  // transcript's evidence-first ordering.
+  yield { type: "tool_group_start", groupId: toolCallId };
+  yield { type: "turn_step", stepId: toolCallId, status: "started", label: pending.description || pending.tool };
   yield { type: "tool_start", name: pending.tool, args: pending.args, toolCallId };
 
   let toolResult: unknown;
@@ -47,9 +56,19 @@ export async function* streamConfirmedToolExecution(args: {
   }
 
   ok = toolResultIndicatesSuccess(toolResult, ok);
-  const summary = truncateStr(JSON.stringify(toolResult) ?? "", 300);
-  yield { type: "tool_end", name: pending.tool, ok, summary, result: toolResult, toolCallId };
-  return { ok, result: toolResult, summary };
+  const output = publicToolOutput(toolResult, ok);
+  // This summary crosses the SSE and persisted-compatibility boundaries.
+  // Never derive it from raw JSON, which may include connector credentials.
+  const summary = summarizeToolResult(toolResult, ok);
+  yield { type: "tool_end", name: pending.tool, ok, summary, output, result: toolResult, toolCallId };
+  yield {
+    type: "turn_step",
+    stepId: toolCallId,
+    status: ok ? "completed" : "blocked",
+    label: ok ? (pending.description || pending.tool) : `Could not complete: ${pending.description || pending.tool}`,
+  };
+  yield { type: "tool_group_end", groupId: toolCallId };
+  return { ok, result: toolResult, summary, output };
 }
 
 export function checkpointMetadataFromToolResult(
@@ -86,8 +105,4 @@ export function checkpointApplyMetadataFromToolResult(
       ? restoredFiles.filter((file): file is string => typeof file === "string")
       : undefined,
   };
-}
-
-function truncateStr(s: string, max: number): string {
-  return s.length <= max ? s : `${s.slice(0, max - 3)}...`;
 }

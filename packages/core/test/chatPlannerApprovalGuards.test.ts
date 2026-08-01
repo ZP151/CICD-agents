@@ -87,6 +87,26 @@ describe("ChatPlanner approval guards", () => {
     expect(result.response).toContain("without proposing staging");
   });
 
+  it("does not surface an approval for a write tool in an explicit read-only turn", async () => {
+    const tool: Tool = {
+      name: "git_merge",
+      description: "Merge branch",
+      parameters: { type: "object", properties: {} },
+      handler: async () => ({ ok: true }),
+    };
+
+    const { called, result, events } = await runPlannerWithToolCall(
+      tool,
+      { ref: "feature/example" },
+      "Only inspect the current Project Link repository branch, working tree, and recent commits. Do not modify any files.",
+    );
+
+    expect(called).toBe(false);
+    expect(events.some((event) => event.type === "tool_start")).toBe(false);
+    expect(result.approvalProposal).toBeUndefined();
+    expect(result.response).toContain("explicitly read-only");
+  });
+
   it.each([
     ["git_fetch", { remote: "origin", prune: true }, "medium"],
     ["git_commit", { message: "feat: test approval" }, "medium"],
@@ -104,6 +124,7 @@ describe("ChatPlanner approval guards", () => {
 
     expect(called).toBe(false);
     expect(events.some((event) => event.type === "tool_start")).toBe(false);
+    expect(events.some((event) => event.type === "work_statement")).toBe(false);
     expect(result.riskLevel).toBe(riskLevel);
     expect(result.approvalProposal).toEqual({
       tool: name,

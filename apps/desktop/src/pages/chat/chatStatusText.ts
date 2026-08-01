@@ -5,7 +5,7 @@ const HIDDEN_PROGRESS_MESSAGES = new Set([
 
 export function visibleProgressStatusText(message: string | null | undefined): string | null {
   const trimmed = message?.trim();
-  if (!trimmed) return "Working";
+  if (!trimmed) return "Thinking";
   if (HIDDEN_PROGRESS_MESSAGES.has(trimmed)) return null;
   return trimmed;
 }

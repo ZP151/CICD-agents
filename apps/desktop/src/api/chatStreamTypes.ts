@@ -4,6 +4,31 @@ import type { ChatApprovalPayload, ChatWorkflowState } from "./chatWorkflowTypes
 export type ChatEventType =
   | "session"
   | "session.started"
+  | "turn.started"
+  | "turn.narrative.delta"
+  | "turn.waiting"
+  | "turn.completed"
+  | "turn.cancelled"
+  | "turn.failed"
+  | "turn.phase"
+  | "turn.plan"
+  | "turn.step"
+  | "turn.work.statement"
+  | "turn.tool_group.started"
+  | "turn.tool_group.completed"
+  | "turn.tool.started"
+  | "turn.tool.completed"
+  | "turn.approval.requested"
+  | "turn.approval.resolved"
+  | "turn.workflow.updated"
+  | "turn.execution.completed"
+  | "turn.final.delta"
+  | "turn.final.completed"
+  | "turn.finished"
+  | "work_statement"
+  | "tool_group_start"
+  | "tool_group_end"
+  | "final_delta"
   | "assistant_delta"
   | "text.delta"
   | "progress"
@@ -52,6 +77,30 @@ export interface ChatEventPayload {
   type: ChatEventType;
   uiChunk?: ChatUiChunk;
   sessionId?: string;
+  turnId?: string;
+  /** Matches the locally-created optimistic Turn when the server starts it. */
+  clientTurnId?: string;
+  sequence?: number;
+  emittedAt?: number;
+  elapsedMs?: number;
+  status?: "completed" | "cancelled" | "failed";
+  phase?: "working" | "final" | "starting" | "context" | "planning" | "executing" | "adjusting";
+  stepId?: string;
+  stepStatus?: "started" | "completed" | "blocked";
+  planItems?: string[];
+  /** Canonical transcript identity. These are intentionally separate from legacy tool ids. */
+  blockId?: string;
+  groupId?: string;
+  commandId?: string;
+  command?: string;
+  durationMs?: number;
+  replace?: boolean;
+  finalText?: string;
+  connector?: {
+    kind: "built-in" | "mcp";
+    id: string;
+    label: string;
+  };
   legacyType?: string;
   delta?: string;
   toolCallId?: string;
@@ -60,10 +109,12 @@ export interface ChatEventPayload {
   stream?: "stdout" | "stderr";
   ok?: boolean;
   summary?: string;
+  output?: string;
   toolResult?: unknown;
   riskLevel?: string;
   plan?: string;
   approval?: ChatApprovalPayload;
+  workflow?: ChatWorkflowState;
   approvalId?: string;
   approved?: boolean;
   state?: ChatWorkflowState;

@@ -18,6 +18,8 @@ export interface ChatRuntimeSetupOptions {
   inlineProjectLink?: InlineProjectLink;
   projectLinkId?: string;
   chatMessage?: string;
+  /** A Turn owns one client so its public narrative and tool loop share transport state. */
+  llm?: LLMClient;
 }
 
 export interface ChatRuntimeSetup {
@@ -28,7 +30,7 @@ export interface ChatRuntimeSetup {
 }
 
 export async function createChatRuntimeSetup(options: ChatRuntimeSetupOptions): Promise<ChatRuntimeSetup> {
-  const llm = new LLMClient(buildEffectiveLlmSettings(options.llmConfig));
+  const llm = options.llm ?? new LLMClient(buildEffectiveLlmSettings(options.llmConfig));
   const toolRuntime = await createChatToolExecutors(buildToolContext(options), llm);
 
   return {

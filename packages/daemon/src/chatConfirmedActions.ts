@@ -8,6 +8,7 @@ import {
   checkpointMetadataFromToolResult,
   streamConfirmedToolExecution,
 } from "./chatToolExecution.js";
+import { storedPublicToolResult } from "./chatPublicToolEvidence.js";
 
 export interface ConfirmedActionPersistenceAdapters {
   appendBubble: (sessionId: string, bubble: StoredBubble) => Promise<void>;
@@ -40,7 +41,15 @@ export async function* streamAndPersistConfirmedAction(args: {
     toolArgs: pending.args,
     toolOk: execution.ok,
     toolSummary: execution.summary,
-    toolResult: execution.result,
+    // Approved actions must obey the same persistence boundary as autonomous
+    // planner calls. The raw result remains in memory for the immediate
+    // workflow decision below, but never becomes restorable chat history.
+    toolResult: storedPublicToolResult(
+      pending.tool,
+      execution.ok,
+      execution.summary,
+      execution.output,
+    ),
     ...checkpointMetadata,
   });
 

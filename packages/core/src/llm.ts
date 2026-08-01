@@ -1,11 +1,18 @@
 import OpenAI, { AzureOpenAI } from "openai";
 import type {
   ChatCompletionCreateParamsNonStreaming,
+  ChatCompletionCreateParamsStreaming,
   ChatCompletionMessageParam,
   ChatCompletionTool,
 } from "openai/resources/chat/completions";
-import { getSettings, type Settings } from "./settings.js";
+import { GPT5_AZURE_CHAT_API_VERSION, getSettings, type Settings } from "./settings.js";
 import { logger } from "./logger.js";
+
+// A streaming Turn cannot leave its Working canvas open indefinitely when a
+// provider accepts a connection but never emits its first chunk. The desktop
+// shows a truthful waiting diagnostic after five seconds; this bounded request
+// turns a persistent transport failure into the canonical failed Turn.
+const STREAM_REQUEST_TIMEOUT_MS = 15_000;
 
 export class LLMUnavailableError extends Error {}
 
@@ -86,6 +93,55 @@ export interface UsageTotals {
   embedTokens: number;
 }
 
+type CompletionTokenLimit =
+  | { max_tokens: number; max_completion_tokens?: never }
+  | { max_completion_tokens: number; max_tokens?: never };
+
+type CompletionTemperature =
+  | { temperature: number }
+  | { temperature?: never };
+
+/**
+ * Azure deployments are passed through the Chat Completions `model` field.
+ * Keep all known reasoning-series compatibility decisions together so a
+ * GPT-5 mini deployment cannot receive one legacy parameter from the normal
+ * path and another from the streaming/health paths.
+ */
+export function isReasoningDeployment(model: string): boolean {
+  const normalized = model.trim().toLowerCase();
+  return /^(?:gpt-?5(?:$|[-_.]|mini|nano|pro)|o[134](?:$|[-_.]))/.test(normalized);
+}
+
+/**
+ * Azure/OpenAI identifies an Azure deployment in `model`. GPT-5 reasoning
+ * deployments reject the legacy `max_tokens` field, so the parameter must be
+ * selected from the resolved deployment/model for both regular and streaming
+ * Chat Completions calls.
+ */
+export function completionTokenLimit(model: string, maxTokens: number): CompletionTokenLimit {
+  return isReasoningDeployment(model)
+    ? { max_completion_tokens: maxTokens }
+    : { max_tokens: maxTokens };
+}
+
+/** Reasoning deployments reject the legacy sampling controls, including temperature. */
+export function completionTemperature(model: string, temperature: number): CompletionTemperature {
+  return isReasoningDeployment(model) ? {} : { temperature };
+}
+
+/**
+ * GPT-5 model snapshot dates (for example 2025-08-07) are not Azure
+ * data-plane API versions. Catch the known default-model mismatch before an
+ * opaque 404 reaches a desktop Turn.
+ */
+export function reasoningApiVersionConfigurationError(
+  model: string,
+  apiVersion: string,
+): string | undefined {
+  if (!isReasoningDeployment(model) || apiVersion.trim() !== "2025-08-07") return undefined;
+  return `Azure GPT-5 model version ${apiVersion} is not a Chat Completions API version. Use ${GPT5_AZURE_CHAT_API_VERSION} (or the Azure v1 endpoint) in the local MergePilot configuration.`;
+}
+
 export class LLMClient {
   private client: AzureOpenAI | OpenAI | null = null;
   public readonly usage: UsageTotals = {
@@ -107,6 +163,13 @@ export class LLMClient {
         "The selected model provider is not reachable.",
       );
     }
+    if (this.settings.llmProvider === "azure") {
+      const configurationError = reasoningApiVersionConfigurationError(
+        this.chatModel(),
+        this.settings.azureOpenAiApiVersion,
+      );
+      if (configurationError) throw new LLMUnavailableError(configurationError);
+    }
     this.client = this.settings.llmProvider === "openai"
       ? new OpenAI({ apiKey: this.settings.openAiApiKey })
       : new AzureOpenAI({
@@ -123,6 +186,28 @@ export class LLMClient {
       : this.settings.azureOpenAiChatDeployment;
   }
 
+  /**
+   * Public action narration is latency-sensitive but must remain genuine
+   * model output. A separately deployed low-latency model can be selected
+   * without changing the main planner's tool and approval behaviour.
+   */
+  actionNarrativeModel(): string {
+    if (this.settings.llmProvider === "openai") {
+      return this.settings.openAiNarrativeModel || this.settings.openAiModel;
+    }
+    return this.settings.azureOpenAiNarrativeDeployment || this.settings.azureOpenAiChatDeployment;
+  }
+
+  /**
+   * A separate narrator deployment is an optional latency optimisation. If it
+   * is unavailable before it emits any public text, the Turn may safely retry
+   * once on the main deployment instead of failing the entire conversation.
+   */
+  actionNarrativeFallbackModel(): string | undefined {
+    const main = this.chatModel();
+    return this.actionNarrativeModel() === main ? undefined : main;
+  }
+
   private embeddingModel(): string {
     return this.settings.llmProvider === "openai"
       ? this.settings.openAiEmbeddingModel
@@ -137,11 +222,12 @@ export class LLMClient {
     retries?: number;
   }): Promise<ChatResult> {
     const retries = opts.retries ?? 3;
+    const model = this.chatModel();
     const params: ChatCompletionCreateParamsNonStreaming = {
-      model: this.chatModel(),
+      model,
       messages: opts.messages,
-      temperature: opts.temperature ?? 0.2,
-      max_tokens: opts.maxTokens ?? 1024,
+      ...completionTemperature(model, opts.temperature ?? 0.2),
+      ...completionTokenLimit(model, opts.maxTokens ?? 1024),
     };
     if (opts.tools && opts.tools.length > 0) {
       params.tools = opts.tools;
@@ -187,48 +273,67 @@ export class LLMClient {
     tools?: ChatCompletionTool[];
     temperature?: number;
     maxTokens?: number;
+    model?: string;
+    /** Use a bounded reasoning mode only where the caller explicitly opts in. */
+    reasoningEffort?: "minimal" | "low" | "medium" | "high";
   }): AsyncGenerator<ChatStreamEvent, void, unknown> {
-    const stream = await this.get().chat.completions.create({
-      model: this.chatModel(),
-      messages: opts.messages,
-      temperature: opts.temperature ?? 0.2,
-      max_tokens: opts.maxTokens ?? 1024,
-      tools: opts.tools && opts.tools.length > 0 ? opts.tools : undefined,
-      tool_choice: opts.tools && opts.tools.length > 0 ? "auto" : undefined,
-      stream: true,
-      stream_options: { include_usage: true },
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), STREAM_REQUEST_TIMEOUT_MS);
+    try {
+      const model = opts.model || this.chatModel();
+      // The installed SDK declaration predates Azure GPT-5's `minimal`
+      // reasoning mode. Keep that narrow compatibility cast at the transport
+      // edge; the Azure runtime receives the documented parameter unchanged.
+      const request = {
+          model,
+          messages: opts.messages,
+          ...completionTemperature(model, opts.temperature ?? 0.2),
+          ...completionTokenLimit(model, opts.maxTokens ?? 1024),
+          ...(opts.reasoningEffort && isReasoningDeployment(model)
+            ? { reasoning_effort: opts.reasoningEffort }
+            : {}),
+          tools: opts.tools && opts.tools.length > 0 ? opts.tools : undefined,
+          tool_choice: opts.tools && opts.tools.length > 0 ? "auto" : undefined,
+          stream: true,
+          stream_options: { include_usage: true },
+        } as unknown as ChatCompletionCreateParamsStreaming;
+      const stream = await this.get().chat.completions.create(
+        request,
+        { timeout: STREAM_REQUEST_TIMEOUT_MS, signal: controller.signal, maxRetries: 0 },
+      );
 
-    const assembler = new ToolCallAssembler();
-    let finishReason = "";
+      const assembler = new ToolCallAssembler();
+      let finishReason = "";
 
-    for await (const chunk of stream) {
-      const choice = chunk.choices[0];
-      if (!choice) {
-        if (chunk.usage) {
-          this.usage.promptTokens += chunk.usage.prompt_tokens;
-          this.usage.completionTokens += chunk.usage.completion_tokens;
+      for await (const chunk of stream) {
+        const choice = chunk.choices[0];
+        if (!choice) {
+          if (chunk.usage) {
+            this.usage.promptTokens += chunk.usage.prompt_tokens;
+            this.usage.completionTokens += chunk.usage.completion_tokens;
+          }
+          continue;
         }
-        continue;
+        const delta = choice.delta;
+        if (delta.content) {
+          yield { type: "delta", delta: delta.content };
+        }
+        if (delta.tool_calls) {
+          assembler.ingest(delta.tool_calls as unknown as StreamingToolCallDelta[]);
+          yield { type: "tool_call_delta", toolCalls: assembler.snapshot() };
+        }
+        if (choice.finish_reason) {
+          finishReason = choice.finish_reason;
+        }
       }
-      const delta = choice.delta;
-      if (delta.content) {
-        yield { type: "delta", delta: delta.content };
-      }
-      if (delta.tool_calls) {
-        assembler.ingest(delta.tool_calls as unknown as StreamingToolCallDelta[]);
-        yield { type: "tool_call_delta", toolCalls: assembler.snapshot() };
-      }
-      if (choice.finish_reason) {
-        finishReason = choice.finish_reason;
-      }
-    }
 
-    if (assembler.size > 0) {
-      yield { type: "tool_call", toolCalls: assembler.finalize() };
+      if (assembler.size > 0) {
+        yield { type: "tool_call", toolCalls: assembler.finalize() };
+      }
+      yield { type: "done", finishReason };
+    } finally {
+      clearTimeout(timeout);
     }
-
-    yield { type: "done", finishReason };
   }
 
   async embed(inputs: string[], retries = 3): Promise<number[][]> {

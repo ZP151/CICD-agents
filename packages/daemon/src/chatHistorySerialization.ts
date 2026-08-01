@@ -3,6 +3,7 @@ import {
   type ChatWorkflowState,
   type CosmosStoredSession,
   type PendingToolAction,
+  type TurnTimelineEvent,
 } from "@mergepilot/core";
 import type { InlineLlmConfig } from "./llmSettings.js";
 import type {
@@ -56,6 +57,7 @@ export function cosmosToStored(doc: CosmosStoredSession): StoredSession {
     projectLinkId: doc.projectLinkId,
     messages: doc.messages as ChatMessage[],
     bubbles: doc.bubbles as StoredBubble[],
+    timelineEvents: doc.timelineEvents as TurnTimelineEvent[] | undefined,
     approvalProposal: doc.approvalProposal as PendingToolAction | undefined,
     pendingAction: doc.pendingAction as PendingToolAction | undefined,
     workflowState: doc.workflowState as ChatWorkflowState | undefined,
@@ -75,6 +77,7 @@ export function storedToCosmos(session: StoredSession): Omit<CosmosStoredSession
     projectLinkId: normalized.projectLinkId,
     messages: normalized.messages,
     bubbles: normalized.bubbles,
+    timelineEvents: normalized.timelineEvents,
     approvalProposal: normalized.approvalProposal,
     pendingAction: normalized.pendingAction,
     workflowState: normalized.workflowState,

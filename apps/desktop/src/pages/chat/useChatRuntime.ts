@@ -2,6 +2,7 @@ import { useCallback, useMemo, type Dispatch, type MutableRefObject, type SetSta
 import {
   chatStream,
   confirmAction as apiConfirmAction,
+  declineAction as apiDeclineAction,
   fetchChatHistory,
   type ChatEventPayload,
   type ChatHistoryEntry,
@@ -11,6 +12,7 @@ import {
 import type { ComposerImageAttachment } from "./chatAttachments.js";
 import type { ToolCallPartSnapshot } from "../../chatBubbles.js";
 import type { ApprovalRequest, Bubble, WorkflowEventState } from "./chat.types.js";
+import type { ChatUiChunkCorrelation } from "./chatUiChunkDispatcher.js";
 import { reduceChatBubbles } from "./chatBubbleReducer.js";
 import {
   dispatchChatStreamEvent,
@@ -22,11 +24,13 @@ import {
   type ConversationModelChoice,
   type CustomConversationModel,
 } from "./chatModelSelection.js";
+import { createOptimisticTurnTranscriptBubble } from "./chatTurnTranscript.js";
+import { beginTurnMetrics } from "./chatTurnMetrics.js";
 
 export interface UseChatRuntimeAdapterArgs {
   uiStreamAvailableRef: MutableRefObject<boolean>;
   cancelRef: MutableRefObject<(() => void) | null>;
-  handleUiChunk: (chunk?: ChatUiChunk) => void;
+  handleUiChunk: (chunk?: ChatUiChunk, correlation?: ChatUiChunkCorrelation) => void;
   setSessionId: Dispatch<SetStateAction<string | null>>;
   setStatusText: Dispatch<SetStateAction<string | null>>;
   appendAssistantDelta: (delta: string) => void;
@@ -99,6 +103,7 @@ export function useChatRuntimeAdapter(args: UseChatRuntimeAdapterArgs): ChatStre
 }
 
 export interface UseChatRuntimeActionsArgs {
+  bubbles: Bubble[];
   busy: boolean;
   sessionId: string | null;
   repoPath: string;
@@ -128,12 +133,37 @@ export function approvalDenialMessage(feedback?: string): string {
   return feedback?.trim() || "no";
 }
 
+const LOCAL_CANCELLED_FINAL = "This turn was cancelled before the work completed. You can send the next instruction when you're ready.";
+
+/**
+ * A browser abort prevents the daemon from sending its terminal event back to
+ * this client. Keep cancellation in the same public Timeline as every other
+ * terminal path so a Working transcript cannot be left orphaned.
+ */
+export function localTurnCancellationEvents(
+  turnId: string,
+  lastSequence: number | undefined,
+  startedAt: number,
+  now = Date.now(),
+): ChatEventPayload[] {
+  const sequence = (lastSequence ?? 0) + 1;
+  const elapsedMs = Math.max(0, now - startedAt);
+  return [
+    { type: "turn.execution.completed", turnId, sequence, emittedAt: now, elapsedMs },
+    { type: "turn.final.delta", turnId, sequence: sequence + 1, emittedAt: now, delta: LOCAL_CANCELLED_FINAL },
+    { type: "turn.final.completed", turnId, sequence: sequence + 2, emittedAt: now, finalText: LOCAL_CANCELLED_FINAL },
+    { type: "turn.cancelled", turnId, sequence: sequence + 3, emittedAt: now, elapsedMs, status: "cancelled" },
+  ];
+}
+
 export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRuntimeActions {
   const sendMessage = useCallback((message: string, options?: { silent?: boolean; imageAttachments?: ComposerImageAttachment[] }) => {
     const imageAttachments = options?.imageAttachments ?? [];
     if ((!message && imageAttachments.length === 0) || args.busy) return;
     args.setBusy(true);
-    args.setStatusText("Planning");
+    // The optimistic Turn Transcript is the only immediate progress surface.
+    // Do not add a second generic "Planning" status beside it.
+    args.setStatusText(null);
     const visibleMessage = imageAttachments.length > 0
       ? [message, imageAttachments.map((attachment) => `[image: ${attachment.name}]`).join("\n")].filter(Boolean).join("\n\n")
       : message;
@@ -145,6 +175,10 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
         transientImageAttachments: imageAttachments,
       }, { forceScroll: true });
     }
+    const optimisticTurnId = uid();
+    const clientTurnId = `local-turn-${optimisticTurnId}`;
+    beginTurnMetrics(clientTurnId);
+    args.addBubble(createOptimisticTurnTranscriptBubble(optimisticTurnId, visibleMessage), { forceScroll: true });
 
     const repo = args.repoPath || ".";
     const resolvedModelChoice =
@@ -156,11 +190,13 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
     let resolvedSessionId = args.sessionId;
     args.uiStreamAvailableRef.current = false;
 
+    let acceptsEvents = true;
     const { cancel } = chatStream(
       message,
       repo,
       args.sessionId,
       (event: ChatEventPayload) => {
+        if (!acceptsEvents) return;
         dispatchChatStreamEvent(event, args.chatStreamDispatcherAdapter, {
           onSession: (nextSessionId) => {
             resolvedSessionId = nextSessionId;
@@ -177,8 +213,12 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
         dataUrl: attachment.dataUrl,
       })),
       args.activeProjectLink,
+      clientTurnId,
     );
-    args.cancelRef.current = cancel;
+    args.cancelRef.current = () => {
+      acceptsEvents = false;
+      cancel();
+    };
   }, [
     args.activeCustomModel,
     args.activeModel,
@@ -198,6 +238,17 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
 
   const confirmPendingAction = useCallback((bubbleId: string) => {
     if (!args.sessionId || args.busy) return;
+    const pending = args.bubbles.find((bubble) => bubble.id === bubbleId);
+    const activeTranscript = pending?.turnId
+      ? args.bubbles.find((bubble) => bubble.turnId === pending.turnId && bubble.turnTranscript)
+      : undefined;
+    const continuation = activeTranscript?.turnTranscript && pending?.turnId
+      ? {
+          turnId: pending.turnId,
+          startedAt: activeTranscript.turnTranscript.startedAt,
+          lastSequence: activeTranscript.turnTranscript.lastSequence,
+        }
+      : undefined;
     args.setBubbles((prev) => reduceChatBubbles(prev, {
       type: "mark_pending_status",
       id: bubbleId,
@@ -212,9 +263,10 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
         pendingBubbleId: bubbleId,
         refreshHistoryOnDone: !args.mini,
       });
-    });
+    }, continuation);
     args.cancelRef.current = cancel;
   }, [
+    args.bubbles,
     args.busy,
     args.cancelRef,
     args.chatStreamDispatcherAdapter,
@@ -227,26 +279,71 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
   ]);
 
   const cancelPendingAction = useCallback((bubbleId: string, feedback?: string) => {
+    if (!args.sessionId || args.busy) return;
+    const pending = args.bubbles.find((bubble) => bubble.id === bubbleId);
+    const activeTranscript = pending?.turnId
+      ? args.bubbles.find((bubble) => bubble.turnId === pending.turnId && bubble.turnTranscript)
+      : undefined;
+    if (!pending?.turnId || !activeTranscript?.turnTranscript) return;
+    const continuation = {
+      turnId: pending.turnId,
+      startedAt: activeTranscript.turnTranscript.startedAt,
+      lastSequence: activeTranscript.turnTranscript.lastSequence,
+    };
     args.setBubbles((prev) => reduceChatBubbles(prev, {
       type: "mark_pending_status",
       id: bubbleId,
       status: "cancelled",
     }, uid));
-    sendMessage(approvalDenialMessage(feedback));
-  }, [args.setBubbles, sendMessage]);
-
-  const stopCurrentTurn = useCallback(() => {
-    args.cancelRef.current?.();
-    args.cancelRef.current = null;
-    args.stopStreaming();
+    args.setBusy(true);
+    args.setStatusText("Finalizing");
     args.uiStreamAvailableRef.current = false;
-    args.setBusy(false);
-    args.setStatusText(null);
+
+    const { cancel } = apiDeclineAction(args.sessionId, (event: ChatEventPayload) => {
+      dispatchChatStreamEvent(event, args.chatStreamDispatcherAdapter, {
+        pendingBubbleId: bubbleId,
+        refreshHistoryOnDone: !args.mini,
+      });
+    }, continuation);
+    args.cancelRef.current = cancel;
   }, [
+    args.bubbles,
+    args.busy,
     args.cancelRef,
+    args.chatStreamDispatcherAdapter,
+    args.mini,
+    args.sessionId,
+    args.setBubbles,
     args.setBusy,
     args.setStatusText,
-    args.stopStreaming,
+    args.uiStreamAvailableRef,
+  ]);
+
+  const stopCurrentTurn = useCallback(() => {
+    const activeBubble = [...args.bubbles].reverse().find((bubble) => (
+      bubble.turnId
+      && bubble.turnTranscript
+      && (bubble.turnTranscript.status === "working" || bubble.turnTranscript.status === "sealed")
+    ));
+    if (activeBubble?.turnId && activeBubble.turnTranscript) {
+      for (const event of localTurnCancellationEvents(
+        activeBubble.turnId,
+        activeBubble.turnTranscript.lastSequence,
+        activeBubble.turnTranscript.startedAt,
+      )) {
+        dispatchChatStreamEvent(event, args.chatStreamDispatcherAdapter, {
+          refreshHistoryOnDone: !args.mini,
+        });
+      }
+    }
+    args.cancelRef.current?.();
+    args.cancelRef.current = null;
+    args.uiStreamAvailableRef.current = false;
+  }, [
+    args.bubbles,
+    args.cancelRef,
+    args.chatStreamDispatcherAdapter,
+    args.mini,
     args.uiStreamAvailableRef,
   ]);
 

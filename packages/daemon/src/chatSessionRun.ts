@@ -1,4 +1,4 @@
-import { type ChatEvent, type ChatImageAttachment } from "@mergepilot/core";
+import { type ChatEvent, type ChatImageAttachment, type LLMClient } from "@mergepilot/core";
 import type { InlineLlmConfig } from "./llmSettings.js";
 import type { ActiveChatSessions } from "./chatActiveSessions.js";
 import {
@@ -12,7 +12,7 @@ import {
   streamPlannerContinuation,
   type PlannerContinuationAdapters,
 } from "./chatPlannerContinuation.js";
-import { createChatRuntimeSetup } from "./chatRuntimeSetup.js";
+import { createChatRuntimeSetup, type ChatRuntimeSetup } from "./chatRuntimeSetup.js";
 
 export interface RunChatSessionTurnArgs {
   active: ActiveChatSessions;
@@ -23,6 +23,18 @@ export interface RunChatSessionTurnArgs {
   llmConfig?: InlineLlmConfig;
   inlineProjectLink?: InlineProjectLink;
   imageAttachments?: ChatImageAttachment[];
+  llm?: LLMClient;
+  initialNarrative?: string;
+  initialNarrativeInFlight?: boolean;
+  /** Lets pure planning overlap the narrator without allowing early tools. */
+  beforeFirstTool?: Promise<void>;
+  fastStart?: boolean;
+  /** The route persisted the user input before the opening narrative started. */
+  userMessageAlreadyStored?: boolean;
+  /** Started alongside the opening narrative so tool/MCP setup cannot add a
+   * second idle gap before the first real action. Ownership transfers to this
+   * function once awaited and is released by the existing finally block. */
+  prewarmedRuntime?: Promise<ChatRuntimeSetup>;
   adapters: PlannerContinuationAdapters;
 }
 
@@ -34,6 +46,13 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
     llmConfig,
     message,
     imageAttachments = [],
+    initialNarrative,
+    initialNarrativeInFlight = false,
+    beforeFirstTool,
+    fastStart = false,
+    userMessageAlreadyStored = false,
+    prewarmedRuntime,
+    llm: turnLlm,
     projectLinkId,
     repoPath,
     sessionId,
@@ -50,7 +69,7 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
 
   const session = active.get(sessionId)!;
   const projectLinkSnapshot = inlineProjectLink;
-  const effectiveRepoPath = (projectLinkSnapshot?.repoPath?.trim() || repoPath.trim()) || ".";
+  const effectiveRepoPath = resolveTurnRepoPath(repoPath, projectLinkSnapshot);
   session.repoPath = effectiveRepoPath;
 
   const storedSession = await loadSession(sessionId);
@@ -67,20 +86,23 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
   }
 
   const storedForRuntime = projectLinkSnapshot ? undefined : storedSession;
-  const runtime = await createChatRuntimeSetup({
+  const runtime = await (prewarmedRuntime ?? createChatRuntimeSetup({
     repoPath: session.repoPath,
     llmConfig,
     inlineProjectLink: projectLinkSnapshot,
     projectLinkId: projectLinkId ?? (storedForRuntime ? storedSessionProjectLinkId(storedForRuntime) : undefined),
     chatMessage: message,
-  });
+    llm: turnLlm,
+  }));
   const { llm, planner, actionExecutor } = runtime;
   const waitForConfirm = (): Promise<boolean> => active.waitForConfirm(sessionId);
 
   try {
-    const storedMessage = messageWithImageNames(message, imageAttachments);
-    await adapters.appendBubble(sessionId, { role: "user", content: storedMessage, timestamp: now(), repoPath });
-    await adapters.appendMessage(sessionId, "user", storedMessage);
+    if (!userMessageAlreadyStored) {
+      const storedMessage = messageWithImageNames(message, imageAttachments);
+      await adapters.appendBubble(sessionId, { role: "user", content: storedMessage, timestamp: now(), repoPath });
+      await adapters.appendMessage(sessionId, "user", storedMessage);
+    }
 
     const handledApproval = yield* handleChatMessageApproval({
       sessionId,
@@ -109,6 +131,11 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
       waitForConfirm,
       contextProgressMessage: "Reading project context",
       planningProgressMessage: "Planning response",
+      initialNarrative,
+      actionNarrativesEnabled: true,
+      initialNarrativeInFlight,
+      beforeFirstTool,
+      fastStart,
       adapters,
     });
   } finally {
@@ -117,11 +144,16 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
   }
 }
 
+/** Project Link is the execution target; the composer workspace is fallback only. */
+export function resolveTurnRepoPath(repoPath: string, projectLink?: Pick<InlineProjectLink, "repoPath">): string {
+  return (projectLink?.repoPath?.trim() || repoPath.trim()) || ".";
+}
+
 function now(): number {
   return Math.floor(Date.now() / 1000);
 }
 
-function messageWithImageNames(message: string, imageAttachments: ChatImageAttachment[]): string {
+export function messageWithImageNames(message: string, imageAttachments: ChatImageAttachment[]): string {
   if (imageAttachments.length === 0) return message;
   const imageLines = imageAttachments.map((attachment) => `[image: ${attachment.name}]`).join("\n");
   return [message, imageLines].filter(Boolean).join("\n\n");

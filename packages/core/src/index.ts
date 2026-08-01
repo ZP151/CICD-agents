@@ -30,6 +30,8 @@ export { isReviewOnlyChangeRequest } from "./chatPlannerGuards.js";
 export * from "./aiInsightQuality.js";
 export * from "./chatUseCases.js";
 export * from "./chatUiStream.js";
+export * from "./turnTimeline.js";
+export * from "./chatPublicOpening.js";
 export * from "./reviewQueue.js";
 export * from "./reviewHistoryLocal.js";
 export * from "./reviewOperationsLocal.js";

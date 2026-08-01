@@ -4,6 +4,7 @@ import { logger } from "../logger.js";
 const SECRET_PATTERNS: Array<RegExp> = [
   /(?<lead>authorization\s*:\s*basic\s+)[A-Za-z0-9+/=]+/gi,
   /(?<lead>authorization\s*:\s*bearer\s+)\S+/gi,
+  /(?<lead>\bbearer\s+)[A-Za-z0-9._~+/=-]{8,}/gi,
   /(?<lead>api[_-]?key\s*[:=]\s*)['"]?[A-Za-z0-9_\-]{8,}['"]?/gi,
   /(?<lead>pat\s*[:=]\s*)['"]?[A-Za-z0-9_\-]{16,}['"]?/gi,
   /(?<lead>(?:access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|token)\s*[:=]\s*)['"]?[A-Za-z0-9._~+/=-]{8,}['"]?/gi,

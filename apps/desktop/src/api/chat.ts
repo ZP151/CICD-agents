@@ -16,6 +16,7 @@ import type {
   ChatHistoryEntry,
   ChatIndexRefreshResult,
   ChatMessageEntry,
+  ChatSessionMessages,
   ChatUiChunk,
   ChatWorkflowAction,
   ChatWorkflowActionInput,
@@ -42,10 +43,13 @@ export function chatStream(
   conversationModelChoice: ConversationModelChoice = "built_in",
   imageAttachments: ChatImageAttachmentPayload[] = [],
   projectLinkData?: ProjectLink | null,
+  clientTurnId?: string,
 ): { cancel: () => void } {
   const controller = new AbortController();
+  let cancelled = false;
 
   const body: Record<string, unknown> = { message, repoPath };
+  if (clientTurnId) body["clientTurnId"] = clientTurnId;
   if (sessionId) body["sessionId"] = sessionId;
   if (projectLinkId) {
     body["projectLinkId"] = projectLinkId;
@@ -64,6 +68,7 @@ export function chatStream(
     signal: controller.signal,
   })
     .then(async (r) => {
+      if (cancelled) return;
       if (!r.ok || !r.body) {
         const bodyText = await r.text().catch(() => "");
         onEvent({ type: "error", message: messageFromErrorBody(`HTTP ${r.status}`, bodyText) });
@@ -72,28 +77,36 @@ export function chatStream(
       await readChatEventStream(r, onEvent);
     })
     .catch((err: unknown) => {
-      if ((err as { name?: string }).name !== "AbortError") {
+      if (!cancelled && (err as { name?: string }).name !== "AbortError") {
         onEvent({ type: "error", message: explainRuntimeError(err instanceof Error ? err.message : String(err)) });
       }
     });
 
-  return { cancel: () => controller.abort() };
+  return {
+    cancel: () => {
+      cancelled = true;
+      controller.abort();
+    },
+  };
 }
 
 /** Dispatch a structured confirm-action and stream its continuation events. */
 export function confirmAction(
   sessionId: string,
   onEvent: (payload: ChatEventPayload) => void,
+  continuation?: { turnId: string; startedAt: number; lastSequence?: number },
 ): { cancel: () => void } {
   const controller = new AbortController();
+  let cancelled = false;
 
   fetch(`${RUNTIME_URL}/chat/${sessionId}/confirm-action`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: "{}",
+    body: JSON.stringify(continuation ?? {}),
     signal: controller.signal,
   })
     .then(async (r) => {
+      if (cancelled) return;
       if (!r.ok || !r.body) {
         const bodyText = await r.text().catch(() => "");
         onEvent({ type: "error", message: messageFromErrorBody(`HTTP ${r.status}`, bodyText) });
@@ -102,12 +115,55 @@ export function confirmAction(
       await readChatEventStream(r, onEvent);
     })
     .catch((err: unknown) => {
-      if ((err as { name?: string }).name !== "AbortError") {
+      if (!cancelled && (err as { name?: string }).name !== "AbortError") {
         onEvent({ type: "error", message: explainRuntimeError(err instanceof Error ? err.message : String(err)) });
       }
     });
 
-  return { cancel: () => controller.abort() };
+  return {
+    cancel: () => {
+      cancelled = true;
+      controller.abort();
+    },
+  };
+}
+
+/** Decline a structured action while keeping its original Turn alive. */
+export function declineAction(
+  sessionId: string,
+  onEvent: (payload: ChatEventPayload) => void,
+  continuation: { turnId: string; startedAt: number; lastSequence?: number },
+): { cancel: () => void } {
+  const controller = new AbortController();
+  let cancelled = false;
+
+  fetch(`${RUNTIME_URL}/chat/${sessionId}/decline-action`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(continuation),
+    signal: controller.signal,
+  })
+    .then(async (r) => {
+      if (cancelled) return;
+      if (!r.ok || !r.body) {
+        const bodyText = await r.text().catch(() => "");
+        onEvent({ type: "error", message: messageFromErrorBody(`HTTP ${r.status}`, bodyText) });
+        return;
+      }
+      await readChatEventStream(r, onEvent);
+    })
+    .catch((err: unknown) => {
+      if (!cancelled && (err as { name?: string }).name !== "AbortError") {
+        onEvent({ type: "error", message: explainRuntimeError(err instanceof Error ? err.message : String(err)) });
+      }
+    });
+
+  return {
+    cancel: () => {
+      cancelled = true;
+      controller.abort();
+    },
+  };
 }
 
 export async function refreshChatIndexStatus(repoPath: string, projectLinkId?: string): Promise<ChatIndexRefreshResult> {
@@ -191,10 +247,13 @@ export async function fetchChatCheckpointRollbackPlan(
   return (await r.json()) as ChatCheckpointRollbackPlan;
 }
 
-export async function fetchChatMessages(sessionId: string): Promise<ChatMessageEntry[]> {
+export async function fetchChatMessages(sessionId: string): Promise<ChatSessionMessages> {
   const r = await fetch(`${RUNTIME_URL}/chat/${sessionId}/messages`);
   if (!r.ok) throw new Error(await messageFromErrorResponse(`Chat messages HTTP ${r.status}`, r));
-  return (await r.json()) as ChatMessageEntry[];
+  const payload = await r.json() as ChatMessageEntry[] | ChatSessionMessages;
+  // Desktop releases before Transcript persistence returned an array. Keep
+  // that payload readable during a rolling sidecar upgrade.
+  return Array.isArray(payload) ? { bubbles: payload } : payload;
 }
 
 export async function fetchChatState(sessionId: string): Promise<{ workflowState?: ChatWorkflowState }> {
@@ -255,7 +314,7 @@ async function readChatEventStream(
       const toolResult = currentEventType === "tool_end" || currentEventType === "tool.completed"
         ? parsed.result
         : undefined;
-      const doneResult = currentEventType === "done" || currentEventType === "final"
+      const doneResult = currentEventType === "done" || currentEventType === "final" || currentEventType === "turn.final.completed"
         ? (parsed.result as ChatEventPayload["result"])
         : undefined;
       const message = currentEventType === "error" && parsed.message

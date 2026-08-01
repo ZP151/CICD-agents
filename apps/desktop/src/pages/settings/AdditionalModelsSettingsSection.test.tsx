@@ -14,9 +14,11 @@ function model(overrides: Partial<AdditionalModelConfig> = {}): AdditionalModelC
     azureEndpoint: overrides.azureEndpoint ?? "",
     azureApiKey: overrides.azureApiKey ?? "",
     azureDeployment: overrides.azureDeployment ?? "gpt-4o",
+    azureNarrativeDeployment: overrides.azureNarrativeDeployment ?? "",
     azureApiVersion: overrides.azureApiVersion ?? "2024-08-01-preview",
     openaiApiKey: overrides.openaiApiKey ?? "",
     openaiModel: overrides.openaiModel ?? "",
+    openaiNarrativeModel: overrides.openaiNarrativeModel ?? "",
     testError: overrides.testError ?? "",
   };
 }
