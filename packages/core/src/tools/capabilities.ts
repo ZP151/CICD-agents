@@ -48,7 +48,7 @@ export function toolCapabilities(tools: Iterable<Tool>): ToolCapability[] {
     readOnly: READ_ONLY_TOOLS.has(tool.name),
     requiresApproval: approvals.has(tool.name),
     required: requiredParams(tool),
-    connector: toolConnector(tool.name),
+    connector: tool.connector ?? toolConnector(tool.name),
   }));
 }
 
@@ -61,7 +61,7 @@ export function toolCapability(tool: Tool): ToolCapability {
     readOnly: READ_ONLY_TOOLS.has(tool.name),
     requiresApproval: classifyToolRisk(tool.name) !== "low",
     required: requiredParams(tool),
-    connector: toolConnector(tool.name),
+    connector: tool.connector ?? toolConnector(tool.name),
   };
 }
 

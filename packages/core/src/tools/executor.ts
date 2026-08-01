@@ -161,6 +161,12 @@ export interface Tool {
   parameters: Record<string, unknown>;
   handler: ToolHandler;
   allowedCommands?: readonly string[];
+  /**
+   * Stable provenance for an externally supplied tool. Keep this on the
+   * executable definition instead of reconstructing it from a lossy local
+   * function name in the chat renderer.
+   */
+  connector?: { kind: "mcp"; id: string; label: string };
 }
 
 export function toolSchema(tool: Tool): {
