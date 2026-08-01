@@ -183,12 +183,15 @@ function TranscriptBlockView({
                   aria-expanded={commandOpen}
                   onClick={() => setOpenCommands((current) => ({ ...current, [commandKey]: !commandOpen }))}
                   title={command.command}
+                  aria-label={commandActivityLabel(command.command, command.durationMs)}
                   className={`flex min-h-[26px] max-w-full items-center gap-1.5 rounded px-1.5 text-left transition-[background,color] duration-150 hover:bg-[rgb(var(--app-surface-raised))] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-[rgb(var(--app-text))] ${
                     commandOpen ? "text-[rgb(var(--app-text))]" : "text-[rgb(var(--app-text-subtle))]"
                   }`}
                 >
                   <TerminalIcon />
-                  <span className="shrink-0">{commandActivityLabel(command.durationMs)}</span>
+                  <span className="shrink-0">Ran</span>
+                  <code className="min-w-0 flex-1 truncate font-mono text-[12px]">{command.command}</code>
+                  {command.durationMs !== undefined && <span className="shrink-0">in {formatDuration(command.durationMs)}</span>}
                   <Chevron open={commandOpen} />
                 </button>
                 {commandOpen && (
@@ -269,8 +272,9 @@ function McpConnectorIcon() {
   );
 }
 
-export function commandActivityLabel(durationMs?: number): string {
-  return durationMs === undefined ? "Ran command" : `Ran command in ${formatDuration(durationMs)}`;
+export function commandActivityLabel(command?: string, durationMs?: number): string {
+  const prefix = command?.trim() ? `Ran ${command}` : "Ran command";
+  return durationMs === undefined ? prefix : `${prefix} in ${formatDuration(durationMs)}`;
 }
 
 export function commandTerminalTranscript(command: string, output?: string): string {

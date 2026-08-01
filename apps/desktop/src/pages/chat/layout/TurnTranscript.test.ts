@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { commandActivityLabel, commandDisclosureKey, commandTerminalTranscript } from "./TurnTranscript.js";
 
 describe("TurnTranscript command presentation", () => {
-  it("keeps the command summary generic while retaining duration", () => {
+  it("shows a compact real command summary while retaining duration", () => {
     expect(commandActivityLabel()).toBe("Ran command");
-    expect(commandActivityLabel(1_240)).toBe("Ran command in 1s");
+    expect(commandActivityLabel("git status --short", 1_240)).toBe("Ran git status --short in 1s");
   });
 
   it("renders the executed command and its real response in one terminal transcript", () => {
