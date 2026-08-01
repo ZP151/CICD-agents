@@ -125,6 +125,29 @@ export function toolCommandPreview(toolName?: string, args?: Record<string, unkn
   if (typeof args?.["command"] === "string" && args["command"].trim()) {
     return args["command"].trim();
   }
+  if (toolName === "git_current_branch") return "git branch --show-current";
+  if (toolName === "git_status") {
+    const flags = [
+      args?.["short"] ? "--short" : "",
+      args?.["branch"] ? "--branch" : "",
+      args?.["porcelain"] ? "--porcelain" : "",
+      args?.["ignored"] ? "--ignored" : "",
+    ].filter(Boolean);
+    return ["git", "status", ...flags].join(" ");
+  }
+  if (toolName === "git_log") {
+    const limit = Number(args?.["limit"]);
+    return ["git", "log", "--oneline", ...(Number.isFinite(limit) && limit > 0 ? ["-n", String(limit)] : [])].join(" ");
+  }
+  if (toolName === "git_diff") {
+    const paths = stringArray(args?.["paths"]);
+    const flags = [
+      args?.["staged"] ? "--staged" : "",
+      args?.["name_only"] || args?.["nameOnly"] ? "--name-only" : "",
+      Number.isFinite(Number(args?.["context"])) ? `--unified=${Number(args?.["context"])}` : "",
+    ].filter(Boolean);
+    return ["git", "diff", ...flags, ...(paths.length ? ["--", ...paths] : [])].join(" ");
+  }
   if (toolName === "git_add") {
     const paths = stringArray(args?.["paths"]);
     const stageAll = Boolean(args?.["all"]) || paths.length === 0;

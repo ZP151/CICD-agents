@@ -12,12 +12,13 @@ describe("streamActionNarrative", () => {
       expect(options.maxTokens).toBeLessThanOrEqual(96);
       expect((options as { model?: string }).model).toBe("fast-narrative-model");
       expect(JSON.stringify(options.messages)).toContain("Review the current project changes");
-      expect(JSON.stringify(options.messages)).toContain("Use English unless the user explicitly requests another language");
+      expect(JSON.stringify(options.messages)).toContain("Always respond in English; this product has one English conversation path");
       expect(JSON.stringify(options.messages)).toContain("Do not repeat the user's request verbatim or use labels such as Goal");
       expect(JSON.stringify(options.messages)).toContain("never use generic framing such as 'Based on the request'");
       expect(JSON.stringify(options.messages)).toContain("No repository evidence is available yet");
       expect(JSON.stringify(options.messages)).toContain("Do not reveal private reasoning");
       expect(JSON.stringify(options.messages)).toContain("ask permission for a clearly read-only action");
+      expect(JSON.stringify(options.messages)).toContain("do not propose cloning, fetching, remote metadata, setup, or a repository-existence check");
       expect(JSON.stringify(options.messages)).not.toContain("Working directory");
         yield { type: "delta" as const, delta: "I will first establish the change scope" };
         yield { type: "delta" as const, delta: " and then run the smallest read-only check." };

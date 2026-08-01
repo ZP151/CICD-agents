@@ -49,6 +49,28 @@ describe("Turn transcript reducer", () => {
     ]);
   });
 
+  it("renders Git tools as executable shell commands instead of internal tool identifiers", () => {
+    let bubbles = upsertTurnStartedTranscript([
+      createOptimisticTurnTranscriptBubble("local", "Inspect the branch", 1_000),
+    ], { type: "turn.started", turnId: "turn-1", sequence: 0, emittedAt: 1_000 }, () => "unused");
+    const events = [
+      { type: "turn.tool.started", turnId: "turn-1", sequence: 1, groupId: "inspect", commandId: "branch", name: "git_current_branch", args: {} },
+      { type: "turn.tool.started", turnId: "turn-1", sequence: 2, groupId: "inspect", commandId: "status", name: "git_status", args: { short: true, branch: true } },
+      { type: "turn.tool.started", turnId: "turn-1", sequence: 3, groupId: "inspect", commandId: "log", name: "git_log", args: { limit: 1 } },
+    ] as const;
+    for (const event of events) bubbles = applyTurnTimelineEvent(bubbles, event);
+
+    const group = bubbles[0]?.turnTranscript?.blocks.find((block) => block.kind === "tool_group");
+    expect(group).toMatchObject({
+      kind: "tool_group",
+      commands: [
+        { command: "git branch --show-current" },
+        { command: "git status --short --branch" },
+        { command: "git log --oneline -n 1" },
+      ],
+    });
+  });
+
   it("does not fabricate a local work statement before the agent emits one", () => {
     const optimistic = createOptimisticTurnTranscriptBubble("local", "What's on this branch?", 1_000);
 
