@@ -517,6 +517,62 @@ describe("ChatPlanner agent_final tool finalization", () => {
     expect(toolNames).not.toContain("git_add");
   });
 
+  it("keeps safe Azure DevOps and Web Research MCP reads in an explicit read-only turn", async () => {
+    const executor = createToolExecutor();
+    executor.register({
+      name: "mcp_azure_devops_repo_list_pull_requests",
+      description: "List pull requests from Azure DevOps.",
+      parameters: { type: "object", properties: {} },
+      connector: { kind: "mcp", id: "azure-devops", label: "Azure DevOps" },
+      handler: async () => ({ ok: true, text: "[]" }),
+    });
+    executor.register({
+      name: "mcp_web_research_search_official_documentation",
+      description: "Search official documentation.",
+      parameters: { type: "object", properties: {} },
+      connector: { kind: "mcp", id: "web-research", label: "Web Research" },
+      handler: async () => ({ ok: true, text: "source" }),
+    });
+    executor.register({
+      name: "mcp_azure_devops_pipelines_run_pipeline",
+      description: "Queue an Azure Pipeline run.",
+      parameters: { type: "object", properties: {} },
+      connector: { kind: "mcp", id: "azure-devops", label: "Azure DevOps" },
+      handler: async () => ({ ok: true }),
+    });
+    const calls: Array<{ tools?: unknown }> = [];
+    const planner = new ChatPlanner(
+      fakeSequenceLlm([[
+        {
+          type: "tool_call",
+          toolCalls: [{
+            id: "final",
+            name: CHAT_FINAL_TOOL_NAME,
+            arguments: JSON.stringify({ response: "No remote changes were made.", risk_level: "low", actions_taken: [], suggestions: [] }),
+          }],
+        },
+        { type: "done", finishReason: "tool_calls" },
+      ]], calls),
+      executor,
+      { maxSteps: 1 },
+    );
+
+    for await (const _event of planner.run(
+      "Read-only: inspect the linked pull request and current official policy requirement; do not modify anything.",
+      [],
+      ".",
+      async () => true,
+    )) {
+      // Schema capture below verifies the actual planner boundary.
+    }
+
+    const toolNames = ((calls[0]?.tools as Array<{ function?: { name?: string } }> | undefined) ?? [])
+      .map((tool) => tool.function?.name);
+    expect(toolNames).toContain("mcp_azure_devops_repo_list_pull_requests");
+    expect(toolNames).toContain("mcp_web_research_search_official_documentation");
+    expect(toolNames).not.toContain("mcp_azure_devops_pipelines_run_pipeline");
+  });
+
   it("adds a later public narrative only after the next real command batch is selected", async () => {
     const executor = createToolExecutor();
     executor.register({
