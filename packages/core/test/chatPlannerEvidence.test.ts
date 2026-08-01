@@ -9,7 +9,7 @@ describe("groundFinalResponse", () => {
       { name: "git_log", ok: true, output: "dffeecd Dev 2026-07-05 fix: validation\n" },
     ]);
 
-    expect(result).toContain("Evidence collected:");
+    expect(result).toContain("Verified facts:");
     expect(result).toContain("Active branch: `main`.");
     expect(result).toContain("Working tree: 1 modified file; 1 untracked file.");
     expect(result).toContain("Most recent commit: `dffeecd Dev 2026-07-05 fix: validation`.");
@@ -40,6 +40,50 @@ describe("groundFinalResponse", () => {
     expect(result).toBe("Findings (read-only):\nThe active branch is main and the working tree has uncommitted changes.");
     expect(result).not.toContain("Evidence needed");
     expect(result).not.toContain("Confirm the active branch");
+  });
+
+  it("removes a completed command replay before a later findings section", () => {
+    const result = groundFinalResponse([
+      "I collected three read-only evidence items and report the results below.",
+      "Evidence collected (read-only commands run):",
+      "- git_current_branch — active branch.",
+      "- git_status — working-tree state.",
+      "",
+      "Findings:",
+      "The active branch is main and the working tree has uncommitted changes.",
+    ].join("\n"), [
+      { name: "git_current_branch", ok: true, output: "main\n" },
+      { name: "git_status", ok: true, output: "## main\n M app.ts\n" },
+    ]);
+
+    expect(result).toBe("Findings:\nThe active branch is main and the working tree has uncommitted changes.");
+    expect(result).not.toContain("Evidence collected");
+    expect(result).not.toContain("git_current_branch");
+  });
+
+  it("turns a collected-evidence result section into findings and drops an unrequested action menu", () => {
+    const result = groundFinalResponse([
+      "Planned evidence to collect (read-only) before reporting:",
+      "- Current branch name (git_current_branch).",
+      "- Working-tree status (git_status).",
+      "",
+      "Collected evidence and result:",
+      "- Active branch: main",
+      "- Working tree has one modified file.",
+      "",
+      "Notes:",
+      "- All checks were read-only; no files were modified.",
+      "- Next steps I can run on request: show full diffs or prepare a commit (requires your approval).",
+    ].join("\n"), [
+      { name: "git_current_branch", ok: true, output: "main\n" },
+      { name: "git_status", ok: true, output: "## main\n M app.ts\n" },
+    ]);
+
+    expect(result).toContain("Findings:\n- Active branch: main");
+    expect(result).toContain("All checks were read-only");
+    expect(result).not.toContain("Planned evidence");
+    expect(result).not.toContain("git_current_branch");
+    expect(result).not.toContain("Next steps I can run");
   });
 
   it("recognizes a short commit SHA already stated by the model", () => {
