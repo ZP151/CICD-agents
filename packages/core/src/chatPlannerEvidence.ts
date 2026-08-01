@@ -35,17 +35,18 @@ function removeRepeatedExecutionPreamble(response: string, evidence: PublicToolE
   if (!evidence.some((entry) => entry.ok && entry.output?.trim())) return response;
   const lines = response.split(/\r?\n/);
   const conclusionIndex = lines.findIndex(isConclusionHeading);
-  if (conclusionIndex <= 0) return response;
+  if (conclusionIndex < 0) return response;
 
   const leading = lines.slice(0, conclusionIndex).filter((line) => line.trim());
-  if (leading.length === 0 || !isRepeatedExecutionPreamble(leading)) return response;
-  const conclusion = lines.slice(conclusionIndex);
+  const conclusion = conclusionIndex > 0 && leading.length > 0 && isRepeatedExecutionPreamble(leading)
+    ? lines.slice(conclusionIndex)
+    : lines;
   // "Collected evidence and result" is still a replay-oriented heading. The
   // transcript has the collection; the final should begin with the outcome.
   if (/^(?:#{1,6}\s*)?collected evidence(?:\s+and\s+result)?\b/i.test(normalizePreambleLine(conclusion[0] ?? ""))) {
     conclusion[0] = "Findings:";
   }
-  return removeUnrequestedNextActions(conclusion).join("\n").trimStart();
+  return removeUnrequestedNextActions(removeEmbeddedExecutionReplay(conclusion)).join("\n").trimStart();
 }
 
 function isConclusionHeading(line: string): boolean {
@@ -58,6 +59,28 @@ function removeUnrequestedNextActions(lines: string[]): string[] {
   // transcript has been sealed. Keep factual notes (for example read-only
   // confirmation) but remove only explicit unrequested action offers.
   return lines.filter((line) => !/\b(?:next steps? I can run|I can (?:run|show|prepare)|requires your approval)\b/i.test(line));
+}
+
+function removeEmbeddedExecutionReplay(lines: string[]): string[] {
+  // Some finalizers state the findings first and then append an evidence/tool
+  // ledger. That ordering is still wrong for this UI: Working owns the ledger
+  // while Final owns the conclusion. Drop a replay heading and its bullets,
+  // then resume at the next ordinary conclusion line.
+  let skippingReplayItems = false;
+  return lines.filter((line) => {
+    const normalized = normalizePreambleLine(line);
+    if (isExecutionReplayHeading(normalized)) {
+      skippingReplayItems = true;
+      return false;
+    }
+    if (skippingReplayItems && (!normalized || /^(?:[-*•]|\d+[.)])\s/.test(normalized))) return false;
+    skippingReplayItems = false;
+    return true;
+  });
+}
+
+function isExecutionReplayHeading(line: string): boolean {
+  return /^(?:#{1,6}\s*)?(?:planned evidence|evidence (?:needed|collected)|collected evidence|read-only (?:commands?|checks?)|(?:commands?|checks?) run)\b/i.test(line);
 }
 
 function isRepeatedExecutionPreamble(lines: string[]): boolean {
