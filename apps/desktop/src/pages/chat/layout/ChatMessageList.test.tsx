@@ -145,6 +145,42 @@ describe("ChatMessageList", () => {
     expect(html).not.toContain("stdout-secret-must-not-render");
   });
 
+  it("renders a complete two-sentence action narrative before its real command group", () => {
+    const narrative = "Check the selected Project Link’s active branch, working-tree state, and latest commit so the response is grounded in the target repository rather than a guessed workspace state. Those facts establish whether local changes affect the branch summary before the agent reports the result.";
+    const html = renderMessages([{
+      id: "turn",
+      kind: "system",
+      text: "Working",
+      turnId: "turn-natural-narrative",
+      turnTranscript: {
+        startedAt: Date.now(),
+        status: "working",
+        executionSealed: false,
+        blocks: [
+          { kind: "statement", id: "inspect", source: "server", text: narrative },
+          {
+            kind: "tool_group",
+            id: "inspect",
+            label: "Ran commands",
+            commands: [
+              { id: "branch", name: "git_branch", command: "git branch --show-current", status: "succeeded", durationMs: 120 },
+              { id: "status", name: "git_status", command: "git status --short", status: "succeeded", durationMs: 160 },
+              { id: "head", name: "git_log", command: "git log -1 --format=%h", status: "succeeded", durationMs: 110 },
+            ],
+          },
+        ],
+        pendingGroups: {},
+      },
+    }]);
+
+    expect(html).toContain(narrative);
+    expect(html).not.toContain("…");
+    expect(html).toContain("Ran commands");
+    // Command rows stay collapsed until the user opens the actual group, so
+    // the pre-action narrative remains the readable first item in the stack.
+    expect(html).not.toContain("git branch --show-current");
+  });
+
   it("does not give an empty optimistic Turn a misleading disclosure control", () => {
     const html = renderMessages([{
       id: "empty-turn",
