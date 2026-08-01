@@ -303,9 +303,9 @@ function now(): number {
 }
 
 function publicTimelineEvent(event: TurnTimelineEvent): TurnTimelineEvent {
-  const { result, ...safe } = event;
   // The final text is already independently present on turn.final.completed;
   // retaining generic result payloads risks persisting provider/tool internals.
-  void result;
-  return safe;
+  const safe = { ...event } as Record<string, unknown>;
+  delete safe.result;
+  return safe as unknown as TurnTimelineEvent;
 }

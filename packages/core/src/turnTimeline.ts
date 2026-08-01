@@ -62,7 +62,6 @@ export interface TurnTimelineEvent {
   /** Public workflow status used by approval and recovery UI, never provider data. */
   workflow?: unknown;
   status?: "completed" | "cancelled" | "failed";
-  result?: unknown;
 }
 
 /**

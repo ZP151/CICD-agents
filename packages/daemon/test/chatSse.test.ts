@@ -102,6 +102,45 @@ describe("chat SSE timeline projection", () => {
     expect(final).not.toHaveProperty("result");
   });
 
+  it("redacts and bounds nested approval metadata before persisting the Timeline", () => {
+    const sent: Array<{ event: string; payload: Record<string, unknown> }> = [];
+    const reply = {
+      raw: {
+        setHeader: () => undefined,
+        flushHeaders: () => undefined,
+        write: (wire: string) => {
+          const event = wire.match(/^event: ([^\n]+)/m)?.[1] ?? "";
+          const payload = JSON.parse(wire.match(/^data: (.+)$/m)?.[1] ?? "{}");
+          sent.push({ event, payload });
+        },
+        end: () => undefined,
+      },
+    } as never;
+    const writer = createChatSseWriter(reply);
+    writer.startTurn("turn-1");
+    writer.sendChatEvent({
+      type: "approval_required",
+      approval: {
+        id: "approval-1",
+        riskLevel: "medium",
+        action: {
+          tool: "mcp_publish",
+          args: { branch: "main", api_key: "should-not-leak", nested: { access_token: "also-secret", path: "src/app.ts" } },
+          description: "Publish the branch",
+          readiness: { providerPayload: { hidden: true }, reason: "Review passes" },
+        },
+      },
+    });
+
+    const approval = sent.find((entry) => entry.event === "turn.approval.requested")?.payload;
+    expect(approval).toMatchObject({
+      approval: { action: { args: { branch: "main", nested: { path: "src/app.ts" } }, readiness: { reason: "Review passes" } } },
+    });
+    expect(JSON.stringify(approval)).not.toContain("should-not-leak");
+    expect(JSON.stringify(approval)).not.toContain("also-secret");
+    expect(JSON.stringify(approval)).not.toContain("providerPayload");
+  });
+
   it("maps the real model narrative onto an updatable Part event and keeps a slow-model notice transient", async () => {
     const sent: Array<{ event: string; payload: Record<string, unknown> }> = [];
     const reply = {

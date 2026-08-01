@@ -1,5 +1,5 @@
 import type { FastifyReply } from "fastify";
-import { type ChatEvent, type TurnTimelineEvent } from "@mergepilot/core";
+import { redact, type ChatEvent, type TurnTimelineEvent } from "@mergepilot/core";
 import { sessionStartedEvent } from "../chatEvents.js";
 
 export interface ChatSseWriter {
@@ -292,7 +292,7 @@ function publicTimelinePayload(eventName: string, payload: Record<string, unknow
   const phase = eventName === "turn.final.delta" || eventName === "turn.final.completed" || eventName === "turn.finished"
     ? "final"
     : "working";
-  const record: Record<string, unknown> = { ...rest, phase: rest.phase ?? phase };
+  const record = publicTimelineValue({ ...rest, phase: rest.phase ?? phase }) as Record<string, unknown>;
   if (approval && typeof approval === "object") {
     const source = approval as Record<string, unknown>;
     const action = source.action && typeof source.action === "object"
@@ -306,16 +306,43 @@ function publicTimelinePayload(eventName: string, payload: Record<string, unknow
         // Approval is the one public activity that must retain its proposed
         // arguments: the user cannot make an informed allow/deny decision
         // from a label alone. Tool output and provider payloads remain out.
-        args: action.args && typeof action.args === "object" ? action.args : undefined,
+        args: publicTimelineValue(action.args),
         description: typeof action.description === "string" ? action.description : undefined,
         nextHint: typeof action.nextHint === "string" ? action.nextHint : undefined,
-        readiness: action.readiness && typeof action.readiness === "object" ? action.readiness : undefined,
-        preflight: action.preflight && typeof action.preflight === "object" ? action.preflight : undefined,
-        workflow: action.workflow && typeof action.workflow === "object" ? action.workflow : undefined,
+        readiness: publicTimelineValue(action.readiness),
+        preflight: publicTimelineValue(action.preflight),
+        workflow: publicTimelineValue(action.workflow),
       } : undefined,
     };
   }
   return record as unknown as TurnTimelineEvent;
+}
+
+/**
+ * A Timeline is durable, user-visible evidence. Approval and workflow data
+ * are useful there, but plugins can attach arbitrary nested metadata; bound
+ * and redact it before it reaches SSE or session persistence.
+ */
+function publicTimelineValue(value: unknown, depth = 0): unknown {
+  if (value === null || value === undefined || typeof value === "boolean" || typeof value === "number") return value;
+  if (typeof value === "string") return truncatePublicValue(redact(value));
+  if (depth >= 4) return "[omitted]";
+  if (Array.isArray(value)) return value.slice(0, 32).map((item) => publicTimelineValue(item, depth + 1));
+  if (typeof value !== "object") return undefined;
+
+  const output: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>).slice(0, 32)) {
+    // Provider/raw result envelopes and credential-shaped fields have no
+    // legitimate role in an approval or workflow transcript.
+    if (/(?:provider|payload|raw|credential|secret|api[_-]?key|token|authorization|password)/i.test(key)) continue;
+    const publicValue = publicTimelineValue(item, depth + 1);
+    if (publicValue !== undefined) output[key] = publicValue;
+  }
+  return output;
+}
+
+function truncatePublicValue(value: string): string {
+  return value.length <= 1_200 ? value : `${value.slice(0, 1_197)}...`;
 }
 
 function enrichTurnEvent(
