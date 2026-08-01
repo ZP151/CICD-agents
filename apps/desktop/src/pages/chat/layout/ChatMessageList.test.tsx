@@ -181,6 +181,33 @@ describe("ChatMessageList", () => {
     expect(html).not.toContain("git branch --show-current");
   });
 
+  it("identifies an MCP-backed command group without changing the activity hierarchy", () => {
+    const html = renderMessages([{
+      id: "mcp-turn",
+      kind: "system",
+      text: "Working",
+      turnId: "turn-mcp",
+      turnTranscript: {
+        startedAt: Date.now(),
+        status: "working",
+        executionSealed: false,
+        blocks: [{
+          kind: "tool_group",
+          id: "github-search",
+          label: "Ran commands",
+          connector: { kind: "mcp", id: "github", label: "GitHub" },
+          commands: [{ id: "search", name: "mcp_github_search", command: "Search open issues", status: "succeeded" }],
+        }],
+        pendingGroups: {},
+      },
+    }]);
+
+    expect(html).toContain("Ran commands");
+    expect(html).toContain("GitHub");
+    expect(html).toContain("MCP connector: GitHub");
+    expect(html).not.toContain("Search open issues");
+  });
+
   it("does not give an empty optimistic Turn a misleading disclosure control", () => {
     const html = renderMessages([{
       id: "empty-turn",

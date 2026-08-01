@@ -159,9 +159,13 @@ function TranscriptBlockView({
         onClick={() => setOpenGroups((current) => ({ ...current, [block.id]: !groupOpen }))}
         className="inline-flex min-h-7 items-center gap-1 rounded px-1 text-[rgb(var(--app-text-muted))] transition-[background,color] duration-150 hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-[rgb(var(--app-text))]"
       >
-        <TerminalIcon />
+        {block.connector?.kind === "mcp" ? <McpConnectorIcon /> : <TerminalIcon />}
         <span>{block.label}</span>
-        {block.connector?.kind === "mcp" && <span className="ml-1 text-[11px] text-[rgb(var(--app-text-subtle))]">{block.connector.label}</span>}
+        {block.connector?.kind === "mcp" && (
+          <span className="ml-1 text-[11px] text-[rgb(var(--app-text-subtle))]" title={`MCP connector: ${block.connector.label}`}>
+            {block.connector.label}
+          </span>
+        )}
         <Chevron open={groupOpen} />
       </button>
       {groupOpen && (
@@ -242,6 +246,21 @@ function TerminalIcon() {
     <svg className="h-3.5 w-3.5 shrink-0 opacity-75" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <rect x="1.5" y="2.25" width="13" height="11.5" rx="2" stroke="currentColor" strokeWidth="1.2" />
       <path d="m5 6 2 2-2 2M9.25 10h2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/**
+ * Keep connector provenance visible without turning an MCP action into a
+ * different type of transcript block. Built-in shell groups retain the
+ * terminal glyph from the reference interaction; externally-provided action
+ * groups gain a small plug mark and their stable connector label.
+ */
+function McpConnectorIcon() {
+  return (
+    <svg className="h-3.5 w-3.5 shrink-0 opacity-75" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M6 2.5v3m4-3v3M4.25 5.5h7.5v3.25a3.75 3.75 0 0 1-7.5 0V5.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 12.5v1.25M5.75 13.75h4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   );
 }
