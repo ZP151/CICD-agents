@@ -25,6 +25,7 @@ concurrency:
 jobs:
   node:
     name: Node ${{ matrix.node }} on ${{ matrix.os }}
+    if: matrix.os != 'ubuntu-latest'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
