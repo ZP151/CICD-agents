@@ -1,13 +1,17 @@
 import { z } from "zod";
 import { PROJECT_CHAT_DEPLOYMENT } from "@mergepilot/core";
 
+// Keep this package independently runnable during webhook deployment and tests.
+// It intentionally matches the desktop/core default for GPT-5 Chat Completions.
+const DEFAULT_GPT5_AZURE_CHAT_API_VERSION = "2025-04-01-preview";
+
 const ConfigSchema = z.object({
   port: z.coerce.number().default(8080),
   host: z.string().default("0.0.0.0"),
   webhookSecret: z.string().default(""),
   azureOpenAiEndpoint: z.string().default(""),
   azureOpenAiApiKey: z.string().default(""),
-  azureOpenAiApiVersion: z.string().default("2024-08-01-preview"),
+  azureOpenAiApiVersion: z.string().default(DEFAULT_GPT5_AZURE_CHAT_API_VERSION),
   azureOpenAiChatDeployment: z.string().default(PROJECT_CHAT_DEPLOYMENT),
   azureDevOpsOrg: z.string().default(""),
   azureDevOpsProject: z.string().default(""),

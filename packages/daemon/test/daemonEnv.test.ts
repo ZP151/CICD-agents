@@ -63,6 +63,7 @@ describe("daemonEnv", () => {
     expect(content).toContain("narrative_deployment = \"\"");
     expect(content).toContain("embedding_deployment = \"text-embedding-3-small\"");
     expect(content).toContain("chat_deployment = \"gpt-5-mini\"");
+    expect(content).toContain("api_version = \"2025-04-01-preview\"");
     expect(content).toContain("key_vault_url = \"\"");
     expect(content).toContain("api_key_ref = \"\"");
   });

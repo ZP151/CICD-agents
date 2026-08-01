@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { getSettings, resetSettingsForTests } from "../src/settings.js";
-import { LLMClient } from "../src/llm.js";
+import { GPT5_AZURE_CHAT_API_VERSION, getSettings, resetSettingsForTests } from "../src/settings.js";
+import { LLMClient, reasoningApiVersionConfigurationError } from "../src/llm.js";
 
 describe("settings", () => {
   const previousEnv = {
@@ -30,6 +30,7 @@ describe("settings", () => {
     resetSettingsForTests();
 
     expect(getSettings().reviewStaleAgeHours).toBe(24);
+    expect(getSettings().azureOpenAiApiVersion).toBe(GPT5_AZURE_CHAT_API_VERSION);
   });
 
   it("reads review stale age from the environment", () => {
@@ -92,5 +93,10 @@ describe("settings", () => {
     resetSettingsForTests();
 
     expect(new LLMClient(getSettings()).actionNarrativeModel()).toBe("fast-narrative-model");
+  });
+
+  it("identifies a GPT-5 model release date accidentally used as an API version", () => {
+    expect(reasoningApiVersionConfigurationError("gpt-5-mini", "2025-08-07")).toContain(GPT5_AZURE_CHAT_API_VERSION);
+    expect(reasoningApiVersionConfigurationError("gpt-5-mini", GPT5_AZURE_CHAT_API_VERSION)).toBeUndefined();
   });
 });

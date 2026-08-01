@@ -28,7 +28,7 @@ chat_deployment = "gpt-5-mini"
 # Optional low-latency deployment used only for the public action narrative.
 narrative_deployment = ""
 embedding_deployment = "text-embedding-3-small"
-api_version = "2024-08-01-preview"
+api_version = "2025-04-01-preview"
 api_key_ref = ""
 
 [azure_auth]
@@ -328,7 +328,7 @@ function configToToml(config: MergePilotUserConfig): string {
     `chat_deployment = ${tomlString(config.azureDeployment ?? "gpt-5-mini")}`,
     `narrative_deployment = ${tomlString(config.azureNarrativeDeployment ?? "")}`,
     `embedding_deployment = ${tomlString(config.azureEmbeddingDeployment ?? "text-embedding-3-small")}`,
-    `api_version = ${tomlString(config.azureApiVersion ?? "2024-08-01-preview")}`,
+    `api_version = ${tomlString(config.azureApiVersion ?? "2025-04-01-preview")}`,
     `api_key_ref = ${tomlString(azureApiKeyRef)}`,
     "",
     "[azure_auth]",

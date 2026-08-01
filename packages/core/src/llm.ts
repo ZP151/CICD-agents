@@ -4,7 +4,7 @@ import type {
   ChatCompletionMessageParam,
   ChatCompletionTool,
 } from "openai/resources/chat/completions";
-import { getSettings, type Settings } from "./settings.js";
+import { GPT5_AZURE_CHAT_API_VERSION, getSettings, type Settings } from "./settings.js";
 import { logger } from "./logger.js";
 
 // A streaming Turn cannot leave its Working canvas open indefinitely when a
@@ -128,6 +128,19 @@ export function completionTemperature(model: string, temperature: number): Compl
   return isReasoningDeployment(model) ? {} : { temperature };
 }
 
+/**
+ * GPT-5 model snapshot dates (for example 2025-08-07) are not Azure
+ * data-plane API versions. Catch the known default-model mismatch before an
+ * opaque 404 reaches a desktop Turn.
+ */
+export function reasoningApiVersionConfigurationError(
+  model: string,
+  apiVersion: string,
+): string | undefined {
+  if (!isReasoningDeployment(model) || apiVersion.trim() !== "2025-08-07") return undefined;
+  return `Azure GPT-5 model version ${apiVersion} is not a Chat Completions API version. Use ${GPT5_AZURE_CHAT_API_VERSION} (or the Azure v1 endpoint) in the local MergePilot configuration.`;
+}
+
 export class LLMClient {
   private client: AzureOpenAI | OpenAI | null = null;
   public readonly usage: UsageTotals = {
@@ -148,6 +161,13 @@ export class LLMClient {
       throw new LLMUnavailableError(
         "The selected model provider is not reachable.",
       );
+    }
+    if (this.settings.llmProvider === "azure") {
+      const configurationError = reasoningApiVersionConfigurationError(
+        this.chatModel(),
+        this.settings.azureOpenAiApiVersion,
+      );
+      if (configurationError) throw new LLMUnavailableError(configurationError);
     }
     this.client = this.settings.llmProvider === "openai"
       ? new OpenAI({ apiKey: this.settings.openAiApiKey })

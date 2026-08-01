@@ -1,5 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import { completionTemperature, completionTokenLimit, type Settings } from "@mergepilot/core";
+import {
+  completionTemperature,
+  completionTokenLimit,
+  type Settings,
+} from "@mergepilot/core";
 import { keyVaultSecretError } from "../daemonEnv.js";
 
 let azureDeploymentProbeCache: {
@@ -8,6 +12,14 @@ let azureDeploymentProbeCache: {
   available: boolean;
   error: string;
 } | null = null;
+
+function gpt5ApiVersionConfigurationError(settings: Settings): string | undefined {
+  const isGpt5 = /^(?:gpt-?5(?:$|[-_.]|mini|nano|pro))/.test(
+    settings.azureOpenAiChatDeployment.trim().toLowerCase(),
+  );
+  if (!isGpt5 || settings.azureOpenAiApiVersion.trim() !== "2025-08-07") return undefined;
+  return "Azure GPT-5 model version 2025-08-07 is not a Chat Completions API version. Use 2025-04-01-preview (or the Azure v1 endpoint) in the local MergePilot configuration.";
+}
 
 function azureDeploymentProbeKey(settings: Settings): string {
   return [
@@ -23,6 +35,8 @@ async function probeAzureDeployment(settings: Settings): Promise<{ available: bo
   if (!settings.azureOpenAiEndpoint || !settings.azureOpenAiApiKey || !settings.azureOpenAiChatDeployment) {
     return { available: false, error: "Azure OpenAI endpoint, key, or chat deployment is missing." };
   }
+  const configurationError = gpt5ApiVersionConfigurationError(settings);
+  if (configurationError) return { available: false, error: configurationError };
 
   const key = azureDeploymentProbeKey(settings);
   const now = Date.now();

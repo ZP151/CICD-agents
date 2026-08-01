@@ -10,11 +10,13 @@ import { z } from "zod";
  */
 export const PROJECT_CHAT_DEPLOYMENT = "gpt-5-mini";
 export const PROJECT_EMBEDDING_DEPLOYMENT = "mergepilot-embeddings";
+/** Azure Chat Completions data-plane preview that supports GPT-5 tool use. */
+export const GPT5_AZURE_CHAT_API_VERSION = "2025-04-01-preview";
 
 const SettingsSchema = z.object({
   llmProvider: z.enum(["azure", "openai"]).default("azure"),
   azureOpenAiEndpoint: z.string().default(""),
-  azureOpenAiApiVersion: z.string().default("2024-08-01-preview"),
+  azureOpenAiApiVersion: z.string().default(GPT5_AZURE_CHAT_API_VERSION),
   azureOpenAiApiKey: z.string().default(""),
   azureOpenAiChatDeployment: z.string().default(PROJECT_CHAT_DEPLOYMENT),
   /** Optional low-latency deployment used only for public action narration. */
