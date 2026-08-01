@@ -2,6 +2,7 @@ use std::{process::Command, thread, time::Duration};
 use std::sync::{Mutex, OnceLock};
 use tauri::{
     AppHandle,
+    Emitter,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
@@ -251,7 +252,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             if argv.iter().any(|arg| is_auth_return_uri(arg)) {
-                reveal_main_window(app);
+                complete_browser_auth_return(app);
             }
         }))
         .plugin(tauri_plugin_deep_link::init())
@@ -281,7 +282,7 @@ pub fn run() {
             let return_handle = app.handle().clone();
             app.deep_link().on_open_url(move |event| {
                 if event.urls().iter().any(|url| is_auth_return_uri(url.as_str())) {
-                    reveal_main_window(&return_handle);
+                    complete_browser_auth_return(&return_handle);
                 }
             });
 
@@ -461,6 +462,15 @@ fn reveal_main_window(app: &tauri::AppHandle) {
         let _ = win.unminimize();
         let _ = win.set_focus();
     }
+}
+
+/// The browser never passes an identity or token back through this URI.  It
+/// only tells the already-running desktop app to re-read the credential that
+/// MSAL has stored locally.  Emitting an event as well as focusing the window
+/// avoids relying on background WebView timers to notice the completed login.
+fn complete_browser_auth_return(app: &tauri::AppHandle) {
+    reveal_main_window(app);
+    let _ = app.emit("mergepilot-auth-complete", ());
 }
 
 #[cfg(test)]

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import {
   authLoginStream,
   fetchAuthAccounts,
@@ -135,9 +136,32 @@ export function LoginModal({
       void checkForCompletedSignIn();
     }, 750);
 
+    // The deep-link return is the fast path.  Focus/visibility checks are
+    // deliberate fallbacks for development, where an OS can focus the WebView
+    // before the deep-link event listener is registered.
+    let unlisten: (() => void) | undefined;
+    void listen("mergepilot-auth-complete", () => {
+      void checkForCompletedSignIn();
+    }).then((dispose) => {
+      if (cancelled) dispose();
+      else unlisten = dispose;
+    }).catch(() => {
+      // Browser-only development does not expose Tauri's event bridge; the
+      // interval and focus fallbacks above remain active there.
+    });
+    const onWindowFocus = () => void checkForCompletedSignIn();
+    const onVisibilityChange = () => {
+      if (!document.hidden) void checkForCompletedSignIn();
+    };
+    window.addEventListener("focus", onWindowFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      window.removeEventListener("focus", onWindowFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      unlisten?.();
     };
   }, [complete, done, started]);
 
