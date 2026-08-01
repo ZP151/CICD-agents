@@ -1,10 +1,15 @@
-import { lazy, Suspense, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { turnTranscriptElapsedMs } from "../chatTurnTranscript.js";
 import type { Bubble, TurnTranscriptBlock } from "../chat.types.js";
 import { PendingActionCard } from "../approval/PendingActionCard.js";
 import { commandLanguage, commandOutputLanguage, type CommandCodeLanguage } from "./commandLanguage.js";
 
 const CommandCodeViewer = lazy(() => import("./CommandCodeViewer.js").then(({ CommandCodeViewer: Viewer }) => ({ default: Viewer })));
+// The transcript is also rendered in Node-side tests/history previews where a
+// layout effect is neither useful nor safe. In the desktop browser it makes
+// the execution → final handoff paint atomically: Working is collapsed before
+// the first final text frame can become visible.
+const useTranscriptLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export function TurnTranscriptView({
   bubble,
@@ -32,7 +37,7 @@ export function TurnTranscriptView({
     return () => window.clearInterval(timer);
   }, [transcript?.status]);
 
-  useEffect(() => {
+  useTranscriptLayoutEffect(() => {
     const working = transcript?.status === "working";
     const approvalWaiting = approval?.pendingStatus === "waiting" || approval?.pendingStatus === "executing";
     if (previousWorking.current && !working && !approvalWaiting) setOpen(false);
