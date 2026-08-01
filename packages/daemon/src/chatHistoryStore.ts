@@ -162,16 +162,18 @@ export async function deleteStoredSession(sessionId: string): Promise<boolean> {
   if (cosmos) {
     try {
       await cosmos.delete(sessionId);
-      return existed;
     } catch {
-      // fall through to local
+      // The local copy is the live desktop transcript. A cloud mirror failure
+      // must not make a user-visible Delete leave it behind.
     }
   }
   const store = loadStoreSync();
-  if (!store[sessionId]) return existed;
-  delete store[sessionId];
-  saveStoreSync(store);
-  return true;
+  const localExisted = Boolean(store[sessionId]);
+  if (localExisted) {
+    delete store[sessionId];
+    saveStoreSync(store);
+  }
+  return existed || localExisted;
 }
 
 export async function listStoredSessionsForActivity(limit: number): Promise<StoredSession[]> {

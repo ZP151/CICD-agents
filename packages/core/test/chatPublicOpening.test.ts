@@ -14,7 +14,7 @@ describe("streamActionNarrative", () => {
       expect((options as { model?: string }).model).toBe("fast-narrative-model");
       expect(JSON.stringify(options.messages)).toContain("Review the current project changes");
       expect(JSON.stringify(options.messages)).toContain("Always respond in English; this product has one English conversation path");
-      expect(JSON.stringify(options.messages)).toContain("Do not repeat the user's request verbatim or use labels such as Goal");
+      expect(JSON.stringify(options.messages)).toContain("Scope, Goal, Uncertainty, Evidence, Plan, or Next step");
       expect(JSON.stringify(options.messages)).toContain("never use generic framing such as 'Based on the request'");
       expect(JSON.stringify(options.messages)).toContain("No repository evidence is available yet");
       expect(JSON.stringify(options.messages)).toContain("Do not reveal private reasoning");

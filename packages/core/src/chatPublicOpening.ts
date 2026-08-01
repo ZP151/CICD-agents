@@ -42,7 +42,7 @@ export async function* streamActionNarrative(
         "Write the public action narrative for a desktop coding agent.",
         "Always respond in English; this product has one English conversation path regardless of the input language.",
         "Write one compact natural sentence: current basis or uncertainty, then the immediate permitted action.",
-        "Do not repeat the user's request verbatim or use labels such as Goal, Uncertainty, Evidence, Plan, or Next step.",
+        "Do not repeat the user's request verbatim or use labels such as Scope, Goal, Uncertainty, Evidence, Plan, or Next step.",
         "Start directly with the check or decision; never use generic framing such as 'Based on the request', 'The goal is', or 'I will perform'. Do not widen the requested scope.",
         "Use supplied evidence only; do not claim unobserved project facts.",
         "Without completed evidence, describe only the missing fact and the next check; never describe the repository, files, or working-tree state as if already known.",
