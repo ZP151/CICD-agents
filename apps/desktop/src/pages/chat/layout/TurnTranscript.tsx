@@ -40,7 +40,14 @@ export function TurnTranscriptView({
   useTranscriptLayoutEffect(() => {
     const working = transcript?.status === "working";
     const approvalWaiting = approval?.pendingStatus === "waiting" || approval?.pendingStatus === "executing";
-    if (previousWorking.current && !working && !approvalWaiting) setOpen(false);
+    if (previousWorking.current && !working && !approvalWaiting) {
+      // A completed Turn is reopened as a record, so start at the first
+      // public statement rather than preserving the live auto-follow offset
+      // from its final command group.
+      followLatestRef.current = false;
+      bodyRef.current?.scrollTo({ top: 0 });
+      setOpen(false);
+    }
     if (working) setOpen(true);
     if (approvalWaiting) setOpen(true);
     previousWorking.current = working;
