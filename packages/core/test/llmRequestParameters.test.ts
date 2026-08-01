@@ -65,7 +65,7 @@ describe("LLMClient GPT-5 parameter compatibility", () => {
     expect(create.mock.calls[0]?.[0]).not.toHaveProperty("temperature");
   });
 
-  it("uses the same GPT-5 parameter for an explicit streaming narration model", async () => {
+  it("uses GPT-5 minimal reasoning for an explicit streaming narration model", async () => {
     async function* stream() {
       yield { choices: [{ delta: { content: "I will inspect the target." }, finish_reason: "stop" }] };
     }
@@ -77,7 +77,7 @@ describe("LLMClient GPT-5 parameter compatibility", () => {
       messages: [{ role: "user", content: "Hello" }],
       model: "gpt5mini",
       maxTokens: 64,
-      reasoningEffort: "low",
+      reasoningEffort: "minimal",
     })) {
       // Exhaust the stream so the request completes.
     }
@@ -85,7 +85,7 @@ describe("LLMClient GPT-5 parameter compatibility", () => {
     expect(create.mock.calls[0]?.[0]).toMatchObject({
       model: "gpt5mini",
       max_completion_tokens: 64,
-      reasoning_effort: "low",
+      reasoning_effort: "minimal",
     });
     expect(create.mock.calls[0]?.[0]).not.toHaveProperty("max_tokens");
     expect(create.mock.calls[0]?.[0]).not.toHaveProperty("temperature");

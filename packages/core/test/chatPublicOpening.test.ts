@@ -7,10 +7,10 @@ describe("streamActionNarrative", () => {
     const llm = {
       configured: true,
       actionNarrativeModel: () => "fast-narrative-model",
-    async *chatStream(options: { messages: Array<{ role: string; content: unknown }>; tools?: unknown; maxTokens?: number; reasoningEffort?: "low" | "medium" | "high" }) {
+    async *chatStream(options: { messages: Array<{ role: string; content: unknown }>; tools?: unknown; maxTokens?: number; reasoningEffort?: "minimal" | "low" | "medium" | "high" }) {
       expect(options.tools).toBeUndefined();
-      expect(options.maxTokens).toBeLessThanOrEqual(96);
-      expect(options.reasoningEffort).toBe("low");
+      expect(options.maxTokens).toBeLessThanOrEqual(128);
+      expect(options.reasoningEffort).toBe("minimal");
       expect((options as { model?: string }).model).toBe("fast-narrative-model");
       expect(JSON.stringify(options.messages)).toContain("Review the current project changes");
       expect(JSON.stringify(options.messages)).toContain("Always respond in English; this product has one English conversation path");
@@ -31,6 +31,7 @@ describe("streamActionNarrative", () => {
     for await (const event of streamActionNarrative(llm, { request: "Review the current project changes" })) events.push(event);
 
     expect(events).toEqual([
+      { type: "work_statement", blockId: "opening", text: "I will first establish the change scope", replace: true },
       { type: "work_statement", blockId: "opening", text: "I will first establish the change scope and then run the smallest read-only check.", replace: true },
     ]);
     expect(JSON.stringify(events)).not.toContain("Establish the relevant evidence first");
@@ -109,7 +110,7 @@ describe("streamActionNarrative", () => {
     expect(events.at(-1)).toMatchObject({ text: "I will inspect uncommitted changes." });
   });
 
-  it("waits for a useful initial phrase instead of rendering an isolated model token", async () => {
+  it("publishes the first real model token immediately, then replaces the same narrative block", async () => {
     const llm = {
       configured: true,
       async *chatStream() {
@@ -123,9 +124,9 @@ describe("streamActionNarrative", () => {
     for await (const event of streamActionNarrative(llm, { request: "Inspect the branch" })) events.push(event);
 
     expect(events).toEqual([
+      expect.objectContaining({ text: "I" }),
       expect.objectContaining({ text: "I will inspect" }),
       expect.objectContaining({ text: "I will inspect the branch." }),
     ]);
-    expect(JSON.stringify(events)).not.toContain('"text":"I"');
   });
 });

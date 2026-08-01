@@ -1,6 +1,7 @@
 import OpenAI, { AzureOpenAI } from "openai";
 import type {
   ChatCompletionCreateParamsNonStreaming,
+  ChatCompletionCreateParamsStreaming,
   ChatCompletionMessageParam,
   ChatCompletionTool,
 } from "openai/resources/chat/completions";
@@ -264,14 +265,16 @@ export class LLMClient {
     maxTokens?: number;
     model?: string;
     /** Use a bounded reasoning mode only where the caller explicitly opts in. */
-    reasoningEffort?: "low" | "medium" | "high";
+    reasoningEffort?: "minimal" | "low" | "medium" | "high";
   }): AsyncGenerator<ChatStreamEvent, void, unknown> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), STREAM_REQUEST_TIMEOUT_MS);
     try {
       const model = opts.model || this.chatModel();
-      const stream = await this.get().chat.completions.create(
-        {
+      // The installed SDK declaration predates Azure GPT-5's `minimal`
+      // reasoning mode. Keep that narrow compatibility cast at the transport
+      // edge; the Azure runtime receives the documented parameter unchanged.
+      const request = {
           model,
           messages: opts.messages,
           ...completionTemperature(model, opts.temperature ?? 0.2),
@@ -283,7 +286,9 @@ export class LLMClient {
           tool_choice: opts.tools && opts.tools.length > 0 ? "auto" : undefined,
           stream: true,
           stream_options: { include_usage: true },
-        },
+        } as unknown as ChatCompletionCreateParamsStreaming;
+      const stream = await this.get().chat.completions.create(
+        request,
         { timeout: STREAM_REQUEST_TIMEOUT_MS, signal: controller.signal, maxRetries: 0 },
       );
 

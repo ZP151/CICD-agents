@@ -3,7 +3,11 @@ import type { LLMClient } from "./llm.js";
 import type { ChatEvent } from "./chatPlannerTypes.js";
 
 const MAX_ACTION_NARRATIVE_CHARS = 180;
-const MAX_ACTION_NARRATIVE_TOKENS = 40;
+// GPT-5 counts reasoning and visible tokens against max_completion_tokens.
+// A 40-token cap regularly finishes before any public token is available;
+// 128 remains deliberately small while leaving enough room for low-effort
+// reasoning plus the one-sentence visible action narrative.
+const MAX_ACTION_NARRATIVE_TOKENS = 128;
 const MIN_INITIAL_VISIBLE_NARRATIVE_CHARS = 12;
 
 export interface ActionNarrativeRequest {
@@ -75,11 +79,10 @@ export async function* streamActionNarrative(
     messages,
     maxTokens: MAX_ACTION_NARRATIVE_TOKENS,
     model: llm.actionNarrativeModel?.(),
-    // The opening is a single public action sentence, not the planner's
-    // private problem-solving pass. For GPT-5 reasoning deployments this
-    // keeps the user-visible first response on Azure's low effort setting;
-    // later planner and tool decisions keep their existing quality path.
-    reasoningEffort: "low",
+    // The narrator is a separate GPT-5 deployment. `minimal` reserves just
+    // enough reasoning budget to form a truthful public action sentence;
+    // the main planning call retains its own low/medium reasoning policy.
+    reasoningEffort: "minimal",
   })) {
     if (event.type !== "delta" || !event.delta) continue;
     text = appendNarrativeDelta(text, event.delta);
@@ -113,14 +116,14 @@ export async function* streamActionNarrative(
 }
 
 /**
- * The very first provider token is often merely "I". Waiting for a compact
- * word boundary gives the user useful live feedback without replacing it
- * with a canned status line or waiting for a whole sentence.
+ * The first visible provider token is the only honest model feedback before
+ * the next token arrives. Emit it immediately instead of buffering it into a
+ * synthetic-looking phrase; later deltas replace this same Transcript block.
  */
 function shouldEmitNarrative(text: string, emittedText: string): boolean {
   if (text.trimEnd() === emittedText) return false;
+  if (!emittedText) return text.trim().length > 0;
   const hasBoundary = /\s$/.test(text) || /[.!?。！？]$/.test(text);
-  if (!emittedText) return text.trim().length >= MIN_INITIAL_VISIBLE_NARRATIVE_CHARS && hasBoundary;
   return hasBoundary;
 }
 

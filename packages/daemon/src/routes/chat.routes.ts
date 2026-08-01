@@ -327,6 +327,12 @@ export function registerChatRoutes(
             throw new Error("The model did not begin an action narrative within 15 seconds.");
           }
           if (openingNarrativeError) throw openingNarrativeError;
+          if (narrativeLlm.configured && !openingNarrativeText.trim()) {
+            // Do not execute tools behind an empty or reasoning-only opening
+            // response. The Working transcript must show a genuine public
+            // action narrative before evidence collection begins.
+            throw new Error("The model completed without a public action narrative. Please try again.");
+          }
           if (!active) return;
 
           // Desktop sends the selected Project Link inline with the request.

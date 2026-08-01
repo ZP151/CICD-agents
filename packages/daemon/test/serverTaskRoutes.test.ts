@@ -101,6 +101,47 @@ describe("daemon basic and task routes", () => {
     }
   });
 
+  it("does not mark a reachable GPT-5 deployment unavailable when a probe exhausts its output budget", async () => {
+    const previous = {
+      endpoint: process.env.AZURE_OPENAI_ENDPOINT,
+      apiKey: process.env.AZURE_OPENAI_API_KEY,
+      deployment: process.env.AZURE_OPENAI_CHAT_DEPLOYMENT,
+      apiVersion: process.env.AZURE_OPENAI_API_VERSION,
+    };
+    process.env.AZURE_OPENAI_ENDPOINT = "https://example.openai.azure.com";
+    process.env.AZURE_OPENAI_API_KEY = "test-key";
+    process.env.AZURE_OPENAI_CHAT_DEPLOYMENT = "gpt-5-mini";
+    process.env.AZURE_OPENAI_API_VERSION = "2025-04-01-preview";
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      error: { message: "Could not finish the message because max_tokens or model output limit was reached." },
+    }), { status: 400 }));
+    vi.stubGlobal("fetch", fetchMock);
+    resetSettingsForTests();
+    try {
+      app = await buildApp();
+      const r = await app.inject({ method: "GET", url: "/healthz" });
+      const body = r.json() as { azureDeploymentAvailable: boolean; azureDeploymentError: string };
+      expect(body.azureDeploymentAvailable).toBe(true);
+      expect(body.azureDeploymentError).toBe("");
+      expect(fetchMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+        body: expect.stringContaining("max_completion_tokens"),
+      }));
+      const requestBody = String((fetchMock.mock.calls[0]?.[1] as RequestInit).body);
+      expect(requestBody).toContain("128");
+      expect(requestBody).toContain("\"reasoning_effort\":\"minimal\"");
+    } finally {
+      if (previous.endpoint === undefined) delete process.env.AZURE_OPENAI_ENDPOINT;
+      else process.env.AZURE_OPENAI_ENDPOINT = previous.endpoint;
+      if (previous.apiKey === undefined) delete process.env.AZURE_OPENAI_API_KEY;
+      else process.env.AZURE_OPENAI_API_KEY = previous.apiKey;
+      if (previous.deployment === undefined) delete process.env.AZURE_OPENAI_CHAT_DEPLOYMENT;
+      else process.env.AZURE_OPENAI_CHAT_DEPLOYMENT = previous.deployment;
+      if (previous.apiVersion === undefined) delete process.env.AZURE_OPENAI_API_VERSION;
+      else process.env.AZURE_OPENAI_API_VERSION = previous.apiVersion;
+      resetSettingsForTests();
+    }
+  });
+
   it("submits and observes a task", async () => {
     app = await buildApp({
       runner: async (h: TaskHandle) => {

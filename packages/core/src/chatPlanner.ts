@@ -136,6 +136,7 @@ export class ChatPlanner {
           messages,
           tools,
           streamedVisibleResponse,
+          plannerReasoningEffort(message, step),
         );
       } catch (err) {
         if (err instanceof LLMUnavailableError) {
@@ -461,6 +462,16 @@ export class ChatPlanner {
       },
     };
   }
+}
+
+/**
+ * Keep the main agent's budget independent from the fast narrator. A first,
+ * explicitly read-only evidence pass benefits from low reasoning; follow-up
+ * decisions and any task that may change state retain the more deliberate
+ * medium mode for tool selection and final evidence judgement.
+ */
+function plannerReasoningEffort(message: string, step: number): "low" | "medium" {
+  return step === 0 && isExplicitReadOnlyRequest(message) ? "low" : "medium";
 }
 
 function withGroundedToolEvidence(
