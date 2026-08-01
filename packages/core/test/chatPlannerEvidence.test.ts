@@ -86,6 +86,28 @@ describe("groundFinalResponse", () => {
     expect(result).not.toContain("Next steps I can run");
   });
 
+  it("removes an execution ledger appended after otherwise valid findings", () => {
+    const result = groundFinalResponse([
+      "Findings:",
+      "- Active branch: main",
+      "- Working tree has one modified file.",
+      "",
+      "Evidence collected before reporting:",
+      "- git_current_branch to confirm the active branch.",
+      "- git_status to list modified files.",
+      "",
+      "No files were modified during this inspection.",
+    ].join("\n"), [
+      { name: "git_current_branch", ok: true, output: "main\n" },
+      { name: "git_status", ok: true, output: "## main\n M app.ts\n" },
+    ]);
+
+    expect(result).toContain("Findings:\n- Active branch: main");
+    expect(result).toContain("No files were modified during this inspection.");
+    expect(result).not.toContain("Evidence collected before reporting");
+    expect(result).not.toContain("git_current_branch");
+  });
+
   it("recognizes a short commit SHA already stated by the model", () => {
     const result = groundFinalResponse("The latest commit is dffeecd and it hardens validation.", [
       { name: "git_log", ok: true, output: "dffeecd Dev 2026-07-05 fix: validation\n" },
