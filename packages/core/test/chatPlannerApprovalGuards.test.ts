@@ -124,6 +124,7 @@ describe("ChatPlanner approval guards", () => {
 
     expect(called).toBe(false);
     expect(events.some((event) => event.type === "tool_start")).toBe(false);
+    expect(events.some((event) => event.type === "work_statement")).toBe(false);
     expect(result.riskLevel).toBe(riskLevel);
     expect(result.approvalProposal).toEqual({
       tool: name,

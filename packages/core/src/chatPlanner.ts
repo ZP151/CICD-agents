@@ -316,7 +316,10 @@ export class ChatPlanner {
               return;
             }
             const description = approvalDescription(capability.description, tc.name);
-            yield publicWorkStatement(tc.id, description);
+            // The public action narrative was already streamed by the model
+            // before this decision. The approval activity carries the formal
+            // action description; emitting another capability-derived work
+            // statement here would look like fabricated agent reasoning.
             yield {
               type: "done",
               result: {
@@ -458,14 +461,6 @@ export class ChatPlanner {
       },
     };
   }
-}
-
-function publicWorkStatement(stepId: string, text: string): ChatEvent {
-  return {
-    type: "work_statement",
-    blockId: stepId,
-    text,
-  };
 }
 
 function withGroundedToolEvidence(
