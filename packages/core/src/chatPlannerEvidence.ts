@@ -46,7 +46,7 @@ function removeRepeatedExecutionPreamble(response: string, evidence: PublicToolE
   if (/^(?:#{1,6}\s*)?collected evidence(?:\s+and\s+result)?\b/i.test(normalizePreambleLine(conclusion[0] ?? ""))) {
     conclusion[0] = "Findings:";
   }
-  return removeUnrequestedNextActions(removeEmbeddedExecutionReplay(conclusion)).join("\n").trimStart();
+  return removeToolSyntaxFromFinal(removeUnrequestedNextActions(removeEmbeddedExecutionReplay(conclusion))).join("\n").trimStart();
 }
 
 function isConclusionHeading(line: string): boolean {
@@ -90,19 +90,31 @@ function isRepeatedExecutionPreamble(lines: string[]): boolean {
   // plan-shaped preamble, but only when a later Findings/Results heading has
   // positively identified a distinct conclusion.
   const normalized = lines.map(normalizePreambleLine);
-  const hasActivitySignal = normalized.some((line) => /\b(?:planned evidence|evidence (?:needed|collected)|read-only (?:commands?|checks?)|(?:commands?|checks?) run|collected .*\bevidence)\b/i.test(line));
+  const hasActivitySignal = normalized.some((line) => /\b(?:planned evidence|evidence (?:needed|collected)|read-only (?:commands?|checks?)|(?:commands?|checks?) run|collect(?:ed)? .*\bevidence)\b/i.test(line));
   return hasActivitySignal && normalized.every((line) => isExecutionPlanLine(line));
 }
 
 function isExecutionPlanLine(line: string): boolean {
   const normalized = normalizePreambleLine(line);
   return /^(?:#{1,6}\s*)?(?:planned evidence|evidence needed(?: before)?|before checks|plan)\b/i.test(normalized)
-    || /^(?:#{1,6}\s*)?(?:evidence collected|read-only (?:commands?|checks?)|(?:commands?|checks?) run|i collected .*\bevidence)\b/i.test(normalized)
+    || /^(?:#{1,6}\s*)?(?:evidence collected|read-only (?:commands?|checks?)|(?:commands?|checks?) run|i (?:will |did )?collect(?:ed)? .*\bevidence)\b/i.test(normalized)
     || /^(?:[-*•]|\d+[.)])\s/.test(normalized);
 }
 
 function normalizePreambleLine(line: string): string {
   return line.trim().replace(/^["']+|["']+$/g, "");
+}
+
+function removeToolSyntaxFromFinal(lines: string[]): string[] {
+  // The final carries facts, while executable syntax belongs to the expandable
+  // command card. Restrict this to the public built-in Git labels used by the
+  // branch/status/commit answers, so user prose and source snippets are not
+  // broadly rewritten.
+  return lines.map((line) => line
+    .replace(/\s*\((?:git_current_branch|git_status(?:\s+--[\w-]+)*(?:\s+with\s+[^)]*)?|git_log(?:\s+[-\w=]+)*|git\s+(?:status|log|branch)(?:\s+--[\w-]+)*)\)/gi, "")
+    .replace(/\b(?:git_current_branch|git_status(?:\s+--[\w-]+)*|git_log(?:\s+[-\w=]+)*|git\s+(?:status|log|branch)(?:\s+--[\w-]+)*)\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([:;,.])/g, "$1"));
 }
 
 function publicFactForTool(entry: PublicToolEvidence): string | undefined {
