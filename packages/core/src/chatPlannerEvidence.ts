@@ -52,7 +52,7 @@ function removeRepeatedExecutionPreamble(response: string, evidence: PublicToolE
 }
 
 function isConclusionHeading(line: string): boolean {
-  return /^(?:#{1,6}\s*)?(?:findings?|results?|conclusion|summary|collected evidence(?:\s+and\s+result)?)\b[^\n]*:/i.test(line.trim());
+  return /^(?:#{1,6}\s*)?(?:findings?|results?|conclusion|summary|verdict|assessment|collected evidence(?:\s+and\s+result)?)\b[^\n]*:/i.test(line.trim());
 }
 
 function removeUnrequestedNextActions(lines: string[]): string[] {
