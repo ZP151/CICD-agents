@@ -37,7 +37,10 @@ describe("Chat agent use-case coverage", () => {
     expect(CHAT_SYSTEM_PROMPT).toContain("commit-workflow");
     expect(CHAT_SYSTEM_PROMPT).toContain("ado_trigger_pipeline");
     expect(CHAT_SYSTEM_PROMPT).toContain("Execute progressively");
-    expect(CHAT_SYSTEM_PROMPT).toContain("closely related read-only tools");
+    expect(CHAT_SYSTEM_PROMPT).toContain("read-only facts are independent");
+    expect(CHAT_SYSTEM_PROMPT).toContain("First select the minimal evidence set");
+    expect(CHAT_SYSTEM_PROMPT).toContain("active branch, working-tree status, and recent commit");
+    expect(CHAT_SYSTEM_PROMPT).toContain("Do not inspect diffs merely because status reports modified files");
     expect(CHAT_SYSTEM_PROMPT).toContain("Use English for user-facing action narratives, approvals, and final responses by default.");
     expect(CHAT_SYSTEM_PROMPT).toContain("Do not change workflow, safety, or rendering behavior based on the input language.");
   });
