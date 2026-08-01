@@ -144,4 +144,36 @@ describe("groundFinalResponse", () => {
       { name: "custom_tool", ok: true, output: "internal payload" },
     ])).toBe("The check failed.");
   });
+
+  it("removes empty final headings and retains a bounded fact for an inspected diff", () => {
+    const result = groundFinalResponse([
+      "Current branch: main.",
+      "Most relevant changed config:",
+      "",
+      "Suggestions:",
+    ].join("\n"), [
+      {
+        name: "git_diff",
+        ok: true,
+        output: [
+          "diff --git a/config/app.yml b/config/app.yml",
+          "index 1111111..2222222 100644",
+          "--- a/config/app.yml",
+          "+++ b/config/app.yml",
+          "@@ -1 +1 @@",
+          "-timeout: 20",
+          "+timeout: 30",
+        ].join("\n"),
+      },
+    ]);
+
+    expect(result).toBe([
+      "Current branch: main.",
+      "",
+      "Verified facts:",
+      "- Reviewed diff: `config/app.yml` (1 added line, 1 removed line).",
+    ].join("\n"));
+    expect(result).not.toContain("Most relevant changed config:");
+    expect(result).not.toContain("Suggestions:");
+  });
 });

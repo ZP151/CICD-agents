@@ -127,6 +127,36 @@ Trace why the selected Project Link's latest pipeline failed, then stop once the
    independent Turn state. Restored historical Working sections begin
    collapsed.
 
+### TS-06 — Release blocker investigation across local Git, Azure DevOps, and current documentation
+
+**User role:** Release owner investigating whether a deployment can proceed.
+
+**Prompt:**
+
+```text
+Investigate whether the selected Project Link is ready for release. First review the local deployment configuration change, then check the linked PR's required policies and latest failed build. If a policy requirement is unclear, verify it against official Azure DevOps documentation. Do not modify the repository, PR, pipeline, or remote state.
+```
+
+**Fixture:** a dirty Project Link fixture with a single deployment-config diff,
+an authenticated fake Azure DevOps MCP server with one failed required policy
+and build, and a deterministic Web Research MCP result pointing to an official
+Microsoft documentation URL.
+
+**Expected Turn:**
+
+1. The first model-authored narrative states the initial evidence question; it
+   arrives before Project Link indexing or connector preparation finishes and
+   never uses a canned opening.
+2. The first actual Git group is followed by a new evidence-based narrative;
+   Azure DevOps and Web Research groups appear only after their first calls and
+   keep their MCP provenance.
+3. A remote pipeline retry or policy update is an approval inside this same
+   Turn, never an implicit action or a new chat message.
+4. After execution seals, the final gives a concise release decision, the
+   observed local/remote blockers and official source metadata. It contains no
+   empty headings, command ledger, raw provider payload, `Suggestions:` shell,
+   Copy control, or timestamp before the Turn finishes.
+
 ## Automated coverage mapping
 
 | Requirement | Automated level |
@@ -137,4 +167,5 @@ Trace why the selected Project Link's latest pipeline failed, then stop once the
 | Azure DevOps native tool semantics | core ADO registry/client tests |
 | Existing Project Link ADO MCP registration | currently disabled by design; covered as a compatibility gap, not claimed as live support |
 | External web research | managed local `web-research` MCP connector plus transcript fixture; live provider smoke remains manual because credentials are user-owned |
+| Cross-service release investigation | desktop transcript reducer scenario with Git + Azure DevOps MCP + Web Research MCP + approval, plus TS-06 fixture prompt |
 | Copy/time/automatic collapse | desktop component and Playwright desktop smoke tests |

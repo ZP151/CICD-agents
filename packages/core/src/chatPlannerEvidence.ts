@@ -11,7 +11,7 @@ export interface PublicToolEvidence {
  * headings from discarding the evidence users just watched the agent gather.
  */
 export function groundFinalResponse(response: string, evidence: PublicToolEvidence[]): string {
-  const conclusion = removeRepeatedExecutionPreamble(response, evidence);
+  const conclusion = removeDanglingFinalSections(removeRepeatedExecutionPreamble(response, evidence));
   const additions = evidence
     .filter((entry) => entry.ok && entry.output?.trim())
     .map(publicFactForTool)
@@ -59,6 +59,27 @@ function removeUnrequestedNextActions(lines: string[]): string[] {
   // transcript has been sealed. Keep factual notes (for example read-only
   // confirmation) but remove only explicit unrequested action offers.
   return lines.filter((line) => !/\b(?:next steps? I can run|I can (?:run|show|prepare)|requires your approval)\b/i.test(line));
+}
+
+/**
+ * Finalization metadata has a dedicated suggestions field. A model may still
+ * leave an empty markdown heading such as "Suggestions:" in its prose after
+ * emitting that field. It reads as an unfinished conclusion in the separate
+ * Final area, so remove that presentation shell rather than showing a blank
+ * section. This intentionally leaves substantive user-requested advice alone.
+ */
+function removeDanglingFinalSections(response: string): string {
+  const lines = response.split(/\r?\n/);
+  const kept = lines.filter((line, index) => {
+    if (!/^(?:#{1,6}\s*)?(?:suggestions?|next steps?)\s*:\s*$/i.test(line.trim())) return true;
+    return lines.slice(index + 1).some((following) => following.trim());
+  });
+  while (kept.length > 0 && !kept.at(-1)?.trim()) kept.pop();
+  while (kept.length > 0 && /^(?:#{1,6}\s*)?[^:\n]{1,100}:\s*$/i.test(kept.at(-1)?.trim() ?? "")) {
+    kept.pop();
+    while (kept.length > 0 && !kept.at(-1)?.trim()) kept.pop();
+  }
+  return kept.join("\n").trim();
 }
 
 function removeEmbeddedExecutionReplay(lines: string[]): string[] {
@@ -123,7 +144,24 @@ function publicFactForTool(entry: PublicToolEvidence): string | undefined {
   if (entry.name === "git_current_branch") return `Active branch: \`${singleLine(output)}\`.`;
   if (entry.name === "git_status") return workingTreeFact(output);
   if (entry.name === "git_log") return `Most recent commit: \`${singleLine(output)}\`.`;
+  if (entry.name === "git_diff") return diffFact(output);
   return undefined;
+}
+
+function diffFact(output: string): string | undefined {
+  const match = output.match(/^diff --git a\/(.+?) b\/(.+)$/m);
+  if (!match) return undefined;
+  const path = match[2] ?? match[1];
+  const lines = output.split(/\r?\n/);
+  const added = lines.filter((line) => line.startsWith("+") && !line.startsWith("+++")).length;
+  const removed = lines.filter((line) => line.startsWith("-") && !line.startsWith("---")).length;
+  const changes = [
+    added > 0 ? `${added} added ${added === 1 ? "line" : "lines"}` : "",
+    removed > 0 ? `${removed} removed ${removed === 1 ? "line" : "lines"}` : "",
+  ].filter(Boolean);
+  return changes.length
+    ? `Reviewed diff: \`${path}\` (${changes.join(", ")}).`
+    : `Reviewed diff: \`${path}\` (no textual line changes in the returned diff).`;
 }
 
 function workingTreeFact(output: string): string {
@@ -150,6 +188,9 @@ function responseContainsFact(response: string, fact: string): boolean {
   }
   if (fact.startsWith("Working tree:")) {
     return /working tree|uncommitted|modified files?|untracked files?/.test(normalizedResponse);
+  }
+  if (fact.startsWith("Reviewed diff:")) {
+    return values.some((value) => normalizedResponse.includes(value.toLocaleLowerCase()));
   }
   return false;
 }
