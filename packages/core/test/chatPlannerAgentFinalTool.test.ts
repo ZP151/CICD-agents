@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CHAT_FINAL_TOOL_NAME, ChatPlanner } from "../src/chatPlanner.js";
-import { publicToolOutput } from "../src/chatPlannerControl.js";
+import { publicToolOutput, summarizeToolResult } from "../src/chatPlannerControl.js";
 import {
   createToolExecutor,
   fakeSequenceLlm,
@@ -28,6 +28,14 @@ describe("ChatPlanner agent_final tool finalization", () => {
     expect(output).toContain("access_token: ***REDACTED***");
     expect(output).not.toContain("local-secret-value-12345");
     expect(output).not.toContain("abcdefghijklmnop");
+  });
+
+  it("redacts a failed connector summary before it can reach Timeline metadata", () => {
+    const summary = summarizeToolResult({ error: "request rejected: bearer abcdefghijklmnop" }, false);
+
+    expect(summary).toContain("error:");
+    expect(summary).toContain("***REDACTED***");
+    expect(summary).not.toContain("abcdefghijklmnop");
   });
 
   it("accepts structured finalization through the internal agent_final tool", async () => {

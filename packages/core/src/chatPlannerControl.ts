@@ -87,7 +87,9 @@ export function summarizeToolResult(result: unknown, ok: boolean): string {
     : result && typeof result === "object" && "error" in result
       ? String((result as { error?: unknown }).error ?? "")
       : JSON.stringify(result);
-  const readable = summarizeKnownRuntimeError(text);
+  // A summary travels through both the Timeline and legacy persistence, so
+  // apply the same connector-agnostic redaction used for command-card output.
+  const readable = summarizeKnownRuntimeError(redact(text));
   return ok ? truncate(readable, 200) : `error: ${truncate(readable, 220)}`;
 }
 

@@ -1,4 +1,5 @@
 import {
+  publicToolOutput,
   type ChatEvent,
   type ChatImageAttachment,
   type ChatMessage,
@@ -82,6 +83,7 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
     } else if (event.type === "tool_end") {
       const toolArgs = pendingToolArgs.get(event.name);
       pendingToolArgs.delete(event.name);
+      const output = event.output ?? publicToolOutput(event.result, event.ok);
       await adapters.appendBubble(sessionId, {
         role: "tool",
         content: event.summary,
@@ -90,7 +92,10 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
         toolArgs,
         toolOk: event.ok,
         toolSummary: event.summary,
-        toolResult: event.result,
+        // Timeline-aware restores ignore compatibility bubbles altogether.
+        // Keep the legacy record public as well, though, so an old session
+        // cannot reintroduce raw stdout/stderr or connector payloads later.
+        toolResult: storedPublicToolResult(event.name, event.ok, event.summary, output),
         ...checkpointMetadataFromToolResult(event.result),
       });
       yield event;
@@ -163,6 +168,25 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
   if (assistantReply) {
     await adapters.appendMessage(sessionId, "assistant", assistantReply);
   }
+}
+
+/**
+ * Compatibility sessions still use StoredBubble for workflow recovery. Store
+ * only the evidence that is also eligible for the public command card, never
+ * the raw executor/MCP result. `stdout` is retained solely for the existing
+ * branch continuation derivation; it is the same bounded public output.
+ */
+export function storedPublicToolResult(
+  toolName: string,
+  ok: boolean,
+  summary: string,
+  output?: string,
+): Record<string, unknown> {
+  const record: Record<string, unknown> = { ok, summary };
+  if (!output?.trim()) return record;
+  record.output = output;
+  if (toolName === "git_current_branch") record.stdout = output;
+  return record;
 }
 
 function doneWorkflowPhaseFromRunning(phase: string | undefined): string | undefined {
