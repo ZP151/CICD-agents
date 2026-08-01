@@ -9,12 +9,12 @@ describe("streamActionNarrative", () => {
       actionNarrativeModel: () => "fast-narrative-model",
     async *chatStream(options: { messages: Array<{ role: string; content: unknown }>; tools?: unknown; maxTokens?: number; reasoningEffort?: "minimal" | "low" | "medium" | "high" }) {
       expect(options.tools).toBeUndefined();
-      expect(options.maxTokens).toBeLessThanOrEqual(128);
+      expect(options.maxTokens).toBeLessThanOrEqual(192);
       expect(options.reasoningEffort).toBe("minimal");
       expect((options as { model?: string }).model).toBe("fast-narrative-model");
       expect(JSON.stringify(options.messages)).toContain("Review the current project changes");
       expect(JSON.stringify(options.messages)).toContain("Always use English");
-      expect(JSON.stringify(options.messages)).toContain("Return one or two concise, natural sentences");
+      expect(JSON.stringify(options.messages)).toContain("two complete, natural sentences");
       expect(JSON.stringify(options.messages)).toContain("Do not use generic framing such as 'Based on the request'");
       expect(JSON.stringify(options.messages)).toContain("No repository evidence is available yet");
       expect(JSON.stringify(options.messages)).toContain("expose private reasoning");

@@ -15,6 +15,7 @@ import {
 } from "./chatWorkflowState.js";
 import { deriveWorkflowPendingAction } from "./chatPendingActions.js";
 import { checkpointMetadataFromToolResult } from "./chatToolExecution.js";
+import { storedPublicToolResult } from "./chatPublicToolEvidence.js";
 
 export interface PlannerPersistenceAdapters {
   appendBubble: (sessionId: string, bubble: StoredBubble) => Promise<void>;
@@ -176,19 +177,6 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
  * the raw executor/MCP result. `stdout` is retained solely for the existing
  * branch continuation derivation; it is the same bounded public output.
  */
-export function storedPublicToolResult(
-  toolName: string,
-  ok: boolean,
-  summary: string,
-  output?: string,
-): Record<string, unknown> {
-  const record: Record<string, unknown> = { ok, summary };
-  if (!output?.trim()) return record;
-  record.output = output;
-  if (toolName === "git_current_branch") record.stdout = output;
-  return record;
-}
-
 function doneWorkflowPhaseFromRunning(phase: string | undefined): string | undefined {
   if (phase === "running_link_work_item") return "work_item_linked";
   if (!phase?.startsWith("running_")) return phase;

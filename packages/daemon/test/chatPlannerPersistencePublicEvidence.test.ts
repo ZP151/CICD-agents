@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { storedPublicToolResult } from "../src/chatPlannerPersistence.js";
+import { storedPublicToolResult } from "../src/chatPublicToolEvidence.js";
 
 describe("chat planner compatibility persistence", () => {
   it("keeps only public, bounded evidence and preserves branch continuation data", () => {

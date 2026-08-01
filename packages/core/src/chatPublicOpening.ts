@@ -3,10 +3,10 @@ import type { LLMClient } from "./llm.js";
 import type { ChatEvent } from "./chatPlannerTypes.js";
 
 // GPT-5 counts reasoning and visible tokens against max_completion_tokens.
-// A 40-token cap regularly finishes before any public token is available;
-// 128 remains deliberately small while leaving enough room for low-effort
-// reasoning plus a one- or two-sentence visible action narrative.
-const MAX_ACTION_NARRATIVE_TOKENS = 128;
+// A 40-token cap regularly finishes before any public token is available.
+// 192 leaves GPT-5-mini-2 enough room for minimal reasoning plus two complete
+// reviewer-useful sentences; 128 could stop half-way through the second one.
+const MAX_ACTION_NARRATIVE_TOKENS = 192;
 const MIN_INITIAL_VISIBLE_NARRATIVE_CHARS = 12;
 const MAX_PUBLIC_ACTION_SENTENCES = 2;
 
@@ -40,10 +40,10 @@ export async function* streamActionNarrative(
       role: "system",
       content: [
         "Write the public pre-action note for a desktop coding agent. Always use English.",
-        "Return one or two concise, natural sentences: name the direct facts to establish or decision to make, then (only when useful) say how that serves the user's exact request or the next immediate decision.",
+        "For an investigation, return two complete, natural sentences of roughly 28–65 words total. First name the exact scope and facts to establish; then state how that serves the user's exact request or the next immediate decision. For a direct answer with no investigation, one complete sentence is enough.",
         "Start directly with the check or decision. Use supplied evidence only; otherwise state facts to check, never pretend unobserved project facts are known. Keep all independent requested facts in one note so the next action can collect them together.",
         "Do not repeat the request, widen scope, use headings/lists, expose private reasoning, or name commands, tools, flags, terminal syntax, or a predeclared command list. Do not use generic framing such as 'Based on the request', 'The goal is', or 'I will perform'.",
-        "Never propose unrelated build, test, commit, PR, deployment, cloning, fetching, setup, or repository-existence checks. Do not ask the user to run a command or for permission for a clearly read-only action. For a simple answer, answer directly. Stop after two sentences.",
+        "Never propose unrelated build, test, commit, PR, deployment, cloning, fetching, setup, or repository-existence checks. Do not ask the user to run a command or for permission for a clearly read-only action. For a simple answer, answer directly. Finish the second sentence with punctuation; stop after two sentences.",
       ].join(" "),
     },
     {
