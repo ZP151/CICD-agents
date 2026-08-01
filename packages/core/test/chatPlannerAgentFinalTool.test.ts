@@ -18,6 +18,18 @@ describe("ChatPlanner agent_final tool finalization", () => {
     expect(publicToolOutput({ providerPayload: { hidden: true } }, true)).toBeUndefined();
   });
 
+  it("redacts connector output again before it becomes public command-card evidence", () => {
+    const output = publicToolOutput({
+      stdout: "endpoint ready\napi_key=local-secret-value-12345\naccess_token: abcdefghijklmnop",
+    }, true);
+
+    expect(output).toContain("endpoint ready");
+    expect(output).toContain("api_key=***REDACTED***");
+    expect(output).toContain("access_token: ***REDACTED***");
+    expect(output).not.toContain("local-secret-value-12345");
+    expect(output).not.toContain("abcdefghijklmnop");
+  });
+
   it("accepts structured finalization through the internal agent_final tool", async () => {
     const planner = new ChatPlanner(
       fakeToolCallLlm(CHAT_FINAL_TOOL_NAME, {

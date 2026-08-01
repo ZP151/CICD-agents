@@ -5,6 +5,7 @@ import type {
   PendingToolAction,
 } from "./chatPlannerTypes.js";
 import { isTextContextPath } from "./repoFileGuards.js";
+import { redact } from "./tools/executor.js";
 
 export const CHAT_CONTROL_JSON_MARKER = "__CONTROL_JSON__";
 export const CHAT_FINAL_TOOL_NAME = "agent_final";
@@ -109,7 +110,10 @@ export function publicToolOutput(result: unknown, ok: boolean): string | undefin
 }
 
 function compactPublicOutput(value: string): string {
-  const normalized = value.replace(/\r\n/g, "\n").trim();
+  // Shell execution already redacts output, but MCP/custom tools can return
+  // arbitrary strings. The public Transcript is a separate trust boundary,
+  // so never rely on every connector to have implemented the same filter.
+  const normalized = redact(value).replace(/\r\n/g, "\n").trim();
   const lines = normalized.split("\n");
   const kept = lines.slice(0, 48).join("\n");
   const capped = truncate(kept, 4_000);
