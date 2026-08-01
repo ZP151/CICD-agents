@@ -134,5 +134,10 @@ export function projectLinkToToolExtra(projectLink: ProjectLink): Record<string,
     ado_target_branch: projectLink.targetBranch,
     ado_pipeline_id: projectLink.adoPipelineId,
     ado_pipeline_name: projectLink.adoPipelineName,
+    // Project Links can select a locally managed connector, but never supply
+    // its executable command or credential. Those stay in the user's local
+    // config.toml/.env and are resolved by the daemon at runtime.
+    ado_mcp_enabled: projectLink.adoMcpEnabled,
+    ado_mcp_domains: projectLink.adoMcpDomains,
   };
 }

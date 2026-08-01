@@ -7,7 +7,13 @@ export interface McpStdioServerConfig {
   command: string;
   args?: string[];
   cwd?: string;
+  /** Explicit credential values selected by the managed connector. */
   env?: Record<string, string>;
+  /**
+   * Kept for an explicit compatibility opt-in only. A managed connector must
+   * not inherit the daemon environment, which contains model credentials.
+   */
+  inheritProcessEnv?: boolean;
   timeoutMs?: number;
 }
 
@@ -52,7 +58,7 @@ export class StdioMcpClient {
     if (this.child) return;
     this.child = spawn(this.config.command, this.config.args ?? [], {
       cwd: this.config.cwd,
-      env: { ...process.env, ...(this.config.env ?? {}) },
+      env: mcpChildEnvironment(this.config),
       shell: false,
       windowsHide: true,
     });
@@ -184,6 +190,11 @@ export function createMcpToolWrappers(
       name: localName,
       description: definition.description ?? `Call MCP tool ${definition.name} on ${serverName}.`,
       parameters: normalizeInputSchema(definition.inputSchema),
+      connector: {
+        kind: "mcp",
+        id: serverName,
+        label: connectorLabel(serverName),
+      },
       handler: async (_ctx, payload) => {
         const result = await callTool(definition.name, payload);
         if (result.isError) {
@@ -198,6 +209,30 @@ export function createMcpToolWrappers(
       },
     };
   });
+}
+
+/**
+ * MCP servers are executable code. Do not hand them the daemon's complete
+ * environment by default: it may contain the model API key or cloud tokens.
+ * Keep only process bootstrap variables and credentials intentionally passed
+ * by a managed connector.
+ */
+function mcpChildEnvironment(config: McpStdioServerConfig): NodeJS.ProcessEnv {
+  if (config.inheritProcessEnv) return { ...process.env, ...(config.env ?? {}) };
+  const inherited = ["PATH", "Path", "SYSTEMROOT", "SystemRoot", "COMSPEC", "ComSpec", "TEMP", "TMP", "USERPROFILE", "HOME"];
+  const base: NodeJS.ProcessEnv = {};
+  for (const key of inherited) {
+    const value = process.env[key];
+    if (value) base[key] = value;
+  }
+  return { ...base, ...(config.env ?? {}) };
+}
+
+function connectorLabel(serverName: string): string {
+  const label = serverName
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return label.replace(/\bDevops\b/g, "DevOps");
 }
 
 export async function createMcpToolsFromClient(serverName: string, client: StdioMcpClient): Promise<Tool[]> {

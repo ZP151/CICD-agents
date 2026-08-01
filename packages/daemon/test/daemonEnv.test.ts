@@ -66,6 +66,8 @@ describe("daemonEnv", () => {
     expect(content).toContain("api_version = \"2025-04-01-preview\"");
     expect(content).toContain("key_vault_url = \"\"");
     expect(content).toContain("api_key_ref = \"\"");
+    expect(content).toContain("[connectors.azure_devops_mcp]");
+    expect(content).toContain("args_json = \"[]\"");
   });
 
   it("round-trips user config without writing plaintext model secrets", () => {
@@ -98,6 +100,30 @@ describe("daemonEnv", () => {
       azureKeyVaultUrl: "https://example.vault.azure.net/",
       reviewAutoApproveEnabled: false,
       reviewStaleAgeHours: 48,
+    });
+  });
+
+  it("keeps Azure DevOps MCP executable metadata local while only naming a credential variable", () => {
+    const configFile = path.join(tmp, ".mergepilot", "config.toml");
+    writeMergePilotUserConfig({
+      azureDevOpsMcp: {
+        enabled: true,
+        command: "npx",
+        args: ["--yes", "@example/azure-devops-mcp"],
+        credentialEnv: "AZURE_DEVOPS_EXT_PAT",
+      },
+    }, configFile);
+
+    const content = fs.readFileSync(configFile, "utf8");
+    expect(content).toContain("[connectors.azure_devops_mcp]");
+    expect(content).toContain("command = \"npx\"");
+    expect(content).toContain("credential_env = \"AZURE_DEVOPS_EXT_PAT\"");
+    expect(content).not.toContain("actual-pat-value");
+    expect(readMergePilotUserConfig(configFile).azureDevOpsMcp).toEqual({
+      enabled: true,
+      command: "npx",
+      args: ["--yes", "@example/azure-devops-mcp"],
+      credentialEnv: "AZURE_DEVOPS_EXT_PAT",
     });
   });
 
