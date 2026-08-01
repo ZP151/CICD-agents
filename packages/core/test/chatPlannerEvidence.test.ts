@@ -176,4 +176,34 @@ describe("groundFinalResponse", () => {
     expect(result).not.toContain("Most relevant changed config:");
     expect(result).not.toContain("Suggestions:");
   });
+
+  it("keeps a verdict but removes raw evidence, source ledgers, and recommendation menus", () => {
+    const result = groundFinalResponse([
+      "Verdict: The deployment change is high risk because the selected configuration changes an endpoint.",
+      "",
+      "Evidence: Snippet: Data Source=192.168.1.85; Password=***REDACTED***",
+      "Immediate recommendations (read-only guidance):",
+      "- Rotate the key.",
+      "Sources:",
+      "I ran git status and git diff to produce this assessment.",
+    ].join("\n"), [
+      {
+        name: "git_diff",
+        ok: true,
+        output: [
+          "diff --git a/config/app.yml b/config/app.yml",
+          "--- a/config/app.yml",
+          "+++ b/config/app.yml",
+          "-endpoint: old",
+          "+endpoint: new",
+        ].join("\n"),
+      },
+    ]);
+
+    expect(result).toContain("Verdict: The deployment change is high risk");
+    expect(result).toContain("Reviewed diff: `config/app.yml`");
+    expect(result).not.toContain("Data Source");
+    expect(result).not.toContain("Immediate recommendations");
+    expect(result).not.toContain("I ran git status");
+  });
 });

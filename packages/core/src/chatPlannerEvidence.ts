@@ -11,7 +11,9 @@ export interface PublicToolEvidence {
  * headings from discarding the evidence users just watched the agent gather.
  */
 export function groundFinalResponse(response: string, evidence: PublicToolEvidence[]): string {
-  const conclusion = removeDanglingFinalSections(removeRepeatedExecutionPreamble(response, evidence));
+  const conclusion = removeDanglingFinalSections(
+    removeFinalEvidenceAndMenuSections(removeRepeatedExecutionPreamble(response, evidence)),
+  );
   const additions = evidence
     .filter((entry) => entry.ok && entry.output?.trim())
     .map(publicFactForTool)
@@ -80,6 +82,38 @@ function removeDanglingFinalSections(response: string): string {
     while (kept.length > 0 && !kept.at(-1)?.trim()) kept.pop();
   }
   return kept.join("\n").trim();
+}
+
+/**
+ * The command card already owns verbatim output and the structured final
+ * metadata already owns sources and suggested follow-ups. Do not let a model
+ * recreate those presentation areas in Final: it makes a conclusion leak raw
+ * config snippets or a second tool ledger below the sealed Working canvas.
+ * Preserve the ordinary verdict before the first such section, and let the
+ * bounded facts below be derived from trusted public tool evidence instead.
+ */
+function removeFinalEvidenceAndMenuSections(response: string): string {
+  const section = /^(?:#{1,6}\s*)?(?:evidence|sources?|immediate recommendations?|recommendations?|suggestions?|next steps?)\b[^\n]*:?\s*$/i;
+  const lines = response.split(/\r?\n/);
+  const kept: string[] = [];
+  let skipping = false;
+  for (const line of lines) {
+    if (section.test(line.trim())) {
+      skipping = true;
+      continue;
+    }
+    if (skipping) {
+      // A later direct finding is still useful. Resume only at an explicit
+      // conclusion heading, never at a bullet/log line from the skipped area.
+      if (isConclusionHeading(line)) {
+        skipping = false;
+        kept.push(line);
+      }
+      continue;
+    }
+    kept.push(line);
+  }
+  return kept.join("\n");
 }
 
 function removeEmbeddedExecutionReplay(lines: string[]): string[] {
