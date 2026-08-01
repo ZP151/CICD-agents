@@ -31,7 +31,7 @@ export interface ActionNarrativeRequest {
  * fallback because a slow model must not be represented as fabricated thought.
  */
 export async function* streamActionNarrative(
-  llm: Pick<LLMClient, "configured" | "chatStream"> & Partial<Pick<LLMClient, "actionNarrativeModel">>,
+  llm: Pick<LLMClient, "configured" | "chatStream"> & Partial<Pick<LLMClient, "actionNarrativeModel" | "actionNarrativeFallbackModel">>,
   input: ActionNarrativeRequest,
 ): AsyncGenerator<ChatEvent> {
   if (!llm.configured || !input.request.trim()) return;
@@ -75,31 +75,44 @@ export async function* streamActionNarrative(
   // long-form answer. End at the first complete useful sentence so the
   // planner can move on to the first real action without waiting for an
   // optional second sentence or a model's verbose continuation.
-  for await (const event of llm.chatStream({
-    messages,
-    maxTokens: MAX_ACTION_NARRATIVE_TOKENS,
-    model: llm.actionNarrativeModel?.(),
-    // The narrator is a separate GPT-5 deployment. `minimal` reserves just
-    // enough reasoning budget to form a truthful public action sentence;
-    // the main planning call retains its own low/medium reasoning policy.
-    reasoningEffort: "minimal",
-  })) {
-    if (event.type !== "delta" || !event.delta) continue;
-    text = appendNarrativeDelta(text, event.delta);
-    if (!text || !shouldEmitNarrative(text, emittedText)) continue;
-    const visibleText = text.trimEnd();
-    const bounded = visibleText.length > MAX_ACTION_NARRATIVE_CHARS
-      ? `${visibleText.slice(0, MAX_ACTION_NARRATIVE_CHARS - 1).trimEnd()}…`
-      : visibleText;
-    input.onText?.(bounded);
-    emittedText = bounded;
-    yield {
-      type: "work_statement",
-      blockId: input.blockId ?? "opening",
-      text: bounded,
-      replace: true,
-    };
-    if (text.length >= MAX_ACTION_NARRATIVE_CHARS || hasCompleteActionNarrative(text)) return;
+  const models = [llm.actionNarrativeModel?.()];
+  const fallbackModel = llm.actionNarrativeFallbackModel?.();
+  if (fallbackModel && fallbackModel !== models[0]) models.push(fallbackModel);
+
+  for (const [modelIndex, model] of models.entries()) {
+    try {
+      for await (const event of llm.chatStream({
+        messages,
+        maxTokens: MAX_ACTION_NARRATIVE_TOKENS,
+        model,
+        // The narrator is a separate GPT-5 deployment. `minimal` reserves just
+        // enough reasoning budget to form a truthful public action sentence;
+        // the main planning call retains its own low/medium reasoning policy.
+        reasoningEffort: "minimal",
+      })) {
+        if (event.type !== "delta" || !event.delta) continue;
+        text = appendNarrativeDelta(text, event.delta);
+        if (!text || !shouldEmitNarrative(text, emittedText)) continue;
+        const visibleText = text.trimEnd();
+        const bounded = visibleText.length > MAX_ACTION_NARRATIVE_CHARS
+          ? `${visibleText.slice(0, MAX_ACTION_NARRATIVE_CHARS - 1).trimEnd()}…`
+          : visibleText;
+        input.onText?.(bounded);
+        emittedText = bounded;
+        yield {
+          type: "work_statement",
+          blockId: input.blockId ?? "opening",
+          text: bounded,
+          replace: true,
+        };
+        if (text.length >= MAX_ACTION_NARRATIVE_CHARS || hasCompleteActionNarrative(text)) return;
+      }
+      break;
+    } catch (err) {
+      // Never splice two providers into one visible narrative. Retrying is
+      // safe only when the optional narrator failed before producing a token.
+      if (text || modelIndex === models.length - 1) throw err;
+    }
   }
 
   // Providers occasionally finish after a final token that does not end in

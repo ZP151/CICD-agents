@@ -198,6 +198,16 @@ export class LLMClient {
     return this.settings.azureOpenAiNarrativeDeployment || this.settings.azureOpenAiChatDeployment;
   }
 
+  /**
+   * A separate narrator deployment is an optional latency optimisation. If it
+   * is unavailable before it emits any public text, the Turn may safely retry
+   * once on the main deployment instead of failing the entire conversation.
+   */
+  actionNarrativeFallbackModel(): string | undefined {
+    const main = this.chatModel();
+    return this.actionNarrativeModel() === main ? undefined : main;
+  }
+
   private embeddingModel(): string {
     return this.settings.llmProvider === "openai"
       ? this.settings.openAiEmbeddingModel

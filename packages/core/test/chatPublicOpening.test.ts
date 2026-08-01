@@ -60,6 +60,26 @@ describe("streamActionNarrative", () => {
     expect(events).toEqual([]);
   });
 
+  it("falls back to the main deployment only when the optional narrator fails before any token", async () => {
+    const requestedModels: string[] = [];
+    const llm = {
+      configured: true,
+      actionNarrativeModel: () => "gpt-5-mini2",
+      actionNarrativeFallbackModel: () => "gpt-5-mini",
+      async *chatStream(options: { model?: string }) {
+        requestedModels.push(options.model ?? "");
+        if (options.model === "gpt-5-mini2") throw new Error("Azure deployment was not found");
+        yield { type: "delta" as const, delta: "I will inspect the selected target first." };
+      },
+    } as Pick<LLMClient, "configured" | "chatStream"> & Pick<LLMClient, "actionNarrativeModel" | "actionNarrativeFallbackModel">;
+
+    const events = [];
+    for await (const event of streamActionNarrative(llm, { request: "Inspect the selected target" })) events.push(event);
+
+    expect(requestedModels).toEqual(["gpt-5-mini2", "gpt-5-mini"]);
+    expect(events.at(-1)).toMatchObject({ text: "I will inspect the selected target first." });
+  });
+
   it("hands off after the first complete action sentence instead of waiting for a verbose continuation", async () => {
     const llm = {
       configured: true,

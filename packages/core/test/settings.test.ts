@@ -93,6 +93,7 @@ describe("settings", () => {
     resetSettingsForTests();
 
     expect(new LLMClient(getSettings()).actionNarrativeModel()).toBe("fast-narrative-model");
+    expect(new LLMClient(getSettings()).actionNarrativeFallbackModel()).toBe("planner-model");
   });
 
   it("identifies a GPT-5 model release date accidentally used as an API version", () => {
