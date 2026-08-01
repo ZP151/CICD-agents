@@ -150,4 +150,45 @@ describe("chat SSE timeline projection", () => {
 
     expect(sent.some((entry) => entry.event === "turn.narrative.delta")).toBe(false);
   });
+
+  it("replays genuine final model deltas only after execution has sealed", () => {
+    const sent: Array<{ event: string; payload: Record<string, unknown> }> = [];
+    const reply = {
+      raw: {
+        setHeader: () => undefined,
+        flushHeaders: () => undefined,
+        write: (wire: string) => {
+          const event = wire.match(/^event: ([^\n]+)/m)?.[1] ?? "";
+          const payload = JSON.parse(wire.match(/^data: (.+)$/m)?.[1] ?? "{}");
+          sent.push({ event, payload });
+        },
+        end: () => undefined,
+      },
+    } as never;
+    const writer = createChatSseWriter(reply);
+    writer.startTurn("turn-1");
+    writer.sendChatEvent({ type: "assistant_delta", delta: "The branch is " });
+    writer.sendChatEvent({ type: "assistant_delta", delta: "ready for review." });
+
+    expect(sent.some((entry) => entry.event === "turn.final.delta")).toBe(false);
+
+    writer.sendChatEvent({
+      type: "done",
+      result: {
+        response: "The branch is ready for review.",
+        riskLevel: "low",
+        actionsTaken: [],
+        suggestions: [],
+        toolCallsMade: [],
+        usedLlm: true,
+      },
+    });
+
+    const eventNames = sent.map((entry) => entry.event);
+    expect(eventNames.indexOf("turn.execution.completed")).toBeLessThan(eventNames.indexOf("turn.final.delta"));
+    expect(sent.filter((entry) => entry.event === "turn.final.delta").map((entry) => entry.payload.delta)).toEqual([
+      "The branch is ",
+      "ready for review.",
+    ]);
+  });
 });

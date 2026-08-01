@@ -30,6 +30,7 @@ export function createChatSseWriter(
     nextSequence: number;
     startedAt: number;
     toolStartedAt: Map<string, number>;
+    finalTextDeltas: string[];
     awaitingApproval: boolean;
     hasNarrative: boolean;
     activeToolGroupId?: string;
@@ -58,6 +59,7 @@ export function createChatSseWriter(
         nextSequence: 1,
         startedAt: Date.now(),
         toolStartedAt: new Map(),
+        finalTextDeltas: [],
         awaitingApproval: false,
         hasNarrative: false,
         activeToolGroupId: undefined,
@@ -88,6 +90,7 @@ export function createChatSseWriter(
         nextSequence: Math.max(1, (options.lastSequence ?? 0) + 1),
         startedAt: typeof options.startedAt === "number" && options.startedAt <= now ? options.startedAt : now,
         toolStartedAt: new Map(),
+        finalTextDeltas: [],
         awaitingApproval: false,
         hasNarrative: false,
         activeToolGroupId: undefined,
@@ -148,7 +151,7 @@ function progressPhase(message: string): "context" | "planning" {
 
 function timelineProjection(
   event: ChatEvent,
-  turn: { id: string; nextSequence: number; startedAt: number; toolStartedAt: Map<string, number>; awaitingApproval: boolean; hasNarrative: boolean; activeToolGroupId?: string } | undefined,
+  turn: { id: string; nextSequence: number; startedAt: number; toolStartedAt: Map<string, number>; finalTextDeltas: string[]; awaitingApproval: boolean; hasNarrative: boolean; activeToolGroupId?: string } | undefined,
 ): Array<{ event: string; payload: Record<string, unknown> }> {
   const correlated = event as ChatEvent & {
     turnId?: string;
@@ -163,7 +166,15 @@ function timelineProjection(
     emittedAt: correlated.emittedAt,
     elapsedMs: correlated.elapsedMs,
   };
-  if (event.type === "progress" || event.type === "turn_phase" || event.type === "assistant_delta") return [];
+  if (event.type === "assistant_delta") {
+    // Final-control arguments stream as normal model text before the planner
+    // confirms the terminal result. Keep their real delta boundaries private
+    // until execution is sealed; emitting them now would put a final beside an
+    // open Working canvas.
+    if (event.delta) turn?.finalTextDeltas.push(event.delta);
+    return [];
+  }
+  if (event.type === "progress" || event.type === "turn_phase") return [];
   if (event.type === "work_statement") {
     if (turn) turn.hasNarrative = true;
     return [{ event: "turn.narrative.delta", payload: {
@@ -232,7 +243,7 @@ function timelineProjection(
       event: "turn.execution.completed",
       payload: { type: "turn.execution.completed", ...base },
     }];
-    for (const delta of finalDeltas(event.result.response)) {
+    for (const delta of finalDeltas(event.result.response, turn?.finalTextDeltas)) {
       const next = nextTimelineBase(turn, base);
       events.push({ event: "turn.final.delta", payload: { type: "turn.final.delta", ...next, delta } });
     }
@@ -308,7 +319,7 @@ function publicTimelinePayload(eventName: string, payload: Record<string, unknow
 
 function enrichTurnEvent(
   event: ChatEvent,
-  turn: { id: string; nextSequence: number; startedAt: number; toolStartedAt: Map<string, number>; awaitingApproval: boolean; hasNarrative: boolean; activeToolGroupId?: string } | undefined,
+  turn: { id: string; nextSequence: number; startedAt: number; toolStartedAt: Map<string, number>; finalTextDeltas: string[]; awaitingApproval: boolean; hasNarrative: boolean; activeToolGroupId?: string } | undefined,
 ): ChatEvent {
   if (!turn) return event;
   const emittedAt = Date.now();
@@ -343,9 +354,17 @@ function nextTimelineBase(
   };
 }
 
-function finalDeltas(text: string): string[] {
+function finalDeltas(text: string, streamed: string[] | undefined): string[] {
+  const retained = streamed?.filter((delta) => Boolean(delta)) ?? [];
+  if (retained.length > 0 && normalisedText(retained.join("")) === normalisedText(text)) {
+    return retained;
+  }
   const chunks = text.match(/.{1,96}(?:\s+|$)/g) ?? [text];
   return chunks.filter(Boolean);
+}
+
+function normalisedText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 export function isTerminalChatEvent(event: ChatEvent): boolean {
