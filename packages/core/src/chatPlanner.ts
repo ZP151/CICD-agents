@@ -76,6 +76,12 @@ export class ChatPlanner {
     initialNarrative?: string,
     actionNarrativesEnabled = false,
     initialNarrativeInFlight = false,
+    /**
+     * The Turn runtime may prepare this planner in parallel with a dedicated
+     * public narrator. Planning is side-effect free, but a real tool must not
+     * begin before the corresponding public action narrative is visible.
+     */
+    beforeFirstTool?: Promise<void>,
   ): AsyncGenerator<ChatEvent> {
     if (!this.llm.configured) {
       yield* offlineFallbackEvents(message);
@@ -109,6 +115,7 @@ export class ChatPlanner {
     let lastText = "";
     let streamedVisibleResponse = "";
     let confirmedOnce = false;
+    let firstToolGate = beforeFirstTool;
     // Track consecutive failures of the same tool to prevent infinite retry loops.
     let toolFailureTracker = { lastFailedTool: "", consecutiveFailCount: 0 };
 
@@ -344,6 +351,14 @@ export class ChatPlanner {
           }
 
           const actionLabel = publicToolActionLabel(capability?.description, tc.name);
+          // Do not merely buffer the UI event: preserve the causal contract
+          // that a user-visible action narrative precedes the real command.
+          // This lets the main LLM plan concurrently with the narrator while
+          // keeping command execution truthful and ordered.
+          if (firstToolGate) {
+            await firstToolGate;
+            firstToolGate = undefined;
+          }
           if (!activeReadOnlyGroupId) {
             activeReadOnlyGroupId = tc.id;
             firstExecutableWasReadOnly = capability?.readOnly === true;

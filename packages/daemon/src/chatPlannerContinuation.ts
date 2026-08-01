@@ -34,6 +34,8 @@ export interface StreamPlannerContinuationArgs {
   initialNarrative?: string;
   actionNarrativesEnabled?: boolean;
   initialNarrativeInFlight?: boolean;
+  /** Public opening must complete before ChatPlanner executes its first tool. */
+  beforeFirstTool?: Promise<void>;
   /** Keep synchronous project-index work out of the first visible Turn path. */
   fastStart?: boolean;
   adapters: PlannerContinuationAdapters;
@@ -52,6 +54,7 @@ export async function* streamPlannerContinuation(args: StreamPlannerContinuation
     imageAttachments = [],
     initialNarrative,
     initialNarrativeInFlight = false,
+    beforeFirstTool,
     fastStart = false,
     actionNarrativesEnabled = false,
     persistUserMessage,
@@ -108,6 +111,7 @@ export async function* streamPlannerContinuation(args: StreamPlannerContinuation
     initialNarrative,
     actionNarrativesEnabled,
     initialNarrativeInFlight,
+    beforeFirstTool,
     adapters,
   });
 }

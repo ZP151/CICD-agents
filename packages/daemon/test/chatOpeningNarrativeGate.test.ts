@@ -52,7 +52,7 @@ afterEach(() => {
 });
 
 describe("chat opening narrative gate", () => {
-  it("does not begin the planner or execute tools until the real opening narrative completes", async () => {
+  it("starts side-effect-free planner preparation early but does not publish commands before the real opening narrative", async () => {
     openingGate.reset();
     let runStarted = false;
     const appendUserTurn = vi.fn(async () => undefined);
@@ -100,18 +100,21 @@ describe("chat opening narrative gate", () => {
     });
 
     await openingGate.waitUntilEntered();
-    expect(runStarted).toBe(false);
+    expect(runStarted).toBe(true);
     expect(appendUserTurn).toHaveBeenCalledWith(
       "session-1",
       "Inspect the selected project's branch.",
       "C:/fixture/project",
     );
+    expect(runArguments.at(-2)).toBe(true);
+    expect(runArguments.at(-1)).toEqual(expect.any(Promise));
 
     openingGate.open();
     const response = await responsePromise;
 
     expect(runStarted).toBe(true);
-    expect(runArguments.at(-1)).toBe(true);
+    expect(runArguments.at(-2)).toBe(true);
+    expect(runArguments.at(-1)).toEqual(expect.any(Promise));
     expect(response.statusCode).toBe(200);
     const firstNarrative = response.body.indexOf("turn.narrative.delta");
     const firstCommand = response.body.indexOf("turn.tool.started");

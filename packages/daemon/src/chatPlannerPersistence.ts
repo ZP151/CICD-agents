@@ -39,6 +39,8 @@ export interface StreamPlannerAndPersistArgs {
   actionNarrativesEnabled?: boolean;
   /** An independently streamed first narrative is already running. */
   initialNarrativeInFlight?: boolean;
+  /** Resolves only after the public opening narrative has completed. */
+  beforeFirstTool?: Promise<void>;
   adapters: PlannerPersistenceAdapters;
 }
 
@@ -49,6 +51,7 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
     imageAttachments = [],
     initialNarrative,
     initialNarrativeInFlight = false,
+    beforeFirstTool,
     actionNarrativesEnabled = false,
     contextSources = [],
     history,
@@ -61,7 +64,18 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
   let assistantReply = "";
   const pendingToolArgs = new Map<string, Record<string, unknown>>();
 
-  for await (const event of planner.run(message, history, repoPath, waitForConfirm, contextPrompt, imageAttachments, initialNarrative, actionNarrativesEnabled, initialNarrativeInFlight)) {
+  for await (const event of planner.run(
+    message,
+    history,
+    repoPath,
+    waitForConfirm,
+    contextPrompt,
+    imageAttachments,
+    initialNarrative,
+    actionNarrativesEnabled,
+    initialNarrativeInFlight,
+    beforeFirstTool,
+  )) {
     if (event.type === "tool_start") {
       pendingToolArgs.set(event.name, event.args);
       yield event;

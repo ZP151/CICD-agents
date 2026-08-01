@@ -26,6 +26,8 @@ export interface RunChatSessionTurnArgs {
   llm?: LLMClient;
   initialNarrative?: string;
   initialNarrativeInFlight?: boolean;
+  /** Lets pure planning overlap the narrator without allowing early tools. */
+  beforeFirstTool?: Promise<void>;
   fastStart?: boolean;
   /** The route persisted the user input before the opening narrative started. */
   userMessageAlreadyStored?: boolean;
@@ -46,6 +48,7 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
     imageAttachments = [],
     initialNarrative,
     initialNarrativeInFlight = false,
+    beforeFirstTool,
     fastStart = false,
     userMessageAlreadyStored = false,
     prewarmedRuntime,
@@ -131,6 +134,7 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
       initialNarrative,
       actionNarrativesEnabled: true,
       initialNarrativeInFlight,
+      beforeFirstTool,
       fastStart,
       adapters,
     });

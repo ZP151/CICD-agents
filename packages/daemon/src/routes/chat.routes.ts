@@ -17,6 +17,50 @@ const MAX_CHAT_IMAGE_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 const CHAT_IMAGE_DATA_URL_PATTERN = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([a-zA-Z0-9+/=\s]+)$/;
 const OPENING_NARRATIVE_DEADLINE_MS = 15_000;
 
+/**
+ * A single-producer / single-consumer bridge for planner events. It lets the
+ * main agent perform pure preparation while the low-latency narrator streams,
+ * without allowing the route to publish a later planner event ahead of that
+ * opening narrative.
+ */
+class AsyncEventQueue<T> implements AsyncIterable<T> {
+  private readonly values: T[] = [];
+  private closed = false;
+  private failure: unknown;
+  private wake: (() => void) | undefined;
+
+  push(value: T): void {
+    if (this.closed) return;
+    this.values.push(value);
+    this.wake?.();
+    this.wake = undefined;
+  }
+
+  close(): void {
+    this.closed = true;
+    this.wake?.();
+    this.wake = undefined;
+  }
+
+  fail(error: unknown): void {
+    this.failure = error;
+    this.close();
+  }
+
+  async *[Symbol.asyncIterator](): AsyncIterator<T> {
+    while (true) {
+      const value = this.values.shift();
+      if (value !== undefined) {
+        yield value;
+        continue;
+      }
+      if (this.failure) throw this.failure;
+      if (this.closed) return;
+      await new Promise<void>((resolve) => { this.wake = resolve; });
+    }
+  }
+}
+
 const LlmConfigSchema = z
   .object({
     llmProvider: z.enum(["azure", "openai"]).optional(),
@@ -297,6 +341,12 @@ export function registerChatRoutes(
         try {
           let openingNarrativeError: unknown;
           let openingNarrativeText = "";
+          let releaseFirstTool: (() => void) | undefined;
+          let rejectFirstTool: ((reason?: unknown) => void) | undefined;
+          const firstToolGate = new Promise<void>((resolve, reject) => {
+            releaseFirstTool = resolve;
+            rejectFirstTool = reject;
+          });
           const openingNarrative = (async () => {
             for await (const event of streamActionNarrative(narrativeLlm, {
               request: message,
@@ -317,44 +367,72 @@ export function registerChatRoutes(
               sseWriter.sendChatEvent(event);
             }
           })().catch((err) => { openingNarrativeError = err; });
-          // The first public response is itself model-authored. Wait only for
-          // this intentionally tiny stream, then hand that exact narrative to
-          // the planner as prior assistant context. Tool/MCP setup and Project
-          // Link resolution have been warming in parallel, but the planner is
-          // deliberately not allowed to execute an action before this point.
+
+          // Start the main Turn immediately. Its context read, tool registry,
+          // and first planning request are side-effect-free and no longer wait
+          // behind a separate narrator deployment. ChatPlanner receives the
+          // firstToolGate, so a genuine public narrative still happens before
+          // any command is actually executed (not merely before it is shown).
+          const plannerEvents = new AsyncEventQueue<ChatEvent>();
+          void (async () => {
+            try {
+              await persistUserTurn;
+              if (!active) return;
+              const projectLink = inlineProjectLink ?? await projectLinkPromise;
+              if (!active) return;
+              prewarmedRuntimeClaimed = true;
+              for await (const event of chatSessions.run(
+                sessionId,
+                message,
+                repoPath,
+                projectLinkId,
+                llmConfig,
+                projectLink,
+                imageAttachments,
+                turnLlm,
+                undefined,
+                prewarmedRuntime,
+                true,
+                true,
+                true,
+                firstToolGate,
+              )) {
+                if (!active) return;
+                plannerEvents.push(event);
+              }
+            } catch (err) {
+              plannerEvents.fail(err);
+              return;
+            } finally {
+              plannerEvents.close();
+            }
+          })();
+
+          // The opening response remains a real model-authored message. It
+          // establishes the public action boundary, then releases any planner
+          // tool that is already ready to execute.
           const openingCompleted = await settlesWithin(openingNarrative, OPENING_NARRATIVE_DEADLINE_MS);
           if (!openingCompleted) {
-            throw new Error("The model did not begin an action narrative within 15 seconds.");
+            const error = new Error("The model did not begin an action narrative within 15 seconds.");
+            rejectFirstTool?.(error);
+            throw error;
           }
-          if (openingNarrativeError) throw openingNarrativeError;
+          if (openingNarrativeError) {
+            rejectFirstTool?.(openingNarrativeError);
+            throw openingNarrativeError;
+          }
           if (narrativeLlm.configured && !openingNarrativeText.trim()) {
             // Do not execute tools behind an empty or reasoning-only opening
             // response. The Working transcript must show a genuine public
             // action narrative before evidence collection begins.
-            throw new Error("The model completed without a public action narrative. Please try again.");
+            const error = new Error("The model completed without a public action narrative. Please try again.");
+            rejectFirstTool?.(error);
+            throw error;
           }
           if (!active) return;
 
-          // Desktop sends the selected Project Link inline with the request.
-          // The fallback remains for older clients that send only an id.
-          const projectLink = inlineProjectLink ?? await projectLinkPromise;
-          prewarmedRuntimeClaimed = true;
-          await persistUserTurn;
-          for await (const event of chatSessions.run(
-            sessionId,
-            message,
-            repoPath,
-            projectLinkId,
-            llmConfig,
-            projectLink,
-            imageAttachments,
-            turnLlm,
-            openingNarrativeText || undefined,
-            prewarmedRuntime,
-            false,
-            true,
-            true,
-          )) {
+          releaseFirstTool?.();
+          for await (const event of plannerEvents) {
             if (!active) return;
             if (event.type === "work_statement") {
               openingNarrativeVisible = true;
