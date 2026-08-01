@@ -8,6 +8,7 @@ import {
   projectLinksGridClass,
   projectLinksListShellClass,
 } from "./ProjectLinks.js";
+import { withoutProjectLinkFallbacks } from "../projectLinks.js";
 import {
   ProjectLinkCard,
   compactProjectLinkName,
@@ -135,5 +136,35 @@ describe("ProjectLinks layout", () => {
       defaultBranch: "feature/work",
       targetBranch: "main",
     })).toBe("feature/work -> main");
+  });
+
+  it("preserves the managed MCP selection but clears legacy executable and credential fields", () => {
+    const safe = withoutProjectLinkFallbacks({
+      name: "ADO",
+      repoPath: "C:\\repo",
+      defaultBranch: "main",
+      targetBranch: "main",
+      adoOrgUrl: "https://dev.azure.com/demo",
+      adoProject: "Demo",
+      adoRepoName: "repo",
+      adoPat: "secret",
+      adoPipelineId: "1",
+      adoPipelineName: "CI",
+      adoMcpEnabled: true,
+      adoMcpCommand: "untrusted-command",
+      adoMcpAuthentication: "pat",
+      adoMcpDomains: "repositories,pull-requests",
+      projectTemplate: "",
+      buildCommand: "",
+      testCommand: "",
+    });
+
+    expect(safe).toMatchObject({
+      adoPat: "",
+      adoMcpEnabled: true,
+      adoMcpCommand: "",
+      adoMcpAuthentication: "",
+      adoMcpDomains: "repositories,pull-requests",
+    });
   });
 });
