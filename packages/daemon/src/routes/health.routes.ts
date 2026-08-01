@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { completionTokenLimit, type Settings } from "@mergepilot/core";
+import { completionTemperature, completionTokenLimit, type Settings } from "@mergepilot/core";
 import { keyVaultSecretError } from "../daemonEnv.js";
 
 let azureDeploymentProbeCache: {
@@ -51,7 +51,7 @@ async function probeAzureDeployment(settings: Settings): Promise<{ available: bo
           { role: "user", content: "health" },
         ],
         ...completionTokenLimit(settings.azureOpenAiChatDeployment, 1),
-        temperature: 0,
+        ...completionTemperature(settings.azureOpenAiChatDeployment, 0),
       }),
       signal: ctrl.signal,
     });

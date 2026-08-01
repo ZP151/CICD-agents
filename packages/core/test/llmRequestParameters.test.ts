@@ -62,6 +62,7 @@ describe("LLMClient GPT-5 parameter compatibility", () => {
       max_completion_tokens: 321,
     }));
     expect(create.mock.calls[0]?.[0]).not.toHaveProperty("max_tokens");
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty("temperature");
   });
 
   it("uses the same GPT-5 parameter for an explicit streaming narration model", async () => {
@@ -87,5 +88,6 @@ describe("LLMClient GPT-5 parameter compatibility", () => {
       reasoning_effort: "low",
     });
     expect(create.mock.calls[0]?.[0]).not.toHaveProperty("max_tokens");
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty("temperature");
   });
 });

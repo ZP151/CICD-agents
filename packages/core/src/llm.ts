@@ -96,6 +96,21 @@ type CompletionTokenLimit =
   | { max_tokens: number; max_completion_tokens?: never }
   | { max_completion_tokens: number; max_tokens?: never };
 
+type CompletionTemperature =
+  | { temperature: number }
+  | { temperature?: never };
+
+/**
+ * Azure deployments are passed through the Chat Completions `model` field.
+ * Keep all known reasoning-series compatibility decisions together so a
+ * GPT-5 mini deployment cannot receive one legacy parameter from the normal
+ * path and another from the streaming/health paths.
+ */
+export function isReasoningDeployment(model: string): boolean {
+  const normalized = model.trim().toLowerCase();
+  return /^(?:gpt-?5(?:$|[-_.]|mini|nano|pro)|o[134](?:$|[-_.]))/.test(normalized);
+}
+
 /**
  * Azure/OpenAI identifies an Azure deployment in `model`. GPT-5 reasoning
  * deployments reject the legacy `max_tokens` field, so the parameter must be
@@ -103,11 +118,14 @@ type CompletionTokenLimit =
  * Chat Completions calls.
  */
 export function completionTokenLimit(model: string, maxTokens: number): CompletionTokenLimit {
-  const normalized = model.trim().toLowerCase();
-  const isGpt5ReasoningDeployment = /^gpt-?5(?:$|[-_.]|mini|nano|pro)/.test(normalized);
-  return isGpt5ReasoningDeployment
+  return isReasoningDeployment(model)
     ? { max_completion_tokens: maxTokens }
     : { max_tokens: maxTokens };
+}
+
+/** Reasoning deployments reject the legacy sampling controls, including temperature. */
+export function completionTemperature(model: string, temperature: number): CompletionTemperature {
+  return isReasoningDeployment(model) ? {} : { temperature };
 }
 
 export class LLMClient {
@@ -177,7 +195,7 @@ export class LLMClient {
     const params: ChatCompletionCreateParamsNonStreaming = {
       model,
       messages: opts.messages,
-      temperature: opts.temperature ?? 0.2,
+      ...completionTemperature(model, opts.temperature ?? 0.2),
       ...completionTokenLimit(model, opts.maxTokens ?? 1024),
     };
     if (opts.tools && opts.tools.length > 0) {
@@ -236,9 +254,11 @@ export class LLMClient {
         {
           model,
           messages: opts.messages,
-          temperature: opts.temperature ?? 0.2,
+          ...completionTemperature(model, opts.temperature ?? 0.2),
           ...completionTokenLimit(model, opts.maxTokens ?? 1024),
-          ...(opts.reasoningEffort ? { reasoning_effort: opts.reasoningEffort } : {}),
+          ...(opts.reasoningEffort && isReasoningDeployment(model)
+            ? { reasoning_effort: opts.reasoningEffort }
+            : {}),
           tools: opts.tools && opts.tools.length > 0 ? opts.tools : undefined,
           tool_choice: opts.tools && opts.tools.length > 0 ? "auto" : undefined,
           stream: true,
