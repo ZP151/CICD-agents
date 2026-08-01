@@ -13,6 +13,8 @@ export interface ActionNarrativeRequest {
   evidence?: string;
   /** A real tool batch chosen by the planner, used only for a later decision. */
   plannedAction?: string;
+  /** The desktop has already supplied a local Project Link target. */
+  selectedProject?: boolean;
   /** Lets the Turn runtime retain the same model-authored text for continuity. */
   onText?: (text: string) => void;
   blockId?: string;
@@ -40,7 +42,7 @@ export async function* streamActionNarrative(
         "Start directly with the check or decision; never use generic framing such as 'Based on the request', 'The goal is', or 'I will perform'. Do not widen the requested scope.",
         "Use supplied evidence only; do not claim unobserved project facts.",
         "Without completed evidence, describe only the missing fact and the next check; never describe the repository, files, or working-tree state as if already known.",
-        "Treat coding-agent requests as targeting an already selected local project. Unless the user explicitly asks, do not propose cloning, fetching, remote metadata, setup, or a repository-existence check; name the direct requested local check instead.",
+        "Unless the user explicitly asks, do not propose cloning, fetching, remote metadata, setup, or a repository-existence check; name the direct requested local check instead.",
         "For a simple answer, answer directly. Do not reveal private reasoning, use headings, list commands, add generic filler, or ask permission for a clearly read-only action.",
       ].join(" "),
     },
@@ -53,7 +55,13 @@ export async function* streamActionNarrative(
             input.plannedAction ? `The next action is already selected:\n${input.plannedAction}` : "",
             "Write the next action narrative.",
           ].filter(Boolean).join("\n\n")
-        : `User request:\n${input.request}\n\nNo repository evidence is available yet. Write the opening action narrative.`,
+        : [
+            `User request:\n${input.request}`,
+            input.selectedProject
+              ? "A selected local Project Link is already available. Start with the direct requested local check; do not verify that the repository exists."
+              : "No repository evidence is available yet.",
+            "Write the opening action narrative.",
+          ].join("\n\n"),
     },
   ];
 

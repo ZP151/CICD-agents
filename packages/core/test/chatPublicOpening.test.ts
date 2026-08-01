@@ -35,6 +35,22 @@ describe("streamActionNarrative", () => {
     expect(JSON.stringify(events)).not.toContain("Establish the relevant evidence first");
   });
 
+  it("tells the model to start directly when the desktop already selected a local Project Link", async () => {
+    const llm = {
+      configured: true,
+      async *chatStream(options: { messages: Array<{ role: string; content: unknown }> }) {
+        expect(JSON.stringify(options.messages)).toContain("A selected local Project Link is already available");
+        expect(JSON.stringify(options.messages)).toContain("do not verify that the repository exists");
+        yield { type: "delta" as const, delta: "I’ll check the active branch and working tree first." };
+      },
+    } as Pick<LLMClient, "configured" | "chatStream">;
+
+    const events = [];
+    for await (const event of streamActionNarrative(llm, { request: "Inspect the branch", selectedProject: true })) events.push(event);
+
+    expect(events.at(-1)).toMatchObject({ text: "I’ll check the active branch and working tree first." });
+  });
+
   it("does not fabricate an opening when the model is unavailable", async () => {
     const llm = { configured: false } as Pick<LLMClient, "configured" | "chatStream">;
     const events = [];

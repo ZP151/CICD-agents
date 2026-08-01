@@ -283,6 +283,7 @@ export function registerChatRoutes(
           for await (const event of streamActionNarrative(turnLlm, {
             request: message,
             blockId: "opening",
+            selectedProject: Boolean(inlineProjectLink || projectLinkId),
             onText: (text) => { openingNarrative = text; },
           })) {
             if (!active) return;
