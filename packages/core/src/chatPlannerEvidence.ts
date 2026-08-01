@@ -11,13 +11,38 @@ export interface PublicToolEvidence {
  * headings from discarding the evidence users just watched the agent gather.
  */
 export function groundFinalResponse(response: string, evidence: PublicToolEvidence[]): string {
+  const conclusion = removeRepeatedExecutionPreamble(response, evidence);
   const additions = evidence
     .filter((entry) => entry.ok && entry.output?.trim())
     .map(publicFactForTool)
     .filter((fact): fact is string => Boolean(fact))
-    .filter((fact) => !responseContainsFact(response, fact));
-  if (additions.length === 0) return response;
-  return `${response.trimEnd()}\n\nEvidence collected:\n${additions.map((fact) => `- ${fact}`).join("\n")}`;
+    .filter((fact) => !responseContainsFact(conclusion, fact));
+  if (additions.length === 0) return conclusion;
+  return `${conclusion.trimEnd()}\n\nEvidence collected:\n${additions.map((fact) => `- ${fact}`).join("\n")}`;
+}
+
+/**
+ * The execution transcript has already shown the action narrative and tool
+ * group. A model sometimes repeats that material as a heading plus bullets
+ * before its actual conclusion (for example, "Evidence needed before
+ * read-only checks"). Remove only a leading plan section when a subsequent
+ * findings/result heading proves that a separate conclusion follows.
+ */
+function removeRepeatedExecutionPreamble(response: string, evidence: PublicToolEvidence[]): string {
+  if (!evidence.some((entry) => entry.ok && entry.output?.trim())) return response;
+  const lines = response.split(/\r?\n/);
+  const conclusionIndex = lines.findIndex((line) => /^(?:#{1,6}\s*)?(?:findings?|results?|conclusion|summary)\b[^\n]*:/i.test(line.trim()));
+  if (conclusionIndex <= 0) return response;
+
+  const leading = lines.slice(0, conclusionIndex).filter((line) => line.trim());
+  if (leading.length === 0 || !leading.every(isExecutionPlanLine)) return response;
+  return lines.slice(conclusionIndex).join("\n").trimStart();
+}
+
+function isExecutionPlanLine(line: string): boolean {
+  const normalized = line.trim();
+  return /^(?:#{1,6}\s*)?(?:planned evidence|evidence needed(?: before)?|before checks|plan)\b/i.test(normalized)
+    || /^(?:[-*•]|\d+[.)])\s/.test(normalized);
 }
 
 function publicFactForTool(entry: PublicToolEvidence): string | undefined {

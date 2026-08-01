@@ -24,6 +24,24 @@ describe("groundFinalResponse", () => {
     expect(result).toBe("The active branch is main and there are uncommitted changes.");
   });
 
+  it("removes a repeated execution-plan preamble when a conclusion follows", () => {
+    const result = groundFinalResponse([
+      "Evidence needed before read-only checks:",
+      "- Confirm the active branch.",
+      "- Read the working-tree status.",
+      "",
+      "Findings (read-only):",
+      "The active branch is main and the working tree has uncommitted changes.",
+    ].join("\n"), [
+      { name: "git_current_branch", ok: true, output: "main\n" },
+      { name: "git_status", ok: true, output: "## main\n M app.ts\n" },
+    ]);
+
+    expect(result).toBe("Findings (read-only):\nThe active branch is main and the working tree has uncommitted changes.");
+    expect(result).not.toContain("Evidence needed");
+    expect(result).not.toContain("Confirm the active branch");
+  });
+
   it("recognizes a short commit SHA already stated by the model", () => {
     const result = groundFinalResponse("The latest commit is dffeecd and it hardens validation.", [
       { name: "git_log", ok: true, output: "dffeecd Dev 2026-07-05 fix: validation\n" },
