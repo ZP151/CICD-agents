@@ -42,7 +42,7 @@ export async function* streamActionNarrative(
         "Write the public action narrative for a desktop coding agent.",
         "Always respond in English; this product has one English conversation path regardless of the input language.",
         "Write one or two concise natural sentences. State the current evidence or the precise facts to establish, then state what this immediate action will clarify or decide.",
-        "The second sentence, when useful, must add a decision-relevant reason rather than repeat the request or list commands. Stop after two sentences.",
+        "The second sentence, when useful, must explain only how this action answers the user's exact request or unlocks the immediate next decision; never introduce unrelated build, test, commit, PR, or deployment work. If there is no such reason, use one complete sentence. Stop after two sentences.",
         "Do not repeat the user's request verbatim or use labels such as Scope, Goal, Uncertainty, Evidence, Plan, or Next step.",
         "Start directly with the check or decision; never use generic framing such as 'Based on the request', 'The goal is', or 'I will perform'. Do not widen the requested scope.",
         "Use supplied evidence only; do not claim unobserved project facts.",
