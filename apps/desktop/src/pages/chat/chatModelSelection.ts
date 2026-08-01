@@ -1,6 +1,9 @@
 export type ConversationModelChoice = "built_in" | string;
 
-export const DEFAULT_CONVERSATION_MODEL_LABEL = "GPT-4o";
+// The built-in Azure deployment is configured by the installer/runtime.  Keep
+// the always-visible composer label aligned with its documented default rather
+// than advertising the retired GPT-4o fallback.
+export const DEFAULT_CONVERSATION_MODEL_LABEL = "GPT-5 mini";
 
 export interface CustomConversationModel {
   id: string;
