@@ -243,9 +243,10 @@ export function registerChatRoutes(
     const sessionId = existingId ?? chatSessions.createSession(repoPath, projectLinkId);
     const turnId = `turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const sseWriter = createChatSseWriter(reply, sessionId, (event) => chatSessions.appendTurnTimelineEvent(sessionId, event));
-    // Confirm the Turn immediately. The public action narrative and planner
-    // begin in parallel: the narrator is emitted first, then the already
-    // prepared real command events follow without a second model-sized gap.
+    // Confirm the Turn immediately. The public action narrative begins before
+    // planning or executing any action. This is a real behavioural boundary:
+    // buffering a command event until after a narrative only changes what the
+    // user sees; it does not stop the command from already having run.
     sseWriter.startTurn(turnId);
     let active = true;
     let openingNarrativeVisible = false;
@@ -284,6 +285,7 @@ export function registerChatRoutes(
       (async () => {
         try {
           let openingNarrativeError: unknown;
+          let openingNarrativeText = "";
           const openingNarrative = (async () => {
             for await (const event of streamActionNarrative(narrativeLlm, {
               request: message,
@@ -298,54 +300,17 @@ export function registerChatRoutes(
               if (!active) return;
               if (event.type === "work_statement") {
                 openingNarrativeVisible = true;
+                openingNarrativeText = event.text;
                 clearTimeout(waitingForModelTimer);
               }
               sseWriter.sendChatEvent(event);
             }
           })().catch((err) => { openingNarrativeError = err; });
-          // Desktop sends the selected Project Link inline with the request.
-          // The fallback remains for older clients that send only an id.
-          const projectLink = inlineProjectLink ?? await projectLinkPromise;
-          prewarmedRuntimeClaimed = true;
-          const bufferedSessionEvents: ChatEvent[] = [];
-          let sessionFinished = false;
-          let sessionFailure: unknown;
-          let wakeSessionConsumer: (() => void) | undefined;
-          const notifySessionConsumer = () => {
-            const wake = wakeSessionConsumer;
-            wakeSessionConsumer = undefined;
-            wake?.();
-          };
-          const sessionProducer = (async () => {
-            try {
-              for await (const event of chatSessions.run(
-                sessionId,
-                message,
-                repoPath,
-                projectLinkId,
-                llmConfig,
-                projectLink,
-                imageAttachments,
-                turnLlm,
-                undefined,
-                prewarmedRuntime,
-                true,
-                true,
-              )) {
-                bufferedSessionEvents.push(event);
-                notifySessionConsumer();
-              }
-            } catch (err) {
-              sessionFailure = err;
-            } finally {
-              sessionFinished = true;
-              notifySessionConsumer();
-            }
-          })();
-
-          // Preserve the transcript order: genuine public narration must be
-          // visible before the first command group, while the planner is free
-          // to select that command in parallel behind the scenes.
+          // The first public response is itself model-authored. Wait only for
+          // this intentionally tiny stream, then hand that exact narrative to
+          // the planner as prior assistant context. Tool/MCP setup and Project
+          // Link resolution have been warming in parallel, but the planner is
+          // deliberately not allowed to execute an action before this point.
           const openingCompleted = await settlesWithin(openingNarrative, OPENING_NARRATIVE_DEADLINE_MS);
           if (!openingCompleted) {
             throw new Error("The model did not begin an action narrative within 15 seconds.");
@@ -353,12 +318,25 @@ export function registerChatRoutes(
           if (openingNarrativeError) throw openingNarrativeError;
           if (!active) return;
 
-          while (active && (!sessionFinished || bufferedSessionEvents.length > 0)) {
-            if (bufferedSessionEvents.length === 0) {
-              await new Promise<void>((resolve) => { wakeSessionConsumer = resolve; });
-              continue;
-            }
-            const event = bufferedSessionEvents.shift()!;
+          // Desktop sends the selected Project Link inline with the request.
+          // The fallback remains for older clients that send only an id.
+          const projectLink = inlineProjectLink ?? await projectLinkPromise;
+          prewarmedRuntimeClaimed = true;
+          for await (const event of chatSessions.run(
+            sessionId,
+            message,
+            repoPath,
+            projectLinkId,
+            llmConfig,
+            projectLink,
+            imageAttachments,
+            turnLlm,
+            openingNarrativeText || undefined,
+            prewarmedRuntime,
+            false,
+            true,
+          )) {
+            if (!active) return;
             if (event.type === "work_statement") {
               openingNarrativeVisible = true;
               clearTimeout(waitingForModelTimer);
@@ -371,8 +349,6 @@ export function registerChatRoutes(
               return;
             }
           }
-          await sessionProducer;
-          if (sessionFailure) throw sessionFailure;
         } catch (err) {
           clearTimeout(waitingForModelTimer);
           active = false;
