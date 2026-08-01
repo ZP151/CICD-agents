@@ -49,9 +49,13 @@ describe("azureAuthSession", () => {
   const originalSecretSource = process.env.MERGEPILOT_SECRET_SOURCE;
   const originalAzureKeyVaultUrl = process.env.AZURE_KEYVAULT_URL;
   const originalAzureOpenAiApiKey = process.env.AZURE_OPENAI_API_KEY;
+  const originalAzureTenantId = process.env.MERGEPILOT_AZURE_TENANT_ID;
+  const originalAzureClientId = process.env.MERGEPILOT_AZURE_CLIENT_ID;
   const roots: string[] = [];
 
   beforeEach(() => {
+    process.env.MERGEPILOT_AZURE_TENANT_ID = "tenant-test";
+    process.env.MERGEPILOT_AZURE_CLIENT_ID = "client-test";
     resetUserCache();
     resetSettingsForTests();
     acquireTokenSilent.mockReset();
@@ -96,6 +100,16 @@ describe("azureAuthSession", () => {
       delete process.env.AZURE_OPENAI_API_KEY;
     } else {
       process.env.AZURE_OPENAI_API_KEY = originalAzureOpenAiApiKey;
+    }
+    if (originalAzureTenantId === undefined) {
+      delete process.env.MERGEPILOT_AZURE_TENANT_ID;
+    } else {
+      process.env.MERGEPILOT_AZURE_TENANT_ID = originalAzureTenantId;
+    }
+    if (originalAzureClientId === undefined) {
+      delete process.env.MERGEPILOT_AZURE_CLIENT_ID;
+    } else {
+      process.env.MERGEPILOT_AZURE_CLIENT_ID = originalAzureClientId;
     }
     for (const root of roots.splice(0)) {
       fs.rmSync(root, { recursive: true, force: true });
@@ -198,7 +212,7 @@ describe("azureAuthSession", () => {
 
   it("keeps basic Microsoft sign-in identity-only even when Key Vault secret mode is configured", async () => {
     process.env.MERGEPILOT_SECRET_SOURCE = "key_vault";
-    process.env.AZURE_KEYVAULT_URL = "https://devagentkv001.vault.azure.net/";
+    process.env.AZURE_KEYVAULT_URL = "https://example.vault.azure.net/";
     process.env.AZURE_OPENAI_API_KEY = "kv://secret/mergepilot-aoai-key";
     acquireTokenInteractive.mockResolvedValue({
       accessToken: jwt({

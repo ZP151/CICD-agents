@@ -5,13 +5,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const LIVE_AZURE = process.env.MERGEPILOT_E2E_LIVE_AZURE === "1";
-const SUBSCRIPTION = process.env.MERGEPILOT_E2E_AZURE_SUBSCRIPTION || "a99512b0-3dc5-476f-8f43-d7db40fbc923";
-const RESOURCE_GROUP = process.env.MERGEPILOT_E2E_AZURE_RESOURCE_GROUP || "developmentagent";
-const STORAGE_ACCOUNT = process.env.MERGEPILOT_E2E_AZURE_STORAGE_ACCOUNT || "devagentstorage001";
-const STORAGE_TABLE = process.env.MERGEPILOT_E2E_AZURE_STORAGE_TABLE || "MergePilotProjectLinks";
-const KEY_VAULT = process.env.MERGEPILOT_E2E_AZURE_KEY_VAULT || "devagentkv001";
-const COSMOS_ACCOUNT = process.env.MERGEPILOT_E2E_AZURE_COSMOS_ACCOUNT || "devagentcosmos001";
-const COSMOS_DATABASE = process.env.MERGEPILOT_E2E_AZURE_COSMOS_DATABASE || "cicd-agent";
+const SUBSCRIPTION = process.env.MERGEPILOT_E2E_AZURE_SUBSCRIPTION || "";
+const RESOURCE_GROUP = process.env.MERGEPILOT_E2E_AZURE_RESOURCE_GROUP || "";
+const STORAGE_ACCOUNT = process.env.MERGEPILOT_E2E_AZURE_STORAGE_ACCOUNT || "";
+const STORAGE_TABLE = process.env.MERGEPILOT_E2E_AZURE_STORAGE_TABLE || "";
+const KEY_VAULT = process.env.MERGEPILOT_E2E_AZURE_KEY_VAULT || "";
+const COSMOS_ACCOUNT = process.env.MERGEPILOT_E2E_AZURE_COSMOS_ACCOUNT || "";
+const COSMOS_DATABASE = process.env.MERGEPILOT_E2E_AZURE_COSMOS_DATABASE || "";
 
 const runLive = LIVE_AZURE ? it : it.skip;
 

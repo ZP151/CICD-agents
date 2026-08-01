@@ -3,7 +3,12 @@ import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 
-export const PROJECT_CHAT_DEPLOYMENT = "mergepilot-chat";
+/**
+ * A fresh desktop installation targets the GPT-5 mini deployment name, but
+ * contains no endpoint or credential. Users can replace this with their own
+ * Azure deployment in their local MergePilot config.
+ */
+export const PROJECT_CHAT_DEPLOYMENT = "gpt-5-mini";
 export const PROJECT_EMBEDDING_DEPLOYMENT = "mergepilot-embeddings";
 
 const SettingsSchema = z.object({

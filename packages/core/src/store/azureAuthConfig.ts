@@ -19,9 +19,6 @@ export const REDIRECT_URI = "http://localhost";
 export const MSAL_CACHE_SERVICE = "Microsoft.Developer.IdentityService";
 export const MSAL_CACHE_ACCOUNT = "MSALCache";
 
-const DEFAULT_DESKTOP_TENANT_ID = "1f432b2e-9e7a-4aa0-ace2-53af62d309f6";
-const DEFAULT_DESKTOP_CLIENT_ID = "03da33ef-7161-4b27-ae80-3079313f131d";
-
 export function desktopAppName(): string {
   return process.env.MERGEPILOT_APP_NAME?.trim()
     || "MergePilot";
@@ -34,14 +31,12 @@ export function desktopAppReturnUri(): string {
 
 export function desktopTenantId(): string | undefined {
   return process.env.MERGEPILOT_AZURE_TENANT_ID
-    ?? process.env.AZURE_TENANT_ID
-    ?? DEFAULT_DESKTOP_TENANT_ID;
+    ?? process.env.AZURE_TENANT_ID;
 }
 
 export function desktopClientId(): string | undefined {
   return process.env.MERGEPILOT_AZURE_CLIENT_ID
-    ?? process.env.AZURE_CLIENT_ID
-    ?? DEFAULT_DESKTOP_CLIENT_ID;
+    ?? process.env.AZURE_CLIENT_ID;
 }
 
 function hasConfiguredTenantId(): boolean {

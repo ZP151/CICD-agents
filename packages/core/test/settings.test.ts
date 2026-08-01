@@ -51,7 +51,7 @@ describe("settings", () => {
 
     expect(settings.llmProvider).toBe("azure");
     expect(settings.llmConfigured).toBe(true);
-    expect(settings.azureOpenAiChatDeployment).toBe("mergepilot-chat");
+    expect(settings.azureOpenAiChatDeployment).toBe("gpt-5-mini");
   });
 
   it("uses OpenAI as a configured custom provider only when key and model are present", () => {

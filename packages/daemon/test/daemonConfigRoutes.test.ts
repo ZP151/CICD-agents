@@ -94,6 +94,7 @@ describe("daemon config routes", () => {
       azureEndpoint: "https://example.openai.azure.com",
       azureDeployment: "gpt-4o",
       azureApiVersion: "2024-08-01-preview",
+      azureKeyVaultUrl: "https://example.vault.azure.net/",
     }, process.env.MERGEPILOT_USER_CONFIG_FILE!);
     vi.spyOn(KeyVaultSecrets.prototype, "setAoaiKey").mockRejectedValue(
       new Error("invalid_client: AADSTS650057: Invalid resource. The client requested access to https://vault.azure.net."),
@@ -110,6 +111,7 @@ describe("daemon config routes", () => {
         azureEndpoint: "https://example.openai.azure.com",
         azureDeployment: "gpt-4o",
         azureApiVersion: "2024-08-01-preview",
+        azureKeyVaultUrl: "https://example.vault.azure.net/",
         azureApiKey: "model-key",
       }),
     });

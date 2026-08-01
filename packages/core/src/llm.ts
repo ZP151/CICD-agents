@@ -92,6 +92,24 @@ export interface UsageTotals {
   embedTokens: number;
 }
 
+type CompletionTokenLimit =
+  | { max_tokens: number; max_completion_tokens?: never }
+  | { max_completion_tokens: number; max_tokens?: never };
+
+/**
+ * Azure/OpenAI identifies an Azure deployment in `model`. GPT-5 reasoning
+ * deployments reject the legacy `max_tokens` field, so the parameter must be
+ * selected from the resolved deployment/model for both regular and streaming
+ * Chat Completions calls.
+ */
+export function completionTokenLimit(model: string, maxTokens: number): CompletionTokenLimit {
+  const normalized = model.trim().toLowerCase();
+  const isGpt5ReasoningDeployment = /^gpt-?5(?:$|[-_.]|mini|nano|pro)/.test(normalized);
+  return isGpt5ReasoningDeployment
+    ? { max_completion_tokens: maxTokens }
+    : { max_tokens: maxTokens };
+}
+
 export class LLMClient {
   private client: AzureOpenAI | OpenAI | null = null;
   public readonly usage: UsageTotals = {
@@ -155,11 +173,12 @@ export class LLMClient {
     retries?: number;
   }): Promise<ChatResult> {
     const retries = opts.retries ?? 3;
+    const model = this.chatModel();
     const params: ChatCompletionCreateParamsNonStreaming = {
-      model: this.chatModel(),
+      model,
       messages: opts.messages,
       temperature: opts.temperature ?? 0.2,
-      max_tokens: opts.maxTokens ?? 1024,
+      ...completionTokenLimit(model, opts.maxTokens ?? 1024),
     };
     if (opts.tools && opts.tools.length > 0) {
       params.tools = opts.tools;
@@ -210,12 +229,13 @@ export class LLMClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), STREAM_REQUEST_TIMEOUT_MS);
     try {
+      const model = opts.model || this.chatModel();
       const stream = await this.get().chat.completions.create(
         {
-          model: opts.model || this.chatModel(),
+          model,
           messages: opts.messages,
           temperature: opts.temperature ?? 0.2,
-          max_tokens: opts.maxTokens ?? 1024,
+          ...completionTokenLimit(model, opts.maxTokens ?? 1024),
           tools: opts.tools && opts.tools.length > 0 ? opts.tools : undefined,
           tool_choice: opts.tools && opts.tools.length > 0 ? "auto" : undefined,
           stream: true,

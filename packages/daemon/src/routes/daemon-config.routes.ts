@@ -10,8 +10,6 @@ import {
   mergePilotUserConfigFile,
   keyVaultSecretError,
   readMergePilotUserConfig,
-  SYSTEM_AZURE_OPENAI_API_KEY_REF,
-  SYSTEM_KEY_VAULT_URL,
   USER_AZURE_OPENAI_API_KEY_REF,
   KEY_VAULT_SECRET_SOURCE,
   LOCAL_ENV_SECRET_SOURCE,
@@ -91,7 +89,7 @@ function keyVaultAccessMessage(action: "read" | "write", err: unknown): string {
   const status = (err as { statusCode?: number; status?: number })?.statusCode
     ?? (err as { statusCode?: number; status?: number })?.status;
   if (status === 401 || status === 403) {
-    return `Azure Key Vault permission is missing. The signed-in Azure account needs secrets/${action === "read" ? "get" : "set"} access to ${SYSTEM_KEY_VAULT_URL}.`;
+    return `Azure Key Vault permission is missing. The signed-in Azure account needs secrets/${action === "read" ? "get" : "set"} access to the Key Vault configured locally.`;
   }
   const message = err instanceof Error ? err.message : String(err);
   if (
@@ -99,13 +97,13 @@ function keyVaultAccessMessage(action: "read" | "write", err: unknown): string {
     message.toLowerCase().includes("invalid_resource") ||
     message.toLowerCase().includes("invalid client")
   ) {
-    return `Azure Key Vault app permission is not configured. Keep Settings > Account > Secret source set to Local .env, or ask an Azure administrator to grant the MergePilot app delegated Key Vault access and secrets/${action === "read" ? "get" : "set"} permission to ${SYSTEM_KEY_VAULT_URL}.`;
+    return `Azure Key Vault app permission is not configured. Keep Settings > Account > Secret source set to Local .env, or ask an Azure administrator to grant the MergePilot app delegated Key Vault access and secrets/${action === "read" ? "get" : "set"} permission to the configured vault.`;
   }
   if (message.includes("AADSTS65001") || message.toLowerCase().includes("consent")) {
-    return `Azure Key Vault consent is missing. Sign in again so MergePilot can request Key Vault access, then ensure the account has secrets/${action === "read" ? "get" : "set"} access to ${SYSTEM_KEY_VAULT_URL}.`;
+    return `Azure Key Vault consent is missing. Sign in again so MergePilot can request Key Vault access, then ensure the account has secrets/${action === "read" ? "get" : "set"} access to the configured vault.`;
   }
   if (message.includes("Automatic authentication has been disabled")) {
-    return `Azure Key Vault sign-in is required. Sign in again so MergePilot can request Key Vault access, then ensure the account has secrets/${action === "read" ? "get" : "set"} access to ${SYSTEM_KEY_VAULT_URL}.`;
+    return `Azure Key Vault sign-in is required. Sign in again so MergePilot can request Key Vault access, then ensure the account has secrets/${action === "read" ? "get" : "set"} access to the configured vault.`;
   }
   return `Azure Key Vault secret ${action} failed: ${message}`;
 }
@@ -114,8 +112,11 @@ async function persistAoaiKeyIfPossible(
   cfg: z.infer<typeof DaemonConfigureSchema>,
   settings: Settings,
 ): Promise<{ ok: true; ref?: string } | { ok: false; statusCode: number; message: string }> {
-  const effectiveKvUrl = cfg.azureKeyVaultUrl || settings.azureKeyVaultUrl || SYSTEM_KEY_VAULT_URL;
-  if (!cfg.azureApiKey || !effectiveKvUrl) return { ok: true };
+  const effectiveKvUrl = cfg.azureKeyVaultUrl || settings.azureKeyVaultUrl;
+  if (!cfg.azureApiKey) return { ok: true };
+  if (!effectiveKvUrl) {
+    return { ok: false, statusCode: 400, message: "A Key Vault URL is required when Key Vault is selected as the secret source." };
+  }
   try {
     const tempKv = new KeyVaultSecrets(effectiveKvUrl);
     await tempKv.setAoaiKey(cfg.azureApiKey);
@@ -149,9 +150,7 @@ async function persistModelSecretRefs(
   return {
     ok: true,
     refs: {
-      azureApiKeyRef: storedInKeyVault.ref ?? (
-        cfg.llmProvider === "azure" ? SYSTEM_AZURE_OPENAI_API_KEY_REF : undefined
-      ),
+      azureApiKeyRef: storedInKeyVault.ref,
     },
   };
 }
@@ -177,7 +176,7 @@ function mergeUserConfig(
     azureTenantId: cfg.azureTenantId ?? existing.azureTenantId,
     azureClientId: cfg.azureClientId ?? existing.azureClientId,
     azureStorageAccount: cfg.azureStorageAccount ?? existing.azureStorageAccount,
-    azureKeyVaultUrl: cfg.azureKeyVaultUrl ?? existing.azureKeyVaultUrl ?? SYSTEM_KEY_VAULT_URL,
+    azureKeyVaultUrl: cfg.azureKeyVaultUrl ?? existing.azureKeyVaultUrl,
     azureCosmosEndpoint: cfg.azureCosmosEndpoint ?? existing.azureCosmosEndpoint,
     reviewAutoApproveEnabled: cfg.reviewAutoApproveEnabled ?? existing.reviewAutoApproveEnabled,
     reviewStaleAgeHours: cfg.reviewStaleAgeHours ?? existing.reviewStaleAgeHours,
@@ -210,7 +209,6 @@ function patchLiveProcessEnv(
 
   if (cfg.azureStorageAccount !== undefined) process.env["AZURE_STORAGE_ACCOUNT"] = cfg.azureStorageAccount;
   if (cfg.azureKeyVaultUrl !== undefined) process.env["AZURE_KEYVAULT_URL"] = cfg.azureKeyVaultUrl;
-  else if (secretRefs.azureApiKeyRef) process.env["AZURE_KEYVAULT_URL"] = SYSTEM_KEY_VAULT_URL;
   if (cfg.azureCosmosEndpoint !== undefined) process.env["AZURE_COSMOS_ENDPOINT"] = cfg.azureCosmosEndpoint;
   if (cfg.azureTenantId !== undefined) process.env["MERGEPILOT_AZURE_TENANT_ID"] = cfg.azureTenantId;
   if (cfg.azureClientId !== undefined) process.env["MERGEPILOT_AZURE_CLIENT_ID"] = cfg.azureClientId;

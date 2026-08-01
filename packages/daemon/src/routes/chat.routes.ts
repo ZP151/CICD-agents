@@ -179,18 +179,18 @@ export function projectLinkIdFromChatPayload(payload: {
   return payload.projectLinkId;
 }
 
-function explainChatSseError(
+export function explainChatSseError(
   err: unknown,
   settings: Settings,
   envSourceLabel: () => string,
 ): string {
   const message = err instanceof Error ? err.message : String(err);
-  if (/deployment.*does not exist|deployment.*not found/i.test(message)) {
+  if (/deployment.*does not exist|deployment.*not found|(?:^|\s)404\s+resource not found|resource not found/i.test(message)) {
     return [
-      "Azure OpenAI deployment not found.",
+      "Azure OpenAI endpoint or deployment was not found.",
       `Daemon env source: ${envSourceLabel()}.`,
       `Deployment: ${settings.azureOpenAiChatDeployment || "(missing)"}.`,
-      "Open Settings and set the chat deployment to an existing Azure OpenAI deployment, then restart the daemon.",
+      "Open Settings, verify the Azure endpoint and chat deployment, then restart the daemon.",
     ].join(" ");
   }
   return message;

@@ -292,7 +292,7 @@ describe("daemon Project Link routes", () => {
 
   it("does not require Key Vault PAT lookup when local env secrets are selected", async () => {
     process.env.AZURE_STORAGE_ACCOUNT = "demoaccount";
-    process.env.AZURE_KEYVAULT_URL = "https://devagentkv001.vault.azure.net/";
+    process.env.AZURE_KEYVAULT_URL = "https://example.vault.azure.net/";
     process.env.MERGEPILOT_SECRET_SOURCE = "local_env";
     resetSettingsForTests();
     vi.spyOn(AzureTableProjectLinkStore.prototype, "list").mockResolvedValue([

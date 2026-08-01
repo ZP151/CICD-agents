@@ -81,7 +81,7 @@ export function AccountSettingsSection({
                 onChange={(value) => onSettingChange("azureClientId", value)}
               />
               <StatusPill tone={authUser.azureAuthConfig?.usesDefaultClient ? "warning" : "success"}>
-                {authUser.azureAuthConfig?.usesDefaultClient ? "Default" : "Custom"}
+                {authUser.azureAuthConfig?.usesDefaultClient ? "Missing" : "Configured"}
               </StatusPill>
             </div>
           </SettingsRow>

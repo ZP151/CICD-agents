@@ -21,6 +21,7 @@ const savedEnv = {
   AZURE_OPENAI_CHAT_DEPLOYMENT: process.env.AZURE_OPENAI_CHAT_DEPLOYMENT,
   AZURE_OPENAI_EMBEDDING_DEPLOYMENT: process.env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
   AZURE_OPENAI_ENDPOINT: process.env.AZURE_OPENAI_ENDPOINT,
+  AZURE_KEYVAULT_URL: process.env.AZURE_KEYVAULT_URL,
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   OPENAI_MODEL: process.env.OPENAI_MODEL,
   LLM_PROVIDER: process.env.LLM_PROVIDER,
@@ -61,7 +62,8 @@ describe("daemonEnv", () => {
     expect(content).toContain("[azure_openai]");
     expect(content).toContain("narrative_deployment = \"\"");
     expect(content).toContain("embedding_deployment = \"text-embedding-3-small\"");
-    expect(content).toContain("key_vault_url = \"https://devagentkv001.vault.azure.net/\"");
+    expect(content).toContain("chat_deployment = \"gpt-5-mini\"");
+    expect(content).toContain("key_vault_url = \"\"");
     expect(content).toContain("api_key_ref = \"\"");
   });
 
@@ -72,11 +74,11 @@ describe("daemonEnv", () => {
       llmProvider: "azure",
       secretSource: "key_vault",
       azureEndpoint: "https://example.openai.azure.com",
-      azureDeployment: "mergepilot-chat",
+      azureDeployment: "gpt-5-mini",
       azureNarrativeDeployment: "fast-narrative-model",
       azureEmbeddingDeployment: "text-embedding-3-small",
       azureApiKeyRef: "kv://secret/mergepilot-aoai-key",
-      azureKeyVaultUrl: "https://devagentkv001.vault.azure.net/",
+      azureKeyVaultUrl: "https://example.vault.azure.net/",
       reviewAutoApproveEnabled: false,
       reviewStaleAgeHours: 48,
     }, configFile);
@@ -92,7 +94,7 @@ describe("daemonEnv", () => {
       azureEmbeddingDeployment: "text-embedding-3-small",
       azureNarrativeDeployment: "fast-narrative-model",
       azureApiKeyRef: "kv://secret/mergepilot-aoai-key",
-      azureKeyVaultUrl: "https://devagentkv001.vault.azure.net/",
+      azureKeyVaultUrl: "https://example.vault.azure.net/",
       reviewAutoApproveEnabled: false,
       reviewStaleAgeHours: 48,
     });
@@ -105,21 +107,21 @@ describe("daemonEnv", () => {
       llmProvider: "azure",
       secretSource: "key_vault",
       azureEndpoint: "https://example.openai.azure.com",
-      azureDeployment: "mergepilot-chat",
+      azureDeployment: "gpt-5-mini",
       azureEmbeddingDeployment: "text-embedding-3-small",
       azureApiVersion: "2024-08-01-preview",
       azureApiKeyRef: "kv://aoai-key",
-      azureKeyVaultUrl: "https://devagentkv001.vault.azure.net/",
+      azureKeyVaultUrl: "https://example.vault.azure.net/",
     }, configFile);
 
     const content = fs.readFileSync(configFile, "utf8");
     expect(content).toContain("api_key_ref = \"kv://aoai-key\"");
-    expect(content).toContain("key_vault_url = \"https://devagentkv001.vault.azure.net/\"");
+    expect(content).toContain("key_vault_url = \"https://example.vault.azure.net/\"");
     expect(content).not.toContain("sk-");
     expect(readMergePilotUserConfig(configFile)).toMatchObject({
       llmProvider: "azure",
       azureApiKeyRef: "kv://aoai-key",
-      azureKeyVaultUrl: "https://devagentkv001.vault.azure.net/",
+      azureKeyVaultUrl: "https://example.vault.azure.net/",
     });
   });
 
@@ -131,10 +133,10 @@ describe("daemonEnv", () => {
       llmProvider: "azure",
       secretSource: "local_env",
       azureEndpoint: "https://example.openai.azure.com",
-      azureDeployment: "mergepilot-chat",
+      azureDeployment: "gpt-5-mini",
       azureEmbeddingDeployment: "text-embedding-3-small",
       azureApiKeyRef: "kv://secret/mergepilot-aoai-key",
-      azureKeyVaultUrl: "https://devagentkv001.vault.azure.net/",
+      azureKeyVaultUrl: "https://example.vault.azure.net/",
     }, userConfig);
     const localEnvFile = path.join(tmp, "user", ".env");
     fs.writeFileSync(localEnvFile, "AZURE_OPENAI_API_KEY=local-env-key\n", "utf8");
@@ -148,7 +150,7 @@ describe("daemonEnv", () => {
     expect(process.env.AZURE_OPENAI_ENDPOINT).toBe("https://example.openai.azure.com");
     expect(process.env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT).toBe("text-embedding-3-small");
     expect(process.env.AZURE_OPENAI_API_KEY).toBe("local-env-key");
-    expect(process.env.AZURE_KEYVAULT_URL).toBe("https://devagentkv001.vault.azure.net/");
+    expect(process.env.AZURE_KEYVAULT_URL).toBe("https://example.vault.azure.net/");
     expect(envSourceLabel()).toBe(userConfig);
   });
 
@@ -162,7 +164,7 @@ describe("daemonEnv", () => {
     expect(process.env.OPENAI_API_KEY).toBeUndefined();
     expect(process.env.AZURE_OPENAI_API_KEY).toBeUndefined();
     expect(process.env.MERGEPILOT_SECRET_SOURCE).toBe("local_env");
-    expect(process.env.AZURE_KEYVAULT_URL).toBe("https://devagentkv001.vault.azure.net/");
+    expect(process.env.AZURE_KEYVAULT_URL).toBeUndefined();
   });
 
   it("creates a local .env placeholder for local secret storage", () => {
@@ -179,7 +181,7 @@ describe("daemonEnv", () => {
       llmProvider: "azure",
       azureEndpoint: "https://example.openai.azure.com",
       azureApiKeyRef: "kv://secret/mergepilot-aoai-key",
-      azureKeyVaultUrl: "https://devagentkv001.vault.azure.net/",
+      azureKeyVaultUrl: "https://example.vault.azure.net/",
     }, userConfig);
     process.env.MERGEPILOT_USER_CONFIG_FILE = userConfig;
     process.env.AZURE_OPENAI_ENDPOINT = "https://explicit.openai.azure.com";
@@ -215,9 +217,9 @@ describe("daemonEnv", () => {
       llmProvider: "azure",
       secretSource: "key_vault",
       azureEndpoint: "https://example.openai.azure.com",
-      azureDeployment: "mergepilot-chat",
+      azureDeployment: "gpt-5-mini",
       azureApiKeyRef: "kv://secret/mergepilot-aoai-key",
-      azureKeyVaultUrl: "https://devagentkv001.vault.azure.net/",
+      azureKeyVaultUrl: "https://example.vault.azure.net/",
     }, userConfig);
     process.env.MERGEPILOT_USER_CONFIG_FILE = userConfig;
     process.env.AZURE_OPENAI_API_KEY = "plaintext-key";
