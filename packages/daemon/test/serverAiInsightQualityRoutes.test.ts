@@ -181,7 +181,15 @@ describe("daemon Chat AI insight quality gate", () => {
 
 function mockFinalAnswer(answer: string): void {
   vi.spyOn(LLMClient.prototype, "embed").mockResolvedValue([]);
-  vi.spyOn(LLMClient.prototype, "chatStream").mockImplementation(async function* (): AsyncGenerator<ChatStreamEvent> {
+  vi.spyOn(LLMClient.prototype, "chatStream").mockImplementation(async function* (options): AsyncGenerator<ChatStreamEvent> {
+    if (options.reasoningEffort === "minimal") {
+      yield {
+        type: "delta",
+        delta: "The changed files and requested risk categories need review. This will establish whether the proposed changes require follow-up.",
+      };
+      yield { type: "done", finishReason: "stop" };
+      return;
+    }
     yield {
       type: "tool_call",
       toolCalls: [
