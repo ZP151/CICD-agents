@@ -27,6 +27,8 @@ export interface RunChatSessionTurnArgs {
   initialNarrative?: string;
   initialNarrativeInFlight?: boolean;
   fastStart?: boolean;
+  /** The route persisted the user input before the opening narrative started. */
+  userMessageAlreadyStored?: boolean;
   /** Started alongside the opening narrative so tool/MCP setup cannot add a
    * second idle gap before the first real action. Ownership transfers to this
    * function once awaited and is released by the existing finally block. */
@@ -45,6 +47,7 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
     initialNarrative,
     initialNarrativeInFlight = false,
     fastStart = false,
+    userMessageAlreadyStored = false,
     prewarmedRuntime,
     llm: turnLlm,
     projectLinkId,
@@ -92,9 +95,11 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
   const waitForConfirm = (): Promise<boolean> => active.waitForConfirm(sessionId);
 
   try {
-    const storedMessage = messageWithImageNames(message, imageAttachments);
-    await adapters.appendBubble(sessionId, { role: "user", content: storedMessage, timestamp: now(), repoPath });
-    await adapters.appendMessage(sessionId, "user", storedMessage);
+    if (!userMessageAlreadyStored) {
+      const storedMessage = messageWithImageNames(message, imageAttachments);
+      await adapters.appendBubble(sessionId, { role: "user", content: storedMessage, timestamp: now(), repoPath });
+      await adapters.appendMessage(sessionId, "user", storedMessage);
+    }
 
     const handledApproval = yield* handleChatMessageApproval({
       sessionId,
@@ -144,7 +149,7 @@ function now(): number {
   return Math.floor(Date.now() / 1000);
 }
 
-function messageWithImageNames(message: string, imageAttachments: ChatImageAttachment[]): string {
+export function messageWithImageNames(message: string, imageAttachments: ChatImageAttachment[]): string {
   if (imageAttachments.length === 0) return message;
   const imageLines = imageAttachments.map((attachment) => `[image: ${attachment.name}]`).join("\n");
   return [message, imageLines].filter(Boolean).join("\n\n");

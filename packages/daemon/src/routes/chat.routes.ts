@@ -10,6 +10,7 @@ import { getChatIndexStatus, refreshChatIndex } from "@mergepilot/core/chatConte
 import type { ChatSessionManager, InlineLlmConfig, InlineProjectLink } from "../chatSession.js";
 import type { ProjectLinkStoreAdapter } from "../projectLinkStore.js";
 import { createChatRuntimeSetup, type ChatRuntimeSetup } from "../chatRuntimeSetup.js";
+import { messageWithImageNames } from "../chatSessionRun.js";
 import { createChatSseWriter, isTerminalChatEvent } from "./chatSse.js";
 
 const MAX_CHAT_IMAGE_ATTACHMENT_BYTES = 4 * 1024 * 1024;
@@ -243,6 +244,15 @@ export function registerChatRoutes(
     const sessionId = existingId ?? chatSessions.createSession(repoPath, projectLinkId);
     const turnId = `turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const sseWriter = createChatSseWriter(reply, sessionId, (event) => chatSessions.appendTurnTimelineEvent(sessionId, event));
+    // A model/provider failure is still a real Turn. Start durable user-input
+    // persistence now, but do not await filesystem/cloud latency before the
+    // first narration request. It is awaited before the planner reads history
+    // so the normal execution path cannot duplicate this message.
+    const persistUserTurn = chatSessions.appendUserTurn(
+      sessionId,
+      messageWithImageNames(message, imageAttachments),
+      repoPath,
+    );
     // Confirm the Turn immediately. The public action narrative begins before
     // planning or executing any action. This is a real behavioural boundary:
     // buffering a command event until after a narrative only changes what the
@@ -322,6 +332,7 @@ export function registerChatRoutes(
           // The fallback remains for older clients that send only an id.
           const projectLink = inlineProjectLink ?? await projectLinkPromise;
           prewarmedRuntimeClaimed = true;
+          await persistUserTurn;
           for await (const event of chatSessions.run(
             sessionId,
             message,
@@ -334,6 +345,7 @@ export function registerChatRoutes(
             openingNarrativeText || undefined,
             prewarmedRuntime,
             false,
+            true,
             true,
           )) {
             if (!active) return;

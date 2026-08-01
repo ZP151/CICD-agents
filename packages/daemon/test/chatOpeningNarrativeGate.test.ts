@@ -55,12 +55,16 @@ describe("chat opening narrative gate", () => {
   it("does not begin the planner or execute tools until the real opening narrative completes", async () => {
     openingGate.reset();
     let runStarted = false;
+    const appendUserTurn = vi.fn(async () => undefined);
+    let runArguments: unknown[] = [];
     const session = {
       createSession: () => "session-1",
+      appendUserTurn,
       appendTurnTimelineEvent: async () => undefined,
       cancel: () => undefined,
-      async *run() {
+      async *run(...args: unknown[]) {
         runStarted = true;
+        runArguments = args;
         yield { type: "tool_group_start", groupId: "branch-check" };
         yield { type: "tool_start", toolCallId: "branch", name: "git_current_branch", args: {} };
         yield { type: "tool_end", toolCallId: "branch", name: "git_current_branch", ok: true, summary: "main", result: {} };
@@ -97,11 +101,17 @@ describe("chat opening narrative gate", () => {
 
     await openingGate.waitUntilEntered();
     expect(runStarted).toBe(false);
+    expect(appendUserTurn).toHaveBeenCalledWith(
+      "session-1",
+      "Inspect the selected project's branch.",
+      "C:/fixture/project",
+    );
 
     openingGate.open();
     const response = await responsePromise;
 
     expect(runStarted).toBe(true);
+    expect(runArguments.at(-1)).toBe(true);
     expect(response.statusCode).toBe(200);
     const firstNarrative = response.body.indexOf("turn.narrative.delta");
     const firstCommand = response.body.indexOf("turn.tool.started");

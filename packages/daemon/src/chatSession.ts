@@ -224,6 +224,7 @@ export class ChatSessionManager {
     prewarmedRuntime?: Promise<ChatRuntimeSetup>,
     initialNarrativeInFlight = false,
     fastStart = false,
+    userMessageAlreadyStored = false,
   ): AsyncGenerator<ChatEvent> {
     yield* runChatSessionTurn({
       active: this.active,
@@ -239,6 +240,7 @@ export class ChatSessionManager {
       initialNarrativeInFlight,
       fastStart,
       prewarmedRuntime,
+      userMessageAlreadyStored,
       adapters: this.plannerContinuationAdapters(),
     });
   }
