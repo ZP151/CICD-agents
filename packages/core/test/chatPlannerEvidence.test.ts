@@ -108,6 +108,28 @@ describe("groundFinalResponse", () => {
     expect(result).not.toContain("git_current_branch");
   });
 
+  it("removes a prose execution preamble and command syntax before findings", () => {
+    const result = groundFinalResponse([
+      "I will collect (and did collect) three read-only pieces of evidence before reporting:",
+      "- Current branch name.",
+      "- Working-tree status in short form.",
+      "",
+      "Findings (collected without modifying files):",
+      "- Active branch: main",
+      "- Working-tree (git status --short): one modified file.",
+      "",
+      "No files were modified during this inspection.",
+    ].join("\n"), [
+      { name: "git_current_branch", ok: true, output: "main\n" },
+      { name: "git_status", ok: true, output: "## main\n M app.ts\n" },
+    ]);
+
+    expect(result).toContain("Findings (collected without modifying files):");
+    expect(result).toContain("Working-tree: one modified file.");
+    expect(result).not.toContain("I will collect");
+    expect(result).not.toContain("git status");
+  });
+
   it("recognizes a short commit SHA already stated by the model", () => {
     const result = groundFinalResponse("The latest commit is dffeecd and it hardens validation.", [
       { name: "git_log", ok: true, output: "dffeecd Dev 2026-07-05 fix: validation\n" },
