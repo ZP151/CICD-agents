@@ -171,13 +171,17 @@ function TranscriptBlockView({
       {groupOpen && (
         <div className="ml-1 space-y-px pb-1 pt-0.5">
           {block.commands.map((command) => {
-            const commandOpen = openCommands[command.id] ?? false;
+            // Tool-call ids are usually globally unique, but a transcript may
+            // be restored from an older client or a connector that reuses a
+            // local id. Keep disclosure state scoped to its action group.
+            const commandKey = commandDisclosureKey(block.id, command.id);
+            const commandOpen = openCommands[commandKey] ?? false;
             return (
-              <div key={command.id}>
+              <div key={commandKey}>
                 <button
                   type="button"
                   aria-expanded={commandOpen}
-                  onClick={() => setOpenCommands((current) => ({ ...current, [command.id]: !commandOpen }))}
+                  onClick={() => setOpenCommands((current) => ({ ...current, [commandKey]: !commandOpen }))}
                   title={command.command}
                   className={`flex min-h-[26px] max-w-full items-center gap-1.5 rounded px-1.5 text-left transition-[background,color] duration-150 hover:bg-[rgb(var(--app-surface-raised))] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-[rgb(var(--app-text))] ${
                     commandOpen ? "text-[rgb(var(--app-text))]" : "text-[rgb(var(--app-text-subtle))]"
@@ -271,6 +275,11 @@ export function commandActivityLabel(durationMs?: number): string {
 
 export function commandTerminalTranscript(command: string, output?: string): string {
   return `$ ${command}${output ? `\n${output}` : ""}`;
+}
+
+/** Stable disclosure identity within a Turn; avoid cross-group command toggles. */
+export function commandDisclosureKey(groupId: string, commandId: string): string {
+  return `${groupId}:${commandId}`;
 }
 
 function commandStatusLabel(status: "running" | "succeeded" | "failed" | "cancelled"): string {
