@@ -136,5 +136,5 @@ Trace why the selected Project Link's latest pipeline failed, then stop once the
 | MCP protocol, read/write risk policy | core `mcpTools` and capability tests |
 | Azure DevOps native tool semantics | core ADO registry/client tests |
 | Existing Project Link ADO MCP registration | currently disabled by design; covered as a compatibility gap, not claimed as live support |
-| External web research | generic MCP transcript fixture; live search is manual-only until a bundled connector is introduced |
+| External web research | managed local `web-research` MCP connector plus transcript fixture; live provider smoke remains manual because credentials are user-owned |
 | Copy/time/automatic collapse | desktop component and Playwright desktop smoke tests |

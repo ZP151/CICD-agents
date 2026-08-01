@@ -4,7 +4,11 @@ import {
   type Tool,
   type ToolContext,
 } from "@mergepilot/core";
-import { readMergePilotUserConfig, type AzureDevOpsMcpUserConfig } from "./daemonEnv.js";
+import {
+  readMergePilotUserConfig,
+  type AzureDevOpsMcpUserConfig,
+  type WebResearchMcpUserConfig,
+} from "./daemonEnv.js";
 
 export interface ChatMcpConnectorRuntime {
   tools: Tool[];
@@ -48,10 +52,49 @@ export async function createAzureDevOpsMcpConnector(
   }
 }
 
-function connectorCredentialEnvironment(config: AzureDevOpsMcpUserConfig): Record<string, string> | undefined {
+function connectorCredentialEnvironment(config: { credentialEnv: string }): Record<string, string> | undefined {
   const name = config.credentialEnv;
   const value = name ? process.env[name] : undefined;
   return name && value ? { [name]: value } : undefined;
+}
+
+/**
+ * Web research is an application-level, local connector. Only discovery and
+ * reading tools are exposed: an arbitrary MCP server cannot turn a research
+ * configuration into a mutation surface for the agent.
+ */
+export async function createWebResearchMcpConnector(
+  ctx: ToolContext,
+  configured: WebResearchMcpUserConfig | undefined = readMergePilotUserConfig().webResearchMcp,
+): Promise<ChatMcpConnectorRuntime | null> {
+  if (!configured?.enabled || !configured.command.trim()) return null;
+  const client = new StdioMcpClient({
+    name: "web-research",
+    command: configured.command,
+    args: configured.args,
+    cwd: ctx.repoPath,
+    env: connectorCredentialEnvironment(configured),
+    timeoutMs: Math.max(1_000, ctx.timeoutSec * 1_000),
+  });
+  try {
+    return {
+      tools: filterWebResearchTools(await createMcpToolsFromClient("web-research", client)),
+      close: () => client.close(),
+    };
+  } catch (error) {
+    await client.close();
+    throw error;
+  }
+}
+
+export function filterWebResearchTools(tools: Tool[]): Tool[] {
+  return tools.filter((tool) => {
+    // Do not match the `web_research` connector prefix itself: otherwise a
+    // write tool such as `publish_report` would be admitted simply because
+    // its generated local name contains `research`.
+    const actionParts = tool.name.replace(/^mcp_web_research_/, "").split("_");
+    return actionParts.some((part) => ["search", "query", "browse", "fetch", "read", "open", "find", "get"].includes(part));
+  });
 }
 
 function parseDomains(value: unknown): string[] {
