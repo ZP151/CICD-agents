@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type Disp
 import { turnTranscriptElapsedMs } from "../chatTurnTranscript.js";
 import type { Bubble, TurnTranscriptBlock } from "../chat.types.js";
 import { PendingActionCard } from "../approval/PendingActionCard.js";
-import { commandLanguage, commandOutputLanguage, type CommandCodeLanguage } from "./commandLanguage.js";
+import { commandLanguage, type CommandCodeLanguage } from "./commandLanguage.js";
 
 const CommandCodeViewer = lazy(() => import("./CommandCodeViewer.js").then(({ CommandCodeViewer: Viewer }) => ({ default: Viewer })));
 // The transcript is also rendered in Node-side tests/history previews where a
@@ -173,21 +173,18 @@ function TranscriptBlockView({
                   }`}
                 >
                   <TerminalIcon />
-                  <span className="shrink-0">Ran</span>
-                  <span className="min-w-0 truncate font-mono text-[12px]">{command.command}</span>
-                  {command.durationMs !== undefined && <span className="shrink-0 text-[11px] text-[rgb(var(--app-text-subtle))]">{formatDuration(command.durationMs)}</span>}
+                  <span className="shrink-0">{commandActivityLabel(command.durationMs)}</span>
                   <Chevron open={commandOpen} />
                 </button>
                 {commandOpen && (
                   <div className="ml-1 mt-1 overflow-hidden rounded-[11px] border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised)_/_0.18)] animate-[turn-command-open_220ms_cubic-bezier(.22,.8,.24,1)]">
                     <div className="px-4 pb-1 pt-2 text-xs text-[rgb(var(--app-text-muted))]">Shell</div>
-                    <LazyCommandCodeViewer value={command.command} language={commandLanguage(command.command)} ariaLabel="Executed command" />
-                    {command.output && (
-                      <>
-                        <div className="border-t border-[rgb(var(--app-border))] px-4 pb-1 pt-2 text-xs text-[rgb(var(--app-text-muted))]">Response</div>
-                        <LazyCommandCodeViewer value={command.output} language={commandOutputLanguage(command.command)} ariaLabel="Command response" output />
-                      </>
-                    )}
+                    <LazyCommandCodeViewer
+                      value={commandTerminalTranscript(command.command, command.output)}
+                      language={commandLanguage(command.command)}
+                      ariaLabel="Executed command and response"
+                      output={Boolean(command.output)}
+                    />
                     <div className="flex justify-end px-3 pb-2 pt-1 text-[11px] text-[rgb(var(--app-text-subtle))]">{commandStatusLabel(command.status)}</div>
                   </div>
                 )}
@@ -234,7 +231,20 @@ function Chevron({ open }: { open: boolean }) {
 }
 
 function TerminalIcon() {
-  return <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm border border-current text-[9px] leading-none opacity-75" aria-hidden="true">›</span>;
+  return (
+    <svg className="h-3.5 w-3.5 shrink-0 opacity-75" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="1.5" y="2.25" width="13" height="11.5" rx="2" stroke="currentColor" strokeWidth="1.2" />
+      <path d="m5 6 2 2-2 2M9.25 10h2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function commandActivityLabel(durationMs?: number): string {
+  return durationMs === undefined ? "Ran command" : `Ran command in ${formatDuration(durationMs)}`;
+}
+
+export function commandTerminalTranscript(command: string, output?: string): string {
+  return `$ ${command}${output ? `\n${output}` : ""}`;
 }
 
 function commandStatusLabel(status: "running" | "succeeded" | "failed" | "cancelled"): string {

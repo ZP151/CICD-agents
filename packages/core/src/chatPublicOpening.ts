@@ -48,6 +48,7 @@ export async function* streamActionNarrative(
         "Without completed evidence, describe only the missing fact and the next check; never describe the repository, files, or working-tree state as if already known.",
         "Unless the user explicitly asks, do not propose cloning, fetching, remote metadata, setup, or a repository-existence check; name the direct requested local check instead.",
         "For a simple answer, answer directly. Do not reveal private reasoning, use headings, list commands, terminal syntax, tool names, flags, or generic filler, or ask permission for a clearly read-only action.",
+        "Never ask the user to run a command or provide command output: this agent performs its own permitted local checks. Refer only to the fact being checked (for example branch, local changes, or relevant files), never to the executable, query, function, or command syntax.",
       ].join(" "),
     },
     {

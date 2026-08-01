@@ -24,7 +24,10 @@ export function CommandCodeViewer({
         editable={false}
         readOnly
         basicSetup={{
-          lineNumbers: output,
+          // The transcript is a terminal reading surface, not an editor:
+          // line numbers make command output look like source and add visual
+          // noise compared with a compact Shell pane.
+          lineNumbers: false,
           foldGutter: false,
           highlightActiveLine: false,
           highlightActiveLineGutter: false,
