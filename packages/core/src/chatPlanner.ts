@@ -75,6 +75,7 @@ export class ChatPlanner {
     imageAttachments: ChatImageAttachment[] = [],
     initialNarrative?: string,
     actionNarrativesEnabled = false,
+    initialNarrativeInFlight = false,
   ): AsyncGenerator<ChatEvent> {
     if (!this.llm.configured) {
       yield* offlineFallbackEvents(message);
@@ -110,7 +111,7 @@ export class ChatPlanner {
       // otherwise a model would narrate a hypothetical next action even when
       // it is about to finalize, creating the repeated prose seen in the
       // former execution transcript.
-      if (actionNarrativesEnabled && step === 0 && !initialNarrative?.trim()) {
+      if (actionNarrativesEnabled && step === 0 && !initialNarrative?.trim() && !initialNarrativeInFlight) {
         const evidence = actionNarrativeEvidence(messages);
         for await (const event of streamActionNarrative(this.llm, {
           request: message,

@@ -33,6 +33,7 @@ export interface StreamPlannerContinuationArgs {
   planningProgressMessage: string;
   initialNarrative?: string;
   actionNarrativesEnabled?: boolean;
+  initialNarrativeInFlight?: boolean;
   adapters: PlannerContinuationAdapters;
 }
 
@@ -48,6 +49,7 @@ export async function* streamPlannerContinuation(args: StreamPlannerContinuation
     message,
     imageAttachments = [],
     initialNarrative,
+    initialNarrativeInFlight = false,
     actionNarrativesEnabled = false,
     persistUserMessage,
     planner,
@@ -100,6 +102,7 @@ export async function* streamPlannerContinuation(args: StreamPlannerContinuation
     contextSources: context?.sources,
     initialNarrative,
     actionNarrativesEnabled,
+    initialNarrativeInFlight,
     adapters,
   });
 }

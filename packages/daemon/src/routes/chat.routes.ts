@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   LLMClient,
   streamActionNarrative,
+  type ChatEvent,
   type Settings,
 } from "@mergepilot/core";
 import { getChatIndexStatus, refreshChatIndex } from "@mergepilot/core/chatContext";
@@ -241,15 +242,16 @@ export function registerChatRoutes(
     const sessionId = existingId ?? chatSessions.createSession(repoPath, projectLinkId);
     const turnId = `turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const sseWriter = createChatSseWriter(reply, sessionId, (event) => chatSessions.appendTurnTimelineEvent(sessionId, event));
-    // Confirm the Turn immediately. The first visible text is a real ordinary
-    // model stream; it is never a fixed progress label or a pseudo-tool call.
+    // Confirm the Turn immediately. The public action narrative and planner
+    // begin in parallel: the narrator is emitted first, then the already
+    // prepared real command events follow without a second model-sized gap.
     sseWriter.startTurn(turnId);
     let active = true;
-    let openingNarrative = "";
+    let openingNarrativeVisible = false;
     // A slow provider is surfaced only as a transport diagnostic after a
     // meaningful delay. It is never substituted with canned agent prose.
     const waitingForModelTimer = setTimeout(() => {
-      if (active && !openingNarrative) sseWriter.sendWaitingForModel();
+      if (active && !openingNarrativeVisible) sseWriter.sendWaitingForModel();
     }, 5_000);
     // One client belongs to one Turn. Unlike the previous implementation,
     // this does not race two independent model conversations.
@@ -278,34 +280,74 @@ export function registerChatRoutes(
     return new Promise<void>((resolve) => {
       (async () => {
         try {
-          // This call has only the user's request. Project Link, history and
-          // context never gate it; tool setup is merely prewarmed in parallel.
-          for await (const event of streamActionNarrative(turnLlm, {
-            request: message,
-            blockId: "opening",
-            selectedProject: Boolean(inlineProjectLink || projectLinkId),
-            onText: (text) => { openingNarrative = text; },
-          })) {
-            if (!active) return;
-            sseWriter.sendChatEvent(event);
-          }
-          clearTimeout(waitingForModelTimer);
+          const openingEvents: ChatEvent[] = [];
+          const openingNarrative = (async () => {
+            for await (const event of streamActionNarrative(turnLlm, {
+              request: message,
+              blockId: "opening",
+              selectedProject: Boolean(inlineProjectLink || projectLinkId),
+            })) {
+              openingEvents.push(event);
+              if (event.type === "work_statement") openingNarrativeVisible = true;
+            }
+          })();
           // Desktop sends the selected Project Link inline with the request.
           // The fallback remains for older clients that send only an id.
           const projectLink = inlineProjectLink ?? await projectLinkPromise;
           prewarmedRuntimeClaimed = true;
-          for await (const event of chatSessions.run(
-            sessionId,
-            message,
-            repoPath,
-            projectLinkId,
-            llmConfig,
-            projectLink,
-            imageAttachments,
-            turnLlm,
-            openingNarrative || undefined,
-            prewarmedRuntime,
-          )) {
+          const bufferedSessionEvents: ChatEvent[] = [];
+          let sessionFinished = false;
+          let sessionFailure: unknown;
+          let wakeSessionConsumer: (() => void) | undefined;
+          const notifySessionConsumer = () => {
+            const wake = wakeSessionConsumer;
+            wakeSessionConsumer = undefined;
+            wake?.();
+          };
+          const sessionProducer = (async () => {
+            try {
+              for await (const event of chatSessions.run(
+                sessionId,
+                message,
+                repoPath,
+                projectLinkId,
+                llmConfig,
+                projectLink,
+                imageAttachments,
+                turnLlm,
+                undefined,
+                prewarmedRuntime,
+                true,
+              )) {
+                bufferedSessionEvents.push(event);
+                notifySessionConsumer();
+              }
+            } catch (err) {
+              sessionFailure = err;
+            } finally {
+              sessionFinished = true;
+              notifySessionConsumer();
+            }
+          })();
+
+          // Preserve the transcript order: genuine public narration must be
+          // visible before the first command group, while the planner is free
+          // to select that command in parallel behind the scenes.
+          await openingNarrative;
+          if (!active) return;
+          for (const event of openingEvents) sseWriter.sendChatEvent(event);
+          if (openingNarrativeVisible) clearTimeout(waitingForModelTimer);
+
+          while (active && (!sessionFinished || bufferedSessionEvents.length > 0)) {
+            if (bufferedSessionEvents.length === 0) {
+              await new Promise<void>((resolve) => { wakeSessionConsumer = resolve; });
+              continue;
+            }
+            const event = bufferedSessionEvents.shift()!;
+            if (event.type === "work_statement") {
+              openingNarrativeVisible = true;
+              clearTimeout(waitingForModelTimer);
+            }
             sseWriter.sendChatEvent(event);
             if (isTerminalChatEvent(event)) {
               active = false;
@@ -314,6 +356,8 @@ export function registerChatRoutes(
               return;
             }
           }
+          await sessionProducer;
+          if (sessionFailure) throw sessionFailure;
         } catch (err) {
           clearTimeout(waitingForModelTimer);
           active = false;

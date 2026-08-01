@@ -37,6 +37,8 @@ export interface StreamPlannerAndPersistArgs {
   contextSources?: ChatPlannerResult["sources"];
   initialNarrative?: string;
   actionNarrativesEnabled?: boolean;
+  /** An independently streamed first narrative is already running. */
+  initialNarrativeInFlight?: boolean;
   adapters: PlannerPersistenceAdapters;
 }
 
@@ -46,6 +48,7 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
     contextPrompt,
     imageAttachments = [],
     initialNarrative,
+    initialNarrativeInFlight = false,
     actionNarrativesEnabled = false,
     contextSources = [],
     history,
@@ -58,7 +61,7 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
   let assistantReply = "";
   const pendingToolArgs = new Map<string, Record<string, unknown>>();
 
-  for await (const event of planner.run(message, history, repoPath, waitForConfirm, contextPrompt, imageAttachments, initialNarrative, actionNarrativesEnabled)) {
+  for await (const event of planner.run(message, history, repoPath, waitForConfirm, contextPrompt, imageAttachments, initialNarrative, actionNarrativesEnabled, initialNarrativeInFlight)) {
     if (event.type === "tool_start") {
       pendingToolArgs.set(event.name, event.args);
       yield event;

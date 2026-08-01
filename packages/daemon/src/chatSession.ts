@@ -222,6 +222,7 @@ export class ChatSessionManager {
     llm?: LLMClient,
     initialNarrative?: string,
     prewarmedRuntime?: Promise<ChatRuntimeSetup>,
+    initialNarrativeInFlight = false,
   ): AsyncGenerator<ChatEvent> {
     yield* runChatSessionTurn({
       active: this.active,
@@ -234,6 +235,7 @@ export class ChatSessionManager {
       imageAttachments,
       llm,
       initialNarrative,
+      initialNarrativeInFlight,
       prewarmedRuntime,
       adapters: this.plannerContinuationAdapters(),
     });
