@@ -76,6 +76,7 @@ describe("LLMClient GPT-5 parameter compatibility", () => {
       messages: [{ role: "user", content: "Hello" }],
       model: "gpt5mini",
       maxTokens: 64,
+      reasoningEffort: "low",
     })) {
       // Exhaust the stream so the request completes.
     }
@@ -83,6 +84,7 @@ describe("LLMClient GPT-5 parameter compatibility", () => {
     expect(create.mock.calls[0]?.[0]).toMatchObject({
       model: "gpt5mini",
       max_completion_tokens: 64,
+      reasoning_effort: "low",
     });
     expect(create.mock.calls[0]?.[0]).not.toHaveProperty("max_tokens");
   });

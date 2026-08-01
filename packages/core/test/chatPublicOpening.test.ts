@@ -7,9 +7,10 @@ describe("streamActionNarrative", () => {
     const llm = {
       configured: true,
       actionNarrativeModel: () => "fast-narrative-model",
-    async *chatStream(options: { messages: Array<{ role: string; content: unknown }>; tools?: unknown; maxTokens?: number }) {
+    async *chatStream(options: { messages: Array<{ role: string; content: unknown }>; tools?: unknown; maxTokens?: number; reasoningEffort?: "low" | "medium" | "high" }) {
       expect(options.tools).toBeUndefined();
       expect(options.maxTokens).toBeLessThanOrEqual(96);
+      expect(options.reasoningEffort).toBe("low");
       expect((options as { model?: string }).model).toBe("fast-narrative-model");
       expect(JSON.stringify(options.messages)).toContain("Review the current project changes");
       expect(JSON.stringify(options.messages)).toContain("Always respond in English; this product has one English conversation path");

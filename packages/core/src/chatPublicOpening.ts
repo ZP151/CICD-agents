@@ -75,6 +75,11 @@ export async function* streamActionNarrative(
     messages,
     maxTokens: MAX_ACTION_NARRATIVE_TOKENS,
     model: llm.actionNarrativeModel?.(),
+    // The opening is a single public action sentence, not the planner's
+    // private problem-solving pass. For GPT-5 reasoning deployments this
+    // keeps the user-visible first response on Azure's low effort setting;
+    // later planner and tool decisions keep their existing quality path.
+    reasoningEffort: "low",
   })) {
     if (event.type !== "delta" || !event.delta) continue;
     text = appendNarrativeDelta(text, event.delta);

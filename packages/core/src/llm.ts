@@ -225,6 +225,8 @@ export class LLMClient {
     temperature?: number;
     maxTokens?: number;
     model?: string;
+    /** Use a bounded reasoning mode only where the caller explicitly opts in. */
+    reasoningEffort?: "low" | "medium" | "high";
   }): AsyncGenerator<ChatStreamEvent, void, unknown> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), STREAM_REQUEST_TIMEOUT_MS);
@@ -236,6 +238,7 @@ export class LLMClient {
           messages: opts.messages,
           temperature: opts.temperature ?? 0.2,
           ...completionTokenLimit(model, opts.maxTokens ?? 1024),
+          ...(opts.reasoningEffort ? { reasoning_effort: opts.reasoningEffort } : {}),
           tools: opts.tools && opts.tools.length > 0 ? opts.tools : undefined,
           tool_choice: opts.tools && opts.tools.length > 0 ? "auto" : undefined,
           stream: true,
