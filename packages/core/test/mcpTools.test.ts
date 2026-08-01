@@ -119,11 +119,29 @@ describe("MCP tool bridge", () => {
 
     expect(toolCapability(readTool).category).toBe("ado");
     expect(toolCapability(readTool).riskLevel).toBe("low");
+    expect(toolCapability(readTool).readOnly).toBe(true);
     expect(toolCapability(readTool).requiresApproval).toBe(false);
     expect(toolCapability(writeTool).riskLevel).toBe("high");
     expect(toolCapability(writeTool).requiresApproval).toBe(true);
     expect(toolCapability(pipelineTool).riskLevel).toBe("high");
     expect(toolCapability(pipelineTool).requiresApproval).toBe(true);
+  });
+
+  it("keeps low-risk Web Research reads available in an explicit read-only turn", () => {
+    const tool = {
+      name: mcpLocalToolName("web_research", "search_official_documentation"),
+      description: "Search official documentation.",
+      parameters: { type: "object", properties: {} },
+      handler: async () => ({}),
+      connector: { kind: "mcp" as const, id: "web-research", label: "Web Research" },
+    };
+
+    expect(toolCapability(tool)).toMatchObject({
+      riskLevel: "low",
+      readOnly: true,
+      requiresApproval: false,
+      connector: { kind: "mcp", id: "web-research", label: "Web Research" },
+    });
   });
 });
 
