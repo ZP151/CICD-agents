@@ -3,14 +3,12 @@ import type { LLMClient } from "./llm.js";
 import type { ChatEvent } from "./chatPlannerTypes.js";
 
 // GPT-5 counts reasoning and visible tokens against max_completion_tokens.
-// A 40-token cap regularly finishes before any public token is available.
-// GPT-5 spends reasoning and visible tokens from the same completion budget.
-// 192 is enough for a terse note, but it can exhaust the visible budget in
-// the middle of a useful second sentence. 320 leaves the low-effort narrator
-// room to state the evidence/uncertainty, the immediate action, and why that
-// action resolves the user's request. The stream still closes as soon as the
-// second sentence is complete, so this is not a fixed latency penalty.
-const MAX_ACTION_NARRATIVE_TOKENS = 320;
+// Tiny probes (1–40) can finish in hidden reasoning before producing public
+// text. 128 is the smallest budget that has reliably produced a complete
+// 1–2 sentence narrator response on the dedicated mini deployment, while
+// avoiding the extra reasoning latency caused by giving this fast path the
+// main agent's much larger completion budget.
+const MAX_ACTION_NARRATIVE_TOKENS = 128;
 const MIN_INITIAL_VISIBLE_NARRATIVE_CHARS = 12;
 const MAX_PUBLIC_ACTION_SENTENCES = 2;
 
