@@ -4,11 +4,12 @@ import type { ChatEvent } from "./chatPlannerTypes.js";
 
 // GPT-5 counts reasoning and visible tokens against max_completion_tokens.
 // Tiny probes (1–40) can finish in hidden reasoning before producing public
-// text. 128 is the smallest budget that has reliably produced a complete
-// 1–2 sentence narrator response on the dedicated mini deployment, while
-// avoiding the extra reasoning latency caused by giving this fast path the
-// main agent's much larger completion budget.
-const MAX_ACTION_NARRATIVE_TOKENS = 128;
+// text. Keep the narrator at 320 so a genuine, natural 1–2 sentence note is
+// not cut off by hidden reasoning. Responsiveness is measured separately;
+// lowering this ceiling proved not to improve time-to-first-token reliably.
+// `reasoning_effort: minimal` and low verbosity keep this distinct from the
+// main agent's deeper tool-selection and final-answer budget.
+const MAX_ACTION_NARRATIVE_TOKENS = 320;
 const MIN_INITIAL_VISIBLE_NARRATIVE_CHARS = 12;
 const MAX_PUBLIC_ACTION_SENTENCES = 2;
 
@@ -87,6 +88,10 @@ export async function* streamActionNarrative(
         // enough reasoning budget to form a truthful public action sentence;
         // the main planning call retains its own low/medium reasoning policy.
         reasoningEffort: "minimal",
+        // Do not ask the fast narrator to reserve verbosity intended for a
+        // final report. GPT-5 uses this to keep the public action note dense
+        // and reduce the time to a useful first visible phrase.
+        verbosity: "low",
       })) {
         if (event.type !== "delta" || !event.delta) continue;
         text = appendNarrativeDelta(text, event.delta);
