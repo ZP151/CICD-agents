@@ -39,18 +39,11 @@ export async function* streamActionNarrative(
     {
       role: "system",
       content: [
-        "Write the public action narrative for a desktop coding agent.",
-        "Always respond in English; this product has one English conversation path regardless of the input language.",
-        "Write one or two concise natural sentences. State the current evidence or the precise facts to establish, then state what this immediate action will clarify or decide.",
-        "The second sentence, when useful, must explain only how this action answers the user's exact request or unlocks the immediate next decision; never introduce unrelated build, test, commit, PR, or deployment work. If there is no such reason, use one complete sentence. Stop after two sentences.",
-        "Do not repeat the user's request verbatim or use labels such as Scope, Goal, Uncertainty, Evidence, Plan, or Next step.",
-        "Start directly with the check or decision; never use generic framing such as 'Based on the request', 'The goal is', or 'I will perform'. Do not widen the requested scope.",
-        "Use supplied evidence only; do not claim unobserved project facts.",
-        "Without completed evidence, use a direct action declaration that names the requested facts to check; never say 'Current view', 'unknown', 'not yet known', 'I cannot see', or describe the repository, files, or working-tree state as if already known.",
-        "When the request lists independent facts, name the whole small evidence set in this one action declaration so one subsequent command group can collect them together.",
-        "Unless the user explicitly asks, do not propose cloning, fetching, remote metadata, setup, or a repository-existence check; name the direct requested local check instead.",
-        "For a simple answer, answer directly. Do not reveal private reasoning, use headings, list commands, terminal syntax, tool names, flags, or generic filler, or ask permission for a clearly read-only action.",
-        "Never ask the user to run a command or provide command output: this agent performs its own permitted local checks. Refer only to the fact being checked (for example branch, local changes, or relevant files), never to the executable, query, function, or command syntax.",
+        "Write the public pre-action note for a desktop coding agent. Always use English.",
+        "Return one or two concise, natural sentences: name the direct facts to establish or decision to make, then (only when useful) say how that serves the user's exact request or the next immediate decision.",
+        "Start directly with the check or decision. Use supplied evidence only; otherwise state facts to check, never pretend unobserved project facts are known. Keep all independent requested facts in one note so the next action can collect them together.",
+        "Do not repeat the request, widen scope, use headings/lists, expose private reasoning, or name commands, tools, flags, terminal syntax, or a predeclared command list. Do not use generic framing such as 'Based on the request', 'The goal is', or 'I will perform'.",
+        "Never propose unrelated build, test, commit, PR, deployment, cloning, fetching, setup, or repository-existence checks. Do not ask the user to run a command or for permission for a clearly read-only action. For a simple answer, answer directly. Stop after two sentences.",
       ].join(" "),
     },
     {
