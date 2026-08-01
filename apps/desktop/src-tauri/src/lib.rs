@@ -6,6 +6,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
+use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_shell::{process::{CommandChild, CommandEvent}, ShellExt};
 
 /// The port on which the daemon is listening.  Set once during setup() and
@@ -248,6 +249,12 @@ struct DaemonProcess(Mutex<Option<CommandChild>>);
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if argv.iter().any(|arg| is_auth_return_uri(arg)) {
+                reveal_main_window(app);
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(DaemonProcess(Mutex::new(None)))
@@ -265,6 +272,19 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // Windows development runs are not installed, so explicitly claim the
+            // configured scheme for the current executable. Release installers
+            // register it from tauri.conf.json.
+            #[cfg(all(debug_assertions, target_os = "windows"))]
+            app.deep_link().register_all()?;
+
+            let return_handle = app.handle().clone();
+            app.deep_link().on_open_url(move |event| {
+                if event.urls().iter().any(|url| is_auth_return_uri(url.as_str())) {
+                    reveal_main_window(&return_handle);
+                }
+            });
+
             // ── System-tray ──────────────────────────────────────────────────
             let open_main =
                 MenuItem::with_id(app, "open_main", "Open MergePilot", true, None::<&str>)?;
@@ -342,6 +362,7 @@ fn start_daemon_sidecar(app: &AppHandle, port: u16) -> Result<(), String> {
         .args(["--port", daemon_port.as_str()])
         .env("RUNTIME_PORT", daemon_port.as_str())
         .env("MERGEPILOT_RUNTIME_MODE", "desktop-sidecar")
+        .env("MERGEPILOT_RETURN_URI", "mergepilot://auth/complete")
         .env("MERGEPILOT_DESKTOP_VERSION", env!("CARGO_PKG_VERSION"))
         .env("MERGEPILOT_DAEMON_VERSION", env!("CARGO_PKG_VERSION"))
         .env("MERGEPILOT_BUILD_SHA", option_env!("GITHUB_SHA").unwrap_or(""))
@@ -430,6 +451,18 @@ fn show_daemon_error(app: &tauri::AppHandle, msg: &str) {
     }
 }
 
+fn is_auth_return_uri(value: &str) -> bool {
+    value == "mergepilot://auth/complete" || value.starts_with("mergepilot://auth/complete?")
+}
+
+fn reveal_main_window(app: &tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.show();
+        let _ = win.unminimize();
+        let _ = win.set_focus();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -464,6 +497,14 @@ mod tests {
             Some(r"C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64\node.exe"),
             Some(r#""C:\Users\15492\Develop\Agents\CICD-agents\.tools\node-v22.11.0-win-x64\node.exe" "C:\Users\15492\Develop\Agents\CICD-agents\node_modules\tsx\dist\cli.mjs" src\bin.ts"#),
         ));
+    }
+
+    #[test]
+    fn accepts_only_the_configured_credential_free_auth_return_uri() {
+        assert!(is_auth_return_uri("mergepilot://auth/complete"));
+        assert!(is_auth_return_uri("mergepilot://auth/complete?source=browser"));
+        assert!(!is_auth_return_uri("mergepilot://auth/completex"));
+        assert!(!is_auth_return_uri("mergepilot://auth/complete/credential"));
     }
 
     #[test]

@@ -262,7 +262,6 @@ export async function loginWithBrowser(
     homeAccountId: result.account?.homeAccountId,
     tenantId: result.account?.tenantId,
     username: result.account?.username,
-    avatarDataUrl: await fetchGraphAvatar(result.accessToken),
   })!;
   return user;
 }

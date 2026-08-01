@@ -210,6 +210,38 @@ describe("azureAuthSession", () => {
     }));
   });
 
+  it("returns the signed-in user without waiting for the optional Graph avatar request", async () => {
+    acquireTokenInteractive.mockResolvedValue({
+      accessToken: jwt({
+        oid: "user-1",
+        preferred_username: "user@example.test",
+        name: "Example User",
+      }),
+      idToken: jwt({
+        oid: "user-1",
+        preferred_username: "user@example.test",
+        name: "Example User",
+      }),
+      account: {
+        homeAccountId: "home-1",
+        tenantId: "tenant-1",
+        username: "user@example.test",
+      },
+    });
+    global.fetch = vi.fn(() => new Promise<Response>(() => {}));
+
+    const outcome = await Promise.race([
+      loginWithBrowser("default"),
+      new Promise<"timed-out">((resolve) => setTimeout(() => resolve("timed-out"), 40)),
+    ]);
+
+    expect(outcome).not.toBe("timed-out");
+    expect(outcome).toMatchObject({
+      oid: "user-1",
+      username: "user@example.test",
+    });
+  });
+
   it("keeps basic Microsoft sign-in identity-only even when Key Vault secret mode is configured", async () => {
     process.env.MERGEPILOT_SECRET_SOURCE = "key_vault";
     process.env.AZURE_KEYVAULT_URL = "https://example.vault.azure.net/";

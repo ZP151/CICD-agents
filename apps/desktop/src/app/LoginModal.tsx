@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   authLoginStream,
   fetchAuthAccounts,
+  fetchAuthStatus,
   type AuthBrowserChoice,
   type AuthCachedAccount,
   type AuthLoginEvent,
@@ -51,6 +52,16 @@ export function LoginModal({
   const [done, setDone] = useState(false);
   const [started, setStarted] = useState(false);
   const cancelRef = useRef<(() => void) | null>(null);
+  const completionHandledRef = useRef(false);
+
+  const complete = useCallback((user: AuthUser) => {
+    if (completionHandledRef.current) return;
+    completionHandledRef.current = true;
+    setDone(true);
+    setStarted(false);
+    setMessage("Sign-in complete.");
+    onDone(user);
+  }, [onDone]);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +76,7 @@ export function LoginModal({
 
   const startLogin = (account?: AuthCachedAccount) => {
     cancelRef.current?.();
+    completionHandledRef.current = false;
     setStarted(true);
     setDone(false);
     setMessage(
@@ -83,12 +95,8 @@ export function LoginModal({
         } else if (event.type === "status") {
           setMessage(event.message);
         } else if (event.type === "done") {
-          setDone(true);
-          setMessage(
-            event.authenticated ? "Sign-in complete." : "Sign-in did not return a verified user.",
-          );
           if (event.authenticated) {
-            onDone({
+            complete({
               authenticated: true,
               oid: event.oid,
               upn: event.upn,
@@ -96,6 +104,8 @@ export function LoginModal({
               avatarDataUrl: event.avatarDataUrl,
             });
           } else {
+            setDone(true);
+            setMessage("Sign-in did not return a verified user.");
             onCancel();
           }
         } else if (event.type === "error") {
@@ -110,6 +120,26 @@ export function LoginModal({
       },
     );
   };
+
+  useEffect(() => {
+    if (!started || done) return;
+
+    let cancelled = false;
+    const checkForCompletedSignIn = async () => {
+      const user = await fetchAuthStatus();
+      if (!cancelled && user.authenticated) complete(user);
+    };
+
+    void checkForCompletedSignIn();
+    const interval = window.setInterval(() => {
+      void checkForCompletedSignIn();
+    }, 750);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [complete, done, started]);
 
   useEffect(
     () => () => {
@@ -195,6 +225,7 @@ export function LoginModal({
             {started && !done && (
               <button
                 onClick={() => {
+                  completionHandledRef.current = true;
                   cancelRef.current?.();
                   onCancel();
                 }}
