@@ -14,6 +14,7 @@ import { createChatSseWriter, isTerminalChatEvent } from "./chatSse.js";
 
 const MAX_CHAT_IMAGE_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 const CHAT_IMAGE_DATA_URL_PATTERN = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([a-zA-Z0-9+/=\s]+)$/;
+const OPENING_NARRATIVE_DEADLINE_MS = 15_000;
 
 const LlmConfigSchema = z
   .object({
@@ -253,9 +254,11 @@ export function registerChatRoutes(
     const waitingForModelTimer = setTimeout(() => {
       if (active && !openingNarrativeVisible) sseWriter.sendWaitingForModel();
     }, 5_000);
-    // One client belongs to one Turn. Unlike the previous implementation,
-    // this does not race two independent model conversations.
+    // The two concurrent streams deliberately use separate transport clients.
+    // Azure can otherwise serialize the opening stream behind a long-lived
+    // tool-planning request on one SDK client, defeating the early narrative.
     const turnLlm = new LLMClient(buildInlineLlmSettings(llmConfig));
+    const narrativeLlm = new LLMClient(buildInlineLlmSettings(llmConfig));
     const projectLinkPromise = inlineProjectLink
       ? Promise.resolve(inlineProjectLink)
       : resolveProjectLinkForChat(projectLinkId, inlineProjectLink, projectLinkStore);
@@ -281,8 +284,9 @@ export function registerChatRoutes(
       (async () => {
         try {
           const openingEvents: ChatEvent[] = [];
+          let openingNarrativeError: unknown;
           const openingNarrative = (async () => {
-            for await (const event of streamActionNarrative(turnLlm, {
+            for await (const event of streamActionNarrative(narrativeLlm, {
               request: message,
               blockId: "opening",
               selectedProject: Boolean(inlineProjectLink || projectLinkId),
@@ -290,7 +294,7 @@ export function registerChatRoutes(
               openingEvents.push(event);
               if (event.type === "work_statement") openingNarrativeVisible = true;
             }
-          })();
+          })().catch((err) => { openingNarrativeError = err; });
           // Desktop sends the selected Project Link inline with the request.
           // The fallback remains for older clients that send only an id.
           const projectLink = inlineProjectLink ?? await projectLinkPromise;
@@ -318,6 +322,7 @@ export function registerChatRoutes(
                 undefined,
                 prewarmedRuntime,
                 true,
+                true,
               )) {
                 bufferedSessionEvents.push(event);
                 notifySessionConsumer();
@@ -333,7 +338,11 @@ export function registerChatRoutes(
           // Preserve the transcript order: genuine public narration must be
           // visible before the first command group, while the planner is free
           // to select that command in parallel behind the scenes.
-          await openingNarrative;
+          const openingCompleted = await settlesWithin(openingNarrative, OPENING_NARRATIVE_DEADLINE_MS);
+          if (!openingCompleted) {
+            throw new Error("The model did not begin an action narrative within 15 seconds.");
+          }
+          if (openingNarrativeError) throw openingNarrativeError;
           if (!active) return;
           for (const event of openingEvents) sseWriter.sendChatEvent(event);
           if (openingNarrativeVisible) clearTimeout(waitingForModelTimer);
@@ -361,6 +370,7 @@ export function registerChatRoutes(
         } catch (err) {
           clearTimeout(waitingForModelTimer);
           active = false;
+          chatSessions.cancel(sessionId);
           sseWriter.sendChatEvent({
             type: "error",
             message: explainChatSseError(err, settings, envSourceLabel),
@@ -553,4 +563,16 @@ export function registerChatRoutes(
     if (!parsed.success) return reply.code(400).send({ error: "invalid sessionId" });
     return { workflowState: await chatSessions.getWorkflowState(parsed.data.sessionId) };
   });
+}
+
+async function settlesWithin(promise: Promise<unknown>, timeoutMs: number): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise.then(() => true),
+      new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), timeoutMs); }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }

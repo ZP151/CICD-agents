@@ -207,50 +207,55 @@ export class LLMClient {
     maxTokens?: number;
     model?: string;
   }): AsyncGenerator<ChatStreamEvent, void, unknown> {
-    const stream = await this.get().chat.completions.create(
-      {
-        model: opts.model || this.chatModel(),
-        messages: opts.messages,
-        temperature: opts.temperature ?? 0.2,
-        max_tokens: opts.maxTokens ?? 1024,
-        tools: opts.tools && opts.tools.length > 0 ? opts.tools : undefined,
-        tool_choice: opts.tools && opts.tools.length > 0 ? "auto" : undefined,
-        stream: true,
-        stream_options: { include_usage: true },
-      },
-      { timeout: STREAM_REQUEST_TIMEOUT_MS, maxRetries: 0 },
-    );
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), STREAM_REQUEST_TIMEOUT_MS);
+    try {
+      const stream = await this.get().chat.completions.create(
+        {
+          model: opts.model || this.chatModel(),
+          messages: opts.messages,
+          temperature: opts.temperature ?? 0.2,
+          max_tokens: opts.maxTokens ?? 1024,
+          tools: opts.tools && opts.tools.length > 0 ? opts.tools : undefined,
+          tool_choice: opts.tools && opts.tools.length > 0 ? "auto" : undefined,
+          stream: true,
+          stream_options: { include_usage: true },
+        },
+        { timeout: STREAM_REQUEST_TIMEOUT_MS, signal: controller.signal, maxRetries: 0 },
+      );
 
-    const assembler = new ToolCallAssembler();
-    let finishReason = "";
+      const assembler = new ToolCallAssembler();
+      let finishReason = "";
 
-    for await (const chunk of stream) {
-      const choice = chunk.choices[0];
-      if (!choice) {
-        if (chunk.usage) {
-          this.usage.promptTokens += chunk.usage.prompt_tokens;
-          this.usage.completionTokens += chunk.usage.completion_tokens;
+      for await (const chunk of stream) {
+        const choice = chunk.choices[0];
+        if (!choice) {
+          if (chunk.usage) {
+            this.usage.promptTokens += chunk.usage.prompt_tokens;
+            this.usage.completionTokens += chunk.usage.completion_tokens;
+          }
+          continue;
         }
-        continue;
+        const delta = choice.delta;
+        if (delta.content) {
+          yield { type: "delta", delta: delta.content };
+        }
+        if (delta.tool_calls) {
+          assembler.ingest(delta.tool_calls as unknown as StreamingToolCallDelta[]);
+          yield { type: "tool_call_delta", toolCalls: assembler.snapshot() };
+        }
+        if (choice.finish_reason) {
+          finishReason = choice.finish_reason;
+        }
       }
-      const delta = choice.delta;
-      if (delta.content) {
-        yield { type: "delta", delta: delta.content };
-      }
-      if (delta.tool_calls) {
-        assembler.ingest(delta.tool_calls as unknown as StreamingToolCallDelta[]);
-        yield { type: "tool_call_delta", toolCalls: assembler.snapshot() };
-      }
-      if (choice.finish_reason) {
-        finishReason = choice.finish_reason;
-      }
-    }
 
-    if (assembler.size > 0) {
-      yield { type: "tool_call", toolCalls: assembler.finalize() };
+      if (assembler.size > 0) {
+        yield { type: "tool_call", toolCalls: assembler.finalize() };
+      }
+      yield { type: "done", finishReason };
+    } finally {
+      clearTimeout(timeout);
     }
-
-    yield { type: "done", finishReason };
   }
 
   async embed(inputs: string[], retries = 3): Promise<number[][]> {

@@ -223,6 +223,7 @@ export class ChatSessionManager {
     initialNarrative?: string,
     prewarmedRuntime?: Promise<ChatRuntimeSetup>,
     initialNarrativeInFlight = false,
+    fastStart = false,
   ): AsyncGenerator<ChatEvent> {
     yield* runChatSessionTurn({
       active: this.active,
@@ -236,6 +237,7 @@ export class ChatSessionManager {
       llm,
       initialNarrative,
       initialNarrativeInFlight,
+      fastStart,
       prewarmedRuntime,
       adapters: this.plannerContinuationAdapters(),
     });

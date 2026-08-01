@@ -26,6 +26,7 @@ export interface RunChatSessionTurnArgs {
   llm?: LLMClient;
   initialNarrative?: string;
   initialNarrativeInFlight?: boolean;
+  fastStart?: boolean;
   /** Started alongside the opening narrative so tool/MCP setup cannot add a
    * second idle gap before the first real action. Ownership transfers to this
    * function once awaited and is released by the existing finally block. */
@@ -43,6 +44,7 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
     imageAttachments = [],
     initialNarrative,
     initialNarrativeInFlight = false,
+    fastStart = false,
     prewarmedRuntime,
     llm: turnLlm,
     projectLinkId,
@@ -124,6 +126,7 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
       initialNarrative,
       actionNarrativesEnabled: true,
       initialNarrativeInFlight,
+      fastStart,
       adapters,
     });
   } finally {

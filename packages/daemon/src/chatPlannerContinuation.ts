@@ -34,6 +34,8 @@ export interface StreamPlannerContinuationArgs {
   initialNarrative?: string;
   actionNarrativesEnabled?: boolean;
   initialNarrativeInFlight?: boolean;
+  /** Keep synchronous project-index work out of the first visible Turn path. */
+  fastStart?: boolean;
   adapters: PlannerContinuationAdapters;
 }
 
@@ -50,6 +52,7 @@ export async function* streamPlannerContinuation(args: StreamPlannerContinuation
     imageAttachments = [],
     initialNarrative,
     initialNarrativeInFlight = false,
+    fastStart = false,
     actionNarrativesEnabled = false,
     persistUserMessage,
     planner,
@@ -69,15 +72,17 @@ export async function* streamPlannerContinuation(args: StreamPlannerContinuation
   // `turn.started`; this phase is an honest description of work now in flight.
   const historyPromise = adapters.getHistory(sessionId, historyLimit);
   yield { type: "progress", message: contextProgressMessage };
-  const contextPromise = contextPromptBuilder.build({
-    repoPath,
-    message,
-    llm,
-    inlineProjectLink,
-    projectLinkId: args.projectLinkId,
-    sessionId,
-    getBubbles: adapters.getBubbles,
-  });
+  const contextPromise = fastStart
+    ? undefined
+    : contextPromptBuilder.build({
+        repoPath,
+        message,
+        llm,
+        inlineProjectLink,
+        projectLinkId: args.projectLinkId,
+        sessionId,
+        getBubbles: adapters.getBubbles,
+      });
   // A full repository-context build can take seconds. It is valuable evidence
   // but not a prerequisite for the first agent plan. Both bounded reads race
   // concurrently, so their 100/250 ms budgets never serialize the first
@@ -85,7 +90,7 @@ export async function* streamPlannerContinuation(args: StreamPlannerContinuation
   // this same Turn.
   const [history, context] = await Promise.all([
     contextWithinBudget(historyPromise, 100),
-    contextWithinBudget(contextPromise, 250),
+    contextPromise ? contextWithinBudget(contextPromise, 250) : Promise.resolve(undefined),
   ]);
   yield { type: "progress", message: planningProgressMessage };
 
