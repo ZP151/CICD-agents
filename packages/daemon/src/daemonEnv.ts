@@ -48,6 +48,14 @@ command = ""
 args_json = "[]"
 credential_env = ""
 
+# Optional read-only web research connector. It is available to all chats
+# once configured locally; no Project Link can supply its command or key.
+[connectors.web_research_mcp]
+enabled = false
+command = ""
+args_json = "[]"
+credential_env = ""
+
 [review]
 auto_approve_enabled = true
 stale_age_hours = 24
@@ -71,6 +79,7 @@ export interface MergePilotUserConfig {
   azureKeyVaultUrl?: string;
   azureCosmosEndpoint?: string;
   azureDevOpsMcp?: AzureDevOpsMcpUserConfig;
+  webResearchMcp?: WebResearchMcpUserConfig;
   reviewAutoApproveEnabled?: boolean;
   reviewStaleAgeHours?: number;
 }
@@ -81,6 +90,14 @@ export interface AzureDevOpsMcpUserConfig {
   args: string[];
   /** One of the supported local credential variable names, never its value. */
   credentialEnv: "" | "AZURE_DEVOPS_EXT_PAT" | "AZURE_DEVOPS_PAT";
+}
+
+export interface WebResearchMcpUserConfig {
+  enabled: boolean;
+  command: string;
+  args: string[];
+  /** A locally held API-key variable, never the key itself. */
+  credentialEnv: "" | "BRAVE_SEARCH_API_KEY" | "TAVILY_API_KEY" | "SERPER_API_KEY";
 }
 
 export function mergePilotHomeDir(): string {
@@ -110,6 +127,9 @@ export function ensureMergePilotLocalEnvFile(envFile = mergePilotLocalEnvFile())
         "AZURE_OPENAI_API_KEY=",
         "OPENAI_API_KEY=",
         "AZURE_DEVOPS_EXT_PAT=",
+        "BRAVE_SEARCH_API_KEY=",
+        "TAVILY_API_KEY=",
+        "SERPER_API_KEY=",
         "",
       ].join("\n"),
       "utf8",
@@ -229,7 +249,10 @@ function applyUserConfigToEnv(config: MergePilotUserConfig, explicitProcessEnv: 
 function loadLocalEnvSecrets(explicitProcessEnv: Set<string>): void {
   const envFile = mergePilotLocalEnvFile();
   if (!nodeFs.existsSync(envFile)) return;
-  const allowedSecretKeys = new Set(["AZURE_OPENAI_API_KEY", "OPENAI_API_KEY", "AZURE_DEVOPS_EXT_PAT", "AZURE_DEVOPS_PAT"]);
+  const allowedSecretKeys = new Set([
+    "AZURE_OPENAI_API_KEY", "OPENAI_API_KEY", "AZURE_DEVOPS_EXT_PAT", "AZURE_DEVOPS_PAT",
+    "BRAVE_SEARCH_API_KEY", "TAVILY_API_KEY", "SERPER_API_KEY",
+  ]);
   for (const rawLine of nodeFs.readFileSync(envFile, "utf8").split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#")) continue;
@@ -313,6 +336,7 @@ function configFromToml(content: string): MergePilotUserConfig {
     azureKeyVaultUrl: sections["cloud"]?.["key_vault_url"],
     azureCosmosEndpoint: sections["cloud"]?.["cosmos_endpoint"],
     azureDevOpsMcp: azureDevOpsMcpConfig(sections["connectors.azure_devops_mcp"]),
+    webResearchMcp: webResearchMcpConfig(sections["connectors.web_research_mcp"]),
     reviewAutoApproveEnabled: booleanValue(sections["review"]?.["auto_approve_enabled"]),
     reviewStaleAgeHours: Number.isFinite(staleAge) && staleAge > 0 ? staleAge : undefined,
   };
@@ -364,6 +388,12 @@ function configToToml(config: MergePilotUserConfig): string {
     `command = ${tomlString(config.azureDevOpsMcp?.command ?? "")}`,
     `args_json = ${tomlString(JSON.stringify(config.azureDevOpsMcp?.args ?? []))}`,
     `credential_env = ${tomlString(config.azureDevOpsMcp?.credentialEnv ?? "")}`,
+    "",
+    "[connectors.web_research_mcp]",
+    `enabled = ${(config.webResearchMcp?.enabled ?? false) ? "true" : "false"}`,
+    `command = ${tomlString(config.webResearchMcp?.command ?? "")}`,
+    `args_json = ${tomlString(JSON.stringify(config.webResearchMcp?.args ?? []))}`,
+    `credential_env = ${tomlString(config.webResearchMcp?.credentialEnv ?? "")}`,
     "",
     "[review]",
     `auto_approve_enabled = ${config.reviewAutoApproveEnabled ?? true}`,
@@ -419,6 +449,19 @@ function azureDevOpsMcpConfig(values: Record<string, string> | undefined): Azure
     command: values["command"] ?? "",
     args,
     credentialEnv: credentialEnv === "AZURE_DEVOPS_EXT_PAT" || credentialEnv === "AZURE_DEVOPS_PAT"
+      ? credentialEnv
+      : "",
+  };
+}
+
+function webResearchMcpConfig(values: Record<string, string> | undefined): WebResearchMcpUserConfig | undefined {
+  if (!values) return undefined;
+  const credentialEnv = values["credential_env"];
+  return {
+    enabled: booleanValue(values["enabled"]) ?? false,
+    command: values["command"] ?? "",
+    args: jsonStringArray(values["args_json"]),
+    credentialEnv: credentialEnv === "BRAVE_SEARCH_API_KEY" || credentialEnv === "TAVILY_API_KEY" || credentialEnv === "SERPER_API_KEY"
       ? credentialEnv
       : "",
   };

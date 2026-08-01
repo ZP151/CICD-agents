@@ -68,6 +68,7 @@ describe("daemonEnv", () => {
     expect(content).toContain("api_key_ref = \"\"");
     expect(content).toContain("[connectors.azure_devops_mcp]");
     expect(content).toContain("args_json = \"[]\"");
+    expect(content).toContain("[connectors.web_research_mcp]");
   });
 
   it("round-trips user config without writing plaintext model secrets", () => {
@@ -124,6 +125,29 @@ describe("daemonEnv", () => {
       command: "npx",
       args: ["--yes", "@example/azure-devops-mcp"],
       credentialEnv: "AZURE_DEVOPS_EXT_PAT",
+    });
+  });
+
+  it("round-trips a local Web Research MCP without storing its API key", () => {
+    const configFile = path.join(tmp, ".mergepilot", "config.toml");
+    writeMergePilotUserConfig({
+      webResearchMcp: {
+        enabled: true,
+        command: "npx",
+        args: ["--yes", "@example/web-research-mcp"],
+        credentialEnv: "TAVILY_API_KEY",
+      },
+    }, configFile);
+
+    const content = fs.readFileSync(configFile, "utf8");
+    expect(content).toContain("[connectors.web_research_mcp]");
+    expect(content).toContain("credential_env = \"TAVILY_API_KEY\"");
+    expect(content).not.toContain("tavily-real-key");
+    expect(readMergePilotUserConfig(configFile).webResearchMcp).toEqual({
+      enabled: true,
+      command: "npx",
+      args: ["--yes", "@example/web-research-mcp"],
+      credentialEnv: "TAVILY_API_KEY",
     });
   });
 

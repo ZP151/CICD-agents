@@ -26,3 +26,23 @@ for example `repositories,pipelines,work-items`. The daemon filters the
 registered MCP tool surface to those domains before the model can see it.
 Read operations remain automatic only when classified as low risk; write-like
 operations still use the normal approval flow.
+
+## Web research
+
+Web research is global to the local desktop instance, rather than a Project
+Link. Configure a reviewed read-only MCP implementation locally:
+
+```toml
+[connectors.web_research_mcp]
+enabled = true
+command = "npx"
+args_json = "[\"--yes\",\"<your-reviewed-web-research-mcp-package>\"]"
+credential_env = "BRAVE_SEARCH_API_KEY"
+```
+
+Supported optional key variable names are `BRAVE_SEARCH_API_KEY`,
+`TAVILY_API_KEY`, and `SERPER_API_KEY`; each belongs only in local `.env` or
+the operating-system environment. MergePilot exposes only MCP tools whose
+names indicate search, query, browse, fetch, read, open, find, or get. Their
+activity groups are labelled `Web Research`; raw page payload remains out of
+the persisted public transcript.

@@ -54,7 +54,7 @@ describe("chat SSE timeline projection", () => {
     expect(sent.find((entry) => entry.payload.type === "turn.tool.completed")?.payload.output).toBe("## main");
   });
 
-  it("projects a realistic Git → Azure DevOps MCP → approval → MCP workflow as one ordered Turn", () => {
+  it("projects a realistic Git → Web Research → Azure DevOps MCP → approval workflow as one ordered Turn", () => {
     const sent: Array<{ event: string; payload: Record<string, unknown> }> = [];
     const reply = {
       raw: {
@@ -76,6 +76,12 @@ describe("chat SSE timeline projection", () => {
     writer.sendChatEvent({ type: "tool_start", toolCallId: "status", name: "git_status", args: { short: true, branch: true } });
     writer.sendChatEvent({ type: "tool_end", toolCallId: "status", name: "git_status", ok: true, summary: "two modified files", output: "## feature/release\n M src/app.ts", result: {} });
     writer.sendChatEvent({ type: "tool_group_end", groupId: "git-evidence" });
+
+    writer.sendChatEvent({ type: "work_statement", blockId: "service-contract", text: "The local scope is clear, so I will verify the current policy requirement before comparing it with the linked pull request.", replace: true });
+    writer.sendChatEvent({ type: "tool_group_start", groupId: "web-contract", connector: { kind: "mcp", id: "web-research", label: "Web Research" } });
+    writer.sendChatEvent({ type: "tool_start", toolCallId: "policy-docs", name: "mcp_web_research_search_policy_requirements", args: { query: "Azure DevOps pull request policy API" } });
+    writer.sendChatEvent({ type: "tool_end", toolCallId: "policy-docs", name: "mcp_web_research_search_policy_requirements", ok: true, summary: "official API requirement found", output: "https://learn.microsoft.com/azure/devops", result: {} });
+    writer.sendChatEvent({ type: "tool_group_end", groupId: "web-contract" });
 
     writer.sendChatEvent({ type: "work_statement", blockId: "pr-risk", text: "The local scope is clear, so I will read the linked pull request and policy state before deciding whether a pipeline run is appropriate.", replace: true });
     writer.sendChatEvent({ type: "tool_group_start", groupId: "ado-read", connector: { kind: "mcp", id: "azure-devops", label: "Azure DevOps" } });
@@ -117,6 +123,7 @@ describe("chat SSE timeline projection", () => {
       "turn.finished",
     ]));
     expect(projected.filter((entry) => entry.payload.groupId === "ado-read")[0]?.payload.connector).toEqual({ kind: "mcp", id: "azure-devops", label: "Azure DevOps" });
+    expect(projected.filter((entry) => entry.payload.groupId === "web-contract")[0]?.payload.connector).toEqual({ kind: "mcp", id: "web-research", label: "Web Research" });
     expect(projected.findIndex((entry) => entry.payload.type === "turn.execution.completed")).toBeLessThan(projected.findIndex((entry) => entry.payload.type === "turn.final.delta"));
     expect(projected.findIndex((entry) => entry.payload.type === "turn.approval.requested")).toBeLessThan(projected.findIndex((entry) => entry.payload.groupId === "ado-write" && entry.payload.type === "turn.tool.started"));
   });
