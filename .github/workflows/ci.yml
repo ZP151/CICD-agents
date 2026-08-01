@@ -24,14 +24,8 @@ concurrency:
 
 jobs:
   node:
-    name: Node ${{ matrix.node }} on ${{ matrix.os }}
-    if: matrix.os != 'ubuntu-latest'
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        node: [22]
+    name: Node 22 on windows-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -39,11 +33,8 @@ jobs:
           version: 9.0.0
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 22
           cache: pnpm
-      - name: Install Linux keychain deps
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libsecret-1-0
       - name: Install
         run: pnpm install --frozen-lockfile=false
       # core must be built first so downstream packages (cli, daemon, review-agent)
@@ -58,6 +49,13 @@ jobs:
         run: pnpm -r --filter "./packages/*" run build
       - name: Test
         run: pnpm -r --filter "./packages/*" run test
+
+  node-ubuntu:
+    name: Node 22 on ubuntu-latest
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Ubuntu CI is disabled."
 
   desktop:
     name: Desktop ${{ matrix.os }} (Tauri)
