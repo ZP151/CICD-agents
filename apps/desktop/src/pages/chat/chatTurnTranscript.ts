@@ -2,8 +2,6 @@ import type { ChatEventPayload } from "../../api.js";
 import { toolCommandPreview } from "../../components/conversation/ApprovalEvidenceModel.js";
 import type { Bubble, TurnTranscript, TurnTranscriptBlock } from "./chat.types.js";
 
-const MAX_STATEMENT_LENGTH = 280;
-
 /**
  * The transcript is the sole user-visible execution record for a Turn.
  * Legacy bubbles may still exist while sessions migrate, but are not used to
@@ -347,10 +345,12 @@ function fallbackGroupId(event: ChatEventPayload): string {
 }
 
 function normalizeStatement(value: string): string {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length > MAX_STATEMENT_LENGTH
-    ? `${normalized.slice(0, MAX_STATEMENT_LENGTH - 1).trimEnd()}…`
-    : normalized;
+  // Canonical public narration is bounded by the daemon's token/sentence
+  // contract. A second UI-only character cap used to cut a truthful streamed
+  // sentence in half and append an ellipsis, making the agent look as though
+  // it had been interrupted. Preserve the complete public part here; the
+  // transcript layout handles wrapping and scrolling.
+  return value.replace(/\s+/g, " ").trim();
 }
 
 

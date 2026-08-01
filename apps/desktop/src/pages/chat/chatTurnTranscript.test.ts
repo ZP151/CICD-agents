@@ -121,6 +121,20 @@ describe("Turn transcript reducer", () => {
     ] });
   });
 
+  it("preserves a complete multi-sentence public narrative instead of UI-ellipsizing it", () => {
+    const fullNarrative = "Check the Project Link’s active branch name, whether the working tree has staged or unstaged changes or untracked files, and the most recent commit hash with its author and commit timestamp. This will establish the exact branch and commit the project is on and whether there are any local changes that could affect decisions about building, testing, or committing.";
+    const started = upsertTurnStartedTranscript([
+      createOptimisticTurnTranscriptBubble("local", "Inspect the project state", 1_000),
+    ], { type: "turn.started", turnId: "turn-1", sequence: 0, emittedAt: 1_000 }, () => "unused");
+    const updated = applyTurnTimelineEvent(started, {
+      type: "turn.narrative.delta", turnId: "turn-1", sequence: 1, blockId: "opening", message: fullNarrative, replace: true,
+    });
+
+    const statement = updated[0]?.turnTranscript?.blocks.find((block) => block.kind === "statement");
+    expect(statement).toMatchObject({ text: fullNarrative });
+    expect(statement?.kind === "statement" && statement.text).not.toContain("…");
+  });
+
   it("keeps actual commands from one decision in one group and preserves the next statement after it", () => {
     let bubbles = upsertTurnStartedTranscript([
       createOptimisticTurnTranscriptBubble("local", "Inspect the repository", 1_000),
