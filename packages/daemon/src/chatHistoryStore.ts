@@ -65,30 +65,45 @@ export function saveStoreSync(store: HistoryStore): void {
 }
 
 export async function loadSession(sessionId: string): Promise<StoredSession | null> {
+  // A desktop Turn is local-first.  Waiting for a cloud session fetch here
+  // placed Cosmos authentication/container initialization on the path from a
+  // model-authored opening narrative to its first actual command.  A slow or
+  // offline cloud mirror must never freeze an active local conversation.
+  const local = loadStoreSync()[sessionId] ?? null;
+  if (local) return local;
+
   const cosmos = getCosmosStore();
   if (cosmos) {
     try {
-      const doc = await cosmos.load(sessionId);
-      if (doc) return cosmosToStored(doc);
+      const doc = await withinCloudReadBudget(cosmos.load(sessionId));
+      if (doc) {
+        const restored = cosmosToStored(doc);
+        writeSessionLocally(restored);
+        return restored;
+      }
     } catch (err) {
       if (isAzureAuthenticationRequiredError(err)) throw err;
     }
   }
-  return loadStoreSync()[sessionId] ?? null;
+  return null;
 }
 
 export async function saveSession(session: StoredSession, now: () => number): Promise<void> {
   normalizeSession(session);
   session.updatedAt = now();
+  writeSessionLocally(session);
+
+  // Cloud persistence is a durability mirror, not a prerequisite for the
+  // current chat turn.  This keeps local history/reconnect reliable while
+  // preventing an unavailable Cosmos endpoint from blocking SSE, tool
+  // execution, or terminal Turn completion.
   const cosmos = getCosmosStore();
   if (cosmos) {
-    try {
-      await cosmos.save(storedToCosmos(session));
-      return;
-    } catch (err) {
-      if (isAzureAuthenticationRequiredError(err)) throw err;
-    }
+    void cosmos.save(storedToCosmos(session)).catch(() => undefined);
   }
+}
+
+function writeSessionLocally(session: StoredSession): void {
   const store = loadStoreSync();
   // Planner persistence and SSE Timeline persistence are intentionally
   // independent async paths. Preserve an already-written public Timeline
@@ -99,6 +114,18 @@ export async function saveSession(session: StoredSession, now: () => number): Pr
   }
   store[session.id] = session;
   saveStoreSync(store);
+}
+
+async function withinCloudReadBudget<T>(promise: Promise<T>, budgetMs = 350): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), budgetMs); }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function mergeTimelineEvents(

@@ -130,4 +130,24 @@ describe("chat SSE timeline projection", () => {
     expect(endCalls).toBe(1);
     releasePersistence?.();
   });
+
+  it("does not invent a narrative when resuming an approved Turn", () => {
+    const sent: Array<{ event: string; payload: Record<string, unknown> }> = [];
+    const reply = {
+      raw: {
+        setHeader: () => undefined,
+        flushHeaders: () => undefined,
+        write: (wire: string) => {
+          const event = wire.match(/^event: ([^\n]+)/m)?.[1] ?? "";
+          const payload = JSON.parse(wire.match(/^data: (.+)$/m)?.[1] ?? "{}");
+          sent.push({ event, payload });
+        },
+        end: () => undefined,
+      },
+    } as never;
+
+    createChatSseWriter(reply).resumeTurn("turn-1", { startedAt: Date.now() - 300 });
+
+    expect(sent.some((entry) => entry.event === "turn.narrative.delta")).toBe(false);
+  });
 });

@@ -24,11 +24,10 @@ export async function* streamConfirmedToolExecution(args: {
   toolCallId: string;
 }): AsyncGenerator<ChatEvent, ConfirmedToolExecutionResult> {
   const { actionExecutor, pending, toolCallId } = args;
-  yield {
-    type: "work_statement",
-    blockId: toolCallId,
-    text: `I’ll ${(pending.description || pending.tool).replace(/\s+/g, " ").trim()} and report the result.`,
-  };
+  // The approved action and its model-authored rationale already exist in
+  // the active Turn. Do not insert a canned "I'll …" sentence at execution
+  // time: it would masquerade as fresh agent reasoning and break the
+  // transcript's evidence-first ordering.
   yield { type: "tool_group_start", groupId: toolCallId };
   yield { type: "turn_step", stepId: toolCallId, status: "started", label: pending.description || pending.tool };
   yield { type: "tool_start", name: pending.tool, args: pending.args, toolCallId };

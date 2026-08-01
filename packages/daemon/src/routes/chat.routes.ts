@@ -428,7 +428,6 @@ export function registerChatRoutes(
       sseWriter.resumeTurn(body.data.turnId, {
         startedAt: body.data.startedAt,
         lastSequence: body.data.lastSequence,
-        statement: "Approval received; executing the approved action.",
       });
     } else {
       // API callers that created a workflow outside chat have no prior Turn
