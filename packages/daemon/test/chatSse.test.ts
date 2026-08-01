@@ -2,6 +2,28 @@ import { describe, expect, it } from "vitest";
 import { createChatSseWriter } from "../src/routes/chatSse.js";
 
 describe("chat SSE timeline projection", () => {
+  it("echoes a browser optimistic Turn id only on the start acknowledgement", () => {
+    const sent: Array<{ event: string; payload: Record<string, unknown> }> = [];
+    const reply = {
+      raw: {
+        setHeader: () => undefined,
+        flushHeaders: () => undefined,
+        write: (wire: string) => {
+          const event = wire.match(/^event: ([^\n]+)/m)?.[1] ?? "";
+          const payload = JSON.parse(wire.match(/^data: (.+)$/m)?.[1] ?? "{}");
+          sent.push({ event, payload });
+        },
+        end: () => undefined,
+      },
+    } as never;
+    const writer = createChatSseWriter(reply);
+    writer.startTurn("turn-1", undefined, "local-turn-1");
+    writer.sendChatEvent({ type: "tool_start", toolCallId: "status", name: "git_status", args: {} });
+
+    expect(sent[0]?.payload).toMatchObject({ type: "turn.started", turnId: "turn-1", clientTurnId: "local-turn-1" });
+    expect(sent[1]?.payload).not.toHaveProperty("clientTurnId");
+  });
+
   it("keeps actual commands from a single read-only decision in one group", () => {
     const sent: Array<{ event: string; payload: Record<string, unknown> }> = [];
     const reply = {

@@ -4,7 +4,7 @@ import { sessionStartedEvent } from "../chatEvents.js";
 
 export interface ChatSseWriter {
   send(event: string, payload: unknown): void;
-  startTurn(turnId: string, openingStatement?: string): void;
+  startTurn(turnId: string, openingStatement?: string, clientTurnId?: string): void;
   resumeTurn(turnId: string, options: { startedAt?: number; lastSequence?: number; statement?: string }): void;
   /** A network/model diagnostic, intentionally not a persisted narrative part. */
   sendWaitingForModel(): void;
@@ -53,7 +53,7 @@ export function createChatSseWriter(
 
   return {
     send,
-    startTurn(turnId, openingStatement) {
+    startTurn(turnId, openingStatement, clientTurnId) {
       activeTurn = {
         id: turnId,
         nextSequence: 1,
@@ -70,6 +70,7 @@ export function createChatSseWriter(
         sequence: 0,
         emittedAt: activeTurn.startedAt,
         sessionId,
+        clientTurnId,
       });
       if (openingStatement) {
         const base = nextTimelineBase(activeTurn);

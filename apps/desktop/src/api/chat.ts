@@ -43,11 +43,13 @@ export function chatStream(
   conversationModelChoice: ConversationModelChoice = "built_in",
   imageAttachments: ChatImageAttachmentPayload[] = [],
   projectLinkData?: ProjectLink | null,
+  clientTurnId?: string,
 ): { cancel: () => void } {
   const controller = new AbortController();
   let cancelled = false;
 
   const body: Record<string, unknown> = { message, repoPath };
+  if (clientTurnId) body["clientTurnId"] = clientTurnId;
   if (sessionId) body["sessionId"] = sessionId;
   if (projectLinkId) {
     body["projectLinkId"] = projectLinkId;

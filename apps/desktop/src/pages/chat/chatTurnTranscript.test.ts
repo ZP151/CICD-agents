@@ -49,6 +49,32 @@ describe("Turn transcript reducer", () => {
     ]);
   });
 
+  it("adopts the exact optimistic Turn when server starts arrive out of order", () => {
+    const first = createOptimisticTurnTranscriptBubble("first", "Inspect the branch", 1_000);
+    const second = createOptimisticTurnTranscriptBubble("second", "Review the changed files", 2_000);
+    const secondStarted = upsertTurnStartedTranscript([first, second], {
+      type: "turn.started", turnId: "turn-second", clientTurnId: "local-turn-second", emittedAt: 2_050, sequence: 0,
+    }, () => "unused");
+    const bothStarted = upsertTurnStartedTranscript(secondStarted, {
+      type: "turn.started", turnId: "turn-first", clientTurnId: "local-turn-first", emittedAt: 1_050, sequence: 0,
+    }, () => "unused");
+
+    expect(bothStarted.map((bubble) => ({ turnId: bubble.turnId, startedAt: bubble.turnTranscript?.startedAt }))).toEqual([
+      { turnId: "turn-first", startedAt: 1_000 },
+      { turnId: "turn-second", startedAt: 2_000 },
+    ]);
+  });
+
+  it("does not let an old daemon adopt an arbitrary Turn when more than one is pending", () => {
+    const first = createOptimisticTurnTranscriptBubble("first", "Inspect the branch", 1_000);
+    const second = createOptimisticTurnTranscriptBubble("second", "Review the changed files", 2_000);
+    const bubbles = upsertTurnStartedTranscript([first, second], {
+      type: "turn.started", turnId: "server-turn", emittedAt: 2_100, sequence: 0,
+    }, () => "server-bubble");
+
+    expect(bubbles.map((bubble) => bubble.turnId)).toEqual(["local-turn-first", "local-turn-second", "server-turn"]);
+  });
+
   it("renders Git tools as executable shell commands instead of internal tool identifiers", () => {
     let bubbles = upsertTurnStartedTranscript([
       createOptimisticTurnTranscriptBubble("local", "Inspect the branch", 1_000),

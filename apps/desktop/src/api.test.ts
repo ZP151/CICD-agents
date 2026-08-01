@@ -54,12 +54,17 @@ describe("chatStream", () => {
       null,
       (event) => events.push(event),
       "project-link-1",
+      "built_in",
+      [],
+      undefined,
+      "local-turn-1",
     );
     await waitFor(() => fetchMock.mock.calls.length === 1 && streamControllerRef.current !== undefined);
     expect(firstRequestBody(fetchMock)).toMatchObject({
       message: "stream a long answer",
       repoPath: "C:\\repo",
       projectLinkId: "project-link-1",
+      clientTurnId: "local-turn-1",
     });
 
     const streamController = streamControllerRef.current;

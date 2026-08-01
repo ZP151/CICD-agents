@@ -33,6 +33,8 @@ export type TurnTimelineEventType =
 export interface TurnTimelineEvent {
   type: TurnTimelineEventType;
   turnId: string;
+  /** Browser-local correlation id used only to adopt an optimistic Turn. */
+  clientTurnId?: string;
   /** Strictly increasing within one Turn; never reused. */
   sequence: number;
   emittedAt: number;

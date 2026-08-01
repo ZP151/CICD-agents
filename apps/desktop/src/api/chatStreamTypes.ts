@@ -78,6 +78,8 @@ export interface ChatEventPayload {
   uiChunk?: ChatUiChunk;
   sessionId?: string;
   turnId?: string;
+  /** Matches the locally-created optimistic Turn when the server starts it. */
+  clientTurnId?: string;
   sequence?: number;
   emittedAt?: number;
   elapsedMs?: number;

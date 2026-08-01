@@ -39,7 +39,7 @@ export function upsertTurnStartedTranscript(
   makeId: () => string,
 ): Bubble[] {
   const startedAt = typeof event.emittedAt === "number" ? event.emittedAt : Date.now();
-  const localIndex = findWorkingTranscript(bubbles, { localOnly: true });
+  const localIndex = findLocalTranscriptForStart(bubbles, event.clientTurnId);
   if (localIndex >= 0) {
     return bubbles.map((bubble, index) => index === localIndex && bubble.turnTranscript
       ? {
@@ -319,6 +319,21 @@ function findWorkingTranscript(
     if (options.turnId && bubble.turnId === options.turnId) return index;
   }
   return -1;
+}
+
+/**
+ * A server acknowledgement must never adopt an unrelated optimistic Turn.
+ * New daemons echo the client id; old sidecars can only be safely adopted
+ * when exactly one local Turn is waiting for acknowledgement.
+ */
+function findLocalTranscriptForStart(bubbles: Bubble[], clientTurnId: string | undefined): number {
+  const local = bubbles
+    .map((bubble, index) => ({ bubble, index }))
+    .filter(({ bubble }) => (
+      bubble.turnTranscript?.status === "working" && bubble.turnId?.startsWith("local-turn-")
+    ));
+  if (clientTurnId) return local.find(({ bubble }) => bubble.turnId === clientTurnId)?.index ?? -1;
+  return local.length === 1 ? local[0]!.index : -1;
 }
 
 function shouldIgnoreSequence(transcript: TurnTranscript, sequence: number | undefined): boolean {

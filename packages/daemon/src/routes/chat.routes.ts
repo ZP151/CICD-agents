@@ -107,6 +107,7 @@ const ChatStartSchema = z
     message: z.string().default(""),
     repoPath: z.string().default(process.cwd()),
     sessionId: OptionalSessionIdSchema,
+    clientTurnId: z.string().min(1).max(160).optional(),
     projectLinkId: z.string().optional(),
     llmConfig: LlmConfigSchema,
     projectLink: InlineProjectLinkSchema,
@@ -238,7 +239,7 @@ export function registerChatRoutes(
     const parsed = ChatStartSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
 
-    const { imageAttachments, message, repoPath, sessionId: existingId, llmConfig } = parsed.data;
+    const { imageAttachments, message, repoPath, sessionId: existingId, llmConfig, clientTurnId } = parsed.data;
     const projectLinkId = projectLinkIdFromChatPayload(parsed.data);
     const inlineProjectLink = inlineProjectLinkFromPayload(parsed.data);
     const sessionId = existingId ?? chatSessions.createSession(repoPath, projectLinkId);
@@ -257,7 +258,7 @@ export function registerChatRoutes(
     // planning or executing any action. This is a real behavioural boundary:
     // buffering a command event until after a narrative only changes what the
     // user sees; it does not stop the command from already having run.
-    sseWriter.startTurn(turnId);
+    sseWriter.startTurn(turnId, undefined, clientTurnId);
     let active = true;
     let openingNarrativeVisible = false;
     // A slow provider is surfaced only as a transport diagnostic after a

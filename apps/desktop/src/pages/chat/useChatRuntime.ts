@@ -212,6 +212,7 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
         dataUrl: attachment.dataUrl,
       })),
       args.activeProjectLink,
+      `local-turn-${optimisticTurnId}`,
     );
     args.cancelRef.current = () => {
       acceptsEvents = false;
