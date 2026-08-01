@@ -4,9 +4,13 @@ import type { ChatEvent } from "./chatPlannerTypes.js";
 
 // GPT-5 counts reasoning and visible tokens against max_completion_tokens.
 // A 40-token cap regularly finishes before any public token is available.
-// 192 leaves GPT-5-mini-2 enough room for minimal reasoning plus two complete
-// reviewer-useful sentences; 128 could stop half-way through the second one.
-const MAX_ACTION_NARRATIVE_TOKENS = 192;
+// GPT-5 spends reasoning and visible tokens from the same completion budget.
+// 192 is enough for a terse note, but it can exhaust the visible budget in
+// the middle of a useful second sentence. 320 leaves the low-effort narrator
+// room to state the evidence/uncertainty, the immediate action, and why that
+// action resolves the user's request. The stream still closes as soon as the
+// second sentence is complete, so this is not a fixed latency penalty.
+const MAX_ACTION_NARRATIVE_TOKENS = 320;
 const MIN_INITIAL_VISIBLE_NARRATIVE_CHARS = 12;
 const MAX_PUBLIC_ACTION_SENTENCES = 2;
 
@@ -40,8 +44,8 @@ export async function* streamActionNarrative(
       role: "system",
       content: [
         "Write the public pre-action note for a desktop coding agent. Always use English.",
-        "For an investigation, return two complete, natural sentences of roughly 28–65 words total. First name the exact scope and facts to establish; then state how that serves the user's exact request or the next immediate decision. For a direct answer with no investigation, one complete sentence is enough.",
-        "Start directly with the check or decision. Use supplied evidence only; otherwise state facts to check, never pretend unobserved project facts are known. Keep all independent requested facts in one note so the next action can collect them together.",
+        "For an investigation, write one compact public paragraph of two complete, natural sentences, normally 45–95 words total. First state the relevant evidence already available or the uncertainty that must be resolved, then the immediate check or decision. Second, say what that action will establish and why it answers the user's exact request or unlocks the next decision. For a direct answer with no investigation, one complete sentence is enough.",
+        "Start directly with the evidence, uncertainty, check, or decision; make it read like an informed teammate's brief, not a status label. Use supplied evidence only; otherwise state facts to check, never pretend unobserved project facts are known. Keep all independent requested facts in one note so the next action can collect them together. Complete the thought: never end in an ellipsis, a dangling clause, or an unfinished sentence.",
         "Do not repeat the request, widen scope, use headings/lists, expose private reasoning, or name commands, tools, flags, terminal syntax, or a predeclared command list. Do not use generic framing such as 'Based on the request', 'The goal is', or 'I will perform'.",
         "Never propose unrelated build, test, commit, PR, deployment, cloning, fetching, setup, or repository-existence checks. Do not ask the user to run a command or for permission for a clearly read-only action. For a simple answer, answer directly. Finish the second sentence with punctuation; stop after two sentences.",
       ].join(" "),
@@ -68,9 +72,9 @@ export async function* streamActionNarrative(
   let text = "";
   let emittedText = "";
   // This is the public decision boundary before a tool group, not a
-  // long-form answer. Keep up to two complete sentences: that is enough to
-  // make the activity legible (basis → action → purpose) without exposing a
-  // private chain of thought or delaying the command group indefinitely.
+  // long-form answer. Keep up to two complete sentences: enough for a public
+  // basis → action → purpose brief, without exposing private reasoning or
+  // delaying the command group indefinitely.
   const models = [llm.actionNarrativeModel?.()];
   const fallbackModel = llm.actionNarrativeFallbackModel?.();
   if (fallbackModel && fallbackModel !== models[0]) models.push(fallbackModel);

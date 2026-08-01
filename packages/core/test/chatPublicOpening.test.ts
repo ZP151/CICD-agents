@@ -9,12 +9,14 @@ describe("streamActionNarrative", () => {
       actionNarrativeModel: () => "fast-narrative-model",
     async *chatStream(options: { messages: Array<{ role: string; content: unknown }>; tools?: unknown; maxTokens?: number; reasoningEffort?: "minimal" | "low" | "medium" | "high" }) {
       expect(options.tools).toBeUndefined();
-      expect(options.maxTokens).toBeLessThanOrEqual(192);
+      expect(options.maxTokens).toBeLessThanOrEqual(320);
       expect(options.reasoningEffort).toBe("minimal");
       expect((options as { model?: string }).model).toBe("fast-narrative-model");
       expect(JSON.stringify(options.messages)).toContain("Review the current project changes");
       expect(JSON.stringify(options.messages)).toContain("Always use English");
       expect(JSON.stringify(options.messages)).toContain("two complete, natural sentences");
+      expect(JSON.stringify(options.messages)).toContain("normally 45–95 words total");
+      expect(JSON.stringify(options.messages)).toContain("never end in an ellipsis");
       expect(JSON.stringify(options.messages)).toContain("Do not use generic framing such as 'Based on the request'");
       expect(JSON.stringify(options.messages)).toContain("No repository evidence is available yet");
       expect(JSON.stringify(options.messages)).toContain("expose private reasoning");
@@ -22,7 +24,7 @@ describe("streamActionNarrative", () => {
       expect(JSON.stringify(options.messages)).toContain("Do not ask the user to run a command");
       expect(JSON.stringify(options.messages)).toContain("state facts to check");
       expect(JSON.stringify(options.messages)).toContain("independent requested facts in one note");
-      expect(JSON.stringify(options.messages)).toContain("serves the user's exact request or the next immediate decision");
+      expect(JSON.stringify(options.messages)).toContain("why it answers the user's exact request or unlocks the next decision");
       expect(JSON.stringify(options.messages)).toContain("Never propose unrelated build, test, commit, PR, deployment");
       expect(JSON.stringify(options.messages)).toContain("permission for a clearly read-only action");
       expect(JSON.stringify(options.messages)).toContain("repository-existence checks");
