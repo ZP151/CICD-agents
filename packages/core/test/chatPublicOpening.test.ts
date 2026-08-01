@@ -18,6 +18,7 @@ describe("streamActionNarrative", () => {
       expect(JSON.stringify(options.messages)).toContain("never use generic framing such as 'Based on the request'");
       expect(JSON.stringify(options.messages)).toContain("No repository evidence is available yet");
       expect(JSON.stringify(options.messages)).toContain("Do not reveal private reasoning");
+      expect(JSON.stringify(options.messages)).toContain("terminal syntax, tool names, flags");
       expect(JSON.stringify(options.messages)).toContain("ask permission for a clearly read-only action");
       expect(JSON.stringify(options.messages)).toContain("do not propose cloning, fetching, remote metadata, setup, or a repository-existence check");
       expect(JSON.stringify(options.messages)).not.toContain("Working directory");

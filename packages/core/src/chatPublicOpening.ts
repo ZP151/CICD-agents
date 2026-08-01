@@ -47,7 +47,7 @@ export async function* streamActionNarrative(
         "Use supplied evidence only; do not claim unobserved project facts.",
         "Without completed evidence, describe only the missing fact and the next check; never describe the repository, files, or working-tree state as if already known.",
         "Unless the user explicitly asks, do not propose cloning, fetching, remote metadata, setup, or a repository-existence check; name the direct requested local check instead.",
-        "For a simple answer, answer directly. Do not reveal private reasoning, use headings, list commands, add generic filler, or ask permission for a clearly read-only action.",
+        "For a simple answer, answer directly. Do not reveal private reasoning, use headings, list commands, terminal syntax, tool names, flags, or generic filler, or ask permission for a clearly read-only action.",
       ].join(" "),
     },
     {

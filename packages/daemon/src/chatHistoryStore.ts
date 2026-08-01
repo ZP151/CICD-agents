@@ -174,7 +174,12 @@ export async function deleteStoredSession(sessionId: string): Promise<boolean> {
   if (cosmos) {
     // The local copy is the live desktop transcript. Delete it immediately;
     // cloud mirroring must never keep the UI waiting on Cosmos availability.
-    void cosmos.delete(sessionId).catch(() => undefined);
+    // Calling an async Cosmos method still runs its synchronous client/setup
+    // work before it returns a Promise, so defer the call itself rather than
+    // merely declining to await its result.
+    setTimeout(() => {
+      void cosmos.delete(sessionId).catch(() => undefined);
+    }, 0);
   }
   return localExisted || Boolean(cosmos);
 }
