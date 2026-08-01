@@ -206,4 +206,33 @@ describe("groundFinalResponse", () => {
     expect(result).not.toContain("Immediate recommendations");
     expect(result).not.toContain("I ran git status");
   });
+
+  it("resumes at a verdict that follows a raw evidence section", () => {
+    const result = groundFinalResponse([
+      "Evidence:",
+      "Snippet: endpoint=https://internal.example.test; token=***REDACTED***",
+      "",
+      "Verdict: The configuration change needs deployment review before release.",
+      "",
+      "Sources:",
+      "I ran git diff to inspect the selected Project Link.",
+    ].join("\n"), [
+      {
+        name: "git_diff",
+        ok: true,
+        output: [
+          "diff --git a/config/app.yml b/config/app.yml",
+          "--- a/config/app.yml",
+          "+++ b/config/app.yml",
+          "-endpoint: old",
+          "+endpoint: new",
+        ].join("\n"),
+      },
+    ]);
+
+    expect(result).toContain("Verdict: The configuration change needs deployment review");
+    expect(result).toContain("Reviewed diff: `config/app.yml`");
+    expect(result).not.toContain("internal.example.test");
+    expect(result).not.toContain("I ran git diff");
+  });
 });
