@@ -23,6 +23,7 @@ describe("streamActionNarrative", () => {
       expect(JSON.stringify(options.messages)).toContain("terminal syntax, or a predeclared command list");
       expect(JSON.stringify(options.messages)).toContain("Do not ask the user to run a command");
       expect(JSON.stringify(options.messages)).toContain("state facts to check");
+      expect(JSON.stringify(options.messages)).toContain("task constraint, not evidence");
       expect(JSON.stringify(options.messages)).toContain("independent requested facts in one note");
       expect(JSON.stringify(options.messages)).toContain("why it answers the user's exact request or unlocks the next decision");
       expect(JSON.stringify(options.messages)).toContain("Never propose unrelated build, test, commit, PR, deployment");
