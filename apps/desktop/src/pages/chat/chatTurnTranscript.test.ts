@@ -240,6 +240,46 @@ describe("Turn transcript reducer", () => {
     }));
   });
 
+  it("keeps multiple public decisions, Git evidence, Azure DevOps MCP, and approval in one ordered transcript", () => {
+    let bubbles = upsertTurnStartedTranscript([
+      createOptimisticTurnTranscriptBubble("local", "Review PR readiness and run the pipeline after approval", 1_000),
+    ], { type: "turn.started", turnId: "turn-release", sequence: 0, emittedAt: 1_000 }, () => "unused");
+    const events = [
+      { type: "turn.narrative.delta", turnId: "turn-release", sequence: 1, blockId: "scope", message: "I will establish the local change scope before checking PR readiness.", replace: true },
+      { type: "turn.tool_group.started", turnId: "turn-release", sequence: 2, groupId: "git", connector: { kind: "built-in", id: "git", label: "Git" } },
+      { type: "turn.tool.started", turnId: "turn-release", sequence: 3, groupId: "git", commandId: "status", name: "git_status", args: { short: true } },
+      { type: "turn.tool.completed", turnId: "turn-release", sequence: 4, groupId: "git", commandId: "status", name: "git_status", ok: true, summary: "changes found" },
+      { type: "turn.narrative.delta", turnId: "turn-release", sequence: 5, blockId: "pr", message: "Those changes are scoped, so I will now inspect the linked PR policies.", replace: true },
+      { type: "turn.tool_group.started", turnId: "turn-release", sequence: 6, groupId: "ado-read", connector: { kind: "mcp", id: "azure-devops", label: "Azure DevOps" } },
+      { type: "turn.tool.started", turnId: "turn-release", sequence: 7, groupId: "ado-read", commandId: "policies", name: "mcp_azure_devops_list_policy_evaluations", args: { pullRequestId: 42 } },
+      { type: "turn.tool.completed", turnId: "turn-release", sequence: 8, groupId: "ado-read", commandId: "policies", name: "mcp_azure_devops_list_policy_evaluations", ok: true, summary: "pending policy" },
+      { type: "turn.approval.requested", turnId: "turn-release", sequence: 9, approval: { id: "run", riskLevel: "high", explanation: "A pipeline run changes remote state.", action: { tool: "mcp_azure_devops_run_pipeline", args: { pipelineId: 18 }, description: "Run the linked Azure Pipeline" } } },
+      { type: "turn.approval.resolved", turnId: "turn-release", sequence: 10, approvalId: "run", approved: true },
+      { type: "turn.narrative.delta", turnId: "turn-release", sequence: 11, blockId: "run", message: "Approval is recorded, so I will request the configured pipeline.", replace: true },
+      { type: "turn.tool_group.started", turnId: "turn-release", sequence: 12, groupId: "ado-write", connector: { kind: "mcp", id: "azure-devops", label: "Azure DevOps" } },
+      { type: "turn.tool.started", turnId: "turn-release", sequence: 13, groupId: "ado-write", commandId: "pipeline", name: "mcp_azure_devops_run_pipeline", args: { pipelineId: 18 } },
+      { type: "turn.tool.completed", turnId: "turn-release", sequence: 14, groupId: "ado-write", commandId: "pipeline", name: "mcp_azure_devops_run_pipeline", ok: true, summary: "queued" },
+      { type: "turn.execution.completed", turnId: "turn-release", sequence: 15, elapsedMs: 8_000 },
+    ] as const;
+    for (const event of events) bubbles = applyTurnTimelineEvent(bubbles, event);
+
+    const transcript = bubbles[0]?.turnTranscript;
+    expect(transcript?.status).toBe("sealed");
+    expect(transcript?.blocks.map((block) => `${block.kind}:${block.id}`)).toEqual([
+      "statement:scope",
+      "tool_group:git",
+      "statement:pr",
+      "tool_group:ado-read",
+      "approval:run",
+      "statement:run",
+      "tool_group:ado-write",
+    ]);
+    expect(transcript?.blocks.find((block) => block.kind === "tool_group" && block.id === "ado-read")).toMatchObject({
+      connector: { kind: "mcp", id: "azure-devops", label: "Azure DevOps" },
+    });
+    expect(transcript?.blocks.find((block) => block.kind === "approval" && block.id === "run")).toMatchObject({ status: "approved" });
+  });
+
   it("removes a duplicated no-tool opening after the same text becomes the final answer", () => {
     let bubbles = upsertTurnStartedTranscript([
       createOptimisticTurnTranscriptBubble("local", "Explain a Git branch", 1_000),
