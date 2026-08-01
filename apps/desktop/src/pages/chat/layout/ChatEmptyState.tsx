@@ -145,48 +145,54 @@ export function ProjectLinkLoadingState(): JSX.Element {
   );
 }
 
-const welcomeSuggestions: SuggestionReply[] = [
+/**
+ * Welcome actions are deliberately ordinary prompts.  A welcome card is a
+ * starting point for a conversation, not authority to run a hidden workflow.
+ * The planner receives the same text once the user sends it and then exposes
+ * any commands as an ordered execution group.
+ */
+export const welcomeSuggestions: SuggestionReply[] = [
   {
     id: "welcome-understand",
     label: "Understand this project",
     message: "Understand this project",
-    action: { kind: "workspace_action", action: "inspect_architecture_context" },
+    action: { kind: "fill_composer" },
   },
   {
     id: "welcome-review",
     label: "Review my changes",
     message: "Review my changes",
-    action: { kind: "workspace_action", action: "inspect_changes" },
+    action: { kind: "fill_composer" },
   },
   {
     id: "welcome-branch",
     label: "What's on this branch?",
     message: "What's on this branch?",
-    action: { kind: "workspace_action", action: "inspect_latest_commit" },
+    action: { kind: "fill_composer" },
   },
   {
     id: "welcome-pr-insight",
     label: "Analyze PR insight for this repo",
     message: "Analyze PR insight for this repo",
-    action: { kind: "workspace_action", action: "inspect_pr_insight" },
+    action: { kind: "fill_composer" },
   },
   {
     id: "welcome-pipelines",
     label: "Open Pipelines workspace",
     message: "Open Pipelines workspace",
-    action: { kind: "workspace_action", action: "inspect_pipeline" },
+    action: { kind: "fill_composer" },
   },
   {
     id: "welcome-stage-commit",
     label: "Stage and commit",
     message: "Stage and commit",
-    action: { kind: "workspace_action", action: "prepare_commit" },
+    action: { kind: "fill_composer" },
   },
   {
     id: "welcome-pr-plan",
     label: "Push and create PR",
     message: "Push and create PR",
-    action: { kind: "workspace_action", action: "inspect_pr_plan_context" },
+    action: { kind: "fill_composer" },
   },
 ];
 
@@ -202,21 +208,24 @@ function WelcomePanel({
       className="flex w-full max-w-[58rem] flex-col items-center gap-5 rounded-lg border border-transparent px-2 text-center"
       aria-label="New conversation welcome"
     >
-      <div className="flex min-w-0 flex-col items-center gap-4 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))] ring-1 ring-[rgb(var(--app-border))]">
+      <div className="flex min-w-0 flex-col items-center gap-3 text-center">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))] ring-1 ring-[rgb(var(--app-border))]">
           <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M7.5 18.25 4 20l.75-3.25A7.25 7.25 0 0 1 3 12c0-4.14 4.03-7.5 9-7.5s9 3.36 9 7.5-4.03 7.5-9 7.5a10.5 10.5 0 0 1-4.5-1.25Z" />
           </svg>
         </div>
-        <div className="max-w-[42rem] space-y-2">
-          <h2 className="text-base font-semibold text-[rgb(var(--app-text))]">Ask MergePilot anything</h2>
+        <div className="max-w-[42rem] space-y-1.5">
+          <h2 className="text-base font-semibold text-[rgb(var(--app-text))]">Start with a focused prompt</h2>
           <p className="text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
-            "help me review changes and go all the way to PR"<br />
-            "what's changed since main?" · "run tests" · "create PR"
+            Choose a starting point, then edit the prompt before MergePilot does any work.
           </p>
         </div>
       </div>
-      <div className="grid w-full max-w-[44rem] min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,12.75rem),1fr))] gap-2">
+      <div
+        className="grid w-full max-w-[44rem] min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,12.75rem),1fr))] gap-2"
+        role="group"
+        aria-label="Suggested prompt drafts"
+      >
         {welcomeSuggestions.map((suggestion) => (
           <button
             key={suggestion.id}
@@ -226,13 +235,14 @@ function WelcomePanel({
             }}
             disabled={disabled}
             title={disabled ? "Create a Project Link first" : undefined}
-            className={`max-w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2 text-center text-xs font-medium leading-snug text-[rgb(var(--app-text-muted))] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/30 ${
+            className={`group max-w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2.5 text-left text-xs leading-snug text-[rgb(var(--app-text-muted))] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/30 ${
               disabled
                 ? "cursor-not-allowed opacity-60"
                 : "hover:border-[rgb(var(--app-accent))]/45 hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
             }`}
           >
-            <span className="block whitespace-normal">{suggestion.label}</span>
+            <span className="block whitespace-normal font-medium text-[rgb(var(--app-text))]">{suggestion.label}</span>
+            <span className="mt-0.5 block text-[10px] text-[rgb(var(--app-text-subtle))] group-hover:text-[rgb(var(--app-text-muted))]">Edit before sending</span>
           </button>
         ))}
       </div>

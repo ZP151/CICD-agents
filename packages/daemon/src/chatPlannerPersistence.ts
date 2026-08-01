@@ -35,6 +35,8 @@ export interface StreamPlannerAndPersistArgs {
   /** Internal diagnostic context; deliberately never exposed as suggested replies. */
   contextNotes?: string[];
   contextSources?: ChatPlannerResult["sources"];
+  initialNarrative?: string;
+  actionNarrativesEnabled?: boolean;
   adapters: PlannerPersistenceAdapters;
 }
 
@@ -43,6 +45,8 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
     adapters,
     contextPrompt,
     imageAttachments = [],
+    initialNarrative,
+    actionNarrativesEnabled = false,
     contextSources = [],
     history,
     message,
@@ -54,7 +58,7 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
   let assistantReply = "";
   const pendingToolArgs = new Map<string, Record<string, unknown>>();
 
-  for await (const event of planner.run(message, history, repoPath, waitForConfirm, contextPrompt, imageAttachments)) {
+  for await (const event of planner.run(message, history, repoPath, waitForConfirm, contextPrompt, imageAttachments, initialNarrative, actionNarrativesEnabled)) {
     if (event.type === "tool_start") {
       pendingToolArgs.set(event.name, event.args);
       yield event;

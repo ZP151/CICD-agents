@@ -3,6 +3,7 @@ import {
   type ChatPlannerResult,
   type ChatWorkflowState,
   type PendingToolAction,
+  type TurnTimelineEvent,
 } from "@mergepilot/core";
 import type { InlineLlmConfig } from "./llmSettings.js";
 
@@ -58,6 +59,8 @@ export interface StoredSession {
   projectLinkId?: string;
   messages: ChatMessage[];
   bubbles: StoredBubble[];
+  /** Public-only Timeline records; used to restore the exact Turn hierarchy. */
+  timelineEvents?: TurnTimelineEvent[];
   approvalProposal?: PendingToolAction;
   /** @deprecated Use approvalProposal. Kept so old local/Cosmos sessions can be resumed. */
   pendingAction?: PendingToolAction;

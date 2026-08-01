@@ -6,10 +6,12 @@ export interface DaemonConfigPayload {
   azureEndpoint?: string;
   azureApiKey?: string;
   azureDeployment?: string;
+  azureNarrativeDeployment?: string;
   azureEmbeddingDeployment?: string;
   azureApiVersion?: string;
   openaiApiKey?: string;
   openaiModel?: string;
+  openaiNarrativeModel?: string;
   azureStorageAccount?: string;
   azureKeyVaultUrl?: string;
   azureCosmosEndpoint?: string;
@@ -21,17 +23,19 @@ export interface DaemonConfigPayload {
 
 export type LlmProviderConfig = Pick<
   DaemonConfigPayload,
-  "llmProvider" | "azureEndpoint" | "azureApiKey" | "azureDeployment" | "azureEmbeddingDeployment" | "azureApiVersion" | "openaiApiKey" | "openaiModel"
+  "llmProvider" | "azureEndpoint" | "azureApiKey" | "azureDeployment" | "azureNarrativeDeployment" | "azureEmbeddingDeployment" | "azureApiVersion" | "openaiApiKey" | "openaiModel" | "openaiNarrativeModel"
 >;
 
 export interface DaemonConfig {
   llmProvider: string;
   secretSource: "key_vault" | "local_env";
   azureDeployment: string;
+  azureNarrativeDeployment: string;
   azureEmbeddingDeployment: string;
   azureApiVersion: string;
   azureEndpoint: string;
   openaiModel: string;
+  openaiNarrativeModel: string;
   aoaiKeyInVault: boolean;
   azureStorageAccount: string;
   azureKeyVaultUrl: string;

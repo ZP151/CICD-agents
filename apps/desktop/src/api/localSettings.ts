@@ -33,9 +33,11 @@ export function readLlmConfig(
     if (selected["azureEndpoint"]) config["azureEndpoint"] = selected["azureEndpoint"];
     if (selected["azureApiKey"]) config["azureApiKey"] = selected["azureApiKey"];
     if (selected["azureDeployment"]) config["azureDeployment"] = selected["azureDeployment"];
+    if (selected["azureNarrativeDeployment"]) config["azureNarrativeDeployment"] = selected["azureNarrativeDeployment"];
     if (selected["azureApiVersion"]) config["azureApiVersion"] = selected["azureApiVersion"];
     if (selected["openaiApiKey"]) config["openaiApiKey"] = selected["openaiApiKey"];
     if (selected["openaiModel"]) config["openaiModel"] = selected["openaiModel"];
+    if (selected["openaiNarrativeModel"]) config["openaiNarrativeModel"] = selected["openaiNarrativeModel"];
     return Object.keys(config).length > 0 ? config : undefined;
   } catch {
     return undefined;

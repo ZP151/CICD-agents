@@ -71,4 +71,18 @@ describe("tool capability registry", () => {
     expect(prompt).toContain("[git; high; approval-required; required: branch]");
     expect(prompt).not.toContain("git_intent_translator");
   });
+
+  it("carries MCP origin through the capability instead of relying on a UI name heuristic", () => {
+    const [capability] = toolCapabilities([{
+      name: "mcp_github_search_issues",
+      description: "Search issues through GitHub.",
+      parameters: { type: "object", properties: {} },
+      handler: async () => ({}),
+    }]);
+
+    expect(capability).toMatchObject({
+      category: "mcp",
+      connector: { kind: "mcp", id: "github", label: "github" },
+    });
+  });
 });

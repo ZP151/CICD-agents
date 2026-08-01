@@ -53,6 +53,7 @@ export function showApprovalRequestTransition(
   prev: Bubble[],
   approval: ApprovalRequest,
   makeId: IdFactory,
+  turnId?: string,
 ): Bubble[] {
   const alreadyWaiting = prev.some(
     (bubble) =>
@@ -69,18 +70,22 @@ export function showApprovalRequestTransition(
       kind: "pending_confirm",
       pendingTool: approval.action.tool,
       pendingArgs: approval.action.args,
-      pendingDescription: approval.explanation || approval.action.description,
+      // The action is the only text that belongs in the approval card. The
+      // model's full response becomes the final conclusion after the Turn,
+      // rather than an accidental long-form plan inside Working.
+      pendingDescription: approval.action.description || approval.explanation,
       pendingNextHint: approval.action.nextHint,
       pendingWorkflow: approval.action.workflow,
       pendingReadiness: approval.action.readiness,
       pendingPreflight: approval.action.preflight,
       pendingStatus: "waiting",
       riskLevel: approval.riskLevel,
+      turnId,
       parts: [
         toolApprovalPartFromSnapshot({
           approvalId: approval.id,
           toolName: approval.action.tool,
-          description: approval.explanation || approval.action.description,
+          description: approval.action.description || approval.explanation,
           args: approval.action.args,
           riskLevel: approval.riskLevel,
         }),
@@ -154,6 +159,10 @@ export function upsertToolBubbleTransition(
     result?: unknown;
     open?: boolean;
     liveOutput?: string;
+    turnId?: string;
+    sequence?: number;
+    timestamp?: number;
+    connector?: Bubble["connector"];
   },
   makeId: IdFactory,
 ): Bubble[] {
@@ -181,10 +190,23 @@ export function upsertToolBubbleTransition(
         toolResult: options.result ?? snapshot.output,
         toolOpen: options.open ?? false,
         toolLiveOutput: options.liveOutput,
+        turnId: options.turnId,
+        turnSequence: options.sequence,
+        timestamp: options.timestamp,
+        connector: options.connector,
         parts: [nextPart],
       },
     ];
   }
+
+  const existing = prev[existingIndex]!;
+  if (
+    options.turnId &&
+    existing.turnId === options.turnId &&
+    typeof options.sequence === "number" &&
+    typeof existing.turnSequence === "number" &&
+    options.sequence < existing.turnSequence
+  ) return prev;
 
   return prev.map((bubble, index) => {
     if (index !== existingIndex) return bubble;
@@ -200,6 +222,10 @@ export function upsertToolBubbleTransition(
       toolResult: options.result ?? snapshot.output ?? bubble.toolResult,
       toolOpen: options.open ?? bubble.toolOpen,
       toolLiveOutput: options.liveOutput ?? bubble.toolLiveOutput,
+      turnId: options.turnId ?? bubble.turnId,
+      turnSequence: options.sequence ?? bubble.turnSequence,
+      timestamp: options.timestamp ?? bubble.timestamp,
+      connector: options.connector ?? bubble.connector,
       parts: upsertToolCallPart(bubble.parts, snapshot),
     };
   });

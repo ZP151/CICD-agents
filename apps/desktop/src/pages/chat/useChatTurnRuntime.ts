@@ -203,6 +203,7 @@ export function useChatTurnRuntime({
     cancelPendingAction,
     stopCurrentTurn,
   } = useChatRuntimeActions({
+    bubbles,
     busy,
     sessionId,
     repoPath,

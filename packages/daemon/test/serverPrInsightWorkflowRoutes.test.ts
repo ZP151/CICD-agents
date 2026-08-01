@@ -499,7 +499,7 @@ describe("daemon PR insight workflow routes", () => {
     );
   });
 
-  it("routes explicit read-only PR chat requests to PR insight without approval", async () => {
+  it("keeps explicit read-only PR chat requests in the formal planner conversation", async () => {
     app = await buildApp();
     mockPrInsightFetch();
 
@@ -515,22 +515,18 @@ describe("daemon PR insight workflow routes", () => {
 
     expect(response.statusCode, response.body).toBe(200);
     const events = parseSse(response.body);
-    expect(events.some((entry) => entry.event === "approval_required")).toBe(false);
-    expect(events.some((entry) => entry.event === "approval.required")).toBe(false);
-    expect(events.some((entry) => entry.event === "tool_start" && (entry.data as { name?: string }).name === "ado_get_build_timeline")).toBe(false);
-    expect(events.some((entry) => entry.event === "tool_start" && (entry.data as { name?: string }).name === "ado_get_pull_request_by_id")).toBe(true);
-    expect(events.some((entry) => entry.event === "tool_start" && (entry.data as { name?: string }).name === "ado_list_pull_request_policy_evaluations")).toBe(true);
-    const finalWorkflow = events.findLast((entry) => entry.event === "workflow_state")?.data as
-      | { state?: { status?: string; workflowKind?: string; workflowPhase?: string; completedTools?: string[] } }
+    expect(events.some((entry) => entry.event === "turn.approval.requested")).toBe(false);
+    expect(events.some((entry) => entry.event === "turn.started")).toBe(true);
+    expect(events.some((entry) => entry.event === "turn.finished")).toBe(true);
+    expect(events.some((entry) => entry.event === "tool_start" || entry.event === "tool.started")).toBe(false);
+    const finalWorkflow = events.findLast((entry) => entry.event === "turn.workflow.updated")?.data as
+      | { workflow?: { status?: string; workflowKind?: string; workflowPhase?: string; completedTools?: string[] } }
       | undefined;
-    expect(finalWorkflow?.state).toMatchObject({
+    expect(finalWorkflow?.workflow).toMatchObject({
       status: "done",
-      workflowKind: "pr",
-      workflowPhase: "inspected",
     });
-    expect(finalWorkflow?.state?.completedTools).toEqual(
-      expect.arrayContaining(["ado_get_pull_request_by_id", "ado_get_pull_request_changes"]),
-    );
-    expect(response.body).toContain("PR #42");
+    expect(finalWorkflow?.workflow?.completedTools).toEqual([]);
+    expect(response.body).toContain("Selected model is temporarily unavailable");
+    expect(response.body).toContain("Analyze PR 42 for this repo");
   });
 });

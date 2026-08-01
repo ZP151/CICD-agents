@@ -90,8 +90,28 @@ export async function saveSession(session: StoredSession, now: () => number): Pr
     }
   }
   const store = loadStoreSync();
+  // Planner persistence and SSE Timeline persistence are intentionally
+  // independent async paths. Preserve an already-written public Timeline
+  // when a slower legacy bubble snapshot is saved afterwards.
+  const existing = store[session.id];
+  if (existing?.timelineEvents?.length || session.timelineEvents?.length) {
+    session.timelineEvents = mergeTimelineEvents(existing?.timelineEvents, session.timelineEvents);
+  }
   store[session.id] = session;
   saveStoreSync(store);
+}
+
+function mergeTimelineEvents(
+  previous: StoredSession["timelineEvents"],
+  incoming: StoredSession["timelineEvents"],
+): NonNullable<StoredSession["timelineEvents"]> {
+  const unique = new Map<string, NonNullable<StoredSession["timelineEvents"]>[number]>();
+  for (const event of [...(previous ?? []), ...(incoming ?? [])]) {
+    unique.set(`${event.turnId}:${event.sequence}`, event);
+  }
+  return [...unique.values()]
+    .sort((left, right) => left.emittedAt - right.emittedAt || left.sequence - right.sequence)
+    .slice(-1_600);
 }
 
 export async function listRecentSessions(limit: number): Promise<ChatHistoryEntry[]> {

@@ -13,7 +13,7 @@ import type { ToolCallPartSnapshot } from "../../chatBubbles.js";
 import { reduceChatBubbles, type ChatBubbleAction } from "./chatBubbleReducer.js";
 import type { ApprovalRequest, Bubble, WorkflowEventState } from "./chat.types.js";
 import { uid } from "./chatStreamDispatcher.js";
-import { dispatchChatUiChunk } from "./chatUiChunkDispatcher.js";
+import { dispatchChatUiChunk, type ChatUiChunkCorrelation } from "./chatUiChunkDispatcher.js";
 
 interface AssistantVisibleStreamActions {
   appendAssistantDelta: (delta: string, textPartId?: string) => void;
@@ -43,7 +43,7 @@ export interface ChatBubbleRuntime {
     toolCallId?: string,
   ) => void;
   finaliseWithResponse: (cleanText: string, meta?: Bubble["meta"], streamedText?: string) => void;
-  handleUiChunk: (chunk?: ChatUiChunk) => void;
+  handleUiChunk: (chunk?: ChatUiChunk, correlation?: ChatUiChunkCorrelation) => void;
   mergeAssistantMetadata: (metadata: unknown) => void;
   resolveConfirm: (bubbleId: string, confirmed: boolean) => Promise<void>;
   showApprovalRequest: (approval: ApprovalRequest) => void;
@@ -55,6 +55,10 @@ export interface ChatBubbleRuntime {
       result?: unknown;
       open?: boolean;
       liveOutput?: string;
+      turnId?: string;
+      sequence?: number;
+      timestamp?: number;
+      connector?: Bubble["connector"];
     },
   ) => void;
 }
@@ -97,9 +101,9 @@ export function useChatBubbleRuntime({
     dispatchBubbleAction({ type: "finalise_response", cleanText, meta, streamedText });
   }, [dispatchBubbleAction, markIncomingContentScrollIntent]);
 
-  const showApprovalRequest = useCallback((approval: ApprovalRequest) => {
+  const showApprovalRequest = useCallback((approval: ApprovalRequest, turnId?: string) => {
     markIncomingContentScrollIntent();
-    dispatchBubbleAction({ type: "show_approval", approval });
+    dispatchBubbleAction({ type: "show_approval", approval, turnId });
   }, [dispatchBubbleAction, markIncomingContentScrollIntent]);
 
   const upsertToolBubble = useCallback((
@@ -132,7 +136,7 @@ export function useChatBubbleRuntime({
     dispatchBubbleAction({ type: "merge_assistant_metadata", metadata });
   }, [dispatchBubbleAction, markIncomingContentScrollIntent]);
 
-  const handleUiChunk = useCallback((chunk?: ChatUiChunk) => {
+  const handleUiChunk = useCallback((chunk?: ChatUiChunk, correlation?: ChatUiChunkCorrelation) => {
     dispatchChatUiChunk(chunk, {
       addErrorBubbleOnce,
       appendAssistantDelta,
@@ -146,12 +150,13 @@ export function useChatBubbleRuntime({
       setUiChunkStreamAvailable: (available) => {
         uiStreamAvailableRef.current = available;
       },
+      updateBubbles: setBubbles,
       setWorkflowState,
       showApprovalRequest,
       startAssistantTextPart,
       stopStreaming,
       upsertToolBubble,
-    });
+    }, correlation);
   }, [
     addErrorBubbleOnce,
     appendAssistantDelta,
@@ -159,6 +164,7 @@ export function useChatBubbleRuntime({
     cancelRef,
     mergeAssistantMetadata,
     setBusy,
+    setBubbles,
     setStatusText,
     setWorkflowState,
     showApprovalRequest,

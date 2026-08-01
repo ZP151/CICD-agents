@@ -123,6 +123,18 @@ export class LLMClient {
       : this.settings.azureOpenAiChatDeployment;
   }
 
+  /**
+   * Public action narration is latency-sensitive but must remain genuine
+   * model output. A separately deployed low-latency model can be selected
+   * without changing the main planner's tool and approval behaviour.
+   */
+  actionNarrativeModel(): string {
+    if (this.settings.llmProvider === "openai") {
+      return this.settings.openAiNarrativeModel || this.settings.openAiModel;
+    }
+    return this.settings.azureOpenAiNarrativeDeployment || this.settings.azureOpenAiChatDeployment;
+  }
+
   private embeddingModel(): string {
     return this.settings.llmProvider === "openai"
       ? this.settings.openAiEmbeddingModel
@@ -187,9 +199,10 @@ export class LLMClient {
     tools?: ChatCompletionTool[];
     temperature?: number;
     maxTokens?: number;
+    model?: string;
   }): AsyncGenerator<ChatStreamEvent, void, unknown> {
     const stream = await this.get().chat.completions.create({
-      model: this.chatModel(),
+      model: opts.model || this.chatModel(),
       messages: opts.messages,
       temperature: opts.temperature ?? 0.2,
       max_tokens: opts.maxTokens ?? 1024,

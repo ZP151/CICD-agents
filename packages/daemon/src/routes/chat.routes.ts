@@ -2,15 +2,14 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   LLMClient,
-  type ChatPlannerResult,
-  type ChatWorkflowState,
+  streamActionNarrative,
   type Settings,
 } from "@mergepilot/core";
 import { getChatIndexStatus, refreshChatIndex } from "@mergepilot/core/chatContext";
 import type { ChatSessionManager, InlineLlmConfig, InlineProjectLink } from "../chatSession.js";
 import type { ProjectLinkStoreAdapter } from "../projectLinkStore.js";
+import { createChatRuntimeSetup, type ChatRuntimeSetup } from "../chatRuntimeSetup.js";
 import { createChatSseWriter, isTerminalChatEvent } from "./chatSse.js";
-import type { ChatWorkflowActionPayload } from "./chat-workflow.routes.js";
 
 const MAX_CHAT_IMAGE_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 const CHAT_IMAGE_DATA_URL_PATTERN = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([a-zA-Z0-9+/=\s]+)$/;
@@ -20,10 +19,12 @@ const LlmConfigSchema = z
     llmProvider: z.enum(["azure", "openai"]).optional(),
     azureEndpoint: z.string().optional(),
     azureApiKey: z.string().optional(),
-    azureDeployment: z.string().optional(),
+  azureDeployment: z.string().optional(),
+  azureNarrativeDeployment: z.string().optional(),
     azureApiVersion: z.string().optional(),
     openaiApiKey: z.string().optional(),
-    openaiModel: z.string().optional(),
+  openaiModel: z.string().optional(),
+  openaiNarrativeModel: z.string().optional(),
   })
   .optional();
 
@@ -119,6 +120,11 @@ const ChatIndexSchema = z.object({
 });
 
 const SessionIdParam = z.object({ sessionId: z.string().min(1) });
+const ConfirmActionBodySchema = z.object({
+  turnId: z.string().min(1).optional(),
+  startedAt: z.number().finite().positive().optional(),
+  lastSequence: z.number().int().min(0).optional(),
+});
 const ChatSessionMetadataSchema = z
   .object({
     title: z.string().max(140).nullable().optional(),
@@ -133,23 +139,6 @@ interface ChatRouteDependencies {
   buildInlineLlmSettings: (override?: InlineLlmConfig) => Settings;
   envSourceLabel: () => string;
   projectLinkStore?: Pick<ProjectLinkStoreAdapter, "getProjectLinkForRequest">;
-  runWorkflowAction?: (payload: ChatWorkflowActionPayload) => Promise<unknown>;
-}
-
-interface WorkflowToolResult {
-  name: string;
-  command?: string;
-  ok?: boolean;
-  stdout?: string;
-  stderr?: string;
-  returncode?: number;
-}
-
-interface WorkflowActionResult {
-  summary?: string;
-  workflowState?: ChatWorkflowState;
-  tools?: WorkflowToolResult[];
-  artifacts?: ChatPlannerResult["artifacts"];
 }
 
 function inlineProjectLinkToIndexProjectLink(projectLink?: InlineProjectLink) {
@@ -204,147 +193,6 @@ function explainChatSseError(
   return message;
 }
 
-function readonlyWorkflowFromMessage(
-  message: string,
-  projectLink?: InlineProjectLink,
-): Pick<ChatWorkflowActionPayload, "action" | "pullRequestId" | "pipelineId"> | undefined {
-  const text = message.trim();
-  if (!text) return undefined;
-
-  const lower = text.toLowerCase();
-  const lowerWithoutNegativeClauses = lower.replace(/\bdo not\b[^.?!;]*/g, "");
-  const hasReadIntent =
-    /\b(analy[sz]e|inspect|review|summari[sz]e|check|explain|show|status|readiness|why|what'?s)\b/.test(
-      lower,
-    );
-  const hasExplicitReadOnly = /\bread[-\s]?only\b|do not (modify|write|request approval)/.test(
-    lower,
-  );
-  const hasWriteIntent =
-    /\b(trigger|rerun|queue|start|create|update|push|commit|stage|merge|approve|link)\b/.test(
-      lowerWithoutNegativeClauses,
-    ) && !hasExplicitReadOnly;
-  if ((!hasReadIntent && !hasExplicitReadOnly) || hasWriteIntent) return undefined;
-
-  const prMatch = text.match(/\b(?:pr|pull\s+request)\s*#?\s*(\d+)\b/i);
-  if (prMatch?.[1]) {
-    return {
-      action: "inspect_pr_insight",
-      pullRequestId: Number(prMatch[1]),
-    };
-  }
-
-  const localGitAction = readonlyLocalGitWorkflowFromMessage(lower);
-  if (localGitAction) return { action: localGitAction };
-
-  if (!projectLinkHasAdoMapping(projectLink)) return undefined;
-  const pipelineMentioned = /\b(pipeline|build|ci)\b/i.test(text);
-  if (!pipelineMentioned) return undefined;
-  const pipelineMatch = text.match(/\b(?:pipeline|build|ci)(?:\s*(?:#|id)?)?\s*(\d+)?\b/i);
-  const pipelineId = Number(pipelineMatch?.[1] ?? projectLink?.adoPipelineId ?? 0);
-  if (!Number.isFinite(pipelineId) || pipelineId <= 0) return undefined;
-  return {
-    action: "inspect_pipeline",
-    pipelineId,
-  };
-}
-
-function readonlyLocalGitWorkflowFromMessage(
-  lower: string,
-): ChatWorkflowActionPayload["action"] | undefined {
-  const mentionsStagedChanges =
-    /\b(what(?:'s| is)? (?:staged|in the index|will be committed)|staged changes|staged diff|cached diff|commit scope|what will be committed|what would be committed)\b/.test(
-      lower,
-    );
-  if (mentionsStagedChanges) return "inspect_staged_changes";
-
-  const mentionsCurrentBranch =
-    /\b(what'?s on this branch|current branch|branch status|branch state|where am i|working tree status)\b/.test(
-      lower,
-    );
-  if (mentionsCurrentBranch) return "refresh_branch";
-
-  const mentionsRemoteTarget =
-    /\b(where will (?:this|my|the)?\s*push go|push target|remote target|show remote|configured remotes|where would (?:this|my|the)?\s*push go)\b/.test(
-      lower,
-    );
-  if (mentionsRemoteTarget) return "inspect_remote_target";
-
-  const mentionsCurrentChanges =
-    /\b(review my changes|review changes|what changed|current changes|inspect diff|working tree changes|workspace changes|unstaged changes)\b/.test(
-      lower,
-    );
-  if (mentionsCurrentChanges) return "inspect_changes";
-
-  return undefined;
-}
-
-function projectLinkHasAdoMapping(projectLink?: InlineProjectLink): boolean {
-  return Boolean(
-    projectLink?.adoOrgUrl?.trim() &&
-    projectLink.adoProject?.trim() &&
-    projectLink.adoRepoName?.trim(),
-  );
-}
-
-function workflowPlannerResult(summary: string, result: WorkflowActionResult): ChatPlannerResult {
-  return {
-    response: summary,
-    riskLevel: "low",
-    actionsTaken: result.workflowState?.completedTools ?? [],
-    suggestions: [],
-    sources: [],
-    artifacts: result.artifacts,
-    toolCallsMade: (result.tools ?? []).map((tool) => ({
-      name: tool.name,
-      args: { command: tool.command ?? tool.name },
-      ok: tool.ok !== false,
-    })),
-    usedLlm: false,
-  };
-}
-
-function workflowToolSummary(tool: WorkflowToolResult): string {
-  if (tool.returncode !== undefined)
-    return tool.returncode === 0 ? "Success" : `Exit code ${tool.returncode}`;
-  return tool.ok === false ? "Failed" : "Success";
-}
-
-function directWorkflowRunningState(
-  directWorkflow: Pick<ChatWorkflowActionPayload, "action" | "pullRequestId" | "pipelineId">,
-): ChatWorkflowState {
-  if (directWorkflow.action === "inspect_pr_insight") {
-    return {
-      status: "running",
-      currentStep: `Inspecting PR #${directWorkflow.pullRequestId}`,
-      completedTools: [],
-      workflowKind: "pr",
-      workflowPhase: "inspecting",
-    };
-  }
-  if (directWorkflow.action === "inspect_pipeline") {
-    return {
-      status: "running",
-      currentStep: `Inspecting pipeline #${directWorkflow.pipelineId}`,
-      completedTools: [],
-      workflowKind: "ci",
-      workflowPhase: "pipeline_inspecting",
-    };
-  }
-  return {
-    status: "running",
-    currentStep:
-      directWorkflow.action === "refresh_branch"
-        ? "Inspecting current branch"
-        : directWorkflow.action === "inspect_staged_changes"
-          ? "Inspecting staged changes"
-          : "Inspecting current changes",
-    completedTools: [],
-    workflowKind: "git",
-    workflowPhase: directWorkflow.action,
-  };
-}
-
 export function registerChatRoutes(
   app: FastifyInstance,
   {
@@ -353,7 +201,6 @@ export function registerChatRoutes(
     buildInlineLlmSettings,
     envSourceLabel,
     projectLinkStore,
-    runWorkflowAction,
   }: ChatRouteDependencies,
 ): void {
   app.post("/chat/index-status", async (req, reply) => {
@@ -392,65 +239,60 @@ export function registerChatRoutes(
     const projectLinkId = projectLinkIdFromChatPayload(parsed.data);
     const inlineProjectLink = inlineProjectLinkFromPayload(parsed.data);
     const sessionId = existingId ?? chatSessions.createSession(repoPath, projectLinkId);
-    const sseWriter = createChatSseWriter(reply, sessionId);
     const turnId = `turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const sseWriter = createChatSseWriter(reply, sessionId, (event) => chatSessions.appendTurnTimelineEvent(sessionId, event));
+    // Confirm the Turn immediately. The first visible text is a real ordinary
+    // model stream; it is never a fixed progress label or a pseudo-tool call.
     sseWriter.startTurn(turnId);
-    sseWriter.sendChatEvent({ type: "progress", message: "Preparing conversation" });
-    const projectLink = await resolveProjectLinkForChat(
+    let active = true;
+    let openingNarrative = "";
+    // A slow provider is surfaced only as a transport diagnostic after a
+    // meaningful delay. It is never substituted with canned agent prose.
+    const waitingForModelTimer = setTimeout(() => {
+      if (active && !openingNarrative) sseWriter.sendWaitingForModel();
+    }, 5_000);
+    // One client belongs to one Turn. Unlike the previous implementation,
+    // this does not race two independent model conversations.
+    const turnLlm = new LLMClient(buildInlineLlmSettings(llmConfig));
+    const projectLinkPromise = inlineProjectLink
+      ? Promise.resolve(inlineProjectLink)
+      : resolveProjectLinkForChat(projectLinkId, inlineProjectLink, projectLinkStore);
+    // Tool and connector initialisation is independent from the opening
+    // narrative. Start it in the background now, but do not await it before
+    // the first model token. This is the only prewarm work allowed ahead of
+    // the public action narrative; context/history still wait for the normal
+    // bounded continuation path below.
+    const prewarmedRuntime = projectLinkPromise.then((projectLink) => createChatRuntimeSetup({
+      repoPath: (projectLink?.repoPath?.trim() || repoPath.trim()) || ".",
+      llmConfig,
+      inlineProjectLink: projectLink,
       projectLinkId,
-      inlineProjectLink,
-      projectLinkStore,
-    );
-    const directWorkflow = runWorkflowAction
-      ? readonlyWorkflowFromMessage(message, projectLink)
-      : undefined;
-
+      chatMessage: message,
+      llm: turnLlm,
+    }));
+    let prewarmedRuntimeClaimed = false;
+    const disposeUnusedPrewarmedRuntime = (): void => {
+      if (prewarmedRuntimeClaimed) return;
+      void prewarmedRuntime.then((runtime: ChatRuntimeSetup) => runtime.close()).catch(() => undefined);
+    };
     return new Promise<void>((resolve) => {
       (async () => {
         try {
-          if (directWorkflow) {
-            const workflowRunner = runWorkflowAction;
-            if (!workflowRunner) return;
-            const storedMessage = imageAttachments.length
-              ? `${message}\n\nAttached images: ${imageAttachments.map((item) => item.name).join(", ")}`.trim()
-              : message;
-            await chatSessions.appendUserTurn(sessionId, storedMessage, repoPath);
-            sseWriter.sendChatEvent({
-              type: "workflow_state",
-              state: directWorkflowRunningState(directWorkflow),
-            });
-            const result = (await workflowRunner({
-              ...directWorkflow,
-              repoPath,
-              sessionId,
-              projectLinkId,
-              projectLink,
-            } as ChatWorkflowActionPayload)) as WorkflowActionResult;
-            for (const tool of result.tools ?? []) {
-              const args = { command: tool.command ?? tool.name };
-              sseWriter.sendChatEvent({ type: "tool_start", name: tool.name, args });
-              sseWriter.sendChatEvent({
-                type: "tool_end",
-                name: tool.name,
-                ok: tool.ok !== false,
-                summary: workflowToolSummary(tool),
-                result: tool,
-              });
-            }
-            const summary = result.summary?.trim() || "Workflow inspection completed.";
-            sseWriter.sendChatEvent({ type: "assistant_delta", delta: summary });
-            if (result.workflowState) {
-              sseWriter.sendChatEvent({ type: "workflow_state", state: result.workflowState });
-            }
-            sseWriter.sendChatEvent({
-              type: "done",
-              result: workflowPlannerResult(summary, result),
-            });
-            sseWriter.end();
-            resolve();
-            return;
+          // This call has only the user's request. Project Link, history and
+          // context never gate it; tool setup is merely prewarmed in parallel.
+          for await (const event of streamActionNarrative(turnLlm, {
+            request: message,
+            blockId: "opening",
+            onText: (text) => { openingNarrative = text; },
+          })) {
+            if (!active) return;
+            sseWriter.sendChatEvent(event);
           }
-
+          clearTimeout(waitingForModelTimer);
+          // Desktop sends the selected Project Link inline with the request.
+          // The fallback remains for older clients that send only an id.
+          const projectLink = inlineProjectLink ?? await projectLinkPromise;
+          prewarmedRuntimeClaimed = true;
           for await (const event of chatSessions.run(
             sessionId,
             message,
@@ -459,27 +301,48 @@ export function registerChatRoutes(
             llmConfig,
             projectLink,
             imageAttachments,
+            turnLlm,
+            openingNarrative || undefined,
+            prewarmedRuntime,
           )) {
             sseWriter.sendChatEvent(event);
             if (isTerminalChatEvent(event)) {
+              active = false;
               sseWriter.end();
               resolve();
               return;
             }
           }
         } catch (err) {
-          sseWriter.send("error", {
+          clearTimeout(waitingForModelTimer);
+          active = false;
+          sseWriter.sendChatEvent({
             type: "error",
             message: explainChatSseError(err, settings, envSourceLabel),
           });
         }
+        disposeUnusedPrewarmedRuntime();
+        active = false;
+        clearTimeout(waitingForModelTimer);
         sseWriter.end();
         resolve();
       })();
 
-      req.raw.on("close", () => {
+      // `IncomingMessage.close` also fires after a normal POST body has been
+      // consumed. Treating it as a disconnect cancelled the SSE Turn before
+      // its first model delta could be written. Only an aborted request or an
+      // unfinished response closing is a real client disconnect.
+      const cancelDisconnectedTurn = () => {
+        if (!active) return;
+        active = false;
+        clearTimeout(waitingForModelTimer);
         chatSessions.cancel(sessionId);
+        disposeUnusedPrewarmedRuntime();
         resolve();
+      };
+      req.raw.once("aborted", cancelDisconnectedTurn);
+      reply.raw.once("close", () => {
+        if (!reply.raw.writableEnded) cancelDisconnectedTurn();
       });
     });
   });
@@ -495,23 +358,39 @@ export function registerChatRoutes(
   app.post("/chat/:sessionId/confirm-action", async (req, reply) => {
     const parsed = SessionIdParam.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send({ error: "invalid sessionId" });
+    const body = ConfirmActionBodySchema.safeParse(req.body ?? {});
+    if (!body.success) return reply.code(400).send({ error: "invalid confirmation continuation" });
 
     const sessionId = parsed.data.sessionId;
-    const sseWriter = createChatSseWriter(reply);
+    const sseWriter = createChatSseWriter(reply, sessionId, (event) => chatSessions.appendTurnTimelineEvent(sessionId, event));
+    if (body.data.turnId) {
+      sseWriter.resumeTurn(body.data.turnId, {
+        startedAt: body.data.startedAt,
+        lastSequence: body.data.lastSequence,
+        statement: "Approval received; executing the approved action.",
+      });
+    } else {
+      // API callers that created a workflow outside chat have no prior Turn
+      // to resume. Give the approval execution its own canonical envelope;
+      // normal desktop approval continuations always use the original turnId.
+      sseWriter.startTurn(`turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+    }
 
+    let continuationActive = true;
     return new Promise<void>((resolve) => {
       (async () => {
         try {
           for await (const event of chatSessions.confirmAction(sessionId)) {
             sseWriter.sendChatEvent(event);
             if (isTerminalChatEvent(event)) {
+              continuationActive = false;
               sseWriter.end();
               resolve();
               return;
             }
           }
         } catch (err) {
-          sseWriter.send("error", {
+          sseWriter.sendChatEvent({
             type: "error",
             message: explainChatSseError(err, settings, envSourceLabel),
           });
@@ -520,9 +399,68 @@ export function registerChatRoutes(
         resolve();
       })();
 
-      req.raw.on("close", () => {
+      const cancelDisconnectedContinuation = () => {
+        if (!continuationActive) return;
+        continuationActive = false;
         chatSessions.cancel(sessionId);
         resolve();
+      };
+      req.raw.once("aborted", cancelDisconnectedContinuation);
+      reply.raw.once("close", () => {
+        if (!reply.raw.writableEnded) cancelDisconnectedContinuation();
+      });
+    });
+  });
+
+  app.post("/chat/:sessionId/decline-action", async (req, reply) => {
+    const parsed = SessionIdParam.safeParse(req.params);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid sessionId" });
+    const body = ConfirmActionBodySchema.safeParse(req.body ?? {});
+    if (!body.success || !body.data.turnId || !body.data.startedAt) {
+      return reply.code(400).send({ error: "a Turn continuation is required to decline an action" });
+    }
+
+    const sessionId = parsed.data.sessionId;
+    const sseWriter = createChatSseWriter(reply, sessionId, (event) => chatSessions.appendTurnTimelineEvent(sessionId, event));
+    sseWriter.resumeTurn(body.data.turnId, {
+      startedAt: body.data.startedAt,
+      lastSequence: body.data.lastSequence,
+      statement: "Approval declined; closing this turn without running the action.",
+    });
+
+    let continuationActive = true;
+    return new Promise<void>((resolve) => {
+      (async () => {
+        try {
+          for await (const event of chatSessions.declineAction(sessionId)) {
+            sseWriter.sendChatEvent(event);
+            if (isTerminalChatEvent(event)) {
+              continuationActive = false;
+              sseWriter.end();
+              resolve();
+              return;
+            }
+          }
+        } catch (err) {
+          sseWriter.sendChatEvent({
+            type: "error",
+            message: explainChatSseError(err, settings, envSourceLabel),
+          });
+        }
+        continuationActive = false;
+        sseWriter.end();
+        resolve();
+      })();
+
+      const cancelDisconnectedContinuation = () => {
+        if (!continuationActive) return;
+        continuationActive = false;
+        chatSessions.cancel(sessionId);
+        resolve();
+      };
+      req.raw.once("aborted", cancelDisconnectedContinuation);
+      reply.raw.once("close", () => {
+        if (!reply.raw.writableEnded) cancelDisconnectedContinuation();
       });
     });
   });
@@ -557,7 +495,12 @@ export function registerChatRoutes(
   app.get("/chat/:sessionId/messages", async (req, reply) => {
     const parsed = SessionIdParam.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send({ error: "invalid sessionId" });
-    return chatSessions.getBubbles(parsed.data.sessionId);
+    const sessionId = parsed.data.sessionId;
+    const [bubbles, timelineEvents] = await Promise.all([
+      chatSessions.getBubbles(sessionId),
+      chatSessions.getTurnTimelineEvents(sessionId),
+    ]);
+    return { bubbles, timelineEvents };
   });
 
   app.get("/chat/:sessionId/state", async (req, reply) => {

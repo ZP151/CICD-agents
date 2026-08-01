@@ -23,6 +23,10 @@ Redesign the Chat middle panel so Git and Azure DevOps workflows read as a conti
 | Approval command preview | Complete | Approval cards now show the concrete command such as `git add -A` or `git add -- <paths>` instead of a raw tool id in the header. |
 | Completed group manual expansion | Complete | Completed groups still auto-collapse once, but manual command detail expansion no longer re-collapses the whole group. |
 | Top-level execution collapse | Complete | Completed `Ran ...` rows stay folded under the top-level `Worked N commands` header until the user expands it. |
+| Turn activity feedback | Complete | A local optimistic activity marker appears immediately after send, then the daemon `turn.started` event takes ownership so the user sees work begin before repo context/model output returns. |
+| Command group collection | Complete | Execution timeline now presents a command-group collection header, plan summary, MCP-ready connector framing, grouped command evidence, per-group summaries, and a short reflection before the final assistant conclusion. |
+| Truthful expand affordance | Complete | `Thinking/Worked for ...` shows a disclosure arrow only when activity details exist; otherwise it is plain status text. |
+| Copy response affordance | Complete | Assistant copy is icon-only and switches to a check icon after successful copy while preserving tooltip and aria labels. |
 | Turn render ordering | Complete | A user turn now renders execution records before assistant summaries and pending approvals, regardless of streaming/tool event arrival order. |
 | Review-only planner scope | Complete | `review my changes` is treated as a read-only review intent and cannot produce `git_add`, `git_commit`, or `git_push` approvals unless the current user message asks for them. |
 | Commit-message draft chips | Complete | `Draft commit message` follow-ups now route through a read-only `draft_commit_message` workflow action instead of filling the composer with a prompt. |
@@ -59,6 +63,9 @@ Redesign the Chat middle panel so Git and Azure DevOps workflows read as a conti
 | 12. Preserve manual execution expansion | Complete | `ExecutionTimeline.tsx`, `ExecutionCommandRow.tsx` | Clicking command details no longer causes completed execution groups to collapse again. |
 | 13. Stabilize per-turn render order | Complete | `chatRenderItems.ts` | Tool records render before assistant summaries and pending approvals inside each user turn. |
 | 14. Fold completed execution into top-level header | Complete | `ExecutionTimeline.tsx` | Completed transcripts initially show only `Worked N commands`; `Ran ...` rows are hidden until expansion. |
+| 14a. Add immediate turn activity and truthful disclosure | Complete | `chatTurnActivity.ts`, `chatStreamDispatcher.ts`, `chatUiChunkDispatcher.ts`, `useChatRuntime.ts`, `ChatMessageList.tsx` | The UI inserts an optimistic activity row within the send action, merges it with server turn events, records progress/workflow details, and only shows the disclosure chevron when there are details. |
+| 14b. Promote execution transcript to command-group collection | Complete | `ExecutionTimeline.tsx`, `executionTimelineModel.ts`, `ExecutionTimeline.test.tsx` | The execution area has a collection header, plan summary, MCP-ready connector framing, grouped command sets, per-group summaries/reflections, and completed auto-collapse before final answer reading. |
+| 14c. Simplify assistant response copy control | Complete | `ChatMessageList.tsx` | Copy uses an icon-only button and changes to a check icon after success. |
 | 15. Remove plain metadata suggestion lines | Complete | `ChatAssistantMetaPanel.tsx` | Assistant metadata no longer renders plain suggestions as `›` rows. |
 | 16. Guard review-only planner intent | Complete | `chatPlannerPrompt.ts`, `chatPlannerGuards.ts`, `chatPlanner.ts` | Review-only prompts summarize changes without proposing stage/commit/push approvals. |
 | 17. Route commit-message drafts through workflow actions | Complete | `suggestionReplyWorkflowSuggestions.ts`, `workspaceWorkflow.ts` | `Draft commit message` is read-only, returns a suggested message, and does not create approval. |
@@ -86,6 +93,11 @@ Redesign the Chat middle panel so Git and Azure DevOps workflows read as a conti
 - Keep approval cards compact; avoid repeating the assistant's formatted explanation inside the card.
 - Approval cards should show the actual command being approved, not just the internal tool id.
 - Assistant conclusions should not include a second permission question when an approval card is present.
+- Turn-level status is not the command-group collection. The turn status shows elapsed activity and optional progress details; command groups own tool/MCP execution evidence.
+- Do not show a disclosure arrow unless a control actually expands useful details.
+- Command groups are the future extension point for Git, Azure DevOps, tests, and other MCP/tool connectors; each group should carry a plan summary, command evidence, and a short post-step reflection.
+- Once command execution is complete, collapse the command-group collection and let the final assistant conclusion become the primary readable output.
+- Copy controls should stay icon-only in transcript chrome; state feedback should change icon/tone instead of adding button text.
 - Per-turn rendering should not depend on whether assistant streaming or tool events arrived first.
 - Plain metadata suggestions are not transcript content; they should not render as `›` action lines.
 - The current user message controls write scope. A review-only prompt should not inherit older stage/commit/push intent from conversation history.
@@ -103,3 +115,11 @@ Redesign the Chat middle panel so Git and Azure DevOps workflows read as a conti
 - PR planning should inspect readiness first and keep push/PR creation behind explicit approval cards.
 - PR planning follow-ups should be derived from inspected state, not generic PR readiness wording.
 - Do not modify Git or Azure DevOps execution behavior in this phase.
+
+## Recent Verification
+
+```powershell
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/chatTurnActivity.test.ts src/pages/chat/chatStreamDispatcher.test.ts src/pages/chat/chatUiChunkDispatcher.test.ts
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop test -- src/pages/chat/layout/ChatMessageList.test.tsx src/components/conversation/ExecutionTimeline.test.tsx
+.\scripts\windows\pnpm-project.ps1 --filter @mergepilot/desktop typecheck
+```

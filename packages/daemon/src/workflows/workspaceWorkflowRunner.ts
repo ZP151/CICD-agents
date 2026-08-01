@@ -627,7 +627,11 @@ function architectureContextSummary(inspection: ArchitectureContextInspection): 
   const lines: string[] = [
     "Architecture context prepared.",
   ];
-  if (inspection.repoSummary) lines.push(`- ${inspection.repoSummary}`);
+  if (inspection.repoSummary) {
+    // `repoSummary` is model-facing retrieval context and can contain source
+    // excerpts. It must not be surfaced as a workflow summary.
+    lines.push("- Repository context is ready for focused follow-up questions.");
+  }
   if (
     inspection.projectLink?.targetBranch
     || inspection.projectLink?.buildCommand
@@ -640,26 +644,15 @@ function architectureContextSummary(inspection: ArchitectureContextInspection): 
     if (inspection.projectLink.testCommand) lines.push(`- Test command: ${inspection.projectLink.testCommand}`);
     if (inspection.projectLink.pipelineName) lines.push(`- Pipeline: ${inspection.projectLink.pipelineName}`);
   }
-  if (inspection.projectStructure.length > 0) {
-    lines.push("", "Project structure signals:");
-    lines.push(...inspection.projectStructure.slice(0, 6).map((item) => `- ${item.path} (${item.kind}): ${item.reason}`));
-  }
-  if (inspection.relevantChunks.length > 0) {
-    lines.push("", "Relevant code and docs:");
-    lines.push(...inspection.relevantChunks.slice(0, 6).map((chunk) =>
-      `- ${chunk.path}:${chunk.startLine}-${chunk.endLine} (${chunk.reason})`,
-    ));
+  if (inspection.projectStructure.length > 0 || inspection.relevantChunks.length > 0) {
+    lines.push(
+      `- Located ${inspection.projectStructure.length} project structure signal${inspection.projectStructure.length === 1 ? "" : "s"} and ${inspection.relevantChunks.length} relevant source reference${inspection.relevantChunks.length === 1 ? "" : "s"}.`,
+    );
   }
   if (inspection.sources.length > 0) {
-    lines.push("", "Inspectable sources:");
-    lines.push(...inspection.sources.slice(0, 8).map((source) => {
-      if (source.type === "source_document") {
-        return `- ${source.line ? `${source.file}:${source.line}` : source.file ?? source.title}`;
-      }
-      return `- ${source.domain ? `${source.domain}: ` : ""}${source.title}`;
-    }));
+    lines.push(`- ${inspection.sources.length} source reference${inspection.sources.length === 1 ? "" : "s"} available for follow-up.`);
   }
-  lines.push("", "Next: ask a focused question about a listed source to inspect its line-level evidence.");
+  lines.push("", "Next: ask a focused question and MergePilot will inspect only the evidence needed for that question.");
   return lines.join("\n");
 }
 

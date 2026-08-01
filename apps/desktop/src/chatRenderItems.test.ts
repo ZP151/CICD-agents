@@ -6,7 +6,7 @@ interface TestBubble extends ChatRenderBubbleLike {
 }
 
 describe("groupChatRenderItems", () => {
-  it("renders each user turn as execution with attached approval, then assistant summary", () => {
+  it("keeps an assistant note before the execution it preceded", () => {
     const items = groupChatRenderItems<TestBubble>([
       { id: "u1", kind: "user" },
       { id: "m1", kind: "assistant" },
@@ -17,15 +17,15 @@ describe("groupChatRenderItems", () => {
 
     expect(items).toHaveLength(3);
     expect(items[0]).toMatchObject({ kind: "bubble", bubble: { id: "u1" } });
-    expect(items[1]).toMatchObject({
+    expect(items[1]).toMatchObject({ kind: "bubble", bubble: { id: "m1" } });
+    expect(items[2]).toMatchObject({
       kind: "tool-group",
       tools: [{ id: "t1" }, { id: "t2" }],
       approval: { id: "a1" },
     });
-    expect(items[2]).toMatchObject({ kind: "bubble", bubble: { id: "m1" } });
   });
 
-  it("keeps turn boundaries when sorting tool records before summaries", () => {
+  it("keeps turn boundaries without sorting tools ahead of summaries", () => {
     const items = groupChatRenderItems<TestBubble>([
       { id: "u1", kind: "user" },
       { id: "m1", kind: "assistant" },
@@ -37,8 +37,8 @@ describe("groupChatRenderItems", () => {
 
     expect(items).toHaveLength(6);
     expect(items[0]).toMatchObject({ kind: "bubble", bubble: { id: "u1" } });
-    expect(items[1]).toMatchObject({ kind: "tool-group", tools: [{ id: "t1" }] });
-    expect(items[2]).toMatchObject({ kind: "bubble", bubble: { id: "m1" } });
+    expect(items[1]).toMatchObject({ kind: "bubble", bubble: { id: "m1" } });
+    expect(items[2]).toMatchObject({ kind: "tool-group", tools: [{ id: "t1" }] });
     expect(items[3]).toMatchObject({ kind: "bubble", bubble: { id: "u2" } });
     expect(items[4]).toMatchObject({ kind: "bubble", bubble: { id: "m2" } });
     expect(items[5]).toMatchObject({ kind: "bubble", bubble: { id: "a1" } });
@@ -53,5 +53,46 @@ describe("groupChatRenderItems", () => {
 
     expect(items).toHaveLength(3);
     expect(items[2]).toMatchObject({ kind: "bubble", bubble: { id: "a1" } });
+  });
+
+
+  it("nests a same-turn approval beneath its transcript instead of emitting a sibling card", () => {
+    const items = groupChatRenderItems<TestBubble>([
+      { id: "turn", kind: "system", turnId: "turn-1", turnTranscript: {} },
+      { id: "approval", kind: "pending_confirm", turnId: "turn-1" },
+    ]);
+
+    expect(items).toEqual([{
+      kind: "transcript",
+      transcript: expect.objectContaining({ id: "turn" }),
+      approval: expect.objectContaining({ id: "approval" }),
+      key: "turn",
+    }]);
+  });
+
+  it("suppresses legacy tool bubbles when their canonical transcript owns the Turn", () => {
+    const items = groupChatRenderItems<TestBubble>([
+      { id: "turn", kind: "system", turnId: "turn-1", turnTranscript: {} },
+      { id: "legacy-tool", kind: "tool", turnId: "turn-1" },
+    ]);
+
+    expect(items).toEqual([{
+      kind: "transcript",
+      transcript: expect.objectContaining({ id: "turn" }),
+      key: "turn",
+    }]);
+  });
+
+  it("suppresses an uncorrelated legacy tool immediately after a canonical transcript", () => {
+    const items = groupChatRenderItems<TestBubble>([
+      { id: "turn", kind: "system", turnId: "turn-1", turnTranscript: {} },
+      { id: "legacy-tool", kind: "tool" },
+      { id: "final", kind: "assistant" },
+    ]);
+
+    expect(items).toMatchObject([
+      { kind: "transcript", transcript: { id: "turn" } },
+      { kind: "bubble", bubble: { id: "final" } },
+    ]);
   });
 });

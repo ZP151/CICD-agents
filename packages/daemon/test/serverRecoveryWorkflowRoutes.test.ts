@@ -175,16 +175,15 @@ describe("daemon recovery workflow routes", () => {
     });
     expect(confirmed.statusCode, confirmed.body).toBe(200);
     const events = parseSse(confirmed.body);
-    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
-      | { state?: { status?: string; workflowKind?: string; workflowPhase?: string } }
+    const workflowEvent = events.findLast((entry) => entry.event === "turn.workflow.updated")?.data as
+      | { workflow?: { status?: string; workflowKind?: string; workflowPhase?: string } }
       | undefined;
-    const done = events.find((entry) => entry.event === "done")?.data as
-      | { result?: { usedLlm?: boolean; response?: string } }
+    const done = events.find((entry) => entry.event === "turn.final.completed")?.data as
+      | { finalText?: string }
       | undefined;
-    expect(workflowEvent?.state?.workflowKind).toBe("git");
-    expect(workflowEvent?.state?.workflowPhase).toBe("rebase_aborted");
-    expect(done?.result?.usedLlm).toBe(false);
-    expect(done?.result?.response).toContain("rebase was aborted");
+    expect(workflowEvent?.workflow?.workflowKind).toBe("git");
+    expect(workflowEvent?.workflow?.workflowPhase).toBe("rebase_aborted");
+    expect(done?.finalText).toContain("rebase was aborted");
   });
 
   it("creates and completes a structured merge abort recovery approval", async () => {
@@ -228,16 +227,15 @@ describe("daemon recovery workflow routes", () => {
     });
     expect(confirmed.statusCode, confirmed.body).toBe(200);
     const events = parseSse(confirmed.body);
-    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
-      | { state?: { status?: string; workflowKind?: string; workflowPhase?: string } }
+    const workflowEvent = events.findLast((entry) => entry.event === "turn.workflow.updated")?.data as
+      | { workflow?: { status?: string; workflowKind?: string; workflowPhase?: string } }
       | undefined;
-    const done = events.find((entry) => entry.event === "done")?.data as
-      | { result?: { usedLlm?: boolean; response?: string } }
+    const done = events.find((entry) => entry.event === "turn.final.completed")?.data as
+      | { finalText?: string }
       | undefined;
-    expect(workflowEvent?.state?.workflowKind).toBe("git");
-    expect(workflowEvent?.state?.workflowPhase).toBe("merge_aborted");
-    expect(done?.result?.usedLlm).toBe(false);
-    expect(done?.result?.response).toContain("merge was aborted");
+    expect(workflowEvent?.workflow?.workflowKind).toBe("git");
+    expect(workflowEvent?.workflow?.workflowPhase).toBe("merge_aborted");
+    expect(done?.finalText).toContain("merge was aborted");
   });
 
   it("creates and completes a selected conflict-file staging approval", async () => {
@@ -300,16 +298,15 @@ describe("daemon recovery workflow routes", () => {
     });
     expect(confirmed.statusCode, confirmed.body).toBe(200);
     const events = parseSse(confirmed.body);
-    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
-      | { state?: { status?: string; workflowKind?: string; workflowPhase?: string } }
+    const workflowEvent = events.findLast((entry) => entry.event === "turn.workflow.updated")?.data as
+      | { workflow?: { status?: string; workflowKind?: string; workflowPhase?: string } }
       | undefined;
-    const done = events.find((entry) => entry.event === "done")?.data as
-      | { result?: { usedLlm?: boolean; response?: string } }
+    const done = events.find((entry) => entry.event === "turn.final.completed")?.data as
+      | { finalText?: string }
       | undefined;
-    expect(workflowEvent?.state?.workflowKind).toBe("git");
-    expect(workflowEvent?.state?.workflowPhase).toBe("merge_conflicts_staged");
-    expect(done?.result?.usedLlm).toBe(false);
-    expect(done?.result?.response).toContain("conflict file");
+    expect(workflowEvent?.workflow?.workflowKind).toBe("git");
+    expect(workflowEvent?.workflow?.workflowPhase).toBe("merge_conflicts_staged");
+    expect(done?.finalText).toContain("conflict file");
     expect(git(["status", "--porcelain=v1"]).stdout).toContain("M  app.config");
   });
 
@@ -345,19 +342,17 @@ describe("daemon recovery workflow routes", () => {
     });
     expect(confirmed.statusCode, confirmed.body).toBe(200);
     const events = parseSse(confirmed.body);
-    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
-      | { state?: { status?: string; workflowKind?: string; workflowPhase?: string; currentStep?: string } }
+    const workflowEvent = events.findLast((entry) => entry.event === "turn.workflow.updated")?.data as
+      | { workflow?: { status?: string; workflowKind?: string; workflowPhase?: string; currentStep?: string } }
       | undefined;
-    const done = events.find((entry) => entry.event === "done")?.data as
-      | { result?: { usedLlm?: boolean; response?: string; toolCallsMade?: Array<{ ok?: boolean }> } }
+    const done = events.find((entry) => entry.event === "turn.final.completed")?.data as
+      | { finalText?: string }
       | undefined;
-    expect(workflowEvent?.state?.status).toBe("blocked");
-    expect(workflowEvent?.state?.workflowKind).toBe("git");
-    expect(workflowEvent?.state?.workflowPhase).toBe("rebase_conflict");
-    expect(workflowEvent?.state?.currentStep).toContain("unresolved conflicts");
-    expect(done?.result?.usedLlm).toBe(false);
-    expect(done?.result?.response).toContain("unresolved conflicts");
-    expect(done?.result?.toolCallsMade?.[0]?.ok).toBe(false);
+    expect(workflowEvent?.workflow?.status).toBe("blocked");
+    expect(workflowEvent?.workflow?.workflowKind).toBe("git");
+    expect(workflowEvent?.workflow?.workflowPhase).toBe("rebase_conflict");
+    expect(workflowEvent?.workflow?.currentStep).toContain("unresolved conflicts");
+    expect(done?.finalText).toContain("unresolved conflicts");
     expect(git(["status", "--porcelain=v1"]).stdout).toContain("UU app.config");
     git(["rebase", "--abort"]);
   });

@@ -2,8 +2,10 @@ import crypto from "node:crypto";
 import {
   type ChatEvent,
   type ChatImageAttachment,
+  type LLMClient,
   type ChatWorkflowState,
   type PendingToolAction,
+  type TurnTimelineEvent,
 } from "@mergepilot/core";
 import type { InlineLlmConfig } from "./llmSettings.js";
 import {
@@ -22,6 +24,13 @@ import { ActiveChatSessions } from "./chatActiveSessions.js";
 import { createStoredApprovalProposal } from "./chatApprovalProposals.js";
 import { runConfirmedChatAction } from "./chatConfirmActionRun.js";
 import { runChatSessionTurn } from "./chatSessionRun.js";
+import type { ChatRuntimeSetup } from "./chatRuntimeSetup.js";
+import {
+  approvalIdFor,
+  buildWorkflowState,
+  clearStoredApprovalProposal,
+  storedApprovalProposal,
+} from "./chatWorkflowState.js";
 import {
   appendBubble,
   appendMessage,
@@ -85,6 +94,10 @@ export class ChatSessionManager {
     return getBubbles(sessionId);
   }
 
+  async getTurnTimelineEvents(sessionId: string): Promise<TurnTimelineEvent[]> {
+    return (await loadSession(sessionId))?.timelineEvents ?? [];
+  }
+
   async getWorkflowState(sessionId: string): Promise<ChatWorkflowState | undefined> {
     return getWorkflowState(sessionId);
   }
@@ -120,6 +133,25 @@ export class ChatSessionManager {
 
   async appendBubble(sessionId: string, bubble: StoredBubble): Promise<void> {
     return appendBubble(sessionId, bubble);
+  }
+
+  async appendTurnTimelineEvent(sessionId: string, event: TurnTimelineEvent): Promise<void> {
+    const session = await loadSession(sessionId);
+    if (!session) return;
+    const events = session.timelineEvents ?? [];
+    const existing = events.findIndex((candidate) => (
+      candidate.turnId === event.turnId && candidate.sequence === event.sequence
+    ));
+    const safeEvent = publicTimelineEvent(event);
+    if (existing >= 0) {
+      events[existing] = safeEvent;
+    } else {
+      events.push(safeEvent);
+    }
+    // Keep a bounded public replay log. This is intentionally separate from
+    // tool persistence, which may retain internal results for agent use.
+    session.timelineEvents = events.slice(-1_600);
+    await saveSession(session);
   }
 
   async appendUserTurn(sessionId: string, content: string, repoPath: string): Promise<void> {
@@ -187,6 +219,9 @@ export class ChatSessionManager {
     llmConfig?: InlineLlmConfig,
     inlineProjectLink?: InlineProjectLink,
     imageAttachments: ChatImageAttachment[] = [],
+    llm?: LLMClient,
+    initialNarrative?: string,
+    prewarmedRuntime?: Promise<ChatRuntimeSetup>,
   ): AsyncGenerator<ChatEvent> {
     yield* runChatSessionTurn({
       active: this.active,
@@ -197,6 +232,9 @@ export class ChatSessionManager {
       llmConfig,
       inlineProjectLink,
       imageAttachments,
+      llm,
+      initialNarrative,
+      prewarmedRuntime,
       adapters: this.plannerContinuationAdapters(),
     });
   }
@@ -215,8 +253,51 @@ export class ChatSessionManager {
       persistenceAdapters: this.confirmedActionPersistenceAdapters(),
     });
   }
+
+  /**
+   * Resolve a rejection without creating a second conversational turn.  The
+   * browser resumes the original Timeline stream around these events.
+   */
+  async *declineAction(sessionId: string): AsyncGenerator<ChatEvent> {
+    const storedSession = await loadSession(sessionId);
+    const pending = storedSession ? storedApprovalProposal(storedSession) : undefined;
+    if (!storedSession || !pending) {
+      yield { type: "error", message: "No approval proposal for this session" };
+      return;
+    }
+
+    clearStoredApprovalProposal(storedSession);
+    const workflowState = buildWorkflowState([], undefined, "done", "cancelled");
+    storedSession.workflowState = workflowState;
+    await saveSession(storedSession);
+
+    const response = "Approval declined. No action was run; you can send the next instruction when ready.";
+    yield { type: "approval_resolved", approvalId: approvalIdFor(pending), approved: false };
+    yield { type: "workflow_state", state: workflowState };
+    await appendMessage(sessionId, "assistant", response);
+    await appendBubble(sessionId, { role: "assistant", content: response, timestamp: now() });
+    yield {
+      type: "done",
+      result: {
+        response,
+        riskLevel: "low",
+        actionsTaken: [],
+        suggestions: [],
+        toolCallsMade: [],
+        usedLlm: false,
+      },
+    };
+  }
 }
 
 function now(): number {
   return Math.floor(Date.now() / 1000);
+}
+
+function publicTimelineEvent(event: TurnTimelineEvent): TurnTimelineEvent {
+  const { result, ...safe } = event;
+  // The final text is already independently present on turn.final.completed;
+  // retaining generic result payloads risks persisting provider/tool internals.
+  void result;
+  return safe;
 }

@@ -74,6 +74,7 @@ describe("daemon config routes", () => {
         llmProvider: "azure",
         azureEndpoint: "https://example.openai.azure.com",
         azureDeployment: "gpt-4o",
+        azureNarrativeDeployment: "gpt-4o-mini-fast",
         azureApiVersion: "2024-08-01-preview",
         azureApiKey: "local-model-key",
       },
@@ -82,6 +83,8 @@ describe("daemon config routes", () => {
     expect(response.statusCode, response.body).toBe(200);
     expect(response.json()).toMatchObject({ ok: true, llmConfigured: true });
     expect(setAoaiKey).not.toHaveBeenCalled();
+    const config = await app.inject({ method: "GET", url: "/daemon/config" });
+    expect(config.json()).toMatchObject({ azureNarrativeDeployment: "gpt-4o-mini-fast" });
   });
 
   it("explains Key Vault app permission failures without leaking raw AADSTS text", async () => {

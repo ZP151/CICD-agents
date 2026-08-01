@@ -27,6 +27,8 @@ source = "local_env"
 [azure_openai]
 endpoint = ""
 chat_deployment = "mergepilot-chat"
+# Optional low-latency deployment used only for the public action narrative.
+narrative_deployment = ""
 embedding_deployment = "text-embedding-3-small"
 api_version = "2024-08-01-preview"
 api_key_ref = ""
@@ -49,9 +51,11 @@ export interface MergePilotUserConfig {
   llmProvider?: "azure" | "openai" | "";
   secretSource?: "key_vault" | "local_env";
   openaiModel?: string;
+  openaiNarrativeModel?: string;
   openaiApiKeyRef?: string;
   azureEndpoint?: string;
   azureDeployment?: string;
+  azureNarrativeDeployment?: string;
   azureEmbeddingDeployment?: string;
   azureApiVersion?: string;
   azureApiKeyRef?: string;
@@ -176,9 +180,11 @@ function applyUserConfigToEnv(config: MergePilotUserConfig, explicitProcessEnv: 
   const entries: Array<[string, string | number | boolean | undefined]> = [
     ["LLM_PROVIDER", config.llmProvider],
     ["OPENAI_MODEL", wantsOpenAi ? config.openaiModel : undefined],
+    ["OPENAI_NARRATIVE_MODEL", wantsOpenAi ? config.openaiNarrativeModel : undefined],
     ["OPENAI_API_KEY", localEnvSecrets ? undefined : wantsOpenAi ? config.openaiApiKeyRef : undefined],
     ["AZURE_OPENAI_ENDPOINT", wantsAzure ? config.azureEndpoint : undefined],
     ["AZURE_OPENAI_CHAT_DEPLOYMENT", wantsAzure ? config.azureDeployment : undefined],
+    ["AZURE_OPENAI_NARRATIVE_DEPLOYMENT", wantsAzure ? config.azureNarrativeDeployment : undefined],
     ["AZURE_OPENAI_EMBEDDING_DEPLOYMENT", wantsAzure ? config.azureEmbeddingDeployment : undefined],
     ["AZURE_OPENAI_API_VERSION", wantsAzure ? config.azureApiVersion : undefined],
     ["AZURE_OPENAI_API_KEY", localEnvSecrets ? undefined : wantsAzure ? config.azureApiKeyRef : undefined],
@@ -274,9 +280,11 @@ function configFromToml(content: string): MergePilotUserConfig {
     llmProvider: providerValue(sections["llm"]?.["provider"]),
     secretSource: secretSourceValue(sections["secrets"]?.["source"]),
     openaiModel: sections["openai"]?.["model"],
+    openaiNarrativeModel: sections["openai"]?.["narrative_model"],
     openaiApiKeyRef: sections["openai"]?.["api_key_ref"],
     azureEndpoint: sections["azure_openai"]?.["endpoint"],
     azureDeployment: sections["azure_openai"]?.["chat_deployment"],
+    azureNarrativeDeployment: sections["azure_openai"]?.["narrative_deployment"],
     azureEmbeddingDeployment: sections["azure_openai"]?.["embedding_deployment"],
     azureApiVersion: sections["azure_openai"]?.["api_version"],
     azureApiKeyRef: sections["azure_openai"]?.["api_key_ref"],
@@ -311,11 +319,13 @@ function configToToml(config: MergePilotUserConfig): string {
     "",
     "[openai]",
     `model = ${tomlString(config.openaiModel ?? "")}`,
+    `narrative_model = ${tomlString(config.openaiNarrativeModel ?? "")}`,
     `api_key_ref = ${tomlString(openaiApiKeyRef)}`,
     "",
     "[azure_openai]",
     `endpoint = ${tomlString(config.azureEndpoint ?? "")}`,
     `chat_deployment = ${tomlString(config.azureDeployment ?? "mergepilot-chat")}`,
+    `narrative_deployment = ${tomlString(config.azureNarrativeDeployment ?? "")}`,
     `embedding_deployment = ${tomlString(config.azureEmbeddingDeployment ?? "text-embedding-3-small")}`,
     `api_version = ${tomlString(config.azureApiVersion ?? "2024-08-01-preview")}`,
     `api_key_ref = ${tomlString(azureApiKeyRef)}`,

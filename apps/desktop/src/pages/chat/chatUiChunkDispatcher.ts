@@ -1,6 +1,6 @@
 import type { ChatUiChunk } from "../../api.js";
 import type { ToolCallPartSnapshot } from "../../chatBubbles.js";
-import type { ApprovalRequest, WorkflowEventState } from "./chat.types.js";
+import type { ApprovalRequest, Bubble, WorkflowEventState } from "./chat.types.js";
 import {
   statusTextForApprovalResolved,
   statusTextForWorkflowState,
@@ -25,6 +25,7 @@ export interface ChatUiChunkDispatcherAdapter {
   ) => void;
   mergeAssistantMetadata: (metadata: unknown) => void;
   setWorkflowState: (update: WorkflowStateUpdate) => void;
+  updateBubbles: (updater: (prev: Bubble[]) => Bubble[]) => void;
   showApprovalRequest: (approval: ApprovalRequest) => void;
   startAssistantTextPart: (textPartId: string) => void;
   stopStreaming: (textPartId?: string) => void;
@@ -35,13 +36,25 @@ export interface ChatUiChunkDispatcherAdapter {
       result?: unknown;
       open?: boolean;
       liveOutput?: string;
+      turnId?: string;
+      sequence?: number;
+      timestamp?: number;
+      connector?: Bubble["connector"];
     },
   ) => void;
+}
+
+export interface ChatUiChunkCorrelation {
+  turnId?: string;
+  sequence?: number;
+  emittedAt?: number;
+  connector?: Bubble["connector"];
 }
 
 export function dispatchChatUiChunk(
   chunk: ChatUiChunk | undefined,
   adapter: ChatUiChunkDispatcherAdapter,
+  correlation?: ChatUiChunkCorrelation,
 ): void {
   if (!chunk) return;
   adapter.setUiChunkStreamAvailable(true);
@@ -75,7 +88,7 @@ export function dispatchChatUiChunk(
         toolCallId: chunk.toolCallId,
         toolName: chunk.toolName,
         state: "input-streaming",
-      });
+      }, toolBubbleCorrelation(correlation));
       break;
     case "tool-input-available":
       adapter.upsertToolBubble({
@@ -83,7 +96,7 @@ export function dispatchChatUiChunk(
         toolName: chunk.toolName,
         state: "input-available",
         input: chunk.input,
-      });
+      }, toolBubbleCorrelation(correlation));
       break;
     case "tool-output-available":
       adapter.upsertToolBubble({
@@ -96,6 +109,7 @@ export function dispatchChatUiChunk(
         ok: true,
         result: chunk.output,
         open: false,
+        ...toolBubbleCorrelation(correlation),
       });
       break;
     case "tool-output-error":
@@ -109,6 +123,7 @@ export function dispatchChatUiChunk(
         ok: false,
         result: { error: chunk.errorText },
         open: true,
+        ...toolBubbleCorrelation(correlation),
       });
       break;
     case "tool-output-delta":
@@ -128,6 +143,15 @@ export function dispatchChatUiChunk(
       adapter.mergeAssistantMetadata(chunk.metadata);
       break;
   }
+}
+
+function toolBubbleCorrelation(correlation: ChatUiChunkCorrelation | undefined) {
+  return {
+    turnId: correlation?.turnId,
+    sequence: correlation?.sequence,
+    timestamp: correlation?.emittedAt,
+    connector: correlation?.connector,
+  };
 }
 
 function finishUiChunk(adapter: ChatUiChunkDispatcherAdapter): void {

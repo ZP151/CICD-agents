@@ -37,7 +37,9 @@ describe("Chat agent use-case coverage", () => {
     expect(CHAT_SYSTEM_PROMPT).toContain("commit-workflow");
     expect(CHAT_SYSTEM_PROMPT).toContain("ado_trigger_pipeline");
     expect(CHAT_SYSTEM_PROMPT).toContain("Execute progressively");
-    expect(CHAT_SYSTEM_PROMPT).toContain("only one executable tool in each planning decision");
+    expect(CHAT_SYSTEM_PROMPT).toContain("closely related read-only tools");
+    expect(CHAT_SYSTEM_PROMPT).toContain("Use English for user-facing action narratives, approvals, and final responses by default.");
+    expect(CHAT_SYSTEM_PROMPT).toContain("Do not change workflow, safety, or rendering behavior based on the input language.");
   });
 });
 

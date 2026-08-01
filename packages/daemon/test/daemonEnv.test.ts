@@ -59,6 +59,7 @@ describe("daemonEnv", () => {
     expect(content).toContain("[secrets]");
     expect(content).toContain("source = \"local_env\"");
     expect(content).toContain("[azure_openai]");
+    expect(content).toContain("narrative_deployment = \"\"");
     expect(content).toContain("embedding_deployment = \"text-embedding-3-small\"");
     expect(content).toContain("key_vault_url = \"https://devagentkv001.vault.azure.net/\"");
     expect(content).toContain("api_key_ref = \"\"");
@@ -72,6 +73,7 @@ describe("daemonEnv", () => {
       secretSource: "key_vault",
       azureEndpoint: "https://example.openai.azure.com",
       azureDeployment: "mergepilot-chat",
+      azureNarrativeDeployment: "fast-narrative-model",
       azureEmbeddingDeployment: "text-embedding-3-small",
       azureApiKeyRef: "kv://secret/mergepilot-aoai-key",
       azureKeyVaultUrl: "https://devagentkv001.vault.azure.net/",
@@ -88,6 +90,7 @@ describe("daemonEnv", () => {
       secretSource: "key_vault",
       azureEndpoint: "https://example.openai.azure.com",
       azureEmbeddingDeployment: "text-embedding-3-small",
+      azureNarrativeDeployment: "fast-narrative-model",
       azureApiKeyRef: "kv://secret/mergepilot-aoai-key",
       azureKeyVaultUrl: "https://devagentkv001.vault.azure.net/",
       reviewAutoApproveEnabled: false,

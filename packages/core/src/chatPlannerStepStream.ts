@@ -49,7 +49,11 @@ export async function* collectPlannerStepStream(
     }
   }
 
-  return { accumulated, emittedVisibleResponse, toolFromStream };
+  return {
+    accumulated,
+    emittedVisibleResponse,
+    toolFromStream,
+  };
 }
 
 function dedupeVisibleResponse(visibleResponse: string, emittedVisibleResponse: string): string {

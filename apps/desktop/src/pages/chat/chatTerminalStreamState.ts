@@ -92,6 +92,7 @@ export function doneFinalizationFromEvent(
         suggestions: ev.result.suggestions,
         sources: ev.result.sources,
         artifacts: ev.result.artifacts,
+        timestamp: Date.now(),
       }
     : undefined;
   const text = ev.result?.response?.trim() ?? "";

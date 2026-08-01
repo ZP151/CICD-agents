@@ -25,10 +25,12 @@ const LlmConfigSchema = z.object({
   azureEndpoint:   z.string().optional(),
   azureApiKey:     z.string().optional(),
   azureDeployment: z.string().optional(),
+  azureNarrativeDeployment: z.string().optional(),
   azureEmbeddingDeployment: z.string().optional(),
   azureApiVersion: z.string().optional(),
   openaiApiKey:    z.string().optional(),
   openaiModel:     z.string().optional(),
+  openaiNarrativeModel: z.string().optional(),
 }).optional();
 
 const TestLlmConfigSchema = z.object({
@@ -43,10 +45,12 @@ const DaemonConfigureSchema = z.object({
   azureEndpoint:   z.string().optional(),
   azureApiKey:     z.string().optional(),
   azureDeployment: z.string().optional(),
+  azureNarrativeDeployment: z.string().optional(),
   azureEmbeddingDeployment: z.string().optional(),
   azureApiVersion: z.string().optional(),
   openaiApiKey:    z.string().optional(),
   openaiModel:     z.string().optional(),
+  openaiNarrativeModel: z.string().optional(),
   azureStorageAccount: z.string().optional(),
   azureKeyVaultUrl:    z.string().optional(),
   azureCosmosEndpoint: z.string().optional(),
@@ -66,10 +70,12 @@ function configValueFromEnv(): Record<string, unknown> {
                    : process.env["OPENAI_API_KEY"]            ? "openai"
                    : "",
     azureDeployment:          process.env["AZURE_OPENAI_CHAT_DEPLOYMENT"] ?? process.env["AZURE_OPENAI_DEPLOYMENT"] ?? "",
+    azureNarrativeDeployment: process.env["AZURE_OPENAI_NARRATIVE_DEPLOYMENT"] ?? "",
     azureEmbeddingDeployment: process.env["AZURE_OPENAI_EMBEDDING_DEPLOYMENT"] ?? "",
     azureApiVersion:          process.env["AZURE_OPENAI_API_VERSION"] ?? "",
     azureEndpoint:            process.env["AZURE_OPENAI_ENDPOINT"] ?? "",
     openaiModel:              process.env["OPENAI_MODEL"] ?? "",
+    openaiNarrativeModel:     process.env["OPENAI_NARRATIVE_MODEL"] ?? "",
     secretSource:    userConfig.secretSource ?? LOCAL_ENV_SECRET_SOURCE,
     aoaiKeyInVault:   (userConfig.secretSource === KEY_VAULT_SECRET_SOURCE) && (userConfig.azureApiKeyRef ?? "").startsWith("kv://"),
     azureTenantId:       azureAuthConfig.tenantId ?? "",
@@ -160,9 +166,11 @@ function mergeUserConfig(
     llmProvider: cfg.llmProvider ?? existing.llmProvider,
     secretSource: cfg.secretSource ?? existing.secretSource ?? LOCAL_ENV_SECRET_SOURCE,
     openaiModel: cfg.openaiModel ?? existing.openaiModel,
+    openaiNarrativeModel: cfg.openaiNarrativeModel ?? existing.openaiNarrativeModel,
     openaiApiKeyRef: secretRefs.openaiApiKeyRef ?? existing.openaiApiKeyRef,
     azureEndpoint: cfg.azureEndpoint ?? existing.azureEndpoint,
     azureDeployment: cfg.azureDeployment ?? existing.azureDeployment,
+    azureNarrativeDeployment: cfg.azureNarrativeDeployment ?? existing.azureNarrativeDeployment,
     azureEmbeddingDeployment: cfg.azureEmbeddingDeployment ?? existing.azureEmbeddingDeployment,
     azureApiVersion: cfg.azureApiVersion ?? existing.azureApiVersion,
     azureApiKeyRef: secretRefs.azureApiKeyRef ?? existing.azureApiKeyRef,
@@ -182,12 +190,14 @@ function patchLiveProcessEnv(
 ): void {
   if (cfg.llmProvider !== undefined) process.env["LLM_PROVIDER"] = cfg.llmProvider;
   if (cfg.openaiModel !== undefined) process.env["OPENAI_MODEL"] = cfg.openaiModel;
+  if (cfg.openaiNarrativeModel !== undefined) process.env["OPENAI_NARRATIVE_MODEL"] = cfg.openaiNarrativeModel;
   if (cfg.secretSource !== undefined) process.env["MERGEPILOT_SECRET_SOURCE"] = cfg.secretSource;
   if (cfg.openaiApiKey !== undefined) process.env["OPENAI_API_KEY"] = cfg.openaiApiKey;
   else if (secretRefs.openaiApiKeyRef) process.env["OPENAI_API_KEY"] = secretRefs.openaiApiKeyRef;
 
   if (cfg.azureEndpoint !== undefined) process.env["AZURE_OPENAI_ENDPOINT"] = cfg.azureEndpoint;
   if (cfg.azureDeployment !== undefined) process.env["AZURE_OPENAI_CHAT_DEPLOYMENT"] = cfg.azureDeployment;
+  if (cfg.azureNarrativeDeployment !== undefined) process.env["AZURE_OPENAI_NARRATIVE_DEPLOYMENT"] = cfg.azureNarrativeDeployment;
   if (cfg.azureEmbeddingDeployment !== undefined) process.env["AZURE_OPENAI_EMBEDDING_DEPLOYMENT"] = cfg.azureEmbeddingDeployment;
   if (cfg.azureApiVersion !== undefined) process.env["AZURE_OPENAI_API_VERSION"] = cfg.azureApiVersion;
   if (cfg.azureApiKey !== undefined) process.env["AZURE_OPENAI_API_KEY"] = cfg.azureApiKey;
@@ -223,12 +233,14 @@ function patchLiveSettings(settings: Settings, cfg: z.infer<typeof DaemonConfigu
   if (cfg.azureEndpoint !== undefined) target["azureOpenAiEndpoint"] = cfg.azureEndpoint;
   if (cfg.azureApiKey !== undefined) target["azureOpenAiApiKey"] = cfg.azureApiKey || settings.azureOpenAiApiKey;
   if (cfg.azureDeployment !== undefined) target["azureOpenAiChatDeployment"] = cfg.azureDeployment || settings.azureOpenAiChatDeployment;
+  if (cfg.azureNarrativeDeployment !== undefined) target["azureOpenAiNarrativeDeployment"] = cfg.azureNarrativeDeployment;
   if (cfg.azureEmbeddingDeployment !== undefined) {
     target["azureOpenAiEmbeddingDeployment"] = cfg.azureEmbeddingDeployment || settings.azureOpenAiEmbeddingDeployment;
   }
   if (cfg.azureApiVersion !== undefined) target["azureOpenAiApiVersion"] = cfg.azureApiVersion || settings.azureOpenAiApiVersion;
   if (cfg.openaiApiKey !== undefined) target["openAiApiKey"] = cfg.openaiApiKey;
   if (cfg.openaiModel !== undefined) target["openAiModel"] = cfg.openaiModel;
+  if (cfg.openaiNarrativeModel !== undefined) target["openAiNarrativeModel"] = cfg.openaiNarrativeModel;
   if (cfg.azureStorageAccount !== undefined) target["azureStorageAccount"] = cfg.azureStorageAccount;
   if (cfg.azureKeyVaultUrl !== undefined) target["azureKeyVaultUrl"] = cfg.azureKeyVaultUrl;
   if (cfg.azureCosmosEndpoint !== undefined) target["azureCosmosEndpoint"] = cfg.azureCosmosEndpoint;

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
+import { rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -49,10 +50,37 @@ afterEach(async () => {
     runtimeDataDir = null;
   }
   for (const repo of seededRepos) {
-    fs.rmSync(repo, { recursive: true, force: true });
+    // Windows can retain a short-lived handle from the just-finished git/
+    // context probe. Do not let concurrent Vitest workers turn that cleanup
+    // race into a false test failure.
+    await removeSeededRepo(repo);
   }
   seededRepos = [];
 });
+
+async function removeSeededRepo(repo: string): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    try {
+      await rm(repo, {
+        recursive: true,
+        force: true,
+        maxRetries: 4,
+        retryDelay: 100,
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!isWindowsBusyError(error) || attempt === 11) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 125 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
+function isWindowsBusyError(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "EBUSY");
+}
 
 describe("daemon Chat AI insight quality gate", () => {
   it("scores a mocked /chat final answer against seeded change-review expectations", async () => {
@@ -264,8 +292,8 @@ function parseSse(body: string): Array<{ event: string; data: unknown }> {
 }
 
 function finalResultFromEvents(events: Array<{ event: string; data: unknown }>): { response?: string; approvalProposal?: unknown } | undefined {
-  const final = events.findLast((entry) => entry.event === "final")?.data as
-    | { result?: { response?: string; approvalProposal?: unknown } }
+  const final = events.findLast((entry) => entry.event === "turn.final.completed")?.data as
+    | { finalText?: string }
     | undefined;
-  return final?.result;
+  return final ? { response: final.finalText } : undefined;
 }

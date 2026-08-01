@@ -1,6 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ChatEmptyState, chatEmptyStateShellClass } from "./ChatEmptyState.js";
+import {
+  ChatEmptyState,
+  chatEmptyStateShellClass,
+  welcomeSuggestions,
+} from "./ChatEmptyState.js";
 import type { ProjectLink } from "../../../api.js";
 
 const projectLink: ProjectLink = {
@@ -53,11 +57,22 @@ describe("ChatEmptyState", () => {
     expect(html).toContain("max-w-[58rem]");
     expect(html).toContain("max-w-[44rem]");
     expect(html).toContain("repeat(auto-fit,minmax(min(100%,12.75rem),1fr))");
-    expect(html).toContain("Ask MergePilot anything");
+    expect(html).toContain("Start with a focused prompt");
+    expect(html).toContain("Suggested prompt drafts");
+    expect(html).toContain("Edit before sending");
     expect(html).toContain("Understand this project");
     expect(html).toContain("Review my changes");
     expect(html).toContain("Push and create PR");
     expect(html).not.toContain("animate-pulse");
+  });
+
+  it("treats every welcome action as a user prompt, never as a direct workflow command", () => {
+    expect(welcomeSuggestions).toHaveLength(7);
+    expect(welcomeSuggestions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "welcome-understand", message: "Understand this project" }),
+      expect.objectContaining({ id: "welcome-review", message: "Review my changes" }),
+    ]));
+    expect(welcomeSuggestions.every((suggestion) => suggestion.action.kind === "fill_composer")).toBe(true);
   });
 
   it("keeps the home welcome stable while Project Links are loading", () => {
@@ -74,7 +89,7 @@ describe("ChatEmptyState", () => {
     );
 
     expect(html).toContain("New conversation welcome");
-    expect(html).toContain("Ask MergePilot anything");
+    expect(html).toContain("Start with a focused prompt");
     expect(html).toContain("Review my changes");
     expect(html).toContain("Checking Project Links...");
     expect(html).toContain("Create a Project Link first");
@@ -98,7 +113,7 @@ describe("ChatEmptyState", () => {
     );
 
     expect(html).toContain("New conversation welcome");
-    expect(html).toContain("Ask MergePilot anything");
+    expect(html).toContain("Start with a focused prompt");
     expect(html).toContain("Review my changes");
     expect(html).toContain("Connect a Project Link to run workspace actions");
     expect(html).toContain("Create and use");

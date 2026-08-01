@@ -120,7 +120,6 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     buildInlineLlmSettings: buildEffectiveLlmSettings,
     envSourceLabel,
     projectLinkStore,
-    runWorkflowAction: (payload) => runWorkspaceWorkflowAction(chatSessions, payload),
   });
 
   registerCheckpointRoutes(app, { settings, chatSessions });

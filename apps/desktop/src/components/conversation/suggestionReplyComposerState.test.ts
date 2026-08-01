@@ -33,7 +33,7 @@ describe("deriveComposerStateNotice", () => {
   it("shows busy state and falls back to a helpful detail", () => {
     expect(deriveComposerStateNotice({ busy: true })).toEqual({
       tone: "busy",
-      label: "Working",
+      label: "Thinking",
       detail: "You can queue a follow-up while the current action finishes.",
     });
   });
@@ -44,7 +44,7 @@ describe("deriveComposerStateNotice", () => {
       statusText: "Inspecting workspace",
     })).toEqual({
       tone: "busy",
-      label: "Working",
+      label: "Thinking",
       detail: "Inspecting workspace",
     });
   });
@@ -69,7 +69,7 @@ describe("deriveComposerInputState", () => {
     });
   });
 
-  it("blocks input while the agent is working", () => {
+  it("blocks input while the agent is thinking", () => {
     expect(deriveComposerInputState({
       busy: true,
       inputValue: "review this too",
@@ -77,8 +77,8 @@ describe("deriveComposerInputState", () => {
       inputDisabled: true,
       sendDisabled: true,
       controlsDisabled: true,
-      placeholder: "MergePilot is working...",
-      inputTitle: "MergePilot is working.",
+      placeholder: "MergePilot is thinking...",
+      inputTitle: "MergePilot is thinking.",
       sendTitle: "Stop or wait for the current response before sending another request.",
     });
   });
@@ -91,8 +91,8 @@ describe("deriveComposerInputState", () => {
       inputDisabled: true,
       sendDisabled: true,
       controlsDisabled: true,
-      placeholder: "MergePilot is working...",
-      inputTitle: "MergePilot is working.",
+      placeholder: "MergePilot is thinking...",
+      inputTitle: "MergePilot is thinking.",
       sendTitle: "Stop or wait for the current response before sending another request.",
     });
   });

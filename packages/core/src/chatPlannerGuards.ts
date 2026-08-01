@@ -33,6 +33,32 @@ export function requiredChangeInspectionGuidance(
   return "";
 }
 
+/**
+ * Repository indexing is useful context, but it cannot establish a mutable
+ * Git fact such as the active branch or current working-tree state. Keep an
+ * agent from returning an indexed-project summary when the user explicitly
+ * asked for that live evidence.
+ */
+export function requiredRepositoryStateEvidenceGuidance(
+  toolName: string,
+  message: string,
+  history: ChatMessage[],
+  toolCallsMade: ChatPlannerResult["toolCallsMade"],
+): string {
+  if (toolName !== "repo_refresh_index") return "";
+  const scope = userScopeText(message, history).toLowerCase();
+  const asksForLiveState = /\b(?:working[-\s]?tree|uncommitted|current branch|branch status|git status|local changes|changed files)\b/.test(scope);
+  if (!asksForLiveState) return "";
+  const hasDirectGitEvidence = toolCallsMade.some((call) => call.ok && [
+    "git_status",
+    "git_current_branch",
+    "git_diff",
+    "git_show",
+  ].includes(call.name));
+  if (hasDirectGitEvidence) return "";
+  return "The user asked for live Git state. Run git_status (and git_current_branch or git_diff when needed) before repo_refresh_index; indexing alone does not establish the current working tree or branch.";
+}
+
 export function outOfScopeWriteMessage(
   toolName: string,
   message: string,
@@ -68,11 +94,21 @@ export function guardReviewOnlyFinalResult(
 }
 
 export function isReviewOnlyChangeRequest(message: string): boolean {
+  if (isExplicitReadOnlyRequest(message)) return true;
   const lower = message.toLowerCase();
   const asksForReview = /\b(review my changes|what changed|inspect diff|review changes|assess changed files|analy[sz]e changed files|changed files|diff|risk before commit|current changes)\b/.test(lower);
   if (!asksForReview) return false;
   const writeIntentText = stripNegatedWriteIntents(lower);
   return !/\b(stage|stage all|stage selected|git add|commit|commit these|commit all|commit my|make a commit|prepare commit|push|publish|create pr|create a pr|open pull request|pull request|run tests?|build)\b/.test(writeIntentText);
+}
+
+/**
+ * MergePilot's default interaction contract is English. This intentionally
+ * narrow, explicit safety boundary lets planners use registered read-only
+ * tools but never propose an approval-gated action for a read-only turn.
+ */
+export function isExplicitReadOnlyRequest(message: string): boolean {
+  return /\b(?:read[-\s]?only|only\s+(?:inspect|review|check)|do not\s+(?:modify|change|write|stage|commit|push|merge|pull|rebase|checkout|switch|stash|restore|delete)|without\s+(?:modifying|changing|writing))\b/i.test(message);
 }
 
 function stripNegatedWriteIntents(text: string): string {
@@ -94,7 +130,7 @@ function reviewOnlyWriteMessage(toolName: string, message: string): string {
 function stripWritePermissionPrompts(text: string): string {
   return text
     .replace(
-      /\s*(?:Would you like me to|Do you want me to|Should I|Shall I)\s+(?:stage|commit|push|run|rerun|create|open|proceed|continue|apply|trigger|update|retry)\b[^?]*\?/gi,
+      /\s*(?:Would you like me to|Do you want me to|Should I|Shall I)\s+(?:stage|commit|push|merge|pull|rebase|checkout|switch|stash|restore|delete|run|rerun|create|open|proceed|continue|apply|trigger|update|retry)\b[^?]*\?/gi,
       "",
     )
     .replace(/\n{3,}/g, "\n\n")
@@ -121,7 +157,7 @@ function isWriteActionSuggestionLine(line: string): boolean {
 }
 
 function isWriteActionText(text: string): boolean {
-  return /^(stage|commit|push|create|open|trigger|run|rerun|proceed|continue|apply|update|retry)\b/i.test(text.trim());
+  return /^(stage|commit|push|merge|pull|rebase|checkout|switch|stash|restore|delete|create|open|trigger|run|rerun|proceed|continue|apply|update|retry)\b/i.test(text.trim());
 }
 
 function userScopeText(message: string, history: ChatMessage[]): string {

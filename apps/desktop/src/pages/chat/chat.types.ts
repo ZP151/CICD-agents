@@ -9,9 +9,59 @@ import type { ComposerImageAttachment } from "./chatAttachments.js";
 
 export type BubbleKind = "user" | "assistant" | "tool" | "confirm" | "pending_confirm" | "error" | "system";
 
+export type TurnTranscriptBlock =
+  | {
+      kind: "statement";
+      id: string;
+      text: string;
+      source: "local" | "server";
+    }
+  | {
+      kind: "tool_group";
+      id: string;
+      label: "Ran commands";
+      connector?: {
+        kind: "built-in" | "mcp";
+        id: string;
+        label: string;
+      };
+      commands: Array<{
+        id: string;
+        name: string;
+        args?: Record<string, unknown>;
+        command: string;
+        status: "running" | "succeeded" | "failed" | "cancelled";
+        durationMs?: number;
+        summary?: string;
+        output?: string;
+      }>;
+    }
+  | {
+      kind: "approval";
+      id: string;
+      text: string;
+      status: "waiting" | "approved" | "rejected";
+    };
+
+export interface TurnTranscript {
+  startedAt: number;
+  elapsedMs?: number;
+  status: "working" | "sealed" | "completed" | "failed" | "cancelled";
+  executionSealed: boolean;
+  /** Transient network/model diagnostic; not saved as agent narrative. */
+  waitingForModel?: boolean;
+  lastSequence?: number;
+  blocks: TurnTranscriptBlock[];
+  /** Groups are registered before a first command but are never rendered empty. */
+  pendingGroups: Record<string, {
+    connector?: Bubble["connector"];
+  }>;
+}
+
 export interface Bubble {
   id: string;
   kind: BubbleKind;
+  timestamp?: number;
   text?: string;
   parts?: ConversationPart[];
   streaming?: boolean;
@@ -37,6 +87,15 @@ export interface Bubble {
   pendingStatus?: "waiting" | "executing" | "done" | "cancelled";
   transientImageAttachments?: ComposerImageAttachment[];
   meta?: AssistantBubbleMeta;
+  turnId?: string;
+  turnSequence?: number;
+  connector?: {
+    kind: "built-in" | "mcp";
+    id: string;
+    label: string;
+  };
+  /** The canonical, user-visible execution read model for this Turn. */
+  turnTranscript?: TurnTranscript;
 }
 
 export interface SavedPrInsightSource {

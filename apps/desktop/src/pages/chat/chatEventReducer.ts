@@ -14,7 +14,15 @@ export interface ChatEventReduction {
   nextState: ChatEventReducerState;
 }
 
-const TERMINAL_EVENT_TYPES = new Set(["done", "cancelled", "error", "final"]);
+const TERMINAL_EVENT_TYPES = new Set([
+  "done",
+  "cancelled",
+  "error",
+  "final",
+  "turn.completed",
+  "turn.cancelled",
+  "turn.failed",
+]);
 const TERMINAL_UI_CHUNK_TYPES = new Set(["finish", "error"]);
 
 export function reduceChatEvent(

@@ -28,7 +28,7 @@ export type ChatBubbleAction =
       meta?: Bubble["meta"];
       streamedText?: string;
     }
-  | { type: "show_approval"; approval: ApprovalRequest }
+  | { type: "show_approval"; approval: ApprovalRequest; turnId?: string }
   | {
       type: "upsert_tool";
       snapshot: ToolCallPartSnapshot;
@@ -37,6 +37,10 @@ export type ChatBubbleAction =
         result?: unknown;
         open?: boolean;
         liveOutput?: string;
+        turnId?: string;
+        sequence?: number;
+        timestamp?: number;
+        connector?: Bubble["connector"];
       };
     }
   | {
@@ -80,7 +84,7 @@ export function reduceChatBubbles(
         makeId,
       );
     case "show_approval":
-      return showApprovalRequestTransition(prev, action.approval, makeId);
+      return showApprovalRequestTransition(prev, action.approval, makeId, action.turnId);
     case "upsert_tool":
       return upsertToolBubbleTransition(prev, action.snapshot, action.options ?? {}, makeId);
     case "append_tool_output_delta":

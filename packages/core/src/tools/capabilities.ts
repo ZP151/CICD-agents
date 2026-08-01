@@ -8,6 +8,8 @@ export interface ToolCapability {
   readOnly: boolean;
   requiresApproval: boolean;
   required: string[];
+  /** Present only for externally provided tools, so the transcript can label them. */
+  connector?: { kind: "mcp"; id: string; label: string };
 }
 
 const READ_ONLY_TOOLS = new Set([
@@ -46,6 +48,7 @@ export function toolCapabilities(tools: Iterable<Tool>): ToolCapability[] {
     readOnly: READ_ONLY_TOOLS.has(tool.name),
     requiresApproval: approvals.has(tool.name),
     required: requiredParams(tool),
+    connector: toolConnector(tool.name),
   }));
 }
 
@@ -58,6 +61,22 @@ export function toolCapability(tool: Tool): ToolCapability {
     readOnly: READ_ONLY_TOOLS.has(tool.name),
     requiresApproval: classifyToolRisk(tool.name) !== "low",
     required: requiredParams(tool),
+    connector: toolConnector(tool.name),
+  };
+}
+
+/**
+ * MCP tools are registered as mcp_<server>_<tool>. Keep this attribution
+ * alongside the capability rather than guessing from UI labels downstream.
+ */
+function toolConnector(name: string): ToolCapability["connector"] | undefined {
+  if (!name.startsWith("mcp_")) return undefined;
+  const server = name.slice("mcp_".length).split("_")[0]?.trim();
+  if (!server) return undefined;
+  return {
+    kind: "mcp",
+    id: server,
+    label: server.replace(/[-_]+/g, " "),
   };
 }
 

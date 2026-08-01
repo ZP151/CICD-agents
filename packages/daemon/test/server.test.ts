@@ -154,18 +154,11 @@ describe("daemon HTTP", () => {
     });
     expect(confirmed.statusCode, confirmed.body).toBe(200);
     const events = parseSse(confirmed.body);
-    const approval = events.find((entry) => entry.event === "approval_required")?.data as
+    const approval = events.find((entry) => entry.event === "turn.approval.requested")?.data as
       | {
-          approval?: {
-            action?: { tool?: string; args?: Record<string, unknown>; workflow?: unknown };
-          };
+          approval?: { action?: { tool?: string; args?: Record<string, unknown>; workflow?: unknown } };
         }
       | undefined;
-    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
-      | { state?: { workflowKind?: string; workflowPhase?: string } }
-      | undefined;
-    expect(workflowEvent?.state?.workflowKind).toBe("commit");
-    expect(workflowEvent?.state?.workflowPhase).toBe("waiting_for_commit_approval");
     expect(approval?.approval?.action?.tool).toBe("git_commit");
     expect(approval?.approval?.action?.args).toEqual({ message: "docs: update readme" });
     expect(approval?.approval?.action?.workflow).toMatchObject({
@@ -217,7 +210,7 @@ describe("daemon HTTP", () => {
     });
     expect(confirmed.statusCode, confirmed.body).toBe(200);
     const events = parseSse(confirmed.body);
-    const approval = events.find((entry) => entry.event === "approval_required")?.data as
+    const approval = events.find((entry) => entry.event === "turn.approval.requested")?.data as
       | {
           approval?: {
             action?: {
@@ -284,7 +277,7 @@ describe("daemon HTTP", () => {
     });
     expect(confirmed.statusCode, confirmed.body).toBe(200);
     const events = parseSse(confirmed.body);
-    const approval = events.find((entry) => entry.event === "approval_required")?.data as
+    const approval = events.find((entry) => entry.event === "turn.approval.requested")?.data as
       | {
           approval?: {
             action?: {
@@ -296,11 +289,6 @@ describe("daemon HTTP", () => {
           };
         }
       | undefined;
-    const workflowEvent = events.findLast((entry) => entry.event === "workflow_state")?.data as
-      | { state?: { workflowKind?: string; workflowPhase?: string } }
-      | undefined;
-    expect(workflowEvent?.state?.workflowKind).toBe("commit");
-    expect(workflowEvent?.state?.workflowPhase).toBe("waiting_for_push_approval");
     expect(approval?.approval?.action?.tool).toBe("git_push");
     expect(approval?.approval?.action?.args).toEqual({
       branch: "feature/publish",
@@ -310,7 +298,7 @@ describe("daemon HTTP", () => {
     expect(approval?.approval?.action?.description).toContain("No upstream branch is configured");
   });
 
-  it("streams OpenHarness-style UI chunks alongside legacy chat SSE events", async () => {
+  it("streams one canonical Turn Timeline without legacy UI chunk duplicates", async () => {
     app = await buildApp();
     const repo = fs.mkdtempSync(path.join(os.tmpdir(), "cicd-chat-ui-stream-"));
     fs.writeFileSync(path.join(repo, "README.md"), "# demo\n", "utf8");
@@ -326,29 +314,12 @@ describe("daemon HTTP", () => {
 
     expect(response.statusCode, response.body).toBe(200);
     const events = parseSse(response.body);
-    const uiChunks = events
-      .filter((entry) => entry.event === "ui.chunk")
-      .map((entry) => entry.data as { chunk?: { type?: string; delta?: string } })
-      .map((entry) => entry.chunk);
-
     expect(events.some((entry) => entry.event === "session")).toBe(true);
-    expect(events.some((entry) => entry.event === "final")).toBe(true);
-    expect(uiChunks.map((chunk) => chunk?.type)).toEqual(
-      expect.arrayContaining([
-        "start",
-        "progress",
-        "text-start",
-        "text-delta",
-        "text-end",
-        "finish",
-      ]),
-    );
-    expect(
-      uiChunks.some(
-        (chunk) =>
-          chunk?.type === "text-delta" && typeof chunk.delta === "string" && chunk.delta.length > 0,
-      ),
-    ).toBe(true);
+    expect(events.some((entry) => entry.event === "turn.started")).toBe(true);
+    expect(events.some((entry) => entry.event === "turn.execution.completed")).toBe(true);
+    expect(events.some((entry) => entry.event === "turn.final.delta")).toBe(true);
+    expect(events.some((entry) => entry.event === "turn.finished")).toBe(true);
+    expect(events.some((entry) => entry.event === "ui.chunk" || entry.event === "final" || entry.event === "done")).toBe(false);
   });
 
   it("treats null chat session and project link ids as a new no-link chat request", async () => {
@@ -400,7 +371,7 @@ describe("daemon HTTP", () => {
     const sessionId = (events.find((entry) => entry.event === "session")?.data as { sessionId?: string } | undefined)
       ?.sessionId;
     expect(sessionId).toBeTruthy();
-    expect(events.some((entry) => entry.event === "final")).toBe(true);
+    expect(events.some((entry) => entry.event === "turn.final.completed")).toBe(true);
 
     const session = await loadSession(sessionId!);
     const storedContent = [

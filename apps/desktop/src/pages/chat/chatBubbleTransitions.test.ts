@@ -47,7 +47,7 @@ describe("chat bubble transitions", () => {
     expect(first[0]).toMatchObject({
       kind: "pending_confirm",
       pendingTool: "git_push",
-      pendingDescription: "Review exact args",
+      pendingDescription: "Push current branch",
       pendingStatus: "waiting",
       riskLevel: "high",
     });
@@ -131,5 +131,24 @@ describe("chat bubble transitions", () => {
       toolName: "git_diff",
       toolLiveOutput: "[stderr] fatal",
     });
+  });
+
+  it("does not regress a tool when an older event for the same turn arrives late", () => {
+    const first = upsertToolBubbleTransition([], {
+      toolCallId: "tool-1",
+      toolName: "git_status",
+      state: "result",
+      output: { stdout: "clean" },
+    }, { ok: true, turnId: "turn-1", sequence: 9 }, () => "tool-row");
+
+    const stale = upsertToolBubbleTransition(first, {
+      toolCallId: "tool-1",
+      toolName: "git_status",
+      state: "input-available",
+      input: { command: "git status" },
+    }, { turnId: "turn-1", sequence: 8 }, () => "ignored");
+
+    expect(stale).toBe(first);
+    expect(stale[0]).toMatchObject({ toolOk: true, turnSequence: 9 });
   });
 });

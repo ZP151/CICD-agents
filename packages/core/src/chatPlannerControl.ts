@@ -90,6 +90,32 @@ export function summarizeToolResult(result: unknown, ok: boolean): string {
   return ok ? truncate(readable, 200) : `error: ${truncate(readable, 220)}`;
 }
 
+/**
+ * Keep a bounded, human-readable part of a real command response for the
+ * public command card. Executor output is already redacted before reaching
+ * this layer; provider payloads and arbitrary JSON stay private.
+ */
+export function publicToolOutput(result: unknown, ok: boolean): string | undefined {
+  if (typeof result === "string") return compactPublicOutput(result);
+  if (!result || typeof result !== "object") return undefined;
+  const record = result as Record<string, unknown>;
+  const candidates = ok
+    ? [record["stdout"], record["output"], record["message"], record["text"]]
+    : [record["stderr"], record["error"], record["stdout"], record["message"]];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return compactPublicOutput(candidate);
+  }
+  return undefined;
+}
+
+function compactPublicOutput(value: string): string {
+  const normalized = value.replace(/\r\n/g, "\n").trim();
+  const lines = normalized.split("\n");
+  const kept = lines.slice(0, 48).join("\n");
+  const capped = truncate(kept, 4_000);
+  return lines.length > 48 || capped.length < normalized.length ? `${capped}\n…` : capped;
+}
+
 export function toolResultIndicatesSuccess(result: unknown, fallbackOk: boolean): boolean {
   if (!fallbackOk) return false;
   if (typeof result !== "object" || result === null) return fallbackOk;

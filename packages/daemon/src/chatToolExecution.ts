@@ -2,6 +2,7 @@ import {
   type ChatEvent,
   type PendingToolAction,
   type ToolExecutor,
+  publicToolOutput,
   toolResultIndicatesSuccess,
 } from "@mergepilot/core";
 
@@ -23,6 +24,13 @@ export async function* streamConfirmedToolExecution(args: {
   toolCallId: string;
 }): AsyncGenerator<ChatEvent, ConfirmedToolExecutionResult> {
   const { actionExecutor, pending, toolCallId } = args;
+  yield {
+    type: "work_statement",
+    blockId: toolCallId,
+    text: `I’ll ${(pending.description || pending.tool).replace(/\s+/g, " ").trim()} and report the result.`,
+  };
+  yield { type: "tool_group_start", groupId: toolCallId };
+  yield { type: "turn_step", stepId: toolCallId, status: "started", label: pending.description || pending.tool };
   yield { type: "tool_start", name: pending.tool, args: pending.args, toolCallId };
 
   let toolResult: unknown;
@@ -48,7 +56,14 @@ export async function* streamConfirmedToolExecution(args: {
 
   ok = toolResultIndicatesSuccess(toolResult, ok);
   const summary = truncateStr(JSON.stringify(toolResult) ?? "", 300);
-  yield { type: "tool_end", name: pending.tool, ok, summary, result: toolResult, toolCallId };
+  yield { type: "tool_end", name: pending.tool, ok, summary, output: publicToolOutput(toolResult, ok), result: toolResult, toolCallId };
+  yield {
+    type: "turn_step",
+    stepId: toolCallId,
+    status: ok ? "completed" : "blocked",
+    label: ok ? (pending.description || pending.tool) : `Could not complete: ${pending.description || pending.tool}`,
+  };
+  yield { type: "tool_group_end", groupId: toolCallId };
   return { ok, result: toolResult, summary };
 }
 

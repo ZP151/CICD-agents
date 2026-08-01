@@ -2,16 +2,17 @@ import type {
   ProjectLink,
   ProjectLinkInput,
 } from "../../../api.js";
+import { useState } from "react";
 import type { ChatRenderItem } from "../../../chatRenderItems.js";
 import {
   conversationPartsFromAssistantBubble,
+  conversationTextFromParts,
   type ConversationArtifactPart,
   type ConversationSourcePart,
 } from "../../../chatBubbles.js";
 import { ConversationPartRenderer } from "../../../components/conversation/ConversationPartRenderer.js";
 import { visibleConversationParts } from "../../../components/conversation/ConversationPartRenderer.js";
 import {
-  ExecutionLog,
   PendingActionCard,
 } from "../approval/ApprovalCards.js";
 import { ConfirmCard } from "../approval/ConfirmCard.js";
@@ -25,6 +26,7 @@ import {
   ChatAssistantMetaPanel,
 } from "./ChatAssistantMetaPanel.js";
 import { ChatEmptyState } from "./ChatEmptyState.js";
+import { TurnTranscriptView } from "./TurnTranscript.js";
 import type { SuggestionReply } from "../../../components/conversation/SuggestionReplyBar.js";
 
 interface ChatMessageListProps {
@@ -87,18 +89,16 @@ export function ChatMessageList({
       )}
 
       {renderItems.map((item) => (
-        item.kind === "tool-group"
-          ? (
-              <div key={item.key} className="mb-3">
-                <ExecutionLog
-                  tools={item.tools}
-                  approval={item.approval}
-                  onToggleTool={toggleTool}
-                  onConfirmApproval={confirmPendingAction}
-                  onCancelApproval={cancelPendingAction}
-                />
-              </div>
-            )
+        item.kind === "transcript"
+            ? <TurnTranscriptView
+                key={item.key}
+                bubble={item.transcript}
+                approval={item.approval}
+                onConfirmApproval={confirmPendingAction}
+                onCancelApproval={cancelPendingAction}
+              />
+          : item.kind === "tool-group"
+          ? null
           : (
               <ChatBubbleRow
                 key={item.bubble.id}
@@ -120,6 +120,7 @@ export function ChatMessageList({
 }
 
 function hasVisibleRenderItem(item: ChatRenderItem<Bubble>): boolean {
+  if (item.kind === "transcript") return true;
   if (item.kind === "tool-group") {
     return item.tools.length > 0 || Boolean(item.approval && isVisibleBubble(item.approval));
   }
@@ -236,6 +237,7 @@ function ChatBubbleRow({
               onOpenPrInsightWorkspace={openPrInsightSourceInWorkspace}
             />
           )}
+          <AssistantResponseFooter bubble={bubble} />
         </div>
       </div>
     );
@@ -286,6 +288,97 @@ function ChatBubbleRow({
   }
 
   return null;
+}
+
+function AssistantResponseFooter({ bubble }: { bubble: Bubble }) {
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const text = assistantTextForClipboard(bubble);
+  const timestamp = bubble.meta?.timestamp;
+
+  // A response footer is the terminal affordance for this assistant turn.
+  // While the final is streaming it must not expose Copy or a completion time.
+  if (bubble.streaming || (!text && !timestamp)) return null;
+
+  const copy = async () => {
+    if (!text) return;
+    const copied = await copyText(text);
+    setCopyState(copied ? "copied" : "failed");
+    window.setTimeout(() => setCopyState("idle"), 1600);
+  };
+
+  return (
+    <footer className="mt-2 flex items-center gap-1 text-[11px] text-[rgb(var(--app-text-subtle))]">
+      {text && (
+        <button
+          type="button"
+          onClick={() => void copy()}
+          title={copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy"}
+          aria-label={copyState === "copied" ? "Copied response" : copyState === "failed" ? "Copy failed" : "Copy response"}
+          className={`inline-flex h-6 w-6 items-center justify-center rounded transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 ${
+            copyState === "copied"
+              ? "bg-[rgb(var(--app-success)_/_0.10)] text-[rgb(var(--app-success))]"
+              : "hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+          }`}
+        >
+          {copyState === "copied" ? <CheckIcon /> : <CopyIcon />}
+        </button>
+      )}
+      {timestamp && (
+        <time dateTime={new Date(timestamp).toISOString()} className="px-1.5" title={new Date(timestamp).toLocaleString()}>
+          {formatMessageTime(timestamp)}
+        </time>
+      )}
+    </footer>
+  );
+}
+
+export function assistantTextForClipboard(bubble: Bubble): string {
+  return (bubble.text?.trim() || conversationTextFromParts(bubble.parts).trim());
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    const input = document.createElement("textarea");
+    input.value = text;
+    input.setAttribute("readonly", "");
+    input.style.position = "fixed";
+    input.style.opacity = "0";
+    document.body.append(input);
+    input.select();
+    const copied = document.execCommand("copy");
+    input.remove();
+    return copied;
+  } catch {
+    return false;
+  }
+}
+
+function formatMessageTime(timestamp: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(timestamp);
+}
+
+function CopyIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <rect x="8" y="8" width="11" height="11" rx="1.5" />
+      <path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-10A1.5 1.5 0 0 0 3 5.5v10A1.5 1.5 0 0 0 4.5 17H8" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+      <path d="m5 12.5 4.2 4.2L19 7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 function visibleUserTextWithoutImagePlaceholders(text: string): string {

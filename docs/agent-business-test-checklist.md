@@ -321,8 +321,7 @@ Use this checklist when evaluating generated analysis, not just mechanics.
 | NEG-11 | Very large file preview | Preview refuses with concise size message. |  |
 | NEG-12 | Binary file preview | Preview says binary unsupported and does not corrupt UI. |  |
 | NEG-13 | Long branch/file names | UI truncates with tooltip and does not overlap. |  |
-| NEG-14 | Non-English prompt | Agent handles Chinese/English mixed prompts. |  |
-| NEG-15 | User asks for unsupported action | Agent explains unsupported gap and closest safe alternative. |  |
+| NEG-14 | User asks for unsupported action | Agent explains unsupported gap and closest safe alternative. |  |
 
 ## 18. Regression Smoke Set
 

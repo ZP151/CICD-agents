@@ -145,7 +145,6 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
     busy: pageState.busy,
     focusComposer,
     queuedSuggestion: pageState.queuedSuggestion,
-    runWorkspaceAction: workspaceRuntime.runWorkspaceAction,
     setInput: pageState.setInput,
     setQueuedSuggestion: pageState.setQueuedSuggestion,
     setStatusText: pageState.setStatusText,
