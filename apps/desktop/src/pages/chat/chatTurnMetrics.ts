@@ -17,10 +17,10 @@ interface TurnMetricRecord {
 }
 
 const records = new Map<string, TurnMetricRecord>();
-let pendingLocalId: string | undefined;
+const pendingLocalIds = new Set<string>();
 
 export function beginTurnMetrics(localId: string): void {
-  pendingLocalId = localId;
+  pendingLocalIds.add(localId);
   const record: TurnMetricRecord = { localId, marks: { client_send: performance.now() } };
   records.set(localId, record);
   // Measure visibility after React has had one paint opportunity instead of
@@ -34,21 +34,45 @@ export function beginTurnMetrics(localId: string): void {
   }
 }
 
+/** Adopt a browser-local measurement record once the daemon confirms its Turn. */
+export function adoptTurnMetrics(clientTurnId: string | undefined, turnId: string | undefined): void {
+  if (!turnId) return;
+  const fallbackLocalId = pendingLocalIds.size === 1 ? [...pendingLocalIds][0] : undefined;
+  const localId = clientTurnId && records.has(clientTurnId) ? clientTurnId : fallbackLocalId;
+  if (!localId) return;
+  const record = records.get(localId);
+  if (!record) return;
+  if (localId !== turnId) {
+    records.delete(localId);
+    records.set(turnId, record);
+  }
+  pendingLocalIds.delete(localId);
+}
+
 export function markTurnMetric(turnId: string | undefined, name: TurnMetricName): void {
   if (!turnId) return;
-  const pending = pendingLocalId ? records.get(pendingLocalId) : undefined;
-  const record = records.get(turnId) ?? pending ?? { marks: {} };
-  if (pending && pendingLocalId && pendingLocalId !== turnId) records.delete(pendingLocalId);
-  pendingLocalId = undefined;
+  const record = records.get(turnId) ?? { marks: {} };
   record.marks[name] ??= performance.now();
   records.set(turnId, record);
   if (name === "finished") publishTurnMetrics(turnId, record);
 }
 
 export function markPendingTurnMetric(name: TurnMetricName): void {
-  if (!pendingLocalId) return;
-  const record = records.get(pendingLocalId);
+  if (pendingLocalIds.size !== 1) return;
+  const localId = [...pendingLocalIds][0];
+  const record = localId ? records.get(localId) : undefined;
   if (record) record.marks[name] ??= performance.now();
+}
+
+/** Internal test seam for verifying concurrent optimistic-Turn correlation. */
+export function turnMetricSnapshotForTests(turnId: string): Partial<Record<TurnMetricName, number>> | undefined {
+  const record = records.get(turnId);
+  return record ? { ...record.marks } : undefined;
+}
+
+export function resetTurnMetricsForTests(): void {
+  records.clear();
+  pendingLocalIds.clear();
 }
 
 function publishTurnMetrics(turnId: string, record: TurnMetricRecord): void {

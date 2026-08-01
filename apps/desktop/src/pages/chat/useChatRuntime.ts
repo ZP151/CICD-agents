@@ -176,7 +176,8 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
       }, { forceScroll: true });
     }
     const optimisticTurnId = uid();
-    beginTurnMetrics(optimisticTurnId);
+    const clientTurnId = `local-turn-${optimisticTurnId}`;
+    beginTurnMetrics(clientTurnId);
     args.addBubble(createOptimisticTurnTranscriptBubble(optimisticTurnId, visibleMessage), { forceScroll: true });
 
     const repo = args.repoPath || ".";
@@ -212,7 +213,7 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
         dataUrl: attachment.dataUrl,
       })),
       args.activeProjectLink,
-      `local-turn-${optimisticTurnId}`,
+      clientTurnId,
     );
     args.cancelRef.current = () => {
       acceptsEvents = false;

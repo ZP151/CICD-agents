@@ -26,7 +26,7 @@ import {
   sealTurnTranscriptExecution,
   upsertTurnStartedTranscript,
 } from "./chatTurnTranscript.js";
-import { markPendingTurnMetric, markTurnMetric } from "./chatTurnMetrics.js";
+import { adoptTurnMetrics, markPendingTurnMetric, markTurnMetric } from "./chatTurnMetrics.js";
 import { acceptCanonicalTimelineSequence } from "./chatTimelineSequence.js";
 
 const pendingFinalDeltas = new Map<string, string[]>();
@@ -326,6 +326,7 @@ function dispatchCanonicalTurnTimelineEvent(
   options: ChatStreamDispatchOptions,
 ): void {
   if (ev.type === "turn.started") {
+    adoptTurnMetrics(ev.clientTurnId, ev.turnId);
     markTurnMetric(ev.turnId, "turn_started");
     markTurnMetric(ev.turnId, "sse_flushed");
     adapter.setStatusText(null);
