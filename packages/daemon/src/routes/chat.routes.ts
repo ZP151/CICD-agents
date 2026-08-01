@@ -283,7 +283,6 @@ export function registerChatRoutes(
     return new Promise<void>((resolve) => {
       (async () => {
         try {
-          const openingEvents: ChatEvent[] = [];
           let openingNarrativeError: unknown;
           const openingNarrative = (async () => {
             for await (const event of streamActionNarrative(narrativeLlm, {
@@ -291,8 +290,17 @@ export function registerChatRoutes(
               blockId: "opening",
               selectedProject: Boolean(inlineProjectLink || projectLinkId),
             })) {
-              openingEvents.push(event);
-              if (event.type === "work_statement") openingNarrativeVisible = true;
+              // Do not buffer genuine model text until the model completes a
+              // sentence. The opening is the first public response to the
+              // user, so every useful delta must reach the desktop as soon as
+              // it arrives. Session/tool events remain buffered below until
+              // this narration completes, preserving narrative → action.
+              if (!active) return;
+              if (event.type === "work_statement") {
+                openingNarrativeVisible = true;
+                clearTimeout(waitingForModelTimer);
+              }
+              sseWriter.sendChatEvent(event);
             }
           })().catch((err) => { openingNarrativeError = err; });
           // Desktop sends the selected Project Link inline with the request.
@@ -344,8 +352,6 @@ export function registerChatRoutes(
           }
           if (openingNarrativeError) throw openingNarrativeError;
           if (!active) return;
-          for (const event of openingEvents) sseWriter.sendChatEvent(event);
-          if (openingNarrativeVisible) clearTimeout(waitingForModelTimer);
 
           while (active && (!sessionFinished || bufferedSessionEvents.length > 0)) {
             if (bufferedSessionEvents.length === 0) {
