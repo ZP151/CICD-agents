@@ -173,7 +173,7 @@ describe("chat SSE timeline projection", () => {
     expect(sent.some((entry) => entry.event === "turn.narrative.delta")).toBe(false);
   });
 
-  it("replays genuine final model deltas only after execution has sealed", () => {
+  it("replays genuine final model text in readable chunks only after execution has sealed", () => {
     const sent: Array<{ event: string; payload: Record<string, unknown> }> = [];
     const reply = {
       raw: {
@@ -209,8 +209,7 @@ describe("chat SSE timeline projection", () => {
     const eventNames = sent.map((entry) => entry.event);
     expect(eventNames.indexOf("turn.execution.completed")).toBeLessThan(eventNames.indexOf("turn.final.delta"));
     expect(sent.filter((entry) => entry.event === "turn.final.delta").map((entry) => entry.payload.delta)).toEqual([
-      "The branch is ",
-      "ready for review.",
+      "The branch is ready for review.",
     ]);
   });
 });

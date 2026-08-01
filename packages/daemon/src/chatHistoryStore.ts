@@ -160,12 +160,9 @@ export async function deleteStoredSession(sessionId: string): Promise<boolean> {
   const existed = Boolean(await loadSession(sessionId));
   const cosmos = getCosmosStore();
   if (cosmos) {
-    try {
-      await cosmos.delete(sessionId);
-    } catch {
-      // The local copy is the live desktop transcript. A cloud mirror failure
-      // must not make a user-visible Delete leave it behind.
-    }
+    // The local copy is the live desktop transcript. Delete it immediately;
+    // cloud mirroring must never keep the UI waiting on Cosmos availability.
+    void cosmos.delete(sessionId).catch(() => undefined);
   }
   const store = loadStoreSync();
   const localExisted = Boolean(store[sessionId]);

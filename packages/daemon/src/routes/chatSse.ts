@@ -357,11 +357,31 @@ function nextTimelineBase(
 
 function finalDeltas(text: string, streamed: string[] | undefined): string[] {
   const retained = streamed?.filter((delta) => Boolean(delta)) ?? [];
-  if (retained.length > 0 && normalisedText(retained.join("")) === normalisedText(text)) {
-    return retained;
+  const source = retained.length > 0 && normalisedText(retained.join("")) === normalisedText(text)
+    ? retained
+    : (text.match(/.{1,96}(?:\s+|$)/g) ?? [text]);
+  return coalesceFinalDeltas(source);
+}
+
+/**
+ * GPT streams can arrive one token at a time. Those are truthful provider
+ * boundaries, but replaying hundreds of them at the desktop's animation
+ * cadence makes a completed conclusion visibly lag behind its Turn. Preserve
+ * the exact text while coalescing into short readable phrases.
+ */
+function coalesceFinalDeltas(chunks: string[]): string[] {
+  const output: string[] = [];
+  let buffer = "";
+  for (const chunk of chunks) {
+    buffer += chunk;
+    const boundary = /\s$|[.!?。！？:]$/.test(buffer);
+    if (buffer.length >= 42 && (boundary || buffer.length >= 88)) {
+      output.push(buffer);
+      buffer = "";
+    }
   }
-  const chunks = text.match(/.{1,96}(?:\s+|$)/g) ?? [text];
-  return chunks.filter(Boolean);
+  if (buffer) output.push(buffer);
+  return output;
 }
 
 function normalisedText(value: string): string {
