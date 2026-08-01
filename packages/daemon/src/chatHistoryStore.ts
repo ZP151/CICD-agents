@@ -157,20 +157,26 @@ export async function listRecentSessions(limit: number): Promise<ChatHistoryEntr
 }
 
 export async function deleteStoredSession(sessionId: string): Promise<boolean> {
-  const existed = Boolean(await loadSession(sessionId));
-  const cosmos = getCosmosStore();
-  if (cosmos) {
-    // The local copy is the live desktop transcript. Delete it immediately;
-    // cloud mirroring must never keep the UI waiting on Cosmos availability.
-    void cosmos.delete(sessionId).catch(() => undefined);
-  }
+  // Deletion is intentionally local-first and must not use `loadSession`.
+  // `loadSession` correctly makes a bounded Cosmos read for history restore,
+  // but even that bounded network hop makes a Delete button feel stuck when
+  // the cloud mirror is slow or unavailable. A DELETE is idempotent: remove
+  // the local transcript now and mirror the request to Cosmos in the
+  // background. If a session exists only in Cosmos, accepting the local
+  // deletion is still the right UX; a refresh cannot resurrect it.
   const store = loadStoreSync();
   const localExisted = Boolean(store[sessionId]);
   if (localExisted) {
     delete store[sessionId];
     saveStoreSync(store);
   }
-  return existed || localExisted;
+  const cosmos = getCosmosStore();
+  if (cosmos) {
+    // The local copy is the live desktop transcript. Delete it immediately;
+    // cloud mirroring must never keep the UI waiting on Cosmos availability.
+    void cosmos.delete(sessionId).catch(() => undefined);
+  }
+  return localExisted || Boolean(cosmos);
 }
 
 export async function listStoredSessionsForActivity(limit: number): Promise<StoredSession[]> {
