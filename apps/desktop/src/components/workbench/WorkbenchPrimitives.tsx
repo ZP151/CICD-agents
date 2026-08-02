@@ -179,6 +179,33 @@ export function ActionLink({
   );
 }
 
+/**
+ * A selectable worklist item for history, activity, and other drill-in lists.
+ * It keeps selection contrast and keyboard focus identical without turning
+ * each list into a visually heavy card grid.
+ */
+export function WorkbenchListItemButton({
+  selected = false,
+  className = "",
+  children,
+  ...props
+}: PropsWithChildren<ButtonHTMLAttributes<HTMLButtonElement> & { selected?: boolean }>) {
+  return (
+    <button
+      {...props}
+      aria-current={selected ? "true" : undefined}
+      data-state={selected ? "selected" : "idle"}
+      className={`w-full rounded-lg border px-3 py-2.5 text-left transition-[background-color,border-color,color,box-shadow] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45 ${
+        selected
+          ? "border-[rgb(var(--app-accent))]/50 bg-[rgb(var(--app-accent-soft))]"
+          : "border-transparent hover:border-[rgb(var(--app-border))] hover:bg-[rgb(var(--app-surface-raised))]"
+      } ${className}`.trim()}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function WorkbenchTextInput({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input

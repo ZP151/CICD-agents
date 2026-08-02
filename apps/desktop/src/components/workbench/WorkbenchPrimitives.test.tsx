@@ -9,6 +9,7 @@ import {
   WorkbenchEmptyState,
   WorkbenchHeader,
   WorkbenchFilterTabs,
+  WorkbenchListItemButton,
   WorkbenchPage,
   WorkbenchSegmentedControl,
   WorkbenchSettingsRow,
@@ -78,6 +79,20 @@ describe("WorkbenchPrimitives", () => {
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain(">Failed</span><span");
     expect(html).toContain("focus-visible:ring");
+  });
+
+  it("uses a shared selected-list treatment for drill-in worklists", () => {
+    const html = renderToStaticMarkup(
+      <>
+        <WorkbenchListItemButton selected onClick={() => undefined}>Review #42</WorkbenchListItemButton>
+        <WorkbenchListItemButton onClick={() => undefined}>Review #43</WorkbenchListItemButton>
+      </>,
+    );
+
+    expect(html).toContain('aria-current="true"');
+    expect(html).toContain('data-state="selected"');
+    expect(html).toContain("focus-visible:ring-[rgb(var(--app-focus))]/45");
+    expect(html).toContain("hover:bg-[rgb(var(--app-surface-raised))]");
   });
 
   it("keeps optional technical detail low-chrome and keyboard accessible", () => {

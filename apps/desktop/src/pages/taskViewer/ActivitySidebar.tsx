@@ -26,6 +26,7 @@ import {
   ActionLink,
   InlineNotice,
   WorkbenchFilterTabs,
+  WorkbenchListItemButton,
 } from "../../components/workbench/WorkbenchPrimitives.js";
 
 interface ActivitySidebarProps {
@@ -716,14 +717,10 @@ function TaskRunList({
       {tasks.map((task) => {
         const selectedTask = task.id === selectedTaskId;
         return (
-          <button
+          <WorkbenchListItemButton
             key={task.id}
             onClick={() => onSelectTask(task.id)}
-            className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
-              selectedTask
-                ? "border-[rgb(var(--app-accent))]/50 bg-[rgb(var(--app-accent-soft))]"
-                : "border-transparent hover:border-[rgb(var(--app-border))] hover:bg-[rgb(var(--app-surface-raised))]"
-            }`}
+            selected={selectedTask}
           >
             <div className="mb-1 flex items-center gap-2">
               <span
@@ -741,7 +738,7 @@ function TaskRunList({
             <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-muted))]">
               {latestDetail(task)}
             </p>
-          </button>
+          </WorkbenchListItemButton>
         );
       })}
     </div>
@@ -775,14 +772,10 @@ function CheckpointActivityList({
         {checkpointActivity.slice(0, 8).map((event) => {
           const selectedEvent = event.id === selectedCheckpointId;
           return (
-            <button
+            <WorkbenchListItemButton
               key={event.id}
               onClick={() => onSelectCheckpoint(event.id)}
-              className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
-                selectedEvent
-                  ? "border-[rgb(var(--app-accent))]/50 bg-[rgb(var(--app-accent-soft))]"
-                  : "border-transparent hover:border-[rgb(var(--app-border))] hover:bg-[rgb(var(--app-surface-raised))]"
-              }`}
+              selected={selectedEvent}
             >
               <div className="mb-1 flex items-center gap-2">
                 <span
@@ -803,7 +796,7 @@ function CheckpointActivityList({
               >
                 {checkpointActivityDetail(event)}
               </p>
-            </button>
+            </WorkbenchListItemButton>
           );
         })}
       </div>

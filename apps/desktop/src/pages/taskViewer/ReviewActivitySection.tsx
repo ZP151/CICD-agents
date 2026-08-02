@@ -8,7 +8,7 @@ import {
 import type { ReviewActivityItem } from "./activityTypes.js";
 import { operationDetailPreview } from "./operationDetailSummary.js";
 import { ProjectLinkFilter } from "./ProjectLinkFilter.js";
-import { WorkbenchSelect } from "../../components/workbench/WorkbenchPrimitives.js";
+import { WorkbenchListItemButton, WorkbenchSelect } from "../../components/workbench/WorkbenchPrimitives.js";
 
 interface ReviewActivitySectionProps {
   projectLinks: ProjectLink[];
@@ -77,14 +77,10 @@ export function ReviewActivitySection({
         {reviewActivity.slice(0, 12).map((event) => {
           const detailSummary = operationDetailPreview(event.details) ?? event.details;
           return (
-            <button
+            <WorkbenchListItemButton
               key={`${event.projectLinkId}-${event.id}`}
               onClick={() => onSelectReview(event.id)}
-              className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
-                event.id === selectedReviewId
-                  ? "border-[rgb(var(--app-accent))]/50 bg-[rgb(var(--app-accent-soft))]"
-                  : "border-transparent hover:border-[rgb(var(--app-border))] hover:bg-[rgb(var(--app-surface-raised))]"
-              }`}
+              selected={event.id === selectedReviewId}
             >
               <div className="mb-1 flex items-center gap-2">
                 <span
@@ -106,7 +102,7 @@ export function ReviewActivitySection({
                 {event.projectLinkName}
                 {detailSummary ? ` · ${detailSummary}` : ""}
               </p>
-            </button>
+            </WorkbenchListItemButton>
           );
         })}
       </div>
