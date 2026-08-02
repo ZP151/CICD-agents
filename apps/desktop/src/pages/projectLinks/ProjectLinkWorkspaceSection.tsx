@@ -1,5 +1,6 @@
 import { useId } from "react";
 import type { ProjectLinkInput } from "../../api.js";
+import { ActionButton, WorkbenchTextInput } from "../../components/workbench/WorkbenchPrimitives.js";
 import { BranchSelect, Field } from "./ProjectLinkFormControls.js";
 
 interface ProjectLinkWorkspaceSectionProps {
@@ -40,19 +41,20 @@ export function ProjectLinkWorkspaceSection({
             Repo path
           </label>
           {form.repoPath && (
-            <button
+            <ActionButton
               type="button"
               onClick={() => onReloadBranches(form.repoPath)}
-              disabled={branchLoading}
+              loading={branchLoading}
               title="Reload branches from this path"
-              className="flex items-center gap-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))] disabled:opacity-40"
+              tone="quiet"
+              className="min-h-7 px-1 text-[10px]"
             >
               <svg
                 width="11"
                 height="11"
                 viewBox="0 0 16 16"
                 fill="none"
-                className={branchLoading ? "animate-spin" : ""}
+                className=""
               >
                 <path
                   d="M13.5 8A5.5 5.5 0 1 1 8 2.5"
@@ -69,15 +71,15 @@ export function ProjectLinkWorkspaceSection({
                   : branches.length > 0
                     ? `${branches.length} branches`
                     : "Detect branches"}
-            </button>
+            </ActionButton>
           )}
         </div>
-        <input
+        <WorkbenchTextInput
           id={repoPathId}
           value={form.repoPath}
           onChange={(event) => set("repoPath")(event.target.value)}
           placeholder="C:\\projects\\my-app"
-          className={repoInputClass}
+          className={`text-sm ${repoInputClass}`}
         />
         {branchError && form.repoPath && (
           <p className="text-[10px] text-[rgb(var(--app-warning))]">

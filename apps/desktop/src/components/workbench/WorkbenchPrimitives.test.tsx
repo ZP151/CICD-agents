@@ -13,6 +13,7 @@ import {
   WorkbenchSettingsSection,
   WorkbenchSkeleton,
   WorkbenchSidePanel,
+  WorkbenchSelect,
   WorkbenchTextInput,
   WorkbenchToggle,
   workbenchPageClass,
@@ -77,6 +78,9 @@ describe("WorkbenchPrimitives", () => {
     const html = renderToStaticMarkup(
       <>
         <WorkbenchTextInput aria-label="Endpoint" placeholder="https://example.test" />
+        <WorkbenchSelect aria-label="Project" defaultValue="mergepilot">
+          <option value="mergepilot">MergePilot</option>
+        </WorkbenchSelect>
         <WorkbenchSegmentedControl
           ariaLabel="Provider"
           options={[{ value: "azure", label: "Azure" }, { value: "openai", label: "OpenAI" }]}
@@ -88,12 +92,14 @@ describe("WorkbenchPrimitives", () => {
     );
 
     expect(html).toContain('aria-label="Endpoint"');
+    expect(html).toContain('aria-label="Project"');
     expect(html).toContain('aria-label="Provider"');
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain('role="switch"');
     expect(html).toContain('aria-checked="true"');
     expect(html).toContain("focus:ring");
     expect(html).toContain("disabled");
+    expect(html).toContain("min-h-9");
   });
 
   it("provides responsive setting rows without a page-specific form vocabulary", () => {

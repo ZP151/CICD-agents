@@ -1,4 +1,5 @@
 import type { ProjectLink } from "../../api";
+import { ActionButton } from "../../components/workbench/WorkbenchPrimitives.js";
 
 export function ProjectLinkCard({
   projectLink,
@@ -41,7 +42,7 @@ export function ProjectLinkCard({
         <div className="mt-1 flex min-w-0 max-w-full flex-wrap items-center gap-2">
           {adoScope && (
             <span
-              className="min-w-0 max-w-full truncate rounded border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5 text-xs text-[rgb(var(--app-text-muted))]"
+              className="min-w-0 max-w-full truncate text-xs text-[rgb(var(--app-text-muted))]"
               title={[projectLink.adoOrgUrl, projectLink.adoProject, projectLink.adoRepoName]
                 .filter(Boolean)
                 .join(" / ")}
@@ -51,7 +52,7 @@ export function ProjectLinkCard({
           )}
           {branchScope && (
             <span
-              className="min-w-0 max-w-full truncate rounded border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5 text-xs text-[rgb(var(--app-text-subtle))]"
+              className="min-w-0 max-w-full truncate text-xs text-[rgb(var(--app-text-subtle))]"
               title={`Default branch: ${projectLink.defaultBranch || "not set"}; PR target: ${projectLink.targetBranch || "not set"}`}
             >
               {branchScope}
@@ -60,12 +61,13 @@ export function ProjectLinkCard({
         </div>
       </div>
       <div className="flex shrink-0 items-center justify-end gap-1 opacity-100 transition sm:ml-3 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
-        <button
+        <ActionButton
           type="button"
           onClick={onEdit}
           aria-label={`Edit ${projectLink.name}`}
           title="Edit Project Link"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/30"
+          tone="quiet"
+          className="h-8 w-8 shrink-0 px-0"
         >
           <svg aria-hidden="true" width="15" height="15" viewBox="0 0 20 20" fill="none">
             <path
@@ -82,13 +84,14 @@ export function ProjectLinkCard({
               strokeWidth="1.5"
             />
           </svg>
-        </button>
-        <button
+        </ActionButton>
+        <ActionButton
           type="button"
           onClick={onDelete}
           aria-label={`Delete ${projectLink.name}`}
           title="Delete Project Link"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-danger))] hover:text-[rgb(var(--app-danger))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-danger))]/25"
+          tone="quiet"
+          className="h-8 w-8 shrink-0 px-0 hover:bg-[rgb(var(--app-danger-soft))] hover:text-[rgb(var(--app-danger))] focus-visible:ring-[rgb(var(--app-danger))]/30"
         >
           <svg aria-hidden="true" width="15" height="15" viewBox="0 0 20 20" fill="none">
             <path
@@ -99,7 +102,7 @@ export function ProjectLinkCard({
               strokeWidth="1.5"
             />
           </svg>
-        </button>
+        </ActionButton>
       </div>
     </div>
   );

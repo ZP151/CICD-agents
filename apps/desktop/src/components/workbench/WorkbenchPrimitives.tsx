@@ -5,6 +5,7 @@ import type {
   InputHTMLAttributes,
   PropsWithChildren,
   ReactNode,
+  SelectHTMLAttributes,
 } from "react";
 
 type ActionTone = "primary" | "secondary" | "danger" | "quiet";
@@ -160,6 +161,20 @@ export function WorkbenchTextInput({ className = "", ...props }: InputHTMLAttrib
     <input
       {...props}
       className={`w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text))] outline-none transition-[background-color,border-color,box-shadow] duration-[var(--app-motion-fast)] placeholder:text-[rgb(var(--app-text-subtle))] hover:border-[rgb(var(--app-border-strong))] focus:border-[rgb(var(--app-accent))] focus:ring-2 focus:ring-[rgb(var(--app-focus))]/35 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
+    />
+  );
+}
+
+/**
+ * The native select counterpart to WorkbenchTextInput. Keeping its focus,
+ * hover, disabled and sizing behavior in one place prevents each workflow
+ * page from accumulating a slightly different form language.
+ */
+export function WorkbenchSelect({ className = "", ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className={`min-h-9 w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text))] outline-none transition-[background-color,border-color,box-shadow] duration-[var(--app-motion-fast)] hover:border-[rgb(var(--app-border-strong))] focus:border-[rgb(var(--app-accent))] focus:ring-2 focus:ring-[rgb(var(--app-focus))]/35 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
     />
   );
 }

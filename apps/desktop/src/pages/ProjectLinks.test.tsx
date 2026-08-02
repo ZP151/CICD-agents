@@ -117,12 +117,14 @@ describe("ProjectLinks layout", () => {
     expect(html).toContain("title=\"A very long Project Link name that should not push actions outside\"");
     expect(html).toContain(`title="${repoPath}"`);
     expect(html).toContain("truncate font-mono text-xs");
-    expect(html).toContain("min-w-0 max-w-full truncate rounded");
+    expect(html).toContain("min-w-0 max-w-full truncate text-xs");
     expect(html).toContain("aria-label=\"Edit A very long Project Link name");
     expect(html).toContain("aria-label=\"Delete A very long Project Link name");
     expect(html).not.toContain(">https://tebssg.visualstudio.com/<");
     expect(html).not.toContain(">C:\\Users\\15492\\Develop\\ClaimBot_API<");
     expect(html).not.toContain("justify-between rounded-xl");
+    expect(html).toContain("border border-transparent");
+    expect(html).not.toContain("bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5 text-xs");
     expect(html).not.toContain(">Edit</button>");
     expect(html).not.toContain(">Delete</button>");
   });

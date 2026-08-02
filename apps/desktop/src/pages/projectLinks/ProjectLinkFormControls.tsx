@@ -3,6 +3,11 @@ import {
   type AdoDiscoveryKind,
   type AdoDiscoveryOption,
 } from "../../api";
+import {
+  ActionButton,
+  WorkbenchSelect,
+  WorkbenchTextInput,
+} from "../../components/workbench/WorkbenchPrimitives.js";
 
 export function Field({
   label,
@@ -34,23 +39,22 @@ export function Field({
       )}
       {children ?? (
         <div className="relative flex items-center">
-          <input
+          <WorkbenchTextInput
             type={isSecret && !show ? "password" : "text"}
             value={value}
             onChange={(event) => onChange?.(event.target.value)}
             placeholder={placeholder}
             disabled={disabled}
-            className={`w-full rounded-lg border px-3 py-2 pr-8 text-sm placeholder:text-[rgb(var(--app-text-subtle))] outline-none transition ${
-              disabled
-                ? "cursor-not-allowed border-[rgb(var(--app-border))] bg-[rgb(var(--app-bg-muted))] text-[rgb(var(--app-text-faint))]"
-                : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text))] focus:border-[rgb(var(--app-accent))] focus:outline-none"
-            }`}
+            className="pr-9 text-sm disabled:bg-[rgb(var(--app-bg-muted))] disabled:text-[rgb(var(--app-text-faint))]"
           />
           {isSecret && !disabled && (
-            <button
+            <ActionButton
               type="button"
               onClick={() => setShow((visible) => !visible)}
-              className="absolute right-2.5 text-[rgb(var(--app-text-subtle))] transition hover:text-[rgb(var(--app-text))]"
+              tone="quiet"
+              aria-label={show ? "Hide password" : "Show password"}
+              title={show ? "Hide password" : "Show password"}
+              className="absolute right-1 h-7 min-h-7 w-7 px-0 text-[rgb(var(--app-text-subtle))]"
             >
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 {show ? (
@@ -69,7 +73,7 @@ export function Field({
                   />
                 )}
               </svg>
-            </button>
+            </ActionButton>
           )}
         </div>
       )}
@@ -117,10 +121,10 @@ export function BranchSelect({
     return (
       <label className="flex min-w-0 flex-col gap-1">
         <span className="text-xs font-medium text-[rgb(var(--app-text-muted))]">{label}</span>
-        <select
+        <WorkbenchSelect
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="w-full min-w-0 rounded-lg border border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-[rgb(var(--app-success))]"
+          className="border-[rgb(var(--app-success-border))] text-sm focus:border-[rgb(var(--app-success))]"
         >
           {branches.map((branch) => (
             <option key={branch} value={branch}>
@@ -128,7 +132,7 @@ export function BranchSelect({
             </option>
           ))}
           {!branches.includes(value) && value && <option value={value}>{value} (saved)</option>}
-        </select>
+        </WorkbenchSelect>
       </label>
     );
   }
@@ -157,13 +161,13 @@ export function ProjectDiscoveryField({
   return (
     <Field label={label}>
       {options.length > 0 ? (
-        <select
+        <WorkbenchSelect
           value={options.some((option) => option.name === value) ? value : ""}
           onChange={(event) => {
             const selected = options.find((option) => option.name === event.target.value);
             if (selected) onApply(kind, selected);
           }}
-          className="w-full min-w-0 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-[rgb(var(--app-accent))]"
+          className="text-sm"
         >
           <option value="">
             {discovering === kind ? `Discovering ${kind}...` : `Select ${kind.slice(0, -1)}`}
@@ -173,13 +177,13 @@ export function ProjectDiscoveryField({
               {option.name}
             </option>
           ))}
-        </select>
+        </WorkbenchSelect>
       ) : (
-        <input
+        <WorkbenchTextInput
           value={value}
           onChange={(event) => onManualChange(event.target.value)}
           placeholder={discovering === kind ? `Discovering ${kind}...` : placeholder}
-          className="w-full min-w-0 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text))] placeholder:text-[rgb(var(--app-text-subtle))] outline-none transition focus:border-[rgb(var(--app-accent))]"
+          className="text-sm"
         />
       )}
     </Field>
