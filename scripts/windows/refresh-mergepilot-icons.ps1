@@ -168,6 +168,60 @@ public static class MergePilotIconSurface
         }
     }
 
+    public static void RenderTaskbarFrame(string sourcePath, string targetPath, int outputSize)
+    {
+        // Taskbar and notification-area icons are viewed at physical pixel
+        // sizes as low as 16px. Render every frame directly from the retained
+        // 1254px source, then constrain only edge alpha. The cloud contour,
+        // internal nodes, whitespace, and check medallion stay identical to
+        // the approved main artwork at every size.
+        using (var source = new Bitmap(sourcePath))
+        using (var target = new Bitmap(outputSize, outputSize, PixelFormat.Format32bppArgb))
+        using (var graphics = Graphics.FromImage(target))
+        {
+            // Keep the original transparent canvas and every proportion intact.
+            // A size-dependent fill scale subtly changed the approved icon's
+            // whitespace at 16–64px, which made those frames look like a
+            // different mark. Pixel refinement must not become redesign.
+            var renderSize = outputSize;
+            var offset = 0;
+
+            graphics.Clear(Color.Transparent);
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.PixelOffsetMode = PixelOffsetMode.Half;
+            graphics.CompositingQuality = CompositingQuality.HighQuality;
+            graphics.SmoothingMode = SmoothingMode.HighQuality;
+            graphics.DrawImage(source, new Rectangle(offset, offset, renderSize, renderSize));
+
+            SnapTaskbarAlpha(target, 80);
+
+            var temporaryPath = targetPath + ".mergepilot-taskbar-tmp";
+            target.Save(temporaryPath, ImageFormat.Png);
+            File.Copy(temporaryPath, targetPath, true);
+            File.Delete(temporaryPath);
+        }
+    }
+
+    private static void SnapTaskbarAlpha(Bitmap bitmap, int alphaThreshold)
+    {
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.A == 0) continue;
+                if (pixel.A < alphaThreshold)
+                {
+                    bitmap.SetPixel(x, y, Color.Transparent);
+                }
+                else
+                {
+                    bitmap.SetPixel(x, y, Color.FromArgb(255, pixel.R, pixel.G, pixel.B));
+                }
+            }
+        }
+    }
+
 }
 '@
 
@@ -236,6 +290,23 @@ foreach ($relativePath in $iconPaths) {
   # presentation pixels that remain connected to the canvas edge.
   [MergePilotIconSurface]::RemoveOuterSurface($path)
 }
+
+# Build a source-controlled native frame set. Every entry is rendered directly
+# from the full-resolution transparent master; no low-resolution PNG is ever
+# enlarged to construct an ICO payload. These exported files also provide a
+# reviewable per-DPI source for 100%, 125%, 150%, 175%, and 200% Windows.
+$taskbarSizes = [int[]](16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 96, 128, 256)
+$taskbarDirectory = Join-Path $desktopRoot "src-tauri\icons\taskbar"
+New-Item -ItemType Directory -Force -Path $taskbarDirectory | Out-Null
+foreach ($taskbarSize in $taskbarSizes) {
+  $taskbarPath = Join-Path $taskbarDirectory "${taskbarSize}x${taskbarSize}.png"
+  [MergePilotIconSurface]::RenderTaskbarFrame($runtimeSourcePath, $taskbarPath, $taskbarSize)
+}
+
+# The notification-area API accepts a bitmap rather than an ICO. Point it at
+# the dedicated 32px frame so it never has to downscale a large web raster.
+[System.IO.File]::Copy((Join-Path $taskbarDirectory "32x32.png"), (Join-Path $desktopRoot "src-tauri\icons\32x32.png"), $true)
+[System.IO.File]::Copy((Join-Path $taskbarDirectory "48x48.png"), (Join-Path $desktopRoot "src-tauri\icons\48x48.png"), $true)
 
 function Get-PngPayload([string] $sourcePath, [int] $size) {
   $source = [System.Drawing.Bitmap]::FromFile($sourcePath)
@@ -306,15 +377,14 @@ function Write-Ico([string] $targetPath, [byte[][]] $payloads, [int[]] $sizes) {
 # Windows chooses the closest payload for the taskbar at the active display
 # scale. 40px and 96px are common 125% / high-DPI requests; without them the
 # shell can enlarge a 32px or 64px frame and soften the approved cloud mark.
-$icoSizes = [int[]](16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 96, 128, 256)
+$icoSizes = $taskbarSizes
 # Render every ICO payload from the retained full-resolution master, rather
 # than from icon.png after it has already been resized. This is especially
 # important for the small taskbar frames where a second resize softens the
 # blue contour and makes the cloud appear blurry.
-$iconSource = $masterSourcePath
 [System.Collections.Generic.List[byte[]]]$icoPayloadList = [System.Collections.Generic.List[byte[]]]::new()
 foreach ($icoSize in $icoSizes) {
-  $icoPayloadList.Add((Get-PngPayload $iconSource $icoSize))
+  $icoPayloadList.Add([System.IO.File]::ReadAllBytes((Join-Path $taskbarDirectory "${icoSize}x${icoSize}.png")))
 }
 [byte[][]]$icoPayloads = $icoPayloadList.ToArray()
 Write-Ico (Join-Path $desktopRoot "src-tauri\\icons\\icon.ico") $icoPayloads $icoSizes

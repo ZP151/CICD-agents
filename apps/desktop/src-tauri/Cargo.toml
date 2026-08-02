@@ -25,7 +25,7 @@ log = "0.4"
 custom-protocol = ["tauri/custom-protocol"]
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_HiDpi"] }
 
 [package.metadata.bundle]
 identifier = "com.mergepilot.desktop"

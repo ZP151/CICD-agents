@@ -15,5 +15,10 @@ fn main() {
     ] {
         println!("cargo:rerun-if-changed={path}");
     }
+    for size in [
+        16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 96, 128, 256,
+    ] {
+        println!("cargo:rerun-if-changed=icons/taskbar/{size}x{size}.png");
+    }
     tauri_build::build();
 }

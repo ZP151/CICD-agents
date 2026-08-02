@@ -12,14 +12,24 @@ Add-Type -AssemblyName System.Drawing
 function Get-IconAlphaBounds([string]$Path) {
   $bitmap = [System.Drawing.Bitmap]::FromFile($Path)
   try {
+    return Get-AlphaBoundsFromBitmap $bitmap $Path
+  } finally {
+    $bitmap.Dispose()
+  }
+}
+
+function Get-AlphaBoundsFromBitmap([System.Drawing.Bitmap]$Bitmap, [string]$Path) {
     $minX = $bitmap.Width
     $minY = $bitmap.Height
     $maxX = -1
     $maxY = -1
+    $semiTransparentPixels = 0
 
     for ($y = 0; $y -lt $bitmap.Height; $y++) {
       for ($x = 0; $x -lt $bitmap.Width; $x++) {
-        if ($bitmap.GetPixel($x, $y).A -eq 0) { continue }
+        $alpha = $bitmap.GetPixel($x, $y).A
+        if ($alpha -eq 0) { continue }
+        if ($alpha -lt 255) { $semiTransparentPixels++ }
         $minX = [Math]::Min($minX, $x)
         $minY = [Math]::Min($minY, $y)
         $maxX = [Math]::Max($maxX, $x)
@@ -39,10 +49,8 @@ function Get-IconAlphaBounds([string]$Path) {
       BottomRightAlpha = $bitmap.GetPixel($bitmap.Width - 1, $bitmap.Height - 1).A
       VisibleWidth = $maxX - $minX + 1
       VisibleHeight = $maxY - $minY + 1
+      SemiTransparentPixels = $semiTransparentPixels
     }
-  } finally {
-    $bitmap.Dispose()
-  }
 }
 
 function Assert-TransparentCloudFrame([string]$Path, [int]$ExpectedSize, [double]$MinimumVisibleRatio) {
@@ -81,6 +89,37 @@ function Get-IcoFrameSizes([string]$Path) {
   return @($sizes | Sort-Object -Unique)
 }
 
+function Get-IcoFrames([string]$Path) {
+  $bytes = [System.IO.File]::ReadAllBytes($Path)
+  $count = [BitConverter]::ToUInt16($bytes, 4)
+
+  for ($index = 0; $index -lt $count; $index++) {
+    $directoryOffset = 6 + 16 * $index
+    $size = [int]$bytes[$directoryOffset]
+    if ($size -eq 0) { $size = 256 }
+    $payloadLength = [BitConverter]::ToUInt32($bytes, $directoryOffset + 8)
+    $payloadOffset = [BitConverter]::ToUInt32($bytes, $directoryOffset + 12)
+    $payload = New-Object byte[] $payloadLength
+    [Array]::Copy($bytes, $payloadOffset, $payload, 0, $payloadLength)
+    $stream = New-Object System.IO.MemoryStream(,$payload)
+    $bitmap = [System.Drawing.Bitmap]::FromStream($stream)
+    try {
+      $profile = Get-AlphaBoundsFromBitmap $bitmap "${Path}:${size}x${size}"
+      [pscustomobject]@{
+        Size = $size
+        Width = $bitmap.Width
+        Height = $bitmap.Height
+        PngPayload = ($payload[0] -eq 137 -and $payload[1] -eq 80 -and $payload[2] -eq 78 -and $payload[3] -eq 71)
+        PayloadHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($payload))
+        Profile = $profile
+      }
+    } finally {
+      $bitmap.Dispose()
+      $stream.Dispose()
+    }
+  }
+}
+
 $desktopRoot = Join-Path (Resolve-Path $RepoRoot) "apps\\desktop"
 $approvedReference = Join-Path $desktopRoot "src\\assets\\mergepilot-icon-reference.png"
 $webIcon = Join-Path $desktopRoot "src\\assets\\mergepilot-icon.png"
@@ -88,6 +127,8 @@ $nativeIcon32 = Join-Path $desktopRoot "src-tauri\\icons\\32x32.png"
 $nativeIcon48 = Join-Path $desktopRoot "src-tauri\\icons\\48x48.png"
 $nativeIcon256 = Join-Path $desktopRoot "src-tauri\\icons\\128x128@2x.png"
 $nativeIco = Join-Path $desktopRoot "src-tauri\\icons\\icon.ico"
+$taskbarDirectory = Join-Path $desktopRoot "src-tauri\\icons\\taskbar"
+$taskbarSizes = @(16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 96, 128, 256)
 
 # This is the user-approved cloud artwork.  Keep the source itself in the
 # repository and fail verification if a later refresh silently replaces it
@@ -99,14 +140,49 @@ if ($actualReferenceHash -ne $approvedReferenceHash) {
 }
 
 $webFrame = Assert-TransparentCloudFrame $webIcon 512 0.6
-$smallFrame = Assert-TransparentCloudFrame $nativeIcon32 32 0.68
-$taskbarFrame = Assert-TransparentCloudFrame $nativeIcon48 48 0.68
+$smallFrame = Assert-TransparentCloudFrame $nativeIcon32 32 0.6
+$taskbarFrame = Assert-TransparentCloudFrame $nativeIcon48 48 0.6
 $retinaFrame = Assert-TransparentCloudFrame $nativeIcon256 256 0.65
 
 $expectedIcoFrames = @(16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 96, 128, 256)
 $actualIcoFrames = Get-IcoFrameSizes $nativeIco
 if (Compare-Object -ReferenceObject $expectedIcoFrames -DifferenceObject $actualIcoFrames) {
   throw "ICO frame set is incomplete. Expected $($expectedIcoFrames -join ', '); got $($actualIcoFrames -join ', ')."
+}
+
+# The shell must be able to choose an exact per-DPI bitmap. Verify each ICO
+# entry is the byte-identical, crisp taskbar source file rather than a runtime
+# resize of one PNG. Small frames deliberately contain only fully opaque or
+# fully transparent pixels so no soft glow/shadow survives into the taskbar.
+$icoFrames = @(Get-IcoFrames $nativeIco)
+foreach ($size in $taskbarSizes) {
+  $taskbarPath = Join-Path $taskbarDirectory "${size}x${size}.png"
+  if (-not (Test-Path -LiteralPath $taskbarPath)) {
+    throw "Missing exported taskbar frame: $taskbarPath"
+  }
+
+  $taskbarFrame = Assert-TransparentCloudFrame $taskbarPath $size 0.6
+  if ($taskbarFrame.SemiTransparentPixels -ne 0) {
+    throw "Taskbar frame contains a soft alpha edge: $taskbarPath"
+  }
+
+  $icoFrame = @($icoFrames | Where-Object { $_.Size -eq $size })
+  if ($icoFrame.Count -ne 1 -or -not $icoFrame[0].PngPayload -or $icoFrame[0].Width -ne $size -or $icoFrame[0].Height -ne $size) {
+    throw "ICO entry is invalid for ${size}px."
+  }
+  if ($icoFrame[0].Profile.SemiTransparentPixels -ne 0) {
+    throw "ICO entry contains a soft alpha edge: ${size}px"
+  }
+  $taskbarHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([System.IO.File]::ReadAllBytes($taskbarPath)))
+  if ($icoFrame[0].PayloadHash -ne $taskbarHash) {
+    throw "ICO entry is not the exact exported ${size}px taskbar source."
+  }
+}
+
+$trayFrameHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([System.IO.File]::ReadAllBytes($nativeIcon32)))
+$taskbar32Hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([System.IO.File]::ReadAllBytes((Join-Path $taskbarDirectory "32x32.png"))))
+if ($trayFrameHash -ne $taskbar32Hash) {
+  throw "Notification-area icon must use the dedicated crisp 32px frame."
 }
 
 if (-not $ExecutablePath) {
@@ -129,5 +205,7 @@ if ($ExecutablePath) {
   }
 }
 
-Write-Host "Verified approved MergePilot cloud icon assets: approved source, 512px web source, high-DPI native PNG/ICO frames, and executable resource."
-Write-Host "Web visible bounds: $($webFrame.VisibleWidth)x$($webFrame.VisibleHeight); tray frame: $($smallFrame.VisibleWidth)x$($smallFrame.VisibleHeight); taskbar frame: $($taskbarFrame.VisibleWidth)x$($taskbarFrame.VisibleHeight)."
+Write-Host "Verified approved MergePilot cloud icon assets: approved source, 512px web source, exported crisp taskbar frames, matching ICO payloads, and executable resource."
+$icoFrameSummary = @($icoFrames | ForEach-Object { "$($_.Size)x$($_.Size)" }) -join ', '
+Write-Host "ICO frames: $icoFrameSummary"
+Write-Host "Web visible bounds: $($webFrame.VisibleWidth)x$($webFrame.VisibleHeight); native 32px tray source: $($smallFrame.VisibleWidth)x$($smallFrame.VisibleHeight); 256px app source: $($taskbarFrame.VisibleWidth)x$($taskbarFrame.VisibleHeight)."

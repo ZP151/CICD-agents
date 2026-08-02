@@ -12,59 +12,89 @@ use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_shell::{process::{CommandChild, CommandEvent}, ShellExt};
 
 #[cfg(target_os = "windows")]
-use windows::Win32::{
-    Foundation::{HWND, LPARAM, WPARAM},
-    UI::WindowsAndMessaging::{CreateIcon, SendMessageW, ICON_BIG, WM_SETICON},
-};
+use windows::Win32::{Foundation::HWND, UI::HiDpi::GetDpiForWindow};
 
 /// The port on which the daemon is listening.  Set once during setup() and
 /// read by the frontend via the `get_daemon_port` command.
 static DAEMON_PORT: OnceLock<u16> = OnceLock::new();
 const DEFAULT_DAEMON_PORT: u16 = 8787;
 
-/// Tao assigns only `ICON_SMALL` from the application resource by default.
-/// Windows uses `ICON_BIG` for the taskbar, and falling back to the 16px small
-/// handle makes the cloud look soft on a normal 24–32px taskbar. Build one
-/// retained 48px native handle for that slot; the 16px title-bar icon remains
-/// supplied by the ICO resource.
 #[cfg(target_os = "windows")]
-fn assign_taskbar_icon(
-    window: &tauri::WebviewWindow,
-    image: Image<'_>,
+const TRAY_ICON_ID: &str = "mergepilot-tray";
+
+#[cfg(target_os = "windows")]
+const TRAY_ICON_FRAME_SIZES: &[u32] = &[
+    16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 96, 128, 256,
+];
+
+#[cfg(target_os = "windows")]
+fn tray_icon_frame_size_for_dpi(dpi: u32) -> u32 {
+    let target = ((16 * dpi.max(96) + 48) / 96).clamp(16, 256);
+    *TRAY_ICON_FRAME_SIZES
+        .iter()
+        .min_by_key(|size| size.abs_diff(target))
+        .expect("MergePilot ships notification-area icon frames")
+}
+
+/// Returns an exact, exported notification-area frame for the window's current
+/// DPI. The shell receives a bitmap for tray icons (not a multi-frame ICO), so
+/// selecting here prevents a second downscale of the web/app logo.
+#[cfg(target_os = "windows")]
+fn tray_icon_for_dpi(dpi: u32) -> Result<Image<'static>, Box<dyn std::error::Error>> {
+    const FRAMES: &[(u32, &[u8])] = &[
+        (16, include_bytes!("../icons/taskbar/16x16.png")),
+        (20, include_bytes!("../icons/taskbar/20x20.png")),
+        (24, include_bytes!("../icons/taskbar/24x24.png")),
+        (30, include_bytes!("../icons/taskbar/30x30.png")),
+        (32, include_bytes!("../icons/taskbar/32x32.png")),
+        (36, include_bytes!("../icons/taskbar/36x36.png")),
+        (40, include_bytes!("../icons/taskbar/40x40.png")),
+        (48, include_bytes!("../icons/taskbar/48x48.png")),
+        (60, include_bytes!("../icons/taskbar/60x60.png")),
+        (64, include_bytes!("../icons/taskbar/64x64.png")),
+        (72, include_bytes!("../icons/taskbar/72x72.png")),
+        (96, include_bytes!("../icons/taskbar/96x96.png")),
+        (128, include_bytes!("../icons/taskbar/128x128.png")),
+        (256, include_bytes!("../icons/taskbar/256x256.png")),
+    ];
+
+    let target = tray_icon_frame_size_for_dpi(dpi);
+    let (_, bytes) = FRAMES
+        .iter()
+        .find(|(size, _)| *size == target)
+        .expect("every declared tray size has an exported asset");
+    Ok(Image::from_bytes(bytes)?)
+}
+
+#[cfg(target_os = "windows")]
+fn dpi_for_window_handle(hwnd: HWND) -> u32 {
+    let dpi = unsafe { GetDpiForWindow(hwnd) };
+    if dpi == 0 { 96 } else { dpi }
+}
+
+#[cfg(target_os = "windows")]
+fn refresh_tray_icon_for_window(
+    window: &tauri::Window,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut pixels = image.rgba().to_vec();
-    let pixel_count = pixels.len() / 4;
-    let mut and_mask = Vec::with_capacity(pixel_count);
-
-    for pixel in pixels.chunks_exact_mut(4) {
-        and_mask.push(pixel[3].wrapping_sub(u8::MAX));
-        pixel.swap(0, 2);
-    }
-
-    let icon = unsafe {
-        CreateIcon(
-            None,
-            image.width() as i32,
-            image.height() as i32,
-            1,
-            32,
-            and_mask.as_ptr(),
-            pixels.as_ptr(),
-        )
-    }?;
-    let hwnd = window.hwnd()?;
-
-    // The native window owns the handle for its lifetime. Do not destroy it
-    // while the shell can still ask Windows to paint the taskbar button.
-    unsafe {
-        SendMessageW(
-            HWND(hwnd.0),
-            WM_SETICON,
-            Some(WPARAM(ICON_BIG as usize)),
-            Some(LPARAM(icon.0 as isize)),
-        );
+    if let Some(tray) = window.app_handle().tray_by_id(TRAY_ICON_ID) {
+        let hwnd = window.hwnd()?;
+        tray.set_icon(Some(tray_icon_for_dpi(dpi_for_window_handle(hwnd))?))?;
     }
     Ok(())
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod windows_icon_tests {
+    use super::tray_icon_frame_size_for_dpi;
+
+    #[test]
+    fn selects_exact_notification_area_frames_for_common_windows_scales() {
+        assert_eq!(tray_icon_frame_size_for_dpi(96), 16);
+        assert_eq!(tray_icon_frame_size_for_dpi(120), 20);
+        assert_eq!(tray_icon_frame_size_for_dpi(144), 24);
+        assert_eq!(tray_icon_frame_size_for_dpi(168), 30);
+        assert_eq!(tray_icon_frame_size_for_dpi(192), 32);
+    }
 }
 
 fn configured_daemon_port() -> u16 {
@@ -335,14 +365,18 @@ pub fn run() {
                 window.hide().unwrap();
                 api.prevent_close();
             }
+
+            // Tauri/tao receives WM_DPICHANGED as a scale-factor event. Refresh
+            // only the notification-area bitmap here; the taskbar continues to
+            // select the closest embedded frame from icon.ico itself.
+            #[cfg(target_os = "windows")]
+            if matches!(event, tauri::WindowEvent::ScaleFactorChanged { .. }) {
+                if let Err(error) = refresh_tray_icon_for_window(window) {
+                    log::warn!("Failed to refresh the DPI-specific tray icon: {error}");
+                }
+            }
         })
         .setup(|app| {
-            #[cfg(target_os = "windows")]
-            if let Some(main_window) = app.get_webview_window("main") {
-                let taskbar_icon = Image::from_bytes(include_bytes!("../icons/48x48.png"))?;
-                assign_taskbar_icon(&main_window, taskbar_icon)?;
-            }
-
             // Windows development runs are not installed, so explicitly claim the
             // configured scheme for the current executable. Release installers
             // register it from tauri.conf.json.
@@ -363,12 +397,21 @@ pub fn run() {
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open_main, &separator, &quit])?;
 
-            // The taskbar gets its per-DPI icon from the multi-frame ICO
-            // embedded in the executable. The tray API accepts one bitmap, so
-            // use the hand-sized 32px frame rather than asking the shell to
-            // downscale a 256px icon for every notification-area draw.
+            // The taskbar receives the multi-frame ICO embedded in the EXE.
+            // The tray API needs a single bitmap, so choose the exact exported
+            // frame for this window's physical DPI and refresh it on DPI moves.
+            #[cfg(target_os = "windows")]
+            let tray_icon = match app.get_webview_window("main") {
+                Some(main_window) => {
+                    let hwnd = main_window.hwnd()?;
+                    tray_icon_for_dpi(dpi_for_window_handle(hwnd))?
+                }
+                None => tray_icon_for_dpi(96)?,
+            };
+            #[cfg(not(target_os = "windows"))]
             let tray_icon = Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
-            TrayIconBuilder::new()
+
+            TrayIconBuilder::with_id("mergepilot-tray")
                 .icon(tray_icon)
                 .menu(&menu)
                 .tooltip("MergePilot")
