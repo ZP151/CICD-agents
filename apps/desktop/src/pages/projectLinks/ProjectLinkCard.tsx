@@ -13,16 +13,23 @@ export function ProjectLinkCard({
   const repoLabel = compactProjectLinkRepoLabel(projectLink.repoPath);
   const adoScope = compactProjectLinkAdoScope(projectLink);
   const branchScope = compactProjectLinkBranchScope(projectLink);
+  const connection = projectLinkConnectionState(projectLink);
 
   return (
     <div className="group flex min-w-0 flex-col gap-3 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2.5 transition hover:border-[rgb(var(--app-border-strong))] sm:flex-row sm:items-start sm:justify-between">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span
-          className="truncate text-sm font-medium text-[rgb(var(--app-text))]"
-          title={projectLink.name}
-        >
-          {nameLabel}
-        </span>
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className="min-w-0 flex-1 truncate text-sm font-medium text-[rgb(var(--app-text))]"
+            title={projectLink.name}
+          >
+            {nameLabel}
+          </span>
+          <span className={`inline-flex shrink-0 items-center gap-1 text-[11px] ${connection.className}`} title={connection.detail}>
+            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+            {connection.label}
+          </span>
+        </div>
         {repoLabel && (
           <span
             className="truncate font-mono text-xs text-[rgb(var(--app-text-muted))]"
@@ -133,4 +140,30 @@ export function compactProjectLinkBranchScope(
     return `${projectLink.defaultBranch} -> ${projectLink.targetBranch}`;
   }
   return projectLink.defaultBranch || projectLink.targetBranch || "";
+}
+
+export function projectLinkConnectionState(
+  projectLink: Pick<ProjectLink, "repoPath" | "adoOrgUrl" | "adoProject" | "adoRepoName">,
+): { label: string; detail: string; className: string } {
+  const hasRepository = Boolean(projectLink.repoPath.trim());
+  const hasAdo = Boolean(projectLink.adoOrgUrl.trim() && projectLink.adoProject.trim() && projectLink.adoRepoName.trim());
+  if (hasRepository && hasAdo) {
+    return {
+      label: "Connected",
+      detail: "Local repository and Azure DevOps mapping are configured.",
+      className: "text-[rgb(var(--app-success))]",
+    };
+  }
+  if (hasRepository) {
+    return {
+      label: "Local only",
+      detail: "A local repository is configured, but Azure DevOps mapping is incomplete.",
+      className: "text-[rgb(var(--app-warning))]",
+    };
+  }
+  return {
+    label: "Setup needed",
+    detail: "Add a local repository and Azure DevOps mapping before using workspace workflows.",
+    className: "text-[rgb(var(--app-text-subtle))]",
+  };
 }

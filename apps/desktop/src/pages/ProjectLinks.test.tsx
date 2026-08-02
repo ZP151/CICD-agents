@@ -15,6 +15,7 @@ import {
   compactProjectLinkAdoScope,
   compactProjectLinkBranchScope,
   compactProjectLinkRepoLabel,
+  projectLinkConnectionState,
 } from "./projectLinks/ProjectLinkCard.js";
 
 describe("ProjectLinks layout", () => {
@@ -48,12 +49,10 @@ describe("ProjectLinks layout", () => {
   it("uses an action-oriented setup empty state", () => {
     const html = renderToStaticMarkup(<ProjectLinksEmpty onCreate={() => undefined} />);
 
-    expect(html).toContain("Create a Project Link to start");
-    expect(html).toContain("Local repository path");
-    expect(html).toContain("Default and PR branches");
-    expect(html).toContain("Azure DevOps mapping");
-    expect(html).toContain("Create Project Link");
-    expect(html).toContain("Setup needs");
+    expect(html).toContain("Connect a project");
+    expect(html).toContain("Link a local repository and Azure DevOps");
+    expect(html).toContain("Connect project");
+    expect(html).not.toContain("Setup needs");
     expect(html).not.toContain("lg:justify-between");
     expect(html).not.toContain("sm:grid-cols-3");
     expect(html).not.toContain("Create your first Project Link");
@@ -105,6 +104,7 @@ describe("ProjectLinks layout", () => {
     expect(html).toContain("flex min-w-0 max-w-full flex-wrap");
     expect(html).toContain(">ClaimBot_API<");
     expect(html).toContain("TeBS-ClaimBot / ClaimBot_API");
+    expect(html).toContain("Connected");
     expect(html).toContain("feature/cicd-agent-20260719-responsive -&gt; main");
     expect(html).toContain("A very long Project Link name that shou...");
     expect(html).toContain("title=\"A very long Project Link name that should not push actions outside\"");
@@ -136,6 +136,24 @@ describe("ProjectLinks layout", () => {
       defaultBranch: "feature/work",
       targetBranch: "main",
     })).toBe("feature/work -> main");
+    expect(projectLinkConnectionState({
+      repoPath: "C:\\repo",
+      adoOrgUrl: "https://dev.azure.com/demo",
+      adoProject: "Demo",
+      adoRepoName: "repo",
+    }).label).toBe("Connected");
+    expect(projectLinkConnectionState({
+      repoPath: "C:\\repo",
+      adoOrgUrl: "",
+      adoProject: "",
+      adoRepoName: "",
+    }).label).toBe("Local only");
+    expect(projectLinkConnectionState({
+      repoPath: "",
+      adoOrgUrl: "",
+      adoProject: "",
+      adoRepoName: "",
+    }).label).toBe("Setup needed");
   });
 
   it("preserves the managed MCP selection but clears legacy executable and credential fields", () => {
