@@ -420,12 +420,14 @@ export function WorkbenchSidePanel({
   onOpenChange,
   title,
   description,
+  actions,
   children,
 }: PropsWithChildren<{
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   description?: string;
+  actions?: ReactNode;
 }>) {
   if (typeof document === "undefined") {
     if (!open) return null;
@@ -436,7 +438,10 @@ export function WorkbenchSidePanel({
             <h3 className="truncate text-sm font-semibold text-[rgb(var(--app-text))]">{title}</h3>
             {description && <p className="mt-1 text-xs leading-5 text-[rgb(var(--app-text-muted))]">{description}</p>}
           </div>
-          <ActionButton aria-label={`Close ${title}`} tone="quiet" className="shrink-0 px-2" onClick={() => onOpenChange(false)}>Close</ActionButton>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            {actions}
+            <ActionButton aria-label={`Close ${title}`} tone="quiet" className="px-2" onClick={() => onOpenChange(false)}>Close</ActionButton>
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
       </aside>
@@ -453,9 +458,12 @@ export function WorkbenchSidePanel({
               <Dialog.Title className="truncate text-sm font-semibold text-[rgb(var(--app-text))]">{title}</Dialog.Title>
               {description && <Dialog.Description className="mt-1 text-xs leading-5 text-[rgb(var(--app-text-muted))]">{description}</Dialog.Description>}
             </div>
-            <Dialog.Close asChild>
-              <ActionButton aria-label={`Close ${title}`} tone="quiet" className="shrink-0 px-2">Close</ActionButton>
-            </Dialog.Close>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+              {actions}
+              <Dialog.Close asChild>
+                <ActionButton aria-label={`Close ${title}`} tone="quiet" className="px-2">Close</ActionButton>
+              </Dialog.Close>
+            </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
         </Dialog.Content>

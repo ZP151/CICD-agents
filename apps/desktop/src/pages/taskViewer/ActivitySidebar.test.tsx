@@ -167,14 +167,17 @@ describe("ActivitySidebar", () => {
     expect(html).toContain("focus-visible:ring-2");
   });
 
-  it("uses a responsive shell instead of a permanently fixed-width rail", () => {
+  it("uses a centered timeline instead of a permanently fixed-width rail", () => {
     const shellClass = activitySidebarShellClass();
     const listClass = activitySidebarListClass();
 
     expect(shellClass).toContain("w-full");
-    expect(shellClass).toContain("lg:w-[clamp(16rem,24vw,21rem)]");
-    expect(shellClass).toContain("border-b");
-    expect(shellClass).toContain("lg:border-r");
+    expect(shellClass).toContain("mx-auto");
+    expect(shellClass).toContain("max-w-5xl");
+    expect(shellClass).toContain("lg:max-h-[calc(100vh-5rem)]");
+    expect(shellClass).not.toContain("lg:w-[clamp(16rem,24vw,21rem)]");
+    expect(shellClass).not.toContain("border-b");
+    expect(shellClass).not.toContain("lg:border-r");
     expect(shellClass).not.toContain("lg:w-[clamp(18rem,30vw,23rem)]");
     expect(shellClass).not.toContain("lg:w-[clamp(20rem,28vw,24rem)]");
     expect(shellClass).not.toContain("xl:w-[420px]");
@@ -229,6 +232,19 @@ describe("ActivitySidebar", () => {
     expect(html).not.toContain("git_status");
     expect(html).not.toContain("No agent runs recorded yet.");
     expect(html).not.toContain("Pipeline submission");
+  });
+
+  it("keeps the no-activity empty state in the timeline after the detail pane moves to a drawer", () => {
+    const html = renderActivitySidebar({
+      tasks: [],
+      checkpointActivity: [],
+      prInsightActivity: [],
+      reviewActivity: [],
+    });
+
+    expect(html).toContain("No activity recorded");
+    expect(html).toContain("Workspace actions will appear here after the agent performs work.");
+    expect(html).toContain("border-dashed");
   });
 
   it("shows a selected empty section even though All hides it", () => {

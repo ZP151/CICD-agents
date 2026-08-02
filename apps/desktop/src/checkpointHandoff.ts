@@ -13,6 +13,7 @@ export interface ActivityHandoffDraft {
   kind: "pr_insight";
   artifactId: string;
   projectLinkId?: string;
+  source?: "chat";
 }
 
 export interface PullRequestsHandoffDraft {
@@ -30,13 +31,16 @@ export function handoffProjectLinkId(input: { projectLinkId?: string }): string 
 export function buildActivityPrInsightHandoffDraft(input: {
   artifactId: string;
   projectLinkId?: string;
+  source?: "chat";
 }): ActivityHandoffDraft {
   const projectLinkId = handoffProjectLinkId(input);
-  return {
+  const draft: ActivityHandoffDraft = {
     kind: "pr_insight",
     artifactId: input.artifactId,
     projectLinkId,
   };
+  if (input.source) draft.source = input.source;
+  return draft;
 }
 
 export function buildPullRequestsPrHandoffDraft(input: {

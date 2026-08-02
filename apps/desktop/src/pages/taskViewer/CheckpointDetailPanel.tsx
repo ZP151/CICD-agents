@@ -18,6 +18,7 @@ interface CheckpointDetailPanelProps {
   previewLoading: boolean;
   rollbackLoading: boolean;
   onOpenRollbackPlanInChat: () => void;
+  showHeader?: boolean;
 }
 
 function checkpointStatusClass(ok: boolean): string {
@@ -33,6 +34,7 @@ export function CheckpointDetailPanel({
   previewLoading,
   rollbackLoading,
   onOpenRollbackPlanInChat,
+  showHeader = true,
 }: CheckpointDetailPanelProps): JSX.Element {
   const toolSummary = checkpoint.toolSummary
     ? operationDetailSummary(checkpoint.toolSummary)
@@ -40,7 +42,7 @@ export function CheckpointDetailPanel({
 
   return (
     <div className="space-y-5">
-      <header className="border-b border-[rgb(var(--app-border))] pb-4">
+      {showHeader && <header className="border-b border-[rgb(var(--app-border))] pb-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${checkpointStatusClass(checkpoint.toolOk !== false)}`}
@@ -60,7 +62,7 @@ export function CheckpointDetailPanel({
         <p className="mt-1 font-mono text-xs text-[rgb(var(--app-text-muted))]">
           {checkpoint.checkpointId}
         </p>
-      </header>
+      </header>}
 
       <ActivityFactGrid className={checkpointMetadataGridClass()}>
         <ActivityFact label="Repository" mono>

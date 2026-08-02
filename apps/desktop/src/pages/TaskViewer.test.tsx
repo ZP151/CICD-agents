@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { PrInsightArtifactRecord } from "../api.js";
 import {
   ActivityEmptyDetail,
+  activityDrawerPresentation,
   activityEmptyDetailContent,
   PrInsightReadinessBlockers,
   taskViewerDetailClass,
@@ -110,20 +111,53 @@ describe("TaskViewer PR insight readiness blockers", () => {
 });
 
 describe("ActivityEmptyDetail", () => {
-  it("uses a responsive activity workbench layout", () => {
+  it("keeps the Activity timeline full-width while details use an overlay panel", () => {
     const className = taskViewerLayoutClass();
 
-    expect(className).toContain("lg:flex-row");
-    expect(className).not.toContain("xl:flex-row");
-    expect(className).toContain("items-stretch");
+    expect(className).toBe("min-w-0");
+    expect(className).not.toContain("flex-row");
     expect(className).not.toContain("ml-0");
     expect(className).not.toContain("mr-auto");
 
     const detailClass = taskViewerDetailClass();
     expect(detailClass).toContain("min-w-0");
-    expect(detailClass).toContain("xl:basis-0");
+    expect(detailClass).not.toContain("basis-0");
     expect(detailClass).not.toContain("lg:max-w-[74rem]");
     expect(detailClass).not.toContain("xl:max-w-[74rem]");
+  });
+
+  it("uses concise titles and context in the shared Activity detail drawer", () => {
+    expect(activityDrawerPresentation({
+      task: null,
+      checkpoint: null,
+      prInsight: {
+        id: "insight-1",
+        projectLinkId: "project-link-1",
+        projectLinkName: "Demo",
+        repoPath: "C:\\demo",
+        repository: "demo-repo",
+        pullRequestId: 42,
+        title: "Improve review reliability",
+        kind: "review_run",
+        at: "2026-07-17T10:00:00.000Z",
+        summary: "Saved summary",
+        readiness: "needs_attention",
+        risks: [],
+        tokensIn: 0,
+        tokensOut: 0,
+      },
+      review: null,
+    })).toEqual({
+      title: "PR #42",
+      description: expect.stringContaining("demo-repo · Full review"),
+    });
+
+    expect(activityDrawerPresentation({
+      task: null,
+      checkpoint: null,
+      prInsight: null,
+      review: null,
+    })).toBeNull();
   });
 
   it("uses the shared low-chrome empty state before an operation is selected", () => {

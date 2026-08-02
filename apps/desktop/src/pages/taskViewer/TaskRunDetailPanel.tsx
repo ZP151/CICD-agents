@@ -11,10 +11,16 @@ function shouldFoldStepDetail(detail: string): boolean {
   return /"?(returncode|stdout|stderr|execution_metadata)"?\s*:/.test(trimmed);
 }
 
-export function TaskRunDetailPanel({ task }: { task: TaskView }): JSX.Element {
+export function TaskRunDetailPanel({
+  task,
+  showHeader = true,
+}: {
+  task: TaskView;
+  showHeader?: boolean;
+}): JSX.Element {
   return (
     <div className="space-y-5">
-      <header className="border-b border-[rgb(var(--app-border))] pb-4">
+      {showHeader && <header className="border-b border-[rgb(var(--app-border))] pb-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${statusClass(task.status)}`}
@@ -28,7 +34,7 @@ export function TaskRunDetailPanel({ task }: { task: TaskView }): JSX.Element {
         </div>
         <h2 className="text-lg font-semibold text-[rgb(var(--app-text))]">{taskTitle(task)}</h2>
         <p className="mt-1 font-mono text-xs text-[rgb(var(--app-text-muted))]">{task.id}</p>
-      </header>
+      </header>}
 
       <ActivityDetailSection title="Steps">
         {task.steps.length === 0 ? (

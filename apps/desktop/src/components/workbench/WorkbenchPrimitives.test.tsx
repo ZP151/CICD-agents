@@ -155,7 +155,13 @@ describe("WorkbenchPrimitives", () => {
 
   it("provides a labelled details panel for route-level evidence", () => {
     const html = renderToStaticMarkup(
-      <WorkbenchSidePanel open onOpenChange={() => undefined} title="Review details" description="PR #42">
+      <WorkbenchSidePanel
+        open
+        onOpenChange={() => undefined}
+        title="Review details"
+        description="PR #42"
+        actions={<button type="button">Open source</button>}
+      >
         Stored evidence
       </WorkbenchSidePanel>,
     );
@@ -163,5 +169,6 @@ describe("WorkbenchPrimitives", () => {
     expect(html).toContain('aria-label="Review details"');
     expect(html).toContain("PR #42");
     expect(html).toContain("Stored evidence");
+    expect(html).toContain("Open source");
   });
 });

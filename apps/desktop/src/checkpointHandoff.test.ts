@@ -82,6 +82,18 @@ describe("checkpoint rollback chat handoff", () => {
     });
   });
 
+  it("retains Chat provenance so Activity can offer a direct return path", () => {
+    expect(buildActivityPrInsightHandoffDraft({
+      artifactId: "artifact-42",
+      source: "chat",
+    })).toEqual({
+      kind: "pr_insight",
+      artifactId: "artifact-42",
+      projectLinkId: "",
+      source: "chat",
+    });
+  });
+
   it("builds a Pull Requests handoff draft for returning to the operational PR workspace", () => {
     expect(buildPullRequestsPrHandoffDraft({
       projectLinkId: "project-link-1",

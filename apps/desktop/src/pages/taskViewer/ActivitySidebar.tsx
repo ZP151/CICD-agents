@@ -25,6 +25,7 @@ import {
   ActionButton,
   ActionLink,
   InlineNotice,
+  WorkbenchEmptyState,
   WorkbenchFilterTabs,
   WorkbenchListItemButton,
 } from "../../components/workbench/WorkbenchPrimitives.js";
@@ -319,6 +320,12 @@ export function ActivitySidebar({
 
           {initialActivityLoading ? (
             <ActivitySidebarLoadingState />
+          ) : activityCount === 0 && temporaryActivityCount === 0 ? (
+            <WorkbenchEmptyState
+              className="min-h-[14rem]"
+              title="No activity recorded"
+              description="Workspace actions will appear here after the agent performs work."
+            />
           ) : (
             <div className={activitySidebarListClass()}>
               {showRuns && (
@@ -452,8 +459,8 @@ export function ActivitySidebarUnavailableState({
 
 export function activitySidebarShellClass(): string {
   return [
-    "flex w-full shrink-0 flex-col border-b border-[rgb(var(--app-border))] pb-3",
-    "lg:max-h-[calc(100vh-5rem)] lg:w-[clamp(16rem,24vw,21rem)] lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4",
+    "mx-auto flex w-full max-w-5xl flex-col",
+    "lg:max-h-[calc(100vh-5rem)]",
   ].join(" ");
 }
 

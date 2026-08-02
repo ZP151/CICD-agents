@@ -17,8 +17,10 @@ function shouldFoldOperationDetails(details: string): boolean {
 
 export function ReviewOperationDetailPanel({
   operation,
+  showHeader = true,
 }: {
   operation: ReviewActivityItem;
+  showHeader?: boolean;
 }): JSX.Element {
   const detailsShouldFold = operation.details ? shouldFoldOperationDetails(operation.details) : false;
   const detailsSummary = operation.details && detailsShouldFold
@@ -27,7 +29,7 @@ export function ReviewOperationDetailPanel({
 
   return (
     <div className="space-y-5">
-      <header className="border-b border-[rgb(var(--app-border))] pb-4">
+      {showHeader && <header className="border-b border-[rgb(var(--app-border))] pb-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${reviewOperationStatusClass(operation.ok)}`}
@@ -43,7 +45,7 @@ export function ReviewOperationDetailPanel({
         </div>
         <h2 className="text-lg font-semibold text-[rgb(var(--app-text))]">{operation.label}</h2>
         <p className="mt-1 font-mono text-xs text-[rgb(var(--app-text-muted))]">{operation.id}</p>
-      </header>
+      </header>}
 
       <ActivityFactGrid className={reviewOperationFactGridClass()}>
         <ActivityFact label="Project Link">{operation.projectLinkName}</ActivityFact>

@@ -35,6 +35,7 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [selectedPrInsightId, setSelectedPrInsightId] = useState<string | null>(null);
   const [selectedCheckpointId, setSelectedCheckpointId] = useState<string | null>(null);
+  const [activityHandoffSource, setActivityHandoffSource] = useState<ActivityHandoffDraft["source"] | null>(null);
   const [reviewProjectLinkFilter, setReviewProjectLinkFilter] = useState("all");
   const [reviewKindFilter, setReviewKindFilter] = useState<ReviewOperationEvent["kind"] | "all">(
     "all",
@@ -142,6 +143,7 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     setSelectedCheckpointId(null);
     setTaskSelectedId(null);
     setTaskSelected(null);
+    setActivityHandoffSource(draft.source ?? null);
     sessionStorage.removeItem(ACTIVITY_HANDOFF_KEY);
   }, [prInsightActivity, setTaskSelected, setTaskSelectedId]);
 
@@ -276,6 +278,7 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     setSelectedReviewId(null);
     setSelectedPrInsightId(null);
     setSelectedCheckpointId(null);
+    setActivityHandoffSource(null);
   }
 
   function selectReviewActivity(eventId: string): void {
@@ -284,6 +287,7 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     setSelectedCheckpointId(null);
     setTaskSelectedId(null);
     setTaskSelected(null);
+    setActivityHandoffSource(null);
   }
 
   function selectPrInsightActivity(eventId: string): void {
@@ -292,6 +296,7 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     setSelectedCheckpointId(null);
     setTaskSelectedId(null);
     setTaskSelected(null);
+    setActivityHandoffSource(null);
   }
 
   function selectCheckpointActivity(eventId: string): void {
@@ -300,6 +305,7 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     setSelectedPrInsightId(null);
     setTaskSelectedId(null);
     setTaskSelected(null);
+    setActivityHandoffSource(null);
   }
 
   function clearSelection(): void {
@@ -308,6 +314,7 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     setSelectedPrInsightId(null);
     setTaskSelectedId(null);
     setTaskSelected(null);
+    setActivityHandoffSource(null);
   }
 
   async function refreshAll(): Promise<void> {
@@ -350,6 +357,7 @@ export function useTaskViewerRuntime(projectLinks: ProjectLink[]) {
     reviewKindFilter,
     selectedReviewId,
     selectedCheckpointId,
+    activityHandoffSource,
     refreshAll,
     selectTask,
     selectCheckpointActivity,

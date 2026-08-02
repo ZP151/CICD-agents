@@ -18,6 +18,7 @@ interface PrInsightDetailPanelProps {
   onCopyArtifactId: (item: PrInsightActivityItem) => void;
   onOpenInChat: (item: PrInsightActivityItem) => void;
   onOpenInPullRequests: (item: PrInsightActivityItem) => void;
+  showHeader?: boolean;
 }
 
 export function PrInsightDetailPanel({
@@ -28,10 +29,11 @@ export function PrInsightDetailPanel({
   onCopyArtifactId,
   onOpenInChat,
   onOpenInPullRequests,
+  showHeader = true,
 }: PrInsightDetailPanelProps): JSX.Element {
   return (
     <div className="space-y-5">
-      <header className="border-b border-[rgb(var(--app-border))] pb-4">
+      {showHeader && <header className="border-b border-[rgb(var(--app-border))] pb-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className="rounded-full bg-[rgb(var(--app-accent-soft))] px-2 py-0.5 text-xs font-medium text-[rgb(var(--app-accent-readable))] ring-1 ring-[rgb(var(--app-accent))]/30">
             {item.kind === "review_run" ? "full review" : "preview"}
@@ -63,7 +65,7 @@ export function PrInsightDetailPanel({
             </ActionButton>
           </div>
         </div>
-      </header>
+      </header>}
 
       <ActivityDetailSection
         title="Provenance"
