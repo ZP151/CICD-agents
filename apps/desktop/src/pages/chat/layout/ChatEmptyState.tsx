@@ -55,7 +55,7 @@ export function ChatEmptyState({
 export function chatEmptyStateShellClass(compactReadyWelcome: boolean): string {
   const base = "flex w-full flex-1 flex-col items-center gap-5 px-4 sm:px-6 lg:px-8";
   return compactReadyWelcome
-    ? `${base} justify-start pb-8 pt-[clamp(3rem,14vh,7rem)]`
+    ? `${base} justify-center py-8`
     : `${base} justify-center py-8`;
 }
 

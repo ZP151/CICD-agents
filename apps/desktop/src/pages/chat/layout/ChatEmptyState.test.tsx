@@ -32,9 +32,9 @@ const projectLink: ProjectLink = {
 
 describe("ChatEmptyState", () => {
   it("uses a balanced maximized layout only for the ready new-chat welcome", () => {
-    expect(chatEmptyStateShellClass(true)).toContain("justify-start");
-    expect(chatEmptyStateShellClass(true)).toContain("pt-[clamp(3rem,14vh,7rem)]");
-    expect(chatEmptyStateShellClass(true)).not.toContain("pt-[18vh]");
+    expect(chatEmptyStateShellClass(true)).toContain("justify-center");
+    expect(chatEmptyStateShellClass(true)).toContain("py-8");
+    expect(chatEmptyStateShellClass(true)).not.toContain("justify-start");
     expect(chatEmptyStateShellClass(false)).toContain("justify-center");
     expect(chatEmptyStateShellClass(false)).toContain("py-8");
     expect(chatEmptyStateShellClass(false)).not.toContain("pt-[18vh]");
@@ -63,6 +63,7 @@ describe("ChatEmptyState", () => {
     expect(html).toContain("Understand this project");
     expect((html.match(/prompt-particle-deck__card/g) ?? [])).toHaveLength(5);
     expect(html).not.toContain("prompt-particle-deck__glyph");
+    expect(html).toContain('data-autoplay="true"');
     expect(html).not.toContain("animate-pulse");
   });
 

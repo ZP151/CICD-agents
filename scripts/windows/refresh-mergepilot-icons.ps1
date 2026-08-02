@@ -145,9 +145,20 @@ public static class MergePilotIconSurface
         using (var target = new Bitmap(outputWidth, outputHeight, PixelFormat.Format32bppArgb))
         using (var graphics = Graphics.FromImage(target))
         {
+            // The cloud needs enough visual mass at 16–32px to hold up in the
+            // Windows title bar and taskbar. This only crops transparent outer
+            // canvas; the original blue outline and white cloud interior stay
+            // untouched.
+            const double contentScale = 1.12;
+            var renderWidth = (int)Math.Ceiling(outputWidth * contentScale);
+            var renderHeight = (int)Math.Ceiling(outputHeight * contentScale);
+            var offsetX = (outputWidth - renderWidth) / 2;
+            var offsetY = (outputHeight - renderHeight) / 2;
             graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
             graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-            graphics.DrawImage(source, 0, 0, outputWidth, outputHeight);
+            graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            graphics.DrawImage(source, offsetX, offsetY, renderWidth, renderHeight);
 
             var temporaryPath = targetPath + ".mergepilot-source-tmp";
             target.Save(temporaryPath, ImageFormat.Png);
