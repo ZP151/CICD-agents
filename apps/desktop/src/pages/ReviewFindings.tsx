@@ -32,10 +32,6 @@ export function reviewQueuePageShellClass(): string {
   return "gap-4";
 }
 
-export function reviewQueueSetupChecklistGridClass(): string {
-  return "mt-4 grid gap-2 text-xs text-[rgb(var(--app-text-muted))] grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))]";
-}
-
 export function reviewQueueLoadingLaneGridClass(): string {
   return reviewQueueLaneGridClass();
 }
@@ -298,29 +294,17 @@ export function ReviewQueueProjectLinkResolvingState(): JSX.Element {
 
 export function ReviewQueueNoProjectLinkState(): JSX.Element {
   return (
-    <section className="w-full max-w-5xl rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-6">
+    <section className="w-full max-w-3xl rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-4 py-3">
       <div className="max-w-2xl">
         <p className="text-sm font-semibold text-[rgb(var(--app-text))]">
           No Project Link available
         </p>
         <p className="mt-1 text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
-          Create a Project Link with Azure DevOps mapping before reviewing PR decisions,
-          approval history, or Review Agent audit records.
+          Connect one Azure DevOps repository before using the Review Queue.
         </p>
-        <ul className={reviewQueueSetupChecklistGridClass()}>
-          <li className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
-            Project Link mapping
-          </li>
-          <li className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
-            Azure DevOps PR access
-          </li>
-          <li className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
-            Review Agent history
-          </li>
-        </ul>
         <a
           href="#/project-links"
-          className="mt-4 inline-flex rounded-md border border-[rgb(var(--app-border))] px-3 py-1.5 text-sm text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+          className="mt-3 inline-flex min-h-8 items-center justify-center rounded-md border border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent))] px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110"
         >
           Open Project Links
         </a>
