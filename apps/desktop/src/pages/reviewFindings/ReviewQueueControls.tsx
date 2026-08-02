@@ -1,5 +1,5 @@
 import type { ReviewQueueItem } from "../../api.js";
-import { WorkbenchFilterTabs } from "../../components/workbench/WorkbenchPrimitives.js";
+import { ActionButton, WorkbenchFilterTabs } from "../../components/workbench/WorkbenchPrimitives.js";
 import { lanes } from "./reviewQueueViewModel.js";
 
 export interface ReviewQueueControlsProps {
@@ -67,21 +67,22 @@ export function ReviewQueueControls({
         onValueChange={onQueueFilterChange}
       />
       <div className="flex flex-wrap items-center gap-1.5">
-        <button
+        <ActionButton
           type="button"
           onClick={onToggleAutoApprove}
-          disabled={autoApproveSaving}
-          className={`rounded-md border px-2.5 py-1 text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
+          loading={autoApproveSaving}
+          tone={autoApproveEnabled ? "secondary" : "quiet"}
+          className={`min-h-7 px-2.5 py-1 ${
             autoApproveEnabled
               ? "border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft)_/_0.58)] text-[rgb(var(--app-success))] hover:bg-[rgb(var(--app-success-soft))]"
-              : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+              : "text-[rgb(var(--app-text-muted))]"
           }`}
           title={autoApproveEnabled ? "Disable auto-approve" : "Enable auto-approve"}
           aria-label={autoApproveEnabled ? "Disable auto-approve" : "Enable auto-approve"}
           aria-pressed={autoApproveEnabled}
         >
           Auto: {autoApproveEnabled ? "On" : "Off"}
-        </button>
+        </ActionButton>
         <select
           className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1 text-xs text-[rgb(var(--app-text-muted))] outline-none focus:border-[rgb(var(--app-border-strong))]"
           value={sortMode}
@@ -108,21 +109,23 @@ export function ReviewQueueControls({
           />
           h
         </label>
-        <button
+        <ActionButton
           type="button"
-          disabled={batchRerunning || visiblePageCount === 0}
           onClick={onRerunVisible}
-          className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={visiblePageCount === 0 || (batchRerunning && batchMode !== "visible")}
+          loading={batchRerunning && batchMode === "visible"}
+          className="min-h-7 px-2.5 py-1"
         >
           {batchRerunning && batchProgress && batchMode === "visible"
             ? `Rerun visible ${batchProgress.done}/${batchProgress.total}`
             : "Rerun page"}
-        </button>
-        <button
+        </ActionButton>
+        <ActionButton
           type="button"
-          disabled={batchRerunning || staleCount === 0}
           onClick={onRerunStale}
-          className="rounded-md border border-[rgb(var(--app-warning))]/35 px-2.5 py-1 text-xs text-[rgb(var(--app-warning))] transition hover:bg-[rgb(var(--app-warning)_/_0.10)] disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={staleCount === 0 || (batchRerunning && batchMode !== "stale")}
+          loading={batchRerunning && batchMode === "stale"}
+          className="min-h-7 border-[rgb(var(--app-warning))]/35 px-2.5 py-1 text-[rgb(var(--app-warning))] hover:bg-[rgb(var(--app-warning)_/_0.10)]"
         >
           {batchRerunning && batchProgress && batchMode === "stale"
             ? `Rerun stale ${batchProgress.done}/${batchProgress.total}`
@@ -132,7 +135,7 @@ export function ReviewQueueControls({
               {staleCount}
             </span>
           )}
-        </button>
+        </ActionButton>
         <span className={reviewQueueFooterCountClass()}>
           {displayedCount}/{totalCount}
         </span>

@@ -68,8 +68,9 @@ describe("ReviewQueueControls responsive layout", () => {
     expect(html).toContain(">Human</span>");
     expect(html).not.toContain(">Needs human review<span");
     expect(html).toContain("h-7");
+    expect(html).toContain("focus-visible:ring-2");
+    expect(html).toContain("focus-visible:ring-[rgb(var(--app-focus))]/45");
     expect(html).toContain('aria-label="Review queue controls"');
-    expect(html).not.toContain("min-h-8");
     expect(html).not.toContain("text-2xl");
     expect(html).not.toContain("lg:grid-cols-4");
     expect(html).not.toContain("rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1.5");
