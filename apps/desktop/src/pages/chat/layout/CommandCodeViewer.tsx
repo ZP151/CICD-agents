@@ -4,6 +4,7 @@ import { tags } from "@lezer/highlight";
 import { diff } from "@codemirror/legacy-modes/mode/diff";
 import { powerShell } from "@codemirror/legacy-modes/mode/powershell";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
+import { Decoration, type DecorationSet, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import { useState } from "react";
 import type { CommandCodeLanguage } from "./commandLanguage.js";
 
@@ -74,7 +75,12 @@ export function CommandCodeViewer({
         editable={false}
         readOnly
         basicSetup={commandCodeViewerSetup(output)}
-        extensions={[commandCodeTheme, syntaxHighlighting(commandHighlightStyle), commandLanguageExtension(language)]}
+        extensions={[
+          commandCodeTheme,
+          syntaxHighlighting(commandHighlightStyle),
+          commandLanguageExtension(language),
+          ...(output ? [terminalOutputHighlights] : []),
+        ]}
       />
       {copyValue && (
         <button
@@ -105,6 +111,8 @@ const commandCodeTheme = EditorView.theme({
   ".cm-line": { padding: "0" },
   ".cm-activeLine": { backgroundColor: "transparent" },
   ".cm-selectionBackground": { backgroundColor: "rgb(var(--app-accent-soft)) !important" },
+  ".cm-line .mp-terminal-error": { color: "rgb(var(--app-danger))", fontWeight: "600" },
+  ".cm-line .mp-terminal-context": { color: "rgb(var(--app-accent))" },
 });
 
 const commandHighlightStyle = HighlightStyle.define([
@@ -120,6 +128,45 @@ function commandLanguageExtension(language: CommandCodeLanguage): Extension {
   if (language === "powershell") return StreamLanguage.define(powerShell);
   if (language === "diff") return StreamLanguage.define(diff);
   return StreamLanguage.define(shell);
+}
+
+/** Map familiar PowerShell diagnostic lines to quiet, stable terminal colors. */
+export function terminalOutputLineTone(line: string): "error" | "context" | null {
+  if (
+    /^\s*[a-z][\w-]*\s*:/i.test(line)
+    || /^\s*(?:cannot\b|error\b|exception\b|failed\b)/i.test(line)
+    || /^\s*[~^]{3,}\s*$/.test(line)
+  ) {
+    return "error";
+  }
+  if (/^\s*(?:line\b|\d+\s*\|)/i.test(line)) return "context";
+  return null;
+}
+
+const terminalOutputHighlights = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = terminalOutputDecorations(view);
+    }
+
+    update(update: ViewUpdate) {
+      if (update.docChanged) this.decorations = terminalOutputDecorations(update.view);
+    }
+  },
+  { decorations: (plugin) => plugin.decorations },
+);
+
+function terminalOutputDecorations(view: EditorView): DecorationSet {
+  const ranges = [];
+  for (let lineNumber = 1; lineNumber <= view.state.doc.lines; lineNumber += 1) {
+    const line = view.state.doc.line(lineNumber);
+    const tone = terminalOutputLineTone(line.text);
+    if (!tone) continue;
+    ranges.push(Decoration.mark({ class: tone === "error" ? "mp-terminal-error" : "mp-terminal-context" }).range(line.from, line.to));
+  }
+  return Decoration.set(ranges, true);
 }
 
 function CopyIcon() {
