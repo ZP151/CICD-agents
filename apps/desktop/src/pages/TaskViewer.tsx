@@ -256,29 +256,26 @@ export function activityEmptyDetailContent({
     return {
       title: "Recovery needed",
       description:
-        "The activity sources did not load. Use Refresh activity in the source panel, or open Settings to check the desktop daemon and account session.",
+        "Could not load activity. Refresh, or check the desktop daemon and account settings.",
     };
   }
 
   if (loading && activityCount === 0) {
     return {
       title: "Checking activity",
-      description:
-        "MergePilot is loading recent runs, checkpoints, PR insights, and review operations.",
+      description: "Loading recent workspace activity.",
     };
   }
 
   if (activityCount === 0) {
     return {
       title: "No activity recorded",
-      description:
-        "Runs, Git checkpoints, PR insights, and review operations will appear here after the agent performs workspace actions.",
+      description: "Workspace actions will appear here after the agent performs work.",
     };
   }
 
   return {
-    title: "Select an operation",
-    description:
-      "Choose a run, checkpoint, PR insight, or review action to inspect its source, result, and recovery path.",
+      title: "Select an operation",
+      description: "Choose an event to inspect its result and recovery path.",
   };
 }

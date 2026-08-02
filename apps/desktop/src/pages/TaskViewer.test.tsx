@@ -131,7 +131,7 @@ describe("ActivityEmptyDetail", () => {
     const html = renderToStaticMarkup(<ActivityEmptyDetail />);
 
     expect(html).toContain("Select an operation");
-    expect(html).toContain("inspect its source, result, and");
+    expect(html).toContain("inspect its result and recovery path");
     expect(html).toContain("border-dashed");
     expect(html).not.toContain(">Detail<");
     expect(html).not.toContain("No operation selected");
@@ -143,8 +143,8 @@ describe("ActivityEmptyDetail", () => {
     );
 
     expect(html).toContain("Recovery needed");
-    expect(html).toContain("Refresh activity");
-    expect(html).toContain("source panel");
+    expect(html).toContain("Could not load activity");
+    expect(html).toContain("account settings");
     expect(html).not.toContain("Select an operation");
   });
 
@@ -155,8 +155,7 @@ describe("ActivityEmptyDetail", () => {
       loading: false,
     })).toEqual({
       title: "No activity recorded",
-      description:
-        "Runs, Git checkpoints, PR insights, and review operations will appear here after the agent performs workspace actions.",
+      description: "Workspace actions will appear here after the agent performs work.",
     });
   });
 });

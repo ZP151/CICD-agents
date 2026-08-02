@@ -306,7 +306,8 @@ describe("ActivitySidebar", () => {
     });
 
     expect(html).toContain("Sources unavailable");
-    expect(html).toContain("Daemon activity API");
+    expect(html).toContain("Refresh activity, or check the desktop daemon and account session.");
+    expect(html).not.toContain("Daemon activity API");
     expect(html).toContain("Refresh activity");
     expect(html).toContain("Open Settings");
     expect(html).toContain("Failed to fetch");
@@ -362,8 +363,8 @@ describe("ActivitySidebarUnavailableState", () => {
     );
 
     expect(html).toContain("Sources unavailable");
-    expect(html).toContain("desktop daemon or account session");
-    expect(html).toContain("Local data folder");
+    expect(html).toContain("the desktop daemon and account session");
+    expect(html).not.toContain("Local data folder");
     expect(html).toContain("Refresh activity");
     expect(html).toContain("href=\"#/settings\"");
     expect(html).toContain("Failed to fetch");

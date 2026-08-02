@@ -22,7 +22,6 @@ import { ReviewActivitySection } from "./ReviewActivitySection.js";
 import {
   ActionButton,
   InlineNotice,
-  StatusBadge,
   WorkbenchFilterTabs,
 } from "../../components/workbench/WorkbenchPrimitives.js";
 
@@ -357,15 +356,9 @@ export function ActivitySidebarUnavailableState({
     <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3">
       <p className="text-xs font-semibold text-[rgb(var(--app-text))]">Sources unavailable</p>
       <p className="mt-1 text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
-        MergePilot could not load local runs, checkpoints, PR insights, or review operations.
-        Check the desktop daemon or account session, then refresh.
+        Refresh activity, or check the desktop daemon and account session.
       </p>
-      <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Activity recovery checks">
-        {["Daemon activity API", "Local data folder", "Account session"].map((label) => (
-          <StatusBadge key={label}>{label}</StatusBadge>
-        ))}
-      </div>
-      <p className="mt-3 truncate text-[11px] text-[rgb(var(--app-danger))]" title={error}>
+      <p className="mt-2 truncate text-[11px] text-[rgb(var(--app-danger))]" title={error}>
         {error}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
