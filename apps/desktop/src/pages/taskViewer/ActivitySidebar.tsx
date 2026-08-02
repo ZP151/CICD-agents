@@ -384,7 +384,7 @@ export function activitySidebarShellClass(): string {
 }
 
 export function activitySidebarListClass(): string {
-  return "min-h-0 max-h-[16rem] overflow-y-auto pr-1 lg:max-h-[18rem] xl:max-h-none xl:flex-1";
+  return "min-h-0 max-h-[16rem] overflow-x-hidden overflow-y-auto pr-1 lg:max-h-[18rem] xl:max-h-none xl:flex-1";
 }
 
 export function activitySectionFilterGridClass(): string {

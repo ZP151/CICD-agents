@@ -1,6 +1,7 @@
 import type { TaskView } from "../../api.js";
 import { duration, formatTime, statusClass, taskTitle } from "./activityPresentation.js";
 import { operationDetailSummary } from "./operationDetailSummary.js";
+import { ActivityDetailSection } from "./ActivityDetailPrimitives.js";
 
 function shouldFoldStepDetail(detail: string): boolean {
   const trimmed = detail.trim();
@@ -28,14 +29,11 @@ export function TaskRunDetailPanel({ task }: { task: TaskView }): JSX.Element {
         <p className="mt-1 font-mono text-xs text-[rgb(var(--app-text-muted))]">{task.id}</p>
       </header>
 
-      <section>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">
-          Steps
-        </h3>
+      <ActivityDetailSection title="Steps">
         {task.steps.length === 0 ? (
           <p className="text-sm text-[rgb(var(--app-text-muted))]">No steps recorded yet.</p>
         ) : (
-          <ol className="space-y-2">
+          <ol className="divide-y divide-[rgb(var(--app-border))]/60">
             {task.steps.map((step) => {
               const detailShouldFold = step.detail ? shouldFoldStepDetail(step.detail) : false;
               const detailSummary = step.detail && detailShouldFold
@@ -44,7 +42,7 @@ export function TaskRunDetailPanel({ task }: { task: TaskView }): JSX.Element {
               return (
                 <li
                   key={step.seq}
-                  className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2"
+                  className="py-3 first:pt-0 last:pb-0"
                 >
                   <div className="flex items-start gap-3">
                     <span className="mt-0.5 w-8 shrink-0 font-mono text-xs text-[rgb(var(--app-text-muted))]">
@@ -91,7 +89,7 @@ export function TaskRunDetailPanel({ task }: { task: TaskView }): JSX.Element {
             })}
           </ol>
         )}
-      </section>
+      </ActivityDetailSection>
 
       {task.error && (
         <section className="rounded-lg border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] p-3">

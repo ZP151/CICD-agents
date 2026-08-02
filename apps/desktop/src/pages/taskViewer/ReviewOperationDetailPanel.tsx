@@ -4,6 +4,7 @@ import {
   reviewOperationKindLabel,
   reviewOperationStatusClass,
 } from "./activityPresentation.js";
+import { ActivityDetailSection, ActivityFact, ActivityFactGrid } from "./ActivityDetailPrimitives.js";
 import { operationDetailSummary } from "./operationDetailSummary.js";
 
 function shouldFoldOperationDetails(details: string): boolean {
@@ -43,23 +44,16 @@ export function ReviewOperationDetailPanel({
         <p className="mt-1 font-mono text-xs text-[rgb(var(--app-text-muted))]">{operation.id}</p>
       </header>
 
-      <section className={reviewOperationFactGridClass()}>
-        <ReviewOperationFact label="Project Link" value={operation.projectLinkName} />
-        <ReviewOperationFact label="Repository" value={operation.repository} mono />
-        <ReviewOperationFact
-          label="Pull Request"
-          value={
-            operation.pullRequestId > 0 ? `#${operation.pullRequestId}` : "Queue-level operation"
-          }
-          mono
-        />
-        <ReviewOperationFact label="Actor" value={operation.actor || "Not available"} />
-      </section>
+      <ActivityFactGrid className={reviewOperationFactGridClass()}>
+        <ActivityFact label="Project Link">{operation.projectLinkName}</ActivityFact>
+        <ActivityFact label="Repository" mono>{operation.repository}</ActivityFact>
+        <ActivityFact label="Pull Request" mono>
+          {operation.pullRequestId > 0 ? `#${operation.pullRequestId}` : "Queue-level operation"}
+        </ActivityFact>
+        <ActivityFact label="Actor">{operation.actor || "Not available"}</ActivityFact>
+      </ActivityFactGrid>
 
-      <section className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
-        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">
-          Details
-        </h3>
+      <ActivityDetailSection title="Details">
         {!operation.details && (
           <p className="break-words text-sm text-[rgb(var(--app-text))]">
             No details recorded.
@@ -85,28 +79,11 @@ export function ReviewOperationDetailPanel({
             {operation.details}
           </p>
         )}
-      </section>
+      </ActivityDetailSection>
     </div>
   );
 }
 
 export function reviewOperationFactGridClass(): string {
-  return "grid gap-3 text-sm grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))]";
-}
-
-function ReviewOperationFact({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}): JSX.Element {
-  return (
-    <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
-      <p className="text-xs text-[rgb(var(--app-text-muted))]">{label}</p>
-      <p className={`mt-1 text-[rgb(var(--app-text))] ${mono ? "font-mono" : ""}`}>{value}</p>
-    </div>
-  );
+  return "gap-3 text-sm grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))]";
 }

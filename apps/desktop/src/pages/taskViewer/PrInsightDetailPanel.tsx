@@ -6,7 +6,9 @@ import {
 import { PrInsightReadinessBlockers } from "./PrInsightReadinessBlockers.js";
 import type { PrInsightActivityItem, PrInsightRefreshComparison } from "./prInsightActivity.js";
 import { MarkdownContent } from "../../components/conversation/ConversationPartRenderer.js";
+import { ActionButton } from "../../components/workbench/WorkbenchPrimitives.js";
 import { formatIsoTime } from "./activityPresentation.js";
+import { ActivityDetailSection, ActivityFact, ActivityFactGrid } from "./ActivityDetailPrimitives.js";
 
 interface PrInsightDetailPanelProps {
   item: PrInsightActivityItem;
@@ -49,36 +51,31 @@ export function PrInsightDetailPanel({
             <p className="mt-1 font-mono text-xs text-[rgb(var(--app-text-muted))]">{item.id}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
+            <ActionButton
               onClick={() => onOpenInPullRequests(item)}
-              className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))]"
             >
               Open in Pull Requests
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               onClick={() => onOpenInChat(item)}
-              className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))]"
             >
               Ask in Chat
-            </button>
+            </ActionButton>
           </div>
         </div>
       </header>
 
-      <section className="rounded-lg border border-[rgb(var(--app-accent))]/20 bg-[rgb(var(--app-accent-soft))]/60 p-3">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-accent-readable))]">
-            Provenance
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => onCopyArtifactId(item)}
-              className="rounded-md border border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-accent-readable))] transition hover:border-[rgb(var(--app-accent))]"
-            >
+      <ActivityDetailSection
+        title="Provenance"
+        actions={(
+          <ActionButton
+            onClick={() => onCopyArtifactId(item)}
+            className="min-h-7 px-2"
+          >
               {copiedArtifactId === item.id ? "Copied" : "Copy artifact id"}
-            </button>
-          </div>
-        </div>
+          </ActionButton>
+        )}
+      >
         <div className={prInsightProvenanceGridClass()}>
           <p className="col-span-full break-words font-mono text-[rgb(var(--app-text-subtle))]">
             {item.id}
@@ -93,50 +90,30 @@ export function PrInsightDetailPanel({
             </span>
           </p>
         </div>
-      </section>
+      </ActivityDetailSection>
 
-      <section className={prInsightMetadataGridClass()}>
-        <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
-          <p className="text-xs text-[rgb(var(--app-text-muted))]">Project Link</p>
-          <p className="mt-1 text-[rgb(var(--app-text))]">{item.projectLinkName}</p>
-        </div>
-        <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
-          <p className="text-xs text-[rgb(var(--app-text-muted))]">Repository</p>
-          <p className="mt-1 font-mono text-[rgb(var(--app-text))]">{item.repository}</p>
-        </div>
-        <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
-          <p className="text-xs text-[rgb(var(--app-text-muted))]">Tokens</p>
-          <p className="mt-1 font-mono text-[rgb(var(--app-text))]">
-            {item.tokensIn}/{item.tokensOut}
-          </p>
-        </div>
-        <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
-          <p className="text-xs text-[rgb(var(--app-text-muted))]">Decision</p>
-          <p className="mt-1 text-[rgb(var(--app-text))]">
-            {[item.decisionQueue, item.decisionRiskLevel, item.contextConfidence]
-              .filter(Boolean)
-              .join(" · ") || "n/a"}
-          </p>
-        </div>
+      <ActivityFactGrid className={prInsightMetadataGridClass()}>
+        <ActivityFact label="Project Link">{item.projectLinkName}</ActivityFact>
+        <ActivityFact label="Repository" mono>{item.repository}</ActivityFact>
+        <ActivityFact label="Tokens" mono>{item.tokensIn}/{item.tokensOut}</ActivityFact>
+        <ActivityFact label="Decision">
+          {[item.decisionQueue, item.decisionRiskLevel, item.contextConfidence]
+            .filter(Boolean)
+            .join(" · ") || "n/a"}
+        </ActivityFact>
         {(item.iterationId || item.sourceCommit) && (
-          <div className="col-span-full rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
-            <p className="text-xs text-[rgb(var(--app-text-muted))]">Analysis baseline</p>
-            <p className="mt-1 break-words font-mono text-[rgb(var(--app-text))]">
-              {item.iterationId ? `iteration ${item.iterationId}` : "iteration n/a"}
-              {item.sourceCommit ? ` · ${item.sourceCommit}` : ""}
-            </p>
-          </div>
+          <ActivityFact className="col-span-full" label="Analysis baseline" mono>
+            {item.iterationId ? `iteration ${item.iterationId}` : "iteration n/a"}
+            {item.sourceCommit ? ` · ${item.sourceCommit}` : ""}
+          </ActivityFact>
         )}
-      </section>
+      </ActivityFactGrid>
 
-      <section className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
-        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">
-          Saved Summary
-        </h3>
+      <ActivityDetailSection title="Saved summary">
         <div className="text-sm leading-relaxed text-[rgb(var(--app-text))]">
           <MarkdownContent markdown={item.summary || "No summary saved."} />
         </div>
-      </section>
+      </ActivityDetailSection>
 
       {comparison && <PrInsightComparisonCard comparison={comparison} />}
       {refreshComparison && (
@@ -152,7 +129,7 @@ export function PrInsightDetailPanel({
 function PrInsightSignalGrid({ item }: { item: PrInsightActivityItem }): JSX.Element | null {
   if (!item.signals && typeof item.findingCount !== "number") return null;
   return (
-    <section className={prInsightSignalGridClass()}>
+    <ActivityFactGrid className={prInsightSignalGridClass()}>
       {item.signals && (
         <>
           <SignalMetric label="Files" value={item.signals.fileCount} />
@@ -165,38 +142,32 @@ function PrInsightSignalGrid({ item }: { item: PrInsightActivityItem }): JSX.Ele
       {typeof item.findingCount === "number" && (
         <SignalMetric label="Findings" value={item.findingCount} />
       )}
-    </section>
+    </ActivityFactGrid>
   );
 }
 
 export function prInsightSignalGridClass(): string {
-  return "grid gap-3 text-sm grid-cols-[repeat(auto-fit,minmax(min(100%,8.5rem),1fr))]";
+  return "gap-3 text-sm grid-cols-[repeat(auto-fit,minmax(min(100%,8.5rem),1fr))]";
 }
 
 export function prInsightProvenanceGridClass(): string {
-  return "grid gap-2 text-xs grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))]";
+  return "gap-2 text-xs grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))]";
 }
 
 export function prInsightMetadataGridClass(): string {
-  return "grid gap-3 text-sm grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))]";
+  return "gap-3 text-sm grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))]";
 }
 
 function SignalMetric({ label, value }: { label: string; value: number }): JSX.Element {
   return (
-    <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
-      <p className="text-xs text-[rgb(var(--app-text-muted))]">{label}</p>
-      <p className="mt-1 font-mono text-[rgb(var(--app-text))]">{value}</p>
-    </div>
+    <ActivityFact label={label} mono>{value}</ActivityFact>
   );
 }
 
 function PrInsightRisks({ item }: { item: PrInsightActivityItem }): JSX.Element | null {
   if (item.risks.length === 0) return null;
   return (
-    <section className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">
-        Risks
-      </h3>
+    <ActivityDetailSection title="Risks">
       <div className="flex flex-wrap gap-1.5">
         {item.risks.map((risk) => (
           <span
@@ -207,6 +178,6 @@ function PrInsightRisks({ item }: { item: PrInsightActivityItem }): JSX.Element 
           </span>
         ))}
       </div>
-    </section>
+    </ActivityDetailSection>
   );
 }

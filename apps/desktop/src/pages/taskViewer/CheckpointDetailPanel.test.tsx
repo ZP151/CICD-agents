@@ -98,8 +98,9 @@ describe("CheckpointDetailPanel", () => {
 
     expect(html).toContain("title=\"C:\\Users\\15492\\AppData\\Local\\Temp\\mergepilot-live-push-uNqAOB\\work\"");
     expect(html).toContain("title=\"chat_1783360943926_18c699\"");
-    expect(html).toContain("class=\"mt-1 break-all font-mono");
+    expect(html).toContain("break-all font-mono");
     expect(html).toContain("auto-fit");
-    expect(html).toContain("class=\"min-w-0 rounded-lg");
+    expect(html).toContain("border-b border-[rgb(var(--app-border))]/60");
+    expect(html).not.toContain("class=\"min-w-0 rounded-lg");
   });
 });

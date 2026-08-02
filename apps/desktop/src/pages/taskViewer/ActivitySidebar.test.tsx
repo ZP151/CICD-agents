@@ -168,6 +168,7 @@ describe("ActivitySidebar", () => {
     expect(shellClass).not.toContain("xl:w-[clamp(20rem,28vw,24rem)]");
     expect(shellClass).not.toContain("xl:w-[420px]");
     expect(listClass).toContain("max-h-[16rem]");
+    expect(listClass).toContain("overflow-x-hidden");
     expect(listClass).toContain("lg:max-h-[18rem]");
     expect(listClass).toContain("xl:flex-1");
     expect(listClass).not.toContain("lg:flex-1");
