@@ -4,6 +4,7 @@ import type { ReviewQueueItem } from "../../api.js";
 import {
   ReviewQueueCard,
   reviewQueueCardActionsClass,
+  reviewQueueDispositionMenuClass,
   reviewQueueCardFooterClass,
   reviewQueueCardMetricsGridClass,
 } from "./ReviewQueueCard.js";
@@ -85,6 +86,16 @@ describe("ReviewQueueCard", () => {
     expect(actionsClass).toContain("justify-start");
     expect(actionsClass).toContain("sm:justify-end");
     expect(actionsClass).not.toContain("justify-end gap-1.5");
+  });
+
+  it("uses an inline disposition strip instead of a portal-dependent overlay", () => {
+    const className = reviewQueueDispositionMenuClass();
+
+    expect(className).toContain("flex-wrap");
+    expect(className).toContain("border-t");
+    expect(className).toContain("pt-1.5");
+    expect(className).not.toContain("absolute");
+    expect(className).not.toContain("z-");
   });
 
   it("renders review audit state and action controls without flattening semantic queue details", () => {

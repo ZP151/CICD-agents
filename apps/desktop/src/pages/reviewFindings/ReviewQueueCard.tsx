@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ReviewQueueItem } from "../../api.js";
 import { buildReviewAuditCardSummary } from "../../reviewAudit.js";
 import { loadFindingsLocal } from "../../reviewHistoryLocal.js";
@@ -12,12 +12,6 @@ import {
   shortCommit,
 } from "./reviewQueueViewModel.js";
 import { ActionButton, StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../../components/ui/DropdownMenu.js";
 
 export interface ReviewQueueCardProps {
   item: ReviewQueueItem;
@@ -146,6 +140,10 @@ export function reviewQueueCardActionsClass(): string {
   return "flex min-w-0 flex-wrap justify-start gap-1 sm:justify-end";
 }
 
+export function reviewQueueDispositionMenuClass(): string {
+  return "flex min-w-0 max-w-full flex-wrap justify-start gap-1 border-t border-[rgb(var(--app-border))] pt-1.5 sm:justify-end";
+}
+
 function ReviewQueueCardActions({
   item,
   hasStoredFindings,
@@ -170,83 +168,108 @@ function ReviewQueueCardActions({
   onApplyDisposition: (item: ReviewQueueItem, disposition: ReviewQueueItem["manualDisposition"]) => void;
 }): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuId = useId();
+
+  function applyDisposition(disposition: ReviewQueueItem["manualDisposition"]): void {
+    setMenuOpen(false);
+    onApplyDisposition(item, disposition);
+  }
 
   return (
-    <div className={reviewQueueCardActionsClass()}>
-      <ActionButton
-        type="button"
-        onClick={() => onOpenFindings(item)}
-        className="min-h-7 px-2.5 py-1"
-      >
-        {hasStoredFindings ? "View findings" : "Review summary"}
-        {(storedFindingsCount > 0 || item.findingCount > 0) && (
-          <span className="ml-1.5 rounded-full bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
-            {hasStoredFindings ? storedFindingsCount : item.findingCount}
-          </span>
-        )}
-      </ActionButton>
-      <ActionButton
-        type="button"
-        disabled={isRerunning}
-        onClick={() => onRerunReview(item)}
-        loading={isRerunning}
-        className="min-h-7 px-2.5 py-1"
-      >
-        {isRerunning ? "Rerunning..." : "Rerun review"}
-      </ActionButton>
-      {item.manualDisposition &&
-        (item.manualDisposition === "marked_blocked" || item.manualDisposition === "changes_requested") &&
-        !item.manualDispositionWriteBackOk && (
-          <ActionButton
-            type="button"
-            disabled={isRetryingWriteBack}
-            onClick={() => onRetryDispositionWriteBack(item)}
-            loading={isRetryingWriteBack}
-            className="min-h-7 px-2.5 py-1"
-          >
-            {isRetryingWriteBack ? "Retrying..." : "Retry ADO"}
-          </ActionButton>
-        )}
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <DropdownMenuTrigger asChild>
+    <div className="flex min-w-0 max-w-full flex-col items-start gap-1.5 sm:items-end">
+      <div className={reviewQueueCardActionsClass()}>
+        <ActionButton
+          type="button"
+          onClick={() => onOpenFindings(item)}
+          className="min-h-7 px-2.5 py-1"
+        >
+          {hasStoredFindings ? "View findings" : "Review summary"}
+          {(storedFindingsCount > 0 || item.findingCount > 0) && (
+            <span className="ml-1.5 rounded-full bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
+              {hasStoredFindings ? storedFindingsCount : item.findingCount}
+            </span>
+          )}
+        </ActionButton>
+        <ActionButton
+          type="button"
+          disabled={isRerunning}
+          onClick={() => onRerunReview(item)}
+          loading={isRerunning}
+          className="min-h-7 px-2.5 py-1"
+        >
+          {isRerunning ? "Rerunning..." : "Rerun review"}
+        </ActionButton>
+        {item.manualDisposition &&
+          (item.manualDisposition === "marked_blocked" || item.manualDisposition === "changes_requested") &&
+          !item.manualDispositionWriteBackOk && (
+            <ActionButton
+              type="button"
+              disabled={isRetryingWriteBack}
+              onClick={() => onRetryDispositionWriteBack(item)}
+              loading={isRetryingWriteBack}
+              className="min-h-7 px-2.5 py-1"
+            >
+              {isRetryingWriteBack ? "Retrying..." : "Retry ADO"}
+            </ActionButton>
+          )}
           <ActionButton
             type="button"
             tone="secondary"
             className="min-h-7 px-2.5 py-1"
+            aria-controls={menuId}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
           >
             Actions
           </ActionButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" aria-label="Review disposition actions">
-          <DropdownMenuItem
+      </div>
+      {menuOpen && (
+        <div
+          id={menuId}
+          role="group"
+          aria-label="Review disposition actions"
+          className={reviewQueueDispositionMenuClass()}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setMenuOpen(false);
+          }}
+        >
+          <ActionButton
+            type="button"
             disabled={isDispositionSaving}
-            onSelect={() => onApplyDisposition(item, "acknowledged")}
+            onClick={() => applyDisposition("acknowledged")}
+            className="min-h-7 px-2.5 py-1"
           >
             {isDispositionSaving ? "Saving..." : "Acknowledge"}
-          </DropdownMenuItem>
-          <DropdownMenuItem
+          </ActionButton>
+          <ActionButton
+            type="button"
+            tone="quiet"
             disabled={isDispositionSaving}
-            onSelect={() => onApplyDisposition(item, "marked_safe")}
-            className="text-[rgb(var(--app-success))] data-[highlighted]:bg-[rgb(var(--app-success-soft))] data-[highlighted]:text-[rgb(var(--app-success))]"
+            onClick={() => applyDisposition("marked_safe")}
+            className="min-h-7 px-2.5 py-1 text-[rgb(var(--app-success))] hover:bg-[rgb(var(--app-success-soft))] hover:text-[rgb(var(--app-success))]"
           >
             Mark safe
-          </DropdownMenuItem>
-          <DropdownMenuItem
+          </ActionButton>
+          <ActionButton
+            type="button"
+            tone="quiet"
             disabled={isDispositionSaving}
-            onSelect={() => onApplyDisposition(item, "marked_blocked")}
-            className="text-[rgb(var(--app-danger))] data-[highlighted]:bg-[rgb(var(--app-danger-soft))] data-[highlighted]:text-[rgb(var(--app-danger))]"
+            onClick={() => applyDisposition("marked_blocked")}
+            className="min-h-7 px-2.5 py-1 text-[rgb(var(--app-danger))] hover:bg-[rgb(var(--app-danger-soft))] hover:text-[rgb(var(--app-danger))]"
           >
             Block
-          </DropdownMenuItem>
-          <DropdownMenuItem
+          </ActionButton>
+          <ActionButton
+            type="button"
+            tone="quiet"
             disabled={isDispositionSaving}
-            onSelect={() => onApplyDisposition(item, "changes_requested")}
-            className="text-[rgb(var(--app-warning))] data-[highlighted]:bg-[rgb(var(--app-warning-soft))] data-[highlighted]:text-[rgb(var(--app-warning))]"
+            onClick={() => applyDisposition("changes_requested")}
+            className="min-h-7 px-2.5 py-1 text-[rgb(var(--app-warning))] hover:bg-[rgb(var(--app-warning-soft))] hover:text-[rgb(var(--app-warning))]"
           >
             Request changes
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </ActionButton>
+        </div>
+      )}
     </div>
   );
 }

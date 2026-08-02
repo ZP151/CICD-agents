@@ -286,16 +286,6 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            // The bundled ICO provides exact taskbar payloads, but Windows
-            // development windows can otherwise inherit a low-resolution
-            // default window-class icon. Bind the retained 256px source to the
-            // live main window as well so the taskbar has a high-DPI image in
-            // both `tauri dev` and packaged runs.
-            if let Some(main_window) = app.get_webview_window("main") {
-                let window_icon = Image::from_bytes(include_bytes!("../icons/128x128@2x.png"))?;
-                main_window.set_icon(window_icon)?;
-            }
-
             // Windows development runs are not installed, so explicitly claim the
             // configured scheme for the current executable. Release installers
             // register it from tauri.conf.json.
@@ -316,10 +306,11 @@ pub fn run() {
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open_main, &separator, &quit])?;
 
-            // The taskbar and tray both render at high-DPI sizes.  Use the
-            // retained 256px PNG as tray source instead of a decoded 32px
-            // default frame, leaving Windows with a high-resolution source.
-            let tray_icon = Image::from_bytes(include_bytes!("../icons/128x128@2x.png"))?;
+            // The taskbar gets its per-DPI icon from the multi-frame ICO
+            // embedded in the executable. The tray API accepts one bitmap, so
+            // use the hand-sized 32px frame rather than asking the shell to
+            // downscale a 256px icon for every notification-area draw.
+            let tray_icon = Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
             TrayIconBuilder::new()
                 .icon(tray_icon)
                 .menu(&menu)
