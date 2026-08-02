@@ -469,14 +469,14 @@ export function PipelineDetailPanel({
       )}
 
       {isApproval && (
-        <section className="mb-4 rounded-md border border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-accent-soft))] p-3">
-          <p className="text-xs font-semibold text-[rgb(var(--app-text))]">
-            Approval required in Chat
-          </p>
-          <p className="mt-2 text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
-            {state.result.summary}. Open Chat to review and confirm the approval proposal.
-          </p>
-        </section>
+        <div className="mb-4">
+          <InlineNotice tone="info" title="Approval required">
+            <p>{state.result.summary}. Review and confirm the proposal in Chat.</p>
+            <ActionLink href="#/chat" tone="secondary" className="mt-2 w-fit">
+              Open Chat approval
+            </ActionLink>
+          </InlineNotice>
+        </div>
       )}
 
       {(state.phase === "analyzing" ||

@@ -1,7 +1,12 @@
 import { formatDate, runTone } from "./pipelineModel.js";
 import type { PipelineInspectState, PipelineRow } from "./pipelineTypes.js";
 import { MarkdownContent } from "../../components/conversation/ConversationPartRenderer.js";
-import { ActionButton, InlineNotice, StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
+import {
+  ActionButton,
+  ActionLink,
+  InlineNotice,
+  StatusBadge,
+} from "../../components/workbench/WorkbenchPrimitives.js";
 
 interface PipelineRowCardProps {
   row: PipelineRow;
@@ -131,7 +136,10 @@ export function PipelineRowCard({
 
       {state.phase === "approval" && (
         <InlineNotice tone="info" title="Approval required">
-          {state.result.summary}. Open Chat to review and confirm the approval proposal.
+          <p>{state.result.summary}. Review and confirm the proposal in Chat.</p>
+          <ActionLink href="#/chat" tone="secondary" className="mt-2 w-fit">
+            Open Chat approval
+          </ActionLink>
         </InlineNotice>
       )}
 

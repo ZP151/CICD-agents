@@ -135,6 +135,35 @@ describe("PipelineRowCard", () => {
     expect(html).toContain("ring-[rgb(var(--app-success-border))]");
   });
 
+  it("hands an approval back to Chat with an explicit recovery action", () => {
+    const html = renderToStaticMarkup(
+      <PipelineRowCard
+        row={baseRow}
+        state={{
+          phase: "approval",
+          result: {
+            ok: true,
+            action: "trigger_pipeline",
+            repoPath: baseRow.repoPath,
+            summary: "Pipeline trigger is ready for approval.",
+            workflowState: { status: "waiting_for_approval", currentStep: "approve pipeline", completedTools: [] },
+            tools: [],
+          },
+        }}
+        onInspect={() => undefined}
+        onTrigger={() => undefined}
+        onAnalyze={() => undefined}
+        onSave={() => undefined}
+        onOpenDetails={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Approval required");
+    expect(html).toContain('href="#/chat"');
+    expect(html).toContain("Open Chat approval");
+    expect(html).not.toContain("Open Chat to review");
+  });
+
   it("lets pipeline action buttons wrap naturally on narrow cards", () => {
     const className = pipelineActionRowClass();
 
