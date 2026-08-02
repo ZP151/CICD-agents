@@ -9,6 +9,31 @@ Set-StrictMode -Version Latest
 
 Add-Type -AssemblyName System.Drawing
 
+if (-not ("MergePilotExecutableIconProbe" -as [type])) {
+  Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class MergePilotExecutableIconProbe
+{
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern uint PrivateExtractIcons(
+        string fileName,
+        int iconIndex,
+        int cxIcon,
+        int cyIcon,
+        IntPtr[] icons,
+        uint[] iconIds,
+        uint iconCount,
+        uint flags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DestroyIcon(IntPtr icon);
+}
+'@
+}
+
 function Get-IconAlphaBounds([string]$Path) {
   $bitmap = [System.Drawing.Bitmap]::FromFile($Path)
   try {
@@ -73,6 +98,123 @@ function Assert-TransparentCloudFrame([string]$Path, [int]$ExpectedSize, [double
   return $frame
 }
 
+function Assert-ApprovedSmallTaskbarDerivative([string]$Path, [int]$ExpectedSize, [string]$Approved32Path) {
+  # The taskbar's 16–30px payloads must be direct reductions of the
+  # user-approved 32px native mark. This catches the previous regression:
+  # the notification-area icon was correct at 32px while Explorer selected a
+  # visually different 24px raster from the EXE.
+  $source = [System.Drawing.Bitmap]::FromFile($Approved32Path)
+  $expected = [System.Drawing.Bitmap]::new($ExpectedSize, $ExpectedSize, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+  $actual = [System.Drawing.Bitmap]::FromFile($Path)
+  try {
+    $graphics = [System.Drawing.Graphics]::FromImage($expected)
+    try {
+      $graphics.Clear([System.Drawing.Color]::Transparent)
+      $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+      $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
+      $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+      $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+      $graphics.DrawImage($source, [System.Drawing.Rectangle]::new(0, 0, $ExpectedSize, $ExpectedSize))
+    } finally {
+      $graphics.Dispose()
+    }
+
+    if ($actual.Width -ne $ExpectedSize -or $actual.Height -ne $ExpectedSize) {
+      throw "Approved taskbar derivative has the wrong dimensions: $Path"
+    }
+
+    for ($y = 0; $y -lt $ExpectedSize; $y++) {
+      for ($x = 0; $x -lt $ExpectedSize; $x++) {
+        if ($expected.GetPixel($x, $y).ToArgb() -ne $actual.GetPixel($x, $y).ToArgb()) {
+          throw "Taskbar ${ExpectedSize}px frame no longer matches the approved 32px icon: $Path"
+        }
+      }
+    }
+  } finally {
+    $actual.Dispose()
+    $expected.Dispose()
+    $source.Dispose()
+  }
+}
+
+function Get-ExecutableIconFrame([string]$Path, [int]$RequestedSize) {
+  $icons = [IntPtr[]]::new(1)
+  $iconIds = [uint32[]]::new(1)
+  $extracted = [MergePilotExecutableIconProbe]::PrivateExtractIcons(
+    $Path,
+    0,
+    $RequestedSize,
+    $RequestedSize,
+    $icons,
+    $iconIds,
+    1,
+    0
+  )
+
+  if ($extracted -ne 1 -or $icons[0] -eq [IntPtr]::Zero) {
+    throw "Windows could not extract the ${RequestedSize}px icon frame from $Path (error $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
+  }
+
+  try {
+    $icon = [System.Drawing.Icon]::FromHandle($icons[0])
+    try {
+      $bitmap = $icon.ToBitmap()
+      $stream = [System.IO.MemoryStream]::new()
+      try {
+        # Icon.ToBitmap can expose premultiplied channels. Round-trip only in
+        # memory so the comparison observes the same straight-alpha pixels
+        # Explorer receives from the PNG payload, rather than false one-channel
+        # differences introduced by System.Drawing's in-memory representation.
+        $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+        $stream.Position = 0
+        $decoded = [System.Drawing.Bitmap]::FromStream($stream)
+        try {
+          return [System.Drawing.Bitmap]::new($decoded)
+        } finally {
+          $decoded.Dispose()
+        }
+      } finally {
+        $stream.Dispose()
+        $bitmap.Dispose()
+      }
+    } finally {
+      $icon.Dispose()
+    }
+  } finally {
+    [void][MergePilotExecutableIconProbe]::DestroyIcon($icons[0])
+  }
+}
+
+function Assert-ExecutableIconFrameMatches([string]$ExecutablePath, [string]$ExpectedPath, [int]$RequestedSize) {
+  # Ask Windows for the same physical size Explorer uses rather than checking a
+  # fixed 48px HICON. The raw ICO payload is hash-verified above; here we
+  # verify that the packaged EXE returns the requested dimensions and the same
+  # transparent visual bounds. (user32 can round premultiplied edge channels.)
+  $expected = [System.Drawing.Bitmap]::FromFile($ExpectedPath)
+  $actual = Get-ExecutableIconFrame $ExecutablePath $RequestedSize
+  try {
+    if ($actual.Width -ne $RequestedSize -or $actual.Height -ne $RequestedSize) {
+      throw "Windows returned $($actual.Width)x$($actual.Height) for a ${RequestedSize}px request from $ExecutablePath."
+    }
+
+    $expectedProfile = Get-AlphaBoundsFromBitmap $expected "${ExpectedPath}:${RequestedSize}px"
+    $actualProfile = Get-AlphaBoundsFromBitmap $actual "${ExecutablePath}:${RequestedSize}px"
+    if (
+      $actualProfile.TopLeftAlpha -ne 0 -or
+      $actualProfile.TopRightAlpha -ne 0 -or
+      $actualProfile.BottomLeftAlpha -ne 0 -or
+      $actualProfile.BottomRightAlpha -ne 0 -or
+      [Math]::Abs($actualProfile.VisibleWidth - $expectedProfile.VisibleWidth) -gt 1 -or
+      [Math]::Abs($actualProfile.VisibleHeight - $expectedProfile.VisibleHeight) -gt 1
+    ) {
+      throw "Packaged executable ${RequestedSize}px frame has different transparent bounds from the ICO payload: $ExecutablePath"
+    }
+  } finally {
+    $actual.Dispose()
+    $expected.Dispose()
+  }
+}
+
 function Get-IcoFrameSizes([string]$Path) {
   $bytes = [System.IO.File]::ReadAllBytes($Path)
   if ($bytes.Length -lt 6 -or [BitConverter]::ToUInt16($bytes, 0) -ne 0 -or [BitConverter]::ToUInt16($bytes, 2) -ne 1) {
@@ -130,6 +272,7 @@ $nativeIcon256 = Join-Path $desktopRoot "src-tauri\\icons\\128x128@2x.png"
 $nativeIco = Join-Path $desktopRoot "src-tauri\\icons\\icon.ico"
 $taskbarDirectory = Join-Path $desktopRoot "src-tauri\\icons\\taskbar"
 $taskbarSizes = @(16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 96, 128, 256)
+$approvedSmallTaskbarSizes = @(16, 20, 24, 30)
 
 # This is the user-approved cloud artwork.  Keep the source itself in the
 # repository and fail verification if a later refresh silently replaces it
@@ -184,6 +327,10 @@ foreach ($size in $taskbarSizes) {
   if ($icoFrame[0].PayloadHash -ne $taskbarHash) {
     throw "ICO entry is not the exact exported ${size}px taskbar source."
   }
+
+  if ($approvedSmallTaskbarSizes -contains $size) {
+    Assert-ApprovedSmallTaskbarDerivative $taskbarPath $size $approvedTaskbar32
+  }
 }
 
 $trayFrameHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([System.IO.File]::ReadAllBytes($nativeIcon32)))
@@ -201,17 +348,9 @@ if (-not $ExecutablePath) {
 }
 
 if ($ExecutablePath) {
-  $icon = [System.Drawing.Icon]::ExtractAssociatedIcon((Resolve-Path $ExecutablePath))
-  if (-not $icon) { throw "Could not extract an icon from executable: $ExecutablePath" }
-
-  $temporaryIcon = Join-Path ([System.IO.Path]::GetTempPath()) "mergepilot-icon-verification.png"
-  try {
-    $bitmap = $icon.ToBitmap()
-    try { $bitmap.Save($temporaryIcon, [System.Drawing.Imaging.ImageFormat]::Png) } finally { $bitmap.Dispose() }
-    Assert-TransparentCloudFrame $temporaryIcon 32 0.55 | Out-Null
-  } finally {
-    $icon.Dispose()
-    Remove-Item -LiteralPath $temporaryIcon -Force -ErrorAction SilentlyContinue
+  $resolvedExecutable = (Resolve-Path $ExecutablePath).Path
+  foreach ($size in @(16, 20, 24, 30, 32)) {
+    Assert-ExecutableIconFrameMatches $resolvedExecutable (Join-Path $taskbarDirectory "${size}x${size}.png") $size
   }
 }
 

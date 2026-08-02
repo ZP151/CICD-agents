@@ -10,12 +10,14 @@ param(
 
 .DESCRIPTION
   The review pack is deliberately generated from the retained full-resolution
-  cloud master and the PNG payloads inside icon.ico. It does not render the
-  React image, extract a shell HICON, or upscale a low-resolution source.
+  cloud master, the user-approved native 32px mark, and the PNG payloads
+  inside icon.ico. It does not render the React image, extract a shell HICON,
+  or upscale a low-resolution source.
 
   It makes the small-frame decision reviewable:
-  - source render: original visual identity at 24px;
-  - retired scaled render: the historical 1.16x crop that was too different;
+  - original source render: original visual identity at 24px;
+  - approved native reduction: the exact 32px user-approved mark reduced to
+    24px without changing its geometry;
   - shipped ICO render: the exact 24px payload packaged for Windows.
 
   The six-frame contact sheet uses the real ICO entries at 8x nearest-neighbour
@@ -39,8 +41,8 @@ if (-not (Test-Path -LiteralPath $icoPath)) { throw "Missing native ICO: $icoPat
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
-function New-RenderFromMaster([int]$size, [double]$scale = 1.0, [bool]$snapAlpha = $false) {
-  $source = [System.Drawing.Bitmap]::FromFile($masterPath)
+function New-RenderFromSource([string]$sourcePath, [int]$size, [double]$scale = 1.0, [bool]$snapAlpha = $false) {
+  $source = [System.Drawing.Bitmap]::FromFile($sourcePath)
   try {
     $target = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
     try {
@@ -156,12 +158,12 @@ function Draw-ScaledFrame(
   try { $graphics.DrawString($label, $font, $brush, $x, $y + 4) } finally { $font.Dispose(); $brush.Dispose() }
 }
 
-$source24 = New-RenderFromMaster 24 1.0 $false
-$legacyScaled24 = New-RenderFromMaster 24 1.16 $false
+$source24 = New-RenderFromSource $masterPath 24 1.0 $false
+$approved24 = New-RenderFromSource $approvedTaskbar32Path 24 1.0 $false
 $current24 = Get-IcoFrame 24
 try {
   Save-Png $source24 (Join-Path $OutputDirectory "original-24x24.png")
-  Save-Png $legacyScaled24 (Join-Path $OutputDirectory "legacy-content-scaled-24x24.png")
+  Save-Png $approved24 (Join-Path $OutputDirectory "approved-native-24x24.png")
   Save-Png $current24 (Join-Path $OutputDirectory "packaged-ico-24x24.png")
 
   $comparison = New-Object System.Drawing.Bitmap(768, 278, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
@@ -169,18 +171,18 @@ try {
   try {
     $graphics.Clear([System.Drawing.Color]::White)
     Draw-ScaledFrame $graphics $source24 18 20 8 "Original master / 24px"
-    Draw-ScaledFrame $graphics $legacyScaled24 274 20 8 "Retired scaled / 24px"
+    Draw-ScaledFrame $graphics $approved24 274 20 8 "Approved 32px reduction / 24px"
     Draw-ScaledFrame $graphics $current24 530 20 8 "Shipped ICO / 24px"
     $font = New-Object System.Drawing.Font("Segoe UI", 9)
     $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 70, 78, 94))
     try {
-      $graphics.DrawString("The shipped frame keeps the original 1.0x canvas. The middle frame documents the retired crop only.", $font, $brush, 18, 238)
+      $graphics.DrawString("The shipped frame must retain the approved native mark at the size Explorer actually requests.", $font, $brush, 18, 238)
     } finally { $font.Dispose(); $brush.Dispose() }
     Save-Png $comparison (Join-Path $OutputDirectory "original-vs-legacy-vs-shipped-24px-8x.png")
   } finally { $graphics.Dispose(); $comparison.Dispose() }
 } finally {
   $source24.Dispose()
-  $legacyScaled24.Dispose()
+  $approved24.Dispose()
   $current24.Dispose()
 }
 

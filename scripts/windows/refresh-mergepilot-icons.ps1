@@ -201,6 +201,32 @@ public static class MergePilotIconSurface
         }
     }
 
+    public static void RenderApprovedSmallTaskbarFrame(string approved32Path, string targetPath, int outputSize)
+    {
+        // The supplied 32px cloud is the approved native taskbar identity.
+        // Windows commonly asks the EXE for 16–30px payloads, so those frames
+        // must be a faithful reduction of that exact mark—not a second
+        // rasterisation of a different source with subtly different edge
+        // coverage or visual bounds. This only reduces pixels; it never crops,
+        // sharpens, redraws, or enlarges the cloud.
+        using (var source = new Bitmap(approved32Path))
+        using (var target = new Bitmap(outputSize, outputSize, PixelFormat.Format32bppArgb))
+        using (var graphics = Graphics.FromImage(target))
+        {
+            graphics.Clear(Color.Transparent);
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.PixelOffsetMode = PixelOffsetMode.Half;
+            graphics.CompositingQuality = CompositingQuality.HighQuality;
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.DrawImage(source, new Rectangle(0, 0, outputSize, outputSize));
+
+            var temporaryPath = targetPath + ".mergepilot-approved-taskbar-tmp";
+            target.Save(temporaryPath, ImageFormat.Png);
+            File.Copy(temporaryPath, targetPath, true);
+            File.Delete(temporaryPath);
+        }
+    }
+
 }
 '@
 
@@ -271,20 +297,26 @@ foreach ($relativePath in $iconPaths) {
   [MergePilotIconSurface]::RemoveOuterSurface($path)
 }
 
-# Build a source-controlled native frame set. Every entry is rendered directly
-# from the full-resolution transparent master; no low-resolution PNG is ever
-# enlarged to construct an ICO payload. These exported files also provide a
-# reviewable per-DPI source for 100%, 125%, 150%, 175%, and 200% Windows.
+# Build a source-controlled native frame set. The approved 32px cloud is the
+# canonical small Windows mark, so its smaller peers are direct reductions of
+# it. Larger entries are independently rasterised from the full-resolution
+# transparent master. Nothing is ever enlarged from a small PNG, and no frame
+# receives a geometry-specific redraw. These files cover the common Windows
+# taskbar requests at 100%, 125%, 150%, 175%, and 200% scaling.
 $taskbarSizes = [int[]](16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 96, 128, 256)
+$approvedSmallTaskbarSizes = [int[]](16, 20, 24, 30, 32)
 $taskbarDirectory = Join-Path $desktopRoot "src-tauri\icons\taskbar"
 New-Item -ItemType Directory -Force -Path $taskbarDirectory | Out-Null
 foreach ($taskbarSize in $taskbarSizes) {
   $taskbarPath = Join-Path $taskbarDirectory "${taskbarSize}x${taskbarSize}.png"
-  if ($taskbarSize -eq 32 -and (Test-Path -LiteralPath $approvedTaskbar32Path)) {
-    # This is the visually-approved native 32px taskbar frame. It shares the
-    # retained cloud source's geometry, but remains byte-for-byte stable so a
-    # later rasterizer tweak cannot alter the frame Windows commonly selects.
-    [System.IO.File]::Copy($approvedTaskbar32Path, $taskbarPath, $true)
+  if ($approvedSmallTaskbarSizes -contains $taskbarSize -and (Test-Path -LiteralPath $approvedTaskbar32Path)) {
+    if ($taskbarSize -eq 32) {
+      # Keep the visually-approved native 32px taskbar frame byte-for-byte
+      # stable. It is the reference for the small frames Windows selects.
+      [System.IO.File]::Copy($approvedTaskbar32Path, $taskbarPath, $true)
+    } else {
+      [MergePilotIconSurface]::RenderApprovedSmallTaskbarFrame($approvedTaskbar32Path, $taskbarPath, $taskbarSize)
+    }
   } else {
     [MergePilotIconSurface]::RenderTaskbarFrame($runtimeSourcePath, $taskbarPath, $taskbarSize)
   }
