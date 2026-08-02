@@ -1,4 +1,4 @@
-import { motion, useReducedMotion } from "motion/react";
+import { animate, motion, useMotionValue, useReducedMotion } from "motion/react";
 import {
   useEffect,
   useRef,
@@ -22,19 +22,19 @@ const PARTICLES = [
 ] as const;
 
 const DECK_POSITIONS = {
-  "-2": { x: -344, y: 8, rotateY: 28, rotateZ: 0, scale: 0.8, opacity: 0.76, zIndex: 1 },
-  "-1": { x: -172, y: 2, rotateY: 13, rotateZ: 0, scale: 0.93, opacity: 0.94, zIndex: 2 },
-  "0": { x: 0, y: -5, rotateY: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 3 },
-  "1": { x: 172, y: 2, rotateY: -13, rotateZ: 0, scale: 0.93, opacity: 0.94, zIndex: 2 },
-  "2": { x: 344, y: 8, rotateY: -28, rotateZ: 0, scale: 0.8, opacity: 0.76, zIndex: 1 },
+  "-2": { x: -356, y: 16, rotateY: 32, rotateZ: 0, scale: 0.72, opacity: 0.62, zIndex: 1 },
+  "-1": { x: -184, y: 4, rotateY: 18, rotateZ: 0, scale: 0.88, opacity: 0.88, zIndex: 2 },
+  "0": { x: 0, y: -8, rotateY: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 3 },
+  "1": { x: 184, y: 4, rotateY: -18, rotateZ: 0, scale: 0.88, opacity: 0.88, zIndex: 2 },
+  "2": { x: 356, y: 16, rotateY: -32, rotateZ: 0, scale: 0.72, opacity: 0.62, zIndex: 1 },
 } as const;
 
 const COMPACT_DECK_POSITIONS = {
-  "-2": { x: -255, y: 8, rotateY: 25, rotateZ: 0, scale: 0.76, opacity: 0.72, zIndex: 1 },
-  "-1": { x: -132, y: 2, rotateY: 12, rotateZ: 0, scale: 0.9, opacity: 0.92, zIndex: 2 },
-  "0": { x: 0, y: -5, rotateY: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 3 },
-  "1": { x: 132, y: 2, rotateY: -12, rotateZ: 0, scale: 0.9, opacity: 0.92, zIndex: 2 },
-  "2": { x: 255, y: 8, rotateY: -25, rotateZ: 0, scale: 0.76, opacity: 0.72, zIndex: 1 },
+  "-2": { x: -258, y: 14, rotateY: 30, rotateZ: 0, scale: 0.68, opacity: 0.54, zIndex: 1 },
+  "-1": { x: -136, y: 4, rotateY: 16, rotateZ: 0, scale: 0.84, opacity: 0.82, zIndex: 2 },
+  "0": { x: 0, y: -8, rotateY: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 3 },
+  "1": { x: 136, y: 4, rotateY: -16, rotateZ: 0, scale: 0.84, opacity: 0.82, zIndex: 2 },
+  "2": { x: 258, y: 14, rotateY: -30, rotateZ: 0, scale: 0.68, opacity: 0.54, zIndex: 1 },
 } as const;
 
 const DRAG_VISUAL_LIMIT = 172;
@@ -107,13 +107,13 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
   const [activeIndex, setActiveIndex] = useState(0);
   const [hovering, setHovering] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState(0);
   const [releaseStrength, setReleaseStrength] = useState(0);
   const [compactDeck, setCompactDeck] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const wheelLockUntil = useRef(0);
   const dragState = useRef<DragState | null>(null);
   const suppressClick = useRef(false);
+  const dragX = useMotionValue(0);
   const reducedMotion = useReducedMotion() ?? false;
   const activeSuggestion = suggestions[activeIndex];
   const autoPlaying = !disabled && !hovering && !dragging && !reducedMotion && suggestions.length > 1;
@@ -173,7 +173,7 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
       drag.velocityX = drag.velocityX * 0.32 + instantaneousVelocity * 0.68;
       drag.lastX = event.clientX;
       drag.lastTime = now;
-      setDragOffset(resistedDragOffset(deltaX));
+      dragX.set(resistedDragOffset(deltaX));
       return;
     }
     if (event.pointerType !== "mouse" || reducedMotion) return;
@@ -193,6 +193,8 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     const now = performance.now();
+    dragX.stop();
+    dragX.set(0);
     dragState.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -217,8 +219,16 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
     const release = resolvePromptDeckRelease(drag.deltaX, drag.velocityX, suggestions.length);
     setReleaseStrength(release.strength);
     selectRelative(release.indexDelta);
+    void animate(dragX, 0, reducedMotion
+      ? { duration: 0.01 }
+      : {
+          type: "spring",
+          stiffness: 360 + release.strength * 160,
+          damping: 30 + release.strength * 5,
+          mass: 0.56,
+          velocity: drag.velocityX * 1000,
+        });
     dragState.current = null;
-    setDragOffset(0);
     setDragging(false);
   };
 
@@ -262,7 +272,8 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
             />
           ))}
         </div>
-        {visibleSuggestions.map(({ suggestion, index, offset }) => {
+        <motion.div className="prompt-particle-deck__ring" style={{ x: dragX }}>
+          {visibleSuggestions.map(({ suggestion, index, offset }) => {
           const positions = compactDeck ? COMPACT_DECK_POSITIONS : DECK_POSITIONS;
           const position = positions[String(offset) as keyof typeof positions];
           const isActive = index === activeIndex;
@@ -276,7 +287,7 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
               initial={false}
               animate={{
                 ...position,
-                x: position.x + (dragging ? dragOffset : 0),
+                x: position.x,
                 rotateX: isActive && !reducedMotion ? tilt.x : 0,
                 rotateY: position.rotateY + (isActive && !reducedMotion ? tilt.y : 0),
               }}
@@ -309,7 +320,8 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
               <span className="prompt-particle-deck__label">{suggestion.label}</span>
             </motion.button>
           );
-        })}
+          })}
+        </motion.div>
       </div>
       <div className="prompt-particle-deck__steps" aria-hidden="true">
         {suggestions.map((suggestion, index) => <i key={suggestion.id} data-active={index === activeIndex ? "true" : "false"} />)}
