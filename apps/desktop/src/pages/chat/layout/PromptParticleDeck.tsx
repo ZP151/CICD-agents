@@ -1,16 +1,14 @@
 import { animate, motion, useMotionValue, useReducedMotion } from "motion/react";
 import {
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
   type PointerEvent,
   type WheelEvent,
 } from "react";
+import { flushSync } from "react-dom";
 import type { SuggestionReply } from "../../../components/conversation/SuggestionReplyBar.js";
-
-const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 interface PromptParticleDeckProps {
   suggestions: SuggestionReply[];
@@ -53,20 +51,13 @@ const WIDE_CARD_ADVANCE_DISTANCE = 205;
 const COMPACT_CARD_ADVANCE_DISTANCE = 146;
 
 interface DragState {
+  captured: boolean;
   pointerId: number;
   startX: number;
   deltaX: number;
   lastX: number;
   lastTime: number;
   velocityX: number;
-}
-
-interface PendingGlide {
-  indexDelta: number;
-  visualOffset: number;
-  cardAdvanceDistance: number;
-  velocityX: number;
-  sequence: number;
 }
 
 function deckOffset(index: number, activeIndex: number, count: number): number {
@@ -148,12 +139,10 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [settling, setSettling] = useState(false);
   const [instantPositioning, setInstantPositioning] = useState(false);
-  const [glideRequest, setGlideRequest] = useState(0);
   const wheelLockUntil = useRef(0);
   const dragState = useRef<DragState | null>(null);
   const suppressClick = useRef(false);
   const deckRef = useRef<HTMLDivElement>(null);
-  const pendingGlide = useRef<PendingGlide | null>(null);
   const glideFrame = useRef<number | null>(null);
   const interactionSequence = useRef(0);
   const dragX = useMotionValue(0);
@@ -186,48 +175,9 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
     return () => window.clearInterval(timer);
   }, [autoPlaying, suggestions.length]);
 
-  useIsomorphicLayoutEffect(() => {
-    const glide = pendingGlide.current;
-    if (!glide) return;
-    pendingGlide.current = null;
-
-    // Move the card geometry and the ring transform together before paint.
-    // The visible position therefore stays continuous while the active index
-    // changes, then the ring itself coasts to rest in a single motion.
-    setInstantPositioning(true);
-    setActiveIndex((current) => (current + glide.indexDelta + suggestions.length) % suggestions.length);
-    const continuationOffset = promptDeckContinuationOffset(
-      glide.visualOffset,
-      glide.indexDelta,
-      glide.cardAdvanceDistance,
-    );
-    dragX.set(continuationOffset);
-    glideFrame.current = window.requestAnimationFrame(() => {
-      glideFrame.current = null;
-      const inertia = animate(dragX, 0, reducedMotion
-        ? { duration: 0.01 }
-        : {
-            type: "tween",
-            duration: promptDeckInertiaDuration(continuationOffset, glide.velocityX),
-            ease: [0.16, 1, 0.3, 1],
-          });
-      void inertia.then(() => {
-        if (interactionSequence.current !== glide.sequence) return;
-        setSettling(false);
-        setInstantPositioning(false);
-      });
-    });
-  }, [dragX, glideRequest, reducedMotion, suggestions.length]);
-
   useEffect(() => () => {
     if (glideFrame.current !== null) window.cancelAnimationFrame(glideFrame.current);
   }, []);
-
-  const selectIndex = (nextIndex: number) => {
-    if (suggestions.length < 2) return;
-    const next = (nextIndex + suggestions.length) % suggestions.length;
-    setActiveIndex(next);
-  };
 
   const selectRelative = (delta: number) => {
     if (suggestions.length < 2 || delta === 0) return;
@@ -273,6 +223,13 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
     const drag = dragState.current;
     if (drag?.pointerId === event.pointerId) {
       const deltaX = event.clientX - drag.startX;
+      // Do not capture on press: immediate capture retargets a normal button
+      // click to the stage in Chromium/WebView2. Capture only once this is a
+      // real drag, so cards remain directly actionable.
+      if (!drag.captured && Math.abs(deltaX) > 6) {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        drag.captured = true;
+      }
       const now = performance.now();
       const elapsed = Math.max(8, now - drag.lastTime);
       const instantaneousVelocity = (event.clientX - drag.lastX) / elapsed;
@@ -298,7 +255,6 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
     const now = performance.now();
     interactionSequence.current += 1;
     if (glideFrame.current !== null) {
@@ -307,7 +263,11 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
     }
     dragX.stop();
     dragX.set(0);
+    // A drag can prevent its own synthetic click. It must never suppress the
+    // next deliberate card click.
+    suppressClick.current = false;
     dragState.current = {
+      captured: false,
       pointerId: event.pointerId,
       startX: event.clientX,
       deltaX: 0,
@@ -325,7 +285,7 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
   const completeDrag = (event: PointerEvent<HTMLDivElement>) => {
     const drag = dragState.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+    if (drag.captured && event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     // Pointer events can be coalesced during a fast drag. The release event is
@@ -341,6 +301,19 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
     dragX.set(finalVisualOffset);
     const didDrag = Math.abs(finalDeltaX) > 10;
     suppressClick.current = didDrag;
+    const clickedCardId = event.target instanceof Element
+      ? event.target.closest<HTMLElement>(".prompt-particle-deck__card")?.dataset.suggestionId
+      : undefined;
+    // The pointer-up path is the dependable activation boundary for a card
+    // embedded in a draggable surface. Apply a press without movement here;
+    // the following synthetic click is intentionally consumed below.
+    if (!didDrag && clickedCardId && !disabled) {
+      const clickedSuggestion = suggestions.find(({ id }) => id === clickedCardId);
+      if (clickedSuggestion) {
+        suppressClick.current = true;
+        onPick(clickedSuggestion);
+      }
+    }
     const release = resolvePromptDeckRelease(finalDeltaX, drag.velocityX, suggestions.length);
     setReleaseStrength(release.strength);
     const cardAdvanceDistance = compactDeck
@@ -355,15 +328,37 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
             ease: [0.2, 0.8, 0.2, 1],
           });
     } else {
-      setSettling(true);
-      pendingGlide.current = {
-        indexDelta: release.indexDelta,
-        visualOffset: finalVisualOffset,
+      const sequence = interactionSequence.current;
+      const continuationOffset = promptDeckContinuationOffset(
+        finalVisualOffset,
+        release.indexDelta,
         cardAdvanceDistance,
-        velocityX: drag.velocityX,
-        sequence: interactionSequence.current,
-      };
-      setGlideRequest((current) => current + 1);
+      );
+      // The active card's geometry shifts by one or more card widths when its
+      // index changes. Flush that shift together with the compensating ring
+      // translation inside the release event, before the browser can paint.
+      // This leaves one continuous coast instead of a state-update pause.
+      flushSync(() => {
+        setSettling(true);
+        setInstantPositioning(true);
+        setActiveIndex((current) => (current + release.indexDelta + suggestions.length) % suggestions.length);
+      });
+      dragX.set(continuationOffset);
+      glideFrame.current = window.requestAnimationFrame(() => {
+        glideFrame.current = null;
+        const inertia = animate(dragX, 0, reducedMotion
+          ? { duration: 0.01 }
+          : {
+              type: "tween",
+              duration: promptDeckInertiaDuration(continuationOffset, drag.velocityX),
+              ease: [0.16, 1, 0.3, 1],
+            });
+        void inertia.then(() => {
+          if (interactionSequence.current !== sequence) return;
+          setSettling(false);
+          setInstantPositioning(false);
+        });
+      });
     }
     dragState.current = null;
     setDragging(false);
@@ -421,6 +416,7 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
               className="prompt-particle-deck__card"
               data-active={isActive ? "true" : "false"}
               data-depth={Math.abs(offset)}
+              data-suggestion-id={suggestion.id}
               data-tone={promptTone(index)}
               initial={false}
               animate={{
@@ -442,9 +438,7 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
               disabled={disabled}
               title={disabled
                 ? "Create a Project Link first"
-                : isActive
-                  ? "Click to edit this prompt"
-                  : "Click to preview this prompt"}
+                : "Use this prompt"}
               onFocus={() => setHovering(true)}
               onBlur={resetTilt}
               onClick={() => {
@@ -453,8 +447,7 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
                   suppressClick.current = false;
                   return;
                 }
-                if (isActive) onPick(suggestion);
-                else selectIndex(index);
+                onPick(suggestion);
               }}
             >
               <span className="prompt-particle-deck__label">{suggestion.label}</span>

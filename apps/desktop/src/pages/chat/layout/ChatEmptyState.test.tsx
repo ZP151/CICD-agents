@@ -61,6 +61,9 @@ describe("ChatEmptyState", () => {
     expect(html).toContain('aria-label="Suggested prompt drafts"');
     expect(html).toContain("Choose a starting point, then edit the prompt before MergePilot does any work.");
     expect(html).toContain("Understand this project");
+    expect(html).toContain('title="Use this prompt"');
+    expect(html).toContain('data-suggestion-id="welcome-understand"');
+    expect(html).not.toContain("Click to edit this prompt");
     // Five cards are visually present; two transparent edge positions stay
     // mounted so a long inertial swipe can move through three cards without a
     // DOM handoff mid-flight.
