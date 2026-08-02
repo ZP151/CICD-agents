@@ -1,5 +1,10 @@
 import type { ReviewQueueItem } from "../../api.js";
-import { ActionButton, WorkbenchFilterTabs } from "../../components/workbench/WorkbenchPrimitives.js";
+import {
+  ActionButton,
+  WorkbenchFilterTabs,
+  WorkbenchSelect,
+  WorkbenchTextInput,
+} from "../../components/workbench/WorkbenchPrimitives.js";
 import { lanes } from "./reviewQueueViewModel.js";
 
 export interface ReviewQueueControlsProps {
@@ -55,12 +60,11 @@ export function ReviewQueueControls({
         ariaLabel="Review queue filters"
         className={reviewQueueLaneGridClass()}
         options={[
-          { value: "all", label: "All", count: totalCount, title: "All review decisions" },
+          { value: "all", label: "All", count: totalCount },
           ...lanes.map((lane) => ({
             value: lane.key,
             label: reviewQueueCompactLaneLabel(lane.key),
             count: counts[lane.key],
-            title: lane.description,
           })),
         ]}
         value={queueFilter}
@@ -77,24 +81,23 @@ export function ReviewQueueControls({
               ? "border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft)_/_0.58)] text-[rgb(var(--app-success))] hover:bg-[rgb(var(--app-success-soft))]"
               : "text-[rgb(var(--app-text-muted))]"
           }`}
-          title={autoApproveEnabled ? "Disable auto-approve" : "Enable auto-approve"}
           aria-label={autoApproveEnabled ? "Disable auto-approve" : "Enable auto-approve"}
           aria-pressed={autoApproveEnabled}
         >
           Auto: {autoApproveEnabled ? "On" : "Off"}
         </ActionButton>
-        <select
-          className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1 text-xs text-[rgb(var(--app-text-muted))] outline-none focus:border-[rgb(var(--app-border-strong))]"
+        <WorkbenchSelect
+          className="min-h-7 w-auto bg-[rgb(var(--app-surface))] px-2.5 py-1 text-[rgb(var(--app-text-muted))]"
           value={sortMode}
           onChange={(e) => onSortModeChange(e.target.value === "recent" ? "recent" : "attention")}
           aria-label="Sort review queue"
         >
           <option value="attention">Needs attention first</option>
           <option value="recent">Most recent first</option>
-        </select>
+        </WorkbenchSelect>
         <label className="inline-flex items-center gap-1.5 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))]">
           Stale
-          <input
+          <WorkbenchTextInput
             type="number"
             min={1}
             value={staleAgeHours}
@@ -104,7 +107,7 @@ export function ReviewQueueControls({
               onStaleAgeChange(Number.isFinite(next) && next > 0 ? next : 1);
             }}
             onBlur={(e) => onStaleAgeSave(Number(e.target.value))}
-            className="w-12 bg-transparent text-right text-[rgb(var(--app-text))] outline-none disabled:opacity-60"
+            className="min-h-0 w-12 border-0 bg-transparent p-0 text-right text-[rgb(var(--app-text))] hover:border-0 focus:border-0 focus:ring-0 disabled:opacity-60"
             aria-label="Stale review age in hours"
           />
           h

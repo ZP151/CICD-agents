@@ -61,9 +61,10 @@ describe("ReviewQueueControls responsive layout", () => {
 
     expect(html).toContain("2/4");
     expect(html).toContain("sm:ml-auto");
-    expect(html).toContain("title=\"Low-risk PRs approved by the Review Agent with an audit record.\"");
     expect(html).toContain("Auto: On");
     expect(html).toContain('aria-label="Disable auto-approve"');
+    expect(html).toContain('aria-label="Sort review queue"');
+    expect(html).toContain('aria-label="Stale review age in hours"');
     expect(html).toContain(">All</span><span");
     expect(html).toContain(">Human</span>");
     expect(html).not.toContain(">Needs human review<span");
@@ -71,6 +72,7 @@ describe("ReviewQueueControls responsive layout", () => {
     expect(html).toContain("focus-visible:ring-2");
     expect(html).toContain("focus-visible:ring-[rgb(var(--app-focus))]/45");
     expect(html).toContain('aria-label="Review queue controls"');
+    expect(html).not.toContain("title=");
     expect(html).not.toContain("text-2xl");
     expect(html).not.toContain("lg:grid-cols-4");
     expect(html).not.toContain("rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1.5");
