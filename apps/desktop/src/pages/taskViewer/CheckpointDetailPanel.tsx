@@ -9,6 +9,7 @@ import { CheckpointPreviewSection } from "./CheckpointPreviewSection.js";
 import { CheckpointRollbackPlanSection } from "./CheckpointRollbackPlanSection.js";
 import { operationDetailSummary } from "./operationDetailSummary.js";
 import { ActivityDetailSection, ActivityFact, ActivityFactGrid } from "./ActivityDetailPrimitives.js";
+import { WorkbenchDisclosure } from "../../components/workbench/WorkbenchPrimitives.js";
 
 interface CheckpointDetailPanelProps {
   checkpoint: ChatCheckpointActivity;
@@ -87,14 +88,11 @@ export function CheckpointDetailPanel({
           <p className="break-words text-sm text-[rgb(var(--app-text))]">
             {toolSummary ?? "Structured checkpoint tool output is available."}
           </p>
-          <details className="mt-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-2">
-            <summary className="cursor-pointer text-xs font-medium text-[rgb(var(--app-text-muted))]">
-              Raw output
-            </summary>
-            <p className="mt-2 break-words font-mono text-xs text-[rgb(var(--app-text))]">
+          <WorkbenchDisclosure label="Raw output">
+            <p className="break-words font-mono text-xs text-[rgb(var(--app-text))]">
               {checkpoint.toolSummary}
             </p>
-          </details>
+          </WorkbenchDisclosure>
         </ActivityDetailSection>
       )}
     </div>

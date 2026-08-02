@@ -6,6 +6,7 @@ import {
 } from "./activityPresentation.js";
 import { ActivityDetailSection, ActivityFact, ActivityFactGrid } from "./ActivityDetailPrimitives.js";
 import { operationDetailSummary } from "./operationDetailSummary.js";
+import { WorkbenchDisclosure } from "../../components/workbench/WorkbenchPrimitives.js";
 
 function shouldFoldOperationDetails(details: string): boolean {
   const trimmed = details.trim();
@@ -64,14 +65,11 @@ export function ReviewOperationDetailPanel({
             <p className="break-words text-sm text-[rgb(var(--app-text))]">
               {detailsSummary ?? "Structured operation details are available."}
             </p>
-            <details className="mt-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-2">
-              <summary className="cursor-pointer text-xs font-medium text-[rgb(var(--app-text-muted))]">
-                Raw detail
-              </summary>
-              <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-[rgb(var(--app-text-subtle))]">
+            <WorkbenchDisclosure label="Raw detail">
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-[rgb(var(--app-text-subtle))]">
                 {operation.details}
               </pre>
-            </details>
+            </WorkbenchDisclosure>
           </>
         )}
         {operation.details && !detailsShouldFold && (

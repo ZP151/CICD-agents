@@ -2,6 +2,7 @@ import type { TaskView } from "../../api.js";
 import { duration, formatTime, statusClass, taskTitle } from "./activityPresentation.js";
 import { operationDetailSummary } from "./operationDetailSummary.js";
 import { ActivityDetailSection } from "./ActivityDetailPrimitives.js";
+import { WorkbenchDisclosure } from "../../components/workbench/WorkbenchPrimitives.js";
 
 function shouldFoldStepDetail(detail: string): boolean {
   const trimmed = detail.trim();
@@ -67,14 +68,11 @@ export function TaskRunDetailPanel({ task }: { task: TaskView }): JSX.Element {
                           <p className="mt-1 break-words text-xs text-[rgb(var(--app-text-subtle))]">
                             {detailSummary ?? "Structured step output is available."}
                           </p>
-                          <details className="mt-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-2">
-                            <summary className="cursor-pointer text-xs font-medium text-[rgb(var(--app-text-muted))]">
-                              Raw output
-                            </summary>
-                            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-[rgb(var(--app-text-subtle))]">
+                          <WorkbenchDisclosure label="Raw output">
+                            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-[rgb(var(--app-text-subtle))]">
                               {step.detail}
                             </pre>
-                          </details>
+                          </WorkbenchDisclosure>
                         </>
                       )}
                       {step.detail && !detailShouldFold && (

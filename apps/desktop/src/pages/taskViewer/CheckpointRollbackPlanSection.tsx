@@ -1,4 +1,5 @@
 import type { ChatCheckpointRollbackPlan } from "../../api.js";
+import { WorkbenchDisclosure } from "../../components/workbench/WorkbenchPrimitives.js";
 
 interface CheckpointRollbackPlanSectionProps {
   rollbackPlan: ChatCheckpointRollbackPlan | null;
@@ -66,11 +67,8 @@ export function CheckpointRollbackPlanSection({
               <p className="text-sm text-[rgb(var(--app-text))]">
                 {rollbackPlan.proposal.description}
               </p>
-              <details className="mt-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-2">
-                <summary className="cursor-pointer text-xs font-medium text-[rgb(var(--app-text-muted))]">
-                  Raw proposal
-                </summary>
-                <pre className="mt-2 max-h-48 overflow-auto text-xs text-[rgb(var(--app-text-subtle))]">
+              <WorkbenchDisclosure label="Raw proposal">
+                <pre className="max-h-48 overflow-auto text-xs text-[rgb(var(--app-text-subtle))]">
                   {JSON.stringify(
                     {
                       tool: rollbackPlan.proposal.tool,
@@ -80,7 +78,7 @@ export function CheckpointRollbackPlanSection({
                     2,
                   )}
                 </pre>
-              </details>
+              </WorkbenchDisclosure>
             </div>
           )}
           {rollbackPlan.requiredCapability && (
