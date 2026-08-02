@@ -22,19 +22,19 @@ const PARTICLES = [
 ] as const;
 
 const DECK_POSITIONS = {
-  "-2": { x: -356, y: 16, z: -62, rotateY: 32, rotateZ: 0, scale: 0.72, opacity: 0.62, zIndex: 1 },
-  "-1": { x: -184, y: 4, z: -26, rotateY: 18, rotateZ: 0, scale: 0.88, opacity: 0.88, zIndex: 2 },
-  "0": { x: 0, y: -8, z: 18, rotateY: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 3 },
-  "1": { x: 184, y: 4, z: -26, rotateY: -18, rotateZ: 0, scale: 0.88, opacity: 0.88, zIndex: 2 },
-  "2": { x: 356, y: 16, z: -62, rotateY: -32, rotateZ: 0, scale: 0.72, opacity: 0.62, zIndex: 1 },
+  "-2": { x: -410, y: 24, z: -94, rotateY: 34, rotateZ: -1.4, scale: 0.7, opacity: 0.56, zIndex: 1 },
+  "-1": { x: -205, y: 5, z: -30, rotateY: 20, rotateZ: -0.5, scale: 0.88, opacity: 0.87, zIndex: 2 },
+  "0": { x: 0, y: -10, z: 28, rotateY: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 3 },
+  "1": { x: 205, y: 5, z: -30, rotateY: -20, rotateZ: 0.5, scale: 0.88, opacity: 0.87, zIndex: 2 },
+  "2": { x: 410, y: 24, z: -94, rotateY: -34, rotateZ: 1.4, scale: 0.7, opacity: 0.56, zIndex: 1 },
 } as const;
 
 const COMPACT_DECK_POSITIONS = {
-  "-2": { x: -258, y: 14, z: -48, rotateY: 30, rotateZ: 0, scale: 0.68, opacity: 0.54, zIndex: 1 },
-  "-1": { x: -136, y: 4, z: -20, rotateY: 16, rotateZ: 0, scale: 0.84, opacity: 0.82, zIndex: 2 },
-  "0": { x: 0, y: -8, z: 14, rotateY: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 3 },
-  "1": { x: 136, y: 4, z: -20, rotateY: -16, rotateZ: 0, scale: 0.84, opacity: 0.82, zIndex: 2 },
-  "2": { x: 258, y: 14, z: -48, rotateY: -30, rotateZ: 0, scale: 0.68, opacity: 0.54, zIndex: 1 },
+  "-2": { x: -284, y: 19, z: -70, rotateY: 30, rotateZ: -1, scale: 0.66, opacity: 0.5, zIndex: 1 },
+  "-1": { x: -146, y: 4, z: -22, rotateY: 16, rotateZ: -0.4, scale: 0.84, opacity: 0.8, zIndex: 2 },
+  "0": { x: 0, y: -8, z: 20, rotateY: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 3 },
+  "1": { x: 146, y: 4, z: -22, rotateY: -16, rotateZ: 0.4, scale: 0.84, opacity: 0.8, zIndex: 2 },
+  "2": { x: 284, y: 19, z: -70, rotateY: -30, rotateZ: 1, scale: 0.66, opacity: 0.5, zIndex: 1 },
 } as const;
 
 const DRAG_VISUAL_LIMIT = 172;
