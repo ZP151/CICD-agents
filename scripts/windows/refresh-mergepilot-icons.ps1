@@ -50,7 +50,7 @@ public static class MergePilotIconSurface
         return maximum >= 60 && maximum - minimum <= 40;
     }
 
-    public static void RemoveOuterSurface(string path)
+    public static void RemoveOuterSurface(string path, bool strengthenBlueContour)
     {
         Bitmap bitmap;
         using (var source = new Bitmap(path))
@@ -119,6 +119,11 @@ public static class MergePilotIconSurface
                 bitmap.UnlockBits(data);
             }
 
+            if (strengthenBlueContour)
+            {
+                StrengthenBlueContour(bitmap);
+            }
+
             var temporaryPath = path + ".mergepilot-icon-tmp";
             bitmap.Save(temporaryPath, ImageFormat.Png);
             File.Copy(temporaryPath, path, true);
@@ -166,6 +171,54 @@ public static class MergePilotIconSurface
             File.Delete(temporaryPath);
         }
     }
+
+    // Windows renders taskbar icons from 16–32px ICO payloads. At that size the
+    // cloud's white interior blends into a light taskbar, so retain the original
+    // shape while adding a single opaque blue cue only into transparent neighbours.
+    public static void StrengthenBlueContour(Bitmap bitmap)
+    {
+        // The maximum is four additions per source pixel. Use primitive arrays
+        // so this helper remains compatible with the script's explicit runtime
+        // references in Windows PowerShell.
+        var additionPositions = new int[bitmap.Width * bitmap.Height * 4];
+        var additionColors = new int[additionPositions.Length];
+        var additionCount = 0;
+        var directions = new int[,] { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } };
+
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                var isBlueContour = pixel.A > 90 && pixel.B > pixel.R + 35 && pixel.B >= pixel.G - 8;
+                if (!isBlueContour) continue;
+
+                for (var direction = 0; direction < 4; direction++)
+                {
+                    var nextX = x + directions[direction, 0];
+                    var nextY = y + directions[direction, 1];
+                    if (nextX < 0 || nextX >= bitmap.Width || nextY < 0 || nextY >= bitmap.Height) continue;
+
+                    if (bitmap.GetPixel(nextX, nextY).A < 80)
+                    {
+                        additionPositions[additionCount] = nextY * bitmap.Width + nextX;
+                        additionColors[additionCount] = Color.FromArgb(220, pixel.R, pixel.G, pixel.B).ToArgb();
+                        additionCount++;
+                    }
+                }
+            }
+        }
+
+        for (var addition = 0; addition < additionCount; addition++)
+        {
+            var x = additionPositions[addition] % bitmap.Width;
+            var y = additionPositions[addition] / bitmap.Width;
+            if (bitmap.GetPixel(x, y).A < 80)
+            {
+                bitmap.SetPixel(x, y, Color.FromArgb(additionColors[addition]));
+            }
+        }
+    }
 }
 '@
 
@@ -199,7 +252,8 @@ foreach ($relativePath in $iconPaths) {
     $sourceSize = if ($relativePath -eq "src\\assets\\mergepilot-icon.png") { 512 } else { 0 }
     [MergePilotIconSurface]::ReplaceWithSource($SourceImage, $path, $sourceSize, $sourceSize)
   }
-  [MergePilotIconSurface]::RemoveOuterSurface($path)
+  $strengthenForTaskbar = $relativePath -eq "src-tauri\\icons\\32x32.png"
+  [MergePilotIconSurface]::RemoveOuterSurface($path, $strengthenForTaskbar)
 }
 
 function Get-PngPayload([string] $sourcePath, [int] $size) {
@@ -214,6 +268,9 @@ function Get-PngPayload([string] $sourcePath, [int] $size) {
         $graphics.DrawImage($source, 0, 0, $size, $size)
       } finally {
         $graphics.Dispose()
+      }
+      if ($size -le 32) {
+        [MergePilotIconSurface]::StrengthenBlueContour($bitmap)
       }
       $stream = New-Object System.IO.MemoryStream
       try {
