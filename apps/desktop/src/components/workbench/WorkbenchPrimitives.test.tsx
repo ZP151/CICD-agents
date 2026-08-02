@@ -8,8 +8,11 @@ import {
   WorkbenchHeader,
   WorkbenchFilterTabs,
   WorkbenchPage,
+  WorkbenchSegmentedControl,
   WorkbenchSkeleton,
   WorkbenchSidePanel,
+  WorkbenchTextInput,
+  WorkbenchToggle,
   workbenchPageClass,
 } from "./WorkbenchPrimitives.js";
 
@@ -66,6 +69,29 @@ describe("WorkbenchPrimitives", () => {
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain(">Failed</span><span");
     expect(html).toContain("focus-visible:ring");
+  });
+
+  it("provides shared form controls with visible selected, focus, and disabled states", () => {
+    const html = renderToStaticMarkup(
+      <>
+        <WorkbenchTextInput aria-label="Endpoint" placeholder="https://example.test" />
+        <WorkbenchSegmentedControl
+          ariaLabel="Provider"
+          options={[{ value: "azure", label: "Azure" }, { value: "openai", label: "OpenAI" }]}
+          value="azure"
+          onValueChange={() => undefined}
+        />
+        <WorkbenchToggle ariaLabel="Enable model" checked disabled onChange={() => undefined} />
+      </>,
+    );
+
+    expect(html).toContain('aria-label="Endpoint"');
+    expect(html).toContain('aria-label="Provider"');
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('role="switch"');
+    expect(html).toContain('aria-checked="true"');
+    expect(html).toContain("focus:ring");
+    expect(html).toContain("disabled");
   });
 
   it("provides a labelled details panel for route-level evidence", () => {

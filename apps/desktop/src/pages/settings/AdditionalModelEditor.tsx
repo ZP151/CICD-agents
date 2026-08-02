@@ -28,6 +28,7 @@ export function AdditionalModelEditor({
     <div className="settings-list rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]/45">
       <SettingsRow title={editingModelId === "new" ? "Add model" : "Edit model"}>
         <SegmentedChoice<AdditionalModelProvider>
+          ariaLabel="Model provider"
           value={modelDraft.provider}
           onChange={(value) => onDraftChange("provider", value)}
           options={[
@@ -51,6 +52,7 @@ export function AdditionalModelEditor({
       )}
       <SettingsRow title="Enabled" description="Controls whether this model appears in Chat.">
         <ToggleSwitch
+          ariaLabel="Enable model"
           checked={modelDraft.enabled && modelDraft.available}
           disabled={testingModelId === modelDraft.id}
           onChange={(value) => {

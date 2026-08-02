@@ -281,7 +281,7 @@ body {
   color: rgb(var(--app-text));
 }
 
-.settings-segmented button,
+.workbench-segmented-control button,
 .theme-choice-option {
   transition:
     background-color var(--app-motion-fast) var(--app-ease-standard),
@@ -291,12 +291,12 @@ body {
     transform var(--app-motion-fast) var(--app-ease-standard);
 }
 
-.settings-segmented button:active:not(:disabled),
+.workbench-segmented-control button:active:not(:disabled),
 .theme-choice-option:active:not(:disabled) {
   transform: translateY(1px);
 }
 
-.settings-segmented button:focus-visible,
+.workbench-segmented-control button:focus-visible,
 .theme-choice-option:focus-visible {
   outline: 2px solid rgb(var(--app-focus) / 0.72);
   outline-offset: 2px;

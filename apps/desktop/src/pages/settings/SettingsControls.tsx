@@ -1,5 +1,10 @@
 import { useState, type ReactNode } from "react";
-import { StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
+import {
+  StatusBadge,
+  WorkbenchSegmentedControl,
+  WorkbenchTextInput,
+  WorkbenchToggle,
+} from "../../components/workbench/WorkbenchPrimitives.js";
 
 export function TextInput({
   label,
@@ -17,21 +22,21 @@ export function TextInput({
   const [show, setShow] = useState(false);
   const isSecret = type === "password";
   return (
-    <label className="settings-input-wrap">
+    <label className="block min-w-0 w-full">
       <span className="sr-only">{label}</span>
       <div className="relative flex items-center">
-        <input
+        <WorkbenchTextInput
           type={isSecret && !show ? "password" : "text"}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
-          className="settings-input"
+          className={isSecret ? "pr-10" : ""}
         />
         {isSecret && (
           <button
             type="button"
             onClick={() => setShow((value) => !value)}
-            className="absolute right-2.5 text-[rgb(var(--app-text-subtle))] transition hover:text-[rgb(var(--app-text))]"
+            className="absolute right-2.5 rounded p-1 text-[rgb(var(--app-text-subtle))] transition hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45"
             title={show ? "Hide" : "Show"}
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -105,20 +110,7 @@ export function SegmentedChoice<T extends string>({
   onChange: (value: T) => void;
 }): JSX.Element {
   return (
-    <div className="settings-segmented" role="group" aria-label={ariaLabel}>
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => onChange(option.value)}
-          className={option.value === value ? "is-active" : ""}
-          data-state={option.value === value ? "active" : "inactive"}
-          aria-pressed={option.value === value}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
+    <WorkbenchSegmentedControl ariaLabel={ariaLabel} options={options} value={value} onValueChange={onChange} />
   );
 }
 
@@ -126,22 +118,14 @@ export function ToggleSwitch({
   checked,
   disabled = false,
   onChange,
+  ariaLabel,
 }: {
   checked: boolean;
   disabled?: boolean;
   onChange: (checked: boolean) => void;
+  ariaLabel?: string;
 }): JSX.Element {
-  return (
-    <button
-      type="button"
-      className={`settings-toggle ${checked ? "is-on" : ""}`}
-      onClick={() => onChange(!checked)}
-      aria-pressed={checked}
-      disabled={disabled}
-    >
-      <span />
-    </button>
-  );
+  return <WorkbenchToggle checked={checked} disabled={disabled} onChange={onChange} ariaLabel={ariaLabel} />;
 }
 
 export function StatusPill({

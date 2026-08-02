@@ -72,6 +72,7 @@ export function AdditionalModelsSettingsSection({
           <div className="settings-action-stack">
             <div className="settings-action-row">
               <ToggleSwitch
+                ariaLabel={`Enable ${additionalModelName(model)}`}
                 checked={model.enabled && model.available}
                 disabled={testingModelId === model.id}
                 onChange={(value) => {

@@ -2,6 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import type {
   ButtonHTMLAttributes,
   HTMLAttributes,
+  InputHTMLAttributes,
   PropsWithChildren,
   ReactNode,
 } from "react";
@@ -150,6 +151,81 @@ export function ActionButton({
     >
       {loading && <span aria-hidden="true" className="workbench-loading-indicator" />}
       {children}
+    </button>
+  );
+}
+
+export function WorkbenchTextInput({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={`w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text))] outline-none transition-[background-color,border-color,box-shadow] duration-[var(--app-motion-fast)] placeholder:text-[rgb(var(--app-text-subtle))] hover:border-[rgb(var(--app-border-strong))] focus:border-[rgb(var(--app-accent))] focus:ring-2 focus:ring-[rgb(var(--app-focus))]/35 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
+    />
+  );
+}
+
+export function WorkbenchSegmentedControl<T extends string>({
+  ariaLabel,
+  options,
+  value,
+  onValueChange,
+}: {
+  ariaLabel?: string;
+  options: readonly { label: string; value: T; disabled?: boolean }[];
+  value: T;
+  onValueChange: (value: T) => void;
+}) {
+  return (
+    <div className="workbench-segmented-control inline-flex min-w-0 gap-1 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-1" role="group" aria-label={ariaLabel}>
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={selected}
+            disabled={option.disabled}
+            onClick={() => onValueChange(option.value)}
+            className={`min-h-7 rounded px-3 text-xs font-medium transition-[background-color,color,box-shadow,transform] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45 disabled:cursor-not-allowed disabled:opacity-50 ${
+              selected
+                ? "bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text))] shadow-sm"
+                : "text-[rgb(var(--app-text-muted))] hover:bg-[rgb(var(--app-control-hover))] hover:text-[rgb(var(--app-text))]"
+            }`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function WorkbenchToggle({
+  checked,
+  disabled = false,
+  onChange,
+  ariaLabel = "Toggle setting",
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+  ariaLabel?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-label={ariaLabel}
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-[background-color,border-color,box-shadow] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45 disabled:cursor-not-allowed disabled:opacity-50 ${
+        checked
+          ? "border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent))]"
+          : "border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-surface-raised))]"
+      }`}
+    >
+      <span aria-hidden="true" className={`pointer-events-none h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-[var(--app-motion-fast)] ${checked ? "translate-x-[18px]" : "translate-x-[3px]"}`} />
     </button>
   );
 }

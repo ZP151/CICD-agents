@@ -9,11 +9,10 @@ const cssPath = resolve(
 );
 
 describe("settings controls stylesheet", () => {
-  it("only stretches compound controls on narrow workbench widths", () => {
+  it("keeps only Settings-specific responsive layout after shared controls migrate", () => {
     const css = readFileSync(cssPath, "utf8").replace(/\r\n/g, "\n");
 
     expect(css).toContain("@media (max-width: 760px)");
-    expect(css).toContain(".settings-segmented");
     expect(css).toContain(".settings-inline-status");
     expect(css).toContain(".settings-account");
     expect(css).toContain(".settings-account-summary");
@@ -24,17 +23,15 @@ describe("settings controls stylesheet", () => {
     expect(css).toContain(".settings-action-stack");
     expect(css).toContain(".settings-action-row");
     expect(css).toContain(".settings-feedback-line");
-    expect(css).toContain(".settings-input-wrap,\n.settings-input {\n  min-width: 0;");
-    expect(css).toContain(".settings-input-wrap {\n  display: block;");
-    expect(css).toContain("width: min(100%, 12rem)");
     expect(css).toContain("@container (max-width: 44rem)");
     expect(css).toContain("text-align: left");
     expect(css).toContain(".settings-model-badge-list");
     expect(css).toContain(".settings-model-badge");
     expect(css).toContain("max-width: min(100%, 18rem)");
     expect(css).toContain("text-overflow: ellipsis");
-    expect(css).not.toContain(".settings-text-button {\n    width: 100%");
-    expect(css).not.toContain(".settings-action-button {\n    width: 100%");
+    expect(css).not.toContain(".settings-segmented");
+    expect(css).not.toContain(".settings-input");
+    expect(css).not.toContain(".settings-toggle");
     expect(css).not.toContain("min-width: 12rem;");
   });
 });

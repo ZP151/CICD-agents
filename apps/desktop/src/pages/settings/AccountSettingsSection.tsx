@@ -42,6 +42,7 @@ export function AccountSettingsSection({
         description="Choose where the built-in model API key is loaded from."
       >
         <SegmentedChoice
+          ariaLabel="Model secret source"
           value={settings.secretSource}
           onChange={(value) => onSettingChange("secretSource", value)}
           options={[
