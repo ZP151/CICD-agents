@@ -49,6 +49,8 @@ describe("PendingActionCard", () => {
     expect(html).toContain('data-risk-level="medium"');
     expect(html).toContain("git add --dry-run --");
     expect(html).toContain("apps/desktop/src/pages/Chat.tsx");
+    expect(html).toContain("focus-visible:ring-[rgb(var(--app-focus))]/45");
+    expect(html).toContain("focus:ring-[rgb(var(--app-focus))]/35");
   });
 
   it("shows an explicit stage-all command when no paths are scoped", () => {

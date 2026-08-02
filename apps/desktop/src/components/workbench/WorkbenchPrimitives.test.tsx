@@ -15,6 +15,7 @@ import {
   WorkbenchSidePanel,
   WorkbenchSelect,
   WorkbenchTextInput,
+  WorkbenchTextArea,
   WorkbenchToggle,
   workbenchPageClass,
 } from "./WorkbenchPrimitives.js";
@@ -78,6 +79,7 @@ describe("WorkbenchPrimitives", () => {
     const html = renderToStaticMarkup(
       <>
         <WorkbenchTextInput aria-label="Endpoint" placeholder="https://example.test" />
+        <WorkbenchTextArea aria-label="Change request" />
         <WorkbenchSelect aria-label="Project" defaultValue="mergepilot">
           <option value="mergepilot">MergePilot</option>
         </WorkbenchSelect>
@@ -92,6 +94,7 @@ describe("WorkbenchPrimitives", () => {
     );
 
     expect(html).toContain('aria-label="Endpoint"');
+    expect(html).toContain('aria-label="Change request"');
     expect(html).toContain('aria-label="Project"');
     expect(html).toContain('aria-label="Provider"');
     expect(html).toContain('aria-pressed="true"');

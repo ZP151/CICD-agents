@@ -1,4 +1,5 @@
 import type { Bubble } from "../chat.types.js";
+import { ActionButton, StatusBadge } from "../../../components/workbench/WorkbenchPrimitives.js";
 
 interface ConfirmCardProps {
   bubble: Bubble;
@@ -21,30 +22,32 @@ export function ConfirmCard({ bubble, onConfirm, onCancel }: ConfirmCardProps) {
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--app-warning))]" />
         <span className="font-semibold text-[rgb(var(--app-text))]">Approval required</span>
-        <span className={`text-[10px] font-semibold ${legacyRiskColor(bubble.riskLevel)}`}>
+        <StatusBadge tone={legacyRiskTone(bubble.riskLevel)} className="uppercase tracking-wide">
           {(bubble.riskLevel ?? "medium").toUpperCase()} risk
-        </span>
+        </StatusBadge>
       </div>
       <div className="flex gap-2">
-        <button
+        <ActionButton
+          type="button"
           onClick={onConfirm}
-          className="rounded-md bg-[rgb(var(--app-accent))] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:translate-y-px"
+          tone="primary"
         >
           Yes, run this action
-        </button>
-        <button
+        </ActionButton>
+        <ActionButton
+          type="button"
           onClick={onCancel}
-          className="rounded-md border border-[rgb(var(--app-border-strong))] px-3 py-1.5 text-xs font-medium text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:translate-y-px"
+          tone="secondary"
         >
           No, don't run it
-        </button>
+        </ActionButton>
       </div>
     </div>
   );
 }
 
-function legacyRiskColor(level = "low") {
-  if (level === "high") return "text-[rgb(var(--app-danger))]";
-  if (level === "medium") return "text-[rgb(var(--app-warning))]";
-  return "text-[rgb(var(--app-success))]";
+function legacyRiskTone(level?: string): "danger" | "success" | "warning" {
+  if (level === "high") return "danger";
+  if (level === "low") return "success";
+  return "warning";
 }
