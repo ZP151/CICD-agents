@@ -7,6 +7,7 @@ import {
   InlineNotice,
   WorkbenchHeader,
   WorkbenchPage,
+  WorkbenchSelect,
   WorkbenchSidePanel,
 } from "../components/workbench/WorkbenchPrimitives.js";
 import { PipelineRowCard } from "./pipelines/PipelineRowCard.js";
@@ -52,9 +53,9 @@ export default function Pipelines(): JSX.Element {
         description="Pipeline discovery, recent run state, controlled triggers, and AI-assisted run analysis."
         descriptionClassName={pipelineHeaderDescriptionClass()}
         actions={<div className={pipelineHeaderControlsClass()}>
-          <select
+          <WorkbenchSelect
             aria-label="Pipelines project filter"
-            className="min-w-0 rounded-md border border-transparent bg-[rgb(var(--app-surface-raised))] px-3 py-1.5 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-[rgb(var(--app-accent))]"
+            className="text-sm"
             value={runtime.projectFilter}
             disabled={projectLinksLoading || runtime.projectOptions.length === 0}
             onChange={(event) => runtime.setProjectFilter(event.target.value)}
@@ -73,7 +74,7 @@ export default function Pipelines(): JSX.Element {
                 {project}
               </option>
             ))}
-          </select>
+          </WorkbenchSelect>
           <ActionButton
             onClick={() => {
               void runtime.loadConnections();

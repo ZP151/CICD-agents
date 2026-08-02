@@ -74,6 +74,8 @@ describe("PullRequestPageHeader", () => {
     expect(html).not.toContain("lg:block");
     expect(html).toContain("sm:min-w-[14rem]");
     expect(html).toContain("sm:w-[9rem]");
+    expect(html).toContain("min-h-9");
+    expect(html).toContain("focus:ring-[rgb(var(--app-focus))]/35");
     expect(html).not.toContain("sm:w-[22rem]");
     expect(html).not.toContain("justify-end");
   });

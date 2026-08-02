@@ -2,14 +2,14 @@ import type { ProjectLink } from "../../api.js";
 import {
   ActionButton,
   WorkbenchHeader,
+  WorkbenchSelect,
 } from "../../components/workbench/WorkbenchPrimitives.js";
 import {
   compactProjectLinkName,
 } from "../projectLinks/ProjectLinkCard.js";
 import { ProjectLinkContextHint } from "../projectLinks/ProjectLinkContextHint.js";
 
-const projectLinkSelectClass =
-  "w-full min-w-0 truncate rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-1.5 text-sm text-[rgb(var(--app-text-muted))] outline-none transition focus:border-[rgb(var(--app-border-strong))] focus:ring-2 focus:ring-[rgb(var(--app-accent))]/20 disabled:cursor-not-allowed disabled:opacity-60";
+const projectLinkSelectClass = "truncate text-sm";
 
 export function reviewQueueHeaderControlsClass(): string {
   return [
@@ -44,7 +44,7 @@ export function ReviewQueuePageHeader({
         description="Approval and quality decisions from Review Agent history, including persisted audit records."
         descriptionClassName="hidden max-w-2xl xl:block"
         actions={<div className={reviewQueueHeaderControlsClass()}>
-          <select
+          <WorkbenchSelect
             aria-label="Review Queue Project Link"
             className={projectLinkSelectClass}
             value={projectLinkId}
@@ -58,7 +58,7 @@ export function ReviewQueuePageHeader({
                 {compactProjectLinkName(projectLink.name)}
               </option>
             ))}
-          </select>
+          </WorkbenchSelect>
           <ActionButton onClick={onRefresh}>Refresh</ActionButton>
         </div>}
       />

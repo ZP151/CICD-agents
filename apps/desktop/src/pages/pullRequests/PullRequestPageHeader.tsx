@@ -2,13 +2,12 @@ import type { ProjectLink } from "../../api.js";
 import {
   ActionButton,
   WorkbenchHeader,
+  WorkbenchSelect,
 } from "../../components/workbench/WorkbenchPrimitives.js";
 import { ProjectLinkContextHint } from "../projectLinks/ProjectLinkContextHint.js";
 
-const pageSelectClass =
-  "min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-1.5 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-[rgb(var(--app-focus))] focus:ring-2 focus:ring-[rgb(var(--app-focus))]/20 disabled:cursor-not-allowed disabled:opacity-60";
-const projectLinkSelectClass = `${pageSelectClass} w-full truncate sm:min-w-[14rem]`;
-const statusSelectClass = `${pageSelectClass} w-full sm:w-[9rem]`;
+const projectLinkSelectClass = "truncate text-sm sm:min-w-[14rem]";
+const statusSelectClass = "text-sm sm:w-[9rem]";
 
 export function pullRequestHeaderControlsClass(): string {
   return [
@@ -47,7 +46,7 @@ export function PullRequestPageHeader({
         description="Triage active changes, inspect evidence, and decide what needs human review."
         descriptionClassName="hidden max-w-2xl xl:block"
         actions={<div className={pullRequestHeaderControlsClass()}>
-          <select
+          <WorkbenchSelect
             aria-label="Pull Requests Project Link"
             className={projectLinkSelectClass}
             value={projectLinkId}
@@ -63,8 +62,8 @@ export function PullRequestPageHeader({
             {projectLinks.map((projectLink) => (
               <option key={projectLink.id} value={projectLink.id}>{projectLink.name}</option>
             ))}
-          </select>
-          <select
+          </WorkbenchSelect>
+          <WorkbenchSelect
             aria-label="Pull Requests status"
             className={statusSelectClass}
             value={status}
@@ -74,7 +73,7 @@ export function PullRequestPageHeader({
             <option value="completed">Completed</option>
             <option value="abandoned">Abandoned</option>
             <option value="all">All</option>
-          </select>
+          </WorkbenchSelect>
           <ActionButton onClick={onRefresh}>Refresh</ActionButton>
         </div>}
       />
