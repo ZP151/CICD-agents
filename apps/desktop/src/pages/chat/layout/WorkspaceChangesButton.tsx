@@ -1,4 +1,5 @@
 import type { WorkspaceAction } from "../workflowTaskState.js";
+import { ActionButton } from "../../../components/workbench/WorkbenchPrimitives.js";
 
 interface WorkspaceChangesButtonProps {
   hasRepoPath: boolean;
@@ -22,11 +23,12 @@ export function WorkspaceChangesButton({
   runAction,
 }: WorkspaceChangesButtonProps) {
   return (
-    <button
+    <ActionButton
       type="button"
+      tone="quiet"
       onClick={() => runAction({ type: "inspect_changes" })}
       disabled={!hasRepoPath || busy}
-      className="flex w-full min-w-0 items-center justify-between gap-2 rounded-md px-1 py-1.5 text-left transition hover:bg-[rgb(var(--app-surface-raised))] disabled:cursor-default disabled:opacity-70"
+      className="w-full justify-between gap-2 px-1 py-1.5 text-left disabled:cursor-default disabled:opacity-70"
     >
       <span className="flex min-w-0 flex-1 items-center gap-2 text-sm">
         <svg className="h-4 w-4 shrink-0 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -48,6 +50,6 @@ export function WorkspaceChangesButton({
           <span className="text-[rgb(var(--app-text-subtle))]">clean</span>
         )}
       </span>
-    </button>
+    </ActionButton>
   );
 }
