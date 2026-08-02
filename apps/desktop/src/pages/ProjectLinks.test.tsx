@@ -55,7 +55,10 @@ describe("ProjectLinks layout", () => {
 
     expect(html).toContain("Connect a project");
     expect(html).toContain("Link a local repository and Azure DevOps");
-    expect(html).toContain("Connect project");
+    expect(html).toContain('aria-label="Connect a project"');
+    expect(html).toContain('type="button"');
+    expect(html).toContain("focus-visible:ring-2");
+    expect(html).not.toContain(">Connect project</button>");
     expect(html).not.toContain("Setup needs");
     expect(html).not.toContain("lg:justify-between");
     expect(html).not.toContain("sm:grid-cols-3");

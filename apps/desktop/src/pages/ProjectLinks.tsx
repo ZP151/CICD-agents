@@ -252,9 +252,14 @@ export function ProjectLinksLoading(): JSX.Element {
 
 export function ProjectLinksEmpty({ onCreate }: { onCreate: () => void }): JSX.Element {
   return (
-    <section className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-6">
+    <button
+      type="button"
+      onClick={onCreate}
+      aria-label="Connect a project"
+      className="group w-full rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-6 text-left transition-[background-color,border-color,box-shadow] duration-[var(--app-motion-fast)] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45"
+    >
       <div className="max-w-2xl">
-        <div className="mb-3 flex h-8 w-8 items-center justify-center text-[rgb(var(--app-text-muted))]">
+        <div className="mb-3 flex h-8 w-8 items-center justify-center text-[rgb(var(--app-text-muted))] transition-colors duration-[var(--app-motion-fast)] group-hover:text-[rgb(var(--app-accent-readable))]">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <path
               d="M4.5 10h11M7.5 6.5h5M7.5 13.5h5M5 3.75h10A1.25 1.25 0 0 1 16.25 5v10A1.25 1.25 0 0 1 15 16.25H5A1.25 1.25 0 0 1 3.75 15V5A1.25 1.25 0 0 1 5 3.75Z"
@@ -271,8 +276,7 @@ export function ProjectLinksEmpty({ onCreate }: { onCreate: () => void }): JSX.E
         <p className="mt-2 max-w-[65ch] text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
           Link a local repository and Azure DevOps to use PRs, reviews, and pipelines.
         </p>
-        <ActionButton tone="primary" className="mt-4" onClick={onCreate}>Connect project</ActionButton>
       </div>
-    </section>
+    </button>
   );
 }
