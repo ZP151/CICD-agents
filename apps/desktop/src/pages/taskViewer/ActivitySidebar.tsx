@@ -19,7 +19,12 @@ import { checkpointActivityDetail, checkpointActivityKindLabel } from "./checkpo
 import { PrInsightActivitySection } from "./PrInsightActivitySection.js";
 import type { PrInsightActivityItem } from "./prInsightActivity.js";
 import { ReviewActivitySection } from "./ReviewActivitySection.js";
-import { ActionButton, InlineNotice, StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
+import {
+  ActionButton,
+  InlineNotice,
+  StatusBadge,
+  WorkbenchFilterTabs,
+} from "../../components/workbench/WorkbenchPrimitives.js";
 
 interface ActivitySidebarProps {
   projectLinks: ProjectLink[];
@@ -257,27 +262,18 @@ export function ActivitySidebar({
         />
       ) : (
         <>
-          <div className={activitySectionFilterGridClass()} aria-label="Activity sections">
-            {sectionOptions.map((section) => (
-              <button
-                key={section.key}
-                type="button"
-                aria-pressed={sectionFilter === section.key}
-                onClick={() => changeSectionFilter(section.key)}
-                className={`inline-flex min-w-0 shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-left transition ${
-                  sectionFilter === section.key
-                    ? "border-[rgb(var(--app-accent))]/45 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text))]"
-                    : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:text-[rgb(var(--app-text))]"
-                }`}
-                title={`${section.label}: ${section.count}`}
-              >
-                <span className="min-w-0 truncate text-xs font-medium">{section.shortLabel}</span>
-                <span className="shrink-0 text-[10px] text-current opacity-80">
-                  {section.count}
-                </span>
-              </button>
-            ))}
-          </div>
+          <WorkbenchFilterTabs
+            ariaLabel="Activity sections"
+            className={activitySectionFilterGridClass()}
+            options={sectionOptions.map((section) => ({
+              value: section.key,
+              label: section.shortLabel,
+              count: section.count,
+              title: `${section.label}: ${section.count}`,
+            }))}
+            value={sectionFilter}
+            onValueChange={changeSectionFilter}
+          />
 
           {initialActivityLoading ? (
             <ActivitySidebarLoadingState />
@@ -452,18 +448,18 @@ function activitySectionOptions(counts: {
   checkpoints: number;
   prInsights: number;
   reviewOperations: number;
-}): Array<{ key: ActivitySectionFilter; label: string; shortLabel: string; count: string }> {
+}): Array<{ key: ActivitySectionFilter; label: string; shortLabel: string; count: number }> {
   return [
     {
       key: "all",
       label: "All",
       shortLabel: "All",
-      count: String(counts.runs + counts.checkpoints + counts.prInsights + counts.reviewOperations),
+      count: counts.runs + counts.checkpoints + counts.prInsights + counts.reviewOperations,
     },
-    { key: "runs", label: "Runs", shortLabel: "Runs", count: String(counts.runs) },
-    { key: "checkpoints", label: "Checkpoints", shortLabel: "Git", count: String(counts.checkpoints) },
-    { key: "pr_insights", label: "PR Insights", shortLabel: "PR", count: String(counts.prInsights) },
-    { key: "review_operations", label: "Reviews", shortLabel: "Reviews", count: String(counts.reviewOperations) },
+    { key: "runs", label: "Runs", shortLabel: "Runs", count: counts.runs },
+    { key: "checkpoints", label: "Checkpoints", shortLabel: "Git", count: counts.checkpoints },
+    { key: "pr_insights", label: "PR Insights", shortLabel: "PR", count: counts.prInsights },
+    { key: "review_operations", label: "Reviews", shortLabel: "Reviews", count: counts.reviewOperations },
   ];
 }
 

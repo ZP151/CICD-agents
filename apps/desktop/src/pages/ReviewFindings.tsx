@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAppData } from "../App.js";
 import { PaginationControls } from "../components/PaginationControls.js";
-import { WorkbenchPage } from "../components/workbench/WorkbenchPrimitives.js";
+import { InlineNotice, WorkbenchPage } from "../components/workbench/WorkbenchPrimitives.js";
 import {
   loadStoredActiveProjectLinkId,
   resolveActiveProjectLinkId,
@@ -140,7 +140,7 @@ export default function ReviewFindings(): JSX.Element {
       />
 
       {!configured && (
-        <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4 text-sm text-[rgb(var(--app-text-muted))]">
+        <InlineNotice tone="info" title="Local review history">
           Azure Table Storage is not configured. Review history is stored on this device
           {storage === "browser"
             ? " (browser)"
@@ -148,25 +148,25 @@ export default function ReviewFindings(): JSX.Element {
               ? " and in the daemon data folder"
               : ""}
           .
-        </div>
+        </InlineNotice>
       )}
 
       {storageWarning && (
-        <div className="rounded-lg border border-[rgb(var(--app-warning))]/30 bg-[rgb(var(--app-warning)_/_0.10)] px-4 py-3 text-sm text-[rgb(var(--app-warning))]">
+        <InlineNotice tone="warning">
           {storageWarning} Local review history remains available on this device.
-        </div>
+        </InlineNotice>
       )}
 
       {error && (
-        <div className="rounded-lg border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] p-4 text-sm text-[rgb(var(--app-danger))]">
+        <InlineNotice tone="danger" title="Review Queue unavailable">
           {error}
-        </div>
+        </InlineNotice>
       )}
 
       {autoApproveError && (
-        <div className="rounded-lg border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] p-4 text-sm text-[rgb(var(--app-danger))]">
+        <InlineNotice tone="danger" title="Auto-approve setting was not saved">
           {autoApproveError}
-        </div>
+        </InlineNotice>
       )}
 
       {missingProjectLink ? (

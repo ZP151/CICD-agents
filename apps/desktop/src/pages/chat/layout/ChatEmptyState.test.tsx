@@ -32,9 +32,9 @@ const projectLink: ProjectLink = {
 
 describe("ChatEmptyState", () => {
   it("uses a balanced maximized layout only for the ready new-chat welcome", () => {
-    expect(chatEmptyStateShellClass(true)).toContain("justify-start");
-    expect(chatEmptyStateShellClass(true)).toContain("pt-[clamp(3rem,14vh,7rem)]");
-    expect(chatEmptyStateShellClass(true)).not.toContain("pt-[18vh]");
+    expect(chatEmptyStateShellClass(true)).toContain("justify-center");
+    expect(chatEmptyStateShellClass(true)).toContain("py-8");
+    expect(chatEmptyStateShellClass(true)).not.toContain("justify-start");
     expect(chatEmptyStateShellClass(false)).toContain("justify-center");
     expect(chatEmptyStateShellClass(false)).toContain("py-8");
     expect(chatEmptyStateShellClass(false)).not.toContain("pt-[18vh]");
@@ -55,14 +55,22 @@ describe("ChatEmptyState", () => {
 
     expect(html).toContain("New conversation welcome");
     expect(html).toContain("max-w-[58rem]");
-    expect(html).toContain("max-w-[44rem]");
-    expect(html).toContain("repeat(auto-fit,minmax(min(100%,12.75rem),1fr))");
+    expect(html).toContain("prompt-particle-deck");
     expect(html).toContain("Start with a focused prompt");
     expect(html).toContain("Suggested prompt drafts");
-    expect(html).toContain("Edit before sending");
+    expect(html).toContain('aria-label="Suggested prompt drafts"');
+    expect(html).toContain("Choose a starting point, then edit the prompt before MergePilot does any work.");
     expect(html).toContain("Understand this project");
-    expect(html).toContain("Review my changes");
-    expect(html).toContain("Push and create PR");
+    expect(html).toContain('title="Use this prompt"');
+    expect(html).toContain('data-suggestion-id="welcome-understand"');
+    expect(html).not.toContain("Click to edit this prompt");
+    // Five cards are visually present; two transparent edge positions stay
+    // mounted so a long inertial swipe can move through three cards without a
+    // DOM handoff mid-flight.
+    expect((html.match(/prompt-particle-deck__card/g) ?? [])).toHaveLength(7);
+    expect((html.match(/data-depth="3"/g) ?? [])).toHaveLength(2);
+    expect(html).not.toContain("prompt-particle-deck__glyph");
+    expect(html).toContain('data-autoplay="true"');
     expect(html).not.toContain("animate-pulse");
   });
 
@@ -90,7 +98,6 @@ describe("ChatEmptyState", () => {
 
     expect(html).toContain("New conversation welcome");
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Review my changes");
     expect(html).toContain("Checking Project Links...");
     expect(html).toContain("Create a Project Link first");
     expect(html).toContain("disabled=\"\"");
@@ -114,8 +121,10 @@ describe("ChatEmptyState", () => {
 
     expect(html).toContain("New conversation welcome");
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Review my changes");
-    expect(html).toContain("Connect a Project Link to run workspace actions");
+    expect(html).toContain("Connect a project");
+    expect(html).toContain("Link this repo to Azure DevOps.");
+    expect(html).not.toContain("Connect a Project Link to run workspace actions");
+    expect(html).not.toMatch(/>Create<\/span>/);
     expect(html).toContain("Create and use");
     expect(html).toContain("Create a Project Link first");
     expect(html).toContain("disabled=\"\"");

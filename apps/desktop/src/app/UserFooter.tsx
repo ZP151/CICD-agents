@@ -53,7 +53,7 @@ export function UserFooter() {
       {loggingIn && <LoginModal onDone={handleLoginDone} onCancel={handleLoginCancel} />}
 
       {!user.authenticated ? (
-        <div className="flex justify-center border-t border-[rgb(var(--app-sidebar-border))] p-2.5">
+        <div className="app-shell-account-footer flex justify-start border-t border-[rgb(var(--app-sidebar-border))] p-2.5">
           <button
             className="flex h-11 w-11 items-center justify-center rounded-xl border border-transparent p-2 text-left transition-colors hover:bg-[rgb(var(--app-sidebar-hover))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/60"
             onClick={handleLogin}
@@ -76,7 +76,7 @@ export function UserFooter() {
           </button>
         </div>
       ) : (
-        <div ref={menuRef} className="relative flex justify-center border-t border-[rgb(var(--app-sidebar-border))] p-2.5">
+        <div ref={menuRef} className="app-shell-account-footer relative flex justify-start border-t border-[rgb(var(--app-sidebar-border))] p-2.5">
           <button
             className="flex h-11 w-11 items-center justify-center rounded-xl border border-transparent p-1 text-left transition-colors hover:bg-[rgb(var(--app-sidebar-hover))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/60"
             onClick={() => setMenuOpen((value) => !value)}

@@ -4,6 +4,7 @@ import type {
 } from "../../../api.js";
 import type { SuggestionReply } from "../../../components/conversation/SuggestionReplyBar.js";
 import { ProjectLinkSetupCard } from "../projectLinkOnboarding/ProjectLinkSetupCard.js";
+import { PromptParticleDeck } from "./PromptParticleDeck.js";
 
 interface ChatEmptyStateProps {
   repoPath: string;
@@ -54,7 +55,7 @@ export function ChatEmptyState({
 export function chatEmptyStateShellClass(compactReadyWelcome: boolean): string {
   const base = "flex w-full flex-1 flex-col items-center gap-5 px-4 sm:px-6 lg:px-8";
   return compactReadyWelcome
-    ? `${base} justify-start pb-8 pt-[clamp(3rem,14vh,7rem)]`
+    ? `${base} justify-center py-8`
     : `${base} justify-center py-8`;
 }
 
@@ -72,21 +73,20 @@ function ProjectLinkFirstRunState({
   return (
     <div className="flex w-full max-w-3xl flex-col items-center gap-6">
       <WelcomePanel onPick={onWelcomeSuggestion} disabled />
-      <details className="w-full max-w-2xl rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-left shadow-sm">
+      <details className="w-full max-w-xl overflow-hidden rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-left shadow-sm">
         <summary
-          role="button"
-          aria-label="Create Project Link"
-          className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-[rgb(var(--app-text))] transition hover:bg-[rgb(var(--app-surface-raised))]"
+          aria-label="Connect a Project Link"
+          className="group flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-medium text-[rgb(var(--app-text))] transition-colors duration-[var(--app-motion-fast)] hover:bg-[rgb(var(--app-surface-raised))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--app-focus))]/55"
         >
           <span className="min-w-0">
-            <span className="block">Connect a Project Link to run workspace actions</span>
+            <span className="block">Connect a project</span>
             <span className="mt-0.5 block text-xs font-normal text-[rgb(var(--app-text-muted))]">
-              Map a local repo to Azure DevOps before Git, PR, pipeline, and review workflows.
+              Link this repo to Azure DevOps.
             </span>
           </span>
-          <span className="shrink-0 rounded-md bg-[rgb(var(--app-accent))] px-3 py-1.5 text-xs font-semibold text-white">
-            Create
-          </span>
+          <svg className="h-4 w-4 shrink-0 text-[rgb(var(--app-text-subtle))] transition-transform duration-[var(--app-motion-fast)] group-open:rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m9 5 7 7-7 7" />
+          </svg>
         </summary>
         <div className="border-t border-[rgb(var(--app-border))] p-4">
           <ProjectLinkSetupCard
@@ -221,31 +221,7 @@ function WelcomePanel({
           </p>
         </div>
       </div>
-      <div
-        className="grid w-full max-w-[44rem] min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,12.75rem),1fr))] gap-2"
-        role="group"
-        aria-label="Suggested prompt drafts"
-      >
-        {welcomeSuggestions.map((suggestion) => (
-          <button
-            key={suggestion.id}
-            type="button"
-            onClick={() => {
-              if (!disabled) onPick(suggestion);
-            }}
-            disabled={disabled}
-            title={disabled ? "Create a Project Link first" : undefined}
-            className={`group max-w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2.5 text-left text-xs leading-snug text-[rgb(var(--app-text-muted))] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/30 ${
-              disabled
-                ? "cursor-not-allowed opacity-60"
-                : "hover:border-[rgb(var(--app-accent))]/45 hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
-            }`}
-          >
-            <span className="block whitespace-normal font-medium text-[rgb(var(--app-text))]">{suggestion.label}</span>
-            <span className="mt-0.5 block text-[10px] text-[rgb(var(--app-text-subtle))] group-hover:text-[rgb(var(--app-text-muted))]">Edit before sending</span>
-          </button>
-        ))}
-      </div>
+      <PromptParticleDeck suggestions={welcomeSuggestions} disabled={disabled} onPick={onPick} />
     </section>
   );
 }

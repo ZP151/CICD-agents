@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
 
 export function TextInput({
   label,
@@ -150,5 +151,5 @@ export function StatusPill({
   children: ReactNode;
   tone?: "neutral" | "success" | "warning" | "danger";
 }): JSX.Element {
-  return <span className={`settings-status settings-status-${tone}`}>{children}</span>;
+  return <StatusBadge tone={tone}>{children}</StatusBadge>;
 }

@@ -9,6 +9,14 @@ import type {
 type ActionTone = "primary" | "secondary" | "danger" | "quiet";
 type StatusTone = "neutral" | "info" | "success" | "warning" | "danger";
 
+export interface WorkbenchFilterOption<T extends string> {
+  value: T;
+  label: string;
+  count?: number;
+  title?: string;
+  disabled?: boolean;
+}
+
 const actionToneClass: Record<ActionTone, string> = {
   primary:
     "border border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent))] text-white hover:brightness-110",
@@ -62,6 +70,66 @@ export function WorkbenchHeader({
 
 export function WorkbenchToolbar({ children, className = "" }: PropsWithChildren<{ className?: string }>) {
   return <div className={`flex min-w-0 flex-wrap items-center gap-2 ${className}`.trim()}>{children}</div>;
+}
+
+/**
+ * A shared, low-chrome filter control for worklists. It intentionally remains
+ * a wrapping row instead of becoming a toolbar card, preserving usable space
+ * at the 1024px desktop breakpoint.
+ */
+export function WorkbenchFilterTabs<T extends string>({
+  ariaLabel,
+  options,
+  value,
+  onValueChange,
+  className = "",
+}: {
+  ariaLabel: string;
+  options: readonly WorkbenchFilterOption<T>[];
+  value: T;
+  onValueChange: (value: T) => void;
+  className?: string;
+}) {
+  const layoutClass = className || "flex min-w-0 flex-wrap items-center gap-1.5";
+  return (
+    <div
+      aria-label={ariaLabel}
+      className={layoutClass}
+      role="toolbar"
+    >
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={selected}
+            disabled={option.disabled}
+            title={option.title}
+            onClick={() => onValueChange(option.value)}
+            className={`inline-flex min-h-7 items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-[background-color,border-color,color,box-shadow] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/35 disabled:cursor-not-allowed disabled:opacity-50 ${
+              selected
+                ? "border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text))]"
+                : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-control-hover))] hover:text-[rgb(var(--app-text))]"
+            }`}
+          >
+            <span className="min-w-0 truncate">{option.label}</span>
+            {typeof option.count === "number" && (
+              <span
+                className={`rounded-full px-1.5 py-px text-[10px] leading-4 ${
+                  selected
+                    ? "bg-[rgb(var(--app-surface))]/75 text-[rgb(var(--app-accent-readable))]"
+                    : "bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-subtle))]"
+                }`}
+              >
+                {option.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export function ActionButton({

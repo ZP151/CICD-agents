@@ -4,6 +4,7 @@ import { useAppData } from "../App";
 import {
   ActionButton,
   InlineNotice,
+  StatusBadge,
   WorkbenchHeader,
   WorkbenchPage,
 } from "../components/workbench/WorkbenchPrimitives.js";
@@ -129,7 +130,7 @@ export function projectLinkFormShellClass(): string {
 }
 
 export function projectLinksListShellClass(): string {
-  return "max-w-7xl gap-6";
+  return "max-w-7xl gap-4";
 }
 
 export function projectLinksHeaderClass(): string {
@@ -149,25 +150,25 @@ function ProjectLinkStoragePill({
 }): JSX.Element {
   if (cloudSync) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-success))]">
+      <StatusBadge tone="success">
         <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--app-success))]" />
         Cloud synced · Azure Table Storage
-      </span>
+      </StatusBadge>
     );
   }
   if (usingDaemon) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-text-muted))]">
+      <StatusBadge>
         <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--app-text-subtle))]" />
         Local · daemon store
-      </span>
+      </StatusBadge>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-text-subtle))]">
+    <StatusBadge>
       <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--app-text-faint))]" />
       Local · browser storage
-    </span>
+    </StatusBadge>
   );
 }
 
@@ -214,27 +215,15 @@ export function ProjectLinksEmpty({ onCreate }: { onCreate: () => void }): JSX.E
           MergePilot needs one mapping between a local repository and Azure DevOps before it
           can review changes, inspect PRs, analyze pipelines, or run Git workflows.
         </p>
-        <button
-          type="button"
-          onClick={onCreate}
-          className="mt-4 inline-flex items-center justify-center rounded-md bg-[rgb(var(--app-accent))] px-3 py-2 text-sm font-medium text-white transition hover:bg-[rgb(var(--app-accent-strong))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/35 active:translate-y-px"
-        >
-          Create Project Link
-        </button>
+        <ActionButton tone="primary" className="mt-4" onClick={onCreate}>Create Project Link</ActionButton>
         <div className="mt-5">
-          <p className="text-xs font-medium uppercase tracking-wide text-[rgb(var(--app-text-subtle))]">
+          <p className="text-xs font-medium text-[rgb(var(--app-text-subtle))]">
             Setup needs
           </p>
-          <ul className="mt-2 flex flex-wrap gap-2 text-xs text-[rgb(var(--app-text-muted))]">
-            <li className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
-              Local repository path
-            </li>
-            <li className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
-              Default and PR branches
-            </li>
-            <li className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
-              Azure DevOps mapping
-            </li>
+          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[rgb(var(--app-text-muted))]">
+            <li>Local repository path</li>
+            <li>Default and PR branches</li>
+            <li>Azure DevOps mapping</li>
           </ul>
         </div>
       </div>

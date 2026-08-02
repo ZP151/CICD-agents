@@ -157,33 +157,6 @@
   font-size: 0.6875rem;
 }
 
-.settings-status {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 0.5rem;
-  background: rgb(var(--app-bg-muted) / 0.82);
-  padding: 0.4rem 0.65rem;
-  color: rgb(var(--app-text-muted));
-  font-size: 0.75rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.settings-status-success {
-  background: rgb(var(--app-success-soft));
-  color: rgb(var(--app-success));
-}
-
-.settings-status-warning {
-  background: rgb(var(--app-warning-soft));
-  color: rgb(var(--app-warning));
-}
-
-.settings-status-danger {
-  background: rgb(var(--app-danger-soft));
-  color: rgb(var(--app-danger));
-}
-
 .settings-advanced {
   border-top: 1px solid rgb(var(--app-border) / 0.55);
 }

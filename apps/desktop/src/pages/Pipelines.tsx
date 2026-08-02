@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppData } from "../App.js";
 import { PaginationControls } from "../components/PaginationControls.js";
 import { MarkdownContent } from "../components/conversation/ConversationPartRenderer.js";
-import { ActionButton, InlineNotice, WorkbenchHeader, WorkbenchPage } from "../components/workbench/WorkbenchPrimitives.js";
+import {
+  ActionButton,
+  InlineNotice,
+  WorkbenchHeader,
+  WorkbenchPage,
+  WorkbenchSidePanel,
+} from "../components/workbench/WorkbenchPrimitives.js";
 import { PipelineRowCard } from "./pipelines/PipelineRowCard.js";
 import { PipelineStatusFilters } from "./pipelines/PipelineStatusFilters.js";
 import { runTone } from "./pipelines/pipelineModel.js";
@@ -44,6 +50,7 @@ export default function Pipelines(): JSX.Element {
       <WorkbenchHeader
         title="Pipelines"
         description="Pipeline discovery, recent run state, controlled triggers, and AI-assisted run analysis."
+        descriptionClassName={pipelineHeaderDescriptionClass()}
         actions={<div className={pipelineHeaderControlsClass()}>
           <select
             aria-label="Pipelines project filter"
@@ -195,8 +202,7 @@ export function pipelineHeaderDescriptionClass(): string {
 
 export function pipelineHeaderControlsClass(): string {
   return [
-    "grid w-full min-w-0 grid-cols-1 gap-2 rounded-lg border border-[rgb(var(--app-border))]",
-    "bg-[rgb(var(--app-surface))] p-1 sm:grid-cols-[minmax(0,1fr)_auto]",
+    "grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]",
     "xl:w-[clamp(18rem,30vw,32rem)]",
   ].join(" ");
 }
@@ -244,13 +250,6 @@ export function pipelineRowsGridClass(detailOpen: boolean): string {
 export function pipelineWorkspaceGridClass(detailOpen: boolean): string {
   void detailOpen;
   return "";
-}
-
-export function pipelineDetailPanelClass(): string {
-  return [
-    "fixed inset-y-0 right-0 z-40 min-w-0 w-[min(30rem,calc(100vw-2rem))]",
-    "overflow-y-auto border-l border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl",
-  ].join(" ");
 }
 
 export function pipelineProjectFilterFallbackLabel({
@@ -402,27 +401,14 @@ export function PipelineDetailPanel({
   const isError = state.phase === "error";
   const isApproval = state.phase === "approval";
   return (
-    <aside className={pipelineDetailPanelClass()}>
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase text-[rgb(var(--app-text-subtle))]">
-            Pipeline detail
-          </p>
-          <h3 className="mt-1 truncate text-sm font-semibold text-[rgb(var(--app-text))]">
-            {row.pipelineName || row.pipelineId}
-          </h3>
-          <p className="mt-1 truncate font-mono text-xs text-[rgb(var(--app-text-muted))]">
-            {row.project} / {row.repository}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))]"
-        >
-          Close
-        </button>
-      </div>
+    <WorkbenchSidePanel
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      title={row.pipelineName || row.pipelineId}
+      description={`${row.project || "No project"} / ${row.repository || "No repository"}`}
+    >
 
       {isWorking && (
         <section className="mb-4 border-t border-[rgb(var(--app-border))] pt-3">
@@ -522,6 +508,6 @@ export function PipelineDetailPanel({
           </ol>
         )}
       </section>
-    </aside>
+    </WorkbenchSidePanel>
   );
 }

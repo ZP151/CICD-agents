@@ -5,7 +5,6 @@ import {
   PipelineEmptyState,
   PipelineLoadingSkeleton,
   pipelineContentState,
-  pipelineDetailPanelClass,
   pipelineEmptyStateClass,
   pipelineHeaderDescriptionClass,
   pipelineHeaderControlsClass,
@@ -81,21 +80,6 @@ describe("Pipelines layout", () => {
 });
 
 describe("PipelineDetailPanel", () => {
-  it("stays reachable as a right-side drawer at every viewport", () => {
-    const className = pipelineDetailPanelClass();
-
-    expect(className).toContain("fixed");
-    expect(className).toContain("inset-y-0");
-    expect(className).toContain("right-0");
-    expect(className).toContain("w-[min(30rem,calc(100vw-2rem))]");
-    expect(className).toContain("overflow-y-auto");
-    expect(className).toContain("shadow-2xl");
-    expect(className).not.toContain("xl:sticky");
-    expect(className).not.toContain("xl:w-auto");
-    expect(className).not.toContain("lg:sticky");
-    expect(className).not.toContain("lg:w-auto");
-  });
-
   it("renders run evidence statuses with the full semantic tone", () => {
     const html = renderToStaticMarkup(
       <PipelineDetailPanel

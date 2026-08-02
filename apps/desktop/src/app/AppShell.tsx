@@ -383,15 +383,7 @@ export function FullLayout() {
     <div className={appShellFrameClass()}>
       <aside className={appShellSidebarClass()}>
         <TooltipProvider>
-          <div className="app-shell-brand flex h-14 shrink-0 items-center gap-2 border-b border-[rgb(var(--app-sidebar-border))] px-3">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-[rgb(var(--app-accent))] text-[11px] font-bold tracking-[-0.08em] text-white shadow-[0_3px_8px_rgb(8_15_38_/_0.26)]">
-              MP
-            </span>
-            <span className="app-shell-brand-name min-w-0 truncate text-sm font-semibold tracking-[-0.01em] text-[rgb(var(--app-sidebar-text))]">
-              MergePilot
-            </span>
-          </div>
-          <nav className="app-shell-navigation flex-1 space-y-4 overflow-y-auto px-2 py-3">
+          <nav className="app-shell-navigation flex-1 space-y-4 overflow-y-auto px-2 pb-3 pt-4">
             {NAV_GROUPS.map((group) => (
               <div key={group.label}>
                 <p className={appShellGroupLabelClass()}>{group.label}</p>

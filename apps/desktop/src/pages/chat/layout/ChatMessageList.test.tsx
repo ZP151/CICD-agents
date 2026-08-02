@@ -360,9 +360,9 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Review my changes");
     expect(html).toContain("Understand this project");
-    expect(html).toContain("Push and create PR");
+    expect(html).toContain("Suggested prompt drafts");
+    expect(html).toContain("prompt-particle-deck");
     expect(html).not.toContain("animate-pulse");
   });
 
@@ -374,7 +374,7 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Review my changes");
+    expect(html).toContain("Understand this project");
     expect(html).toContain("Checking Project Links...");
     expect(html).toContain("Create a Project Link first");
     expect(html).toContain("disabled=\"\"");
@@ -391,7 +391,7 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Review my changes");
+    expect(html).toContain("Understand this project");
     expect(html).toContain("Checking Project Links...");
     expect(html).toContain("Create a Project Link first");
     expect(html).toContain("disabled=\"\"");
@@ -444,7 +444,7 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Review my changes");
+    expect(html).toContain("Understand this project");
     expect(html).not.toContain("Approved action finished");
     expect(html).not.toContain("Action not run");
   });
@@ -488,7 +488,7 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Review my changes");
+    expect(html).toContain("Understand this project");
     expect(html).not.toContain("Session restored");
   });
 
@@ -531,7 +531,7 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Review my changes");
+    expect(html).toContain("Understand this project");
   });
 
   it("shows the New Chat welcome when restored assistant metadata has no visible transcript content", () => {
@@ -574,7 +574,7 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Review my changes");
+    expect(html).toContain("Understand this project");
     expect(html).not.toContain("Run unit tests to verify error handling changes.");
     expect(html).not.toContain("Repository context: semantic index used.");
   });
@@ -621,7 +621,7 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Review my changes");
+    expect(html).toContain("Understand this project");
     expect(html).not.toContain("Run tests");
   });
 
@@ -663,7 +663,7 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Review my changes");
+    expect(html).toContain("Understand this project");
     expect(html).not.toContain("Would you like me to stage");
     expect(html).not.toContain("Run unit tests");
   });

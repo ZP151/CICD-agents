@@ -5,7 +5,6 @@ import {
   PullRequestLoadingSkeleton,
   PullRequestProjectLinkResolvingState,
   pullRequestEmptyChecklistGridClass,
-  pullRequestInsightPanelClass,
   pullRequestLoadingMetaGridClass,
   pullRequestsListGridClass,
   pullRequestsPageShellClass,
@@ -43,21 +42,6 @@ describe("PullRequests layout", () => {
     expect(className).toContain("border-[rgb(var(--app-border))]");
     expect(className).not.toContain("auto-fit");
     expect(className).not.toContain("grid-cols-1");
-  });
-
-  it("keeps the insight detail reachable as a right-side drawer at every viewport", () => {
-    const className = pullRequestInsightPanelClass();
-
-    expect(className).toContain("fixed");
-    expect(className).toContain("inset-y-0");
-    expect(className).toContain("right-0");
-    expect(className).toContain("w-[min(30rem,calc(100vw-2rem))]");
-    expect(className).toContain("overflow-y-auto");
-    expect(className).toContain("shadow-2xl");
-    expect(className).not.toContain("xl:sticky");
-    expect(className).not.toContain("xl:w-auto");
-    expect(className).not.toContain("lg:sticky");
-    expect(className).not.toContain("lg:w-auto");
   });
 
   it("uses auto-fit grids for loading and empty transient states", () => {

@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { PaginationControls } from "../components/PaginationControls.js";
-import { WorkbenchPage } from "../components/workbench/WorkbenchPrimitives.js";
+import {
+  InlineNotice,
+  WorkbenchFilterTabs,
+  WorkbenchPage,
+  WorkbenchSidePanel,
+} from "../components/workbench/WorkbenchPrimitives.js";
 import { PullRequestCard } from "./pullRequests/PullRequestCard.js";
 import { PullRequestPageHeader } from "./pullRequests/PullRequestPageHeader.js";
 import {
@@ -34,13 +39,6 @@ export function pullRequestsListGridClass(): string {
 
 export function pullRequestsPageShellClass(): string {
   return "gap-4";
-}
-
-export function pullRequestInsightPanelClass(): string {
-  return [
-    "fixed inset-y-0 right-0 z-40 min-w-0 w-[min(30rem,calc(100vw-2rem))]",
-    "overflow-y-auto border-l border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl",
-  ].join(" ");
 }
 
 export function pullRequestLoadingMetaGridClass(): string {
@@ -119,19 +117,18 @@ export default function PullRequests(): JSX.Element {
       />
 
       {error && prs.length > 0 && (
-        <div className="rounded-lg border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] p-4 text-sm text-[rgb(var(--app-danger))]">
+        <InlineNotice tone="danger" title="Pull request refresh failed">
           {error}
-        </div>
+        </InlineNotice>
       )}
       {!error && pullRequestWarnings.length > 0 && (
-        <div className="rounded-lg border border-[rgb(var(--app-warning))]/25 bg-[rgb(var(--app-warning)_/_0.10)] p-3 text-sm text-[rgb(var(--app-warning))]">
-          <p className="font-medium">Some Project Links could not refresh.</p>
+        <InlineNotice tone="warning" title="Some Project Links could not refresh.">
           <ul className="mt-1 list-disc space-y-1 pl-4 text-xs leading-relaxed">
             {pullRequestWarnings.slice(0, 3).map((warning) => (
               <li key={warning}>{warning}</li>
             ))}
           </ul>
-        </div>
+        </InlineNotice>
       )}
 
       {projectLinkResolving && <PullRequestProjectLinkResolvingState />}
@@ -160,26 +157,17 @@ export default function PullRequests(): JSX.Element {
       {prs.length > 0 && (
         <div className={pullRequestsWorkspaceLayoutClass(Boolean(selectedInsightPr))}>
           <div className="flex min-w-0 flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2.5">
-              <div className="flex flex-wrap gap-1.5">
-                {prCategories.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setCategory(item.key)}
-                    className={`rounded-md px-2.5 py-1 text-xs transition ${
-                      category === item.key
-                        ? "bg-[rgb(var(--app-accent))] text-white shadow-sm"
-                        : "text-[rgb(var(--app-text-muted))] hover:bg-[rgb(var(--app-control-hover))] hover:text-[rgb(var(--app-text))]"
-                    }`}
-                  >
-                    {item.label}
-                    <span className="ml-1.5 text-[10px] opacity-70">
-                      {categoryCounts[item.key]}
-                    </span>
-                  </button>
-                ))}
-              </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgb(var(--app-border))] pb-3">
+              <WorkbenchFilterTabs
+                ariaLabel="Pull request category filters"
+                options={prCategories.map((item) => ({
+                  value: item.key,
+                  label: item.label,
+                  count: categoryCounts[item.key],
+                }))}
+                value={category}
+                onValueChange={setCategory}
+              />
               <p className="text-xs text-[rgb(var(--app-text-subtle))]">
                 {filteredPrs.length} of {prs.length} PRs in view
               </p>
@@ -430,29 +418,15 @@ function PullRequestInsightSidePanel({
   const scopeLabel = pr.sourceProjectLinkName || pr.repository;
 
   return (
-    <aside className={pullRequestInsightPanelClass()}>
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase text-[rgb(var(--app-text-subtle))]">
-            PR insight
-          </p>
-          <h3 className="mt-1 line-clamp-2 text-sm font-semibold text-[rgb(var(--app-text))]">
-            #{pr.id} {pr.title || "(untitled)"}
-          </h3>
-          <p className="mt-1 truncate font-mono text-xs text-[rgb(var(--app-text-muted))]">
-            {pr.sourceBranch} {"->"} {pr.targetBranch}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))]"
-        >
-          Close
-        </button>
-      </div>
-
-      <div className="mb-3 flex flex-wrap gap-2 border-b border-[rgb(var(--app-border))] pb-3">
+    <WorkbenchSidePanel
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      title={`PR #${pr.id} ${pr.title || "(untitled)"}`}
+      description={`${pr.sourceBranch} -> ${pr.targetBranch}`}
+    >
+      <div className="flex flex-wrap gap-2 border-b border-[rgb(var(--app-border))] pb-3">
         <button
           type="button"
           disabled={previewState.phase === "loading"}
@@ -524,6 +498,6 @@ function PullRequestInsightSidePanel({
           <p className="text-[10px] text-[rgb(var(--app-text-subtle))]">Scope: {scopeLabel}</p>
         )}
       </div>
-    </aside>
+    </WorkbenchSidePanel>
   );
 }

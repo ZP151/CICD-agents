@@ -190,6 +190,10 @@ body {
   height: 1.25rem;
 }
 
+.app-shell-account-footer {
+  padding-left: 0.75rem;
+}
+
 .app-shell-compact-tooltip {
   display: none;
 }
@@ -199,12 +203,11 @@ body {
     width: 4.5rem;
   }
 
-  .app-shell-brand {
+  .app-shell-account-footer {
     justify-content: center;
-    padding-inline: 0;
+    padding-inline: 0.75rem;
   }
 
-  .app-shell-brand-name,
   .app-shell-group-label,
   .app-shell-nav-label {
     position: absolute;
