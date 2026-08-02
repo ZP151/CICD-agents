@@ -3,7 +3,12 @@ import {
   type PrInsightArtifact,
 } from "../../prInsightArtifacts.js";
 import { PullRequestContextPanel } from "./PullRequestContextPanel.js";
-import { ActionButton, InlineNotice, StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
+import {
+  ActionButton,
+  ActionLink,
+  InlineNotice,
+  StatusBadge,
+} from "../../components/workbench/WorkbenchPrimitives.js";
 import {
   formatDate,
   insightReadinessTone,
@@ -91,6 +96,9 @@ export function PullRequestCard({
     : qState.result.decisionQueue === "blocked" ? "border-[rgb(var(--app-danger))]/35 bg-[rgb(var(--app-danger)_/_0.10)] text-[rgb(var(--app-danger))]"
     : "border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent-readable))]"
     : "";
+  const opensReviewQueue = isDone && (
+    qState.result.decisionQueue === "needs_human_review" || qState.result.decisionQueue === "blocked"
+  );
 
   return (
     <article
@@ -146,7 +154,14 @@ export function PullRequestCard({
               {previewState.phase === "loading" ? "Generating..." : hasInsight ? "Open insight" : "Generate insight"}
             </ActionButton>
             {isDone ? (
-              <StatusBadge className={decisionTone}>{decisionLabel}</StatusBadge>
+              <>
+                <StatusBadge className={decisionTone}>{decisionLabel}</StatusBadge>
+                {opensReviewQueue && (
+                  <ActionLink href="#/findings" tone="quiet" className="min-h-7 px-2.5 py-1">
+                    Open Review Queue
+                  </ActionLink>
+                )}
+              </>
             ) : (
               <ActionButton
                 type="button"
