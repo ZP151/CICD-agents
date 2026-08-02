@@ -12,15 +12,11 @@ concurrency:
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
-  # Build a native installer on each target OS
+  # Build the supported native installer.
   # ─────────────────────────────────────────────────────────────────────────────
   build-installer:
-    name: Installer (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest]
+    name: Installer (windows-latest)
+    runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -35,14 +31,6 @@ jobs:
           cache: pnpm
 
       - uses: dtolnay/rust-toolchain@stable
-
-      # macOS: add both Intel and Apple-Silicon targets so Tauri can build a
-      # universal binary (or separate slices picked up by the matrix later).
-      - name: Add macOS Rust targets
-        if: matrix.os == 'macos-latest'
-        run: |
-          rustup target add x86_64-apple-darwin
-          rustup target add aarch64-apple-darwin
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile=false
@@ -68,18 +56,15 @@ jobs:
         run: pnpm --filter @mergepilot/desktop tauri build
 
       - name: Verify removed chat templates
-        if: matrix.os == 'windows-latest'
         shell: pwsh
         run: .\scripts\windows\verify-no-stale-chat-template.ps1
 
       - name: Verify Windows installer metadata
-        if: matrix.os == 'windows-latest'
         shell: pwsh
         run: .\scripts\windows\verify-windows-installer-metadata.ps1
 
       - name: Detect Windows signing configuration
         id: windows_signing
-        if: matrix.os == 'windows-latest'
         shell: pwsh
         env:
           WINDOWS_CODESIGN_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_CERT_PFX_BASE64 }}
@@ -95,7 +80,7 @@ jobs:
           }
 
       - name: Verify Windows signing readiness
-        if: matrix.os == 'windows-latest' && steps.windows_signing.outputs.configured == 'true'
+        if: steps.windows_signing.outputs.configured == 'true'
         shell: pwsh
         env:
           WINDOWS_CODESIGN_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_CERT_PFX_BASE64 }}
@@ -103,7 +88,7 @@ jobs:
         run: .\scripts\windows\verify-windows-signing-readiness.ps1
 
       - name: Sign Windows installers
-        if: matrix.os == 'windows-latest' && steps.windows_signing.outputs.configured == 'true'
+        if: steps.windows_signing.outputs.configured == 'true'
         shell: pwsh
         env:
           WINDOWS_CODESIGN_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_CERT_PFX_BASE64 }}
@@ -111,12 +96,12 @@ jobs:
         run: .\scripts\windows\sign-windows-release-artifacts.ps1
 
       - name: Verify Windows installer signatures
-        if: matrix.os == 'windows-latest' && steps.windows_signing.outputs.configured == 'true'
+        if: steps.windows_signing.outputs.configured == 'true'
         shell: pwsh
         run: .\scripts\windows\verify-windows-artifact-signatures.ps1
 
       - name: Report unsigned Windows installers
-        if: matrix.os == 'windows-latest' && steps.windows_signing.outputs.configured != 'true'
+        if: steps.windows_signing.outputs.configured != 'true'
         shell: pwsh
         run: |
           $artifacts = Get-ChildItem -LiteralPath "apps\desktop\src-tauri\target\release\bundle" -Recurse -File -Include *.msi,*.exe
@@ -131,11 +116,10 @@ jobs:
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: installer-${{ matrix.os }}
+          name: installer-windows-latest
           path: |
             apps/desktop/src-tauri/target/release/bundle/**/*.msi
             apps/desktop/src-tauri/target/release/bundle/**/*.exe
-            apps/desktop/src-tauri/target/release/bundle/**/*.dmg
           if-no-files-found: error
 
   # ─────────────────────────────────────────────────────────────────────────────
