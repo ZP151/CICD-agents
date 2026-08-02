@@ -184,8 +184,8 @@ describe("ActivitySidebar", () => {
     expect(className).not.toContain("auto-fit");
     expect(className).not.toContain("grid-cols-2");
     expect(html).toContain("Activity sections");
-    expect(html).toContain("title=\"All: 4\"");
-    expect(html).toContain("title=\"Checkpoints: 1\"");
+    expect(html).toContain("title=\"All: 3\"");
+    expect(html).toContain("title=\"Checkpoints: 0\"");
     expect(html).toContain("title=\"PR Insights: 1\"");
     expect(html).toContain("All");
     expect(html).toContain("Runs");
@@ -194,15 +194,15 @@ describe("ActivitySidebar", () => {
     expect(html).toContain("Reviews");
   });
 
-  it("keeps all operational history sections visible by default", () => {
+  it("keeps saved activity visible while collapsing transient workspace history", () => {
     const html = renderActivitySidebar();
 
     expect(html).toContain("Pipeline submission");
-    expect(html).toContain("git_status");
-    expect(html).toContain("...\\mergepilot-live-push-j2JDBp\\work");
-    expect(html).toContain("title=\"C:\\Users\\15492\\AppData\\Local\\Temp\\mergepilot-live-push-j2JDBp\\work\"");
     expect(html).toContain("Update pipeline");
     expect(html).toContain("Review completed");
+    expect(html).toContain("Temporary history");
+    expect(html).not.toContain("git_status");
+    expect(html).not.toContain("...\\mergepilot-live-push-j2JDBp\\work");
   });
 
   it("hides empty sections from the default All view while keeping non-empty sources visible", () => {
@@ -210,9 +210,10 @@ describe("ActivitySidebar", () => {
       tasks: [],
     });
 
-    expect(html).toContain("git_status");
     expect(html).toContain("Update pipeline");
     expect(html).toContain("Review completed");
+    expect(html).toContain("Temporary history");
+    expect(html).not.toContain("git_status");
     expect(html).not.toContain("No agent runs recorded yet.");
     expect(html).not.toContain("Pipeline submission");
   });

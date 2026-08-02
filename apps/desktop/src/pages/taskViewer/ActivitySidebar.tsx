@@ -6,6 +6,7 @@ import type {
   ProjectLink,
 } from "../../api.js";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { isTemporaryProjectLink } from "../../projectLinks.js";
 import {
   duration,
   formatTime,
@@ -19,6 +20,7 @@ import { checkpointActivityDetail, checkpointActivityKindLabel } from "./checkpo
 import { PrInsightActivitySection } from "./PrInsightActivitySection.js";
 import type { PrInsightActivityItem } from "./prInsightActivity.js";
 import { ReviewActivitySection } from "./ReviewActivitySection.js";
+import { partitionActivity } from "./activityGrouping.js";
 import {
   ActionButton,
   InlineNotice,
@@ -94,22 +96,48 @@ export function ActivitySidebar({
   onReviewKindFilterChange,
 }: ActivitySidebarProps): JSX.Element {
   const [sectionFilter, setSectionFilter] = useState<ActivitySectionFilter>("all");
+  const [temporaryActivityOpen, setTemporaryActivityOpen] = useState(false);
+  const temporaryProjectLinkIds = useMemo(
+    () => new Set(projectLinks.filter(isTemporaryProjectLink).map((link) => link.id)),
+    [projectLinks],
+  );
+  const checkpointGroups = useMemo(
+    () => partitionActivity(checkpointActivity, temporaryProjectLinkIds),
+    [checkpointActivity, temporaryProjectLinkIds],
+  );
+  const prInsightGroups = useMemo(
+    () => partitionActivity(prInsightActivity, temporaryProjectLinkIds),
+    [prInsightActivity, temporaryProjectLinkIds],
+  );
+  const reviewGroups = useMemo(
+    () => partitionActivity(reviewActivity, temporaryProjectLinkIds),
+    [reviewActivity, temporaryProjectLinkIds],
+  );
+  const primaryCheckpoints = checkpointGroups.primary;
+  const primaryPrInsights = prInsightGroups.primary;
+  const primaryReviews = reviewGroups.primary;
+  const temporaryActivityCount =
+    checkpointGroups.temporary.length + prInsightGroups.temporary.length + reviewGroups.temporary.length;
+  const selectedTemporaryActivity =
+    checkpointGroups.temporary.some((event) => event.id === selectedCheckpointId) ||
+    prInsightGroups.temporary.some((event) => event.id === selectedPrInsightId) ||
+    reviewGroups.temporary.some((event) => event.id === selectedReviewId);
   const sectionOptions = useMemo(
     () =>
       activitySectionOptions({
         runs: tasks.length,
-        checkpoints: checkpointActivity.length,
-        prInsights: prInsightActivity.length,
-        reviewOperations: reviewActivity.length,
+        checkpoints: primaryCheckpoints.length,
+        prInsights: primaryPrInsights.length,
+        reviewOperations: primaryReviews.length,
       }),
-    [checkpointActivity.length, prInsightActivity.length, reviewActivity.length, tasks.length],
+    [primaryCheckpoints.length, primaryPrInsights.length, primaryReviews.length, tasks.length],
   );
   const visibleSections = activityVisibleSections({
     sectionFilter,
     runs: tasks.length,
-    checkpoints: checkpointActivity.length,
-    prInsights: prInsightActivity.length,
-    reviewOperations: reviewActivity.length,
+    checkpoints: primaryCheckpoints.length,
+    prInsights: primaryPrInsights.length,
+    reviewOperations: primaryReviews.length,
     loading,
     checkpointLoading,
     prInsightLoading,
@@ -120,7 +148,7 @@ export function ActivitySidebar({
   const showPrInsights = visibleSections.prInsights;
   const showReviewOps = visibleSections.reviewOperations;
   const activityCount =
-    tasks.length + checkpointActivity.length + prInsightActivity.length + reviewActivity.length;
+    tasks.length + primaryCheckpoints.length + primaryPrInsights.length + primaryReviews.length;
   const anyActivityLoading = loading || checkpointLoading || prInsightLoading || reviewLoading;
   const activityUnavailable = Boolean(error && activityCount === 0 && !anyActivityLoading);
   const initialActivityLoading = anyActivityLoading && activityCount === 0 && !activityUnavailable;
@@ -133,31 +161,31 @@ export function ActivitySidebar({
       return;
     }
     if (nextFilter === "checkpoints") {
-      const first = checkpointActivity[0];
+      const first = primaryCheckpoints[0];
       if (first) onSelectCheckpoint(first.id);
       else onClearSelection();
       return;
     }
     if (nextFilter === "pr_insights") {
-      const first = prInsightActivity[0];
+      const first = primaryPrInsights[0];
       if (first) onSelectPrInsight(first.id);
       else onClearSelection();
       return;
     }
     if (nextFilter === "review_operations") {
-      const first = reviewActivity[0];
+      const first = primaryReviews[0];
       if (first) onSelectReview(first.id);
       else onClearSelection();
     }
   }, [
-    checkpointActivity,
+    primaryCheckpoints,
     onClearSelection,
     onSelectCheckpoint,
     onSelectPrInsight,
     onSelectReview,
     onSelectTask,
-    prInsightActivity,
-    reviewActivity,
+    primaryPrInsights,
+    primaryReviews,
     tasks,
   ]);
 
@@ -165,6 +193,10 @@ export function ActivitySidebar({
     setSectionFilter(nextFilter);
     selectFirstInSection(nextFilter);
   }
+
+  useEffect(() => {
+    if (selectedTemporaryActivity) setTemporaryActivityOpen(true);
+  }, [selectedTemporaryActivity]);
 
   useEffect(() => {
     if (sectionFilter === "all") return;
@@ -186,13 +218,13 @@ export function ActivitySidebar({
     if (
       sectionFilter === "checkpoints" &&
       (
-        checkpointActivity.length > 0 ||
+        primaryCheckpoints.length > 0 ||
         selectedTaskId !== null ||
         selectedCheckpointId !== null ||
         selectedPrInsightId !== null ||
         selectedReviewId !== null
       ) &&
-      !checkpointActivity.some((event) => event.id === selectedCheckpointId)
+      !primaryCheckpoints.some((event) => event.id === selectedCheckpointId)
     ) {
       selectFirstInSection("checkpoints");
       return;
@@ -200,13 +232,13 @@ export function ActivitySidebar({
     if (
       sectionFilter === "pr_insights" &&
       (
-        prInsightActivity.length > 0 ||
+        primaryPrInsights.length > 0 ||
         selectedTaskId !== null ||
         selectedCheckpointId !== null ||
         selectedPrInsightId !== null ||
         selectedReviewId !== null
       ) &&
-      !prInsightActivity.some((event) => event.id === selectedPrInsightId)
+      !primaryPrInsights.some((event) => event.id === selectedPrInsightId)
     ) {
       selectFirstInSection("pr_insights");
       return;
@@ -214,20 +246,20 @@ export function ActivitySidebar({
     if (
       sectionFilter === "review_operations" &&
       (
-        reviewActivity.length > 0 ||
+        primaryReviews.length > 0 ||
         selectedTaskId !== null ||
         selectedCheckpointId !== null ||
         selectedPrInsightId !== null ||
         selectedReviewId !== null
       ) &&
-      !reviewActivity.some((event) => event.id === selectedReviewId)
+      !primaryReviews.some((event) => event.id === selectedReviewId)
     ) {
       selectFirstInSection("review_operations");
     }
   }, [
-    checkpointActivity,
-    prInsightActivity,
-    reviewActivity,
+    primaryCheckpoints,
+    primaryPrInsights,
+    primaryReviews,
     sectionFilter,
     selectFirstInSection,
     selectedCheckpointId,
@@ -288,7 +320,7 @@ export function ActivitySidebar({
               )}
               {showCheckpoints && (
                 <CheckpointActivityList
-                  checkpointActivity={checkpointActivity}
+                  checkpointActivity={primaryCheckpoints}
                   checkpointLoading={checkpointLoading}
                   selectedCheckpointId={selectedCheckpointId}
                   onSelectCheckpoint={onSelectCheckpoint}
@@ -304,7 +336,7 @@ export function ActivitySidebar({
                 >
                   <PrInsightActivitySection
                     projectLinks={projectLinks}
-                    prInsightActivity={prInsightActivity}
+                    prInsightActivity={primaryPrInsights}
                     prInsightLoading={prInsightLoading}
                     prInsightProjectLinkFilter={prInsightProjectLinkFilter}
                     prInsightKindFilter={prInsightKindFilter}
@@ -326,7 +358,7 @@ export function ActivitySidebar({
                 >
                   <ReviewActivitySection
                     projectLinks={projectLinks}
-                    reviewActivity={reviewActivity}
+                    reviewActivity={primaryReviews}
                     reviewLoading={reviewLoading}
                     reviewProjectLinkFilter={reviewProjectLinkFilter}
                     reviewKindFilter={reviewKindFilter}
@@ -336,6 +368,38 @@ export function ActivitySidebar({
                     onReviewKindFilterChange={onReviewKindFilterChange}
                   />
                 </div>
+              )}
+              {temporaryActivityCount > 0 && (
+                <TemporaryActivityHistory
+                  open={temporaryActivityOpen}
+                  count={temporaryActivityCount}
+                  showCheckpoints={showCheckpoints}
+                  showPrInsights={showPrInsights}
+                  showReviewOps={showReviewOps}
+                  checkpointActivity={checkpointGroups.temporary}
+                  checkpointLoading={checkpointLoading}
+                  selectedCheckpointId={selectedCheckpointId}
+                  onSelectCheckpoint={onSelectCheckpoint}
+                  prInsightActivity={prInsightGroups.temporary}
+                  prInsightLoading={prInsightLoading}
+                  prInsightProjectLinkFilter={prInsightProjectLinkFilter}
+                  prInsightKindFilter={prInsightKindFilter}
+                  prInsightHistoryMeta={prInsightHistoryMeta}
+                  selectedPrInsightId={selectedPrInsightId}
+                  onSelectPrInsight={onSelectPrInsight}
+                  onPrInsightProjectLinkFilterChange={onPrInsightProjectLinkFilterChange}
+                  onPrInsightKindFilterChange={onPrInsightKindFilterChange}
+                  reviewActivity={reviewGroups.temporary}
+                  reviewLoading={reviewLoading}
+                  reviewProjectLinkFilter={reviewProjectLinkFilter}
+                  reviewKindFilter={reviewKindFilter}
+                  selectedReviewId={selectedReviewId}
+                  onSelectReview={onSelectReview}
+                  onReviewProjectLinkFilterChange={onReviewProjectLinkFilterChange}
+                  onReviewKindFilterChange={onReviewKindFilterChange}
+                  projectLinks={projectLinks}
+                  onToggle={() => setTemporaryActivityOpen((open) => !open)}
+                />
               )}
             </div>
           )}
@@ -385,6 +449,119 @@ export function activitySidebarShellClass(): string {
 
 export function activitySidebarListClass(): string {
   return "min-h-0 max-h-[16rem] overflow-x-hidden overflow-y-auto pr-1 lg:max-h-[18rem] xl:max-h-none xl:flex-1";
+}
+
+function TemporaryActivityHistory({
+  open,
+  count,
+  showCheckpoints,
+  showPrInsights,
+  showReviewOps,
+  checkpointActivity,
+  checkpointLoading,
+  selectedCheckpointId,
+  onSelectCheckpoint,
+  prInsightActivity,
+  prInsightLoading,
+  prInsightProjectLinkFilter,
+  prInsightKindFilter,
+  prInsightHistoryMeta,
+  selectedPrInsightId,
+  onSelectPrInsight,
+  onPrInsightProjectLinkFilterChange,
+  onPrInsightKindFilterChange,
+  reviewActivity,
+  reviewLoading,
+  reviewProjectLinkFilter,
+  reviewKindFilter,
+  selectedReviewId,
+  onSelectReview,
+  onReviewProjectLinkFilterChange,
+  onReviewKindFilterChange,
+  projectLinks,
+  onToggle,
+}: {
+  open: boolean;
+  count: number;
+  showCheckpoints: boolean;
+  showPrInsights: boolean;
+  showReviewOps: boolean;
+  checkpointActivity: ChatCheckpointActivity[];
+  checkpointLoading: boolean;
+  selectedCheckpointId: string | null;
+  onSelectCheckpoint: (eventId: string) => void;
+  prInsightActivity: PrInsightActivityItem[];
+  prInsightLoading: boolean;
+  prInsightProjectLinkFilter: string;
+  prInsightKindFilter: PrInsightArtifactRecord["kind"] | "all";
+  prInsightHistoryMeta: Map<string, Pick<PrInsightArtifactHistoryMeta, "index" | "total" | "latest">>;
+  selectedPrInsightId: string | null;
+  onSelectPrInsight: (eventId: string) => void;
+  onPrInsightProjectLinkFilterChange: (value: string) => void;
+  onPrInsightKindFilterChange: (value: PrInsightArtifactRecord["kind"] | "all") => void;
+  reviewActivity: ReviewActivityItem[];
+  reviewLoading: boolean;
+  reviewProjectLinkFilter: string;
+  reviewKindFilter: ReviewActivityItem["kind"] | "all";
+  selectedReviewId: string | null;
+  onSelectReview: (eventId: string) => void;
+  onReviewProjectLinkFilterChange: (value: string) => void;
+  onReviewKindFilterChange: (value: ReviewActivityItem["kind"] | "all") => void;
+  projectLinks: ProjectLink[];
+  onToggle: () => void;
+}): JSX.Element {
+  return (
+    <section className="mt-4 border-t border-[rgb(var(--app-border))] pt-3">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 rounded-md px-1 py-1 text-left text-xs font-medium text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]"
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <span>Temporary history</span>
+        <span className="text-[11px] text-[rgb(var(--app-text-subtle))]">{count} {open ? "−" : "+"}</span>
+      </button>
+      {open && (
+        <div className="mt-2 space-y-5 border-l border-[rgb(var(--app-border))] pl-3">
+          {showCheckpoints && checkpointActivity.length > 0 && (
+            <CheckpointActivityList
+              checkpointActivity={checkpointActivity}
+              checkpointLoading={checkpointLoading}
+              selectedCheckpointId={selectedCheckpointId}
+              onSelectCheckpoint={onSelectCheckpoint}
+            />
+          )}
+          {showPrInsights && prInsightActivity.length > 0 && (
+            <PrInsightActivitySection
+              projectLinks={projectLinks}
+              prInsightActivity={prInsightActivity}
+              prInsightLoading={prInsightLoading}
+              prInsightProjectLinkFilter={prInsightProjectLinkFilter}
+              prInsightKindFilter={prInsightKindFilter}
+              prInsightHistoryMeta={prInsightHistoryMeta}
+              selectedPrInsightId={selectedPrInsightId}
+              onSelectPrInsight={onSelectPrInsight}
+              onPrInsightProjectLinkFilterChange={onPrInsightProjectLinkFilterChange}
+              onPrInsightKindFilterChange={onPrInsightKindFilterChange}
+            />
+          )}
+          {showReviewOps && reviewActivity.length > 0 && (
+            <ReviewActivitySection
+              projectLinks={projectLinks}
+              reviewActivity={reviewActivity}
+              reviewLoading={reviewLoading}
+              reviewProjectLinkFilter={reviewProjectLinkFilter}
+              reviewKindFilter={reviewKindFilter}
+              selectedReviewId={selectedReviewId}
+              onSelectReview={onSelectReview}
+              onReviewProjectLinkFilterChange={onReviewProjectLinkFilterChange}
+              onReviewKindFilterChange={onReviewKindFilterChange}
+            />
+          )}
+        </div>
+      )}
+    </section>
+  );
 }
 
 export function activitySectionFilterGridClass(): string {
