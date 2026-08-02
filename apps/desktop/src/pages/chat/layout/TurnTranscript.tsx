@@ -1,10 +1,10 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { turnTranscriptElapsedMs } from "../chatTurnTranscript.js";
 import type { Bubble, TurnTranscriptBlock } from "../chat.types.js";
 import { PendingActionCard } from "../approval/PendingActionCard.js";
-import { commandLanguage, commandOutputLanguage, type CommandCodeLanguage } from "./commandLanguage.js";
+import { commandLanguage, commandOutputLanguage } from "./commandLanguage.js";
+import { CommandCodeViewer } from "./CommandCodeViewer.js";
 
-const CommandCodeViewer = lazy(() => import("./CommandCodeViewer.js").then(({ CommandCodeViewer: Viewer }) => ({ default: Viewer })));
 // The transcript is also rendered in Node-side tests/history previews where a
 // layout effect is neither useful nor safe. In the desktop browser it makes
 // the execution → final handoff paint atomically: Working is collapsed before
@@ -197,7 +197,7 @@ function TranscriptBlockView({
                 {commandOpen && (
                   <div className="ml-1 mt-1 overflow-hidden rounded-[11px] border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface)_/_0.46)] animate-[turn-command-open_220ms_cubic-bezier(.22,.8,.24,1)]">
                     <div className="px-4 pb-1 pt-2 text-xs text-[rgb(var(--app-text-muted))]">Shell</div>
-                    <LazyCommandCodeViewer
+                    <CommandCodeViewer
                       value={`$ ${command.command}`}
                       language={commandLanguage(command.command)}
                       ariaLabel="Executed command"
@@ -206,7 +206,7 @@ function TranscriptBlockView({
                     {command.output && (
                       <>
                         <div className="mx-4 h-px bg-[rgb(var(--app-border))]" />
-                        <LazyCommandCodeViewer
+                        <CommandCodeViewer
                           value={command.output}
                           language={commandOutputLanguage(command.command)}
                           ariaLabel="Command output"
@@ -223,37 +223,6 @@ function TranscriptBlockView({
         </div>
       )}
     </section>
-  );
-}
-
-function LazyCommandCodeViewer({
-  value,
-  language,
-  ariaLabel,
-  output = false,
-  copyValue,
-}: {
-  value: string;
-  language: "shell" | "powershell" | "diff";
-  ariaLabel: string;
-  output?: boolean;
-  copyValue?: string;
-}) {
-  return (
-    <Suspense
-      fallback={(
-        <pre
-          className={`m-0 overflow-auto whitespace-pre-wrap break-words px-4 py-2 font-mono text-[12.5px] leading-[1.62] text-[rgb(var(--app-text))] ${
-            output ? "max-h-[260px]" : "max-h-[150px]"
-          }`}
-          aria-label={ariaLabel}
-        >
-          {value}
-        </pre>
-      )}
-    >
-      <CommandCodeViewer value={value} language={language} ariaLabel={ariaLabel} output={output} copyValue={copyValue} />
-    </Suspense>
   );
 }
 
