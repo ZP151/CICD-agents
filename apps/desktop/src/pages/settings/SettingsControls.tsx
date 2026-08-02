@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  ActionButton,
   WorkbenchTextInput,
 } from "../../components/workbench/WorkbenchPrimitives.js";
 
@@ -30,13 +31,14 @@ export function TextInput({
           className={isSecret ? "pr-10" : ""}
         />
         {isSecret && (
-          <button
+          <ActionButton
             type="button"
+            tone="quiet"
             onClick={() => setShow((value) => !value)}
-            className="absolute right-2.5 rounded p-1 text-[rgb(var(--app-text-subtle))] transition hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45"
-            title={show ? "Hide" : "Show"}
+            className="absolute right-1.5 min-h-7 min-w-7 px-1.5 py-1 text-[rgb(var(--app-text-subtle))] hover:text-[rgb(var(--app-text))]"
+            aria-label={`${show ? "Hide" : "Show"} ${label}`}
           >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               {show ? (
                 <path
                   strokeLinecap="round"
@@ -53,7 +55,7 @@ export function TextInput({
                 />
               )}
             </svg>
-          </button>
+          </ActionButton>
         )}
       </div>
     </label>
