@@ -1,9 +1,4 @@
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-  useSpring,
-} from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   useRef,
   useState,
@@ -20,37 +15,48 @@ interface PromptParticleDeckProps {
 }
 
 const PARTICLES = [
-  ["8%", "24%", 4, 22, -12], ["14%", "69%", 3, 18, 15], ["25%", "12%", 3, -14, 18],
-  ["34%", "82%", 5, 13, -17], ["65%", "11%", 4, 19, 12], ["78%", "27%", 3, -17, 16],
-  ["88%", "62%", 5, -21, -10], ["73%", "82%", 3, 15, -18], ["48%", "7%", 3, 12, 9],
-  ["18%", "44%", 3, 18, -7], ["84%", "42%", 4, -19, 8], ["57%", "87%", 3, 9, -16],
+  ["7%", "29%", 3, 18, -9], ["15%", "76%", 3, 12, 11], ["26%", "17%", 2, -10, 13],
+  ["38%", "86%", 3, 8, -12], ["63%", "12%", 3, 13, 9], ["78%", "24%", 2, -12, 10],
+  ["92%", "65%", 3, -17, -8], ["77%", "85%", 2, 10, -13], ["50%", "7%", 2, 7, 8],
 ] as const;
 
-function PromptGlyph({ id }: { id: string }) {
-  const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-  if (id.includes("review")) return <svg viewBox="0 0 24 24" aria-hidden="true"><path {...common} d="m5 12 4 4L19 6" /><path {...common} d="M5 5h9" /></svg>;
-  if (id.includes("pipeline")) return <svg viewBox="0 0 24 24" aria-hidden="true"><path {...common} d="M5 5v14M19 5v14M5 9h6m2 6h6" /><circle cx="12" cy="9" r="2" {...common} /></svg>;
-  if (id.includes("commit")) return <svg viewBox="0 0 24 24" aria-hidden="true"><path {...common} d="M6 12h12M12 6v12" /><circle cx="12" cy="12" r="3.25" {...common} /></svg>;
-  if (id.includes("pr")) return <svg viewBox="0 0 24 24" aria-hidden="true"><path {...common} d="M7 5v14m0-14a3 3 0 1 0 0 6m0 2a3 3 0 1 1 0 6M7 8h10a2 2 0 0 1 2 2v3" /></svg>;
-  if (id.includes("branch")) return <svg viewBox="0 0 24 24" aria-hidden="true"><path {...common} d="M7 5v14m0-14a3 3 0 1 0 0 6m0 2a3 3 0 1 1 0 6m0-5h6a4 4 0 0 1 4 4v3" /></svg>;
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5" {...common} /><path {...common} d="m15 15 4 4" /></svg>;
+const DECK_POSITIONS = {
+  "-2": { x: -164, y: 14, rotateY: 32, rotateZ: -3.5, scale: 0.7, opacity: 0.6, zIndex: 1 },
+  "-1": { x: -94, y: 5, rotateY: 17, rotateZ: -1.5, scale: 0.86, opacity: 0.84, zIndex: 2 },
+  "0": { x: 0, y: -5, rotateY: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 3 },
+  "1": { x: 94, y: 5, rotateY: -17, rotateZ: 1.5, scale: 0.86, opacity: 0.84, zIndex: 2 },
+  "2": { x: 164, y: 14, rotateY: -32, rotateZ: 3.5, scale: 0.7, opacity: 0.6, zIndex: 1 },
+} as const;
+
+function deckOffset(index: number, activeIndex: number, count: number): number {
+  const rawOffset = index - activeIndex;
+  const wrapForward = rawOffset - count;
+  const wrapBackward = rawOffset + count;
+  return [rawOffset, wrapForward, wrapBackward].reduce((closest, candidate) => (
+    Math.abs(candidate) < Math.abs(closest) ? candidate : closest
+  ));
 }
 
-/** A wheel-driven vertical deck. Particles activate only while exploring a draft. */
+function promptTone(index: number): "blue" | "violet" | "mint" {
+  return (["blue", "violet", "mint"] as const)[index % 3] ?? "blue";
+}
+
+/**
+ * Wheel-driven prompt selector. The cards sit on a shallow 3D arc so users can
+ * preview neighboring drafts without a horizontal scroller or an oversized
+ * one-card-at-a-time presentation.
+ */
 export function PromptParticleDeck({ suggestions, disabled = false, onPick }: PromptParticleDeckProps) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [direction, setDirection] = useState(1);
   const [hovering, setHovering] = useState(false);
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const wheelLockUntil = useRef(0);
   const reducedMotion = useReducedMotion() ?? false;
-  const rotateX = useSpring(0, { stiffness: 260, damping: 24, mass: 0.55 });
-  const rotateY = useSpring(0, { stiffness: 260, damping: 24, mass: 0.55 });
   const activeSuggestion = suggestions[activeIndex];
 
   const selectIndex = (nextIndex: number) => {
-    const next = Math.min(suggestions.length - 1, Math.max(0, nextIndex));
-    if (next === activeIndex) return;
-    setDirection(next > activeIndex ? 1 : -1);
+    if (suggestions.length < 2) return;
+    const next = (nextIndex + suggestions.length) % suggestions.length;
     setActiveIndex(next);
   };
 
@@ -58,35 +64,48 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
     if (Math.abs(event.deltaY) < 4) return;
     event.preventDefault();
     if (Date.now() < wheelLockUntil.current) return;
-    wheelLockUntil.current = Date.now() + 130;
+    wheelLockUntil.current = Date.now() + 140;
     selectIndex(activeIndex + (event.deltaY > 0 ? 1 : -1));
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+    if (event.key === "ArrowDown") {
       event.preventDefault();
       selectIndex(activeIndex + 1);
     }
-    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+    if (event.key === "ArrowUp") {
       event.preventDefault();
       selectIndex(activeIndex - 1);
     }
+    if (event.key === "Home") {
+      event.preventDefault();
+      setActiveIndex(0);
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      setActiveIndex(Math.max(0, suggestions.length - 1));
+    }
   };
 
-  const handlePointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== "mouse" || reducedMotion) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    rotateX.set(((event.clientY - rect.top) / rect.height - 0.5) * -12);
-    rotateY.set(((event.clientX - rect.left) / rect.width - 0.5) * 14);
+    setTilt({
+      x: ((event.clientY - rect.top) / rect.height - 0.5) * -7,
+      y: ((event.clientX - rect.left) / rect.width - 0.5) * 7,
+    });
   };
 
   const resetTilt = () => {
-    rotateX.set(0);
-    rotateY.set(0);
     setHovering(false);
+    setTilt({ x: 0, y: 0 });
   };
 
   if (!activeSuggestion) return null;
+
+  const visibleSuggestions = suggestions
+    .map((suggestion, index) => ({ suggestion, index, offset: deckOffset(index, activeIndex, suggestions.length) }))
+    .filter(({ offset }) => Math.abs(offset) <= 2);
 
   return (
     <div
@@ -97,7 +116,12 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
       onWheel={handleWheel}
       onKeyDown={handleKeyDown}
     >
-      <div className="prompt-particle-deck__stage">
+      <div
+        className="prompt-particle-deck__stage"
+        onPointerMove={handlePointerMove}
+        onPointerEnter={() => setHovering(true)}
+        onPointerLeave={resetTilt}
+      >
         <div className="prompt-particle-deck__particles" aria-hidden="true">
           {PARTICLES.map(([left, top, size, driftX, driftY], index) => (
             <motion.i
@@ -106,42 +130,54 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
               style={{ left, top, width: size, height: size }}
               initial={false}
               animate={hovering && !reducedMotion
-                ? { x: [0, driftX, 0], y: [0, driftY, 0], opacity: [0.42, 0.95, 0.48], scale: [0.72, 1.25, 0.78] }
-                : { x: 0, y: 0, opacity: 0.3, scale: 1 }}
-              transition={{ duration: 1.25 + index * 0.08, ease: [0.22, 1, 0.36, 1], repeat: hovering && !reducedMotion ? Infinity : 0 }}
+                ? { x: [0, driftX, 0], y: [0, driftY, 0], opacity: [0.3, 0.82, 0.38], scale: [0.8, 1.18, 0.84] }
+                : { x: 0, y: 0, opacity: 0.2, scale: 1 }}
+              transition={{ duration: 1.35 + index * 0.08, ease: [0.22, 1, 0.36, 1], repeat: hovering && !reducedMotion ? Infinity : 0 }}
             />
           ))}
         </div>
-        <AnimatePresence initial={false} mode="wait" custom={direction}>
-          <motion.button
-            key={activeSuggestion.id}
-            type="button"
-            className="prompt-particle-deck__card"
-            initial={{ opacity: 0, y: direction > 0 ? 28 : -28, scale: 0.985 }}
-            animate={{ opacity: 1, y: 0, scale: hovering && !reducedMotion ? 1.018 : 1 }}
-            exit={{ opacity: 0, y: direction > 0 ? -20 : 20, scale: 0.985 }}
-            transition={{ duration: reducedMotion ? 0.01 : 0.28, ease: [0.22, 1, 0.36, 1] }}
-            style={{ rotateX, rotateY }}
-            disabled={disabled}
-            title={disabled ? "Create a Project Link first" : "Click to edit this prompt"}
-            onPointerMove={handlePointerMove}
-            onPointerEnter={() => setHovering(true)}
-            onPointerLeave={resetTilt}
-            onFocus={() => setHovering(true)}
-            onBlur={resetTilt}
-            onClick={() => {
-              if (!disabled) onPick(activeSuggestion);
-            }}
-          >
-            <span className="prompt-particle-deck__glyph"><PromptGlyph id={activeSuggestion.id} /></span>
-            <span className="prompt-particle-deck__label">{activeSuggestion.label}</span>
-          </motion.button>
-        </AnimatePresence>
+        {visibleSuggestions.map(({ suggestion, index, offset }) => {
+          const position = DECK_POSITIONS[String(offset) as keyof typeof DECK_POSITIONS];
+          const isActive = index === activeIndex;
+          return (
+            <motion.button
+              key={suggestion.id}
+              type="button"
+              className="prompt-particle-deck__card"
+              data-active={isActive ? "true" : "false"}
+              data-tone={promptTone(index)}
+              initial={false}
+              animate={{
+                ...position,
+                rotateX: isActive && !reducedMotion ? tilt.x : 0,
+                rotateY: position.rotateY + (isActive && !reducedMotion ? tilt.y : 0),
+              }}
+              transition={reducedMotion
+                ? { duration: 0.01 }
+                : { type: "spring", stiffness: 300, damping: 28, mass: 0.62 }}
+              disabled={disabled}
+              title={disabled
+                ? "Create a Project Link first"
+                : isActive
+                  ? "Click to edit this prompt"
+                  : "Click to preview this prompt"}
+              onFocus={() => setHovering(true)}
+              onBlur={resetTilt}
+              onClick={() => {
+                if (disabled) return;
+                if (isActive) onPick(suggestion);
+                else selectIndex(index);
+              }}
+            >
+              <span className="prompt-particle-deck__label">{suggestion.label}</span>
+            </motion.button>
+          );
+        })}
       </div>
       <div className="prompt-particle-deck__steps" aria-hidden="true">
         {suggestions.map((suggestion, index) => <i key={suggestion.id} data-active={index === activeIndex ? "true" : "false"} />)}
       </div>
-      <span className="sr-only" aria-live="polite">Selected draft: {activeSuggestion.label}. Use the mouse wheel or arrow keys to browse.</span>
+      <span className="sr-only" aria-live="polite">Selected draft: {activeSuggestion.label}. Use the mouse wheel or up and down arrow keys to browse.</span>
     </div>
   );
 }

@@ -190,12 +190,6 @@ body {
   height: 1.25rem;
 }
 
-.app-shell-brand-mark {
-  /* The source already contains its original blue cloud depth. Extra chrome
-     around it reads as a second tile in a compact desktop sidebar. */
-  filter: none;
-}
-
 .app-shell-account-footer {
   padding-left: 0.75rem;
 }
@@ -209,17 +203,11 @@ body {
     width: 4.5rem;
   }
 
-  .app-shell-brand {
-    justify-content: center;
-    padding-inline: 0;
-  }
-
   .app-shell-account-footer {
     justify-content: center;
     padding-inline: 0.75rem;
   }
 
-  .app-shell-brand-name,
   .app-shell-group-label,
   .app-shell-nav-label {
     position: absolute;

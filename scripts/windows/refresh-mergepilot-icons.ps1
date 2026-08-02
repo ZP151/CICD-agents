@@ -130,23 +130,24 @@ public static class MergePilotIconSurface
         }
     }
 
-    public static void ReplaceWithSource(string sourcePath, string targetPath)
+    public static void ReplaceWithSource(string sourcePath, string targetPath, int outputWidth, int outputHeight)
     {
-        int targetWidth;
-        int targetHeight;
-        using (var targetTemplate = new Bitmap(targetPath))
+        if (outputWidth <= 0 || outputHeight <= 0)
         {
-            targetWidth = targetTemplate.Width;
-            targetHeight = targetTemplate.Height;
+            using (var targetTemplate = new Bitmap(targetPath))
+            {
+                outputWidth = targetTemplate.Width;
+                outputHeight = targetTemplate.Height;
+            }
         }
 
         using (var source = new Bitmap(sourcePath))
-        using (var target = new Bitmap(targetWidth, targetHeight, PixelFormat.Format32bppArgb))
+        using (var target = new Bitmap(outputWidth, outputHeight, PixelFormat.Format32bppArgb))
         using (var graphics = Graphics.FromImage(target))
         {
             graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
             graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-            graphics.DrawImage(source, 0, 0, targetWidth, targetHeight);
+            graphics.DrawImage(source, 0, 0, outputWidth, outputHeight);
 
             var temporaryPath = targetPath + ".mergepilot-source-tmp";
             target.Save(temporaryPath, ImageFormat.Png);
@@ -181,7 +182,11 @@ foreach ($relativePath in $iconPaths) {
     if (-not (Test-Path -LiteralPath $SourceImage)) {
       throw "Source image does not exist: $SourceImage"
     }
-    [MergePilotIconSurface]::ReplaceWithSource($SourceImage, $path)
+    # The React shell renders this source at multiple Windows scale factors.
+    # Keep a 512px web source rather than letting the title bar fall back to a
+    # 256px raster while the native ICO selects its high-density payload.
+    $sourceSize = if ($relativePath -eq "src\\assets\\mergepilot-icon.png") { 512 } else { 0 }
+    [MergePilotIconSurface]::ReplaceWithSource($SourceImage, $path, $sourceSize, $sourceSize)
   }
   [MergePilotIconSurface]::RemoveOuterSurface($path)
 }
@@ -245,7 +250,7 @@ function Write-Ico([string] $targetPath, [byte[][]] $payloads, [int[]] $sizes) {
 }
 
 $icoSizes = [int[]](16, 20, 24, 32, 48, 64, 128, 256)
-$iconSource = Join-Path $desktopRoot "src-tauri\\icons\\128x128@2x.png"
+$iconSource = Join-Path $desktopRoot "src-tauri\\icons\\icon.png"
 [System.Collections.Generic.List[byte[]]]$icoPayloadList = [System.Collections.Generic.List[byte[]]]::new()
 foreach ($icoSize in $icoSizes) {
   $icoPayloadList.Add((Get-PngPayload $iconSource $icoSize))

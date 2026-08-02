@@ -73,21 +73,20 @@ function ProjectLinkFirstRunState({
   return (
     <div className="flex w-full max-w-3xl flex-col items-center gap-6">
       <WelcomePanel onPick={onWelcomeSuggestion} disabled />
-      <details className="w-full max-w-2xl rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-left shadow-sm">
+      <details className="w-full max-w-xl overflow-hidden rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-left shadow-sm">
         <summary
-          role="button"
-          aria-label="Create Project Link"
-          className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-[rgb(var(--app-text))] transition hover:bg-[rgb(var(--app-surface-raised))]"
+          aria-label="Connect a Project Link"
+          className="group flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-medium text-[rgb(var(--app-text))] transition-colors duration-[var(--app-motion-fast)] hover:bg-[rgb(var(--app-surface-raised))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--app-focus))]/55"
         >
           <span className="min-w-0">
-            <span className="block">Connect a Project Link to run workspace actions</span>
+            <span className="block">Connect a project</span>
             <span className="mt-0.5 block text-xs font-normal text-[rgb(var(--app-text-muted))]">
-              Map a local repo to Azure DevOps before Git, PR, pipeline, and review workflows.
+              Link this repo to Azure DevOps.
             </span>
           </span>
-          <span className="shrink-0 rounded-md bg-[rgb(var(--app-accent))] px-3 py-1.5 text-xs font-semibold text-white">
-            Create
-          </span>
+          <svg className="h-4 w-4 shrink-0 text-[rgb(var(--app-text-subtle))] transition-transform duration-[var(--app-motion-fast)] group-open:rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m9 5 7 7-7 7" />
+          </svg>
         </summary>
         <div className="border-t border-[rgb(var(--app-border))] p-4">
           <ProjectLinkSetupCard

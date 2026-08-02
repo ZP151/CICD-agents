@@ -61,6 +61,8 @@ describe("ChatEmptyState", () => {
     expect(html).toContain('aria-label="Suggested prompt drafts"');
     expect(html).toContain("Choose a starting point, then edit the prompt before MergePilot does any work.");
     expect(html).toContain("Understand this project");
+    expect((html.match(/prompt-particle-deck__card/g) ?? [])).toHaveLength(5);
+    expect(html).not.toContain("prompt-particle-deck__glyph");
     expect(html).not.toContain("animate-pulse");
   });
 
@@ -111,7 +113,10 @@ describe("ChatEmptyState", () => {
 
     expect(html).toContain("New conversation welcome");
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Connect a Project Link to run workspace actions");
+    expect(html).toContain("Connect a project");
+    expect(html).toContain("Link this repo to Azure DevOps.");
+    expect(html).not.toContain("Connect a Project Link to run workspace actions");
+    expect(html).not.toMatch(/>Create<\/span>/);
     expect(html).toContain("Create and use");
     expect(html).toContain("Create a Project Link first");
     expect(html).toContain("disabled=\"\"");

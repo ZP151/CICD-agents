@@ -7,7 +7,6 @@ import {
   type ErrorInfo,
   type ReactNode,
 } from "react";
-import mergepilotIcon from "../assets/mergepilot-icon.png";
 import { UserFooter } from "./UserFooter.js";
 import { Tooltip, TooltipProvider } from "../components/ui/Tooltip.js";
 
@@ -384,14 +383,7 @@ export function FullLayout() {
     <div className={appShellFrameClass()}>
       <aside className={appShellSidebarClass()}>
         <TooltipProvider>
-          <div className="app-shell-brand flex h-14 shrink-0 items-center border-b border-[rgb(var(--app-sidebar-border))] px-3">
-            <img
-              className="app-shell-brand-mark h-8 w-8 object-contain"
-              src={mergepilotIcon}
-              alt="MergePilot"
-            />
-          </div>
-          <nav className="app-shell-navigation flex-1 space-y-4 overflow-y-auto px-2 py-3">
+          <nav className="app-shell-navigation flex-1 space-y-4 overflow-y-auto px-2 pb-3 pt-4">
             {NAV_GROUPS.map((group) => (
               <div key={group.label}>
                 <p className={appShellGroupLabelClass()}>{group.label}</p>
