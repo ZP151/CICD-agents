@@ -30,29 +30,18 @@ export function runtimeProcessLabel(health: HealthStatus | null): string {
 export function RuntimeSettingsSection({ health }: { health: HealthStatus | null }): JSX.Element {
   return (
     <SettingsSection title="System">
-      <div
-        className="settings-runtime-summary"
-        title={[
-          `Desktop: ${DESKTOP_VERSION}${DESKTOP_BUILD_SHA ? ` (${DESKTOP_BUILD_SHA.slice(0, 12)})` : ""}`,
-          `Daemon: ${health?.version || "Unknown"} · ${health?.runtimeMode || "No runtime mode"}`,
-          `Owner: ${runtimeOwnerLabel(health)}`,
-        ].join("\n")}
+      <SettingsRow
+        title="Runtime"
+        description="Desktop, daemon, and ownership status."
       >
-        <div>
-          <p className="settings-runtime-label">Desktop</p>
-          <StatusPill tone="success">{DESKTOP_VERSION}</StatusPill>
-        </div>
-        <div>
-          <p className="settings-runtime-label">Daemon</p>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+          <StatusPill tone="success">Desktop {DESKTOP_VERSION}</StatusPill>
           <StatusPill tone={runtimeVersionTone(health)}>
-            {health?.version || "Unknown"}
+            Daemon {health?.version || "Unknown"}
           </StatusPill>
-        </div>
-        <div>
-          <p className="settings-runtime-label">Owner</p>
           <StatusPill tone={runtimeOwnerTone(health)}>{runtimeOwnerCompactLabel(health)}</StatusPill>
         </div>
-      </div>
+      </SettingsRow>
       <details className="settings-advanced">
         <summary>
           <span>Runtime details</span>
