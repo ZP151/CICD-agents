@@ -291,7 +291,10 @@ function Write-Ico([string] $targetPath, [byte[][]] $payloads, [int[]] $sizes) {
   }
 }
 
-$icoSizes = [int[]](16, 20, 24, 32, 48, 64, 128, 256)
+# Windows chooses the closest payload for the taskbar at the active display
+# scale. 40px and 96px are common 125% / high-DPI requests; without them the
+# shell can enlarge a 32px or 64px frame and soften the approved cloud mark.
+$icoSizes = [int[]](16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
 # Render every ICO payload from the retained full-resolution master, rather
 # than from icon.png after it has already been resized. This is especially
 # important for the small taskbar frames where a second resize softens the

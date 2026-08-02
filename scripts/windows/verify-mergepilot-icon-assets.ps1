@@ -82,16 +82,26 @@ function Get-IcoFrameSizes([string]$Path) {
 }
 
 $desktopRoot = Join-Path (Resolve-Path $RepoRoot) "apps\\desktop"
+$approvedReference = Join-Path $desktopRoot "src\\assets\\mergepilot-icon-reference.png"
 $webIcon = Join-Path $desktopRoot "src\\assets\\mergepilot-icon.png"
 $nativeIcon32 = Join-Path $desktopRoot "src-tauri\\icons\\32x32.png"
 $nativeIcon256 = Join-Path $desktopRoot "src-tauri\\icons\\128x128@2x.png"
 $nativeIco = Join-Path $desktopRoot "src-tauri\\icons\\icon.ico"
 
+# This is the user-approved cloud artwork.  Keep the source itself in the
+# repository and fail verification if a later refresh silently replaces it
+# with a low-resolution derivative or a different logo.
+$approvedReferenceHash = "563CFEFF1DE0472F8DAE310CDD7AAF0CBCD55A8281134C2C0C7832F0388127A8"
+$actualReferenceHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([System.IO.File]::ReadAllBytes($approvedReference)))
+if ($actualReferenceHash -ne $approvedReferenceHash) {
+  throw "Approved cloud artwork changed unexpectedly: $approvedReference"
+}
+
 $webFrame = Assert-TransparentCloudFrame $webIcon 512 0.6
 $smallFrame = Assert-TransparentCloudFrame $nativeIcon32 32 0.55
 $retinaFrame = Assert-TransparentCloudFrame $nativeIcon256 256 0.6
 
-$expectedIcoFrames = @(16, 20, 24, 32, 48, 64, 128, 256)
+$expectedIcoFrames = @(16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
 $actualIcoFrames = Get-IcoFrameSizes $nativeIco
 if (Compare-Object -ReferenceObject $expectedIcoFrames -DifferenceObject $actualIcoFrames) {
   throw "ICO frame set is incomplete. Expected $($expectedIcoFrames -join ', '); got $($actualIcoFrames -join ', ')."
@@ -117,5 +127,5 @@ if ($ExecutablePath) {
   }
 }
 
-Write-Host "Verified approved MergePilot cloud icon assets: 512px web source, native PNG frames, ICO frame set, and executable resource."
+Write-Host "Verified approved MergePilot cloud icon assets: approved source, 512px web source, high-DPI native PNG/ICO frames, and executable resource."
 Write-Host "Web visible bounds: $($webFrame.VisibleWidth)x$($webFrame.VisibleHeight); taskbar frame: $($smallFrame.VisibleWidth)x$($smallFrame.VisibleHeight)."
