@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import type { ProjectLink, ProjectLinkInput } from "../api";
 import { useAppData } from "../App";
+import { isTemporaryProjectLink } from "../projectLinks.js";
 import {
   ActionButton,
   InlineNotice,
@@ -110,18 +111,74 @@ export default function ProjectLinks(): JSX.Element {
       ) : projectLinks.length === 0 ? (
         <ProjectLinksEmpty onCreate={() => setMode("new")} />
       ) : (
-        <div className={projectLinksGridClass()}>
-          {projectLinks.map((projectLink) => (
-            <ProjectLinkCard
-              key={projectLink.id}
-              projectLink={projectLink}
-              onEdit={() => setMode({ editing: projectLink })}
-              onDelete={() => void handleDelete(projectLink.id)}
-            />
-          ))}
-        </div>
+        <ProjectLinksList
+          projectLinks={projectLinks}
+          onEdit={(projectLink) => setMode({ editing: projectLink })}
+          onDelete={(id) => void handleDelete(id)}
+        />
       )}
     </WorkbenchPage>
+  );
+}
+
+export function partitionProjectLinks(projectLinks: ProjectLink[]): {
+  saved: ProjectLink[];
+  temporary: ProjectLink[];
+} {
+  return projectLinks.reduce<{ saved: ProjectLink[]; temporary: ProjectLink[] }>(
+    (groups, projectLink) => {
+      groups[isTemporaryProjectLink(projectLink) ? "temporary" : "saved"].push(projectLink);
+      return groups;
+    },
+    { saved: [], temporary: [] },
+  );
+}
+
+export function projectLinksTemporarySectionClass(): string {
+  return "border-t border-[rgb(var(--app-border))]/70 pt-3";
+}
+
+export function ProjectLinksList({
+  projectLinks,
+  onEdit,
+  onDelete,
+}: {
+  projectLinks: ProjectLink[];
+  onEdit: (projectLink: ProjectLink) => void;
+  onDelete: (id: string) => void;
+}): JSX.Element {
+  const { saved, temporary } = partitionProjectLinks(projectLinks);
+  return (
+    <>
+      <div className={projectLinksGridClass()}>
+        {saved.map((projectLink) => (
+          <ProjectLinkCard
+            key={projectLink.id}
+            projectLink={projectLink}
+            onEdit={() => onEdit(projectLink)}
+            onDelete={() => onDelete(projectLink.id)}
+          />
+        ))}
+      </div>
+      {temporary.length > 0 && (
+        <details className={projectLinksTemporarySectionClass()}>
+          <summary>
+            <span>Temporary links</span>
+            <span>{temporary.length}</span>
+          </summary>
+          <div className={`${projectLinksGridClass()} mt-3`}>
+            {temporary.map((projectLink) => (
+              <ProjectLinkCard
+                key={projectLink.id}
+                projectLink={projectLink}
+                onEdit={() => onEdit(projectLink)}
+                onDelete={() => onDelete(projectLink.id)}
+              />
+            ))}
+          </div>
+        </details>
+      )}
+    </>
   );
 }
 

@@ -263,7 +263,12 @@ foreach ($relativePath in $iconPaths) {
     $sourceSize = if ($relativePath -eq "src\\assets\\mergepilot-icon.png") { 512 } else { 0 }
     [MergePilotIconSurface]::ReplaceWithSource($SourceImage, $path, $sourceSize, $sourceSize)
   }
-  [MergePilotIconSurface]::RemoveOuterSurface($path, $false)
+  # Keep the high-resolution artwork unchanged. Only the smallest native PNG
+  # gets a one-pixel contour reinforcement: Windows may select it directly for
+  # the title bar or taskbar, where the otherwise soft blue edge is too easily
+  # blurred by a second system scaling pass.
+  $isSmallNativeIcon = $relativePath -eq "src-tauri\\icons\\32x32.png"
+  [MergePilotIconSurface]::RemoveOuterSurface($path, $isSmallNativeIcon)
 }
 
 function Get-PngPayload([string] $sourcePath, [int] $size) {
@@ -280,6 +285,12 @@ function Get-PngPayload([string] $sourcePath, [int] $size) {
         $graphics.DrawImage($source, 0, 0, $size, $size)
       } finally {
         $graphics.Dispose()
+      }
+      # These are the payloads Windows selects for the taskbar. Reinforce only
+      # the low-density contour after the final resize so the 128px/256px
+      # artwork remains a faithful high-resolution copy of the tracked source.
+      if ($size -le 48) {
+        [MergePilotIconSurface]::StrengthenBlueContour($bitmap)
       }
       $stream = New-Object System.IO.MemoryStream
       try {

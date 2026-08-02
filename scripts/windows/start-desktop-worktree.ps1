@@ -12,9 +12,11 @@ $ErrorActionPreference = 'Stop'
 $workspaceRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $pnpm = Join-Path $workspaceRoot '.tools\pnpm.exe'
 $node = Join-Path $workspaceRoot '.tools\node-v22.11.0-win-x64\node.exe'
+$tauri = Join-Path $workspaceRoot 'apps\desktop\node_modules\.bin\tauri.cmd'
+$viteEntry = Join-Path $workspaceRoot 'apps\desktop\node_modules\vite\bin\vite.js'
 
-if (-not (Test-Path -LiteralPath $pnpm) -or -not (Test-Path -LiteralPath $node)) {
-  throw 'Repository-local Node.js and pnpm are required. Run bootstrap before starting the desktop worktree.'
+if (-not (Test-Path -LiteralPath $pnpm) -or -not (Test-Path -LiteralPath $node) -or -not (Test-Path -LiteralPath $tauri) -or -not (Test-Path -LiteralPath $viteEntry)) {
+  throw 'Repository-local Node.js, pnpm, and the desktop Tauri CLI are required. Run bootstrap before starting the desktop worktree.'
 }
 
 function Assert-PortAvailable([int]$Port, [string]$Purpose) {
@@ -36,9 +38,9 @@ $env:MERGEPILOT_RUNTIME_PORT = "$DaemonPort"
 & $node 'apps/desktop/scripts/ensure-sidecar.mjs'
 if ($LASTEXITCODE -ne 0) { throw "Sidecar preparation failed with exit code $LASTEXITCODE." }
 
-$vite = Start-Process -FilePath $pnpm -ArgumentList @(
-  '--filter', '@mergepilot/desktop', 'exec', 'vite', '--host', '127.0.0.1'
-) -WorkingDirectory $workspaceRoot -WindowStyle Hidden -PassThru
+$vite = Start-Process -FilePath $node -ArgumentList @(
+  $viteEntry, '--host', '127.0.0.1'
+) -WorkingDirectory (Join-Path $workspaceRoot 'apps\desktop') -WindowStyle Hidden -PassThru
 
 try {
   $ready = $false
@@ -51,10 +53,20 @@ try {
   }
   if (-not $ready) { throw "Vite did not start on port $DevPort." }
 
-  $config = @{ identifier = $AppIdentifier; build = @{ beforeDevCommand = ''; devUrl = "http://127.0.0.1:$DevPort" } } |
-    ConvertTo-Json -Compress
-  & $pnpm --filter '@mergepilot/desktop' exec tauri dev --config $config
-  if ($LASTEXITCODE -ne 0) { throw "Tauri exited with code $LASTEXITCODE." }
+  # Passing inline JSON through a Windows .cmd wrapper drops its quotes. A
+  # short-lived config file keeps a parallel worktree's identifier and dev URL
+  # intact without mutating the checked-in Tauri configuration.
+  $configPath = Join-Path ([System.IO.Path]::GetTempPath()) "mergepilot-worktree-$PID-$DevPort.json"
+  @{ identifier = $AppIdentifier; build = @{ beforeDevCommand = ''; devUrl = "http://127.0.0.1:$DevPort" } } |
+    ConvertTo-Json -Compress |
+    Set-Content -LiteralPath $configPath -Encoding utf8 -NoNewline
+  try {
+    & $tauri dev --config $configPath
+    if ($LASTEXITCODE -ne 0) { throw "Tauri exited with code $LASTEXITCODE." }
+  }
+  finally {
+    Remove-Item -LiteralPath $configPath -Force -ErrorAction SilentlyContinue
+  }
 }
 finally {
   if (-not $vite.HasExited) {

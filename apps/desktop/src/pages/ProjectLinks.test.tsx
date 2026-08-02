@@ -3,12 +3,16 @@ import { describe, expect, it } from "vitest";
 import {
   ProjectLinksEmpty,
   ProjectLinksLoading,
+  ProjectLinksList,
+  partitionProjectLinks,
   projectLinkFormShellClass,
   projectLinksHeaderClass,
   projectLinksGridClass,
   projectLinksListShellClass,
+  projectLinksTemporarySectionClass,
 } from "./ProjectLinks.js";
 import { withoutProjectLinkFallbacks } from "../projectLinks.js";
+import type { ProjectLink } from "../api.js";
 import {
   ProjectLinkCard,
   compactProjectLinkName,
@@ -154,6 +158,44 @@ describe("ProjectLinks layout", () => {
       adoProject: "",
       adoRepoName: "",
     }).label).toBe("Setup needed");
+  });
+
+  it("keeps generated live links out of the primary connection list", () => {
+    const links = [
+      {
+        id: "saved-link",
+        name: "ClaimBot_API link",
+        repoPath: "C:\\work\\ClaimBot_API",
+        defaultBranch: "main",
+        targetBranch: "main",
+        adoOrgUrl: "https://tebssg.visualstudio.com/",
+        adoProject: "TeBS-ClaimBot",
+        adoRepoName: "ClaimBot_API",
+        adoPipelineId: "117",
+      },
+      {
+        id: "temporary-link",
+        name: "mp-live-claimbot-pipeline-20260716181319",
+        repoPath: "C:\\Users\\me\\AppData\\Local\\Temp\\mergepilot-live\\ClaimBot_API",
+        defaultBranch: "main",
+        targetBranch: "main",
+        adoOrgUrl: "https://tebssg.visualstudio.com/",
+        adoProject: "TeBS-ClaimBot",
+        adoRepoName: "ClaimBot_API",
+        adoPipelineId: "117",
+      },
+    ] as ProjectLink[];
+    const groups = partitionProjectLinks(links);
+    const html = renderToStaticMarkup(
+      <ProjectLinksList projectLinks={links} onEdit={() => undefined} onDelete={() => undefined} />,
+    );
+
+    expect(groups.saved.map((link) => link.id)).toEqual(["saved-link"]);
+    expect(groups.temporary.map((link) => link.id)).toEqual(["temporary-link"]);
+    expect(html).toContain("ClaimBot_API link");
+    expect(html).toContain("Temporary links");
+    expect(html).toContain(">1<");
+    expect(projectLinksTemporarySectionClass()).toContain("border-t");
   });
 
   it("preserves the managed MCP selection but clears legacy executable and credential fields", () => {
