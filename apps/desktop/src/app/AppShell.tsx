@@ -79,7 +79,7 @@ export function appShellGroupLabelClass(): string {
 }
 
 export function appShellNavLinkClass(active: boolean): string {
-  return `app-shell-nav-link rounded-lg border border-transparent text-[13px] font-medium leading-5 transition-[background-color,border-color,color,box-shadow] duration-[var(--app-motion-fast)] ${
+  return `app-shell-nav-link rounded-lg border border-transparent text-[13px] font-medium leading-5 transition-[background-color,border-color,color,box-shadow] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--app-focus))]/70 ${
     active
       ? "border-white/10 bg-[rgb(var(--app-sidebar-active))] text-[rgb(var(--app-sidebar-text))] shadow-[0_3px_8px_rgb(8_15_38_/_0.22)]"
       : "text-[rgb(var(--app-sidebar-muted))] hover:bg-[rgb(var(--app-sidebar-hover))] hover:text-[rgb(var(--app-sidebar-text))]"

@@ -137,6 +137,14 @@ describe("AppShell themed layout classes", () => {
     expect(appShellNavLinkClass(false)).toContain("hover:bg");
     expect(appShellNavLinkClass(false)).toContain("--app-sidebar-muted");
   });
+
+  it("keeps keyboard focus visible in the full sidebar and compact icon rail", () => {
+    const classes = appShellNavLinkClass(false);
+
+    expect(classes).toContain("focus-visible:ring-2");
+    expect(classes).toContain("focus-visible:ring-inset");
+    expect(classes).toContain("--app-focus");
+  });
 });
 
 describe("AppShell workspace routes", () => {
