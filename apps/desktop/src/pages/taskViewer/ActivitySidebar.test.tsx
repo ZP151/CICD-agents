@@ -104,6 +104,7 @@ function renderActivitySidebar({
   prInsightActivity = [prInsight],
   reviewActivity = [reviewEvent],
   loading = false,
+  refreshing = false,
   checkpointLoading = false,
   prInsightLoading = false,
   reviewLoading = false,
@@ -114,6 +115,7 @@ function renderActivitySidebar({
   prInsightActivity?: PrInsightActivityItem[];
   reviewActivity?: ReviewActivityItem[];
   loading?: boolean;
+  refreshing?: boolean;
   checkpointLoading?: boolean;
   prInsightLoading?: boolean;
   reviewLoading?: boolean;
@@ -125,6 +127,7 @@ function renderActivitySidebar({
       tasks={tasks}
       selectedTaskId={tasks[0]?.id ?? null}
       loading={loading}
+      refreshing={refreshing}
       activeCount={0}
       error={error}
       checkpointActivity={checkpointActivity}
@@ -156,6 +159,14 @@ function renderActivitySidebar({
 }
 
 describe("ActivitySidebar", () => {
+  it("keeps refresh feedback on the single refresh action", () => {
+    const html = renderActivitySidebar({ refreshing: true });
+
+    expect(html).toContain("Refreshing...");
+    expect(html).toContain("workbench-loading-indicator");
+    expect(html).toContain("focus-visible:ring-2");
+  });
+
   it("uses a responsive shell instead of a permanently fixed-width rail", () => {
     const shellClass = activitySidebarShellClass();
     const listClass = activitySidebarListClass();

@@ -32,6 +32,7 @@ interface ActivitySidebarProps {
   tasks: TaskView[];
   selectedTaskId: string | null;
   loading: boolean;
+  refreshing: boolean;
   activeCount: number;
   error: string | null;
   checkpointActivity: ChatCheckpointActivity[];
@@ -68,6 +69,7 @@ export function ActivitySidebar({
   tasks,
   selectedTaskId,
   loading,
+  refreshing,
   activeCount,
   error,
   checkpointActivity,
@@ -275,7 +277,14 @@ export function ActivitySidebar({
         <div>
           <h2 className="text-lg font-semibold text-[rgb(var(--app-text))] xl:text-xl">Activity</h2>
         </div>
-        <ActionButton onClick={onRefreshAll}>Refresh</ActionButton>
+        <ActionButton
+          type="button"
+          onClick={onRefreshAll}
+          loading={refreshing}
+          className="min-w-[5.5rem]"
+        >
+          {refreshing ? "Refreshing..." : "Refresh"}
+        </ActionButton>
       </div>
 
       {activeCount > 0 && (

@@ -141,6 +141,7 @@ export default function TaskViewer(): JSX.Element {
         tasks={tasks}
         selectedTaskId={selectedId}
         loading={loading}
+        refreshing={refreshing}
         activeCount={activeCount}
         error={error}
         checkpointActivity={checkpointActivity}
@@ -170,12 +171,6 @@ export default function TaskViewer(): JSX.Element {
       />
 
       <section className={taskViewerDetailClass()}>
-        {refreshing && (
-          <p className="mb-3 text-xs text-[rgb(var(--app-text-subtle))]">
-            Refreshing activity...
-          </p>
-        )}
-
         {!selected && !selectedReview && !selectedPrInsight && !selectedCheckpoint && (
           <ActivityEmptyDetail
             activityCount={visibleActivityCount}
