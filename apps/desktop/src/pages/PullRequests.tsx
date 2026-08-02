@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PaginationControls } from "../components/PaginationControls.js";
 import {
+  ActionButton,
   InlineNotice,
   WorkbenchFilterTabs,
   WorkbenchPage,
@@ -43,10 +44,6 @@ export function pullRequestsPageShellClass(): string {
 
 export function pullRequestLoadingMetaGridClass(): string {
   return "mt-3 grid gap-2 grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))]";
-}
-
-export function pullRequestEmptyChecklistGridClass(): string {
-  return "mt-3 grid gap-1.5 text-xs text-[rgb(var(--app-text-muted))] grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))]";
 }
 
 export default function PullRequests(): JSX.Element {
@@ -312,19 +309,20 @@ export function PullRequestEmptyState({
   onRefresh: () => void | Promise<void>;
 }): JSX.Element {
   const isError = mode === "error";
+  const recovery = pullRequestRecovery(message, hasProjectLinks);
   const title = isError
-    ? "Pull requests unavailable"
+    ? recovery.title
     : hasProjectLinks
       ? "No pull requests found"
       : "No Project Link available";
   const description = isError
-    ? (message || "Azure DevOps could not refresh pull requests right now.")
+    ? recovery.description
     : hasProjectLinks
       ? "Try another Project Link or status filter, or refresh after creating a pull request."
       : "Create a Project Link with Azure DevOps mapping before reviewing pull requests or generating PR insight.";
   return (
     <section
-      className={`w-full max-w-5xl rounded-lg border p-5 ${
+      className={`w-full max-w-3xl rounded-lg border px-4 py-3 ${
         isError
           ? "border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.08)]"
           : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]"
@@ -338,13 +336,23 @@ export function PullRequestEmptyState({
           <p className={`mt-1 text-sm leading-relaxed ${isError ? "text-[rgb(var(--app-danger))]" : "text-[rgb(var(--app-text-muted))]"}`}>
             {description}
           </p>
-          <ul className={pullRequestEmptyChecklistGridClass()}>
-            <li>Microsoft sign-in</li>
-            <li>Repository permissions</li>
-            <li>Project Link branch scope</li>
-          </ul>
+          {isError && message && (
+            <details className="mt-2 text-xs text-[rgb(var(--app-text-muted))]">
+              <summary className="cursor-pointer select-none text-[rgb(var(--app-text-subtle))]">
+                Technical detail
+              </summary>
+              <p className="mt-1 break-words font-mono leading-5">{message}</p>
+            </details>
+          )}
         </div>
-        {!hasProjectLinks && !isError ? (
+        {isError && recovery.primaryHref ? (
+          <a
+            href={recovery.primaryHref}
+            className="inline-flex min-h-8 items-center justify-center rounded-md border border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent))] px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110"
+          >
+            {recovery.primaryAction}
+          </a>
+        ) : !hasProjectLinks && !isError ? (
           <a
             href="#/project-links"
             className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-1.5 text-sm font-medium text-[rgb(var(--app-text))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))]"
@@ -352,17 +360,56 @@ export function PullRequestEmptyState({
             Open Project Links
           </a>
         ) : (
-          <button
-            type="button"
-            onClick={() => void onRefresh()}
-            className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-1.5 text-sm text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
-          >
-            Refresh
-          </button>
+          <ActionButton onClick={() => void onRefresh()}>{isError ? recovery.primaryAction : "Refresh"}</ActionButton>
         )}
       </div>
     </section>
   );
+}
+
+export interface PullRequestRecovery {
+  title: string;
+  description: string;
+  primaryAction: string;
+  primaryHref?: string;
+}
+
+/** Turns daemon and Azure DevOps error codes into a single, actionable recovery. */
+export function pullRequestRecovery(
+  message: string | undefined,
+  hasProjectLinks: boolean,
+): PullRequestRecovery {
+  const issue = message?.toLowerCase() ?? "";
+  if (issue.includes("ado_project_link_incomplete") || issue.includes("project link") && issue.includes("mapping")) {
+    return {
+      title: "Complete this Project Link",
+      description: "Pull requests need an Azure DevOps organization, project, repository, and branch scope.",
+      primaryAction: "Open Project Links",
+      primaryHref: "#/project-links",
+    };
+  }
+  if (issue.includes("sign in") || issue.includes("credential") || issue.includes("401") || issue.includes("unauthorized")) {
+    return {
+      title: "Azure DevOps sign-in needs attention",
+      description: "Refresh your Microsoft session, then retry the pull request query.",
+      primaryAction: "Try again",
+    };
+  }
+  if (issue.includes("permission") || issue.includes("403") || issue.includes("forbidden")) {
+    return {
+      title: "Azure DevOps access is missing",
+      description: "Confirm that your account can read this repository, then retry the query.",
+      primaryAction: "Try again",
+    };
+  }
+  return {
+    title: "Pull requests unavailable",
+    description: hasProjectLinks
+      ? "MergePilot could not refresh this project’s pull requests. Retry, or check the Project Link setup."
+      : "Create a Project Link with Azure DevOps mapping before reviewing pull requests.",
+    primaryAction: hasProjectLinks ? "Try again" : "Open Project Links",
+    primaryHref: hasProjectLinks ? undefined : "#/project-links",
+  };
 }
 
 function PullRequestInsightSidePanel({
