@@ -1,5 +1,6 @@
 import { ChatShell } from "./chat/layout/ChatShell.js";
 import { useChatPageRuntime } from "./chat/useChatPageRuntime.js";
+import "../styles/chat-workspace.css";
 
 export type { WorkflowEventState } from "./chat/chat.types.js";
 export {
