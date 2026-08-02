@@ -3,7 +3,7 @@ import {
   type PrInsightArtifact,
 } from "../../prInsightArtifacts.js";
 import { PullRequestContextPanel } from "./PullRequestContextPanel.js";
-import { InlineNotice, StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
+import { ActionButton, InlineNotice, StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
 import {
   formatDate,
   insightReadinessTone,
@@ -92,13 +92,6 @@ export function PullRequestCard({
     : "border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent-readable))]"
     : "";
 
-  const buttonClass = `rounded-md border px-3 py-1.5 text-xs font-medium transition disabled:opacity-60 ${
-    isDone ? `${decisionTone} cursor-default`
-    : isError ? "border-[rgb(var(--app-danger))]/35 text-[rgb(var(--app-danger))] hover:bg-[rgb(var(--app-danger)_/_0.10)]"
-    : isRunning ? "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-subtle))] cursor-wait"
-    : "border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent))] text-white hover:brightness-110"
-  }`;
-
   return (
     <article
       className={`border-b border-[rgb(var(--app-border))] px-4 py-4 transition-colors last:border-b-0 ${
@@ -128,13 +121,17 @@ export function PullRequestCard({
         </div>
         <div className={pullRequestActionsClass()}>
           <div className={pullRequestActionRowClass()}>
-            <button
+            <ActionButton
+              type="button"
+              tone="quiet"
               onClick={() => onToggleContext(pr)}
-              className="rounded-md px-2.5 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-control-hover))] hover:text-[rgb(var(--app-text))]"
+              className="min-h-7 px-2.5 py-1"
             >
               {isExpanded ? "Hide details" : contextState?.phase === "loaded" ? "Show details" : "Load details"}
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
+              type="button"
+              tone="quiet"
               onClick={() => {
                 if (hasInsight) {
                   onOpenInsight(pr);
@@ -143,22 +140,27 @@ export function PullRequestCard({
                 onOpenInsight(pr);
                 onPreviewInsight(pr);
               }}
-              disabled={previewState.phase === "loading"}
-              className="rounded-md px-2.5 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-control-hover))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60"
+              loading={previewState.phase === "loading"}
+              className="min-h-7 px-2.5 py-1"
             >
               {previewState.phase === "loading" ? "Generating..." : hasInsight ? "Open insight" : "Generate insight"}
-            </button>
-            <button
-              onClick={() => onQueueForReview(pr)}
-              disabled={isRunning || isDone}
-              className={buttonClass}
-            >
-              {qState.phase === "watching" ? "Preparing..."
-              : qState.phase === "reviewing" ? "Analyzing..."
-              : isDone ? decisionLabel
-              : isError ? "Retry"
-              : "Run review"}
-            </button>
+            </ActionButton>
+            {isDone ? (
+              <StatusBadge className={decisionTone}>{decisionLabel}</StatusBadge>
+            ) : (
+              <ActionButton
+                type="button"
+                tone={isError ? "danger" : "primary"}
+                onClick={() => onQueueForReview(pr)}
+                loading={isRunning}
+                className="min-h-7 px-2.5 py-1"
+              >
+                {qState.phase === "watching" ? "Preparing..."
+                : qState.phase === "reviewing" ? "Analyzing..."
+                : isError ? "Retry"
+                : "Run review"}
+              </ActionButton>
+            )}
             {pr.url && (
               <a
                 href={pr.url}

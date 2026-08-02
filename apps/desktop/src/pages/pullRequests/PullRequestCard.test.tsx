@@ -70,6 +70,7 @@ describe("PullRequestCard", () => {
 
     expect(html).toContain("Open insight");
     expect(html).toContain("Run review");
+    expect(html).toContain("focus-visible:ring-2");
     expect(html).not.toContain("Preview Insight");
     expect(html).toContain("Author:");
     expect(html).toContain("Created:");
@@ -83,6 +84,48 @@ describe("PullRequestCard", () => {
     expect(html).not.toContain("<strong>Ready:");
     expect(html).not.toContain("<li>");
     expect(html).toContain("only documentation changed.");
+  });
+
+  it("presents a completed review as state rather than a disabled action button", () => {
+    const html = renderToStaticMarkup(
+      <PullRequestCard
+        pr={pr}
+        projectLinkId="pl-1"
+        queueState={{
+          phase: "done",
+          result: {
+            ok: true,
+            pullRequestId: pr.id,
+            repository: pr.repository,
+            iterationId: 1,
+            decisionQueue: "auto_approved",
+            decisionRiskLevel: "low",
+            decisionReason: "No blocking findings.",
+            findingCount: 0,
+            readiness: "ready",
+            lastRunAt: "2026-08-02T12:00:00.000Z",
+            autoApprovalActor: "MergePilot",
+            tokensIn: 0,
+            tokensOut: 0,
+            summary: "No blocking findings.",
+          },
+        }}
+        previewState={{ phase: "idle" }}
+        insightArtifacts={[]}
+        contextState={undefined}
+        isExpanded={false}
+        highlighted={false}
+        onToggleContext={() => undefined}
+        onPreviewInsight={() => undefined}
+        onQueueForReview={() => undefined}
+        onOpenInsight={() => undefined}
+        onOpenSavedInsightInChat={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Auto-approved");
+    expect(html).toContain("No blocking findings.");
+    expect(html).not.toContain("disabled=\"\"");
   });
 });
 
