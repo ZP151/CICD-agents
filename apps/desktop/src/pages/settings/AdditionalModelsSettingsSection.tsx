@@ -1,6 +1,10 @@
 import { AdditionalModelEditor } from "./AdditionalModelEditor.js";
-import { ActionButton } from "../../components/workbench/WorkbenchPrimitives.js";
-import { SettingsRow, SettingsSection, ToggleSwitch } from "./SettingsControls.js";
+import {
+  ActionButton,
+  WorkbenchSettingsRow,
+  WorkbenchSettingsSection,
+  WorkbenchToggle,
+} from "../../components/workbench/WorkbenchPrimitives.js";
 import {
   additionalModelDescription,
   additionalModelName,
@@ -44,12 +48,12 @@ export function AdditionalModelsSettingsSection({
   onTestModel: (model: AdditionalModelConfig, source?: "draft" | "saved") => void;
 }): JSX.Element {
   return (
-    <SettingsSection title="Additional Models">
-      <SettingsRow
+    <WorkbenchSettingsSection title="Additional Models">
+      <WorkbenchSettingsRow
         title="Available in Chat"
         description={<AvailableModelsDescription models={availableAdditionalModels} />}
       />
-      <SettingsRow title="Models" description="Optional model choices for Chat.">
+      <WorkbenchSettingsRow title="Models" description="Optional model choices for Chat.">
         <ActionButton
           tone="secondary"
           onClick={onAddModel}
@@ -57,21 +61,21 @@ export function AdditionalModelsSettingsSection({
         >
           Add model
         </ActionButton>
-      </SettingsRow>
+      </WorkbenchSettingsRow>
 
       {additionalModels.length === 0 && editingModelId === null && (
         <p className="settings-message">No additional models configured.</p>
       )}
 
       {additionalModels.map((model) => (
-        <SettingsRow
+        <WorkbenchSettingsRow
           key={model.id}
           title={additionalModelName(model)}
           description={additionalModelDescription(model)}
         >
           <div className="settings-action-stack">
             <div className="settings-action-row">
-              <ToggleSwitch
+              <WorkbenchToggle
                 ariaLabel={`Enable ${additionalModelName(model)}`}
                 checked={model.enabled && model.available}
                 disabled={testingModelId === model.id}
@@ -101,7 +105,7 @@ export function AdditionalModelsSettingsSection({
               <p className="settings-feedback-line text-[rgb(var(--app-danger))]">{model.testError}</p>
             )}
           </div>
-        </SettingsRow>
+        </WorkbenchSettingsRow>
       ))}
 
       {editingModelId !== null && (
@@ -116,7 +120,7 @@ export function AdditionalModelsSettingsSection({
           onTest={onTestModel}
         />
       )}
-    </SettingsSection>
+    </WorkbenchSettingsSection>
   );
 }
 

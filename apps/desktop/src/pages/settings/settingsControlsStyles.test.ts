@@ -17,8 +17,6 @@ describe("settings controls stylesheet", () => {
     expect(css).toContain(".settings-account");
     expect(css).toContain(".settings-account-summary");
     expect(css).toContain(".settings-account-summary-chips");
-    expect(css).toContain(".settings-runtime-summary");
-    expect(css).toContain("repeat(auto-fit, minmax(min(100%, 8rem), 1fr))");
     expect(css).toContain(".settings-advanced-meta");
     expect(css).toContain(".settings-action-stack");
     expect(css).toContain(".settings-action-row");
@@ -32,6 +30,7 @@ describe("settings controls stylesheet", () => {
     expect(css).not.toContain(".settings-segmented");
     expect(css).not.toContain(".settings-input");
     expect(css).not.toContain(".settings-toggle");
+    expect(css).not.toContain(".settings-runtime-summary");
     expect(css).not.toContain("min-width: 12rem;");
   });
 });

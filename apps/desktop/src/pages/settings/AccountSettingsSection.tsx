@@ -1,5 +1,11 @@
 import type { AuthUser, HealthStatus } from "../../api";
-import { SegmentedChoice, SettingsRow, SettingsSection, StatusPill, TextInput } from "./SettingsControls.js";
+import {
+  StatusBadge,
+  WorkbenchSegmentedControl,
+  WorkbenchSettingsRow,
+  WorkbenchSettingsSection,
+} from "../../components/workbench/WorkbenchPrimitives.js";
+import { TextInput } from "./SettingsControls.js";
 import { accountLabel, type AppSettings } from "./settingsTypes.js";
 
 export function AccountSettingsSection({
@@ -22,44 +28,44 @@ export function AccountSettingsSection({
   const azureAuthConfigured = Boolean(settings.azureTenantId.trim() && settings.azureClientId.trim());
 
   return (
-    <SettingsSection title="Account">
+    <WorkbenchSettingsSection title="Account">
       <div className="settings-account-summary" title={accountTitle}>
         <div className="settings-avatar">
           {accountLabel(authUser).slice(0, 1).toUpperCase()}
         </div>
         <div className="settings-account-summary-chips">
-          <StatusPill tone={signedIn ? "success" : "neutral"}>
+          <StatusBadge tone={signedIn ? "success" : "neutral"}>
             {signedIn ? "Signed in" : "Not signed in"}
-          </StatusPill>
-          <StatusPill tone={signedIn ? "success" : "neutral"}>{authMode}</StatusPill>
-          <StatusPill tone={cloudEnabled ? "success" : "neutral"}>
+          </StatusBadge>
+          <StatusBadge tone={signedIn ? "success" : "neutral"}>{authMode}</StatusBadge>
+          <StatusBadge tone={cloudEnabled ? "success" : "neutral"}>
             {cloudEnabled ? "Cloud enabled" : "Local fallback"}
-          </StatusPill>
+          </StatusBadge>
         </div>
       </div>
-      <SettingsRow
+      <WorkbenchSettingsRow
         title="Model secrets"
         description="Choose where the built-in model API key is loaded from."
       >
-        <SegmentedChoice
+        <WorkbenchSegmentedControl
           ariaLabel="Model secret source"
           value={settings.secretSource}
-          onChange={(value) => onSettingChange("secretSource", value)}
+          onValueChange={(value) => onSettingChange("secretSource", value)}
           options={[
             { label: "Key Vault", value: "key_vault" },
             { label: "Local .env", value: "local_env" },
           ]}
         />
-      </SettingsRow>
+      </WorkbenchSettingsRow>
       <details className="settings-advanced">
         <summary>
           <span>Advanced Azure auth</span>
-          <StatusPill tone={azureAuthConfigured ? "success" : "warning"}>
+          <StatusBadge tone={azureAuthConfigured ? "success" : "warning"}>
             {azureAuthConfigured ? "Configured" : "Incomplete"}
-          </StatusPill>
+          </StatusBadge>
         </summary>
         <div className="settings-advanced-list">
-          <SettingsRow
+          <WorkbenchSettingsRow
             title="Azure tenant ID"
             description="Must match the tenant of the MergePilot app registration."
           >
@@ -69,8 +75,8 @@ export function AccountSettingsSection({
               value={settings.azureTenantId}
               onChange={(value) => onSettingChange("azureTenantId", value)}
             />
-          </SettingsRow>
-          <SettingsRow
+          </WorkbenchSettingsRow>
+          <WorkbenchSettingsRow
             title="Azure client ID"
             description="Application client ID for Azure DevOps delegated access."
           >
@@ -81,13 +87,13 @@ export function AccountSettingsSection({
                 value={settings.azureClientId}
                 onChange={(value) => onSettingChange("azureClientId", value)}
               />
-              <StatusPill tone={authUser.azureAuthConfig?.usesDefaultClient ? "warning" : "success"}>
+              <StatusBadge tone={authUser.azureAuthConfig?.usesDefaultClient ? "warning" : "success"}>
                 {authUser.azureAuthConfig?.usesDefaultClient ? "Missing" : "Configured"}
-              </StatusPill>
+              </StatusBadge>
             </div>
-          </SettingsRow>
+          </WorkbenchSettingsRow>
         </div>
       </details>
-    </SettingsSection>
+    </WorkbenchSettingsSection>
   );
 }

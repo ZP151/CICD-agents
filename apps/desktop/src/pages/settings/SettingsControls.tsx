@@ -1,11 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import {
-  StatusBadge,
-  WorkbenchSettingsRow,
-  WorkbenchSettingsSection,
-  WorkbenchSegmentedControl,
   WorkbenchTextInput,
-  WorkbenchToggle,
 } from "../../components/workbench/WorkbenchPrimitives.js";
 
 export function TextInput({
@@ -63,70 +58,4 @@ export function TextInput({
       </div>
     </label>
   );
-}
-
-export function SettingsSection({
-  children,
-  title,
-}: {
-  children: ReactNode;
-  title: string;
-}): JSX.Element {
-  return (
-    <WorkbenchSettingsSection title={title}>{children}</WorkbenchSettingsSection>
-  );
-}
-
-export function SettingsRow({
-  children,
-  description,
-  title,
-}: {
-  children?: ReactNode;
-  description?: ReactNode;
-  title: string;
-}): JSX.Element {
-  return (
-    <WorkbenchSettingsRow title={title} description={description}>{children}</WorkbenchSettingsRow>
-  );
-}
-
-export function SegmentedChoice<T extends string>({
-  ariaLabel,
-  options,
-  value,
-  onChange,
-}: {
-  ariaLabel?: string;
-  options: Array<{ label: string; value: T }>;
-  value: T;
-  onChange: (value: T) => void;
-}): JSX.Element {
-  return (
-    <WorkbenchSegmentedControl ariaLabel={ariaLabel} options={options} value={value} onValueChange={onChange} />
-  );
-}
-
-export function ToggleSwitch({
-  checked,
-  disabled = false,
-  onChange,
-  ariaLabel,
-}: {
-  checked: boolean;
-  disabled?: boolean;
-  onChange: (checked: boolean) => void;
-  ariaLabel?: string;
-}): JSX.Element {
-  return <WorkbenchToggle checked={checked} disabled={disabled} onChange={onChange} ariaLabel={ariaLabel} />;
-}
-
-export function StatusPill({
-  children,
-  tone = "neutral",
-}: {
-  children: ReactNode;
-  tone?: "neutral" | "success" | "warning" | "danger";
-}): JSX.Element {
-  return <StatusBadge tone={tone}>{children}</StatusBadge>;
 }

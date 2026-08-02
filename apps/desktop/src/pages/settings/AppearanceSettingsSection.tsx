@@ -1,5 +1,5 @@
 import type { AppTheme } from "../../theme.js";
-import { SettingsRow, SettingsSection } from "./SettingsControls.js";
+import { WorkbenchSettingsRow, WorkbenchSettingsSection } from "../../components/workbench/WorkbenchPrimitives.js";
 
 const themeOptions: Array<{ value: AppTheme; label: string; description: string }> = [
   { value: "standard", label: "Standard", description: "Blue + violet" },
@@ -15,8 +15,8 @@ export function AppearanceSettingsSection({
   onThemeChange: (theme: AppTheme) => void;
 }): JSX.Element {
   return (
-    <SettingsSection title="Appearance">
-      <SettingsRow
+    <WorkbenchSettingsSection title="Appearance">
+      <WorkbenchSettingsRow
         title="Theme"
         description="Standard keeps blue and soft violet cues; light and dark remove ambient tint."
       >
@@ -44,7 +44,7 @@ export function AppearanceSettingsSection({
             );
           })}
         </div>
-      </SettingsRow>
-    </SettingsSection>
+      </WorkbenchSettingsRow>
+    </WorkbenchSettingsSection>
   );
 }
