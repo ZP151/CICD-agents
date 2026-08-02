@@ -230,68 +230,65 @@ public static class MergePilotIconSurface
         }
     }
 
-    // The supplied 512px artwork remains the canonical application mark. Windows
-    // taskbar slots are only 16–32px, however, where a JPEG-derived outline turns
-    // into a soft one-pixel line after a second shell-scale. Render the same cloud,
-    // dependency path, and checkmark as vector geometry for those tiny payloads.
-    public static Bitmap CreateTaskbarCloud(int size)
+    // Match the supplied cloud's actual 1.25:1 silhouette at taskbar scale.
+    // It is intentionally taller than the previous approximation, whose 1.5:1
+    // geometry made the mark look flattened next to Windows taskbar icons.
+    public static Bitmap CreateCrispCloudMark(int size)
     {
-        var scale = Math.Max(1, size * 4 / 54);
-        var canvasSize = size * scale;
-        var bitmap = new Bitmap(canvasSize, canvasSize, PixelFormat.Format32bppArgb);
-        using (var graphics = Graphics.FromImage(bitmap))
+        const int scale = 4;
+        var sourceSize = size * scale;
+        var source = new Bitmap(sourceSize, sourceSize, PixelFormat.Format32bppArgb);
+        using (var graphics = Graphics.FromImage(source))
         {
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
             graphics.CompositingQuality = CompositingQuality.HighQuality;
             graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            graphics.ScaleTransform(canvasSize / 54f, canvasSize / 54f);
-
-            using (var blue = new LinearGradientBrush(new RectangleF(0, 0, 54, 54), Color.FromArgb(92, 173, 255), Color.FromArgb(31, 119, 230), LinearGradientMode.Vertical))
-            using (var outline = new Pen(blue, 2.5f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
-            using (var connection = new Pen(blue, 2.35f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
+            graphics.ScaleTransform(sourceSize / 54f, sourceSize / 54f);
+            using (var blue = new LinearGradientBrush(new RectangleF(0, 0, 54, 54), Color.FromArgb(86, 172, 255), Color.FromArgb(33, 125, 238), LinearGradientMode.Vertical))
+            using (var outline = new Pen(blue, 2.55f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
+            using (var connection = new Pen(blue, 2.28f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
             using (var white = new SolidBrush(Color.White))
             using (var cloud = new GraphicsPath())
             {
-                cloud.AddBezier(8, 43, 4, 43, 2, 39, 2, 34);
-                cloud.AddBezier(2, 34, 2, 28, 6, 24, 12, 24);
-                cloud.AddBezier(12, 24, 13, 17, 18, 13, 24, 13);
-                cloud.AddBezier(24, 13, 31, 13, 36, 18, 37, 25);
-                cloud.AddBezier(37, 25, 42, 24, 46, 27, 46, 31);
-                cloud.AddBezier(46, 31, 50, 32, 52, 35, 52, 39);
-                cloud.AddBezier(52, 39, 52, 43, 48, 46, 43, 46);
-                cloud.AddLine(10, 46, 43, 46);
+                cloud.AddBezier(9, 46, 4, 46, 2, 42, 2, 36);
+                cloud.AddBezier(2, 36, 2, 28, 6, 23, 12.5f, 23);
+                cloud.AddBezier(12.5f, 23, 14, 13, 19.5f, 7, 26, 7);
+                cloud.AddBezier(26, 7, 33, 7, 37.5f, 13.5f, 38.5f, 24);
+                cloud.AddBezier(38.5f, 24, 43.5f, 23, 47.5f, 27, 47.5f, 32);
+                cloud.AddBezier(47.5f, 32, 51, 33, 52, 37, 52, 40.5f);
+                cloud.AddBezier(52, 40.5f, 52, 44.5f, 48, 47, 43, 47);
+                cloud.AddLine(10, 47, 43, 47);
                 cloud.CloseFigure();
                 graphics.FillPath(white, cloud);
                 graphics.DrawPath(outline, cloud);
 
-                graphics.DrawEllipse(outline, 15, 24, 6.5f, 6.5f);
-                graphics.DrawEllipse(outline, 14, 36, 6.5f, 6.5f);
+                graphics.DrawEllipse(outline, 15.5f, 24.2f, 6.5f, 6.5f);
+                graphics.DrawEllipse(outline, 14.5f, 36.6f, 6.5f, 6.5f);
                 using (var path = new GraphicsPath())
                 {
-                    path.AddBezier(21, 27.25f, 25, 28, 25, 33.25f, 30.5f, 34.5f);
-                    path.AddBezier(20.5f, 39.25f, 25.5f, 39.25f, 26.5f, 35.5f, 30.5f, 34.5f);
+                    path.AddBezier(21.5f, 27.45f, 25.5f, 28.25f, 25.5f, 33.35f, 30.6f, 34.7f);
+                    path.AddBezier(21, 39.9f, 25.7f, 39.9f, 26.8f, 35.7f, 30.6f, 34.7f);
                     graphics.DrawPath(connection, path);
                 }
 
-                graphics.FillEllipse(blue, 31, 29, 13, 13);
+                graphics.FillEllipse(blue, 31.2f, 29.6f, 13.2f, 13.2f);
                 using (var check = new Pen(Color.White, 2.25f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
                 {
-                    graphics.DrawLines(check, new[] { new PointF(34, 35.3f), new PointF(36.8f, 38), new PointF(41.1f, 32.8f) });
+                    graphics.DrawLines(check, new[] { new PointF(34.2f, 36), new PointF(37, 38.7f), new PointF(41.4f, 33.3f) });
                 }
             }
         }
 
-        if (scale == 1) return bitmap;
-        var reduced = new Bitmap(size, size, PixelFormat.Format32bppArgb);
-        using (var graphics = Graphics.FromImage(reduced))
+        var target = new Bitmap(size, size, PixelFormat.Format32bppArgb);
+        using (var graphics = Graphics.FromImage(target))
         {
             graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
             graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
             graphics.CompositingQuality = CompositingQuality.HighQuality;
-            graphics.DrawImage(bitmap, 0, 0, size, size);
+            graphics.DrawImage(source, 0, 0, size, size);
         }
-        bitmap.Dispose();
-        return reduced;
+        source.Dispose();
+        return target;
     }
 }
 '@
@@ -326,20 +323,22 @@ foreach ($relativePath in $iconPaths) {
     $sourceSize = if ($relativePath -eq "src\\assets\\mergepilot-icon.png") { 512 } else { 0 }
     [MergePilotIconSurface]::ReplaceWithSource($SourceImage, $path, $sourceSize, $sourceSize)
   }
+  # Preserve the supplied cloud silhouette at every scale. A hand-drawn small
+  # approximation with the wrong aspect ratio flattened the recognisable mark.
+  # The dedicated renderer below uses the original source proportions instead.
   if ($relativePath -eq "src-tauri\\icons\\32x32.png") {
-    $taskbarBitmap = [MergePilotIconSurface]::CreateTaskbarCloud(32)
+    $taskbarBitmap = [MergePilotIconSurface]::CreateCrispCloudMark(32)
     try { $taskbarBitmap.Save($path, [System.Drawing.Imaging.ImageFormat]::Png) } finally { $taskbarBitmap.Dispose() }
     continue
   }
-  $strengthenForTaskbar = $relativePath -eq "src-tauri\\icons\\32x32.png"
-  [MergePilotIconSurface]::RemoveOuterSurface($path, $strengthenForTaskbar)
+  [MergePilotIconSurface]::RemoveOuterSurface($path, $false)
 }
 
 function Get-PngPayload([string] $sourcePath, [int] $size) {
   $source = [System.Drawing.Bitmap]::FromFile($sourcePath)
   try {
     $bitmap = if ($size -le 32) {
-      [MergePilotIconSurface]::CreateTaskbarCloud($size)
+      [MergePilotIconSurface]::CreateCrispCloudMark($size)
     } else {
       New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
     }
@@ -349,6 +348,8 @@ function Get-PngPayload([string] $sourcePath, [int] $size) {
         try {
           $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
           $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+          $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+          $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
           $graphics.DrawImage($source, 0, 0, $size, $size)
         } finally {
           $graphics.Dispose()

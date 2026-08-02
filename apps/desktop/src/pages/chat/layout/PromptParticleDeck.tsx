@@ -22,19 +22,19 @@ const PARTICLES = [
 ] as const;
 
 const DECK_POSITIONS = {
-  "-2": { x: -356, y: 16, rotateY: 32, rotateZ: 0, scale: 0.72, opacity: 0.62, zIndex: 1 },
-  "-1": { x: -184, y: 4, rotateY: 18, rotateZ: 0, scale: 0.88, opacity: 0.88, zIndex: 2 },
-  "0": { x: 0, y: -8, rotateY: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 3 },
-  "1": { x: 184, y: 4, rotateY: -18, rotateZ: 0, scale: 0.88, opacity: 0.88, zIndex: 2 },
-  "2": { x: 356, y: 16, rotateY: -32, rotateZ: 0, scale: 0.72, opacity: 0.62, zIndex: 1 },
+  "-2": { x: -356, y: 16, z: -62, rotateY: 32, rotateZ: 0, scale: 0.72, opacity: 0.62, zIndex: 1 },
+  "-1": { x: -184, y: 4, z: -26, rotateY: 18, rotateZ: 0, scale: 0.88, opacity: 0.88, zIndex: 2 },
+  "0": { x: 0, y: -8, z: 18, rotateY: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 3 },
+  "1": { x: 184, y: 4, z: -26, rotateY: -18, rotateZ: 0, scale: 0.88, opacity: 0.88, zIndex: 2 },
+  "2": { x: 356, y: 16, z: -62, rotateY: -32, rotateZ: 0, scale: 0.72, opacity: 0.62, zIndex: 1 },
 } as const;
 
 const COMPACT_DECK_POSITIONS = {
-  "-2": { x: -258, y: 14, rotateY: 30, rotateZ: 0, scale: 0.68, opacity: 0.54, zIndex: 1 },
-  "-1": { x: -136, y: 4, rotateY: 16, rotateZ: 0, scale: 0.84, opacity: 0.82, zIndex: 2 },
-  "0": { x: 0, y: -8, rotateY: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 3 },
-  "1": { x: 136, y: 4, rotateY: -16, rotateZ: 0, scale: 0.84, opacity: 0.82, zIndex: 2 },
-  "2": { x: 258, y: 14, rotateY: -30, rotateZ: 0, scale: 0.68, opacity: 0.54, zIndex: 1 },
+  "-2": { x: -258, y: 14, z: -48, rotateY: 30, rotateZ: 0, scale: 0.68, opacity: 0.54, zIndex: 1 },
+  "-1": { x: -136, y: 4, z: -20, rotateY: 16, rotateZ: 0, scale: 0.84, opacity: 0.82, zIndex: 2 },
+  "0": { x: 0, y: -8, z: 14, rotateY: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 3 },
+  "1": { x: 136, y: 4, z: -20, rotateY: -16, rotateZ: 0, scale: 0.84, opacity: 0.82, zIndex: 2 },
+  "2": { x: 258, y: 14, z: -48, rotateY: -30, rotateZ: 0, scale: 0.68, opacity: 0.54, zIndex: 1 },
 } as const;
 
 const DRAG_VISUAL_LIMIT = 172;
@@ -117,6 +117,7 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
   const reducedMotion = useReducedMotion() ?? false;
   const activeSuggestion = suggestions[activeIndex];
   const autoPlaying = !disabled && !hovering && !dragging && !reducedMotion && suggestions.length > 1;
+  const particlesFlowing = !reducedMotion && (hovering || autoPlaying);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 1150px)");
@@ -240,7 +241,7 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
 
   return (
     <div
-      className={`prompt-particle-deck${hovering ? " is-exploring" : ""}`}
+      className={`prompt-particle-deck${hovering ? " is-exploring" : ""}${autoPlaying ? " is-autoplaying" : ""}`}
       role="region"
       tabIndex={0}
       aria-label="Suggested prompt drafts"
@@ -265,10 +266,10 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
               className="prompt-particle-deck__particle"
               style={{ left, top, width: size, height: size }}
               initial={false}
-              animate={hovering && !reducedMotion
+              animate={particlesFlowing
                 ? { x: [0, driftX, 0], y: [0, driftY, 0], opacity: [0.3, 0.82, 0.38], scale: [0.8, 1.18, 0.84] }
                 : { x: 0, y: 0, opacity: 0.2, scale: 1 }}
-              transition={{ duration: 1.35 + index * 0.08, ease: [0.22, 1, 0.36, 1], repeat: hovering && !reducedMotion ? Infinity : 0 }}
+              transition={{ duration: 1.35 + index * 0.08, ease: [0.22, 1, 0.36, 1], repeat: particlesFlowing ? Infinity : 0 }}
             />
           ))}
         </div>
