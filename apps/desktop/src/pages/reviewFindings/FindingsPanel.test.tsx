@@ -122,4 +122,19 @@ describe("FindingsPanel", () => {
     expect(html).toContain("No findings stored");
     expect(html).toContain("Run a new review from the Pull Requests page to capture findings.");
   });
+
+  it("labels a historical count as a summary when detailed records are unavailable", () => {
+    const html = renderToStaticMarkup(
+      <FindingsPanel
+        item={queueItem({ findingCount: 9 })}
+        findings={[]}
+        onClose={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Review summary (9)");
+    expect(html).toContain("Detailed findings are unavailable");
+    expect(html).toContain("9 findings were recorded in the review summary.");
+    expect(html).not.toContain("Review Findings (0)");
+  });
 });

@@ -18,20 +18,25 @@ export interface FindingsPanelProps {
 
 export function FindingsPanel({ item, findings, onClose }: FindingsPanelProps): JSX.Element {
   const audit = buildReviewAuditViewModel(item);
+  const detailsUnavailable = findings.length === 0 && item.findingCount > 0;
   return (
     <WorkbenchSidePanel
       open
       onOpenChange={(open) => { if (!open) onClose(); }}
-      title={`Review Findings (${findings.length})`}
+      title={detailsUnavailable ? `Review summary (${item.findingCount})` : `Review Findings (${findings.length})`}
       description={`#${item.pullRequestId} · ${item.decisionReason}`}
     >
       {audit.hasAudit && <DispositionAuditSection audit={audit} />}
       {findings.length === 0 ? (
         <div className="flex h-full items-center justify-center">
           <div className="text-center">
-            <p className="text-sm font-medium text-[rgb(var(--app-text))]">No findings stored</p>
+            <p className="text-sm font-medium text-[rgb(var(--app-text))]">
+              {detailsUnavailable ? "Detailed findings are unavailable" : "No findings stored"}
+            </p>
             <p className="mt-1 text-xs text-[rgb(var(--app-text-muted))]">
-              Run a new review from the Pull Requests page to capture findings.
+              {detailsUnavailable
+                ? `${item.findingCount} finding${item.findingCount === 1 ? " was" : "s were"} recorded in the review summary. Run a new review from Pull Requests to restore the details.`
+                : "Run a new review from the Pull Requests page to capture findings."}
             </p>
           </div>
         </div>
