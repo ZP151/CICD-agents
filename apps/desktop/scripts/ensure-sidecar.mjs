@@ -7,13 +7,37 @@
  *   node scripts/ensure-sidecar.mjs
  */
 import { spawnSync, execSync } from "child_process";
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, statSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = resolve(__dirname, "..");
 const binariesDir = resolve(desktopRoot, "src-tauri/binaries");
+const repoRoot = resolve(desktopRoot, "../..");
+
+function newestMtime(path) {
+  const stat = statSync(path);
+  if (!stat.isDirectory()) return stat.mtimeMs;
+  return readdirSync(path).reduce(
+    (latest, entry) => Math.max(latest, newestMtime(resolve(path, entry))),
+    stat.mtimeMs,
+  );
+}
+
+function sidecarInputsChanged(sidecarPath) {
+  if (!existsSync(sidecarPath)) return true;
+  if (process.env.MERGEPILOT_FORCE_SIDECAR_REBUILD === "1") return true;
+
+  const sidecarMtime = statSync(sidecarPath).mtimeMs;
+  const inputPaths = [
+    resolve(repoRoot, "packages/core/src"),
+    resolve(repoRoot, "packages/core/package.json"),
+    resolve(repoRoot, "packages/daemon/src"),
+    resolve(repoRoot, "packages/daemon/package.json"),
+  ];
+  return inputPaths.some((inputPath) => newestMtime(inputPath) > sidecarMtime);
+}
 
 // ── Resolve Rust target triple (same logic as build-sidecar.mjs) ─────────────
 function getRustTargetTriple() {
@@ -30,14 +54,14 @@ const triple = getRustTargetTriple();
 const ext = process.platform === "win32" ? ".exe" : "";
 const sidecarPath = resolve(binariesDir, `mergepilot-daemon-${triple}${ext}`);
 
-if (existsSync(sidecarPath)) {
+if (!sidecarInputsChanged(sidecarPath)) {
   console.log(`[ensure-sidecar] Binary already exists: ${sidecarPath}`);
-  console.log("[ensure-sidecar] Skipping build — delete the binary to force a rebuild.");
+  console.log("[ensure-sidecar] Source inputs are unchanged; skipping build.");
   process.exit(0);
 }
 
-console.log(`[ensure-sidecar] Sidecar not found at: ${sidecarPath}`);
-console.log("[ensure-sidecar] Running full build-sidecar pipeline (one-time cost)...\n");
+console.log(`[ensure-sidecar] Sidecar is missing or stale: ${sidecarPath}`);
+console.log("[ensure-sidecar] Running build-sidecar so the dev runtime matches source...\n");
 
 mkdirSync(binariesDir, { recursive: true });
 

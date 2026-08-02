@@ -8,6 +8,7 @@ import {
 import type { ReviewActivityItem } from "./activityTypes.js";
 import { operationDetailPreview } from "./operationDetailSummary.js";
 import { ProjectLinkFilter } from "./ProjectLinkFilter.js";
+import { WorkbenchListItemButton, WorkbenchSelect } from "../../components/workbench/WorkbenchPrimitives.js";
 
 interface ReviewActivitySectionProps {
   projectLinks: ProjectLink[];
@@ -49,8 +50,8 @@ export function ReviewActivitySection({
           onChange={onReviewProjectLinkFilterChange}
           label="Filter review activity by Project Link"
         />
-        <select
-          className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))] outline-none focus:border-[rgb(var(--app-accent))]"
+        <WorkbenchSelect
+          className="min-h-8 px-2 py-1 text-xs text-[rgb(var(--app-text-muted))]"
           value={reviewKindFilter}
           onChange={(e) =>
             onReviewKindFilterChange(e.target.value as ReviewOperationEvent["kind"] | "all")
@@ -65,7 +66,7 @@ export function ReviewActivitySection({
           <option value="ado_retry">ADO retry</option>
           <option value="insight_preview">Insight preview</option>
           <option value="review_run">Review run</option>
-        </select>
+        </WorkbenchSelect>
       </div>
       <div className="space-y-1.5">
         {!reviewLoading && reviewActivity.length === 0 && (
@@ -76,14 +77,10 @@ export function ReviewActivitySection({
         {reviewActivity.slice(0, 12).map((event) => {
           const detailSummary = operationDetailPreview(event.details) ?? event.details;
           return (
-            <button
+            <WorkbenchListItemButton
               key={`${event.projectLinkId}-${event.id}`}
               onClick={() => onSelectReview(event.id)}
-              className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
-                event.id === selectedReviewId
-                  ? "border-[rgb(var(--app-accent))]/50 bg-[rgb(var(--app-accent-soft))]"
-                  : "border-transparent hover:border-[rgb(var(--app-border))] hover:bg-[rgb(var(--app-surface-raised))]"
-              }`}
+              selected={event.id === selectedReviewId}
             >
               <div className="mb-1 flex items-center gap-2">
                 <span
@@ -105,7 +102,7 @@ export function ReviewActivitySection({
                 {event.projectLinkName}
                 {detailSummary ? ` · ${detailSummary}` : ""}
               </p>
-            </button>
+            </WorkbenchListItemButton>
           );
         })}
       </div>

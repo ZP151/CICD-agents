@@ -51,7 +51,7 @@ public static class MergePilotIconSurface
         return maximum >= 60 && maximum - minimum <= 40;
     }
 
-    public static void RemoveOuterSurface(string path, bool strengthenBlueContour)
+    public static void RemoveOuterSurface(string path)
     {
         Bitmap bitmap;
         using (var source = new Bitmap(path))
@@ -120,11 +120,6 @@ public static class MergePilotIconSurface
                 bitmap.UnlockBits(data);
             }
 
-            if (strengthenBlueContour)
-            {
-                StrengthenBlueContour(bitmap);
-            }
-
             var temporaryPath = path + ".mergepilot-icon-tmp";
             bitmap.Save(temporaryPath, ImageFormat.Png);
             File.Copy(temporaryPath, path, true);
@@ -151,11 +146,11 @@ public static class MergePilotIconSurface
         using (var target = new Bitmap(outputWidth, outputHeight, PixelFormat.Format32bppArgb))
         using (var graphics = Graphics.FromImage(target))
         {
-            // The cloud needs enough visual mass at 16–32px to hold up in the
-            // Windows title bar and taskbar. This only crops transparent outer
-            // canvas; the original blue outline and white cloud interior stay
-            // untouched.
-            const double contentScale = 1.12;
+            // Keep every platform asset on the original transparent canvas.
+            // An earlier size-dependent scale changed the cloud's visual
+            // identity at taskbar size. A smaller frame may only be a direct
+            // rasterization of this master, never a cropped or redrawn mark.
+            const double contentScale = 1.00;
             var renderWidth = (int)Math.Ceiling(outputWidth * contentScale);
             var renderHeight = (int)Math.Ceiling(outputHeight * contentScale);
             var offsetX = (outputWidth - renderWidth) / 2;
@@ -173,60 +168,62 @@ public static class MergePilotIconSurface
         }
     }
 
-    // Windows renders taskbar icons from 16–32px ICO payloads. At that size the
-    // cloud's white interior blends into a light taskbar. Keep the supplied mark,
-    // but make its blue pixels opaque/saturated and add one crisp cue into only
-    // transparent neighbours. This prevents a second soft scaling pass from
-    // turning the contour into a blurred pale line.
-    public static void StrengthenBlueContour(Bitmap bitmap)
+    public static void RenderTaskbarFrame(string sourcePath, string targetPath, int outputSize)
     {
-        // The maximum is four additions per source pixel. Use primitive arrays
-        // so this helper remains compatible with the script's explicit runtime
-        // references in Windows PowerShell.
-        var additionPositions = new int[bitmap.Width * bitmap.Height * 4];
-        var additionColors = new int[additionPositions.Length];
-        var additionCount = 0;
-        var directions = new int[,] { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } };
-
-        for (var y = 0; y < bitmap.Height; y++)
+        // Taskbar and notification-area icons are viewed at physical pixel
+        // sizes as low as 16px. Render every frame directly from the retained
+        // 1254px source. The cloud contour, internal nodes, whitespace, and
+        // check medallion stay identical to the approved main artwork.
+        using (var source = new Bitmap(sourcePath))
+        using (var target = new Bitmap(outputSize, outputSize, PixelFormat.Format32bppArgb))
+        using (var graphics = Graphics.FromImage(target))
         {
-            for (var x = 0; x < bitmap.Width; x++)
-            {
-                var pixel = bitmap.GetPixel(x, y);
-                var isBlueContour = pixel.A > 90 && pixel.B > pixel.R + 35 && pixel.B >= pixel.G - 8;
-                if (!isBlueContour) continue;
+            // Keep the original transparent canvas and every proportion intact.
+            // A size-dependent fill scale subtly changed the approved icon's
+            // whitespace at 16–64px, which made those frames look like a
+            // different mark. Pixel refinement must not become redesign.
+            var renderSize = outputSize;
+            var offset = 0;
 
-                pixel = Color.FromArgb(
-                    255,
-                    Math.Max(0, (int)Math.Round(pixel.R * 0.88)),
-                    Math.Max(0, (int)Math.Round(pixel.G * 0.91)),
-                    Math.Min(255, (int)Math.Round(pixel.B * 1.02)));
-                bitmap.SetPixel(x, y, pixel);
+            graphics.Clear(Color.Transparent);
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            graphics.CompositingQuality = CompositingQuality.HighQuality;
+            // Match the approved native frame rasterization exactly. This is
+            // anti-aliasing of the retained source edge, not a new blur pass.
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.DrawImage(source, new Rectangle(offset, offset, renderSize, renderSize));
 
-                for (var direction = 0; direction < 4; direction++)
-                {
-                    var nextX = x + directions[direction, 0];
-                    var nextY = y + directions[direction, 1];
-                    if (nextX < 0 || nextX >= bitmap.Width || nextY < 0 || nextY >= bitmap.Height) continue;
-
-                    if (bitmap.GetPixel(nextX, nextY).A < 80)
-                    {
-                        additionPositions[additionCount] = nextY * bitmap.Width + nextX;
-                        additionColors[additionCount] = Color.FromArgb(255, pixel.R, pixel.G, pixel.B).ToArgb();
-                        additionCount++;
-                    }
-                }
-            }
+            var temporaryPath = targetPath + ".mergepilot-taskbar-tmp";
+            target.Save(temporaryPath, ImageFormat.Png);
+            File.Copy(temporaryPath, targetPath, true);
+            File.Delete(temporaryPath);
         }
+    }
 
-        for (var addition = 0; addition < additionCount; addition++)
+    public static void RenderApprovedSmallTaskbarFrame(string approved32Path, string targetPath, int outputSize)
+    {
+        // The supplied 32px cloud is the approved native taskbar identity.
+        // Windows commonly asks the EXE for 16–30px payloads, so those frames
+        // must be a faithful reduction of that exact mark—not a second
+        // rasterisation of a different source with subtly different edge
+        // coverage or visual bounds. This only reduces pixels; it never crops,
+        // sharpens, redraws, or enlarges the cloud.
+        using (var source = new Bitmap(approved32Path))
+        using (var target = new Bitmap(outputSize, outputSize, PixelFormat.Format32bppArgb))
+        using (var graphics = Graphics.FromImage(target))
         {
-            var x = additionPositions[addition] % bitmap.Width;
-            var y = additionPositions[addition] / bitmap.Width;
-            if (bitmap.GetPixel(x, y).A < 80)
-            {
-                bitmap.SetPixel(x, y, Color.FromArgb(additionColors[addition]));
-            }
+            graphics.Clear(Color.Transparent);
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.PixelOffsetMode = PixelOffsetMode.Half;
+            graphics.CompositingQuality = CompositingQuality.HighQuality;
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.DrawImage(source, new Rectangle(0, 0, outputSize, outputSize));
+
+            var temporaryPath = targetPath + ".mergepilot-approved-taskbar-tmp";
+            target.Save(temporaryPath, ImageFormat.Png);
+            File.Copy(temporaryPath, targetPath, true);
+            File.Delete(temporaryPath);
         }
     }
 
@@ -235,10 +232,39 @@ public static class MergePilotIconSurface
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\\..")
 $desktopRoot = Join-Path $repoRoot "apps\\desktop"
+$approvedArtworkPath = Join-Path $desktopRoot "src\\assets\\mergepilot-icon-reference.png"
+$masterSourcePath = Join-Path $desktopRoot "src\\assets\\mergepilot-icon-source.png"
+$approvedTaskbar32Path = Join-Path $desktopRoot "src\\assets\\mergepilot-taskbar-32.png"
+
+if ($SourceImage) {
+  if (-not (Test-Path -LiteralPath $SourceImage)) {
+    throw "Source image does not exist: $SourceImage"
+  }
+
+  # Keep the supplied artwork byte-for-byte as the approved reference. The
+  # reference includes a checkerboard presentation surface, so Windows cannot
+  # consume it directly; it is intentionally separate from the transparent
+  # master below. This prevents a later refresh from silently treating an
+  # already-processed 16px/512px derivative as the new source of truth.
+  [System.IO.File]::Copy($SourceImage, $approvedArtworkPath, $true)
+
+  # Every runtime asset is rendered from a full-resolution transparent master,
+  # never from a previously resized PNG. This preserves the supplied cloud
+  # geometry while removing only the outer presentation surface.
+  [System.IO.File]::Copy($approvedArtworkPath, $masterSourcePath, $true)
+  [MergePilotIconSurface]::RemoveOuterSurface($masterSourcePath)
+}
+
+# Even when the caller supplied a new reference image, generate the platform
+# variants from the transparent master, not from the opaque presentation copy.
+# This makes reruns deterministic and prevents checkerboard pixels becoming
+# anti-aliased edge colour in the 16–32px taskbar frames.
+$runtimeSourcePath = if (Test-Path -LiteralPath $masterSourcePath) { $masterSourcePath } else { $SourceImage }
 
 $iconPaths = @(
   "src\\assets\\mergepilot-icon.png",
   "src-tauri\\icons\\32x32.png",
+  "src-tauri\\icons\\48x48.png",
   "src-tauri\\icons\\128x128.png",
   "src-tauri\\icons\\128x128@2x.png",
   "src-tauri\\icons\\icon.png",
@@ -253,48 +279,53 @@ $iconPaths = @(
 
 foreach ($relativePath in $iconPaths) {
   $path = Join-Path $desktopRoot $relativePath
-  if ($SourceImage) {
-    if (-not (Test-Path -LiteralPath $SourceImage)) {
-      throw "Source image does not exist: $SourceImage"
-    }
+  if ($runtimeSourcePath) {
     # The React shell renders this source at multiple Windows scale factors.
     # Keep a 512px web source rather than letting the title bar fall back to a
     # 256px raster while the native ICO selects its high-density payload.
-    $sourceSize = if ($relativePath -eq "src\\assets\\mergepilot-icon.png") { 512 } else { 0 }
-    [MergePilotIconSurface]::ReplaceWithSource($SourceImage, $path, $sourceSize, $sourceSize)
+    $sourceSize = switch ($relativePath) {
+      "src\\assets\\mergepilot-icon.png" { 512 }
+      "src-tauri\\icons\\48x48.png" { 48 }
+      default { 0 }
+    }
+    [MergePilotIconSurface]::ReplaceWithSource($runtimeSourcePath, $path, $sourceSize, $sourceSize)
   }
-  [MergePilotIconSurface]::RemoveOuterSurface($path, $false)
+  # The transparent master is the only geometry source. Do not widen or redraw
+  # its blue contour at taskbar size: doing so changes the approved mark and
+  # introduces blur in the smallest Windows frames. Only remove any outer
+  # presentation pixels that remain connected to the canvas edge.
+  [MergePilotIconSurface]::RemoveOuterSurface($path)
 }
 
-function Get-PngPayload([string] $sourcePath, [int] $size) {
-  $source = [System.Drawing.Bitmap]::FromFile($sourcePath)
-  try {
-    $bitmap = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    try {
-      $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-      try {
-        $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-        $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-        $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
-        $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
-        $graphics.DrawImage($source, 0, 0, $size, $size)
-      } finally {
-        $graphics.Dispose()
-      }
-      $stream = New-Object System.IO.MemoryStream
-      try {
-        $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
-        Write-Output -NoEnumerate $stream.ToArray()
-      } finally {
-        $stream.Dispose()
-      }
-    } finally {
-      $bitmap.Dispose()
+# Build a source-controlled native frame set. The approved 32px cloud is the
+# canonical small Windows mark, so its smaller peers are direct reductions of
+# it. Larger entries are independently rasterised from the full-resolution
+# transparent master. Nothing is ever enlarged from a small PNG, and no frame
+# receives a geometry-specific redraw. These files cover the common Windows
+# taskbar requests at 100%, 125%, 150%, 175%, and 200% scaling.
+$taskbarSizes = [int[]](16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 96, 128, 256)
+$approvedSmallTaskbarSizes = [int[]](16, 20, 24, 30, 32)
+$taskbarDirectory = Join-Path $desktopRoot "src-tauri\icons\taskbar"
+New-Item -ItemType Directory -Force -Path $taskbarDirectory | Out-Null
+foreach ($taskbarSize in $taskbarSizes) {
+  $taskbarPath = Join-Path $taskbarDirectory "${taskbarSize}x${taskbarSize}.png"
+  if ($approvedSmallTaskbarSizes -contains $taskbarSize -and (Test-Path -LiteralPath $approvedTaskbar32Path)) {
+    if ($taskbarSize -eq 32) {
+      # Keep the visually-approved native 32px taskbar frame byte-for-byte
+      # stable. It is the reference for the small frames Windows selects.
+      [System.IO.File]::Copy($approvedTaskbar32Path, $taskbarPath, $true)
+    } else {
+      [MergePilotIconSurface]::RenderApprovedSmallTaskbarFrame($approvedTaskbar32Path, $taskbarPath, $taskbarSize)
     }
-  } finally {
-    $source.Dispose()
+  } else {
+    [MergePilotIconSurface]::RenderTaskbarFrame($runtimeSourcePath, $taskbarPath, $taskbarSize)
   }
 }
+
+# The notification-area API accepts a bitmap rather than an ICO. Point it at
+# the dedicated 32px frame so it never has to downscale a large web raster.
+[System.IO.File]::Copy((Join-Path $taskbarDirectory "32x32.png"), (Join-Path $desktopRoot "src-tauri\icons\32x32.png"), $true)
+[System.IO.File]::Copy((Join-Path $taskbarDirectory "48x48.png"), (Join-Path $desktopRoot "src-tauri\icons\48x48.png"), $true)
 
 function Write-Ico([string] $targetPath, [byte[][]] $payloads, [int[]] $sizes) {
   $stream = [System.IO.File]::Open($targetPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
@@ -326,11 +357,17 @@ function Write-Ico([string] $targetPath, [byte[][]] $payloads, [int[]] $sizes) {
   }
 }
 
-$icoSizes = [int[]](16, 20, 24, 32, 48, 64, 128, 256)
-$iconSource = Join-Path $desktopRoot "src-tauri\\icons\\icon.png"
+# Windows chooses the closest payload for the taskbar at the active display
+# scale. 40px and 96px are common 125% / high-DPI requests; without them the
+# shell can enlarge a 32px or 64px frame and soften the approved cloud mark.
+$icoSizes = $taskbarSizes
+# Render every ICO payload from the retained full-resolution master, rather
+# than from icon.png after it has already been resized. This is especially
+# important for the small taskbar frames where a second resize softens the
+# blue contour and makes the cloud appear blurry.
 [System.Collections.Generic.List[byte[]]]$icoPayloadList = [System.Collections.Generic.List[byte[]]]::new()
 foreach ($icoSize in $icoSizes) {
-  $icoPayloadList.Add((Get-PngPayload $iconSource $icoSize))
+  $icoPayloadList.Add([System.IO.File]::ReadAllBytes((Join-Path $taskbarDirectory "${icoSize}x${icoSize}.png")))
 }
 [byte[][]]$icoPayloads = $icoPayloadList.ToArray()
 Write-Ico (Join-Path $desktopRoot "src-tauri\\icons\\icon.ico") $icoPayloads $icoSizes

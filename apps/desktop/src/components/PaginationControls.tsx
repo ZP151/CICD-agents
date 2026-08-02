@@ -62,7 +62,7 @@ export function PaginationControls({
   const end = Math.min(start + visibleItems - 1, totalItems);
 
   return (
-    <div className="mt-auto flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2">
+    <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-[rgb(var(--app-border))] pt-3">
       <p className="text-xs text-[rgb(var(--app-text-muted))]">
         Showing <span className="text-[rgb(var(--app-text))]">{start}-{end}</span> of{" "}
         <span className="text-[rgb(var(--app-text))]">{totalItems}</span> {itemLabel}
@@ -72,47 +72,49 @@ export function PaginationControls({
         {showPageSize && (
         <label className="inline-flex items-center gap-1.5 text-xs text-[rgb(var(--app-text-subtle))]">
           Page size
-          <select
+          <WorkbenchSelect
             value={displayedPageSize}
             onChange={(event) => onPageSizeChange(Number(event.target.value))}
-            className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))] outline-none transition focus:border-[rgb(var(--app-border-strong))]"
+            className="min-h-7 w-auto px-2 py-1 text-xs text-[rgb(var(--app-text-muted))]"
             aria-label={`${itemLabel} page size`}
           >
             {normalizedOptions.map((option) => (
               <option key={option} value={option}>{option === totalItems ? "All" : option}</option>
             ))}
-          </select>
+          </WorkbenchSelect>
         </label>
         )}
         {showPageStepper && (
         <div className="inline-flex items-center gap-1">
-          <button
+          <ActionButton
             type="button"
             disabled={currentPage <= 1}
             onClick={() => onPageChange(currentPage - 1)}
             title={`Previous ${itemLabel} page`}
             aria-label={`Previous ${itemLabel} page`}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-40"
+            tone="quiet"
+            className="h-7 min-h-7 w-7 px-0"
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 6l-6 6 6 6" />
             </svg>
-          </button>
+          </ActionButton>
           <span className="min-w-16 text-center text-xs text-[rgb(var(--app-text-subtle))]">
             {currentPage} / {pageCount}
           </span>
-          <button
+          <ActionButton
             type="button"
             disabled={currentPage >= pageCount}
             onClick={() => onPageChange(currentPage + 1)}
             title={`Next ${itemLabel} page`}
             aria-label={`Next ${itemLabel} page`}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-40"
+            tone="quiet"
+            className="h-7 min-h-7 w-7 px-0"
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 6l6 6-6 6" />
             </svg>
-          </button>
+          </ActionButton>
         </div>
         )}
       </div>
@@ -120,3 +122,4 @@ export function PaginationControls({
     </div>
   );
 }
+import { ActionButton, WorkbenchSelect } from "./workbench/WorkbenchPrimitives.js";

@@ -1,7 +1,12 @@
-import { useState } from "react";
 import type { ReviewQueueItem } from "../../api.js";
-import { buildReviewAuditCardSummary, dispositionLabel } from "../../reviewAudit.js";
-import { loadFindingsLocal, reviewQueuePriorityReasons } from "../../reviewHistoryLocal.js";
+import { buildReviewAuditCardSummary } from "../../reviewAudit.js";
+import { loadFindingsLocal } from "../../reviewHistoryLocal.js";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../components/ui/DropdownMenu.js";
 import {
   reviewQueueFreshnessStatus,
   reviewQueueItemKey,
@@ -11,13 +16,7 @@ import {
   riskTone,
   shortCommit,
 } from "./reviewQueueViewModel.js";
-import { StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../../components/ui/DropdownMenu.js";
+import { ActionButton, StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
 
 export interface ReviewQueueCardProps {
   item: ReviewQueueItem;
@@ -45,26 +44,16 @@ export function ReviewQueueCard({
   onApplyDisposition,
 }: ReviewQueueCardProps): JSX.Element {
   const storedFindings = loadFindingsLocal(item.repository, item.pullRequestId, projectLinkId);
-  const hasFindings = item.findingCount > 0 || storedFindings.length > 0;
-  const attentionReasons = reviewQueuePriorityReasons(item);
+  const hasStoredFindings = storedFindings.length > 0;
   const itemKey = reviewQueueItemKey(item);
   const isRetryingWriteBack = Boolean(writeBackRetrying[itemKey]);
   const isRerunning = Boolean(rerunning[itemKey]);
   const isDispositionSaving = Boolean(dispositionSaving[itemKey]);
   const freshness = reviewQueueFreshnessStatus(item, Date.now(), staleAgeHours);
   const auditSummary = buildReviewAuditCardSummary(item);
-  const detailTitle = reviewQueueCardDetailTitle({
-    item,
-    attentionReasons,
-    auditLabel: auditSummary.hasAudit ? auditSummary.label : "",
-    auditThreadId: auditSummary.threadId ?? "",
-  });
 
   return (
-    <article
-      className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3"
-      title={detailTitle || undefined}
-    >
+    <article className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
       <div className="flex flex-wrap items-start justify-between gap-2.5">
         <div className="min-w-0 flex-1">
           <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
@@ -91,7 +80,7 @@ export function ReviewQueueCard({
                       ? "bg-[rgb(var(--app-warning)_/_0.10)] text-[rgb(var(--app-warning))] ring-[rgb(var(--app-warning))]/30"
                       : "bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))] ring-[rgb(var(--app-border))]"
                 }`}
-                title={`Audit: ${auditSummary.label}${auditSummary.threadId ? ` · thread ${auditSummary.threadId}` : ""}`}
+                aria-label={`Audit status: ${auditSummary.label}${auditSummary.threadId ? `, thread ${auditSummary.threadId}` : ""}`}
               >
                 {auditSummary.label}
               </StatusBadge>
@@ -111,18 +100,25 @@ export function ReviewQueueCard({
       </div>
       <div className={reviewQueueCardFooterClass()}>
         <div className={reviewQueueCardMetricsGridClass()}>
-          <span title={`${item.findingCount} findings`}>findings {item.findingCount}</span>
-          <span title={`${item.discardedFindingCount} discarded findings`}>discarded {item.discardedFindingCount}</span>
-          <span title={`${item.hunkCoverageFiles} changed files and ${item.changedHunkLines} changed lines covered by hunks`}>
+          <span aria-label={hasStoredFindings
+            ? `${storedFindings.length} findings available to inspect`
+            : item.findingCount > 0
+              ? `${item.findingCount} findings were recorded, but detailed records are unavailable. Rerun the review to restore them.`
+              : "No findings recorded"}
+          >
+            {hasStoredFindings ? `findings ${storedFindings.length}` : item.findingCount > 0 ? `summary ${item.findingCount}` : "findings 0"}
+          </span>
+          <span aria-label={`${item.discardedFindingCount} discarded findings`}>discarded {item.discardedFindingCount}</span>
+          <span aria-label={`${item.hunkCoverageFiles} changed files and ${item.changedHunkLines} changed lines covered by hunks`}>
             hunks {item.hunkCoverageFiles}f/{item.changedHunkLines}l
           </span>
-          <span title={`${item.wholeFileFallbackFiles} files required whole-file fallback`}>
+          <span aria-label={`${item.wholeFileFallbackFiles} files required whole-file fallback`}>
             fallback {item.wholeFileFallbackFiles}f
           </span>
         </div>
         <ReviewQueueCardActions
           item={item}
-          hasFindings={hasFindings}
+          hasStoredFindings={hasStoredFindings}
           storedFindingsCount={storedFindings.length}
           isRerunning={isRerunning}
           isRetryingWriteBack={isRetryingWriteBack}
@@ -149,33 +145,9 @@ export function reviewQueueCardActionsClass(): string {
   return "flex min-w-0 flex-wrap justify-start gap-1 sm:justify-end";
 }
 
-export function reviewQueueCardDetailTitle({
-  item,
-  attentionReasons,
-  auditLabel,
-  auditThreadId,
-}: {
-  item: ReviewQueueItem;
-  attentionReasons: string[];
-  auditLabel: string;
-  auditThreadId: string;
-}): string {
-  return [
-    attentionReasons.length > 0 ? `Attention: ${attentionReasons.join(" · ")}` : "",
-    item.autoApprovedAt || item.autoApprovalActor
-      ? `Auto-approval: ${item.autoApprovedAt ? formatDate(item.autoApprovedAt) : "not recorded"}${
-          item.autoApprovalActor ? ` · ${item.autoApprovalActor}` : ""
-        }`
-      : "",
-    auditLabel ? `Audit: ${auditLabel}${auditThreadId ? ` · thread ${auditThreadId}` : ""}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
 function ReviewQueueCardActions({
   item,
-  hasFindings,
+  hasStoredFindings,
   storedFindingsCount,
   isRerunning,
   isRetryingWriteBack,
@@ -186,7 +158,7 @@ function ReviewQueueCardActions({
   onApplyDisposition,
 }: {
   item: ReviewQueueItem;
-  hasFindings: boolean;
+  hasStoredFindings: boolean;
   storedFindingsCount: number;
   isRerunning: boolean;
   isRetryingWriteBack: boolean;
@@ -196,83 +168,82 @@ function ReviewQueueCardActions({
   onRetryDispositionWriteBack: (item: ReviewQueueItem) => void;
   onApplyDisposition: (item: ReviewQueueItem, disposition: ReviewQueueItem["manualDisposition"]) => void;
 }): JSX.Element {
-  const [menuOpen, setMenuOpen] = useState(false);
-
   return (
     <div className={reviewQueueCardActionsClass()}>
-      {hasFindings && (
-        <button
+        <ActionButton
           type="button"
           onClick={() => onOpenFindings(item)}
-          className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+          className="min-h-7 px-2.5 py-1"
         >
-          View findings
-          {storedFindingsCount > 0 && (
+          {hasStoredFindings ? "View findings" : "Review summary"}
+          {(storedFindingsCount > 0 || item.findingCount > 0) && (
             <span className="ml-1.5 rounded-full bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
-              {storedFindingsCount}
+              {hasStoredFindings ? storedFindingsCount : item.findingCount}
             </span>
           )}
-        </button>
-      )}
-      <button
-        type="button"
-        disabled={isRerunning}
-        onClick={() => onRerunReview(item)}
-        className="rounded-md border border-[rgb(var(--app-accent))]/30 px-2.5 py-1 text-xs text-[rgb(var(--app-accent-readable))] transition hover:bg-[rgb(var(--app-accent-soft))] disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {isRerunning ? "Rerunning..." : "Rerun review"}
-      </button>
-      {item.manualDisposition &&
-        (item.manualDisposition === "marked_blocked" || item.manualDisposition === "changes_requested") &&
-        !item.manualDispositionWriteBackOk && (
-          <button
-            type="button"
-            disabled={isRetryingWriteBack}
-            onClick={() => onRetryDispositionWriteBack(item)}
-            className="rounded-md border border-[rgb(var(--app-accent))]/30 px-2.5 py-1 text-xs text-[rgb(var(--app-accent-readable))] transition hover:bg-[rgb(var(--app-accent-soft))] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isRetryingWriteBack ? "Retrying..." : "Retry ADO"}
-          </button>
-        )}
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
-          >
-            Actions
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" aria-label="Review disposition actions">
-          <DropdownMenuItem
-            disabled={isDispositionSaving}
-            onSelect={() => onApplyDisposition(item, "acknowledged")}
-          >
-            {isDispositionSaving ? "Saving..." : "Acknowledge"}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={isDispositionSaving}
-            onSelect={() => onApplyDisposition(item, "marked_safe")}
-            className="text-[rgb(var(--app-success))] data-[highlighted]:bg-[rgb(var(--app-success-soft))] data-[highlighted]:text-[rgb(var(--app-success))]"
-          >
-            Mark safe
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={isDispositionSaving}
-            onSelect={() => onApplyDisposition(item, "marked_blocked")}
-            className="text-[rgb(var(--app-danger))] data-[highlighted]:bg-[rgb(var(--app-danger-soft))] data-[highlighted]:text-[rgb(var(--app-danger))]"
-          >
-            Block
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={isDispositionSaving}
-            onSelect={() => onApplyDisposition(item, "changes_requested")}
-            className="text-[rgb(var(--app-warning))] data-[highlighted]:bg-[rgb(var(--app-warning-soft))] data-[highlighted]:text-[rgb(var(--app-warning))]"
-          >
-            Request changes
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </ActionButton>
+        <ActionButton
+          type="button"
+          disabled={isRerunning}
+          onClick={() => onRerunReview(item)}
+          loading={isRerunning}
+          className="min-h-7 px-2.5 py-1"
+        >
+          {isRerunning ? "Rerunning..." : "Rerun review"}
+        </ActionButton>
+        {item.manualDisposition &&
+          (item.manualDisposition === "marked_blocked" || item.manualDisposition === "changes_requested") &&
+          !item.manualDispositionWriteBackOk && (
+            <ActionButton
+              type="button"
+              disabled={isRetryingWriteBack}
+              onClick={() => onRetryDispositionWriteBack(item)}
+              loading={isRetryingWriteBack}
+              className="min-h-7 px-2.5 py-1"
+            >
+              {isRetryingWriteBack ? "Retrying..." : "Retry ADO"}
+            </ActionButton>
+          )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <ActionButton
+              type="button"
+              tone="secondary"
+              className="min-h-7 px-2.5 py-1"
+            >
+              Actions
+            </ActionButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" aria-label="Review disposition actions">
+            <DropdownMenuItem
+              disabled={isDispositionSaving}
+              onSelect={() => onApplyDisposition(item, "acknowledged")}
+            >
+              {isDispositionSaving ? "Saving..." : "Acknowledge"}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={isDispositionSaving}
+              onSelect={() => onApplyDisposition(item, "marked_safe")}
+              className="text-[rgb(var(--app-success))] data-[highlighted]:bg-[rgb(var(--app-success-soft))] data-[highlighted]:text-[rgb(var(--app-success))]"
+            >
+              Mark safe
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={isDispositionSaving}
+              onSelect={() => onApplyDisposition(item, "marked_blocked")}
+              className="text-[rgb(var(--app-danger))] data-[highlighted]:bg-[rgb(var(--app-danger-soft))] data-[highlighted]:text-[rgb(var(--app-danger))]"
+            >
+              Block
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={isDispositionSaving}
+              onSelect={() => onApplyDisposition(item, "changes_requested")}
+              className="text-[rgb(var(--app-warning))] data-[highlighted]:bg-[rgb(var(--app-warning-soft))] data-[highlighted]:text-[rgb(var(--app-warning))]"
+            >
+              Request changes
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
     </div>
   );
 }

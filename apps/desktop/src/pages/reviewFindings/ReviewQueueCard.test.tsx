@@ -4,7 +4,6 @@ import type { ReviewQueueItem } from "../../api.js";
 import {
   ReviewQueueCard,
   reviewQueueCardActionsClass,
-  reviewQueueCardDetailTitle,
   reviewQueueCardFooterClass,
   reviewQueueCardMetricsGridClass,
 } from "./ReviewQueueCard.js";
@@ -88,6 +87,28 @@ describe("ReviewQueueCard", () => {
     expect(actionsClass).not.toContain("justify-end gap-1.5");
   });
 
+  it("keeps disposition choices behind the Actions menu instead of expanding each card", () => {
+    const html = renderToStaticMarkup(
+      <ReviewQueueCard
+        item={queueItem()}
+        projectLinkId="claimbot-link"
+        staleAgeHours={24}
+        writeBackRetrying={{}}
+        rerunning={{}}
+        dispositionSaving={{}}
+        onOpenFindings={() => undefined}
+        onRerunReview={() => undefined}
+        onRetryDispositionWriteBack={() => undefined}
+        onApplyDisposition={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Actions");
+    expect(html).toContain('aria-haspopup="menu"');
+    expect(html).not.toContain("Request changes");
+    expect(html).not.toContain('role="group"');
+  });
+
   it("renders review audit state and action controls without flattening semantic queue details", () => {
     const html = renderToStaticMarkup(
       <ReviewQueueCard
@@ -108,19 +129,18 @@ describe("ReviewQueueCard", () => {
     expect(html).toContain("medium");
     expect(html).toContain("needs human review");
     expect(html).toContain("Warnings or policy-sensitive files need human review.");
-    expect(html).toContain("Attention:");
-    expect(html).toContain("context whole file fallback");
-    expect(html).not.toContain(">Attention:");
-    expect(html).toContain("Audit:");
+    expect(html).not.toContain("Attention:");
+    expect(html).not.toContain("context whole file fallback");
+    expect(html).toContain('aria-label="Audit status: Changes requested · ADO pending · 1 audit event · 1 write-back attempt"');
     expect(html).toContain("Changes requested");
     expect(html).toContain("ADO pending");
-    expect(html).toContain("findings 3");
+    expect(html).toContain("summary 3");
     expect(html).toContain("hunks 0f/0l");
     expect(html).toContain("fallback 2f");
-    expect(html).toContain("View findings");
+    expect(html).not.toContain("View findings");
     expect(html).toContain("Retry ADO");
     expect(html).toContain("Actions");
-    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('aria-haspopup="menu"');
     expect(html).not.toContain("Request changes");
   });
 
@@ -147,15 +167,68 @@ describe("ReviewQueueCard", () => {
     expect(html).not.toContain("Saving...");
   });
 
-  it("moves long decision detail into hover title text", () => {
-    const title = reviewQueueCardDetailTitle({
-      item: queueItem(),
-      attentionReasons: ["risk medium", "context whole file fallback"],
-      auditLabel: "Changes requested · ADO pending",
-      auditThreadId: "123",
-    });
+  it("offers the historical review summary when detailed findings are unavailable", () => {
+    const html = renderToStaticMarkup(
+      <ReviewQueueCard
+        item={queueItem({ findingCount: 9 })}
+        projectLinkId="claimbot-link"
+        staleAgeHours={24}
+        writeBackRetrying={{}}
+        rerunning={{}}
+        dispositionSaving={{}}
+        onOpenFindings={() => undefined}
+        onRerunReview={() => undefined}
+        onRetryDispositionWriteBack={() => undefined}
+        onApplyDisposition={() => undefined}
+      />,
+    );
 
-    expect(title).toContain("Attention: risk medium · context whole file fallback");
-    expect(title).toContain("Audit: Changes requested · ADO pending · thread 123");
+    expect(html).toContain("summary 9");
+    expect(html).toContain("Review summary");
+    expect(html).toContain(">9</span>");
+    expect(html).toContain('aria-label="9 findings were recorded, but detailed records are unavailable. Rerun the review to restore them."');
+    expect(html).not.toContain("title=");
+  });
+
+  it("keeps the review summary control after a clean rerun", () => {
+    const html = renderToStaticMarkup(
+      <ReviewQueueCard
+        item={queueItem({ findingCount: 0 })}
+        projectLinkId="claimbot-link"
+        staleAgeHours={24}
+        writeBackRetrying={{}}
+        rerunning={{}}
+        dispositionSaving={{}}
+        onOpenFindings={() => undefined}
+        onRerunReview={() => undefined}
+        onRetryDispositionWriteBack={() => undefined}
+        onApplyDisposition={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Review summary");
+    expect(html).toContain("Actions");
+  });
+
+  it("uses shared buttons so card actions retain keyboard focus and loading feedback", () => {
+    const html = renderToStaticMarkup(
+      <ReviewQueueCard
+        item={queueItem()}
+        projectLinkId="claimbot-link"
+        staleAgeHours={24}
+        writeBackRetrying={{}}
+        rerunning={{}}
+        dispositionSaving={{}}
+        onOpenFindings={() => undefined}
+        onRerunReview={() => undefined}
+        onRetryDispositionWriteBack={() => undefined}
+        onApplyDisposition={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("focus-visible:ring-2");
+    expect(html).toContain("focus-visible:ring-[rgb(var(--app-focus))]/45");
+    expect(html).toContain("Rerun review");
+    expect(html).toContain("Retry ADO");
   });
 });

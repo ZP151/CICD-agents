@@ -4,9 +4,12 @@ import { PaginationControls } from "../components/PaginationControls.js";
 import { MarkdownContent } from "../components/conversation/ConversationPartRenderer.js";
 import {
   ActionButton,
+  ActionLink,
   InlineNotice,
+  WorkbenchDisclosure,
   WorkbenchHeader,
   WorkbenchPage,
+  WorkbenchSelect,
   WorkbenchSidePanel,
 } from "../components/workbench/WorkbenchPrimitives.js";
 import { PipelineRowCard } from "./pipelines/PipelineRowCard.js";
@@ -52,9 +55,9 @@ export default function Pipelines(): JSX.Element {
         description="Pipeline discovery, recent run state, controlled triggers, and AI-assisted run analysis."
         descriptionClassName={pipelineHeaderDescriptionClass()}
         actions={<div className={pipelineHeaderControlsClass()}>
-          <select
+          <WorkbenchSelect
             aria-label="Pipelines project filter"
-            className="min-w-0 rounded-md border border-transparent bg-[rgb(var(--app-surface-raised))] px-3 py-1.5 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-[rgb(var(--app-accent))]"
+            className="text-sm"
             value={runtime.projectFilter}
             disabled={projectLinksLoading || runtime.projectOptions.length === 0}
             onChange={(event) => runtime.setProjectFilter(event.target.value)}
@@ -73,7 +76,7 @@ export default function Pipelines(): JSX.Element {
                 {project}
               </option>
             ))}
-          </select>
+          </WorkbenchSelect>
           <ActionButton
             onClick={() => {
               void runtime.loadConnections();
@@ -304,20 +307,21 @@ export function PipelineEmptyState({
   onRefresh: () => void | Promise<void>;
 }): JSX.Element {
   const hasBlockingError = Boolean(error && mode === "empty");
+  const recovery = pipelineRecovery(error, hasProjectLinks);
   const title = hasBlockingError
-    ? "Pipeline workspace unavailable"
+    ? recovery.title
     : mode === "refreshing"
     ? "Refreshing pipeline discovery"
     : hasProjectLinks
       ? "No pipelines discovered yet"
       : "No Project Links available";
   const description = hasBlockingError
-    ? "MergePilot could not load Project Links or pipeline discovery data. Check the desktop daemon or account session, then refresh this workspace."
+    ? recovery.description
     : mode === "refreshing"
     ? "Checking Azure DevOps for pipeline definitions."
     : hasProjectLinks
-      ? "Check that the selected Project Link points at the intended Azure DevOps project and repository, then refresh discovery."
-      : "Create a Project Link with Azure DevOps mapping before inspecting pipeline runs or triggering CI.";
+      ? "Check the Project Link mapping, then refresh discovery."
+      : "Connect a Project Link before inspecting pipeline runs or triggering CI.";
   return (
     <section className={pipelineEmptyStateClass(mode)}>
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -326,46 +330,83 @@ export function PipelineEmptyState({
           <p className="mt-1 text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
             {description}
           </p>
-          {mode !== "refreshing" && (
-            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[rgb(var(--app-text-muted))]">
-              <li>Project Link mapping</li>
-              <li>ADO repository access</li>
-              <li>Pipeline definition access</li>
-            </ul>
-          )}
-          {hasBlockingError && (
-            <p className="mt-3 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text-subtle))]">
-              Latest error: {error}
-            </p>
+          {hasBlockingError && error && (
+            <WorkbenchDisclosure>{error}</WorkbenchDisclosure>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!hasProjectLinks && (
-            <a
+          {hasBlockingError && recovery.primaryHref ? (
+            <ActionLink
+              href={recovery.primaryHref}
+              tone="primary"
+            >
+              {recovery.primaryAction}
+            </ActionLink>
+          ) : !hasProjectLinks && (
+            <ActionLink
               href="#/project-links"
-              className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-1.5 text-sm font-medium text-[rgb(var(--app-text))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))]"
+              className="text-sm"
             >
               Open Project Links
-            </a>
+            </ActionLink>
           )}
-          {(hasProjectLinks || hasBlockingError) && (
-            <button
-              type="button"
+          {(hasProjectLinks || hasBlockingError) && !recovery.primaryHref && (
+            <ActionButton
               onClick={() => void onRefresh()}
               disabled={mode === "refreshing"}
-              className="rounded-md border border-[rgb(var(--app-border))] px-3 py-1.5 text-sm text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {mode === "refreshing"
                 ? "Refreshing..."
                 : hasBlockingError
-                  ? "Retry loading"
+                  ? recovery.primaryAction
                   : "Refresh discovery"}
-            </button>
+            </ActionButton>
           )}
         </div>
       </div>
     </section>
   );
+}
+
+export interface PipelineRecovery {
+  title: string;
+  description: string;
+  primaryAction: string;
+  primaryHref?: string;
+}
+
+export function pipelineRecovery(error: string | null | undefined, hasProjectLinks: boolean): PipelineRecovery {
+  const issue = error?.toLowerCase() ?? "";
+  if (issue.includes("ado_project_link_incomplete") || (issue.includes("project link") && issue.includes("mapping"))) {
+    return {
+      title: "Complete this Project Link",
+      description: "Pipeline discovery needs an Azure DevOps organization, project, repository, and branch scope.",
+      primaryAction: "Open Project Links",
+      primaryHref: "#/project-links",
+    };
+  }
+  if (issue.includes("sign in") || issue.includes("credential") || issue.includes("401") || issue.includes("unauthorized")) {
+    return {
+      title: "Azure DevOps sign-in needs attention",
+      description: "Refresh your Microsoft session, then retry pipeline discovery.",
+      primaryAction: "Try again",
+    };
+  }
+  if (issue.includes("permission") || issue.includes("403") || issue.includes("forbidden")) {
+    return {
+      title: "Azure DevOps access is missing",
+      description: "Confirm that your account can read this project, then retry pipeline discovery.",
+      primaryAction: "Try again",
+    };
+  }
+  return {
+    title: "Pipeline workspace unavailable",
+    description: hasProjectLinks
+      ? "MergePilot could not load pipeline discovery for this project. Retry, or check the Project Link setup."
+      : "Connect a Project Link before discovering pipeline definitions.",
+    primaryAction: hasProjectLinks ? "Try again" : "Open Project Links",
+    primaryHref: hasProjectLinks ? undefined : "#/project-links",
+  };
 }
 
 export function pipelineEmptyStateClass(mode: "refreshing" | "empty"): string {
@@ -428,14 +469,14 @@ export function PipelineDetailPanel({
       )}
 
       {isApproval && (
-        <section className="mb-4 rounded-md border border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-accent-soft))] p-3">
-          <p className="text-xs font-semibold text-[rgb(var(--app-text))]">
-            Approval required in Chat
-          </p>
-          <p className="mt-2 text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
-            {state.result.summary}. Open Chat to review and confirm the approval proposal.
-          </p>
-        </section>
+        <div className="mb-4">
+          <InlineNotice tone="info" title="Approval required">
+            <p>{state.result.summary}. Review and confirm the proposal in Chat.</p>
+            <ActionLink href="#/chat" tone="secondary" className="mt-2 w-fit">
+              Open Chat approval
+            </ActionLink>
+          </InlineNotice>
+        </div>
       )}
 
       {(state.phase === "analyzing" ||

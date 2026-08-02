@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import type { ProjectLink, ProjectLinkInput } from "../api";
 import { useAppData } from "../App";
+import { isTemporaryProjectLink } from "../projectLinks.js";
 import {
   ActionButton,
   InlineNotice,
@@ -81,7 +82,7 @@ export default function ProjectLinks(): JSX.Element {
     <WorkbenchPage className={projectLinksListShellClass()}>
       <WorkbenchHeader
         title="Project Links"
-        description="Map one local repository to Azure DevOps, branch defaults, and validation commands."
+        description="Local repository, Azure DevOps, and validation defaults."
         actions={projectLinks.length > 0 && (
           <ActionButton
             onClick={() => setMode("new")}
@@ -110,18 +111,74 @@ export default function ProjectLinks(): JSX.Element {
       ) : projectLinks.length === 0 ? (
         <ProjectLinksEmpty onCreate={() => setMode("new")} />
       ) : (
-        <div className={projectLinksGridClass()}>
-          {projectLinks.map((projectLink) => (
-            <ProjectLinkCard
-              key={projectLink.id}
-              projectLink={projectLink}
-              onEdit={() => setMode({ editing: projectLink })}
-              onDelete={() => void handleDelete(projectLink.id)}
-            />
-          ))}
-        </div>
+        <ProjectLinksList
+          projectLinks={projectLinks}
+          onEdit={(projectLink) => setMode({ editing: projectLink })}
+          onDelete={(id) => void handleDelete(id)}
+        />
       )}
     </WorkbenchPage>
+  );
+}
+
+export function partitionProjectLinks(projectLinks: ProjectLink[]): {
+  saved: ProjectLink[];
+  temporary: ProjectLink[];
+} {
+  return projectLinks.reduce<{ saved: ProjectLink[]; temporary: ProjectLink[] }>(
+    (groups, projectLink) => {
+      groups[isTemporaryProjectLink(projectLink) ? "temporary" : "saved"].push(projectLink);
+      return groups;
+    },
+    { saved: [], temporary: [] },
+  );
+}
+
+export function projectLinksTemporarySectionClass(): string {
+  return "border-t border-[rgb(var(--app-border))]/70 pt-3";
+}
+
+export function ProjectLinksList({
+  projectLinks,
+  onEdit,
+  onDelete,
+}: {
+  projectLinks: ProjectLink[];
+  onEdit: (projectLink: ProjectLink) => void;
+  onDelete: (id: string) => void;
+}): JSX.Element {
+  const { saved, temporary } = partitionProjectLinks(projectLinks);
+  return (
+    <>
+      <div className={projectLinksGridClass()}>
+        {saved.map((projectLink) => (
+          <ProjectLinkCard
+            key={projectLink.id}
+            projectLink={projectLink}
+            onEdit={() => onEdit(projectLink)}
+            onDelete={() => onDelete(projectLink.id)}
+          />
+        ))}
+      </div>
+      {temporary.length > 0 && (
+        <details className={projectLinksTemporarySectionClass()}>
+          <summary>
+            <span>Temporary links</span>
+            <span>{temporary.length}</span>
+          </summary>
+          <div className={`${projectLinksGridClass()} mt-3`}>
+            {temporary.map((projectLink) => (
+              <ProjectLinkCard
+                key={projectLink.id}
+                projectLink={projectLink}
+                onEdit={() => onEdit(projectLink)}
+                onDelete={() => onDelete(projectLink.id)}
+              />
+            ))}
+          </div>
+        </details>
+      )}
+    </>
   );
 }
 
@@ -195,9 +252,14 @@ export function ProjectLinksLoading(): JSX.Element {
 
 export function ProjectLinksEmpty({ onCreate }: { onCreate: () => void }): JSX.Element {
   return (
-    <section className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-6">
+    <button
+      type="button"
+      onClick={onCreate}
+      aria-label="Connect a project"
+      className="group w-full rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-6 text-left transition-[background-color,border-color,box-shadow] duration-[var(--app-motion-fast)] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45"
+    >
       <div className="max-w-2xl">
-        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))] ring-1 ring-[rgb(var(--app-border))]">
+        <div className="mb-3 flex h-8 w-8 items-center justify-center text-[rgb(var(--app-text-muted))] transition-colors duration-[var(--app-motion-fast)] group-hover:text-[rgb(var(--app-accent-readable))]">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <path
               d="M4.5 10h11M7.5 6.5h5M7.5 13.5h5M5 3.75h10A1.25 1.25 0 0 1 16.25 5v10A1.25 1.25 0 0 1 15 16.25H5A1.25 1.25 0 0 1 3.75 15V5A1.25 1.25 0 0 1 5 3.75Z"
@@ -209,24 +271,12 @@ export function ProjectLinksEmpty({ onCreate }: { onCreate: () => void }): JSX.E
           </svg>
         </div>
         <h3 className="text-base font-semibold text-[rgb(var(--app-text))]">
-          Create a Project Link to start
+          Connect a project
         </h3>
         <p className="mt-2 max-w-[65ch] text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
-          MergePilot needs one mapping between a local repository and Azure DevOps before it
-          can review changes, inspect PRs, analyze pipelines, or run Git workflows.
+          Link a local repository and Azure DevOps to use PRs, reviews, and pipelines.
         </p>
-        <ActionButton tone="primary" className="mt-4" onClick={onCreate}>Create Project Link</ActionButton>
-        <div className="mt-5">
-          <p className="text-xs font-medium text-[rgb(var(--app-text-subtle))]">
-            Setup needs
-          </p>
-          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[rgb(var(--app-text-muted))]">
-            <li>Local repository path</li>
-            <li>Default and PR branches</li>
-            <li>Azure DevOps mapping</li>
-          </ul>
-        </div>
       </div>
-    </section>
+    </button>
   );
 }

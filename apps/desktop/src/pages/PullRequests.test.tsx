@@ -4,8 +4,8 @@ import {
   PullRequestEmptyState,
   PullRequestLoadingSkeleton,
   PullRequestProjectLinkResolvingState,
-  pullRequestEmptyChecklistGridClass,
   pullRequestLoadingMetaGridClass,
+  pullRequestRecovery,
   pullRequestsListGridClass,
   pullRequestsPageShellClass,
   pullRequestsWorkspaceLayoutClass,
@@ -44,38 +44,34 @@ describe("PullRequests layout", () => {
     expect(className).not.toContain("grid-cols-1");
   });
 
-  it("uses auto-fit grids for loading and empty transient states", () => {
+  it("uses an auto-fit grid for the loading metadata", () => {
     const loadingClassName = pullRequestLoadingMetaGridClass();
-    const checklistClassName = pullRequestEmptyChecklistGridClass();
 
     expect(loadingClassName).toContain("auto-fit");
     expect(loadingClassName).toContain("minmax(min(100%,9.5rem),1fr)");
     expect(loadingClassName).not.toContain("sm:grid-cols-3");
-
-    expect(checklistClassName).toContain("auto-fit");
-    expect(checklistClassName).toContain("minmax(min(100%,10rem),1fr)");
-    expect(checklistClassName).not.toContain("sm:grid-cols-3");
   });
 });
 
 describe("PullRequestEmptyState", () => {
-  it("renders credential errors as a compact recovery state", () => {
+  it("turns a raw project-link error into a compact, actionable recovery state", () => {
     const html = renderToStaticMarkup(
       <PullRequestEmptyState
         mode="error"
         hasProjectLinks
-        message="Azure credential expired or missing. Please sign in again."
+        message="ado_project_link_incomplete"
         onRefresh={() => undefined}
       />,
     );
 
-    expect(html).toContain("Pull requests unavailable");
-    expect(html).toContain("Azure credential expired or missing");
-    expect(html).toContain("Microsoft sign-in");
-    expect(html).toContain("Repository permissions");
-    expect(html).toContain("Project Link branch scope");
-    expect(html).toContain("Refresh");
-    expect(html).toContain("auto-fit");
+    expect(html).toContain("Complete this Project Link");
+    expect(html).toContain("Azure DevOps organization, project, repository, and branch scope");
+    expect(html).toContain("Open Project Links");
+    expect(html).toContain("href=\"#/project-links\"");
+    expect(html).toContain("Technical detail");
+    expect(html).toContain("ado_project_link_incomplete");
+    expect(html).not.toContain("Microsoft sign-in");
+    expect(html).not.toContain("Repository permissions");
     expect(html).not.toContain("flex-1 items-center justify-center");
     expect(html).not.toContain("sm:grid-cols-3");
   });
@@ -109,6 +105,19 @@ describe("PullRequestEmptyState", () => {
     expect(html).toContain("Open Project Links");
     expect(html).toContain("href=\"#/project-links\"");
     expect(html).not.toContain("No pull requests found");
+  });
+});
+
+describe("pullRequestRecovery", () => {
+  it("keeps credential and permission recovery concise", () => {
+    expect(pullRequestRecovery("401 unauthorized", true)).toMatchObject({
+      title: "Azure DevOps sign-in needs attention",
+      primaryAction: "Try again",
+    });
+    expect(pullRequestRecovery("403 forbidden", true)).toMatchObject({
+      title: "Azure DevOps access is missing",
+      primaryAction: "Try again",
+    });
   });
 });
 

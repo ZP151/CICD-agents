@@ -1,4 +1,5 @@
 import type { AdoDiscoveryKind, AdoDiscoveryOption, ProjectLinkInput } from "../../api.js";
+import { InlineNotice } from "../../components/workbench/WorkbenchPrimitives.js";
 import { Field, ProjectDiscoveryField } from "./ProjectLinkFormControls.js";
 
 interface ProjectLinkAdoSectionProps {
@@ -67,7 +68,7 @@ export function ProjectLinkAdoSection({
         onApply={onApplyDiscovery}
         onManualChange={onManualPipelineChange}
       />
-      <fieldset className="space-y-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2.5">
+      <fieldset className="space-y-2 border-t border-[rgb(var(--app-border))] pt-3">
         <label className="flex cursor-pointer items-start gap-2.5 text-sm text-[rgb(var(--app-text))]">
           <input
             type="checkbox"
@@ -96,11 +97,7 @@ export function ProjectLinkAdoSection({
           </div>
         )}
       </fieldset>
-      {discoveryError && (
-        <p className="rounded-md border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] px-2.5 py-1.5 text-[11px] text-[rgb(var(--app-danger))]">
-          {discoveryError}
-        </p>
-      )}
+      {discoveryError && <InlineNotice tone="danger" title="Azure DevOps discovery failed">{discoveryError}</InlineNotice>}
     </section>
   );
 }

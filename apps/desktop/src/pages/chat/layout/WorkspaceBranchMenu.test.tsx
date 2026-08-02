@@ -20,5 +20,7 @@ describe("WorkspaceBranchMenu", () => {
     expect(html).toContain("Refresh branch state");
     expect(html).toContain("Fetch remotes");
     expect(html).toContain("feature/review");
+    expect(html).toContain('aria-label="New branch name"');
+    expect(html).toContain("focus-visible:ring-[rgb(var(--app-focus))]/45");
   });
 });

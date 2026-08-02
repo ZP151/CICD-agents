@@ -6,6 +6,10 @@ import {
   gitDivergenceNotice,
   gitDivergenceNoticeClass,
 } from "./gitDivergenceNotice.js";
+import {
+  ActionButton,
+  WorkbenchTextArea,
+} from "../../../components/workbench/WorkbenchPrimitives.js";
 
 interface WorkspaceCommitMenuProps {
   hasRepoPath: boolean;
@@ -20,6 +24,8 @@ interface WorkspaceCommitMenuProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   runAction: (action: WorkspaceAction) => void;
+  /** Lets the compact pinned summary open away from the window edge. */
+  menuPositionClassName?: string;
 }
 
 export function WorkspaceCommitMenu({
@@ -35,6 +41,7 @@ export function WorkspaceCommitMenu({
   open,
   onOpenChange,
   runAction,
+  menuPositionClassName = "right-0 top-full mt-1 w-full",
 }: WorkspaceCommitMenuProps) {
   const [commitMessage, setCommitMessage] = useState("");
   const [includeUnstaged, setIncludeUnstaged] = useState(true);
@@ -83,19 +90,21 @@ export function WorkspaceCommitMenu({
 
   return (
     <div className="relative mt-1">
-      <button
+      <ActionButton
         type="button"
+        tone="quiet"
         onClick={() => onOpenChange(!open)}
         disabled={!hasRepoPath || busy}
-        className="flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1.5 text-sm transition hover:bg-[rgb(var(--app-surface-raised))]"
+        aria-expanded={open}
+        className="w-full justify-start gap-2 px-1.5 py-1.5 text-sm"
       >
         <svg className="h-4 w-4 shrink-0 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 12h7m2 0h7M8 8l-4 4 4 4m8-8l4 4-4 4" />
         </svg>
         <span className="min-w-0 truncate">Commit or push</span>
-      </button>
+      </ActionButton>
       {open && (
-        <div className="absolute right-0 top-full z-30 mt-1 w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl">
+        <div className={`absolute z-30 ${menuPositionClassName} rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl`}>
           <div className="mb-2 flex min-w-0 items-center justify-between gap-2 text-xs">
             <span className="flex min-w-0 flex-1 items-center gap-1.5 font-mono text-[rgb(var(--app-text-muted))]">
               <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -111,19 +120,17 @@ export function WorkspaceCommitMenu({
             )}
           </div>
           {divergenceNotice && (
-            <div
-              className={`mb-2 rounded-md border px-2 py-1.5 text-xs ${gitDivergenceNoticeClass(divergenceNotice.tone)}`}
-              title="Remote readiness"
-            >
+            <div className={`mb-2 rounded-md border px-2 py-1.5 text-xs ${gitDivergenceNoticeClass(divergenceNotice.tone)}`}>
               {divergenceNotice.label}
             </div>
           )}
-          <textarea
+          <WorkbenchTextArea
             value={commitMessage}
             onChange={(event) => setCommitMessage(event.target.value)}
             rows={2}
-            className="mb-3 w-full resize-none rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2.5 py-2 text-sm text-[rgb(var(--app-text))] outline-none placeholder:text-[rgb(var(--app-text-subtle))] focus:border-[rgb(var(--app-accent))]"
+            className="mb-3 resize-none text-sm"
             placeholder="Commit message (leave blank to generate)..."
+            aria-label="Commit message"
           />
           <label className="mb-2 flex items-center gap-2 text-sm text-[rgb(var(--app-text-muted))]">
             <input
@@ -136,58 +143,59 @@ export function WorkspaceCommitMenu({
           </label>
           <div className="space-y-1 border-t border-[rgb(var(--app-border))] pt-2">
             {pushBlocked && (
-              <button
+              <ActionButton
                 type="button"
+                tone="secondary"
                 aria-label="Pull with rebase before pushing"
                 onClick={syncBranchBeforePush}
                 disabled={busy}
-                className="flex w-full min-w-0 items-center gap-2 rounded-md bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-left text-sm transition hover:bg-[rgb(var(--app-accent-soft))] disabled:cursor-wait disabled:opacity-60"
+                className="w-full justify-start gap-2 px-2 py-1.5 text-left text-sm disabled:cursor-wait"
               >
                 <svg className="h-4 w-4 shrink-0 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 4v12m0 0 4-4m-4 4-4-4M5 20h14" />
                 </svg>
                 <span className="min-w-0 truncate">Pull/rebase first</span>
-              </button>
+              </ActionButton>
             )}
-            <button type="button" aria-label="Prepare commit" onClick={() => commitPrompt("commit")} disabled={busy} className="flex w-full min-w-0 items-center gap-2 rounded-md bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-left text-sm transition hover:bg-[rgb(var(--app-accent-soft))] disabled:cursor-wait disabled:opacity-60">
+            <ActionButton type="button" tone="secondary" aria-label="Prepare commit" onClick={() => commitPrompt("commit")} disabled={busy} className="w-full justify-start gap-2 px-2 py-1.5 text-left text-sm disabled:cursor-wait">
               <svg className="h-4 w-4 shrink-0 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 12h16M8 8l-4 4 4 4" />
               </svg>
               <span className="min-w-0 flex-1 truncate">Commit</span>
               <span className="shrink-0 rounded bg-[rgb(var(--app-border))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">Ctrl+↵</span>
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               type="button"
+              tone="quiet"
               aria-label="Prepare commit and push"
               onClick={() => commitPrompt("commit-push")}
               disabled={busy || pushBlocked}
-              title={pushBlocked ? "Pull or rebase before pushing" : undefined}
-              className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-45"
+              className="w-full justify-start gap-2 px-2 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-45"
             >
               <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 16V4m0 0L8 8m4-4l4 4M5 20h14" />
               </svg>
               <span className="min-w-0 truncate">Commit and push</span>
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               type="button"
+              tone="quiet"
               aria-label="Push branch"
               onClick={() => commitPrompt("push")}
               disabled={busy || pushBlocked}
-              title={pushBlocked ? "Pull or rebase before pushing" : undefined}
-              className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-45"
+              className="w-full justify-start gap-2 px-2 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-45"
             >
               <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 16V4m0 0L8 8m4-4l4 4M5 20h14" />
               </svg>
               <span className="min-w-0 truncate">Push</span>
-            </button>
-            <button type="button" onClick={createPullRequest} disabled={busy || !hasRepoPath} className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60">
+            </ActionButton>
+            <ActionButton type="button" tone="quiet" onClick={createPullRequest} disabled={busy || !hasRepoPath} className="w-full justify-start gap-2 px-2 py-1.5 text-left text-sm disabled:cursor-wait">
               <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M8 7h8m-8 5h5m-8 8h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
               <span className="min-w-0 truncate">Create pull request</span>
-            </button>
+            </ActionButton>
           </div>
         </div>
       )}

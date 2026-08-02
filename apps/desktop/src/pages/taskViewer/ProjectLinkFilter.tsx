@@ -1,4 +1,5 @@
 import type { ProjectLink } from "../../api.js";
+import { WorkbenchSelect } from "../../components/workbench/WorkbenchPrimitives.js";
 
 interface ProjectLinkFilterProps {
   projectLinks: ProjectLink[];
@@ -14,8 +15,8 @@ export function ProjectLinkFilter({
   label,
 }: ProjectLinkFilterProps): JSX.Element {
   return (
-    <select
-      className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))] outline-none focus:border-[rgb(var(--app-accent))]"
+    <WorkbenchSelect
+      className="min-h-8 px-2 py-1 text-xs text-[rgb(var(--app-text-muted))]"
       value={value}
       onChange={(e) => onChange(e.target.value)}
       aria-label={label}
@@ -26,6 +27,6 @@ export function ProjectLinkFilter({
           {projectLink.name}
         </option>
       ))}
-    </select>
+    </WorkbenchSelect>
   );
 }

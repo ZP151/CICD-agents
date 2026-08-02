@@ -1,6 +1,30 @@
-import type { ReviewQueueItem, ReviewRunResult } from "./api.js";
+import type { ReviewFinding, ReviewQueueItem, ReviewRunResult } from "./api.js";
 
 export const DEFAULT_STALE_REVIEW_AGE_HOURS = 24;
+
+export interface ReviewRunFindingsResolution {
+  findings: ReviewFinding[];
+  /**
+   * A result with an explicit findings payload is authoritative, including an
+   * empty list. Summary-only responses are not: persisting an empty list for
+   * those used to erase the last inspectable evidence from Review Queue.
+   */
+  shouldPersist: boolean;
+  source: "result" | "clean_result" | "stored";
+}
+
+export function resolveReviewRunFindings(
+  result: Pick<ReviewRunResult, "findingCount" | "findings">,
+  storedFindings: ReviewFinding[] = [],
+): ReviewRunFindingsResolution {
+  if (result.findings !== undefined) {
+    return { findings: result.findings, shouldPersist: true, source: "result" };
+  }
+  if (result.findingCount === 0) {
+    return { findings: [], shouldPersist: true, source: "clean_result" };
+  }
+  return { findings: storedFindings, shouldPersist: false, source: "stored" };
+}
 
 export function reviewQueueItemKey(item: Pick<ReviewQueueItem, "repository" | "pullRequestId">): string {
   return `${item.repository}/${item.pullRequestId}`;

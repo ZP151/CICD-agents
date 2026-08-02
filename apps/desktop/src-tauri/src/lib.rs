@@ -3,6 +3,7 @@ use std::sync::{Mutex, OnceLock};
 use tauri::{
     AppHandle,
     Emitter,
+    image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
@@ -10,9 +11,102 @@ use tauri::{
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_shell::{process::{CommandChild, CommandEvent}, ShellExt};
 
+#[cfg(target_os = "windows")]
+use windows::Win32::{Foundation::HWND, UI::HiDpi::GetDpiForWindow};
+
 /// The port on which the daemon is listening.  Set once during setup() and
 /// read by the frontend via the `get_daemon_port` command.
 static DAEMON_PORT: OnceLock<u16> = OnceLock::new();
+const DEFAULT_DAEMON_PORT: u16 = 8787;
+
+#[cfg(target_os = "windows")]
+const TRAY_ICON_ID: &str = "mergepilot-tray";
+
+#[cfg(target_os = "windows")]
+const TRAY_ICON_FRAME_SIZES: &[u32] = &[
+    16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 96, 128, 256,
+];
+
+#[cfg(target_os = "windows")]
+fn tray_icon_frame_size_for_dpi(dpi: u32) -> u32 {
+    let target = ((16 * dpi.max(96) + 48) / 96).clamp(16, 256);
+    *TRAY_ICON_FRAME_SIZES
+        .iter()
+        .min_by_key(|size| size.abs_diff(target))
+        .expect("MergePilot ships notification-area icon frames")
+}
+
+/// Returns an exact, exported notification-area frame for the window's current
+/// DPI. The shell receives a bitmap for tray icons (not a multi-frame ICO), so
+/// selecting here prevents a second downscale of the web/app logo.
+#[cfg(target_os = "windows")]
+fn tray_icon_for_dpi(dpi: u32) -> Result<Image<'static>, Box<dyn std::error::Error>> {
+    const FRAMES: &[(u32, &[u8])] = &[
+        (16, include_bytes!("../icons/taskbar/16x16.png")),
+        (20, include_bytes!("../icons/taskbar/20x20.png")),
+        (24, include_bytes!("../icons/taskbar/24x24.png")),
+        (30, include_bytes!("../icons/taskbar/30x30.png")),
+        (32, include_bytes!("../icons/taskbar/32x32.png")),
+        (36, include_bytes!("../icons/taskbar/36x36.png")),
+        (40, include_bytes!("../icons/taskbar/40x40.png")),
+        (48, include_bytes!("../icons/taskbar/48x48.png")),
+        (60, include_bytes!("../icons/taskbar/60x60.png")),
+        (64, include_bytes!("../icons/taskbar/64x64.png")),
+        (72, include_bytes!("../icons/taskbar/72x72.png")),
+        (96, include_bytes!("../icons/taskbar/96x96.png")),
+        (128, include_bytes!("../icons/taskbar/128x128.png")),
+        (256, include_bytes!("../icons/taskbar/256x256.png")),
+    ];
+
+    let target = tray_icon_frame_size_for_dpi(dpi);
+    let (_, bytes) = FRAMES
+        .iter()
+        .find(|(size, _)| *size == target)
+        .expect("every declared tray size has an exported asset");
+    Ok(Image::from_bytes(bytes)?)
+}
+
+#[cfg(target_os = "windows")]
+fn dpi_for_window_handle(hwnd: HWND) -> u32 {
+    let dpi = unsafe { GetDpiForWindow(hwnd) };
+    if dpi == 0 { 96 } else { dpi }
+}
+
+#[cfg(target_os = "windows")]
+fn refresh_tray_icon_for_window(
+    window: &tauri::Window,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(tray) = window.app_handle().tray_by_id(TRAY_ICON_ID) {
+        let hwnd = window.hwnd()?;
+        tray.set_icon(Some(tray_icon_for_dpi(dpi_for_window_handle(hwnd))?))?;
+    }
+    Ok(())
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod windows_icon_tests {
+    use super::tray_icon_frame_size_for_dpi;
+
+    #[test]
+    fn selects_exact_notification_area_frames_for_common_windows_scales() {
+        assert_eq!(tray_icon_frame_size_for_dpi(96), 16);
+        assert_eq!(tray_icon_frame_size_for_dpi(120), 20);
+        assert_eq!(tray_icon_frame_size_for_dpi(144), 24);
+        assert_eq!(tray_icon_frame_size_for_dpi(168), 30);
+        assert_eq!(tray_icon_frame_size_for_dpi(192), 32);
+    }
+}
+
+fn configured_daemon_port() -> u16 {
+    daemon_port_from(std::env::var("MERGEPILOT_RUNTIME_PORT").ok().as_deref())
+}
+
+fn daemon_port_from(value: Option<&str>) -> u16 {
+    value
+        .and_then(|value| value.parse::<u16>().ok())
+        .filter(|port| *port > 0)
+        .unwrap_or(DEFAULT_DAEMON_PORT)
+}
 
 #[tauri::command]
 fn get_daemon_port() -> u16 {
@@ -271,6 +365,16 @@ pub fn run() {
                 window.hide().unwrap();
                 api.prevent_close();
             }
+
+            // Tauri/tao receives WM_DPICHANGED as a scale-factor event. Refresh
+            // only the notification-area bitmap here; the taskbar continues to
+            // select the closest embedded frame from icon.ico itself.
+            #[cfg(target_os = "windows")]
+            if matches!(event, tauri::WindowEvent::ScaleFactorChanged { .. }) {
+                if let Err(error) = refresh_tray_icon_for_window(window) {
+                    log::warn!("Failed to refresh the DPI-specific tray icon: {error}");
+                }
+            }
         })
         .setup(|app| {
             // Windows development runs are not installed, so explicitly claim the
@@ -293,8 +397,22 @@ pub fn run() {
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open_main, &separator, &quit])?;
 
-            TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+            // The taskbar receives the multi-frame ICO embedded in the EXE.
+            // The tray API needs a single bitmap, so choose the exact exported
+            // frame for this window's physical DPI and refresh it on DPI moves.
+            #[cfg(target_os = "windows")]
+            let tray_icon = match app.get_webview_window("main") {
+                Some(main_window) => {
+                    let hwnd = main_window.hwnd()?;
+                    tray_icon_for_dpi(dpi_for_window_handle(hwnd))?
+                }
+                None => tray_icon_for_dpi(96)?,
+            };
+            #[cfg(not(target_os = "windows"))]
+            let tray_icon = Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
+
+            TrayIconBuilder::with_id("mergepilot-tray")
+                .icon(tray_icon)
                 .menu(&menu)
                 .tooltip("MergePilot")
                 .show_menu_on_left_click(false)
@@ -319,9 +437,10 @@ pub fn run() {
                 .build(app)?;
 
             // ── Start the daemon sidecar ──────────────────────────────────────
-            // Use port 8787 for both dev and release so the frontend URL
-            // constant never needs to change between builds.
-            let daemon_port_num: u16 = 8787;
+            // Packaged releases retain 8787. A worktree can opt into its own
+            // port so a UX/dev instance never takes over an installed app's
+            // runtime during parallel validation.
+            let daemon_port_num = configured_daemon_port();
             let _ = DAEMON_PORT.set(daemon_port_num);
             if let Err(e) = start_daemon_sidecar(&app.handle(), daemon_port_num) {
                 log::error!("Failed to start mergepilot-daemon: {e}");
@@ -483,6 +602,14 @@ mod tests {
             Some(r"C:\Program Files\MergePilot\mergepilot-daemon.exe"),
             Some(r#""\\?\C:\Program Files\MergePilot\mergepilot-daemon.exe" --port 8787"#),
         ));
+    }
+
+    #[test]
+    fn uses_default_runtime_port_when_no_valid_override_is_present() {
+        assert_eq!(daemon_port_from(None), 8787);
+        assert_eq!(daemon_port_from(Some("invalid")), 8787);
+        assert_eq!(daemon_port_from(Some("0")), 8787);
+        assert_eq!(daemon_port_from(Some("8788")), 8788);
     }
 
     #[test]

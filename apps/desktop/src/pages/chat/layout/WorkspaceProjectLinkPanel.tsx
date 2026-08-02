@@ -1,4 +1,5 @@
 import type { ProjectLink } from "../../../api.js";
+import { ActionButton, WorkbenchSelect } from "../../../components/workbench/WorkbenchPrimitives.js";
 import type { WorkspaceAction } from "../workflowTaskState.js";
 
 interface WorkspaceProjectLinkPanelProps {
@@ -12,6 +13,8 @@ interface WorkspaceProjectLinkPanelProps {
   busy: boolean;
   onProjectLinkSelect: (id: string) => void;
   runAction: (action: WorkspaceAction) => void;
+  showRepositoryContext?: boolean;
+  actionDensity?: "full" | "compact";
 }
 
 export function WorkspaceProjectLinkPanel({
@@ -25,81 +28,93 @@ export function WorkspaceProjectLinkPanel({
   busy,
   onProjectLinkSelect,
   runAction,
+  showRepositoryContext = true,
+  actionDensity = "full",
 }: WorkspaceProjectLinkPanelProps) {
   return (
     <div className="mt-2 border-t border-[rgb(var(--app-border))] pt-2">
       {projectLinks.length > 0 ? (
-        <select
+        <WorkbenchSelect
           aria-label="Workspace Project Link"
-          className="w-full bg-transparent text-xs text-[rgb(var(--app-text-muted))] outline-none"
+          className="min-h-8 bg-transparent px-0 py-1 text-xs text-[rgb(var(--app-text-muted))]"
           value={activeProjectLinkId ?? ""}
           onChange={(event) => onProjectLinkSelect(event.target.value)}
-          title="Project Link"
         >
           <option value="">No Project Link</option>
           {projectLinks.map((projectLink) => (
             <option key={projectLink.id} value={projectLink.id}>{projectLink.name}</option>
           ))}
-        </select>
+        </WorkbenchSelect>
       ) : (
         <p className="text-xs text-[rgb(var(--app-text-subtle))]">No Project Link</p>
       )}
-      <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-subtle))]" title={repoPath}>
-        {repoName || repoPath || "No local repository selected"}
-      </p>
+      {showRepositoryContext && (
+        <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-subtle))]" title={repoPath}>
+          {repoName || repoPath || "No local repository selected"}
+        </p>
+      )}
       {adoReady && (
         <>
           <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-subtle))]">
             {activeProjectLink?.adoProject} / {activeProjectLink?.adoRepoName}
           </p>
           <div className={workspaceProjectLinkActionsGridClass()}>
-            <button
+            <ActionButton
               type="button"
               onClick={() => runAction({ type: "inspect_pr_insight" })}
               disabled={busy}
-              className="truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
+              tone="quiet"
+              className="min-h-7 w-full truncate whitespace-nowrap px-1.5 py-1 text-[10px]"
               aria-label="Inspect PR insight"
-              title="Inspect the latest active pull request insight"
             >
               PR insight
-            </button>
-            <button
-              type="button"
-              onClick={() => runAction({ type: "check_pr_policy" })}
-              disabled={busy}
-              className="truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
-              title="Check policy evaluations for the latest active pull request"
-            >
-              Policy
-            </button>
-            <button
-              type="button"
-              onClick={() => runAction({ type: "list_pr_work_items" })}
-              disabled={busy}
-              className="truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
-              title="List linked work items for the latest active pull request"
-            >
-              Work items
-            </button>
-            <button
+            </ActionButton>
+            {actionDensity === "full" && (
+              <>
+                <ActionButton
+                  type="button"
+                  onClick={() => runAction({ type: "check_pr_policy" })}
+                  disabled={busy}
+                  tone="quiet"
+                  className="min-h-7 w-full truncate whitespace-nowrap px-1.5 py-1 text-[10px]"
+                  aria-label="Check pull request policy evaluations"
+                >
+                  Policy
+                </ActionButton>
+                <ActionButton
+                  type="button"
+                  onClick={() => runAction({ type: "list_pr_work_items" })}
+                  disabled={busy}
+                  tone="quiet"
+                  className="min-h-7 w-full truncate whitespace-nowrap px-1.5 py-1 text-[10px]"
+                  aria-label="List pull request work items"
+                >
+                  Work items
+                </ActionButton>
+              </>
+            )}
+            <ActionButton
               type="button"
               onClick={() => runAction({ type: "inspect_pipeline" })}
               disabled={busy}
-              className="truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-50"
+              tone="quiet"
+              className="min-h-7 w-full truncate whitespace-nowrap px-1.5 py-1 text-[10px]"
               aria-label="Inspect pipeline readiness"
-              title="Inspect Azure DevOps pipeline readiness for this project link"
             >
               Pipeline
-            </button>
-            <button
-              type="button"
-              onClick={() => runAction({ type: "trigger_pipeline", branch: branchName || undefined })}
-              disabled={busy}
-              className="col-span-full truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-warning-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-warning))] transition hover:bg-[rgb(var(--app-warning-soft))] disabled:cursor-wait disabled:opacity-50"
-              title="Prepare approval before triggering the configured Azure DevOps pipeline"
-            >
-              Run pipeline
-            </button>
+            </ActionButton>
+            {actionDensity === "full" && (
+              <ActionButton
+                type="button"
+                onClick={() => runAction({ type: "trigger_pipeline", branch: branchName || undefined })}
+                disabled={busy}
+                tone="quiet"
+                className="col-span-full min-h-7 w-full truncate whitespace-nowrap border border-[rgb(var(--app-warning-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-warning))] hover:bg-[rgb(var(--app-warning-soft))] hover:text-[rgb(var(--app-warning))]"
+                aria-label="Prepare approval before triggering the configured Azure DevOps pipeline"
+              >
+                Run pipeline
+              </ActionButton>
+            )}
           </div>
         </>
       )}

@@ -80,7 +80,6 @@ export function UserFooter() {
           <button
             className="flex h-11 w-11 items-center justify-center rounded-xl border border-transparent p-1 text-left transition-colors hover:bg-[rgb(var(--app-sidebar-hover))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/60"
             onClick={() => setMenuOpen((value) => !value)}
-            title={accountTitle}
             aria-label={`Account: ${displayName}`}
             aria-expanded={menuOpen}
           >

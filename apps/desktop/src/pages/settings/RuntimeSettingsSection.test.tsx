@@ -31,11 +31,13 @@ describe("RuntimeSettingsSection", () => {
     expect(runtimeOwnerCompactLabel(health)).toBe("Installed");
     expect(runtimeProcessLabel(health)).toContain("PID 40348");
     expect(html).toContain("System");
-    expect(html).toContain("Desktop");
-    expect(html).toContain("Daemon");
-    expect(html).toContain("Owner");
+    expect(html).toContain("Runtime");
+    expect(html).toContain(`Desktop ${DESKTOP_VERSION}`);
+    expect(html).toContain(`Daemon ${DESKTOP_VERSION}`);
+    expect(html).toContain("Installed");
     expect(html).toContain("Runtime details");
     expect(html).toContain("mergepilot-daemon.exe");
+    expect(html).not.toContain("settings-runtime-summary");
   });
 
   it("bounds runtime metadata by the Settings control column", () => {

@@ -8,6 +8,12 @@ import {
   type ReactNode,
 } from "react";
 import { UserFooter } from "./UserFooter.js";
+import {
+  ActionButton,
+  ActionLink,
+  WorkbenchDisclosure,
+  WorkbenchSkeleton,
+} from "../components/workbench/WorkbenchPrimitives.js";
 import { Tooltip, TooltipProvider } from "../components/ui/Tooltip.js";
 
 type RouteModuleLoader = () => Promise<unknown>;
@@ -66,7 +72,7 @@ export function pageShellFadeClass(): string {
 }
 
 export function appShellFrameClass(): string {
-  return "flex h-screen w-screen bg-[rgb(var(--app-bg))] text-[rgb(var(--app-text))]";
+  return "app-shell-frame flex h-screen w-screen text-[rgb(var(--app-text))]";
 }
 
 export function appShellSidebarClass(): string {
@@ -78,7 +84,7 @@ export function appShellGroupLabelClass(): string {
 }
 
 export function appShellNavLinkClass(active: boolean): string {
-  return `app-shell-nav-link rounded-lg border border-transparent text-[13px] font-medium leading-5 transition-[background-color,border-color,color,box-shadow] duration-[var(--app-motion-fast)] ${
+  return `app-shell-nav-link rounded-lg border border-transparent text-[13px] font-medium leading-5 transition-[background-color,border-color,color,box-shadow] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--app-focus))]/70 ${
     active
       ? "border-white/10 bg-[rgb(var(--app-sidebar-active))] text-[rgb(var(--app-sidebar-text))] shadow-[0_3px_8px_rgb(8_15_38_/_0.22)]"
       : "text-[rgb(var(--app-sidebar-muted))] hover:bg-[rgb(var(--app-sidebar-hover))] hover:text-[rgb(var(--app-sidebar-text))]"
@@ -265,14 +271,23 @@ function PageShell({
   );
 }
 
-function PageLoadingFallback() {
+export function PageLoadingFallback(): JSX.Element {
   return (
-    <div
-      aria-label="Preparing page"
-      className="flex min-h-24 items-center justify-center text-xs text-[rgb(var(--app-text-subtle))]"
+    <section
+      aria-label="Preparing workspace page"
+      aria-live="polite"
+      className="mx-auto flex min-h-48 w-full max-w-5xl flex-col justify-center gap-4 py-6"
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--app-text-subtle))]/60" />
-    </div>
+      <div className="max-w-xl">
+        <p className="text-sm font-medium text-[rgb(var(--app-text))]">Preparing workspace</p>
+        <p className="mt-1 text-xs leading-5 text-[rgb(var(--app-text-muted))]">
+          Loading this page and its local context.
+        </p>
+      </div>
+      <div className="max-w-3xl">
+        <WorkbenchSkeleton rows={2} />
+      </div>
+    </section>
   );
 }
 
@@ -325,28 +340,17 @@ export function RouteErrorFallback({ error }: { error: Error }): JSX.Element {
         Refresh the page data, switch routes, or return to Chat and try the workflow again.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="rounded-md bg-[rgb(var(--app-accent))] px-3 py-1.5 text-sm font-medium text-white"
-        >
+        <ActionButton type="button" tone="primary" onClick={() => window.location.reload()}>
           Refresh page
-        </button>
-        <a
+        </ActionButton>
+        <ActionLink
           href="#/chat"
-          className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-1.5 text-sm text-[rgb(var(--app-text))]"
+          className="text-sm"
         >
           Back to Chat
-        </a>
+        </ActionLink>
       </div>
-      <details className="mt-4 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-2">
-        <summary className="cursor-pointer text-xs font-medium text-[rgb(var(--app-text-muted))]">
-          Technical detail
-        </summary>
-        <p className="mt-2 break-words font-mono text-xs text-[rgb(var(--app-text-subtle))]">
-          {error.message}
-        </p>
-      </details>
+      <WorkbenchDisclosure className="mt-4">{error.message}</WorkbenchDisclosure>
     </div>
   );
 }
@@ -391,7 +395,6 @@ export function FullLayout() {
                   <Tooltip key={item.to} content={item.label} contentClassName="app-shell-compact-tooltip">
                     <NavLink
                       to={item.to}
-                      title={item.label}
                       aria-label={item.label}
                       className={appShellNavLinkClass(
                         item.match ? location.pathname === item.match : location.pathname === item.to,

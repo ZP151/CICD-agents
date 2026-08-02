@@ -1,9 +1,13 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import type {
+  AnchorHTMLAttributes,
   ButtonHTMLAttributes,
   HTMLAttributes,
+  InputHTMLAttributes,
   PropsWithChildren,
   ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
 } from "react";
 
 type ActionTone = "primary" | "secondary" | "danger" | "quiet";
@@ -154,6 +158,152 @@ export function ActionButton({
   );
 }
 
+/**
+ * Route recovery actions are links semantically, but must look and focus like
+ * their adjacent workbench actions. Keeping this separate from ActionButton
+ * preserves keyboard and navigation semantics without a second visual system.
+ */
+export function ActionLink({
+  tone = "secondary",
+  className = "",
+  children,
+  ...props
+}: PropsWithChildren<AnchorHTMLAttributes<HTMLAnchorElement> & { tone?: ActionTone }>) {
+  return (
+    <a
+      {...props}
+      className={`inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-[background-color,border-color,color,transform] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45 active:translate-y-px ${actionToneClass[tone]} ${className}`.trim()}
+    >
+      {children}
+    </a>
+  );
+}
+
+/**
+ * A selectable worklist item for history, activity, and other drill-in lists.
+ * It keeps selection contrast and keyboard focus identical without turning
+ * each list into a visually heavy card grid.
+ */
+export function WorkbenchListItemButton({
+  selected = false,
+  className = "",
+  children,
+  ...props
+}: PropsWithChildren<ButtonHTMLAttributes<HTMLButtonElement> & { selected?: boolean }>) {
+  return (
+    <button
+      {...props}
+      aria-current={selected ? "true" : undefined}
+      data-state={selected ? "selected" : "idle"}
+      className={`w-full rounded-lg border px-3 py-2.5 text-left transition-[background-color,border-color,color,box-shadow] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45 ${
+        selected
+          ? "border-[rgb(var(--app-accent))]/50 bg-[rgb(var(--app-accent-soft))]"
+          : "border-transparent hover:border-[rgb(var(--app-border))] hover:bg-[rgb(var(--app-surface-raised))]"
+      } ${className}`.trim()}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function WorkbenchTextInput({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={`w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text))] outline-none transition-[background-color,border-color,box-shadow] duration-[var(--app-motion-fast)] placeholder:text-[rgb(var(--app-text-subtle))] hover:border-[rgb(var(--app-border-strong))] focus:border-[rgb(var(--app-accent))] focus:ring-2 focus:ring-[rgb(var(--app-focus))]/35 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
+    />
+  );
+}
+
+/**
+ * The native select counterpart to WorkbenchTextInput. Keeping its focus,
+ * hover, disabled and sizing behavior in one place prevents each workflow
+ * page from accumulating a slightly different form language.
+ */
+export function WorkbenchSelect({ className = "", ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className={`min-h-9 w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text))] outline-none transition-[background-color,border-color,box-shadow] duration-[var(--app-motion-fast)] hover:border-[rgb(var(--app-border-strong))] focus:border-[rgb(var(--app-accent))] focus:ring-2 focus:ring-[rgb(var(--app-focus))]/35 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
+    />
+  );
+}
+
+export function WorkbenchTextArea({ className = "", ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      {...props}
+      className={`w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text))] outline-none transition-[background-color,border-color,box-shadow] duration-[var(--app-motion-fast)] placeholder:text-[rgb(var(--app-text-subtle))] hover:border-[rgb(var(--app-border-strong))] focus:border-[rgb(var(--app-accent))] focus:ring-2 focus:ring-[rgb(var(--app-focus))]/35 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
+    />
+  );
+}
+
+export function WorkbenchSegmentedControl<T extends string>({
+  ariaLabel,
+  options,
+  value,
+  onValueChange,
+}: {
+  ariaLabel?: string;
+  options: readonly { label: string; value: T; disabled?: boolean }[];
+  value: T;
+  onValueChange: (value: T) => void;
+}) {
+  return (
+    <div className="workbench-segmented-control inline-flex min-w-0 gap-1 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-1" role="group" aria-label={ariaLabel}>
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={selected}
+            disabled={option.disabled}
+            onClick={() => onValueChange(option.value)}
+            className={`min-h-7 rounded px-3 text-xs font-medium transition-[background-color,color,box-shadow,transform] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45 disabled:cursor-not-allowed disabled:opacity-50 ${
+              selected
+                ? "bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text))] shadow-sm"
+                : "text-[rgb(var(--app-text-muted))] hover:bg-[rgb(var(--app-control-hover))] hover:text-[rgb(var(--app-text))]"
+            }`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function WorkbenchToggle({
+  checked,
+  disabled = false,
+  onChange,
+  ariaLabel = "Toggle setting",
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+  ariaLabel?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-label={ariaLabel}
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-[background-color,border-color,box-shadow] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45 disabled:cursor-not-allowed disabled:opacity-50 ${
+        checked
+          ? "border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent))]"
+          : "border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-surface-raised))]"
+      }`}
+    >
+      <span aria-hidden="true" className={`pointer-events-none h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-[var(--app-motion-fast)] ${checked ? "translate-x-[18px]" : "translate-x-[3px]"}`} />
+    </button>
+  );
+}
+
 export function StatusBadge({
   tone = "neutral",
   children,
@@ -180,21 +330,78 @@ export function InlineNotice({
   );
 }
 
+/**
+ * Keeps optional diagnostic output available without turning routine recovery
+ * states into stacked cards. Native details semantics preserve keyboard and
+ * screen-reader behaviour across every workspace route.
+ */
+export function WorkbenchDisclosure({
+  label = "Technical detail",
+  children,
+  className = "",
+}: PropsWithChildren<{ label?: string; className?: string }>) {
+  return (
+    <details className={`group mt-2 min-w-0 text-xs text-[rgb(var(--app-text-muted))] ${className}`.trim()}>
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 select-none text-[rgb(var(--app-text-subtle))] transition-colors hover:text-[rgb(var(--app-text-muted))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/35 [&::-webkit-details-marker]:hidden">
+        <span aria-hidden="true" className="text-sm leading-none transition-transform duration-[var(--app-motion-fast)] group-open:rotate-90">›</span>
+        {label}
+      </summary>
+      <div className="mt-1.5 break-words font-mono leading-5 text-[rgb(var(--app-text-muted))]">{children}</div>
+    </details>
+  );
+}
+
 export function WorkbenchEmptyState({
   title,
   description,
   action,
+  className = "",
 }: {
   title: string;
   description: string;
   action?: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="flex min-h-48 flex-col items-start justify-center rounded-lg border border-dashed border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-5 py-6">
+    <section className={`flex min-h-48 flex-col items-start justify-center rounded-lg border border-dashed border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-5 py-6 ${className}`.trim()}>
       <h3 className="text-sm font-semibold text-[rgb(var(--app-text))]">{title}</h3>
       <p className="mt-1 max-w-xl text-sm leading-5 text-[rgb(var(--app-text-muted))]">{description}</p>
       {action && <div className="mt-3">{action}</div>}
     </section>
+  );
+}
+
+/**
+ * Shared settings vocabulary for compact, desktop-first configuration pages.
+ * These remain low-chrome rows instead of nesting a card inside every setting.
+ */
+export function WorkbenchSettingsSection({
+  title,
+  children,
+}: PropsWithChildren<{ title: string }>) {
+  return (
+    <section>
+      <h3 className="mb-2 text-sm font-semibold text-[rgb(var(--app-text))]">{title}</h3>
+      <div className="divide-y divide-[rgb(var(--app-border))] overflow-hidden rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+export function WorkbenchSettingsRow({
+  title,
+  description,
+  children,
+}: PropsWithChildren<{ title: string; description?: ReactNode }>) {
+  return (
+    <div className="grid min-w-0 gap-3 px-4 py-3 max-[760px]:grid-cols-1 min-[761px]:grid-cols-[minmax(0,1fr)_minmax(12rem,42%)] min-[761px]:items-center">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-[rgb(var(--app-text))]">{title}</p>
+        {description && <div className="mt-1 text-xs leading-5 text-[rgb(var(--app-text-muted))]">{description}</div>}
+      </div>
+      {children && <div className="flex min-w-0 justify-start min-[761px]:justify-end">{children}</div>}
+    </div>
   );
 }
 
@@ -213,12 +420,14 @@ export function WorkbenchSidePanel({
   onOpenChange,
   title,
   description,
+  actions,
   children,
 }: PropsWithChildren<{
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   description?: string;
+  actions?: ReactNode;
 }>) {
   if (typeof document === "undefined") {
     if (!open) return null;
@@ -229,7 +438,10 @@ export function WorkbenchSidePanel({
             <h3 className="truncate text-sm font-semibold text-[rgb(var(--app-text))]">{title}</h3>
             {description && <p className="mt-1 text-xs leading-5 text-[rgb(var(--app-text-muted))]">{description}</p>}
           </div>
-          <ActionButton aria-label={`Close ${title}`} tone="quiet" className="shrink-0 px-2" onClick={() => onOpenChange(false)}>Close</ActionButton>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            {actions}
+            <ActionButton aria-label={`Close ${title}`} tone="quiet" className="px-2" onClick={() => onOpenChange(false)}>Close</ActionButton>
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
       </aside>
@@ -246,9 +458,12 @@ export function WorkbenchSidePanel({
               <Dialog.Title className="truncate text-sm font-semibold text-[rgb(var(--app-text))]">{title}</Dialog.Title>
               {description && <Dialog.Description className="mt-1 text-xs leading-5 text-[rgb(var(--app-text-muted))]">{description}</Dialog.Description>}
             </div>
-            <Dialog.Close asChild>
-              <ActionButton aria-label={`Close ${title}`} tone="quiet" className="shrink-0 px-2">Close</ActionButton>
-            </Dialog.Close>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+              {actions}
+              <Dialog.Close asChild>
+                <ActionButton aria-label={`Close ${title}`} tone="quiet" className="px-2">Close</ActionButton>
+              </Dialog.Close>
+            </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
         </Dialog.Content>

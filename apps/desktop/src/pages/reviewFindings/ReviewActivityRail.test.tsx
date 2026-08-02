@@ -45,8 +45,9 @@ describe("ReviewActivityRail", () => {
 
     expect(html).toContain("Show activity");
     expect(html).toContain('aria-label="Show activity"');
-    expect(html).toContain("Show recent review activity");
     expect(html).toContain(">Activity</button>");
+    expect(html).toContain("focus-visible:ring-[rgb(var(--app-focus))]/45");
+    expect(html).not.toContain("title=\"Show recent review activity\"");
     expect(html).not.toContain("Review completed");
   });
 

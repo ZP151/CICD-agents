@@ -1,7 +1,12 @@
 import { formatDate, runTone } from "./pipelineModel.js";
 import type { PipelineInspectState, PipelineRow } from "./pipelineTypes.js";
 import { MarkdownContent } from "../../components/conversation/ConversationPartRenderer.js";
-import { ActionButton, InlineNotice, StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
+import {
+  ActionButton,
+  ActionLink,
+  InlineNotice,
+  StatusBadge,
+} from "../../components/workbench/WorkbenchPrimitives.js";
 
 interface PipelineRowCardProps {
   row: PipelineRow;
@@ -43,14 +48,8 @@ export function PipelineRowCard({
             <span className="font-mono text-xs text-[rgb(var(--app-accent-readable))]">
               #{row.pipelineId}
             </span>
-            <StatusBadge>
-              {row.source === "saved" ? "saved" : "discovered"}
-            </StatusBadge>
             <StatusBadge className={tone.tone}>
               {tone.label}
-            </StatusBadge>
-            <StatusBadge>
-              {row.projectLinkName}
             </StatusBadge>
           </div>
           <h3 className="truncate text-sm font-medium text-[rgb(var(--app-text))]">
@@ -58,28 +57,28 @@ export function PipelineRowCard({
           </h3>
           <p className="mt-1 truncate font-mono text-xs text-[rgb(var(--app-text-muted))]">
             {row.project || "No project"} / {row.repository || "No repository"}
+            <span className="font-sans text-[rgb(var(--app-text-subtle))]"> · {row.projectLinkName} · {row.source}</span>
           </p>
         </div>
         {dateLabel && <p className="shrink-0 text-xs text-[rgb(var(--app-text-subtle))]">{dateLabel}</p>}
       </div>
 
       <div className={pipelineFieldGridClass()} aria-label="Pipeline summary">
-        <PipelineSummaryChip
-          label="Branches"
-          value={`${row.defaultBranch || "not set"} -> ${row.targetBranch || "main"}`}
-          title={`Default branch: ${row.defaultBranch || "not set"}; Target branch: ${row.targetBranch || "main"}`}
-        />
-        <PipelineSummaryChip
-          label="Linked PRs"
-          value={String(row.relatedPullRequests.length)}
-          title={`${row.relatedPullRequests.length} linked pull request${row.relatedPullRequests.length === 1 ? "" : "s"}`}
-        />
+        <span title={`Default branch: ${row.defaultBranch || "not set"}; Target branch: ${row.targetBranch || "main"}`}>
+          {row.defaultBranch || "not set"} → {row.targetBranch || "main"}
+        </span>
+        <span aria-hidden="true">·</span>
+        <span title={`${row.relatedPullRequests.length} linked pull request${row.relatedPullRequests.length === 1 ? "" : "s"}`}>
+          {row.relatedPullRequests.length} linked PR{row.relatedPullRequests.length === 1 ? "" : "s"}
+        </span>
         <LatestRunLink row={row} />
       </div>
 
       {state.phase === "done" && (
         <div className="mt-3 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3">
-          <p className="text-xs text-[rgb(var(--app-text-muted))]">{state.result.summary}</p>
+          <p className="text-xs text-[rgb(var(--app-text-muted))]">
+            {pipelineInspectionSummary(state.result.summary, inspectedRuns.length)}
+          </p>
           {inspectedRuns.length > 0 && (
             <div className="mt-3 divide-y divide-[rgb(var(--app-border))] rounded-md border border-[rgb(var(--app-border))]">
               {inspectedRuns.slice(0, 5).map((run) => {
@@ -111,36 +110,38 @@ export function PipelineRowCard({
             <p className="text-[10px] font-semibold uppercase text-[rgb(var(--app-text-muted))]">
               AI analysis
             </p>
-            <span
-              className={`rounded-full border px-2 py-0.5 text-[10px] ${
-                state.phase === "analysis_error"
-                  ? "border-[rgb(var(--app-warning))]/35 bg-[rgb(var(--app-warning)_/_0.10)] text-[rgb(var(--app-warning))]"
-                  : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))]"
-              }`}
-            >
+            <StatusBadge className={
+              state.phase === "analysis_error"
+                ? "bg-[rgb(var(--app-warning)_/_0.10)] text-[rgb(var(--app-warning))] ring-[rgb(var(--app-warning))]/35"
+                : "bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text-muted))] ring-[rgb(var(--app-border))]"
+            }>
               {state.phase === "analyzing"
                 ? "Analyzing"
                 : state.phase === "analysis_error"
                   ? "Error"
               : "Ready"}
-            </span>
+            </StatusBadge>
           </div>
           <div className={pipelineAnalysisPreviewClass()}>
             <MarkdownContent markdown={state.analysis || "Starting analysis..."} />
           </div>
-          <button
+          <ActionButton
             type="button"
+            tone="quiet"
             onClick={() => onOpenDetails(row)}
-            className="mt-2 text-xs text-[rgb(var(--app-accent-readable))] hover:underline"
+            className="mt-2 min-h-7 px-0 py-1 text-[rgb(var(--app-accent-readable))] hover:underline"
           >
             Open analysis
-          </button>
+          </ActionButton>
         </div>
       )}
 
       {state.phase === "approval" && (
         <InlineNotice tone="info" title="Approval required">
-          {state.result.summary}. Open Chat to review and confirm the approval proposal.
+          <p>{state.result.summary}. Review and confirm the proposal in Chat.</p>
+          <ActionLink href="#/chat" tone="secondary" className="mt-2 w-fit">
+            Open Chat approval
+          </ActionLink>
         </InlineNotice>
       )}
 
@@ -152,6 +153,7 @@ export function PipelineRowCard({
         {row.source === "discovered" && (
           <ActionButton
             type="button"
+            tone="quiet"
             disabled={state.phase === "loading"}
             onClick={() => onSave(row)}
           >
@@ -165,6 +167,7 @@ export function PipelineRowCard({
           state.phase === "error") && (
           <ActionButton
             type="button"
+            tone="quiet"
             onClick={() => onOpenDetails(row)}
           >
             Details
@@ -172,6 +175,7 @@ export function PipelineRowCard({
         )}
         <ActionButton
           type="button"
+          tone="quiet"
           disabled={state.phase === "loading" || state.phase === "analyzing"}
           onClick={() => onInspect(row)}
           loading={state.phase === "loading"}
@@ -180,6 +184,7 @@ export function PipelineRowCard({
         </ActionButton>
         <ActionButton
           type="button"
+          tone="quiet"
           disabled={state.phase === "loading" || state.phase === "analyzing"}
           onClick={() => onAnalyze(row)}
           loading={state.phase === "analyzing"}
@@ -214,48 +219,27 @@ export function pipelineFieldGridClass(): string {
   return "mt-3 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-[rgb(var(--app-text-muted))]";
 }
 
-function PipelineSummaryChip({
-  label,
-  value,
-  title,
-}: {
-  label: string;
-  value: string;
-  title: string;
-}): JSX.Element {
-  return (
-    <span
-      className="inline-flex max-w-full min-w-0 items-center gap-1 rounded border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5"
-      title={title}
-    >
-      <span className="text-[rgb(var(--app-text-subtle))]">{label}</span>
-      <span className="min-w-0 truncate text-[rgb(var(--app-text))]">{value}</span>
-    </span>
-  );
+/** A compact card must never render raw tool output; full evidence lives in Details. */
+export function pipelineInspectionSummary(_rawSummary: string, runCount: number): string {
+  if (runCount === 0) return "Inspection completed. No recent pipeline runs were returned.";
+  return `Inspection completed. ${runCount} recent run${runCount === 1 ? " is" : "s are"} available in Details.`;
 }
 
 function LatestRunLink({ row }: { row: PipelineRow }): JSX.Element | null {
   if (!row.latestRun) return null;
   const label = row.latestRun.name || `Run ${row.latestRun.id}`;
   const title = `Latest run: ${label}`;
-  return (
-    <span
-      className="inline-flex max-w-full min-w-0 items-center gap-1 rounded border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5"
+  return row.latestRun.url ? (
+    <a
+      href={row.latestRun.url}
+      target="_blank"
+      rel="noreferrer"
+      className="min-w-0 truncate text-[rgb(var(--app-accent-readable))] hover:underline"
       title={title}
     >
-      <span className="text-[rgb(var(--app-text-subtle))]">Latest run</span>
-      {row.latestRun.url ? (
-        <a
-          href={row.latestRun.url}
-          target="_blank"
-          rel="noreferrer"
-          className="min-w-0 truncate text-[rgb(var(--app-accent-readable))] hover:underline"
-        >
-          {label}
-        </a>
-      ) : (
-        <span className="min-w-0 truncate text-[rgb(var(--app-text))]">{label}</span>
-      )}
-    </span>
+      · Latest run {label}
+    </a>
+  ) : (
+    <span className="min-w-0 truncate" title={title}>· Latest run {label}</span>
   );
 }

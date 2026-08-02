@@ -12,7 +12,9 @@ export interface PublicToolEvidence {
  */
 export function groundFinalResponse(response: string, evidence: PublicToolEvidence[]): string {
   const conclusion = removeDanglingFinalSections(
-    removeFinalEvidenceAndMenuSections(removeRepeatedExecutionPreamble(response, evidence)),
+    removeFinalEvidenceAndMenuSections(
+      removeUnrequestedNextActions(removeRepeatedExecutionPreamble(response, evidence).split(/\r?\n/)).join("\n"),
+    ),
   );
   const additions = evidence
     .filter((entry) => entry.ok && entry.output?.trim())
@@ -60,7 +62,8 @@ function removeUnrequestedNextActions(lines: string[]): string[] {
   // also makes the final look like a second planning phase after the Working
   // transcript has been sealed. Keep factual notes (for example read-only
   // confirmation) but remove only explicit unrequested action offers.
-  return lines.filter((line) => !/\b(?:next steps? I can run|I can (?:run|show|prepare)|requires your approval)\b/i.test(line));
+  return lines.filter((line) => !/\b(?:next steps? I can run|I can (?:run|show|display|prepare)|requires your approval)\b/i.test(line)
+    && !/^\s*if you (?:want|would like)\b.*\bI can\b/i.test(line));
 }
 
 /**
@@ -73,15 +76,29 @@ function removeUnrequestedNextActions(lines: string[]): string[] {
 function removeDanglingFinalSections(response: string): string {
   const lines = response.split(/\r?\n/);
   const kept = lines.filter((line, index) => {
-    if (!/^(?:#{1,6}\s*)?(?:suggestions?|next steps?)\s*:\s*$/i.test(line.trim())) return true;
-    return lines.slice(index + 1).some((following) => following.trim());
+    if (!isFinalSectionHeading(line)) return true;
+    const nextContent = lines.slice(index + 1).find((following) => following.trim());
+    // A heading immediately followed by another heading has no body. The
+    // model occasionally emits a sequence such as "Findings", "Risks", and
+    // "Recommended next steps" before writing any actual facts. Rendering
+    // those shells produces large, misleading gaps in Final.
+    return nextContent !== undefined && !isFinalSectionHeading(nextContent);
   });
   while (kept.length > 0 && !kept.at(-1)?.trim()) kept.pop();
-  while (kept.length > 0 && /^(?:#{1,6}\s*)?[^:\n]{1,100}:\s*$/i.test(kept.at(-1)?.trim() ?? "")) {
+  while (kept.length > 0 && isFinalSectionHeading(kept.at(-1) ?? "")) {
     kept.pop();
     while (kept.length > 0 && !kept.at(-1)?.trim()) kept.pop();
   }
-  return kept.join("\n").trim();
+  return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function isFinalSectionHeading(line: string): boolean {
+  const trimmed = line.trim();
+  return /^(?:#{1,6}\s*)?(?:\*\*)?\s*(?:findings?|risks?(?:\s+and\s+quick\s+checks)?|recommended\s+next\s+steps?|suggestions?|next\s+steps?|verified\s+facts)(?:\s*\([^)]*\))?\s*:\s*(?:\*\*)?\s*$/i.test(trimmed)
+    // Model-written section labels are intentionally broad here. A label can
+    // be named for the inspected artifact (for example, "Most relevant
+    // changed config:") and should disappear when it never gains a body.
+    || /^(?:#{1,6}\s*)?(?:\*\*)?[^:\n]{1,100}:\s*(?:\*\*)?\s*$/.test(trimmed);
 }
 
 /**

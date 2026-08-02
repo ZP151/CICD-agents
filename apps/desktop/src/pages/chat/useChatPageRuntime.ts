@@ -56,6 +56,7 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
   const openPrInsightSourceInActivity = useCallback((source: { artifactId: string }) => {
     sessionStorage.setItem(ACTIVITY_HANDOFF_KEY, JSON.stringify(buildActivityPrInsightHandoffDraft({
       artifactId: source.artifactId,
+      source: "chat",
     })));
     navigate("/activity");
   }, [navigate]);

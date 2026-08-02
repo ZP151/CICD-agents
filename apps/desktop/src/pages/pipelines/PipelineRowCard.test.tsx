@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   PipelineRowCard,
+  pipelineInspectionSummary,
   pipelineAnalysisPreviewClass,
   pipelineActionRowClass,
   pipelineFieldGridClass,
@@ -26,6 +27,14 @@ const baseRow: PipelineRow = {
 };
 
 describe("PipelineRowCard", () => {
+  it("keeps raw tool output out of compact pipeline cards", () => {
+    const raw = `Pipeline #117 ${"C:\\very-long-path\\build.log ".repeat(40)}`;
+    const summary = pipelineInspectionSummary(raw, 3);
+
+    expect(summary).toBe("Inspection completed. 3 recent runs are available in Details.");
+    expect(summary).not.toContain("very-long-path");
+  });
+
   it("keys row state by repository and branch scope as well as pipeline id", () => {
     expect(rowKey(baseRow)).not.toBe(
       rowKey({ ...baseRow, repository: "OtherRepo" }),
@@ -54,8 +63,9 @@ describe("PipelineRowCard", () => {
     expect(html).not.toContain("Unknown");
     expect(html).toContain("min-w-0 flex-1");
     expect(html).toContain("Pipeline summary");
-    expect(html).toContain("Branches");
-    expect(html).toContain("main -&gt; main");
+    expect(html).toContain("ClaimBot_API link · discovered");
+    expect(html).toContain("main → main");
+    expect(html).toContain("focus-visible:ring-2");
     expect(html).toContain("title=\"Default branch: main; Target branch: main\"");
     expect(html).not.toContain("Latest run");
   });
@@ -132,6 +142,35 @@ describe("PipelineRowCard", () => {
     expect(html).toContain("Succeeded");
     expect(html).toContain("text-[rgb(var(--app-success))]");
     expect(html).toContain("ring-[rgb(var(--app-success-border))]");
+  });
+
+  it("hands an approval back to Chat with an explicit recovery action", () => {
+    const html = renderToStaticMarkup(
+      <PipelineRowCard
+        row={baseRow}
+        state={{
+          phase: "approval",
+          result: {
+            ok: true,
+            action: "trigger_pipeline",
+            repoPath: baseRow.repoPath,
+            summary: "Pipeline trigger is ready for approval.",
+            workflowState: { status: "waiting_for_approval", currentStep: "approve pipeline", completedTools: [] },
+            tools: [],
+          },
+        }}
+        onInspect={() => undefined}
+        onTrigger={() => undefined}
+        onAnalyze={() => undefined}
+        onSave={() => undefined}
+        onOpenDetails={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Approval required");
+    expect(html).toContain('href="#/chat"');
+    expect(html).toContain("Open Chat approval");
+    expect(html).not.toContain("Open Chat to review");
   });
 
   it("lets pipeline action buttons wrap naturally on narrow cards", () => {

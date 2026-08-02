@@ -70,12 +70,14 @@ describe("PullRequestCard", () => {
 
     expect(html).toContain("Open insight");
     expect(html).toContain("Run review");
+    expect(html).toContain("focus-visible:ring-2");
     expect(html).not.toContain("Preview Insight");
     expect(html).toContain("Author:");
     expect(html).toContain("Created:");
     expect(html).toContain("Reviewers:");
     expect(html).toContain('title="Author: Zhou Ping; Created:');
     expect(html).toContain("Latest insight");
+    expect(html).not.toContain('title="### PR Insight Summary');
     expect(html).toContain("rounded-lg bg-[rgb(var(--app-surface-raised))]");
     expect(html).toContain("max-w-[72ch]");
     expect(html).toContain("truncate");
@@ -83,6 +85,91 @@ describe("PullRequestCard", () => {
     expect(html).not.toContain("<strong>Ready:");
     expect(html).not.toContain("<li>");
     expect(html).toContain("only documentation changed.");
+  });
+
+  it("presents a completed review as state rather than a disabled action button", () => {
+    const html = renderToStaticMarkup(
+      <PullRequestCard
+        pr={pr}
+        projectLinkId="pl-1"
+        queueState={{
+          phase: "done",
+          result: {
+            ok: true,
+            pullRequestId: pr.id,
+            repository: pr.repository,
+            iterationId: 1,
+            decisionQueue: "auto_approved",
+            decisionRiskLevel: "low",
+            decisionReason: "No blocking findings.",
+            findingCount: 0,
+            readiness: "ready",
+            lastRunAt: "2026-08-02T12:00:00.000Z",
+            autoApprovalActor: "MergePilot",
+            tokensIn: 0,
+            tokensOut: 0,
+            summary: "No blocking findings.",
+          },
+        }}
+        previewState={{ phase: "idle" }}
+        insightArtifacts={[]}
+        contextState={undefined}
+        isExpanded={false}
+        highlighted={false}
+        onToggleContext={() => undefined}
+        onPreviewInsight={() => undefined}
+        onQueueForReview={() => undefined}
+        onOpenInsight={() => undefined}
+        onOpenSavedInsightInChat={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Auto-approved");
+    expect(html).toContain("No blocking findings.");
+    expect(html).not.toContain("disabled=\"\"");
+    expect(html).not.toContain("Open Review Queue");
+  });
+
+  it("provides a direct review-queue handoff only when a human decision is needed", () => {
+    const html = renderToStaticMarkup(
+      <PullRequestCard
+        pr={pr}
+        projectLinkId="pl-1"
+        queueState={{
+          phase: "done",
+          result: {
+            ok: true,
+            pullRequestId: pr.id,
+            repository: pr.repository,
+            iterationId: 1,
+            decisionQueue: "needs_human_review",
+            decisionRiskLevel: "medium",
+            decisionReason: "Review the security-sensitive change.",
+            findingCount: 2,
+            readiness: "needs_attention",
+            lastRunAt: "2026-08-02T12:00:00.000Z",
+            autoApprovalActor: "",
+            tokensIn: 0,
+            tokensOut: 0,
+            summary: "Two findings require a human decision.",
+          },
+        }}
+        previewState={{ phase: "idle" }}
+        insightArtifacts={[]}
+        contextState={undefined}
+        isExpanded={false}
+        highlighted={false}
+        onToggleContext={() => undefined}
+        onPreviewInsight={() => undefined}
+        onQueueForReview={() => undefined}
+        onOpenInsight={() => undefined}
+        onOpenSavedInsightInChat={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Needs review");
+    expect(html).toContain('href="#/findings"');
+    expect(html).toContain("Open Review Queue");
   });
 });
 

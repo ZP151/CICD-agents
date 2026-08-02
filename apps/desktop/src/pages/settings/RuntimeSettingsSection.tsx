@@ -1,6 +1,10 @@
 import type { HealthStatus } from "../../api";
 import { DESKTOP_BUILD_SHA, DESKTOP_VERSION } from "../../buildInfo.js";
-import { SettingsRow, SettingsSection, StatusPill } from "./SettingsControls.js";
+import {
+  StatusBadge,
+  WorkbenchSettingsRow,
+  WorkbenchSettingsSection,
+} from "../../components/workbench/WorkbenchPrimitives.js";
 
 export function runtimeVersionTone(health: HealthStatus | null): "success" | "warning" | "neutral" {
   if (!health) return "neutral";
@@ -29,70 +33,59 @@ export function runtimeProcessLabel(health: HealthStatus | null): string {
 
 export function RuntimeSettingsSection({ health }: { health: HealthStatus | null }): JSX.Element {
   return (
-    <SettingsSection title="System">
-      <div
-        className="settings-runtime-summary"
-        title={[
-          `Desktop: ${DESKTOP_VERSION}${DESKTOP_BUILD_SHA ? ` (${DESKTOP_BUILD_SHA.slice(0, 12)})` : ""}`,
-          `Daemon: ${health?.version || "Unknown"} · ${health?.runtimeMode || "No runtime mode"}`,
-          `Owner: ${runtimeOwnerLabel(health)}`,
-        ].join("\n")}
+    <WorkbenchSettingsSection title="System">
+      <WorkbenchSettingsRow
+        title="Runtime"
+        description="Desktop, daemon, and ownership status."
       >
-        <div>
-          <p className="settings-runtime-label">Desktop</p>
-          <StatusPill tone="success">{DESKTOP_VERSION}</StatusPill>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+          <StatusBadge tone="success">Desktop {DESKTOP_VERSION}</StatusBadge>
+          <StatusBadge tone={runtimeVersionTone(health)}>
+            Daemon {health?.version || "Unknown"}
+          </StatusBadge>
+          <StatusBadge tone={runtimeOwnerTone(health)}>{runtimeOwnerCompactLabel(health)}</StatusBadge>
         </div>
-        <div>
-          <p className="settings-runtime-label">Daemon</p>
-          <StatusPill tone={runtimeVersionTone(health)}>
-            {health?.version || "Unknown"}
-          </StatusPill>
-        </div>
-        <div>
-          <p className="settings-runtime-label">Owner</p>
-          <StatusPill tone={runtimeOwnerTone(health)}>{runtimeOwnerCompactLabel(health)}</StatusPill>
-        </div>
-      </div>
+      </WorkbenchSettingsRow>
       <details className="settings-advanced">
         <summary>
           <span>Runtime details</span>
           <span className="settings-advanced-meta">{health?.runtimeMode || "Unknown"}</span>
         </summary>
         <div className="settings-advanced-list">
-          <SettingsRow title="Desktop build">
+          <WorkbenchSettingsRow title="Desktop build">
             <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 text-right">
-              <StatusPill tone="success">{DESKTOP_VERSION}</StatusPill>
+              <StatusBadge tone="success">{DESKTOP_VERSION}</StatusBadge>
               {DESKTOP_BUILD_SHA && (
                 <span className={runtimeBuildShaClass()}>
                   {DESKTOP_BUILD_SHA.slice(0, 12)}
                 </span>
               )}
             </div>
-          </SettingsRow>
-          <SettingsRow title="Daemon runtime">
+          </WorkbenchSettingsRow>
+          <WorkbenchSettingsRow title="Daemon runtime">
             <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 text-right">
-              <StatusPill tone={runtimeVersionTone(health)}>
+              <StatusBadge tone={runtimeVersionTone(health)}>
                 {health?.version || "Unknown"}
-              </StatusPill>
+              </StatusBadge>
               <span className={runtimeModeLabelClass()}>
                 {health?.runtimeMode || "No runtime mode"}
               </span>
             </div>
-          </SettingsRow>
-          <SettingsRow title="Sidecar owner">
-            <StatusPill tone={runtimeOwnerTone(health)}>{runtimeOwnerLabel(health)}</StatusPill>
-          </SettingsRow>
-          <SettingsRow title="Runtime process">
+          </WorkbenchSettingsRow>
+          <WorkbenchSettingsRow title="Sidecar owner">
+            <StatusBadge tone={runtimeOwnerTone(health)}>{runtimeOwnerLabel(health)}</StatusBadge>
+          </WorkbenchSettingsRow>
+          <WorkbenchSettingsRow title="Runtime process">
             <p
               className="max-w-full break-all text-right font-mono text-[11px] leading-relaxed text-[rgb(var(--app-text-muted))]"
               title={runtimeProcessLabel(health)}
             >
               {runtimeProcessLabel(health)}
             </p>
-          </SettingsRow>
+          </WorkbenchSettingsRow>
         </div>
       </details>
-    </SettingsSection>
+    </WorkbenchSettingsSection>
   );
 }
 

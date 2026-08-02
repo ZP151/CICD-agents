@@ -6,6 +6,7 @@ import {
   type ActivityCategory,
 } from "./reviewQueueViewModel.js";
 import {
+  ActionButton,
   StatusBadge,
   WorkbenchFilterTabs,
   WorkbenchSidePanel,
@@ -29,16 +30,15 @@ export function ReviewActivityRail({
   if (!open) {
     return (
       <aside className={reviewActivityRailCollapsedClass()}>
-        <button
+        <ActionButton
           type="button"
           onClick={() => onOpenChange(true)}
-          className="pointer-events-auto inline-flex h-8 items-center gap-1.5 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 text-xs text-[rgb(var(--app-text-muted))] shadow-lg transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-accent))]/30"
+          className="pointer-events-auto min-h-8 gap-1.5 border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 text-[rgb(var(--app-text-muted))] shadow-lg hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))]"
           aria-label="Show activity"
-          title="Show recent review activity"
         >
           <ActivityIcon />
           Activity
-        </button>
+        </ActionButton>
       </aside>
     );
   }

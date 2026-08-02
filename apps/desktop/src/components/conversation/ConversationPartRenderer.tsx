@@ -202,13 +202,34 @@ function ConversationPartView({
 }
 
 export function cleanAssistantTranscriptMarkdown(markdown: string): string {
-  return stripInlineActionPermissionQuestions(markdown)
+  return removeEmptyTranscriptSections(stripInlineActionPermissionQuestions(markdown))
     .replace(/\r\n/g, "\n")
     .split("\n")
     .filter((line) => !isActionSuggestionQuote(line))
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trimEnd();
+}
+
+/**
+ * Older locally persisted turns do not pass through the current final-response
+ * normalizer. Remove empty conclusion labels here as well, so opening a saved
+ * conversation cannot recreate vertical gaps that new turns avoid.
+ */
+function removeEmptyTranscriptSections(markdown: string): string {
+  const lines = markdown.split(/\r?\n/)
+    .filter((line) => !/^\s*if you (?:want|would like)\b.*\bI can\b/i.test(line));
+  return lines
+    .filter((line, index) => {
+      if (!isTranscriptSectionHeading(line)) return true;
+      const nextContent = lines.slice(index + 1).find((following) => following.trim());
+      return nextContent !== undefined && !isTranscriptSectionHeading(nextContent);
+    })
+    .join("\n");
+}
+
+function isTranscriptSectionHeading(line: string): boolean {
+  return /^(?:#{1,6}\s*)?(?:\*\*)?\s*(?:findings?|risks?(?:\s+and\s+quick\s+checks)?|recommended\s+next\s+steps?|suggestions?|next\s+steps?|verified\s+facts)(?:\s*\([^)]*\))?\s*:\s*(?:\*\*)?\s*$/i.test(line.trim());
 }
 
 function stripInlineActionPermissionQuestions(markdown: string): string {

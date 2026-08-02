@@ -213,6 +213,35 @@ describe("active Project Link persistence", () => {
     expect(resolved).toBe("project-link-2");
   });
 
+  it("defaults to the most complete saved Azure DevOps link instead of a newer local-only link", () => {
+    localStorage.clear();
+
+    const resolved = resolveActiveProjectLinkId([
+      {
+        id: "local-e2e",
+        name: "ClaimBot API E2E",
+        repoPath: "C:\\work\\ClaimBot_API",
+        adoOrgUrl: "",
+        adoProject: "",
+        adoRepoName: "",
+        adoPipelineId: "",
+        updatedAt: 30,
+      },
+      {
+        id: "claimbot-link",
+        name: "ClaimBot_API link",
+        repoPath: "C:\\work\\ClaimBot_API",
+        adoOrgUrl: "https://tebssg.visualstudio.com/",
+        adoProject: "TeBS-ClaimBot",
+        adoRepoName: "ClaimBot_API",
+        adoPipelineId: "117",
+        updatedAt: 10,
+      },
+    ] as ProjectLink[]);
+
+    expect(resolved).toBe("claimbot-link");
+  });
+
   it("moves stale temporary Project Link selections back to the matching saved link", () => {
     localStorage.clear();
     saveStoredActiveProjectLinkId("mp-live-link");

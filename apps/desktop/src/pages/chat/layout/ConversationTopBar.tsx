@@ -84,9 +84,11 @@ export function ConversationTopBar({
 
   return (
     <div className="relative flex min-h-[40px] shrink-0 items-center border-b border-[rgb(var(--app-border))] bg-[rgb(var(--app-bg))]">
+      {/* This width follows the resizable history panel. Keeping it immediate
+          avoids a layout-animation queue trailing behind pointer resizing. */}
       <div
         className="flex shrink-0 items-center overflow-hidden"
-        style={{ width: historyOpen ? historyWidth : 40, transition: "width 180ms ease" }}
+        style={{ width: historyOpen ? historyWidth : 40 }}
       >
         <button
           onClick={onToggleHistory}

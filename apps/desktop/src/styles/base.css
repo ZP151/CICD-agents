@@ -140,6 +140,20 @@ body {
   transition: background-color var(--app-motion-base) var(--app-ease-standard), color var(--app-motion-fast) var(--app-ease-standard);
 }
 
+/* Keep Standard visibly distinct from neutral Light without tinting worklist
+ * surfaces or weakening dense code/text contrast. The color lives behind the
+ * workspace, where it reads as environmental depth rather than decoration. */
+.app-shell-frame {
+  background: rgb(var(--app-bg));
+}
+
+:root[data-theme="standard"] .app-shell-frame {
+  background:
+    radial-gradient(ellipse 58% 54% at 4% 100%, rgb(202 221 255 / 0.62), transparent 73%),
+    radial-gradient(ellipse 48% 48% at 96% 0%, rgb(228 216 255 / 0.56), transparent 74%),
+    rgb(var(--app-bg));
+}
+
 /* The shell uses its own contrast ramp so icon-only navigation stays legible on Standard. */
 .app-shell-sidebar nav a {
   color: rgb(var(--app-sidebar-muted));
@@ -281,7 +295,7 @@ body {
   color: rgb(var(--app-text));
 }
 
-.settings-segmented button,
+.workbench-segmented-control button,
 .theme-choice-option {
   transition:
     background-color var(--app-motion-fast) var(--app-ease-standard),
@@ -291,12 +305,12 @@ body {
     transform var(--app-motion-fast) var(--app-ease-standard);
 }
 
-.settings-segmented button:active:not(:disabled),
+.workbench-segmented-control button:active:not(:disabled),
 .theme-choice-option:active:not(:disabled) {
   transform: translateY(1px);
 }
 
-.settings-segmented button:focus-visible,
+.workbench-segmented-control button:focus-visible,
 .theme-choice-option:focus-visible {
   outline: 2px solid rgb(var(--app-focus) / 0.72);
   outline-offset: 2px;

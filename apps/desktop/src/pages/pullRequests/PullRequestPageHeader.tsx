@@ -1,19 +1,13 @@
 import type { ProjectLink } from "../../api.js";
 import {
   ActionButton,
-  StatusBadge,
   WorkbenchHeader,
-  WorkbenchToolbar,
+  WorkbenchSelect,
 } from "../../components/workbench/WorkbenchPrimitives.js";
-import {
-  compactProjectLinkAdoScope,
-  compactProjectLinkBranchScope,
-} from "../projectLinks/ProjectLinkCard.js";
+import { ProjectLinkContextHint } from "../projectLinks/ProjectLinkContextHint.js";
 
-const pageSelectClass =
-  "min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-1.5 text-sm text-[rgb(var(--app-text))] outline-none transition focus:border-[rgb(var(--app-focus))] focus:ring-2 focus:ring-[rgb(var(--app-focus))]/20 disabled:cursor-not-allowed disabled:opacity-60";
-const projectLinkSelectClass = `${pageSelectClass} w-full truncate sm:min-w-[14rem]`;
-const statusSelectClass = `${pageSelectClass} w-full sm:w-[9rem]`;
+const projectLinkSelectClass = "truncate text-sm sm:min-w-[14rem]";
+const statusSelectClass = "text-sm sm:w-[9rem]";
 
 export function pullRequestHeaderControlsClass(): string {
   return [
@@ -22,7 +16,6 @@ export function pullRequestHeaderControlsClass(): string {
     "xl:w-[clamp(30rem,42vw,38rem)]",
   ].join(" ");
 }
-
 export interface PullRequestPageHeaderProps {
   projectLinks: ProjectLink[];
   projectLinksLoading: boolean;
@@ -53,7 +46,7 @@ export function PullRequestPageHeader({
         description="Triage active changes, inspect evidence, and decide what needs human review."
         descriptionClassName="hidden max-w-2xl xl:block"
         actions={<div className={pullRequestHeaderControlsClass()}>
-          <select
+          <WorkbenchSelect
             aria-label="Pull Requests Project Link"
             className={projectLinkSelectClass}
             value={projectLinkId}
@@ -69,8 +62,8 @@ export function PullRequestPageHeader({
             {projectLinks.map((projectLink) => (
               <option key={projectLink.id} value={projectLink.id}>{projectLink.name}</option>
             ))}
-          </select>
-          <select
+          </WorkbenchSelect>
+          <WorkbenchSelect
             aria-label="Pull Requests status"
             className={statusSelectClass}
             value={status}
@@ -80,64 +73,14 @@ export function PullRequestPageHeader({
             <option value="completed">Completed</option>
             <option value="abandoned">Abandoned</option>
             <option value="all">All</option>
-          </select>
+          </WorkbenchSelect>
           <ActionButton onClick={onRefresh}>Refresh</ActionButton>
         </div>}
       />
 
-      <PullRequestScopeBadges
-        projectLinks={projectLinks}
-        selectedProjectLink={selectedProjectLink}
-        branchScope={branchScope}
-        status={status}
-      />
+      {selectedProjectLink && (
+        <ProjectLinkContextHint projectLink={selectedProjectLink} branchFallback={branchScope} />
+      )}
     </>
-  );
-}
-
-function PullRequestScopeBadges({
-  projectLinks,
-  selectedProjectLink,
-  branchScope,
-  status,
-}: {
-  projectLinks: ProjectLink[];
-  selectedProjectLink: ProjectLink | null;
-  branchScope: string;
-  status: string;
-}): JSX.Element | null {
-  if (selectedProjectLink) {
-    const adoScope = compactProjectLinkAdoScope(selectedProjectLink);
-    const branchLabel = compactProjectLinkBranchScope(selectedProjectLink) || "target: main";
-    return (
-      <WorkbenchToolbar className="text-xs text-[rgb(var(--app-text-muted))]">
-        <StatusBadge
-          className="max-w-full truncate rounded-full px-2.5 py-1"
-          title={[
-            selectedProjectLink.adoOrgUrl,
-            selectedProjectLink.adoProject,
-            selectedProjectLink.adoRepoName,
-          ]
-            .filter(Boolean)
-            .join(" / ")}
-        >
-          {adoScope || "No ADO mapping"}
-        </StatusBadge>
-        <StatusBadge
-          className="max-w-full truncate rounded-full px-2.5 py-1"
-          title={`Default branch: ${selectedProjectLink.defaultBranch || branchScope || "not set"}; PR target: ${selectedProjectLink.targetBranch || "main"}`}
-        >
-          {branchLabel}
-        </StatusBadge>
-      </WorkbenchToolbar>
-    );
-  }
-
-  if (projectLinks.length === 0) return null;
-  return (
-    <WorkbenchToolbar>
-      <StatusBadge>All Project Links</StatusBadge>
-      <StatusBadge>status: {status}</StatusBadge>
-    </WorkbenchToolbar>
   );
 }

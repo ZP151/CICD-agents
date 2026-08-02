@@ -168,7 +168,9 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
     }));
   }, []);
 
-  const repoInputClass = `w-full rounded-lg border px-3 py-2 text-sm text-[rgb(var(--app-text))] placeholder:text-[rgb(var(--app-text-subtle))] bg-[rgb(var(--app-surface-raised))] outline-none transition ${
+  // The shared text input owns base surface, spacing and focus feedback. This
+  // hook only supplies the repository-specific validation colour.
+  const repoInputClass = `${
     !branchLoading && branches.length > 0
       ? "border-[rgb(var(--app-success-border))] focus:border-[rgb(var(--app-success))]"
       : branchError && form.repoPath

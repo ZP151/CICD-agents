@@ -9,6 +9,7 @@ import {
   appShellNavLinkClass,
   appShellSidebarClass,
   FullLayout,
+  PageLoadingFallback,
   pageShellContentClass,
   pageShellFadeClass,
   preloadWorkspaceRouteModules,
@@ -88,6 +89,18 @@ describe("AppShell route recovery", () => {
   });
 });
 
+describe("AppShell route loading", () => {
+  it("renders a quiet workspace skeleton while a page chunk is loading", () => {
+    const html = renderToStaticMarkup(createElement(PageLoadingFallback));
+
+    expect(html).toContain("Preparing workspace");
+    expect(html).toContain("Loading this page and its local context.");
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain("Loading workspace content");
+    expect(html).toContain("workbench-skeleton-block");
+  });
+});
+
 describe("AppShell themed layout classes", () => {
   it("uses responsive page padding and preserves scroll mode", () => {
     expect(pageShellContentClass(true)).toContain("px-4");
@@ -124,6 +137,19 @@ describe("AppShell themed layout classes", () => {
     expect(appShellNavLinkClass(false)).toContain("hover:bg");
     expect(appShellNavLinkClass(false)).toContain("--app-sidebar-muted");
   });
+
+  it("exposes a dedicated shell canvas for Standard theme ambience", () => {
+    expect(appShellFrameClass()).toContain("app-shell-frame");
+    expect(appShellFrameClass()).not.toContain("bg-[rgb(var(--app-bg))]");
+  });
+
+  it("keeps keyboard focus visible in the full sidebar and compact icon rail", () => {
+    const classes = appShellNavLinkClass(false);
+
+    expect(classes).toContain("focus-visible:ring-2");
+    expect(classes).toContain("focus-visible:ring-inset");
+    expect(classes).toContain("--app-focus");
+  });
 });
 
 describe("AppShell workspace routes", () => {
@@ -137,6 +163,8 @@ describe("AppShell workspace routes", () => {
       expect(html).toContain("overflow-auto");
       expect(html).toContain("app-shell-nav-icon");
       expect(html).toContain("app-shell-nav-link");
+      expect(html).toContain('aria-label="New chat"');
+      expect(html).not.toContain('title="New chat"');
       expect(html).not.toContain("({ isActive })");
     } finally {
       consoleError.mockRestore();

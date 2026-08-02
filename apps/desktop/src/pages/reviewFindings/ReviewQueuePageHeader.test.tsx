@@ -44,6 +44,8 @@ describe("ReviewQueuePageHeader", () => {
     expect(html).toContain("sm:grid-cols-[minmax(0,1fr)_auto]");
     expect(html).toContain("xl:w-[clamp(24rem,36vw,36rem)]");
     expect(html).toContain("xl:flex-row");
+    expect(html).toContain("min-h-9");
+    expect(html).toContain("focus:ring-[rgb(var(--app-focus))]/35");
     expect(html).toContain("hidden max-w-2xl");
     expect(html).toContain("xl:block");
     expect(html).not.toContain("lg:block");

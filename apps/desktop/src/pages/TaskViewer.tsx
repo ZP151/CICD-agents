@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppData } from "../App.js";
-import { WorkbenchPage } from "../components/workbench/WorkbenchPrimitives.js";
+import {
+  ActionButton,
+  WorkbenchEmptyState,
+  WorkbenchPage,
+  WorkbenchSidePanel,
+} from "../components/workbench/WorkbenchPrimitives.js";
 import {
   CHAT_HANDOFF_KEY,
   PULL_REQUESTS_HANDOFF_KEY,
@@ -15,7 +20,17 @@ import { CheckpointDetailPanel } from "./taskViewer/CheckpointDetailPanel.js";
 import { PrInsightDetailPanel } from "./taskViewer/PrInsightDetailPanel.js";
 import { ReviewOperationDetailPanel } from "./taskViewer/ReviewOperationDetailPanel.js";
 import { TaskRunDetailPanel } from "./taskViewer/TaskRunDetailPanel.js";
+import {
+  duration,
+  formatIsoTime,
+  formatTime,
+  reviewOperationKindLabel,
+  taskTitle,
+} from "./taskViewer/activityPresentation.js";
+import { checkpointActivityKindLabel } from "./taskViewer/checkpointActivity.js";
+import type { ReviewActivityItem } from "./taskViewer/activityTypes.js";
 import type { PrInsightActivityItem } from "./taskViewer/prInsightActivity.js";
+import type { ChatCheckpointActivity, TaskView } from "../api.js";
 import { useTaskViewerRuntime } from "./taskViewer/useTaskViewerRuntime.js";
 
 export { PrInsightReadinessBlockers } from "./taskViewer/PrInsightReadinessBlockers.js";
@@ -56,6 +71,7 @@ export default function TaskViewer(): JSX.Element {
     reviewKindFilter,
     selectedReviewId,
     selectedCheckpointId,
+    activityHandoffSource,
     refreshAll,
     selectTask,
     selectCheckpointActivity,
@@ -67,11 +83,12 @@ export default function TaskViewer(): JSX.Element {
     setReviewProjectLinkFilter,
     setReviewKindFilter,
   } = runtime;
-  const visibleActivityCount =
-    tasks.length +
-    checkpointActivity.length +
-    filteredPrInsightActivity.length +
-    filteredReviewActivity.length;
+  const drawerPresentation = activityDrawerPresentation({
+    task: selected,
+    checkpoint: selectedCheckpoint,
+    prInsight: selectedPrInsight,
+    review: selectedReview,
+  });
 
   function openRollbackPlanInChat(): void {
     if (!selectedCheckpoint || !checkpointRollbackPlan?.proposal) return;
@@ -134,6 +151,32 @@ export default function TaskViewer(): JSX.Element {
     });
   }
 
+  const drawerActions = selectedPrInsight ? (
+    <>
+      {activityHandoffSource === "chat" && (
+        <ActionButton type="button" tone="quiet" className="min-h-7 px-2" onClick={() => navigate("/chat")}>
+          Back to Chat
+        </ActionButton>
+      )}
+      <ActionButton
+        type="button"
+        tone="quiet"
+        className="min-h-7 px-2"
+        onClick={() => openPrInsightInPullRequests(selectedPrInsight)}
+      >
+        Open PR
+      </ActionButton>
+      <ActionButton
+        type="button"
+        tone="quiet"
+        className="min-h-7 px-2"
+        onClick={() => openPrInsightInChat(selectedPrInsight)}
+      >
+        Ask in Chat
+      </ActionButton>
+    </>
+  ) : undefined;
+
   return (
     <WorkbenchPage className={taskViewerLayoutClass()}>
       <ActivitySidebar
@@ -141,6 +184,7 @@ export default function TaskViewer(): JSX.Element {
         tasks={tasks}
         selectedTaskId={selectedId}
         loading={loading}
+        refreshing={refreshing}
         activeCount={activeCount}
         error={error}
         checkpointActivity={checkpointActivity}
@@ -169,22 +213,16 @@ export default function TaskViewer(): JSX.Element {
         onReviewKindFilterChange={setReviewKindFilter}
       />
 
-      <section className={taskViewerDetailClass()}>
-        {refreshing && (
-          <p className="mb-3 text-xs text-[rgb(var(--app-text-subtle))]">
-            Refreshing activity...
-          </p>
-        )}
-
-        {!selected && !selectedReview && !selectedPrInsight && !selectedCheckpoint && (
-          <ActivityEmptyDetail
-            activityCount={visibleActivityCount}
-            error={error}
-            loading={loading || checkpointLoading || prInsightLoading || reviewLoading}
-          />
-        )}
-
-        {selected && <TaskRunDetailPanel task={selected} />}
+      <WorkbenchSidePanel
+        open={Boolean(drawerPresentation)}
+        onOpenChange={(open) => {
+          if (!open) clearSelection();
+        }}
+        title={drawerPresentation?.title ?? "Activity detail"}
+        description={drawerPresentation?.description}
+        actions={drawerActions}
+      >
+        {selected && <TaskRunDetailPanel task={selected} showHeader={false} />}
 
         {selectedCheckpoint && (
           <CheckpointDetailPanel
@@ -194,6 +232,7 @@ export default function TaskViewer(): JSX.Element {
             previewLoading={checkpointPreviewLoading}
             rollbackLoading={checkpointRollbackLoading}
             onOpenRollbackPlanInChat={openRollbackPlanInChat}
+            showHeader={false}
           />
         )}
 
@@ -206,21 +245,70 @@ export default function TaskViewer(): JSX.Element {
             onCopyArtifactId={copyPrInsightArtifactId}
             onOpenInChat={openPrInsightInChat}
             onOpenInPullRequests={openPrInsightInPullRequests}
+            showHeader={false}
           />
         )}
 
-        {selectedReview && <ReviewOperationDetailPanel operation={selectedReview} />}
-      </section>
+        {selectedReview && <ReviewOperationDetailPanel operation={selectedReview} showHeader={false} />}
+      </WorkbenchSidePanel>
     </WorkbenchPage>
   );
 }
 
 export function taskViewerLayoutClass(): string {
-  return "min-w-0 items-stretch gap-4 xl:flex-row";
+  return "min-w-0";
 }
 
 export function taskViewerDetailClass(): string {
-  return "w-full min-w-0 flex-1 xl:basis-0";
+  return "w-full min-w-0";
+}
+
+export function activityDrawerPresentation({
+  task,
+  checkpoint,
+  prInsight,
+  review,
+}: {
+  task: TaskView | null;
+  checkpoint: ChatCheckpointActivity | null;
+  prInsight: PrInsightActivityItem | null;
+  review: ReviewActivityItem | null;
+}): { title: string; description: string } | null {
+  if (task) {
+    return {
+      title: taskTitle(task),
+      description: [task.status, task.kind, duration(task)].filter(Boolean).join(" · "),
+    };
+  }
+  if (checkpoint) {
+    return {
+      title: checkpoint.targetCheckpointId ? "Checkpoint apply" : "Git checkpoint",
+      description: [checkpointActivityKindLabel(checkpoint), checkpoint.toolName, formatTime(checkpoint.at)]
+        .filter(Boolean)
+        .join(" · "),
+    };
+  }
+  if (prInsight) {
+    return {
+      title: `PR #${prInsight.pullRequestId}`,
+      description: [
+        prInsight.repository,
+        prInsight.kind === "review_run" ? "Full review" : "Preview",
+        formatIsoTime(prInsight.at),
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    };
+  }
+  if (review) {
+    return {
+      title: review.label,
+      description: [reviewOperationKindLabel(review.kind), review.repository, formatIsoTime(review.at)]
+        .filter(Boolean)
+        .join(" · "),
+    };
+  }
+  return null;
 }
 
 export function ActivityEmptyDetail({
@@ -235,17 +323,11 @@ export function ActivityEmptyDetail({
   const content = activityEmptyDetailContent({ activityCount, error, loading });
 
   return (
-    <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4">
-      <p className="text-xs font-semibold uppercase text-[rgb(var(--app-text-subtle))]">
-        Detail
-      </p>
-      <h3 className="mt-2 text-sm font-semibold text-[rgb(var(--app-text))]">
-        {content.title}
-      </h3>
-      <p className="mt-1 max-w-xl text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
-        {content.description}
-      </p>
-    </div>
+    <WorkbenchEmptyState
+      className="min-h-[18rem]"
+      title={content.title}
+      description={content.description}
+    />
   );
 }
 
@@ -262,29 +344,26 @@ export function activityEmptyDetailContent({
     return {
       title: "Recovery needed",
       description:
-        "The activity sources did not load. Use Refresh activity in the source panel, or open Settings to check the desktop daemon and account session.",
+        "Could not load activity. Refresh, or check the desktop daemon and account settings.",
     };
   }
 
   if (loading && activityCount === 0) {
     return {
       title: "Checking activity",
-      description:
-        "MergePilot is loading recent runs, checkpoints, PR insights, and review operations.",
+      description: "Loading recent workspace activity.",
     };
   }
 
   if (activityCount === 0) {
     return {
       title: "No activity recorded",
-      description:
-        "Runs, Git checkpoints, PR insights, and review operations will appear here after the agent performs workspace actions.",
+      description: "Workspace actions will appear here after the agent performs work.",
     };
   }
 
   return {
-    title: "Select an operation",
-    description:
-      "Choose a run, checkpoint, PR insight, or review action to inspect its source, result, and recovery path.",
+      title: "Select an operation",
+      description: "Choose an event to inspect its result and recovery path.",
   };
 }

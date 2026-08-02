@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  pinnedSummaryAdoActionsGridClass,
-  pinnedSummaryPanelShellClass,
-} from "./PinnedSummaryPanel.js";
+import { pinnedSummaryPanelShellClass } from "./PinnedSummaryPanel.js";
+import { workspaceProjectLinkActionsGridClass } from "./WorkspaceProjectLinkPanel.js";
 
 describe("PinnedSummaryPanel layout", () => {
   it("keeps the floating panel bounded to the viewport", () => {
@@ -13,12 +11,12 @@ describe("PinnedSummaryPanel layout", () => {
     expect(className).not.toContain("w-[300px]");
   });
 
-  it("uses an auto-fit grid for ADO actions", () => {
-    const className = pinnedSummaryAdoActionsGridClass();
+  it("uses the shared auto-fit grid for compact ADO actions", () => {
+    const className = workspaceProjectLinkActionsGridClass();
 
     expect(className).toContain("min-w-0");
     expect(className).toContain("auto-fit");
-    expect(className).toContain("minmax(min(100%,6.5rem),1fr)");
+    expect(className).toContain("minmax(min(100%,5.75rem),1fr)");
     expect(className).not.toContain("grid-cols-2");
   });
 });

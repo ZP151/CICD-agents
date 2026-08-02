@@ -31,7 +31,7 @@ function nodePackageName(id: string): string | undefined {
     : scopeOrName;
 }
 
-function desktopManualChunk(id: string): string | undefined {
+export function desktopManualChunk(id: string): string | undefined {
   const packageName = nodePackageName(id);
   if (!packageName) return undefined;
   if (
@@ -46,11 +46,19 @@ function desktopManualChunk(id: string): string | undefined {
   if (packageName === "react-router" || packageName === "react-router-dom") {
     return "vendor-router";
   }
+  if (packageName === "@assistant-ui/react") return "vendor-assistant-ui";
   if (packageName.startsWith("@codemirror/") || packageName.startsWith("@uiw/")) {
     return "vendor-codemirror";
   }
   if (packageName === "lucide-react") return "vendor-icons";
   return undefined;
+}
+
+function devServerPort(): number {
+  const configured = Number(process.env["VITE_DEV_SERVER_PORT"] ?? "1420");
+  return Number.isInteger(configured) && configured > 0 && configured < 65_536
+    ? configured
+    : 1420;
 }
 
 export default defineConfig(() => {
@@ -64,7 +72,7 @@ export default defineConfig(() => {
     plugins: [react()],
     clearScreen: false,
     server: {
-      port: 1420,
+      port: devServerPort(),
       strictPort: true,
     },
     envPrefix: ["VITE_", "TAURI_"],

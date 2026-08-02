@@ -6,6 +6,7 @@ import type {
 import { formatIsoTime } from "./activityPresentation.js";
 import { ProjectLinkFilter } from "./ProjectLinkFilter.js";
 import type { PrInsightActivityItem } from "./prInsightActivity.js";
+import { WorkbenchListItemButton, WorkbenchSelect } from "../../components/workbench/WorkbenchPrimitives.js";
 
 interface PrInsightActivitySectionProps {
   projectLinks: ProjectLink[];
@@ -52,8 +53,8 @@ export function PrInsightActivitySection({
           onChange={onPrInsightProjectLinkFilterChange}
           label="Filter saved PR insights by Project Link"
         />
-        <select
-          className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))] outline-none focus:border-[rgb(var(--app-accent))]"
+        <WorkbenchSelect
+          className="min-h-8 px-2 py-1 text-xs text-[rgb(var(--app-text-muted))]"
           value={prInsightKindFilter}
           onChange={(e) =>
             onPrInsightKindFilterChange(e.target.value as PrInsightArtifactRecord["kind"] | "all")
@@ -63,7 +64,7 @@ export function PrInsightActivitySection({
           <option value="all">All saved insight types</option>
           <option value="insight_preview">Insight preview</option>
           <option value="review_run">Full review</option>
-        </select>
+        </WorkbenchSelect>
       </div>
       <div className="space-y-1.5">
         {!prInsightLoading && prInsightActivity.length === 0 && (
@@ -97,14 +98,10 @@ function PrInsightActivityButton({
   onSelectPrInsight: (eventId: string) => void;
 }): JSX.Element {
   return (
-    <button
+    <WorkbenchListItemButton
       key={event.id}
       onClick={() => onSelectPrInsight(event.id)}
-      className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
-        selected
-          ? "border-[rgb(var(--app-accent))]/50 bg-[rgb(var(--app-accent-soft))]"
-          : "border-transparent hover:border-[rgb(var(--app-border))] hover:bg-[rgb(var(--app-surface-raised))]"
-      }`}
+      selected={selected}
     >
       <div className="mb-1 flex items-center gap-2">
         <span className="rounded-full bg-[rgb(var(--app-accent-soft))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--app-accent-readable))] ring-1 ring-[rgb(var(--app-border-strong))]">
@@ -133,6 +130,6 @@ function PrInsightActivityButton({
       <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-muted))]">
         {event.projectLinkName} · {event.repository}
       </p>
-    </button>
+    </WorkbenchListItemButton>
   );
 }

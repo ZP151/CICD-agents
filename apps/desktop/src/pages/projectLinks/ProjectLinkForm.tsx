@@ -1,4 +1,5 @@
 import type { ProjectLinkInput } from "../../api.js";
+import { ActionButton } from "../../components/workbench/WorkbenchPrimitives.js";
 import { DEFAULT_ADO_ORG_URL, withoutProjectLinkFallbacks } from "../../projectLinks.js";
 import { ProjectLinkAdoSection } from "./ProjectLinkAdoSection.js";
 import { ProjectLinkWorkspaceSection } from "./ProjectLinkWorkspaceSection.js";
@@ -42,10 +43,13 @@ export function ProjectLinkForm({
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
-        <button
+        <ActionButton
           type="button"
           onClick={onBack}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))]"
+          tone="quiet"
+          aria-label="Back to Project Links"
+          title="Back to Project Links"
+          className="h-7 min-h-7 w-7 px-0"
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path
@@ -56,7 +60,7 @@ export function ProjectLinkForm({
               strokeWidth="1.6"
             />
           </svg>
-        </button>
+        </ActionButton>
         <h2 className="text-xl font-semibold text-[rgb(var(--app-text))]">
           {isNew ? "New Project Link" : "Edit Project Link"}
         </h2>
@@ -94,20 +98,22 @@ export function ProjectLinkForm({
         </div>
 
         <div className={projectLinkFormActionsClass()}>
-          <button
+          <ActionButton
             type="submit"
             disabled={saving || !runtime.form.name.trim()}
-            className="rounded-lg bg-[rgb(var(--app-accent))] px-5 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-40"
+            loading={saving}
+            tone="primary"
+            className="px-4 text-sm"
           >
             {saving ? "Saving..." : "Save Project Link"}
-          </button>
-          <button
+          </ActionButton>
+          <ActionButton
             type="button"
             onClick={onBack}
-            className="rounded-lg border border-[rgb(var(--app-border))] px-5 py-2 text-sm text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))]"
+            className="px-4 text-sm"
           >
             Cancel
-          </button>
+          </ActionButton>
         </div>
       </form>
     </div>

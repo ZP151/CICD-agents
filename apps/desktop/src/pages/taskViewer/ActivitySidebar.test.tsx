@@ -104,6 +104,7 @@ function renderActivitySidebar({
   prInsightActivity = [prInsight],
   reviewActivity = [reviewEvent],
   loading = false,
+  refreshing = false,
   checkpointLoading = false,
   prInsightLoading = false,
   reviewLoading = false,
@@ -114,6 +115,7 @@ function renderActivitySidebar({
   prInsightActivity?: PrInsightActivityItem[];
   reviewActivity?: ReviewActivityItem[];
   loading?: boolean;
+  refreshing?: boolean;
   checkpointLoading?: boolean;
   prInsightLoading?: boolean;
   reviewLoading?: boolean;
@@ -125,6 +127,7 @@ function renderActivitySidebar({
       tasks={tasks}
       selectedTaskId={tasks[0]?.id ?? null}
       loading={loading}
+      refreshing={refreshing}
       activeCount={0}
       error={error}
       checkpointActivity={checkpointActivity}
@@ -156,21 +159,33 @@ function renderActivitySidebar({
 }
 
 describe("ActivitySidebar", () => {
-  it("uses a responsive shell instead of a permanently fixed-width rail", () => {
+  it("keeps refresh feedback on the single refresh action", () => {
+    const html = renderActivitySidebar({ refreshing: true });
+
+    expect(html).toContain("Refreshing...");
+    expect(html).toContain("workbench-loading-indicator");
+    expect(html).toContain("focus-visible:ring-2");
+  });
+
+  it("uses a centered timeline instead of a permanently fixed-width rail", () => {
     const shellClass = activitySidebarShellClass();
     const listClass = activitySidebarListClass();
 
     expect(shellClass).toContain("w-full");
-    expect(shellClass).toContain("xl:w-[clamp(16rem,24vw,21rem)]");
-    expect(shellClass).toContain("border-b");
-    expect(shellClass).toContain("xl:border-r");
+    expect(shellClass).toContain("mx-auto");
+    expect(shellClass).toContain("max-w-5xl");
+    expect(shellClass).toContain("lg:max-h-[calc(100vh-5rem)]");
+    expect(shellClass).not.toContain("lg:w-[clamp(16rem,24vw,21rem)]");
+    expect(shellClass).not.toContain("border-b");
+    expect(shellClass).not.toContain("lg:border-r");
     expect(shellClass).not.toContain("lg:w-[clamp(18rem,30vw,23rem)]");
-    expect(shellClass).not.toContain("xl:w-[clamp(20rem,28vw,24rem)]");
+    expect(shellClass).not.toContain("lg:w-[clamp(20rem,28vw,24rem)]");
     expect(shellClass).not.toContain("xl:w-[420px]");
     expect(listClass).toContain("max-h-[16rem]");
-    expect(listClass).toContain("lg:max-h-[18rem]");
-    expect(listClass).toContain("xl:flex-1");
-    expect(listClass).not.toContain("lg:flex-1");
+    expect(listClass).toContain("overflow-x-hidden");
+    expect(listClass).toContain("lg:max-h-none");
+    expect(listClass).toContain("lg:flex-1");
+    expect(listClass).not.toContain("xl:flex-1");
   });
 
   it("renders section filters with counts before the activity lists", () => {
@@ -183,25 +198,27 @@ describe("ActivitySidebar", () => {
     expect(className).not.toContain("auto-fit");
     expect(className).not.toContain("grid-cols-2");
     expect(html).toContain("Activity sections");
-    expect(html).toContain("title=\"All: 4\"");
-    expect(html).toContain("title=\"Checkpoints: 1\"");
+    expect(html).toContain("title=\"All: 3\"");
+    expect(html).toContain("title=\"Checkpoints: 0\"");
     expect(html).toContain("title=\"PR Insights: 1\"");
     expect(html).toContain("All");
     expect(html).toContain("Runs");
     expect(html).toContain("Git");
     expect(html).toContain("PR");
     expect(html).toContain("Reviews");
+    expect(html).toContain("min-h-8");
+    expect(html).toContain("focus:ring-[rgb(var(--app-focus))]/35");
   });
 
-  it("keeps all operational history sections visible by default", () => {
+  it("keeps saved activity visible while collapsing transient workspace history", () => {
     const html = renderActivitySidebar();
 
     expect(html).toContain("Pipeline submission");
-    expect(html).toContain("git_status");
-    expect(html).toContain("...\\mergepilot-live-push-j2JDBp\\work");
-    expect(html).toContain("title=\"C:\\Users\\15492\\AppData\\Local\\Temp\\mergepilot-live-push-j2JDBp\\work\"");
     expect(html).toContain("Update pipeline");
     expect(html).toContain("Review completed");
+    expect(html).toContain("Temporary history");
+    expect(html).not.toContain("git_status");
+    expect(html).not.toContain("...\\mergepilot-live-push-j2JDBp\\work");
   });
 
   it("hides empty sections from the default All view while keeping non-empty sources visible", () => {
@@ -209,11 +226,25 @@ describe("ActivitySidebar", () => {
       tasks: [],
     });
 
-    expect(html).toContain("git_status");
     expect(html).toContain("Update pipeline");
     expect(html).toContain("Review completed");
+    expect(html).toContain("Temporary history");
+    expect(html).not.toContain("git_status");
     expect(html).not.toContain("No agent runs recorded yet.");
     expect(html).not.toContain("Pipeline submission");
+  });
+
+  it("keeps the no-activity empty state in the timeline after the detail pane moves to a drawer", () => {
+    const html = renderActivitySidebar({
+      tasks: [],
+      checkpointActivity: [],
+      prInsightActivity: [],
+      reviewActivity: [],
+    });
+
+    expect(html).toContain("No activity recorded");
+    expect(html).toContain("Workspace actions will appear here after the agent performs work.");
+    expect(html).toContain("border-dashed");
   });
 
   it("shows a selected empty section even though All hides it", () => {
@@ -306,7 +337,8 @@ describe("ActivitySidebar", () => {
     });
 
     expect(html).toContain("Sources unavailable");
-    expect(html).toContain("Daemon activity API");
+    expect(html).toContain("Refresh activity, or check the desktop daemon and account session.");
+    expect(html).not.toContain("Daemon activity API");
     expect(html).toContain("Refresh activity");
     expect(html).toContain("Open Settings");
     expect(html).toContain("Failed to fetch");
@@ -362,8 +394,8 @@ describe("ActivitySidebarUnavailableState", () => {
     );
 
     expect(html).toContain("Sources unavailable");
-    expect(html).toContain("desktop daemon or account session");
-    expect(html).toContain("Local data folder");
+    expect(html).toContain("the desktop daemon and account session");
+    expect(html).not.toContain("Local data folder");
     expect(html).toContain("Refresh activity");
     expect(html).toContain("href=\"#/settings\"");
     expect(html).toContain("Failed to fetch");

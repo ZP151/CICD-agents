@@ -3,6 +3,7 @@ import {
   type PrInsightArtifact,
 } from "../../prInsightArtifacts.js";
 import { MarkdownContent } from "../../components/conversation/ConversationPartRenderer.js";
+import { ActionButton, StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
 import { formatDate, insightReadinessTone } from "./pullRequestViewModel.js";
 import type { DisplayPullRequest } from "./pullRequestTypes.js";
 
@@ -37,17 +38,17 @@ export function StoredInsightPanel({
         <div className="flex flex-wrap items-center gap-2">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-muted))]">Last AI Insight</h4>
           {storedInsightTone && (
-            <span className={`rounded border px-2 py-0.5 text-[10px] ${storedInsightTone.tone}`}>
+            <StatusBadge className={storedInsightTone.tone}>
               {storedInsightTone.label}
-            </span>
+            </StatusBadge>
           )}
-          <span className="rounded border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
+          <StatusBadge>
             {storedInsight.kind === "review_run" ? "full review" : "preview"}
-          </span>
+          </StatusBadge>
           {storedInsightHistory.length > 1 && (
-            <span className="rounded border border-[rgb(var(--app-border))] px-2 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
+            <StatusBadge>
               {storedInsightHistory.length} saved runs
-            </span>
+            </StatusBadge>
           )}
           {storedInsightFreshness && <FreshnessBadge freshness={storedInsightFreshness} />}
         </div>
@@ -55,26 +56,32 @@ export function StoredInsightPanel({
           {formatDate(storedInsight.at)} · tokens {storedInsight.tokensIn}/{storedInsight.tokensOut}
         </span>
       </div>
-      <button
+      <ActionButton
+        type="button"
+        tone="quiet"
         onClick={() => onOpenSavedInsightInChat(pr, storedInsight)}
-        className="rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))]"
+        className="min-h-7 px-0 py-1 text-[rgb(var(--app-accent-readable))]"
       >
         Ask in Chat
-      </button>
+      </ActionButton>
       {storedInsightFreshness?.state === "stale" && (
-        <button
+        <ActionButton
+          type="button"
           onClick={() => storedInsight.kind === "review_run"
             ? onQueueForReview(pr)
             : onPreviewInsight(pr)}
-          disabled={isRunning || previewLoading}
-          className="rounded-md border border-[rgb(var(--app-warning))]/35 px-2 py-1 text-xs text-[rgb(var(--app-warning))] transition hover:bg-[rgb(var(--app-warning)_/_0.10)] disabled:cursor-wait disabled:opacity-60"
+          loading={isRunning || previewLoading}
+          className="min-h-7 px-2.5 py-1 text-[rgb(var(--app-warning))]"
         >
           Refresh insight
-        </button>
+        </ActionButton>
       )}
-      <div className="max-h-24 overflow-hidden text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
+      <article
+        aria-label="Insight report"
+        className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 text-xs leading-relaxed text-[rgb(var(--app-text-muted))]"
+      >
         <MarkdownContent markdown={storedInsight.summary || "No summary stored."} />
-      </div>
+      </article>
       {storedInsightFreshness && storedInsightFreshness.state !== "fresh" && (
         <p className="text-xs text-[rgb(var(--app-text-muted))]">{storedInsightFreshness.label}</p>
       )}
@@ -164,12 +171,14 @@ function PreviousStoredInsights({
               {artifact.summary || "No summary stored."}
             </p>
           </div>
-          <button
+          <ActionButton
+            type="button"
+            tone="quiet"
             onClick={() => onOpenSavedInsightInChat(pr, artifact)}
-            className="shrink-0 rounded-md border border-[rgb(var(--app-border))] px-2 py-1 text-[11px] text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:text-[rgb(var(--app-text))]"
+            className="min-h-7 shrink-0 px-1.5 py-1 text-[11px] text-[rgb(var(--app-accent-readable))]"
           >
             Ask in Chat
-          </button>
+          </ActionButton>
         </div>
       ))}
     </div>

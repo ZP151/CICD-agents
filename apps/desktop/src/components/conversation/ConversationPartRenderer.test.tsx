@@ -150,6 +150,34 @@ describe("ConversationPartRenderer markdown and code parts", () => {
     expect(html).not.toContain("Update documentation");
   });
 
+  it("removes empty conclusion headings while retaining the next populated section", () => {
+    const markdown = [
+      "I reviewed the working tree: two tracked files have unstaged edits.",
+      "",
+      "Findings:",
+      "",
+      "Risks and quick checks:",
+      "",
+      "Recommended next steps (you can tell me which to run):",
+      "",
+      "If you want a deeper review, I can display the diffs for these files.",
+      "",
+      "Verified facts:",
+      "",
+      "- Most recent commit is `dffeecd`.",
+    ].join("\n");
+
+    const html = renderToStaticMarkup(<ConversationPartRenderer parts={[{ type: "markdown", markdown }]} />);
+
+    expect(html).toContain("I reviewed the working tree");
+    expect(html).toContain("Verified facts");
+    expect(html).toContain("Most recent commit");
+    expect(html).not.toContain("Findings:");
+    expect(html).not.toContain("Risks and quick checks:");
+    expect(html).not.toContain("Recommended next steps");
+    expect(html).not.toContain("If you want a deeper review");
+  });
+
   it("omits inline suggested reply parts from the transcript", () => {
     const html = renderToStaticMarkup(
       <ConversationPartRenderer

@@ -1,5 +1,8 @@
-import { useState, type ReactNode } from "react";
-import { StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
+import { useState } from "react";
+import {
+  ActionButton,
+  WorkbenchTextInput,
+} from "../../components/workbench/WorkbenchPrimitives.js";
 
 export function TextInput({
   label,
@@ -17,24 +20,25 @@ export function TextInput({
   const [show, setShow] = useState(false);
   const isSecret = type === "password";
   return (
-    <label className="settings-input-wrap">
+    <label className="block min-w-0 w-full">
       <span className="sr-only">{label}</span>
       <div className="relative flex items-center">
-        <input
+        <WorkbenchTextInput
           type={isSecret && !show ? "password" : "text"}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
-          className="settings-input"
+          className={isSecret ? "pr-10" : ""}
         />
         {isSecret && (
-          <button
+          <ActionButton
             type="button"
+            tone="quiet"
             onClick={() => setShow((value) => !value)}
-            className="absolute right-2.5 text-[rgb(var(--app-text-subtle))] transition hover:text-[rgb(var(--app-text))]"
-            title={show ? "Hide" : "Show"}
+            className="absolute right-1.5 min-h-7 min-w-7 px-1.5 py-1 text-[rgb(var(--app-text-subtle))] hover:text-[rgb(var(--app-text))]"
+            aria-label={`${show ? "Hide" : "Show"} ${label}`}
           >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               {show ? (
                 <path
                   strokeLinecap="round"
@@ -51,105 +55,9 @@ export function TextInput({
                 />
               )}
             </svg>
-          </button>
+          </ActionButton>
         )}
       </div>
     </label>
   );
-}
-
-export function SettingsSection({
-  children,
-  title,
-}: {
-  children: ReactNode;
-  title: string;
-}): JSX.Element {
-  return (
-    <section className="settings-section">
-      <h3 className="settings-section-title">{title}</h3>
-      <div className="settings-list">{children}</div>
-    </section>
-  );
-}
-
-export function SettingsRow({
-  children,
-  description,
-  title,
-}: {
-  children?: ReactNode;
-  description?: ReactNode;
-  title: string;
-}): JSX.Element {
-  return (
-    <div className="settings-row">
-      <div className="min-w-0">
-        <p className="settings-row-title">{title}</p>
-        {description && <div className="settings-row-copy">{description}</div>}
-      </div>
-      {children && <div className="settings-row-control">{children}</div>}
-    </div>
-  );
-}
-
-export function SegmentedChoice<T extends string>({
-  ariaLabel,
-  options,
-  value,
-  onChange,
-}: {
-  ariaLabel?: string;
-  options: Array<{ label: string; value: T }>;
-  value: T;
-  onChange: (value: T) => void;
-}): JSX.Element {
-  return (
-    <div className="settings-segmented" role="group" aria-label={ariaLabel}>
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => onChange(option.value)}
-          className={option.value === value ? "is-active" : ""}
-          data-state={option.value === value ? "active" : "inactive"}
-          aria-pressed={option.value === value}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-export function ToggleSwitch({
-  checked,
-  disabled = false,
-  onChange,
-}: {
-  checked: boolean;
-  disabled?: boolean;
-  onChange: (checked: boolean) => void;
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      className={`settings-toggle ${checked ? "is-on" : ""}`}
-      onClick={() => onChange(!checked)}
-      aria-pressed={checked}
-      disabled={disabled}
-    >
-      <span />
-    </button>
-  );
-}
-
-export function StatusPill({
-  children,
-  tone = "neutral",
-}: {
-  children: ReactNode;
-  tone?: "neutral" | "success" | "warning" | "danger";
-}): JSX.Element {
-  return <StatusBadge tone={tone}>{children}</StatusBadge>;
 }

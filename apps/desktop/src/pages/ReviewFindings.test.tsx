@@ -7,7 +7,6 @@ import {
   ReviewQueueProjectLinkResolvingState,
   reviewQueueLoadingLaneGridClass,
   reviewQueuePageShellClass,
-  reviewQueueSetupChecklistGridClass,
   reviewQueueWorkspaceLayoutClass,
 } from "./ReviewFindings.js";
 
@@ -37,9 +36,8 @@ describe("ReviewFindings layout", () => {
     expect(className).not.toContain("2xl:grid-cols");
   });
 
-  it("uses compact wrapping lanes for loading and auto-fit setup guidance", () => {
+  it("uses compact wrapping lanes for loading", () => {
     const loadingClassName = reviewQueueLoadingLaneGridClass();
-    const setupClassName = reviewQueueSetupChecklistGridClass();
 
     expect(loadingClassName).toContain("flex-wrap");
     expect(loadingClassName).toContain("gap-1.5");
@@ -47,9 +45,6 @@ describe("ReviewFindings layout", () => {
     expect(loadingClassName).not.toContain("sm:grid-cols-2");
     expect(loadingClassName).not.toContain("lg:grid-cols-4");
 
-    expect(setupClassName).toContain("auto-fit");
-    expect(setupClassName).toContain("minmax(min(100%,10rem),1fr)");
-    expect(setupClassName).not.toContain("sm:grid-cols-3");
   });
 
   it("keeps recent activity collapsed by default, ignoring the legacy always-open key", () => {
@@ -77,8 +72,9 @@ describe("ReviewQueueNoProjectLinkState", () => {
     const html = renderToStaticMarkup(<ReviewQueueNoProjectLinkState />);
 
     expect(html).toContain("No Project Link available");
-    expect(html).toContain("Create a Project Link with Azure DevOps mapping");
+    expect(html).toContain("Connect one Azure DevOps repository");
     expect(html).toContain("Open Project Links");
+    expect(html).not.toContain("Review Agent history");
     expect(html).not.toContain("No review decisions found");
     expect(html).not.toContain("Recent activity");
   });

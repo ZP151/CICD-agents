@@ -1,5 +1,10 @@
 import type { ReviewQueueItem } from "../../api.js";
-import { WorkbenchFilterTabs } from "../../components/workbench/WorkbenchPrimitives.js";
+import {
+  ActionButton,
+  WorkbenchFilterTabs,
+  WorkbenchSelect,
+  WorkbenchTextInput,
+} from "../../components/workbench/WorkbenchPrimitives.js";
 import { lanes } from "./reviewQueueViewModel.js";
 
 export interface ReviewQueueControlsProps {
@@ -55,45 +60,44 @@ export function ReviewQueueControls({
         ariaLabel="Review queue filters"
         className={reviewQueueLaneGridClass()}
         options={[
-          { value: "all", label: "All", count: totalCount, title: "All review decisions" },
+          { value: "all", label: "All", count: totalCount },
           ...lanes.map((lane) => ({
             value: lane.key,
             label: reviewQueueCompactLaneLabel(lane.key),
             count: counts[lane.key],
-            title: lane.description,
           })),
         ]}
         value={queueFilter}
         onValueChange={onQueueFilterChange}
       />
       <div className="flex flex-wrap items-center gap-1.5">
-        <button
+        <ActionButton
           type="button"
           onClick={onToggleAutoApprove}
-          disabled={autoApproveSaving}
-          className={`rounded-md border px-2.5 py-1 text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
+          loading={autoApproveSaving}
+          tone={autoApproveEnabled ? "secondary" : "quiet"}
+          className={`min-h-7 px-2.5 py-1 ${
             autoApproveEnabled
               ? "border-[rgb(var(--app-success-border))] bg-[rgb(var(--app-success-soft)_/_0.58)] text-[rgb(var(--app-success))] hover:bg-[rgb(var(--app-success-soft))]"
-              : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+              : "text-[rgb(var(--app-text-muted))]"
           }`}
-          title={autoApproveEnabled ? "Disable auto-approve" : "Enable auto-approve"}
           aria-label={autoApproveEnabled ? "Disable auto-approve" : "Enable auto-approve"}
           aria-pressed={autoApproveEnabled}
         >
           Auto: {autoApproveEnabled ? "On" : "Off"}
-        </button>
-        <select
-          className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1 text-xs text-[rgb(var(--app-text-muted))] outline-none focus:border-[rgb(var(--app-border-strong))]"
+        </ActionButton>
+        <WorkbenchSelect
+          className="min-h-7 w-auto bg-[rgb(var(--app-surface))] px-2.5 py-1 text-[rgb(var(--app-text-muted))]"
           value={sortMode}
           onChange={(e) => onSortModeChange(e.target.value === "recent" ? "recent" : "attention")}
           aria-label="Sort review queue"
         >
           <option value="attention">Needs attention first</option>
           <option value="recent">Most recent first</option>
-        </select>
+        </WorkbenchSelect>
         <label className="inline-flex items-center gap-1.5 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))]">
           Stale
-          <input
+          <WorkbenchTextInput
             type="number"
             min={1}
             value={staleAgeHours}
@@ -103,26 +107,28 @@ export function ReviewQueueControls({
               onStaleAgeChange(Number.isFinite(next) && next > 0 ? next : 1);
             }}
             onBlur={(e) => onStaleAgeSave(Number(e.target.value))}
-            className="w-12 bg-transparent text-right text-[rgb(var(--app-text))] outline-none disabled:opacity-60"
+            className="min-h-0 w-12 border-0 bg-transparent p-0 text-right text-[rgb(var(--app-text))] hover:border-0 focus:border-0 focus:ring-0 disabled:opacity-60"
             aria-label="Stale review age in hours"
           />
           h
         </label>
-        <button
+        <ActionButton
           type="button"
-          disabled={batchRerunning || visiblePageCount === 0}
           onClick={onRerunVisible}
-          className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={visiblePageCount === 0 || (batchRerunning && batchMode !== "visible")}
+          loading={batchRerunning && batchMode === "visible"}
+          className="min-h-7 px-2.5 py-1"
         >
           {batchRerunning && batchProgress && batchMode === "visible"
             ? `Rerun visible ${batchProgress.done}/${batchProgress.total}`
             : "Rerun page"}
-        </button>
-        <button
+        </ActionButton>
+        <ActionButton
           type="button"
-          disabled={batchRerunning || staleCount === 0}
           onClick={onRerunStale}
-          className="rounded-md border border-[rgb(var(--app-warning))]/35 px-2.5 py-1 text-xs text-[rgb(var(--app-warning))] transition hover:bg-[rgb(var(--app-warning)_/_0.10)] disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={staleCount === 0 || (batchRerunning && batchMode !== "stale")}
+          loading={batchRerunning && batchMode === "stale"}
+          className="min-h-7 border-[rgb(var(--app-warning))]/35 px-2.5 py-1 text-[rgb(var(--app-warning))] hover:bg-[rgb(var(--app-warning)_/_0.10)]"
         >
           {batchRerunning && batchProgress && batchMode === "stale"
             ? `Rerun stale ${batchProgress.done}/${batchProgress.total}`
@@ -132,7 +138,7 @@ export function ReviewQueueControls({
               {staleCount}
             </span>
           )}
-        </button>
+        </ActionButton>
         <span className={reviewQueueFooterCountClass()}>
           {displayedCount}/{totalCount}
         </span>

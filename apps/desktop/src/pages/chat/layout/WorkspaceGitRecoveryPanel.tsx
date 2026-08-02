@@ -2,6 +2,10 @@ import type {
   GitRecoveryWorkspaceAction,
   WorkspaceAction,
 } from "../workflowTaskState.js";
+import {
+  ActionButton,
+  InlineNotice,
+} from "../../../components/workbench/WorkbenchPrimitives.js";
 
 interface WorkspaceGitRecoveryPanelProps {
   gitRecovery: {
@@ -24,25 +28,23 @@ export function WorkspaceGitRecoveryPanel({
   if (!gitRecovery) return null;
 
   return (
-    <div className="mt-2 rounded-lg border border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] p-2">
-      <p className="mb-2 truncate text-xs text-[rgb(var(--app-warning))]">
-        {gitRecovery.label} needs attention
-      </p>
+    <InlineNotice tone="warning" title={`${gitRecovery.label} needs attention`}>
       <div className={workspaceGitRecoveryActionsGridClass()}>
         {gitRecovery.actions.map((action) => (
-          <button
+          <ActionButton
             key={action.type}
             type="button"
             onClick={() => runAction({ type: action.type })}
             disabled={busy}
-            className="truncate whitespace-nowrap rounded-md border border-[rgb(var(--app-warning-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-warning))] transition hover:bg-[rgb(var(--app-surface))] disabled:cursor-wait disabled:opacity-50"
-            title={action.title}
+            tone="quiet"
+            className="min-h-7 truncate whitespace-nowrap border border-[rgb(var(--app-warning-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-warning))] hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-warning))] disabled:cursor-wait"
+            aria-label={action.title}
           >
             {action.label}
-          </button>
+          </ActionButton>
         ))}
       </div>
-    </div>
+    </InlineNotice>
   );
 }
 
