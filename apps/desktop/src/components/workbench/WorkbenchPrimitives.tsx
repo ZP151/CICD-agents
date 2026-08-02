@@ -303,6 +303,27 @@ export function InlineNotice({
   );
 }
 
+/**
+ * Keeps optional diagnostic output available without turning routine recovery
+ * states into stacked cards. Native details semantics preserve keyboard and
+ * screen-reader behaviour across every workspace route.
+ */
+export function WorkbenchDisclosure({
+  label = "Technical detail",
+  children,
+  className = "",
+}: PropsWithChildren<{ label?: string; className?: string }>) {
+  return (
+    <details className={`group mt-2 min-w-0 text-xs text-[rgb(var(--app-text-muted))] ${className}`.trim()}>
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 select-none text-[rgb(var(--app-text-subtle))] transition-colors hover:text-[rgb(var(--app-text-muted))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/35 [&::-webkit-details-marker]:hidden">
+        <span aria-hidden="true" className="text-sm leading-none transition-transform duration-[var(--app-motion-fast)] group-open:rotate-90">›</span>
+        {label}
+      </summary>
+      <div className="mt-1.5 break-words font-mono leading-5 text-[rgb(var(--app-text-muted))]">{children}</div>
+    </details>
+  );
+}
+
 export function WorkbenchEmptyState({
   title,
   description,

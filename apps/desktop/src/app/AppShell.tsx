@@ -8,7 +8,12 @@ import {
   type ReactNode,
 } from "react";
 import { UserFooter } from "./UserFooter.js";
-import { WorkbenchSkeleton } from "../components/workbench/WorkbenchPrimitives.js";
+import {
+  ActionButton,
+  ActionLink,
+  WorkbenchDisclosure,
+  WorkbenchSkeleton,
+} from "../components/workbench/WorkbenchPrimitives.js";
 import { Tooltip, TooltipProvider } from "../components/ui/Tooltip.js";
 
 type RouteModuleLoader = () => Promise<unknown>;
@@ -335,28 +340,17 @@ export function RouteErrorFallback({ error }: { error: Error }): JSX.Element {
         Refresh the page data, switch routes, or return to Chat and try the workflow again.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="rounded-md bg-[rgb(var(--app-accent))] px-3 py-1.5 text-sm font-medium text-white"
-        >
+        <ActionButton type="button" tone="primary" onClick={() => window.location.reload()}>
           Refresh page
-        </button>
-        <a
+        </ActionButton>
+        <ActionLink
           href="#/chat"
-          className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-1.5 text-sm text-[rgb(var(--app-text))]"
+          className="text-sm"
         >
           Back to Chat
-        </a>
+        </ActionLink>
       </div>
-      <details className="mt-4 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-2">
-        <summary className="cursor-pointer text-xs font-medium text-[rgb(var(--app-text-muted))]">
-          Technical detail
-        </summary>
-        <p className="mt-2 break-words font-mono text-xs text-[rgb(var(--app-text-subtle))]">
-          {error.message}
-        </p>
-      </details>
+      <WorkbenchDisclosure className="mt-4">{error.message}</WorkbenchDisclosure>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   ActionButton,
   ActionLink,
   InlineNotice,
+  WorkbenchDisclosure,
   WorkbenchHeader,
   WorkbenchPage,
   WorkbenchSelect,
@@ -330,12 +331,7 @@ export function PipelineEmptyState({
             {description}
           </p>
           {hasBlockingError && error && (
-            <details className="mt-2 text-xs text-[rgb(var(--app-text-muted))]">
-              <summary className="cursor-pointer select-none text-[rgb(var(--app-text-subtle))]">
-                Technical detail
-              </summary>
-              <p className="mt-1 break-words font-mono leading-5">{error}</p>
-            </details>
+            <WorkbenchDisclosure>{error}</WorkbenchDisclosure>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">

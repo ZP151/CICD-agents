@@ -5,6 +5,7 @@ import {
   ActionButton,
   InlineNotice,
   StatusBadge,
+  WorkbenchDisclosure,
   WorkbenchEmptyState,
   WorkbenchHeader,
   WorkbenchFilterTabs,
@@ -77,6 +78,18 @@ describe("WorkbenchPrimitives", () => {
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain(">Failed</span><span");
     expect(html).toContain("focus-visible:ring");
+  });
+
+  it("keeps optional technical detail low-chrome and keyboard accessible", () => {
+    const html = renderToStaticMarkup(
+      <WorkbenchDisclosure>ado_project_link_incomplete</WorkbenchDisclosure>,
+    );
+
+    expect(html).toContain("<details");
+    expect(html).toContain("Technical detail");
+    expect(html).toContain("ado_project_link_incomplete");
+    expect(html).toContain("focus-visible:ring-2");
+    expect(html).not.toContain("rounded-lg border");
   });
 
   it("provides shared form controls with visible selected, focus, and disabled states", () => {
