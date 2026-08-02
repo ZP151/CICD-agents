@@ -22,7 +22,9 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   border-right: 1px solid rgb(var(--app-border));
-  transition: width 180ms ease, opacity 150ms ease;
+  /* Width is controlled by direct resize input. Keep it immediate so drag
+     updates do not queue layout animations behind the pointer. */
+  transition: opacity 150ms ease;
   min-width: 0;
 }
 
@@ -110,7 +112,9 @@
   overflow: hidden;
   overscroll-behavior: contain;
   border-left: 0;
-  transition: width 180ms ease, opacity 150ms ease;
+  /* The code panel changes the middle-column layout; animating that width
+     creates a visible reflow under long transcripts. Fade its content only. */
+  transition: opacity 150ms ease;
   min-width: 0;
 }
 

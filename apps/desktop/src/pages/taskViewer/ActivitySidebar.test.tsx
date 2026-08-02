@@ -172,17 +172,17 @@ describe("ActivitySidebar", () => {
     const listClass = activitySidebarListClass();
 
     expect(shellClass).toContain("w-full");
-    expect(shellClass).toContain("xl:w-[clamp(16rem,24vw,21rem)]");
+    expect(shellClass).toContain("lg:w-[clamp(16rem,24vw,21rem)]");
     expect(shellClass).toContain("border-b");
-    expect(shellClass).toContain("xl:border-r");
+    expect(shellClass).toContain("lg:border-r");
     expect(shellClass).not.toContain("lg:w-[clamp(18rem,30vw,23rem)]");
-    expect(shellClass).not.toContain("xl:w-[clamp(20rem,28vw,24rem)]");
+    expect(shellClass).not.toContain("lg:w-[clamp(20rem,28vw,24rem)]");
     expect(shellClass).not.toContain("xl:w-[420px]");
     expect(listClass).toContain("max-h-[16rem]");
     expect(listClass).toContain("overflow-x-hidden");
-    expect(listClass).toContain("lg:max-h-[18rem]");
-    expect(listClass).toContain("xl:flex-1");
-    expect(listClass).not.toContain("lg:flex-1");
+    expect(listClass).toContain("lg:max-h-none");
+    expect(listClass).toContain("lg:flex-1");
+    expect(listClass).not.toContain("xl:flex-1");
   });
 
   it("renders section filters with counts before the activity lists", () => {

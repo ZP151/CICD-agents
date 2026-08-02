@@ -453,12 +453,12 @@ export function ActivitySidebarUnavailableState({
 export function activitySidebarShellClass(): string {
   return [
     "flex w-full shrink-0 flex-col border-b border-[rgb(var(--app-border))] pb-3",
-    "xl:max-h-[calc(100vh-5rem)] xl:w-[clamp(16rem,24vw,21rem)] xl:border-b-0 xl:border-r xl:pb-0 xl:pr-4",
+    "lg:max-h-[calc(100vh-5rem)] lg:w-[clamp(16rem,24vw,21rem)] lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4",
   ].join(" ");
 }
 
 export function activitySidebarListClass(): string {
-  return "min-h-0 max-h-[16rem] overflow-x-hidden overflow-y-auto pr-1 lg:max-h-[18rem] xl:max-h-none xl:flex-1";
+  return "min-h-0 max-h-[16rem] overflow-x-hidden overflow-y-auto pr-1 lg:max-h-none lg:flex-1";
 }
 
 function TemporaryActivityHistory({

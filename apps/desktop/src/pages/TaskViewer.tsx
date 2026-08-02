@@ -211,7 +211,10 @@ export default function TaskViewer(): JSX.Element {
 }
 
 export function taskViewerLayoutClass(): string {
-  return "min-w-0 items-stretch gap-4 xl:flex-row";
+  // A 1024px desktop still has enough room for a compact evidence list and a
+  // readable detail pane. Waiting until 1280px forced users to scroll past the
+  // entire activity list before seeing the selection they just made.
+  return "min-w-0 items-stretch gap-4 lg:flex-row";
 }
 
 export function taskViewerDetailClass(): string {

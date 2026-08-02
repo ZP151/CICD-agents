@@ -113,8 +113,8 @@ describe("ActivityEmptyDetail", () => {
   it("uses a responsive activity workbench layout", () => {
     const className = taskViewerLayoutClass();
 
-    expect(className).toContain("xl:flex-row");
-    expect(className).not.toContain("lg:flex-row");
+    expect(className).toContain("lg:flex-row");
+    expect(className).not.toContain("xl:flex-row");
     expect(className).toContain("items-stretch");
     expect(className).not.toContain("ml-0");
     expect(className).not.toContain("mr-auto");
@@ -122,7 +122,6 @@ describe("ActivityEmptyDetail", () => {
     const detailClass = taskViewerDetailClass();
     expect(detailClass).toContain("min-w-0");
     expect(detailClass).toContain("xl:basis-0");
-    expect(detailClass).not.toContain("lg:basis-0");
     expect(detailClass).not.toContain("lg:max-w-[74rem]");
     expect(detailClass).not.toContain("xl:max-w-[74rem]");
   });
