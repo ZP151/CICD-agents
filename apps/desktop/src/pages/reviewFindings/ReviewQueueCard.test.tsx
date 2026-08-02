@@ -165,4 +165,26 @@ describe("ReviewQueueCard", () => {
     expect(html).toContain("detailed records are unavailable");
     expect(html).not.toContain("View findings");
   });
+
+  it("uses shared buttons so card actions retain keyboard focus and loading feedback", () => {
+    const html = renderToStaticMarkup(
+      <ReviewQueueCard
+        item={queueItem()}
+        projectLinkId="claimbot-link"
+        staleAgeHours={24}
+        writeBackRetrying={{}}
+        rerunning={{}}
+        dispositionSaving={{}}
+        onOpenFindings={() => undefined}
+        onRerunReview={() => undefined}
+        onRetryDispositionWriteBack={() => undefined}
+        onApplyDisposition={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("focus-visible:ring-2");
+    expect(html).toContain("focus-visible:ring-[rgb(var(--app-focus))]/45");
+    expect(html).toContain("Rerun review");
+    expect(html).toContain("Retry ADO");
+  });
 });

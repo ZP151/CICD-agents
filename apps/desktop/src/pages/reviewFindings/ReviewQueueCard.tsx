@@ -11,7 +11,7 @@ import {
   riskTone,
   shortCommit,
 } from "./reviewQueueViewModel.js";
-import { StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
+import { ActionButton, StatusBadge } from "../../components/workbench/WorkbenchPrimitives.js";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -174,10 +174,10 @@ function ReviewQueueCardActions({
   return (
     <div className={reviewQueueCardActionsClass()}>
       {hasStoredFindings && (
-        <button
+        <ActionButton
           type="button"
           onClick={() => onOpenFindings(item)}
-          className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+          className="min-h-7 px-2.5 py-1"
         >
           View findings
           {storedFindingsCount > 0 && (
@@ -185,36 +185,39 @@ function ReviewQueueCardActions({
               {storedFindingsCount}
             </span>
           )}
-        </button>
+        </ActionButton>
       )}
-      <button
+      <ActionButton
         type="button"
         disabled={isRerunning}
         onClick={() => onRerunReview(item)}
-        className="rounded-md border border-[rgb(var(--app-accent))]/30 px-2.5 py-1 text-xs text-[rgb(var(--app-accent-readable))] transition hover:bg-[rgb(var(--app-accent-soft))] disabled:cursor-not-allowed disabled:opacity-50"
+        loading={isRerunning}
+        className="min-h-7 px-2.5 py-1"
       >
         {isRerunning ? "Rerunning..." : "Rerun review"}
-      </button>
+      </ActionButton>
       {item.manualDisposition &&
         (item.manualDisposition === "marked_blocked" || item.manualDisposition === "changes_requested") &&
         !item.manualDispositionWriteBackOk && (
-          <button
+          <ActionButton
             type="button"
             disabled={isRetryingWriteBack}
             onClick={() => onRetryDispositionWriteBack(item)}
-            className="rounded-md border border-[rgb(var(--app-accent))]/30 px-2.5 py-1 text-xs text-[rgb(var(--app-accent-readable))] transition hover:bg-[rgb(var(--app-accent-soft))] disabled:cursor-not-allowed disabled:opacity-50"
+            loading={isRetryingWriteBack}
+            className="min-h-7 px-2.5 py-1"
           >
             {isRetryingWriteBack ? "Retrying..." : "Retry ADO"}
-          </button>
+          </ActionButton>
         )}
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
-          <button
+          <ActionButton
             type="button"
-            className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))]"
+            tone="secondary"
+            className="min-h-7 px-2.5 py-1"
           >
             Actions
-          </button>
+          </ActionButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" aria-label="Review disposition actions">
           <DropdownMenuItem
