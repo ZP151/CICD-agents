@@ -81,7 +81,7 @@ export function ReviewQueueCard({
                       ? "bg-[rgb(var(--app-warning)_/_0.10)] text-[rgb(var(--app-warning))] ring-[rgb(var(--app-warning))]/30"
                       : "bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))] ring-[rgb(var(--app-border))]"
                 }`}
-                title={`Audit: ${auditSummary.label}${auditSummary.threadId ? ` · thread ${auditSummary.threadId}` : ""}`}
+                aria-label={`Audit status: ${auditSummary.label}${auditSummary.threadId ? `, thread ${auditSummary.threadId}` : ""}`}
               >
                 {auditSummary.label}
               </StatusBadge>
@@ -101,7 +101,7 @@ export function ReviewQueueCard({
       </div>
       <div className={reviewQueueCardFooterClass()}>
         <div className={reviewQueueCardMetricsGridClass()}>
-          <span title={hasStoredFindings
+          <span aria-label={hasStoredFindings
             ? `${storedFindings.length} findings available to inspect`
             : item.findingCount > 0
               ? `${item.findingCount} findings were recorded, but detailed records are unavailable. Rerun the review to restore them.`
@@ -109,11 +109,11 @@ export function ReviewQueueCard({
           >
             {hasStoredFindings ? `findings ${storedFindings.length}` : item.findingCount > 0 ? `summary ${item.findingCount}` : "findings 0"}
           </span>
-          <span title={`${item.discardedFindingCount} discarded findings`}>discarded {item.discardedFindingCount}</span>
-          <span title={`${item.hunkCoverageFiles} changed files and ${item.changedHunkLines} changed lines covered by hunks`}>
+          <span aria-label={`${item.discardedFindingCount} discarded findings`}>discarded {item.discardedFindingCount}</span>
+          <span aria-label={`${item.hunkCoverageFiles} changed files and ${item.changedHunkLines} changed lines covered by hunks`}>
             hunks {item.hunkCoverageFiles}f/{item.changedHunkLines}l
           </span>
-          <span title={`${item.wholeFileFallbackFiles} files required whole-file fallback`}>
+          <span aria-label={`${item.wholeFileFallbackFiles} files required whole-file fallback`}>
             fallback {item.wholeFileFallbackFiles}f
           </span>
         </div>
@@ -173,16 +173,16 @@ function ReviewQueueCardActions({
 
   return (
     <div className={reviewQueueCardActionsClass()}>
-      {hasStoredFindings && (
+      {(hasStoredFindings || item.findingCount > 0) && (
         <ActionButton
           type="button"
           onClick={() => onOpenFindings(item)}
           className="min-h-7 px-2.5 py-1"
         >
-          View findings
-          {storedFindingsCount > 0 && (
+          {hasStoredFindings ? "View findings" : "Review summary"}
+          {(storedFindingsCount > 0 || item.findingCount > 0) && (
             <span className="ml-1.5 rounded-full bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
-              {storedFindingsCount}
+              {hasStoredFindings ? storedFindingsCount : item.findingCount}
             </span>
           )}
         </ActionButton>

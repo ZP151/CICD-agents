@@ -109,7 +109,7 @@ describe("ReviewQueueCard", () => {
     expect(html).toContain("Warnings or policy-sensitive files need human review.");
     expect(html).not.toContain("Attention:");
     expect(html).not.toContain("context whole file fallback");
-    expect(html).toContain("Audit:");
+    expect(html).toContain('aria-label="Audit status: Changes requested · ADO pending · 1 audit event · 1 write-back attempt"');
     expect(html).toContain("Changes requested");
     expect(html).toContain("ADO pending");
     expect(html).toContain("summary 3");
@@ -145,7 +145,7 @@ describe("ReviewQueueCard", () => {
     expect(html).not.toContain("Saving...");
   });
 
-  it("does not advertise a findings panel when only a historical summary remains", () => {
+  it("offers the historical review summary when detailed findings are unavailable", () => {
     const html = renderToStaticMarkup(
       <ReviewQueueCard
         item={queueItem({ findingCount: 9 })}
@@ -162,8 +162,10 @@ describe("ReviewQueueCard", () => {
     );
 
     expect(html).toContain("summary 9");
-    expect(html).toContain("detailed records are unavailable");
-    expect(html).not.toContain("View findings");
+    expect(html).toContain("Review summary");
+    expect(html).toContain(">9</span>");
+    expect(html).toContain('aria-label="9 findings were recorded, but detailed records are unavailable. Rerun the review to restore them."');
+    expect(html).not.toContain("title=");
   });
 
   it("uses shared buttons so card actions retain keyboard focus and loading feedback", () => {
