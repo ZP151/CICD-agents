@@ -204,6 +204,7 @@ $runtimeSourcePath = if (Test-Path -LiteralPath $masterSourcePath) { $masterSour
 $iconPaths = @(
   "src\\assets\\mergepilot-icon.png",
   "src-tauri\\icons\\32x32.png",
+  "src-tauri\\icons\\48x48.png",
   "src-tauri\\icons\\128x128.png",
   "src-tauri\\icons\\128x128@2x.png",
   "src-tauri\\icons\\icon.png",
@@ -222,7 +223,11 @@ foreach ($relativePath in $iconPaths) {
     # The React shell renders this source at multiple Windows scale factors.
     # Keep a 512px web source rather than letting the title bar fall back to a
     # 256px raster while the native ICO selects its high-density payload.
-    $sourceSize = if ($relativePath -eq "src\\assets\\mergepilot-icon.png") { 512 } else { 0 }
+    $sourceSize = switch ($relativePath) {
+      "src\\assets\\mergepilot-icon.png" { 512 }
+      "src-tauri\\icons\\48x48.png" { 48 }
+      default { 0 }
+    }
     [MergePilotIconSurface]::ReplaceWithSource($runtimeSourcePath, $path, $sourceSize, $sourceSize)
   }
   # The transparent master is the only geometry source. Do not widen or redraw

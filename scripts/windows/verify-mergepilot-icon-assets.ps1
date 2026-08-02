@@ -85,6 +85,7 @@ $desktopRoot = Join-Path (Resolve-Path $RepoRoot) "apps\\desktop"
 $approvedReference = Join-Path $desktopRoot "src\\assets\\mergepilot-icon-reference.png"
 $webIcon = Join-Path $desktopRoot "src\\assets\\mergepilot-icon.png"
 $nativeIcon32 = Join-Path $desktopRoot "src-tauri\\icons\\32x32.png"
+$nativeIcon48 = Join-Path $desktopRoot "src-tauri\\icons\\48x48.png"
 $nativeIcon256 = Join-Path $desktopRoot "src-tauri\\icons\\128x128@2x.png"
 $nativeIco = Join-Path $desktopRoot "src-tauri\\icons\\icon.ico"
 
@@ -99,6 +100,7 @@ if ($actualReferenceHash -ne $approvedReferenceHash) {
 
 $webFrame = Assert-TransparentCloudFrame $webIcon 512 0.6
 $smallFrame = Assert-TransparentCloudFrame $nativeIcon32 32 0.68
+$taskbarFrame = Assert-TransparentCloudFrame $nativeIcon48 48 0.68
 $retinaFrame = Assert-TransparentCloudFrame $nativeIcon256 256 0.65
 
 $expectedIcoFrames = @(16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 96, 128, 256)
@@ -128,4 +130,4 @@ if ($ExecutablePath) {
 }
 
 Write-Host "Verified approved MergePilot cloud icon assets: approved source, 512px web source, high-DPI native PNG/ICO frames, and executable resource."
-Write-Host "Web visible bounds: $($webFrame.VisibleWidth)x$($webFrame.VisibleHeight); taskbar frame: $($smallFrame.VisibleWidth)x$($smallFrame.VisibleHeight)."
+Write-Host "Web visible bounds: $($webFrame.VisibleWidth)x$($webFrame.VisibleHeight); tray frame: $($smallFrame.VisibleWidth)x$($smallFrame.VisibleHeight); taskbar frame: $($taskbarFrame.VisibleWidth)x$($taskbarFrame.VisibleHeight)."

@@ -11,10 +11,61 @@ use tauri::{
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_shell::{process::{CommandChild, CommandEvent}, ShellExt};
 
+#[cfg(target_os = "windows")]
+use windows::Win32::{
+    Foundation::{HWND, LPARAM, WPARAM},
+    UI::WindowsAndMessaging::{CreateIcon, SendMessageW, ICON_BIG, WM_SETICON},
+};
+
 /// The port on which the daemon is listening.  Set once during setup() and
 /// read by the frontend via the `get_daemon_port` command.
 static DAEMON_PORT: OnceLock<u16> = OnceLock::new();
 const DEFAULT_DAEMON_PORT: u16 = 8787;
+
+/// Tao assigns only `ICON_SMALL` from the application resource by default.
+/// Windows uses `ICON_BIG` for the taskbar, and falling back to the 16px small
+/// handle makes the cloud look soft on a normal 24–32px taskbar. Build one
+/// retained 48px native handle for that slot; the 16px title-bar icon remains
+/// supplied by the ICO resource.
+#[cfg(target_os = "windows")]
+fn assign_taskbar_icon(
+    window: &tauri::WebviewWindow,
+    image: Image<'_>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut pixels = image.rgba().to_vec();
+    let pixel_count = pixels.len() / 4;
+    let mut and_mask = Vec::with_capacity(pixel_count);
+
+    for pixel in pixels.chunks_exact_mut(4) {
+        and_mask.push(pixel[3].wrapping_sub(u8::MAX));
+        pixel.swap(0, 2);
+    }
+
+    let icon = unsafe {
+        CreateIcon(
+            None,
+            image.width() as i32,
+            image.height() as i32,
+            1,
+            32,
+            and_mask.as_ptr(),
+            pixels.as_ptr(),
+        )
+    }?;
+    let hwnd = window.hwnd()?;
+
+    // The native window owns the handle for its lifetime. Do not destroy it
+    // while the shell can still ask Windows to paint the taskbar button.
+    unsafe {
+        SendMessageW(
+            HWND(hwnd.0),
+            WM_SETICON,
+            Some(WPARAM(ICON_BIG as usize)),
+            Some(LPARAM(icon.0 as isize)),
+        );
+    }
+    Ok(())
+}
 
 fn configured_daemon_port() -> u16 {
     daemon_port_from(std::env::var("MERGEPILOT_RUNTIME_PORT").ok().as_deref())
@@ -286,6 +337,12 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            #[cfg(target_os = "windows")]
+            if let Some(main_window) = app.get_webview_window("main") {
+                let taskbar_icon = Image::from_bytes(include_bytes!("../icons/48x48.png"))?;
+                assign_taskbar_icon(&main_window, taskbar_icon)?;
+            }
+
             // Windows development runs are not installed, so explicitly claim the
             // configured scheme for the current executable. Release installers
             // register it from tauri.conf.json.
