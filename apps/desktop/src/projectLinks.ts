@@ -56,7 +56,7 @@ export function resolveActiveProjectLinkId(
     if (storedLink) return preferredProjectLinkId(projectLinks, storedLink);
   }
 
-  return preferredProjectLinkId(projectLinks, projectLinks[0]);
+  return preferredProjectLinkId(projectLinks, preferredDefaultProjectLink(projectLinks));
 }
 
 export function isTemporaryProjectLink(
@@ -84,6 +84,24 @@ function preferredProjectLinkId(
     .filter((candidate) => projectLinkAdoMappingKey(candidate) === projectLinkAdoMappingKey(fallback))
     .sort(compareProjectLinkPreference);
   return sameAdoMapping[0]?.id ?? fallback.id;
+}
+
+function preferredDefaultProjectLink(projectLinks: ProjectLink[]): ProjectLink | undefined {
+  const savedMappedLinks = projectLinks
+    .filter((link) => !isTemporaryProjectLink(link))
+    .filter(hasAzureDevOpsMapping)
+    .sort(compareProjectLinkPreference);
+  if (savedMappedLinks.length > 0) return savedMappedLinks[0];
+
+  return projectLinks.find((link) => !isTemporaryProjectLink(link)) ?? projectLinks[0];
+}
+
+function hasAzureDevOpsMapping(link: ProjectLink): boolean {
+  return Boolean(
+    link.adoOrgUrl.trim() &&
+    link.adoProject.trim() &&
+    link.adoRepoName.trim(),
+  );
 }
 
 function projectLinkAdoMappingKey(link: ProjectLink): string {
