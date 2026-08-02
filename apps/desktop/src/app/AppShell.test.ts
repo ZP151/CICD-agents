@@ -9,6 +9,7 @@ import {
   appShellNavLinkClass,
   appShellSidebarClass,
   FullLayout,
+  PageLoadingFallback,
   pageShellContentClass,
   pageShellFadeClass,
   preloadWorkspaceRouteModules,
@@ -85,6 +86,18 @@ describe("AppShell route recovery", () => {
     expect(html).toContain("Back to Chat");
     expect(html).toContain("Technical detail");
     expect(html).toContain("connections.filter is not a function");
+  });
+});
+
+describe("AppShell route loading", () => {
+  it("renders a quiet workspace skeleton while a page chunk is loading", () => {
+    const html = renderToStaticMarkup(createElement(PageLoadingFallback));
+
+    expect(html).toContain("Preparing workspace");
+    expect(html).toContain("Loading this page and its local context.");
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain("Loading workspace content");
+    expect(html).toContain("workbench-skeleton-block");
   });
 });
 

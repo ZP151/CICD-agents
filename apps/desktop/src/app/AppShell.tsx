@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { UserFooter } from "./UserFooter.js";
+import { WorkbenchSkeleton } from "../components/workbench/WorkbenchPrimitives.js";
 import { Tooltip, TooltipProvider } from "../components/ui/Tooltip.js";
 
 type RouteModuleLoader = () => Promise<unknown>;
@@ -265,14 +266,23 @@ function PageShell({
   );
 }
 
-function PageLoadingFallback() {
+export function PageLoadingFallback(): JSX.Element {
   return (
-    <div
-      aria-label="Preparing page"
-      className="flex min-h-24 items-center justify-center text-xs text-[rgb(var(--app-text-subtle))]"
+    <section
+      aria-label="Preparing workspace page"
+      aria-live="polite"
+      className="mx-auto flex min-h-48 w-full max-w-5xl flex-col justify-center gap-4 py-6"
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--app-text-subtle))]/60" />
-    </div>
+      <div className="max-w-xl">
+        <p className="text-sm font-medium text-[rgb(var(--app-text))]">Preparing workspace</p>
+        <p className="mt-1 text-xs leading-5 text-[rgb(var(--app-text-muted))]">
+          Loading this page and its local context.
+        </p>
+      </div>
+      <div className="max-w-3xl">
+        <WorkbenchSkeleton rows={2} />
+      </div>
+    </section>
   );
 }
 
