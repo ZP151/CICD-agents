@@ -67,7 +67,7 @@ export function pageShellFadeClass(): string {
 }
 
 export function appShellFrameClass(): string {
-  return "flex h-screen w-screen bg-[rgb(var(--app-bg))] text-[rgb(var(--app-text))]";
+  return "app-shell-frame flex h-screen w-screen text-[rgb(var(--app-text))]";
 }
 
 export function appShellSidebarClass(): string {

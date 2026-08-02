@@ -138,6 +138,11 @@ describe("AppShell themed layout classes", () => {
     expect(appShellNavLinkClass(false)).toContain("--app-sidebar-muted");
   });
 
+  it("exposes a dedicated shell canvas for Standard theme ambience", () => {
+    expect(appShellFrameClass()).toContain("app-shell-frame");
+    expect(appShellFrameClass()).not.toContain("bg-[rgb(var(--app-bg))]");
+  });
+
   it("keeps keyboard focus visible in the full sidebar and compact icon rail", () => {
     const classes = appShellNavLinkClass(false);
 
