@@ -146,11 +146,11 @@ public static class MergePilotIconSurface
         using (var target = new Bitmap(outputWidth, outputHeight, PixelFormat.Format32bppArgb))
         using (var graphics = Graphics.FromImage(target))
         {
-            // The approved horizontal cloud carries more natural canvas padding
-            // than a square mark. Windows adds a second taskbar inset, so native
-            // frames use the available canvas without redrawing the artwork.
-            var contentScale = outputWidth <= 64 ? 1.16 : 1.08;
-            if (outputWidth >= 512) contentScale = 1.00;
+            // Keep every platform asset on the original transparent canvas.
+            // An earlier size-dependent scale changed the cloud's visual
+            // identity at taskbar size. A smaller frame may only be a direct
+            // rasterization of this master, never a cropped or redrawn mark.
+            const double contentScale = 1.00;
             var renderWidth = (int)Math.Ceiling(outputWidth * contentScale);
             var renderHeight = (int)Math.Ceiling(outputHeight * contentScale);
             var offsetX = (outputWidth - renderWidth) / 2;
@@ -172,9 +172,8 @@ public static class MergePilotIconSurface
     {
         // Taskbar and notification-area icons are viewed at physical pixel
         // sizes as low as 16px. Render every frame directly from the retained
-        // 1254px source, then constrain only edge alpha. The cloud contour,
-        // internal nodes, whitespace, and check medallion stay identical to
-        // the approved main artwork at every size.
+        // 1254px source. The cloud contour, internal nodes, whitespace, and
+        // check medallion stay identical to the approved main artwork.
         using (var source = new Bitmap(sourcePath))
         using (var target = new Bitmap(outputSize, outputSize, PixelFormat.Format32bppArgb))
         using (var graphics = Graphics.FromImage(target))
@@ -188,37 +187,17 @@ public static class MergePilotIconSurface
 
             graphics.Clear(Color.Transparent);
             graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            graphics.PixelOffsetMode = PixelOffsetMode.Half;
+            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
             graphics.CompositingQuality = CompositingQuality.HighQuality;
-            graphics.SmoothingMode = SmoothingMode.HighQuality;
+            // Match the approved native frame rasterization exactly. This is
+            // anti-aliasing of the retained source edge, not a new blur pass.
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
             graphics.DrawImage(source, new Rectangle(offset, offset, renderSize, renderSize));
-
-            SnapTaskbarAlpha(target, 80);
 
             var temporaryPath = targetPath + ".mergepilot-taskbar-tmp";
             target.Save(temporaryPath, ImageFormat.Png);
             File.Copy(temporaryPath, targetPath, true);
             File.Delete(temporaryPath);
-        }
-    }
-
-    private static void SnapTaskbarAlpha(Bitmap bitmap, int alphaThreshold)
-    {
-        for (var y = 0; y < bitmap.Height; y++)
-        {
-            for (var x = 0; x < bitmap.Width; x++)
-            {
-                var pixel = bitmap.GetPixel(x, y);
-                if (pixel.A == 0) continue;
-                if (pixel.A < alphaThreshold)
-                {
-                    bitmap.SetPixel(x, y, Color.Transparent);
-                }
-                else
-                {
-                    bitmap.SetPixel(x, y, Color.FromArgb(255, pixel.R, pixel.G, pixel.B));
-                }
-            }
         }
     }
 
@@ -229,6 +208,7 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\\..")
 $desktopRoot = Join-Path $repoRoot "apps\\desktop"
 $approvedArtworkPath = Join-Path $desktopRoot "src\\assets\\mergepilot-icon-reference.png"
 $masterSourcePath = Join-Path $desktopRoot "src\\assets\\mergepilot-icon-source.png"
+$approvedTaskbar32Path = Join-Path $desktopRoot "src\\assets\\mergepilot-taskbar-32.png"
 
 if ($SourceImage) {
   if (-not (Test-Path -LiteralPath $SourceImage)) {
@@ -300,49 +280,20 @@ $taskbarDirectory = Join-Path $desktopRoot "src-tauri\icons\taskbar"
 New-Item -ItemType Directory -Force -Path $taskbarDirectory | Out-Null
 foreach ($taskbarSize in $taskbarSizes) {
   $taskbarPath = Join-Path $taskbarDirectory "${taskbarSize}x${taskbarSize}.png"
-  [MergePilotIconSurface]::RenderTaskbarFrame($runtimeSourcePath, $taskbarPath, $taskbarSize)
+  if ($taskbarSize -eq 32 -and (Test-Path -LiteralPath $approvedTaskbar32Path)) {
+    # This is the visually-approved native 32px taskbar frame. It shares the
+    # retained cloud source's geometry, but remains byte-for-byte stable so a
+    # later rasterizer tweak cannot alter the frame Windows commonly selects.
+    [System.IO.File]::Copy($approvedTaskbar32Path, $taskbarPath, $true)
+  } else {
+    [MergePilotIconSurface]::RenderTaskbarFrame($runtimeSourcePath, $taskbarPath, $taskbarSize)
+  }
 }
 
 # The notification-area API accepts a bitmap rather than an ICO. Point it at
 # the dedicated 32px frame so it never has to downscale a large web raster.
 [System.IO.File]::Copy((Join-Path $taskbarDirectory "32x32.png"), (Join-Path $desktopRoot "src-tauri\icons\32x32.png"), $true)
 [System.IO.File]::Copy((Join-Path $taskbarDirectory "48x48.png"), (Join-Path $desktopRoot "src-tauri\icons\48x48.png"), $true)
-
-function Get-PngPayload([string] $sourcePath, [int] $size) {
-  $source = [System.Drawing.Bitmap]::FromFile($sourcePath)
-  try {
-    $bitmap = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    try {
-      $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-      try {
-        $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-        $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-        $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
-        $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
-        # Windows selects an exact ICO payload before it scales.  Fill more of
-        # the small native canvas so this wide cloud has the same optical weight
-        # as the square icons beside it on the taskbar.
-        $contentScale = if ($size -le 64) { 1.16 } else { 1.08 }
-        $renderSize = [int][Math]::Ceiling($size * $contentScale)
-        $offset = [int](($size - $renderSize) / 2)
-        $graphics.DrawImage($source, $offset, $offset, $renderSize, $renderSize)
-      } finally {
-        $graphics.Dispose()
-      }
-      $stream = New-Object System.IO.MemoryStream
-      try {
-        $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
-        Write-Output -NoEnumerate $stream.ToArray()
-      } finally {
-        $stream.Dispose()
-      }
-    } finally {
-      $bitmap.Dispose()
-    }
-  } finally {
-    $source.Dispose()
-  }
-}
 
 function Write-Ico([string] $targetPath, [byte[][]] $payloads, [int[]] $sizes) {
   $stream = [System.IO.File]::Open($targetPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)

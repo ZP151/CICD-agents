@@ -20,6 +20,7 @@
     "tauri": "tauri",
     "icons:refresh": "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/windows/refresh-mergepilot-icons.ps1",
     "icons:verify": "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/windows/verify-mergepilot-icon-assets.ps1",
+    "icons:review": "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/windows/render-mergepilot-icon-review.ps1",
     "tauri:dev": "pnpm run icons:refresh && node scripts/ensure-sidecar.mjs && tauri dev",
     "build:sidecar": "node scripts/build-sidecar.mjs",
     "tauri:build": "pnpm run icons:refresh && node scripts/build-sidecar.mjs && tauri build"

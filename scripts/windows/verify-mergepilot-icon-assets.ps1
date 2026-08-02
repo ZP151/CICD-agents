@@ -122,6 +122,7 @@ function Get-IcoFrames([string]$Path) {
 
 $desktopRoot = Join-Path (Resolve-Path $RepoRoot) "apps\\desktop"
 $approvedReference = Join-Path $desktopRoot "src\\assets\\mergepilot-icon-reference.png"
+$approvedTaskbar32 = Join-Path $desktopRoot "src\\assets\\mergepilot-taskbar-32.png"
 $webIcon = Join-Path $desktopRoot "src\\assets\\mergepilot-icon.png"
 $nativeIcon32 = Join-Path $desktopRoot "src-tauri\\icons\\32x32.png"
 $nativeIcon48 = Join-Path $desktopRoot "src-tauri\\icons\\48x48.png"
@@ -139,10 +140,23 @@ if ($actualReferenceHash -ne $approvedReferenceHash) {
   throw "Approved cloud artwork changed unexpectedly: $approvedReference"
 }
 
+$approvedTaskbar32Hash = "93413291F3F43E9CF4197DCA9F7B382EFA614BE8663F0E44A41F01F73DB3CA6F"
+if (-not (Test-Path -LiteralPath $approvedTaskbar32)) {
+  throw "Missing approved 32px taskbar frame: $approvedTaskbar32"
+}
+$actualTaskbar32Hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([System.IO.File]::ReadAllBytes($approvedTaskbar32)))
+if ($actualTaskbar32Hash -ne $approvedTaskbar32Hash) {
+  throw "Approved 32px taskbar frame changed unexpectedly: $approvedTaskbar32"
+}
+
 $webFrame = Assert-TransparentCloudFrame $webIcon 512 0.6
 $smallFrame = Assert-TransparentCloudFrame $nativeIcon32 32 0.6
 $taskbarFrame = Assert-TransparentCloudFrame $nativeIcon48 48 0.6
-$retinaFrame = Assert-TransparentCloudFrame $nativeIcon256 256 0.65
+# The approved horizontal cloud intentionally carries more vertical breathing
+# room than a square app mark. Its 256px source is 209×163 visible pixels,
+# so a 0.60 minimum catches accidental shrinkage without rejecting the
+# original composition.
+$retinaFrame = Assert-TransparentCloudFrame $nativeIcon256 256 0.6
 
 $expectedIcoFrames = @(16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 96, 128, 256)
 $actualIcoFrames = Get-IcoFrameSizes $nativeIco
@@ -151,9 +165,9 @@ if (Compare-Object -ReferenceObject $expectedIcoFrames -DifferenceObject $actual
 }
 
 # The shell must be able to choose an exact per-DPI bitmap. Verify each ICO
-# entry is the byte-identical, crisp taskbar source file rather than a runtime
-# resize of one PNG. Small frames deliberately contain only fully opaque or
-# fully transparent pixels so no soft glow/shadow survives into the taskbar.
+# entry is the byte-identical taskbar source file rather than a runtime resize
+# of one PNG. The source's own anti-aliasing is retained because removing it
+# changes the cloud silhouette; no synthetic shadow or glow is added here.
 $icoFrames = @(Get-IcoFrames $nativeIco)
 foreach ($size in $taskbarSizes) {
   $taskbarPath = Join-Path $taskbarDirectory "${size}x${size}.png"
@@ -162,16 +176,9 @@ foreach ($size in $taskbarSizes) {
   }
 
   $taskbarFrame = Assert-TransparentCloudFrame $taskbarPath $size 0.6
-  if ($taskbarFrame.SemiTransparentPixels -ne 0) {
-    throw "Taskbar frame contains a soft alpha edge: $taskbarPath"
-  }
-
   $icoFrame = @($icoFrames | Where-Object { $_.Size -eq $size })
   if ($icoFrame.Count -ne 1 -or -not $icoFrame[0].PngPayload -or $icoFrame[0].Width -ne $size -or $icoFrame[0].Height -ne $size) {
     throw "ICO entry is invalid for ${size}px."
-  }
-  if ($icoFrame[0].Profile.SemiTransparentPixels -ne 0) {
-    throw "ICO entry contains a soft alpha edge: ${size}px"
   }
   $taskbarHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([System.IO.File]::ReadAllBytes($taskbarPath)))
   if ($icoFrame[0].PayloadHash -ne $taskbarHash) {
@@ -183,6 +190,9 @@ $trayFrameHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData
 $taskbar32Hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([System.IO.File]::ReadAllBytes((Join-Path $taskbarDirectory "32x32.png"))))
 if ($trayFrameHash -ne $taskbar32Hash) {
   throw "Notification-area icon must use the dedicated crisp 32px frame."
+}
+if ($taskbar32Hash -ne $approvedTaskbar32Hash) {
+  throw "Taskbar 32px frame must remain byte-identical to the approved icon."
 }
 
 if (-not $ExecutablePath) {

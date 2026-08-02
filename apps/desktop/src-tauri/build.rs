@@ -11,6 +11,7 @@ fn main() {
         "icons/128x128@2x.png",
         "../src/assets/mergepilot-icon-source.png",
         "../src/assets/mergepilot-icon-reference.png",
+        "../src/assets/mergepilot-taskbar-32.png",
         "tauri.conf.json",
     ] {
         println!("cargo:rerun-if-changed={path}");
