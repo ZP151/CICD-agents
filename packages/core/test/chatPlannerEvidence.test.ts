@@ -177,6 +177,34 @@ describe("groundFinalResponse", () => {
     expect(result).not.toContain("Suggestions:");
   });
 
+  it("removes consecutive empty conclusion sections and their action offer", () => {
+    const result = groundFinalResponse([
+      "I reviewed the working tree: two tracked files have unstaged edits and there is one untracked file; nothing is staged on branch `main`.",
+      "",
+      "Findings:",
+      "",
+      "Risks and quick checks:",
+      "",
+      "Recommended next steps (you can tell me which to run):",
+      "",
+      "If you want a deeper review, I can display the diffs for these files, run a secrets search, or prepare a commit with a suggested message.",
+      "",
+      "Verified facts:",
+      "- Active branch: `main`.",
+    ].join("\n"), []);
+
+    expect(result).toBe([
+      "I reviewed the working tree: two tracked files have unstaged edits and there is one untracked file; nothing is staged on branch `main`.",
+      "",
+      "Verified facts:",
+      "- Active branch: `main`.",
+    ].join("\n"));
+    expect(result).not.toContain("Findings:");
+    expect(result).not.toContain("Risks and quick checks:");
+    expect(result).not.toContain("Recommended next steps");
+    expect(result).not.toContain("If you want a deeper review");
+  });
+
   it("keeps a verdict but removes raw evidence, source ledgers, and recommendation menus", () => {
     const result = groundFinalResponse([
       "Verdict: The deployment change is high risk because the selected configuration changes an endpoint.",

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ReviewQueueItem } from "../../api.js";
-import { buildReviewAuditCardSummary, dispositionLabel } from "../../reviewAudit.js";
-import { loadFindingsLocal, reviewQueuePriorityReasons } from "../../reviewHistoryLocal.js";
+import { buildReviewAuditCardSummary } from "../../reviewAudit.js";
+import { loadFindingsLocal } from "../../reviewHistoryLocal.js";
 import {
   reviewQueueFreshnessStatus,
   reviewQueueItemKey,
@@ -45,26 +45,16 @@ export function ReviewQueueCard({
   onApplyDisposition,
 }: ReviewQueueCardProps): JSX.Element {
   const storedFindings = loadFindingsLocal(item.repository, item.pullRequestId, projectLinkId);
-  const hasFindings = item.findingCount > 0 || storedFindings.length > 0;
-  const attentionReasons = reviewQueuePriorityReasons(item);
+  const hasStoredFindings = storedFindings.length > 0;
   const itemKey = reviewQueueItemKey(item);
   const isRetryingWriteBack = Boolean(writeBackRetrying[itemKey]);
   const isRerunning = Boolean(rerunning[itemKey]);
   const isDispositionSaving = Boolean(dispositionSaving[itemKey]);
   const freshness = reviewQueueFreshnessStatus(item, Date.now(), staleAgeHours);
   const auditSummary = buildReviewAuditCardSummary(item);
-  const detailTitle = reviewQueueCardDetailTitle({
-    item,
-    attentionReasons,
-    auditLabel: auditSummary.hasAudit ? auditSummary.label : "",
-    auditThreadId: auditSummary.threadId ?? "",
-  });
 
   return (
-    <article
-      className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3"
-      title={detailTitle || undefined}
-    >
+    <article className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
       <div className="flex flex-wrap items-start justify-between gap-2.5">
         <div className="min-w-0 flex-1">
           <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
@@ -111,7 +101,14 @@ export function ReviewQueueCard({
       </div>
       <div className={reviewQueueCardFooterClass()}>
         <div className={reviewQueueCardMetricsGridClass()}>
-          <span title={`${item.findingCount} findings`}>findings {item.findingCount}</span>
+          <span title={hasStoredFindings
+            ? `${storedFindings.length} findings available to inspect`
+            : item.findingCount > 0
+              ? `${item.findingCount} findings were recorded, but detailed records are unavailable. Rerun the review to restore them.`
+              : "No findings recorded"}
+          >
+            {hasStoredFindings ? `findings ${storedFindings.length}` : item.findingCount > 0 ? `summary ${item.findingCount}` : "findings 0"}
+          </span>
           <span title={`${item.discardedFindingCount} discarded findings`}>discarded {item.discardedFindingCount}</span>
           <span title={`${item.hunkCoverageFiles} changed files and ${item.changedHunkLines} changed lines covered by hunks`}>
             hunks {item.hunkCoverageFiles}f/{item.changedHunkLines}l
@@ -122,7 +119,7 @@ export function ReviewQueueCard({
         </div>
         <ReviewQueueCardActions
           item={item}
-          hasFindings={hasFindings}
+          hasStoredFindings={hasStoredFindings}
           storedFindingsCount={storedFindings.length}
           isRerunning={isRerunning}
           isRetryingWriteBack={isRetryingWriteBack}
@@ -149,33 +146,9 @@ export function reviewQueueCardActionsClass(): string {
   return "flex min-w-0 flex-wrap justify-start gap-1 sm:justify-end";
 }
 
-export function reviewQueueCardDetailTitle({
-  item,
-  attentionReasons,
-  auditLabel,
-  auditThreadId,
-}: {
-  item: ReviewQueueItem;
-  attentionReasons: string[];
-  auditLabel: string;
-  auditThreadId: string;
-}): string {
-  return [
-    attentionReasons.length > 0 ? `Attention: ${attentionReasons.join(" · ")}` : "",
-    item.autoApprovedAt || item.autoApprovalActor
-      ? `Auto-approval: ${item.autoApprovedAt ? formatDate(item.autoApprovedAt) : "not recorded"}${
-          item.autoApprovalActor ? ` · ${item.autoApprovalActor}` : ""
-        }`
-      : "",
-    auditLabel ? `Audit: ${auditLabel}${auditThreadId ? ` · thread ${auditThreadId}` : ""}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
 function ReviewQueueCardActions({
   item,
-  hasFindings,
+  hasStoredFindings,
   storedFindingsCount,
   isRerunning,
   isRetryingWriteBack,
@@ -186,7 +159,7 @@ function ReviewQueueCardActions({
   onApplyDisposition,
 }: {
   item: ReviewQueueItem;
-  hasFindings: boolean;
+  hasStoredFindings: boolean;
   storedFindingsCount: number;
   isRerunning: boolean;
   isRetryingWriteBack: boolean;
@@ -200,7 +173,7 @@ function ReviewQueueCardActions({
 
   return (
     <div className={reviewQueueCardActionsClass()}>
-      {hasFindings && (
+      {hasStoredFindings && (
         <button
           type="button"
           onClick={() => onOpenFindings(item)}

@@ -4,7 +4,6 @@ import type { ReviewQueueItem } from "../../api.js";
 import {
   ReviewQueueCard,
   reviewQueueCardActionsClass,
-  reviewQueueCardDetailTitle,
   reviewQueueCardFooterClass,
   reviewQueueCardMetricsGridClass,
 } from "./ReviewQueueCard.js";
@@ -108,16 +107,15 @@ describe("ReviewQueueCard", () => {
     expect(html).toContain("medium");
     expect(html).toContain("needs human review");
     expect(html).toContain("Warnings or policy-sensitive files need human review.");
-    expect(html).toContain("Attention:");
-    expect(html).toContain("context whole file fallback");
-    expect(html).not.toContain(">Attention:");
+    expect(html).not.toContain("Attention:");
+    expect(html).not.toContain("context whole file fallback");
     expect(html).toContain("Audit:");
     expect(html).toContain("Changes requested");
     expect(html).toContain("ADO pending");
-    expect(html).toContain("findings 3");
+    expect(html).toContain("summary 3");
     expect(html).toContain("hunks 0f/0l");
     expect(html).toContain("fallback 2f");
-    expect(html).toContain("View findings");
+    expect(html).not.toContain("View findings");
     expect(html).toContain("Retry ADO");
     expect(html).toContain("Actions");
     expect(html).toContain('aria-expanded="false"');
@@ -147,15 +145,24 @@ describe("ReviewQueueCard", () => {
     expect(html).not.toContain("Saving...");
   });
 
-  it("moves long decision detail into hover title text", () => {
-    const title = reviewQueueCardDetailTitle({
-      item: queueItem(),
-      attentionReasons: ["risk medium", "context whole file fallback"],
-      auditLabel: "Changes requested · ADO pending",
-      auditThreadId: "123",
-    });
+  it("does not advertise a findings panel when only a historical summary remains", () => {
+    const html = renderToStaticMarkup(
+      <ReviewQueueCard
+        item={queueItem({ findingCount: 9 })}
+        projectLinkId="claimbot-link"
+        staleAgeHours={24}
+        writeBackRetrying={{}}
+        rerunning={{}}
+        dispositionSaving={{}}
+        onOpenFindings={() => undefined}
+        onRerunReview={() => undefined}
+        onRetryDispositionWriteBack={() => undefined}
+        onApplyDisposition={() => undefined}
+      />,
+    );
 
-    expect(title).toContain("Attention: risk medium · context whole file fallback");
-    expect(title).toContain("Audit: Changes requested · ADO pending · thread 123");
+    expect(html).toContain("summary 9");
+    expect(html).toContain("detailed records are unavailable");
+    expect(html).not.toContain("View findings");
   });
 });
