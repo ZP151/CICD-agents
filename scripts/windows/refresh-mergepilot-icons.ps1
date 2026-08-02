@@ -230,66 +230,6 @@ public static class MergePilotIconSurface
         }
     }
 
-    // Match the supplied cloud's actual 1.25:1 silhouette at taskbar scale.
-    // It is intentionally taller than the previous approximation, whose 1.5:1
-    // geometry made the mark look flattened next to Windows taskbar icons.
-    public static Bitmap CreateCrispCloudMark(int size)
-    {
-        const int scale = 4;
-        var sourceSize = size * scale;
-        var source = new Bitmap(sourceSize, sourceSize, PixelFormat.Format32bppArgb);
-        using (var graphics = Graphics.FromImage(source))
-        {
-            graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            graphics.CompositingQuality = CompositingQuality.HighQuality;
-            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            graphics.ScaleTransform(sourceSize / 54f, sourceSize / 54f);
-            using (var blue = new LinearGradientBrush(new RectangleF(0, 0, 54, 54), Color.FromArgb(86, 172, 255), Color.FromArgb(33, 125, 238), LinearGradientMode.Vertical))
-            using (var outline = new Pen(blue, 2.55f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
-            using (var connection = new Pen(blue, 2.28f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
-            using (var white = new SolidBrush(Color.White))
-            using (var cloud = new GraphicsPath())
-            {
-                cloud.AddBezier(9, 46, 4, 46, 2, 42, 2, 36);
-                cloud.AddBezier(2, 36, 2, 28, 6, 23, 12.5f, 23);
-                cloud.AddBezier(12.5f, 23, 14, 13, 19.5f, 7, 26, 7);
-                cloud.AddBezier(26, 7, 33, 7, 37.5f, 13.5f, 38.5f, 24);
-                cloud.AddBezier(38.5f, 24, 43.5f, 23, 47.5f, 27, 47.5f, 32);
-                cloud.AddBezier(47.5f, 32, 51, 33, 52, 37, 52, 40.5f);
-                cloud.AddBezier(52, 40.5f, 52, 44.5f, 48, 47, 43, 47);
-                cloud.AddLine(10, 47, 43, 47);
-                cloud.CloseFigure();
-                graphics.FillPath(white, cloud);
-                graphics.DrawPath(outline, cloud);
-
-                graphics.DrawEllipse(outline, 15.5f, 24.2f, 6.5f, 6.5f);
-                graphics.DrawEllipse(outline, 14.5f, 36.6f, 6.5f, 6.5f);
-                using (var path = new GraphicsPath())
-                {
-                    path.AddBezier(21.5f, 27.45f, 25.5f, 28.25f, 25.5f, 33.35f, 30.6f, 34.7f);
-                    path.AddBezier(21, 39.9f, 25.7f, 39.9f, 26.8f, 35.7f, 30.6f, 34.7f);
-                    graphics.DrawPath(connection, path);
-                }
-
-                graphics.FillEllipse(blue, 31.2f, 29.6f, 13.2f, 13.2f);
-                using (var check = new Pen(Color.White, 2.25f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
-                {
-                    graphics.DrawLines(check, new[] { new PointF(34.2f, 36), new PointF(37, 38.7f), new PointF(41.4f, 33.3f) });
-                }
-            }
-        }
-
-        var target = new Bitmap(size, size, PixelFormat.Format32bppArgb);
-        using (var graphics = Graphics.FromImage(target))
-        {
-            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            graphics.CompositingQuality = CompositingQuality.HighQuality;
-            graphics.DrawImage(source, 0, 0, size, size);
-        }
-        source.Dispose();
-        return target;
-    }
 }
 '@
 
@@ -323,37 +263,23 @@ foreach ($relativePath in $iconPaths) {
     $sourceSize = if ($relativePath -eq "src\\assets\\mergepilot-icon.png") { 512 } else { 0 }
     [MergePilotIconSurface]::ReplaceWithSource($SourceImage, $path, $sourceSize, $sourceSize)
   }
-  # Preserve the supplied cloud silhouette at every scale. A hand-drawn small
-  # approximation with the wrong aspect ratio flattened the recognisable mark.
-  # The dedicated renderer below uses the original source proportions instead.
-  if ($relativePath -eq "src-tauri\\icons\\32x32.png") {
-    $taskbarBitmap = [MergePilotIconSurface]::CreateCrispCloudMark(32)
-    try { $taskbarBitmap.Save($path, [System.Drawing.Imaging.ImageFormat]::Png) } finally { $taskbarBitmap.Dispose() }
-    continue
-  }
   [MergePilotIconSurface]::RemoveOuterSurface($path, $false)
 }
 
 function Get-PngPayload([string] $sourcePath, [int] $size) {
   $source = [System.Drawing.Bitmap]::FromFile($sourcePath)
   try {
-    $bitmap = if ($size -le 32) {
-      [MergePilotIconSurface]::CreateCrispCloudMark($size)
-    } else {
-      New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    }
+    $bitmap = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
     try {
-      if ($size -gt 32) {
-        $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-        try {
-          $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-          $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-          $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
-          $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
-          $graphics.DrawImage($source, 0, 0, $size, $size)
-        } finally {
-          $graphics.Dispose()
-        }
+      $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+      try {
+        $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+        $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+        $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+        $graphics.DrawImage($source, 0, 0, $size, $size)
+      } finally {
+        $graphics.Dispose()
       }
       $stream = New-Object System.IO.MemoryStream
       try {
