@@ -13,6 +13,18 @@ use tauri_plugin_shell::{process::{CommandChild, CommandEvent}, ShellExt};
 /// The port on which the daemon is listening.  Set once during setup() and
 /// read by the frontend via the `get_daemon_port` command.
 static DAEMON_PORT: OnceLock<u16> = OnceLock::new();
+const DEFAULT_DAEMON_PORT: u16 = 8787;
+
+fn configured_daemon_port() -> u16 {
+    daemon_port_from(std::env::var("MERGEPILOT_RUNTIME_PORT").ok().as_deref())
+}
+
+fn daemon_port_from(value: Option<&str>) -> u16 {
+    value
+        .and_then(|value| value.parse::<u16>().ok())
+        .filter(|port| *port > 0)
+        .unwrap_or(DEFAULT_DAEMON_PORT)
+}
 
 #[tauri::command]
 fn get_daemon_port() -> u16 {
@@ -319,9 +331,10 @@ pub fn run() {
                 .build(app)?;
 
             // ── Start the daemon sidecar ──────────────────────────────────────
-            // Use port 8787 for both dev and release so the frontend URL
-            // constant never needs to change between builds.
-            let daemon_port_num: u16 = 8787;
+            // Packaged releases retain 8787. A worktree can opt into its own
+            // port so a UX/dev instance never takes over an installed app's
+            // runtime during parallel validation.
+            let daemon_port_num = configured_daemon_port();
             let _ = DAEMON_PORT.set(daemon_port_num);
             if let Err(e) = start_daemon_sidecar(&app.handle(), daemon_port_num) {
                 log::error!("Failed to start mergepilot-daemon: {e}");
@@ -483,6 +496,14 @@ mod tests {
             Some(r"C:\Program Files\MergePilot\mergepilot-daemon.exe"),
             Some(r#""\\?\C:\Program Files\MergePilot\mergepilot-daemon.exe" --port 8787"#),
         ));
+    }
+
+    #[test]
+    fn uses_default_runtime_port_when_no_valid_override_is_present() {
+        assert_eq!(daemon_port_from(None), 8787);
+        assert_eq!(daemon_port_from(Some("invalid")), 8787);
+        assert_eq!(daemon_port_from(Some("0")), 8787);
+        assert_eq!(daemon_port_from(Some("8788")), 8788);
     }
 
     #[test]

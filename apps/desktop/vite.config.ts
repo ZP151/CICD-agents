@@ -53,6 +53,13 @@ function desktopManualChunk(id: string): string | undefined {
   return undefined;
 }
 
+function devServerPort(): number {
+  const configured = Number(process.env["VITE_DEV_SERVER_PORT"] ?? "1420");
+  return Number.isInteger(configured) && configured > 0 && configured < 65_536
+    ? configured
+    : 1420;
+}
+
 export default defineConfig(() => {
   // Dev and packaged builds both use 8787 (matches the Tauri sidecar in lib.rs).
   // Allow an explicit VITE_RUNTIME_URL env var to override for custom deployments.
@@ -64,7 +71,7 @@ export default defineConfig(() => {
     plugins: [react()],
     clearScreen: false,
     server: {
-      port: 1420,
+      port: devServerPort(),
       strictPort: true,
     },
     envPrefix: ["VITE_", "TAURI_"],
