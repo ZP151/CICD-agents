@@ -1,6 +1,6 @@
 {
   "name": "@mergepilot/review-agent",
-  "version": "0.5.25",
+  "version": "0.5.26",
   "description": "MergePilot pull request review service.",
   "private": true,
   "author": "ZP151 <zhouping151140@gmail.com>",
