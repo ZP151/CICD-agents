@@ -304,15 +304,16 @@ export function PipelineEmptyState({
   onRefresh: () => void | Promise<void>;
 }): JSX.Element {
   const hasBlockingError = Boolean(error && mode === "empty");
+  const recovery = pipelineRecovery(error, hasProjectLinks);
   const title = hasBlockingError
-    ? "Pipeline workspace unavailable"
+    ? recovery.title
     : mode === "refreshing"
     ? "Refreshing pipeline discovery"
     : hasProjectLinks
       ? "No pipelines discovered yet"
       : "No Project Links available";
   const description = hasBlockingError
-    ? "MergePilot could not load Project Links or pipeline discovery data. Check the desktop daemon or account session, then refresh this workspace."
+    ? recovery.description
     : mode === "refreshing"
     ? "Checking Azure DevOps for pipeline definitions."
     : hasProjectLinks
@@ -326,14 +327,24 @@ export function PipelineEmptyState({
           <p className="mt-1 text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
             {description}
           </p>
-          {hasBlockingError && (
-            <p className="mt-3 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text-subtle))]">
-              Latest error: {error}
-            </p>
+          {hasBlockingError && error && (
+            <details className="mt-2 text-xs text-[rgb(var(--app-text-muted))]">
+              <summary className="cursor-pointer select-none text-[rgb(var(--app-text-subtle))]">
+                Technical detail
+              </summary>
+              <p className="mt-1 break-words font-mono leading-5">{error}</p>
+            </details>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!hasProjectLinks && (
+          {hasBlockingError && recovery.primaryHref ? (
+            <a
+              href={recovery.primaryHref}
+              className="inline-flex min-h-8 items-center justify-center rounded-md border border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent))] px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110"
+            >
+              {recovery.primaryAction}
+            </a>
+          ) : !hasProjectLinks && (
             <a
               href="#/project-links"
               className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-1.5 text-sm font-medium text-[rgb(var(--app-text))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))]"
@@ -341,24 +352,63 @@ export function PipelineEmptyState({
               Open Project Links
             </a>
           )}
-          {(hasProjectLinks || hasBlockingError) && (
-            <button
-              type="button"
+          {(hasProjectLinks || hasBlockingError) && !recovery.primaryHref && (
+            <ActionButton
               onClick={() => void onRefresh()}
               disabled={mode === "refreshing"}
-              className="rounded-md border border-[rgb(var(--app-border))] px-3 py-1.5 text-sm text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {mode === "refreshing"
                 ? "Refreshing..."
                 : hasBlockingError
-                  ? "Retry loading"
+                  ? recovery.primaryAction
                   : "Refresh discovery"}
-            </button>
+            </ActionButton>
           )}
         </div>
       </div>
     </section>
   );
+}
+
+export interface PipelineRecovery {
+  title: string;
+  description: string;
+  primaryAction: string;
+  primaryHref?: string;
+}
+
+export function pipelineRecovery(error: string | null | undefined, hasProjectLinks: boolean): PipelineRecovery {
+  const issue = error?.toLowerCase() ?? "";
+  if (issue.includes("ado_project_link_incomplete") || (issue.includes("project link") && issue.includes("mapping"))) {
+    return {
+      title: "Complete this Project Link",
+      description: "Pipeline discovery needs an Azure DevOps organization, project, repository, and branch scope.",
+      primaryAction: "Open Project Links",
+      primaryHref: "#/project-links",
+    };
+  }
+  if (issue.includes("sign in") || issue.includes("credential") || issue.includes("401") || issue.includes("unauthorized")) {
+    return {
+      title: "Azure DevOps sign-in needs attention",
+      description: "Refresh your Microsoft session, then retry pipeline discovery.",
+      primaryAction: "Try again",
+    };
+  }
+  if (issue.includes("permission") || issue.includes("403") || issue.includes("forbidden")) {
+    return {
+      title: "Azure DevOps access is missing",
+      description: "Confirm that your account can read this project, then retry pipeline discovery.",
+      primaryAction: "Try again",
+    };
+  }
+  return {
+    title: "Pipeline workspace unavailable",
+    description: hasProjectLinks
+      ? "MergePilot could not load pipeline discovery for this project. Retry, or check the Project Link setup."
+      : "Connect a Project Link before discovering pipeline definitions.",
+    primaryAction: hasProjectLinks ? "Try again" : "Open Project Links",
+    primaryHref: hasProjectLinks ? undefined : "#/project-links",
+  };
 }
 
 export function pipelineEmptyStateClass(mode: "refreshing" | "empty"): string {

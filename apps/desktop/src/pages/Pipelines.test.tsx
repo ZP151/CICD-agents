@@ -9,6 +9,7 @@ import {
   pipelineHeaderDescriptionClass,
   pipelineHeaderControlsClass,
   pipelineProjectFilterFallbackLabel,
+  pipelineRecovery,
   pipelineRowsGridClass,
   pipelineShouldShowTopLevelError,
   pipelineShouldShowStatusFilters,
@@ -157,22 +158,35 @@ describe("PipelineEmptyState", () => {
     expect(html).not.toContain("Refresh discovery");
   });
 
-  it("folds no-data load failures into the empty state instead of duplicating alerts", () => {
+  it("turns mapping failures into a compact Project Link recovery", () => {
     const html = renderToStaticMarkup(
       <PipelineEmptyState
         mode="empty"
-        hasProjectLinks={false}
-        error="Failed to fetch"
+        hasProjectLinks
+        error="ado_project_link_incomplete"
         onRefresh={() => undefined}
       />,
     );
 
-    expect(html).toContain("Pipeline workspace unavailable");
-    expect(html).toContain("desktop daemon or account session");
-    expect(html).toContain("Latest error: Failed to fetch");
+    expect(html).toContain("Complete this Project Link");
+    expect(html).toContain("Azure DevOps organization, project, repository, and branch scope");
     expect(html).toContain("Open Project Links");
-    expect(html).toContain("Retry loading");
-    expect(html).not.toContain("No Project Links available");
+    expect(html).toContain("Technical detail");
+    expect(html).toContain("ado_project_link_incomplete");
+    expect(html).not.toContain("Latest error:");
+  });
+});
+
+describe("pipelineRecovery", () => {
+  it("keeps credential and permission recovery concise", () => {
+    expect(pipelineRecovery("401 unauthorized", true)).toMatchObject({
+      title: "Azure DevOps sign-in needs attention",
+      primaryAction: "Try again",
+    });
+    expect(pipelineRecovery("403 forbidden", true)).toMatchObject({
+      title: "Azure DevOps access is missing",
+      primaryAction: "Try again",
+    });
   });
 });
 
