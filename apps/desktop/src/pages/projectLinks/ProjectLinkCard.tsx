@@ -60,28 +60,28 @@ export function ProjectLinkCard({
           )}
         </div>
       </div>
-      <div className="flex shrink-0 items-center justify-end gap-1 opacity-100 transition sm:ml-3 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
+      <div className="flex shrink-0 items-center justify-end gap-1.5 text-[rgb(var(--app-text-muted))] sm:ml-3">
         <ActionButton
           type="button"
           onClick={onEdit}
           aria-label={`Edit ${projectLink.name}`}
           title="Edit Project Link"
           tone="quiet"
-          className="h-8 w-8 shrink-0 px-0"
+          className="h-9 w-9 shrink-0 px-0"
         >
-          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 20 20" fill="none">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 20 20" fill="none">
             <path
               d="M4 14.5V16h1.5L15 6.5 13.5 5 4 14.5Z"
               stroke="currentColor"
               strokeLinejoin="round"
-              strokeWidth="1.5"
+              strokeWidth="1.8"
             />
             <path
               d="m12.75 5.75 1.5-1.5a1.4 1.4 0 0 1 2 0l.5.5a1.4 1.4 0 0 1 0 2l-1.5 1.5"
               stroke="currentColor"
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeWidth="1.5"
+              strokeWidth="1.8"
             />
           </svg>
         </ActionButton>
@@ -91,15 +91,15 @@ export function ProjectLinkCard({
           aria-label={`Delete ${projectLink.name}`}
           title="Delete Project Link"
           tone="quiet"
-          className="h-8 w-8 shrink-0 px-0 hover:bg-[rgb(var(--app-danger-soft))] hover:text-[rgb(var(--app-danger))] focus-visible:ring-[rgb(var(--app-danger))]/30"
+          className="h-9 w-9 shrink-0 px-0 hover:bg-[rgb(var(--app-danger-soft))] hover:text-[rgb(var(--app-danger))] focus-visible:ring-[rgb(var(--app-danger))]/30"
         >
-          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 20 20" fill="none">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 20 20" fill="none">
             <path
               d="M4.5 6h11M8 6V4.75A1.25 1.25 0 0 1 9.25 3.5h1.5A1.25 1.25 0 0 1 12 4.75V6m2.25 0-.55 9.1a1.5 1.5 0 0 1-1.5 1.4H7.8a1.5 1.5 0 0 1-1.5-1.4L5.75 6M8.75 8.75v5M11.25 8.75v5"
               stroke="currentColor"
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeWidth="1.5"
+              strokeWidth="1.8"
             />
           </svg>
         </ActionButton>

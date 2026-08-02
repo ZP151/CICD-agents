@@ -232,7 +232,7 @@ export function PullRequestCard({
               </StatusBadge>
             )}
           </div>
-          <p className={pullRequestInsightPreviewClass()} title={latestInsightSummary}>
+          <p className={pullRequestInsightPreviewClass()}>
             {latestInsightPreview}
           </p>
         </button>

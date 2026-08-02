@@ -173,20 +173,18 @@ function ReviewQueueCardActions({
 
   return (
     <div className={reviewQueueCardActionsClass()}>
-      {(hasStoredFindings || item.findingCount > 0) && (
-        <ActionButton
-          type="button"
-          onClick={() => onOpenFindings(item)}
-          className="min-h-7 px-2.5 py-1"
-        >
-          {hasStoredFindings ? "View findings" : "Review summary"}
-          {(storedFindingsCount > 0 || item.findingCount > 0) && (
-            <span className="ml-1.5 rounded-full bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
-              {hasStoredFindings ? storedFindingsCount : item.findingCount}
-            </span>
-          )}
-        </ActionButton>
-      )}
+      <ActionButton
+        type="button"
+        onClick={() => onOpenFindings(item)}
+        className="min-h-7 px-2.5 py-1"
+      >
+        {hasStoredFindings ? "View findings" : "Review summary"}
+        {(storedFindingsCount > 0 || item.findingCount > 0) && (
+          <span className="ml-1.5 rounded-full bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--app-text-muted))]">
+            {hasStoredFindings ? storedFindingsCount : item.findingCount}
+          </span>
+        )}
+      </ActionButton>
       <ActionButton
         type="button"
         disabled={isRerunning}

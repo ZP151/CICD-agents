@@ -168,6 +168,26 @@ describe("ReviewQueueCard", () => {
     expect(html).not.toContain("title=");
   });
 
+  it("keeps the review summary control after a clean rerun", () => {
+    const html = renderToStaticMarkup(
+      <ReviewQueueCard
+        item={queueItem({ findingCount: 0 })}
+        projectLinkId="claimbot-link"
+        staleAgeHours={24}
+        writeBackRetrying={{}}
+        rerunning={{}}
+        dispositionSaving={{}}
+        onOpenFindings={() => undefined}
+        onRerunReview={() => undefined}
+        onRetryDispositionWriteBack={() => undefined}
+        onApplyDisposition={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Review summary");
+    expect(html).toContain("Actions");
+  });
+
   it("uses shared buttons so card actions retain keyboard focus and loading feedback", () => {
     const html = renderToStaticMarkup(
       <ReviewQueueCard

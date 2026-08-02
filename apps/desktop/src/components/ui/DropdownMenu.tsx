@@ -14,7 +14,7 @@ export function DropdownMenuContent({
       <DropdownMenuPrimitive.Content
         {...props}
         sideOffset={sideOffset}
-        className={`z-50 min-w-44 overflow-hidden rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-1 shadow-xl outline-none data-[state=open]:animate-in data-[state=closed]:animate-out ${className}`.trim()}
+        className={`z-[60] min-w-44 overflow-hidden rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-1 shadow-xl outline-none data-[state=open]:animate-in data-[state=closed]:animate-out ${className}`.trim()}
       />
     </DropdownMenuPrimitive.Portal>
   );

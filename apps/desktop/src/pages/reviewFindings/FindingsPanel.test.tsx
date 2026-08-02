@@ -118,9 +118,10 @@ describe("FindingsPanel", () => {
       />,
     );
 
-    expect(html).toContain("Review Findings (0)");
-    expect(html).toContain("No findings stored");
-    expect(html).toContain("Run a new review from the Pull Requests page to capture findings.");
+    expect(html).toContain("Review summary (0)");
+    expect(html).toContain("No detailed findings were returned by this review run.");
+    expect(html).toContain("Decision");
+    expect(html).toContain("Coverage");
   });
 
   it("labels a historical count as a summary when detailed records are unavailable", () => {
@@ -135,6 +136,8 @@ describe("FindingsPanel", () => {
     expect(html).toContain("Review summary (9)");
     expect(html).toContain("Detailed findings are unavailable");
     expect(html).toContain("9 findings were recorded in the review summary.");
+    expect(html).toContain("Decision");
+    expect(html).toContain("Coverage");
     expect(html).not.toContain("Review Findings (0)");
   });
 });

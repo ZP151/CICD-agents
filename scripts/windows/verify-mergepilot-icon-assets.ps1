@@ -98,10 +98,10 @@ if ($actualReferenceHash -ne $approvedReferenceHash) {
 }
 
 $webFrame = Assert-TransparentCloudFrame $webIcon 512 0.6
-$smallFrame = Assert-TransparentCloudFrame $nativeIcon32 32 0.55
-$retinaFrame = Assert-TransparentCloudFrame $nativeIcon256 256 0.6
+$smallFrame = Assert-TransparentCloudFrame $nativeIcon32 32 0.68
+$retinaFrame = Assert-TransparentCloudFrame $nativeIcon256 256 0.65
 
-$expectedIcoFrames = @(16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
+$expectedIcoFrames = @(16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 96, 128, 256)
 $actualIcoFrames = Get-IcoFrameSizes $nativeIco
 if (Compare-Object -ReferenceObject $expectedIcoFrames -DifferenceObject $actualIcoFrames) {
   throw "ICO frame set is incomplete. Expected $($expectedIcoFrames -join ', '); got $($actualIcoFrames -join ', ')."

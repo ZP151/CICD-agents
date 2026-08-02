@@ -8,6 +8,8 @@ fn main() {
         "icons/32x32.png",
         "icons/128x128.png",
         "icons/128x128@2x.png",
+        "../src/assets/mergepilot-icon-source.png",
+        "../src/assets/mergepilot-icon-reference.png",
         "tauri.conf.json",
     ] {
         println!("cargo:rerun-if-changed={path}");

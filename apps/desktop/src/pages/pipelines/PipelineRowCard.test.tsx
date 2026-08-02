@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   PipelineRowCard,
+  pipelineInspectionSummary,
   pipelineAnalysisPreviewClass,
   pipelineActionRowClass,
   pipelineFieldGridClass,
@@ -26,6 +27,14 @@ const baseRow: PipelineRow = {
 };
 
 describe("PipelineRowCard", () => {
+  it("keeps raw tool output out of compact pipeline cards", () => {
+    const raw = `Pipeline #117 ${"C:\\very-long-path\\build.log ".repeat(40)}`;
+    const summary = pipelineInspectionSummary(raw, 3);
+
+    expect(summary).toBe("Inspection completed. 3 recent runs are available in Details.");
+    expect(summary).not.toContain("very-long-path");
+  });
+
   it("keys row state by repository and branch scope as well as pipeline id", () => {
     expect(rowKey(baseRow)).not.toBe(
       rowKey({ ...baseRow, repository: "OtherRepo" }),

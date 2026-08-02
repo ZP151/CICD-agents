@@ -146,10 +146,11 @@ public static class MergePilotIconSurface
         using (var target = new Bitmap(outputWidth, outputHeight, PixelFormat.Format32bppArgb))
         using (var graphics = Graphics.FromImage(target))
         {
-            // Preserve the approved master artwork's natural padding. Windows adds
-            // its own taskbar framing; enlarging it here makes the contour touch
-            // the small native frames and makes the silhouette feel flattened.
-            const double contentScale = 1.00;
+            // The approved horizontal cloud carries more natural canvas padding
+            // than a square mark. Windows adds a second taskbar inset, so native
+            // frames use the available canvas without redrawing the artwork.
+            var contentScale = outputWidth <= 64 ? 1.16 : 1.08;
+            if (outputWidth >= 512) contentScale = 1.00;
             var renderWidth = (int)Math.Ceiling(outputWidth * contentScale);
             var renderHeight = (int)Math.Ceiling(outputHeight * contentScale);
             var offsetX = (outputWidth - renderWidth) / 2;
@@ -242,7 +243,13 @@ function Get-PngPayload([string] $sourcePath, [int] $size) {
         $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
         $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
         $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
-        $graphics.DrawImage($source, 0, 0, $size, $size)
+        # Windows selects an exact ICO payload before it scales.  Fill more of
+        # the small native canvas so this wide cloud has the same optical weight
+        # as the square icons beside it on the taskbar.
+        $contentScale = if ($size -le 64) { 1.16 } else { 1.08 }
+        $renderSize = [int][Math]::Ceiling($size * $contentScale)
+        $offset = [int](($size - $renderSize) / 2)
+        $graphics.DrawImage($source, $offset, $offset, $renderSize, $renderSize)
       } finally {
         $graphics.Dispose()
       }
@@ -294,7 +301,7 @@ function Write-Ico([string] $targetPath, [byte[][]] $payloads, [int[]] $sizes) {
 # Windows chooses the closest payload for the taskbar at the active display
 # scale. 40px and 96px are common 125% / high-DPI requests; without them the
 # shell can enlarge a 32px or 64px frame and soften the approved cloud mark.
-$icoSizes = [int[]](16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
+$icoSizes = [int[]](16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 96, 128, 256)
 # Render every ICO payload from the retained full-resolution master, rather
 # than from icon.png after it has already been resized. This is especially
 # important for the small taskbar frames where a second resize softens the

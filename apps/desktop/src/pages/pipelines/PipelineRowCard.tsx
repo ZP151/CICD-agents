@@ -76,7 +76,9 @@ export function PipelineRowCard({
 
       {state.phase === "done" && (
         <div className="mt-3 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3">
-          <p className="text-xs text-[rgb(var(--app-text-muted))]">{state.result.summary}</p>
+          <p className="text-xs text-[rgb(var(--app-text-muted))]">
+            {pipelineInspectionSummary(state.result.summary, inspectedRuns.length)}
+          </p>
           {inspectedRuns.length > 0 && (
             <div className="mt-3 divide-y divide-[rgb(var(--app-border))] rounded-md border border-[rgb(var(--app-border))]">
               {inspectedRuns.slice(0, 5).map((run) => {
@@ -215,6 +217,12 @@ export function pipelineAnalysisPreviewClass(): string {
 
 export function pipelineFieldGridClass(): string {
   return "mt-3 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-[rgb(var(--app-text-muted))]";
+}
+
+/** A compact card must never render raw tool output; full evidence lives in Details. */
+export function pipelineInspectionSummary(_rawSummary: string, runCount: number): string {
+  if (runCount === 0) return "Inspection completed. No recent pipeline runs were returned.";
+  return `Inspection completed. ${runCount} recent run${runCount === 1 ? " is" : "s are"} available in Details.`;
 }
 
 function LatestRunLink({ row }: { row: PipelineRow }): JSX.Element | null {

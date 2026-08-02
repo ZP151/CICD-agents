@@ -76,9 +76,12 @@ export function StoredInsightPanel({
           Refresh insight
         </ActionButton>
       )}
-      <div className="max-h-24 overflow-hidden text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
+      <article
+        aria-label="Insight report"
+        className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 text-xs leading-relaxed text-[rgb(var(--app-text-muted))]"
+      >
         <MarkdownContent markdown={storedInsight.summary || "No summary stored."} />
-      </div>
+      </article>
       {storedInsightFreshness && storedInsightFreshness.state !== "fresh" && (
         <p className="text-xs text-[rgb(var(--app-text-muted))]">{storedInsightFreshness.label}</p>
       )}

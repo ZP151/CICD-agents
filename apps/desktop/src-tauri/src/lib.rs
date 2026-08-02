@@ -3,6 +3,7 @@ use std::sync::{Mutex, OnceLock};
 use tauri::{
     AppHandle,
     Emitter,
+    image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
@@ -305,8 +306,12 @@ pub fn run() {
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open_main, &separator, &quit])?;
 
+            // The taskbar and tray both render at high-DPI sizes.  Use the
+            // retained 256px PNG as tray source instead of a decoded 32px
+            // default frame, leaving Windows with a high-resolution source.
+            let tray_icon = Image::from_bytes(include_bytes!("../icons/128x128@2x.png"))?;
             TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(tray_icon)
                 .menu(&menu)
                 .tooltip("MergePilot")
                 .show_menu_on_left_click(false)

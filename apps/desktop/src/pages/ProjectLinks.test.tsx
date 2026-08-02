@@ -120,6 +120,9 @@ describe("ProjectLinks layout", () => {
     expect(html).toContain("min-w-0 max-w-full truncate text-xs");
     expect(html).toContain("aria-label=\"Edit A very long Project Link name");
     expect(html).toContain("aria-label=\"Delete A very long Project Link name");
+    expect(html).toContain("h-9 w-9");
+    expect(html).toContain('width="18"');
+    expect(html).toContain('height="18"');
     expect(html).not.toContain(">https://tebssg.visualstudio.com/<");
     expect(html).not.toContain(">C:\\Users\\15492\\Develop\\ClaimBot_API<");
     expect(html).not.toContain("justify-between rounded-xl");
