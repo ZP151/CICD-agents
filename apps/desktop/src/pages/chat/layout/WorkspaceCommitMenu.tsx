@@ -24,6 +24,8 @@ interface WorkspaceCommitMenuProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   runAction: (action: WorkspaceAction) => void;
+  /** Lets the compact pinned summary open away from the window edge. */
+  menuPositionClassName?: string;
 }
 
 export function WorkspaceCommitMenu({
@@ -39,6 +41,7 @@ export function WorkspaceCommitMenu({
   open,
   onOpenChange,
   runAction,
+  menuPositionClassName = "right-0 top-full mt-1 w-full",
 }: WorkspaceCommitMenuProps) {
   const [commitMessage, setCommitMessage] = useState("");
   const [includeUnstaged, setIncludeUnstaged] = useState(true);
@@ -101,7 +104,7 @@ export function WorkspaceCommitMenu({
         <span className="min-w-0 truncate">Commit or push</span>
       </ActionButton>
       {open && (
-        <div className="absolute right-0 top-full z-30 mt-1 w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl">
+        <div className={`absolute z-30 ${menuPositionClassName} rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl`}>
           <div className="mb-2 flex min-w-0 items-center justify-between gap-2 text-xs">
             <span className="flex min-w-0 flex-1 items-center gap-1.5 font-mono text-[rgb(var(--app-text-muted))]">
               <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

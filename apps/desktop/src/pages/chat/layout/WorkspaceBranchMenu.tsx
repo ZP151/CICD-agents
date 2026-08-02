@@ -14,6 +14,8 @@ interface WorkspaceBranchMenuProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   runAction: (action: WorkspaceAction) => void;
+  /** Lets the compact pinned summary open away from the window edge. */
+  menuPositionClassName?: string;
 }
 
 export function WorkspaceBranchMenu({
@@ -25,6 +27,7 @@ export function WorkspaceBranchMenu({
   open,
   onOpenChange,
   runAction,
+  menuPositionClassName = "right-0 top-full mt-1 w-full",
 }: WorkspaceBranchMenuProps) {
   const [newBranchName, setNewBranchName] = useState("");
   const branchOptions = Array.from(new Set([branchName, ...branchList].filter(Boolean)));
@@ -59,7 +62,7 @@ export function WorkspaceBranchMenu({
         </svg>
       </ActionButton>
       {open && (
-        <div className="absolute right-0 top-full z-30 mt-1 w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl">
+        <div className={`absolute z-30 ${menuPositionClassName} rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl`}>
           <div className="mb-3 flex items-center gap-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-xs text-[rgb(var(--app-text-muted))]">
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M21 21l-4.3-4.3m1.8-5.2a7 7 0 11-14 0 7 7 0 0114 0z" />

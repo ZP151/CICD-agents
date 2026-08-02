@@ -13,6 +13,8 @@ interface WorkspaceProjectLinkPanelProps {
   busy: boolean;
   onProjectLinkSelect: (id: string) => void;
   runAction: (action: WorkspaceAction) => void;
+  showRepositoryContext?: boolean;
+  actionDensity?: "full" | "compact";
 }
 
 export function WorkspaceProjectLinkPanel({
@@ -26,6 +28,8 @@ export function WorkspaceProjectLinkPanel({
   busy,
   onProjectLinkSelect,
   runAction,
+  showRepositoryContext = true,
+  actionDensity = "full",
 }: WorkspaceProjectLinkPanelProps) {
   return (
     <div className="mt-2 border-t border-[rgb(var(--app-border))] pt-2">
@@ -44,9 +48,11 @@ export function WorkspaceProjectLinkPanel({
       ) : (
         <p className="text-xs text-[rgb(var(--app-text-subtle))]">No Project Link</p>
       )}
-      <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-subtle))]" title={repoPath}>
-        {repoName || repoPath || "No local repository selected"}
-      </p>
+      {showRepositoryContext && (
+        <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-subtle))]" title={repoPath}>
+          {repoName || repoPath || "No local repository selected"}
+        </p>
+      )}
       {adoReady && (
         <>
           <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-subtle))]">
@@ -63,26 +69,30 @@ export function WorkspaceProjectLinkPanel({
             >
               PR insight
             </ActionButton>
-            <ActionButton
-              type="button"
-              onClick={() => runAction({ type: "check_pr_policy" })}
-              disabled={busy}
-              tone="quiet"
-              className="min-h-7 w-full truncate whitespace-nowrap px-1.5 py-1 text-[10px]"
-              aria-label="Check pull request policy evaluations"
-            >
-              Policy
-            </ActionButton>
-            <ActionButton
-              type="button"
-              onClick={() => runAction({ type: "list_pr_work_items" })}
-              disabled={busy}
-              tone="quiet"
-              className="min-h-7 w-full truncate whitespace-nowrap px-1.5 py-1 text-[10px]"
-              aria-label="List pull request work items"
-            >
-              Work items
-            </ActionButton>
+            {actionDensity === "full" && (
+              <>
+                <ActionButton
+                  type="button"
+                  onClick={() => runAction({ type: "check_pr_policy" })}
+                  disabled={busy}
+                  tone="quiet"
+                  className="min-h-7 w-full truncate whitespace-nowrap px-1.5 py-1 text-[10px]"
+                  aria-label="Check pull request policy evaluations"
+                >
+                  Policy
+                </ActionButton>
+                <ActionButton
+                  type="button"
+                  onClick={() => runAction({ type: "list_pr_work_items" })}
+                  disabled={busy}
+                  tone="quiet"
+                  className="min-h-7 w-full truncate whitespace-nowrap px-1.5 py-1 text-[10px]"
+                  aria-label="List pull request work items"
+                >
+                  Work items
+                </ActionButton>
+              </>
+            )}
             <ActionButton
               type="button"
               onClick={() => runAction({ type: "inspect_pipeline" })}
@@ -93,16 +103,18 @@ export function WorkspaceProjectLinkPanel({
             >
               Pipeline
             </ActionButton>
-            <ActionButton
-              type="button"
-              onClick={() => runAction({ type: "trigger_pipeline", branch: branchName || undefined })}
-              disabled={busy}
-              tone="quiet"
-              className="col-span-full min-h-7 w-full truncate whitespace-nowrap border border-[rgb(var(--app-warning-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-warning))] hover:bg-[rgb(var(--app-warning-soft))] hover:text-[rgb(var(--app-warning))]"
-              aria-label="Prepare approval before triggering the configured Azure DevOps pipeline"
-            >
-              Run pipeline
-            </ActionButton>
+            {actionDensity === "full" && (
+              <ActionButton
+                type="button"
+                onClick={() => runAction({ type: "trigger_pipeline", branch: branchName || undefined })}
+                disabled={busy}
+                tone="quiet"
+                className="col-span-full min-h-7 w-full truncate whitespace-nowrap border border-[rgb(var(--app-warning-border))] px-1.5 py-1 text-[10px] text-[rgb(var(--app-warning))] hover:bg-[rgb(var(--app-warning-soft))] hover:text-[rgb(var(--app-warning))]"
+                aria-label="Prepare approval before triggering the configured Azure DevOps pipeline"
+              >
+                Run pipeline
+              </ActionButton>
+            )}
           </div>
         </>
       )}
