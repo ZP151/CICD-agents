@@ -37,6 +37,21 @@ const COMPACT_DECK_POSITIONS = {
   "2": { x: 255, y: 8, rotateY: -25, rotateZ: 0, scale: 0.76, opacity: 0.72, zIndex: 1 },
 } as const;
 
+const DRAG_VISUAL_LIMIT = 172;
+const DRAG_DISTANCE_PER_CARD = 118;
+const DRAG_DISTANCE_START = 62;
+const DRAG_VELOCITY_START = 0.42;
+const DRAG_VELOCITY_PER_CARD = 0.58;
+
+interface DragState {
+  pointerId: number;
+  startX: number;
+  deltaX: number;
+  lastX: number;
+  lastTime: number;
+  velocityX: number;
+}
+
 function deckOffset(index: number, activeIndex: number, count: number): number {
   const rawOffset = index - activeIndex;
   const wrapForward = rawOffset - count;
@@ -50,6 +65,39 @@ function promptTone(index: number): "blue" | "violet" | "mint" {
   return (["blue", "violet", "mint"] as const)[index % 3] ?? "blue";
 }
 
+function resistedDragOffset(deltaX: number): number {
+  const direction = Math.sign(deltaX);
+  const magnitude = Math.abs(deltaX);
+  if (magnitude <= DRAG_VISUAL_LIMIT) return deltaX;
+  return direction * (DRAG_VISUAL_LIMIT + (magnitude - DRAG_VISUAL_LIMIT) * 0.18);
+}
+
+export function resolvePromptDeckRelease(deltaX: number, velocityX: number, suggestionCount: number) {
+  const distance = Math.abs(deltaX);
+  const velocity = Math.abs(velocityX);
+  const distanceSteps = distance < DRAG_DISTANCE_START
+    ? 0
+    : Math.floor((distance - DRAG_DISTANCE_START) / DRAG_DISTANCE_PER_CARD) + 1;
+  const momentumSteps = velocity < DRAG_VELOCITY_START
+    ? 0
+    : Math.min(3, Math.floor((velocity - DRAG_VELOCITY_START) / DRAG_VELOCITY_PER_CARD) + 1);
+  const steps = Math.min(Math.max(distanceSteps, momentumSteps), Math.max(0, suggestionCount - 1));
+  return {
+    // Dragging left advances the visible ring; dragging right returns it.
+    indexDelta: steps === 0 ? 0 : deltaX < 0 ? steps : -steps,
+    steps,
+    strength: Math.min(1, Math.max(distance / 360, velocity / 1.8)),
+  };
+}
+
+export function promptDeckKeyboardAction(key: string, suggestionCount: number): number | "start" | "end" | null {
+  if (key === "ArrowRight" || key === "ArrowDown") return 1;
+  if (key === "ArrowLeft" || key === "ArrowUp") return -1;
+  if (key === "Home") return "start";
+  if (key === "End") return suggestionCount > 0 ? "end" : null;
+  return null;
+}
+
 /**
  * Wheel-driven prompt selector. The cards sit on a shallow 3D arc so users can
  * preview neighboring drafts without a horizontal scroller or an oversized
@@ -60,10 +108,11 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
   const [hovering, setHovering] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
+  const [releaseStrength, setReleaseStrength] = useState(0);
   const [compactDeck, setCompactDeck] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const wheelLockUntil = useRef(0);
-  const dragState = useRef<{ pointerId: number; startX: number; deltaX: number } | null>(null);
+  const dragState = useRef<DragState | null>(null);
   const suppressClick = useRef(false);
   const reducedMotion = useReducedMotion() ?? false;
   const activeSuggestion = suggestions[activeIndex];
@@ -91,39 +140,40 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
     setActiveIndex(next);
   };
 
+  const selectRelative = (delta: number) => {
+    if (suggestions.length < 2 || delta === 0) return;
+    setActiveIndex((current) => (current + delta + suggestions.length) % suggestions.length);
+  };
+
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
     if (Math.abs(event.deltaY) < 4) return;
     event.preventDefault();
     if (Date.now() < wheelLockUntil.current) return;
     wheelLockUntil.current = Date.now() + 140;
-    selectIndex(activeIndex + (event.deltaY > 0 ? 1 : -1));
+    selectRelative(event.deltaY > 0 ? 1 : -1);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      selectIndex(activeIndex + 1);
-    }
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      selectIndex(activeIndex - 1);
-    }
-    if (event.key === "Home") {
-      event.preventDefault();
-      setActiveIndex(0);
-    }
-    if (event.key === "End") {
-      event.preventDefault();
-      setActiveIndex(Math.max(0, suggestions.length - 1));
-    }
+    const action = promptDeckKeyboardAction(event.key, suggestions.length);
+    if (action === null) return;
+    event.preventDefault();
+    if (action === "start") setActiveIndex(0);
+    else if (action === "end") setActiveIndex(Math.max(0, suggestions.length - 1));
+    else selectRelative(action);
   };
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     const drag = dragState.current;
     if (drag?.pointerId === event.pointerId) {
       const deltaX = event.clientX - drag.startX;
+      const now = performance.now();
+      const elapsed = Math.max(8, now - drag.lastTime);
+      const instantaneousVelocity = (event.clientX - drag.lastX) / elapsed;
       drag.deltaX = deltaX;
-      setDragOffset(Math.max(-72, Math.min(72, deltaX)));
+      drag.velocityX = drag.velocityX * 0.32 + instantaneousVelocity * 0.68;
+      drag.lastX = event.clientX;
+      drag.lastTime = now;
+      setDragOffset(resistedDragOffset(deltaX));
       return;
     }
     if (event.pointerType !== "mouse" || reducedMotion) return;
@@ -142,7 +192,16 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragState.current = { pointerId: event.pointerId, startX: event.clientX, deltaX: 0 };
+    const now = performance.now();
+    dragState.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      deltaX: 0,
+      lastX: event.clientX,
+      lastTime: now,
+      velocityX: 0,
+    };
+    setReleaseStrength(0);
     setDragging(true);
     setHovering(true);
   };
@@ -155,9 +214,9 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
     }
     const didDrag = Math.abs(drag.deltaX) > 10;
     suppressClick.current = didDrag;
-    if (Math.abs(drag.deltaX) > 48) {
-      selectIndex(activeIndex + (drag.deltaX < 0 ? 1 : -1));
-    }
+    const release = resolvePromptDeckRelease(drag.deltaX, drag.velocityX, suggestions.length);
+    setReleaseStrength(release.strength);
+    selectRelative(release.indexDelta);
     dragState.current = null;
     setDragOffset(0);
     setDragging(false);
@@ -175,6 +234,7 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
       role="region"
       tabIndex={0}
       aria-label="Suggested prompt drafts"
+      aria-roledescription="prompt carousel"
       data-autoplay={autoPlaying ? "true" : "false"}
       onWheel={handleWheel}
       onKeyDown={handleKeyDown}
@@ -222,7 +282,12 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
               }}
               transition={reducedMotion
                 ? { duration: 0.01 }
-                : { type: "spring", stiffness: 300, damping: 28, mass: 0.62 }}
+                : {
+                    type: "spring",
+                    stiffness: 300 + releaseStrength * 180,
+                    damping: 28 + releaseStrength * 5,
+                    mass: 0.62,
+                  }}
               disabled={disabled}
               title={disabled
                 ? "Create a Project Link first"
@@ -249,7 +314,7 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
       <div className="prompt-particle-deck__steps" aria-hidden="true">
         {suggestions.map((suggestion, index) => <i key={suggestion.id} data-active={index === activeIndex ? "true" : "false"} />)}
       </div>
-      <span className="sr-only" aria-live="polite">Selected draft: {activeSuggestion.label}. Use the mouse wheel, up and down arrow keys, or drag the card ring left and right to browse.</span>
+      <span className="sr-only" aria-live="polite">Selected draft: {activeSuggestion.label}. Use the mouse wheel, left and right arrow keys, or drag the card ring left and right to browse. Faster or longer drags move through more drafts.</span>
     </div>
   );
 }

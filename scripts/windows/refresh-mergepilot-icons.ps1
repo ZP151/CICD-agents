@@ -173,8 +173,10 @@ public static class MergePilotIconSurface
     }
 
     // Windows renders taskbar icons from 16–32px ICO payloads. At that size the
-    // cloud's white interior blends into a light taskbar, so retain the original
-    // shape while adding a single opaque blue cue only into transparent neighbours.
+    // cloud's white interior blends into a light taskbar. Keep the supplied mark,
+    // but make its blue pixels opaque/saturated and add one crisp cue into only
+    // transparent neighbours. This prevents a second soft scaling pass from
+    // turning the contour into a blurred pale line.
     public static void StrengthenBlueContour(Bitmap bitmap)
     {
         // The maximum is four additions per source pixel. Use primitive arrays
@@ -193,6 +195,13 @@ public static class MergePilotIconSurface
                 var isBlueContour = pixel.A > 90 && pixel.B > pixel.R + 35 && pixel.B >= pixel.G - 8;
                 if (!isBlueContour) continue;
 
+                pixel = Color.FromArgb(
+                    255,
+                    Math.Max(0, (int)Math.Round(pixel.R * 0.88)),
+                    Math.Max(0, (int)Math.Round(pixel.G * 0.91)),
+                    Math.Min(255, (int)Math.Round(pixel.B * 1.02)));
+                bitmap.SetPixel(x, y, pixel);
+
                 for (var direction = 0; direction < 4; direction++)
                 {
                     var nextX = x + directions[direction, 0];
@@ -202,7 +211,7 @@ public static class MergePilotIconSurface
                     if (bitmap.GetPixel(nextX, nextY).A < 80)
                     {
                         additionPositions[additionCount] = nextY * bitmap.Width + nextX;
-                        additionColors[additionCount] = Color.FromArgb(220, pixel.R, pixel.G, pixel.B).ToArgb();
+                        additionColors[additionCount] = Color.FromArgb(255, pixel.R, pixel.G, pixel.B).ToArgb();
                         additionCount++;
                     }
                 }
