@@ -1,20 +1,30 @@
-import { WorkbenchHeader, WorkbenchPage } from "../components/workbench/WorkbenchPrimitives.js";
+import { useNavigate } from "react-router-dom";
+import {
+  ActionButton,
+  WorkbenchEmptyState,
+  WorkbenchHeader,
+  WorkbenchPage,
+} from "../components/workbench/WorkbenchPrimitives.js";
+
+export function RepositoriesEmptyState({ onOpenProjectLinks }: { onOpenProjectLinks: () => void }): JSX.Element {
+  return (
+    <WorkbenchEmptyState
+      title="Manage repositories from Project Links"
+      description="Connect a local repository and its workflow defaults once, then use it across Chat, Pull Requests, Pipelines, and Review Queue."
+      action={<ActionButton tone="primary" onClick={onOpenProjectLinks}>Open Project Links</ActionButton>}
+    />
+  );
+}
 
 export default function Repos(): JSX.Element {
+  const navigate = useNavigate();
   return (
     <WorkbenchPage>
-      <WorkbenchHeader title="Repositories" description="Repository mappings and template defaults." />
-      <p className="text-sm text-[rgb(var(--app-text-muted))]">
-        Repository mappings are managed from Project Links. For template defaults, edit
-        <code className="mx-1 rounded bg-[rgb(var(--app-bg-muted))] px-1 py-0.5 text-xs text-[rgb(var(--app-text))]">
-          packages/core/config/project-templates.yaml
-        </code>
-        or use{" "}
-        <code className="rounded bg-[rgb(var(--app-bg-muted))] px-1 py-0.5 text-xs text-[rgb(var(--app-text))]">
-          mergepilot init --project-template
-        </code>{" "}
-        from the CLI.
-      </p>
+      <WorkbenchHeader
+        title="Repositories"
+        description="Repository mappings now live with their connection and workflow settings."
+      />
+      <RepositoriesEmptyState onOpenProjectLinks={() => navigate("/project-links")} />
     </WorkbenchPage>
   );
 }
