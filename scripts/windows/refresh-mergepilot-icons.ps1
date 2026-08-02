@@ -179,10 +179,12 @@ if ($SourceImage) {
     throw "Source image does not exist: $SourceImage"
   }
 
-  # Persist the approved artwork inside the repository before deriving platform
-  # assets. Future refreshes therefore cannot silently fall back to an image in
-  # a user's temporary clipboard directory.
-  [MergePilotIconSurface]::ReplaceWithSource($SourceImage, $masterSourcePath, 512, 512)
+  # Keep the approved artwork at its supplied native resolution. In particular,
+  # do not first reduce a 1254px source to the 512px web asset and then use that
+  # smaller raster to build the Windows ICO. Every platform size below is
+  # rendered directly from this master, so the 16–256px frames retain the best
+  # available edge detail.
+  [System.IO.File]::Copy($SourceImage, $masterSourcePath, $true)
   [MergePilotIconSurface]::RemoveOuterSurface($masterSourcePath)
   $SourceImage = $masterSourcePath
 }
@@ -278,7 +280,11 @@ function Write-Ico([string] $targetPath, [byte[][]] $payloads, [int[]] $sizes) {
 }
 
 $icoSizes = [int[]](16, 20, 24, 32, 48, 64, 128, 256)
-$iconSource = Join-Path $desktopRoot "src-tauri\\icons\\icon.png"
+# Render every ICO payload from the retained full-resolution master, rather
+# than from icon.png after it has already been resized. This is especially
+# important for the small taskbar frames where a second resize softens the
+# blue contour and makes the cloud appear blurry.
+$iconSource = $masterSourcePath
 [System.Collections.Generic.List[byte[]]]$icoPayloadList = [System.Collections.Generic.List[byte[]]]::new()
 foreach ($icoSize in $icoSizes) {
   $icoPayloadList.Add((Get-PngPayload $iconSource $icoSize))
