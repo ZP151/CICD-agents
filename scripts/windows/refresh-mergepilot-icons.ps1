@@ -51,7 +51,7 @@ public static class MergePilotIconSurface
         return maximum >= 60 && maximum - minimum <= 40;
     }
 
-    public static void RemoveOuterSurface(string path, bool strengthenBlueContour)
+    public static void RemoveOuterSurface(string path)
     {
         Bitmap bitmap;
         using (var source = new Bitmap(path))
@@ -120,11 +120,6 @@ public static class MergePilotIconSurface
                 bitmap.UnlockBits(data);
             }
 
-            if (strengthenBlueContour)
-            {
-                StrengthenBlueContour(bitmap);
-            }
-
             var temporaryPath = path + ".mergepilot-icon-tmp";
             bitmap.Save(temporaryPath, ImageFormat.Png);
             File.Copy(temporaryPath, path, true);
@@ -177,6 +172,20 @@ public static class MergePilotIconSurface
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\\..")
 $desktopRoot = Join-Path $repoRoot "apps\\desktop"
+$masterSourcePath = Join-Path $desktopRoot "src\\assets\\mergepilot-icon-source.png"
+
+if ($SourceImage) {
+  if (-not (Test-Path -LiteralPath $SourceImage)) {
+    throw "Source image does not exist: $SourceImage"
+  }
+
+  # Persist the approved artwork inside the repository before deriving platform
+  # assets. Future refreshes therefore cannot silently fall back to an image in
+  # a user's temporary clipboard directory.
+  [MergePilotIconSurface]::ReplaceWithSource($SourceImage, $masterSourcePath, 512, 512)
+  [MergePilotIconSurface]::RemoveOuterSurface($masterSourcePath)
+  $SourceImage = $masterSourcePath
+}
 
 $iconPaths = @(
   "src\\assets\\mergepilot-icon.png",
@@ -196,9 +205,6 @@ $iconPaths = @(
 foreach ($relativePath in $iconPaths) {
   $path = Join-Path $desktopRoot $relativePath
   if ($SourceImage) {
-    if (-not (Test-Path -LiteralPath $SourceImage)) {
-      throw "Source image does not exist: $SourceImage"
-    }
     # The React shell renders this source at multiple Windows scale factors.
     # Keep a 512px web source rather than letting the title bar fall back to a
     # 256px raster while the native ICO selects its high-density payload.
@@ -208,7 +214,7 @@ foreach ($relativePath in $iconPaths) {
   # The accepted master artwork is the only geometry source. Do not widen or
   # redraw its blue contour at taskbar size: that was the source of the blurry,
   # flattened fallback icon. Only remove the outer checkerboard surface.
-  [MergePilotIconSurface]::RemoveOuterSurface($path, $false)
+  [MergePilotIconSurface]::RemoveOuterSurface($path)
 }
 
 function Get-PngPayload([string] $sourcePath, [int] $size) {
