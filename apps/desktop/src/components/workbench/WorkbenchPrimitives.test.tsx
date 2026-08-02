@@ -9,6 +9,8 @@ import {
   WorkbenchFilterTabs,
   WorkbenchPage,
   WorkbenchSegmentedControl,
+  WorkbenchSettingsRow,
+  WorkbenchSettingsSection,
   WorkbenchSkeleton,
   WorkbenchSidePanel,
   WorkbenchTextInput,
@@ -92,6 +94,22 @@ describe("WorkbenchPrimitives", () => {
     expect(html).toContain('aria-checked="true"');
     expect(html).toContain("focus:ring");
     expect(html).toContain("disabled");
+  });
+
+  it("provides responsive setting rows without a page-specific form vocabulary", () => {
+    const html = renderToStaticMarkup(
+      <WorkbenchSettingsSection title="Runtime">
+        <WorkbenchSettingsRow title="Daemon" description="Local process status.">
+          <StatusBadge tone="success">Healthy</StatusBadge>
+        </WorkbenchSettingsRow>
+      </WorkbenchSettingsSection>,
+    );
+
+    expect(html).toContain("Runtime");
+    expect(html).toContain("Local process status.");
+    expect(html).toContain("divide-y");
+    expect(html).toContain("min-[761px]:grid-cols");
+    expect(html).toContain("max-[760px]:grid-cols-1");
   });
 
   it("provides a labelled details panel for route-level evidence", () => {

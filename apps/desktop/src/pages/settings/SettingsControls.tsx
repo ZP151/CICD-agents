@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from "react";
 import {
   StatusBadge,
+  WorkbenchSettingsRow,
+  WorkbenchSettingsSection,
   WorkbenchSegmentedControl,
   WorkbenchTextInput,
   WorkbenchToggle,
@@ -71,10 +73,7 @@ export function SettingsSection({
   title: string;
 }): JSX.Element {
   return (
-    <section className="settings-section">
-      <h3 className="settings-section-title">{title}</h3>
-      <div className="settings-list">{children}</div>
-    </section>
+    <WorkbenchSettingsSection title={title}>{children}</WorkbenchSettingsSection>
   );
 }
 
@@ -88,13 +87,7 @@ export function SettingsRow({
   title: string;
 }): JSX.Element {
   return (
-    <div className="settings-row">
-      <div className="min-w-0">
-        <p className="settings-row-title">{title}</p>
-        {description && <div className="settings-row-copy">{description}</div>}
-      </div>
-      {children && <div className="settings-row-control">{children}</div>}
-    </div>
+    <WorkbenchSettingsRow title={title} description={description}>{children}</WorkbenchSettingsRow>
   );
 }
 

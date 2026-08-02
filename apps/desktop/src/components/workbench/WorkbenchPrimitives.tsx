@@ -276,6 +276,40 @@ export function WorkbenchEmptyState({
   );
 }
 
+/**
+ * Shared settings vocabulary for compact, desktop-first configuration pages.
+ * These remain low-chrome rows instead of nesting a card inside every setting.
+ */
+export function WorkbenchSettingsSection({
+  title,
+  children,
+}: PropsWithChildren<{ title: string }>) {
+  return (
+    <section>
+      <h3 className="mb-2 text-sm font-semibold text-[rgb(var(--app-text))]">{title}</h3>
+      <div className="divide-y divide-[rgb(var(--app-border))] overflow-hidden rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+export function WorkbenchSettingsRow({
+  title,
+  description,
+  children,
+}: PropsWithChildren<{ title: string; description?: ReactNode }>) {
+  return (
+    <div className="grid min-w-0 gap-3 px-4 py-3 max-[760px]:grid-cols-1 min-[761px]:grid-cols-[minmax(0,1fr)_minmax(12rem,42%)] min-[761px]:items-center">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-[rgb(var(--app-text))]">{title}</p>
+        {description && <div className="mt-1 text-xs leading-5 text-[rgb(var(--app-text-muted))]">{description}</div>}
+      </div>
+      {children && <div className="flex min-w-0 justify-start min-[761px]:justify-end">{children}</div>}
+    </div>
+  );
+}
+
 export function WorkbenchSkeleton({ rows = 3 }: { rows?: number }) {
   return (
     <div aria-label="Loading workspace content" className="space-y-2" role="status">
