@@ -4,7 +4,6 @@ import type { ReviewQueueItem } from "../../api.js";
 import {
   ReviewQueueCard,
   reviewQueueCardActionsClass,
-  reviewQueueDispositionMenuClass,
   reviewQueueCardFooterClass,
   reviewQueueCardMetricsGridClass,
 } from "./ReviewQueueCard.js";
@@ -88,14 +87,26 @@ describe("ReviewQueueCard", () => {
     expect(actionsClass).not.toContain("justify-end gap-1.5");
   });
 
-  it("uses an inline disposition strip instead of a portal-dependent overlay", () => {
-    const className = reviewQueueDispositionMenuClass();
+  it("keeps disposition choices behind the Actions menu instead of expanding each card", () => {
+    const html = renderToStaticMarkup(
+      <ReviewQueueCard
+        item={queueItem()}
+        projectLinkId="claimbot-link"
+        staleAgeHours={24}
+        writeBackRetrying={{}}
+        rerunning={{}}
+        dispositionSaving={{}}
+        onOpenFindings={() => undefined}
+        onRerunReview={() => undefined}
+        onRetryDispositionWriteBack={() => undefined}
+        onApplyDisposition={() => undefined}
+      />,
+    );
 
-    expect(className).toContain("flex-wrap");
-    expect(className).toContain("border-t");
-    expect(className).toContain("pt-1.5");
-    expect(className).not.toContain("absolute");
-    expect(className).not.toContain("z-");
+    expect(html).toContain("Actions");
+    expect(html).toContain('aria-haspopup="menu"');
+    expect(html).not.toContain("Request changes");
+    expect(html).not.toContain('role="group"');
   });
 
   it("renders review audit state and action controls without flattening semantic queue details", () => {
@@ -129,7 +140,7 @@ describe("ReviewQueueCard", () => {
     expect(html).not.toContain("View findings");
     expect(html).toContain("Retry ADO");
     expect(html).toContain("Actions");
-    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('aria-haspopup="menu"');
     expect(html).not.toContain("Request changes");
   });
 

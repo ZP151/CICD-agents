@@ -1,7 +1,12 @@
-import { useId, useState } from "react";
 import type { ReviewQueueItem } from "../../api.js";
 import { buildReviewAuditCardSummary } from "../../reviewAudit.js";
 import { loadFindingsLocal } from "../../reviewHistoryLocal.js";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../components/ui/DropdownMenu.js";
 import {
   reviewQueueFreshnessStatus,
   reviewQueueItemKey,
@@ -140,10 +145,6 @@ export function reviewQueueCardActionsClass(): string {
   return "flex min-w-0 flex-wrap justify-start gap-1 sm:justify-end";
 }
 
-export function reviewQueueDispositionMenuClass(): string {
-  return "flex min-w-0 max-w-full flex-wrap justify-start gap-1 border-t border-[rgb(var(--app-border))] pt-1.5 sm:justify-end";
-}
-
 function ReviewQueueCardActions({
   item,
   hasStoredFindings,
@@ -167,17 +168,8 @@ function ReviewQueueCardActions({
   onRetryDispositionWriteBack: (item: ReviewQueueItem) => void;
   onApplyDisposition: (item: ReviewQueueItem, disposition: ReviewQueueItem["manualDisposition"]) => void;
 }): JSX.Element {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuId = useId();
-
-  function applyDisposition(disposition: ReviewQueueItem["manualDisposition"]): void {
-    setMenuOpen(false);
-    onApplyDisposition(item, disposition);
-  }
-
   return (
-    <div className="flex min-w-0 max-w-full flex-col items-start gap-1.5 sm:items-end">
-      <div className={reviewQueueCardActionsClass()}>
+    <div className={reviewQueueCardActionsClass()}>
         <ActionButton
           type="button"
           onClick={() => onOpenFindings(item)}
@@ -212,64 +204,46 @@ function ReviewQueueCardActions({
               {isRetryingWriteBack ? "Retrying..." : "Retry ADO"}
             </ActionButton>
           )}
-          <ActionButton
-            type="button"
-            tone="secondary"
-            className="min-h-7 px-2.5 py-1"
-            aria-controls={menuId}
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            Actions
-          </ActionButton>
-      </div>
-      {menuOpen && (
-        <div
-          id={menuId}
-          role="group"
-          aria-label="Review disposition actions"
-          className={reviewQueueDispositionMenuClass()}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") setMenuOpen(false);
-          }}
-        >
-          <ActionButton
-            type="button"
-            disabled={isDispositionSaving}
-            onClick={() => applyDisposition("acknowledged")}
-            className="min-h-7 px-2.5 py-1"
-          >
-            {isDispositionSaving ? "Saving..." : "Acknowledge"}
-          </ActionButton>
-          <ActionButton
-            type="button"
-            tone="quiet"
-            disabled={isDispositionSaving}
-            onClick={() => applyDisposition("marked_safe")}
-            className="min-h-7 px-2.5 py-1 text-[rgb(var(--app-success))] hover:bg-[rgb(var(--app-success-soft))] hover:text-[rgb(var(--app-success))]"
-          >
-            Mark safe
-          </ActionButton>
-          <ActionButton
-            type="button"
-            tone="quiet"
-            disabled={isDispositionSaving}
-            onClick={() => applyDisposition("marked_blocked")}
-            className="min-h-7 px-2.5 py-1 text-[rgb(var(--app-danger))] hover:bg-[rgb(var(--app-danger-soft))] hover:text-[rgb(var(--app-danger))]"
-          >
-            Block
-          </ActionButton>
-          <ActionButton
-            type="button"
-            tone="quiet"
-            disabled={isDispositionSaving}
-            onClick={() => applyDisposition("changes_requested")}
-            className="min-h-7 px-2.5 py-1 text-[rgb(var(--app-warning))] hover:bg-[rgb(var(--app-warning-soft))] hover:text-[rgb(var(--app-warning))]"
-          >
-            Request changes
-          </ActionButton>
-        </div>
-      )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <ActionButton
+              type="button"
+              tone="secondary"
+              className="min-h-7 px-2.5 py-1"
+            >
+              Actions
+            </ActionButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" aria-label="Review disposition actions">
+            <DropdownMenuItem
+              disabled={isDispositionSaving}
+              onSelect={() => onApplyDisposition(item, "acknowledged")}
+            >
+              {isDispositionSaving ? "Saving..." : "Acknowledge"}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={isDispositionSaving}
+              onSelect={() => onApplyDisposition(item, "marked_safe")}
+              className="text-[rgb(var(--app-success))] data-[highlighted]:bg-[rgb(var(--app-success-soft))] data-[highlighted]:text-[rgb(var(--app-success))]"
+            >
+              Mark safe
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={isDispositionSaving}
+              onSelect={() => onApplyDisposition(item, "marked_blocked")}
+              className="text-[rgb(var(--app-danger))] data-[highlighted]:bg-[rgb(var(--app-danger-soft))] data-[highlighted]:text-[rgb(var(--app-danger))]"
+            >
+              Block
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={isDispositionSaving}
+              onSelect={() => onApplyDisposition(item, "changes_requested")}
+              className="text-[rgb(var(--app-warning))] data-[highlighted]:bg-[rgb(var(--app-warning-soft))] data-[highlighted]:text-[rgb(var(--app-warning))]"
+            >
+              Request changes
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
     </div>
   );
 }
