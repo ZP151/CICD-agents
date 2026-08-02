@@ -54,8 +54,8 @@ describe("PipelineRowCard", () => {
     expect(html).not.toContain("Unknown");
     expect(html).toContain("min-w-0 flex-1");
     expect(html).toContain("Pipeline summary");
-    expect(html).toContain("Branches");
-    expect(html).toContain("main -&gt; main");
+    expect(html).toContain("ClaimBot_API link · discovered");
+    expect(html).toContain("main → main");
     expect(html).toContain("title=\"Default branch: main; Target branch: main\"");
     expect(html).not.toContain("Latest run");
   });

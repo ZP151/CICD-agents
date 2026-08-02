@@ -43,14 +43,8 @@ export function PipelineRowCard({
             <span className="font-mono text-xs text-[rgb(var(--app-accent-readable))]">
               #{row.pipelineId}
             </span>
-            <StatusBadge>
-              {row.source === "saved" ? "saved" : "discovered"}
-            </StatusBadge>
             <StatusBadge className={tone.tone}>
               {tone.label}
-            </StatusBadge>
-            <StatusBadge>
-              {row.projectLinkName}
             </StatusBadge>
           </div>
           <h3 className="truncate text-sm font-medium text-[rgb(var(--app-text))]">
@@ -58,22 +52,20 @@ export function PipelineRowCard({
           </h3>
           <p className="mt-1 truncate font-mono text-xs text-[rgb(var(--app-text-muted))]">
             {row.project || "No project"} / {row.repository || "No repository"}
+            <span className="font-sans text-[rgb(var(--app-text-subtle))]"> · {row.projectLinkName} · {row.source}</span>
           </p>
         </div>
         {dateLabel && <p className="shrink-0 text-xs text-[rgb(var(--app-text-subtle))]">{dateLabel}</p>}
       </div>
 
       <div className={pipelineFieldGridClass()} aria-label="Pipeline summary">
-        <PipelineSummaryChip
-          label="Branches"
-          value={`${row.defaultBranch || "not set"} -> ${row.targetBranch || "main"}`}
-          title={`Default branch: ${row.defaultBranch || "not set"}; Target branch: ${row.targetBranch || "main"}`}
-        />
-        <PipelineSummaryChip
-          label="Linked PRs"
-          value={String(row.relatedPullRequests.length)}
-          title={`${row.relatedPullRequests.length} linked pull request${row.relatedPullRequests.length === 1 ? "" : "s"}`}
-        />
+        <span title={`Default branch: ${row.defaultBranch || "not set"}; Target branch: ${row.targetBranch || "main"}`}>
+          {row.defaultBranch || "not set"} → {row.targetBranch || "main"}
+        </span>
+        <span aria-hidden="true">·</span>
+        <span title={`${row.relatedPullRequests.length} linked pull request${row.relatedPullRequests.length === 1 ? "" : "s"}`}>
+          {row.relatedPullRequests.length} linked PR{row.relatedPullRequests.length === 1 ? "" : "s"}
+        </span>
         <LatestRunLink row={row} />
       </div>
 
@@ -214,48 +206,21 @@ export function pipelineFieldGridClass(): string {
   return "mt-3 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-[rgb(var(--app-text-muted))]";
 }
 
-function PipelineSummaryChip({
-  label,
-  value,
-  title,
-}: {
-  label: string;
-  value: string;
-  title: string;
-}): JSX.Element {
-  return (
-    <span
-      className="inline-flex max-w-full min-w-0 items-center gap-1 rounded border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5"
-      title={title}
-    >
-      <span className="text-[rgb(var(--app-text-subtle))]">{label}</span>
-      <span className="min-w-0 truncate text-[rgb(var(--app-text))]">{value}</span>
-    </span>
-  );
-}
-
 function LatestRunLink({ row }: { row: PipelineRow }): JSX.Element | null {
   if (!row.latestRun) return null;
   const label = row.latestRun.name || `Run ${row.latestRun.id}`;
   const title = `Latest run: ${label}`;
-  return (
-    <span
-      className="inline-flex max-w-full min-w-0 items-center gap-1 rounded border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-1.5 py-0.5"
+  return row.latestRun.url ? (
+    <a
+      href={row.latestRun.url}
+      target="_blank"
+      rel="noreferrer"
+      className="min-w-0 truncate text-[rgb(var(--app-accent-readable))] hover:underline"
       title={title}
     >
-      <span className="text-[rgb(var(--app-text-subtle))]">Latest run</span>
-      {row.latestRun.url ? (
-        <a
-          href={row.latestRun.url}
-          target="_blank"
-          rel="noreferrer"
-          className="min-w-0 truncate text-[rgb(var(--app-accent-readable))] hover:underline"
-        >
-          {label}
-        </a>
-      ) : (
-        <span className="min-w-0 truncate text-[rgb(var(--app-text))]">{label}</span>
-      )}
-    </span>
+      · Latest run {label}
+    </a>
+  ) : (
+    <span className="min-w-0 truncate" title={title}>· Latest run {label}</span>
   );
 }

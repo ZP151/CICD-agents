@@ -137,9 +137,7 @@ describe("PipelineEmptyState", () => {
     );
 
     expect(html).toContain("No pipelines discovered yet");
-    expect(html).toContain("Project Link mapping");
-    expect(html).toContain("ADO repository access");
-    expect(html).toContain("Pipeline definition access");
+    expect(html).toContain("Check the Project Link mapping");
     expect(html).toContain("Refresh discovery");
     expect(html).not.toContain("flex-1 items-center justify-center");
   });

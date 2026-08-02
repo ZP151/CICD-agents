@@ -316,8 +316,8 @@ export function PipelineEmptyState({
     : mode === "refreshing"
     ? "Checking Azure DevOps for pipeline definitions."
     : hasProjectLinks
-      ? "Check that the selected Project Link points at the intended Azure DevOps project and repository, then refresh discovery."
-      : "Create a Project Link with Azure DevOps mapping before inspecting pipeline runs or triggering CI.";
+      ? "Check the Project Link mapping, then refresh discovery."
+      : "Connect a Project Link before inspecting pipeline runs or triggering CI.";
   return (
     <section className={pipelineEmptyStateClass(mode)}>
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -326,13 +326,6 @@ export function PipelineEmptyState({
           <p className="mt-1 text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
             {description}
           </p>
-          {mode !== "refreshing" && (
-            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[rgb(var(--app-text-muted))]">
-              <li>Project Link mapping</li>
-              <li>ADO repository access</li>
-              <li>Pipeline definition access</li>
-            </ul>
-          )}
           {hasBlockingError && (
             <p className="mt-3 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text-subtle))]">
               Latest error: {error}
