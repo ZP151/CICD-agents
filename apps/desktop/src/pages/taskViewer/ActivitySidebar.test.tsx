@@ -203,6 +203,8 @@ describe("ActivitySidebar", () => {
     expect(html).toContain("Git");
     expect(html).toContain("PR");
     expect(html).toContain("Reviews");
+    expect(html).toContain("min-h-8");
+    expect(html).toContain("focus:ring-[rgb(var(--app-focus))]/35");
   });
 
   it("keeps saved activity visible while collapsing transient workspace history", () => {

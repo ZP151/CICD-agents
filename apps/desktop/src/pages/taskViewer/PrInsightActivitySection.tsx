@@ -6,6 +6,7 @@ import type {
 import { formatIsoTime } from "./activityPresentation.js";
 import { ProjectLinkFilter } from "./ProjectLinkFilter.js";
 import type { PrInsightActivityItem } from "./prInsightActivity.js";
+import { WorkbenchSelect } from "../../components/workbench/WorkbenchPrimitives.js";
 
 interface PrInsightActivitySectionProps {
   projectLinks: ProjectLink[];
@@ -52,8 +53,8 @@ export function PrInsightActivitySection({
           onChange={onPrInsightProjectLinkFilterChange}
           label="Filter saved PR insights by Project Link"
         />
-        <select
-          className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2 py-1 text-xs text-[rgb(var(--app-text-muted))] outline-none focus:border-[rgb(var(--app-accent))]"
+        <WorkbenchSelect
+          className="min-h-8 px-2 py-1 text-xs text-[rgb(var(--app-text-muted))]"
           value={prInsightKindFilter}
           onChange={(e) =>
             onPrInsightKindFilterChange(e.target.value as PrInsightArtifactRecord["kind"] | "all")
@@ -63,7 +64,7 @@ export function PrInsightActivitySection({
           <option value="all">All saved insight types</option>
           <option value="insight_preview">Insight preview</option>
           <option value="review_run">Full review</option>
-        </select>
+        </WorkbenchSelect>
       </div>
       <div className="space-y-1.5">
         {!prInsightLoading && prInsightActivity.length === 0 && (
