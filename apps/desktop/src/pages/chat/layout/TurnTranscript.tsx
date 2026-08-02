@@ -195,7 +195,7 @@ function TranscriptBlockView({
                   <Chevron open={commandOpen} />
                 </button>
                 {commandOpen && (
-                  <div className="ml-1 mt-1 overflow-hidden rounded-[11px] border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised)_/_0.18)] animate-[turn-command-open_220ms_cubic-bezier(.22,.8,.24,1)]">
+                  <div className="ml-1 mt-1 overflow-hidden rounded-[11px] border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface)_/_0.46)] animate-[turn-command-open_220ms_cubic-bezier(.22,.8,.24,1)]">
                     <div className="px-4 pb-1 pt-2 text-xs text-[rgb(var(--app-text-muted))]">Shell</div>
                     <LazyCommandCodeViewer
                       value={`$ ${command.command}`}
@@ -206,7 +206,6 @@ function TranscriptBlockView({
                     {command.output && (
                       <>
                         <div className="mx-4 h-px bg-[rgb(var(--app-border))]" />
-                        <div className="px-4 pb-1 pt-2 text-xs text-[rgb(var(--app-text-muted))]">Output</div>
                         <LazyCommandCodeViewer
                           value={command.output}
                           language={commandOutputLanguage(command.command)}

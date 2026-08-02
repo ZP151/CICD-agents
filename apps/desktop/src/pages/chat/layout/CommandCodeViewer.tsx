@@ -75,7 +75,9 @@ const commandCodeTheme = EditorView.theme({
   "&": { fontSize: "12.5px", backgroundColor: "transparent" },
   "&.cm-editor": { backgroundColor: "transparent" },
   ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", lineHeight: "1.62", overflow: "auto", scrollbarGutter: "stable both-edges" },
-  ".cm-content": { minWidth: "max-content", padding: "6px 16px 8px" },
+  // Reserve the right edge for the copy action. Long commands stay readable
+  // through horizontal scrolling instead of running underneath that control.
+  ".cm-content": { minWidth: "max-content", padding: "6px 42px 8px 16px" },
   ".cm-gutters": { minHeight: "100%", backgroundColor: "rgb(var(--app-surface))", borderRight: "1px solid rgb(var(--app-border))", color: "rgb(var(--app-text-subtle))" },
   ".cm-lineNumbers .cm-gutterElement": { minWidth: "2.4rem", padding: "0 0.7rem 0 0.45rem" },
   ".cm-line": { padding: "0" },
