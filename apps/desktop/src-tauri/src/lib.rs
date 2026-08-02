@@ -286,6 +286,16 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // The bundled ICO provides exact taskbar payloads, but Windows
+            // development windows can otherwise inherit a low-resolution
+            // default window-class icon. Bind the retained 256px source to the
+            // live main window as well so the taskbar has a high-DPI image in
+            // both `tauri dev` and packaged runs.
+            if let Some(main_window) = app.get_webview_window("main") {
+                let window_icon = Image::from_bytes(include_bytes!("../icons/128x128@2x.png"))?;
+                main_window.set_icon(window_icon)?;
+            }
+
             // Windows development runs are not installed, so explicitly claim the
             // configured scheme for the current executable. Release installers
             // register it from tauri.conf.json.
