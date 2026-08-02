@@ -1,6 +1,7 @@
 import { animate, motion, useMotionValue, useReducedMotion } from "motion/react";
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
@@ -8,6 +9,8 @@ import {
   type WheelEvent,
 } from "react";
 import type { SuggestionReply } from "../../../components/conversation/SuggestionReplyBar.js";
+
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 interface PromptParticleDeckProps {
   suggestions: SuggestionReply[];
@@ -42,6 +45,8 @@ const DRAG_DISTANCE_PER_CARD = 118;
 const DRAG_DISTANCE_START = 62;
 const DRAG_VELOCITY_START = 0.42;
 const DRAG_VELOCITY_PER_CARD = 0.58;
+const WIDE_CARD_ADVANCE_DISTANCE = 205;
+const COMPACT_CARD_ADVANCE_DISTANCE = 146;
 
 interface DragState {
   pointerId: number;
@@ -50,6 +55,15 @@ interface DragState {
   lastX: number;
   lastTime: number;
   velocityX: number;
+}
+
+interface PendingGlide {
+  indexDelta: number;
+  visualOffset: number;
+  cardAdvanceDistance: number;
+  strength: number;
+  velocityX: number;
+  sequence: number;
 }
 
 function deckOffset(index: number, activeIndex: number, count: number): number {
@@ -91,11 +105,17 @@ export function resolvePromptDeckRelease(deltaX: number, velocityX: number, sugg
 }
 
 export function promptDeckKeyboardAction(key: string, suggestionCount: number): number | "start" | "end" | null {
-  if (key === "ArrowRight" || key === "ArrowDown") return 1;
-  if (key === "ArrowLeft" || key === "ArrowUp") return -1;
+  // WebView2 normally emits the browser-standard Arrow* values, while some
+  // native key injectors surface the Win32 keysym names without the prefix.
+  if (key === "ArrowRight" || key === "ArrowDown" || key === "Right" || key === "Down") return 1;
+  if (key === "ArrowLeft" || key === "ArrowUp" || key === "Left" || key === "Up") return -1;
   if (key === "Home") return "start";
   if (key === "End") return suggestionCount > 0 ? "end" : null;
   return null;
+}
+
+export function promptDeckGlideTarget(indexDelta: number, cardAdvanceDistance: number): number {
+  return indexDelta === 0 ? 0 : -indexDelta * cardAdvanceDistance;
 }
 
 /**
@@ -110,21 +130,36 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
   const [releaseStrength, setReleaseStrength] = useState(0);
   const [compactDeck, setCompactDeck] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const [settling, setSettling] = useState(false);
+  const [instantPositioning, setInstantPositioning] = useState(false);
+  const [glideRequest, setGlideRequest] = useState(0);
   const wheelLockUntil = useRef(0);
   const dragState = useRef<DragState | null>(null);
   const suppressClick = useRef(false);
+  const deckRef = useRef<HTMLDivElement>(null);
+  const pendingGlide = useRef<PendingGlide | null>(null);
+  const glideFrame = useRef<number | null>(null);
+  const interactionSequence = useRef(0);
   const dragX = useMotionValue(0);
   const reducedMotion = useReducedMotion() ?? false;
   const activeSuggestion = suggestions[activeIndex];
-  const autoPlaying = !disabled && !hovering && !dragging && !reducedMotion && suggestions.length > 1;
+  const autoPlaying = !disabled && !hovering && !dragging && !settling && !reducedMotion && suggestions.length > 1;
   const particlesFlowing = !reducedMotion && (hovering || autoPlaying);
 
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 1150px)");
-    const updateCompactDeck = () => setCompactDeck(media.matches);
-    updateCompactDeck();
-    media.addEventListener("change", updateCompactDeck);
-    return () => media.removeEventListener("change", updateCompactDeck);
+    const deck = deckRef.current;
+    if (!deck) return undefined;
+    // The chat pane can be narrower than the window because of navigation and
+    // split panels. Measure the ring itself rather than the viewport so its
+    // outer cards are never clipped by a wide-window false positive.
+    const updateDeckDensity = (width: number) => setCompactDeck(width < 940);
+    updateDeckDensity(deck.getBoundingClientRect().width);
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (width) updateDeckDensity(width);
+    });
+    observer.observe(deck);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -134,6 +169,40 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
     }, 4600);
     return () => window.clearInterval(timer);
   }, [autoPlaying, suggestions.length]);
+
+  useIsomorphicLayoutEffect(() => {
+    const glide = pendingGlide.current;
+    if (!glide) return;
+    pendingGlide.current = null;
+
+    // Move the card geometry and the ring transform together before paint.
+    // The visible position therefore stays continuous while the active index
+    // changes, then the ring itself coasts to rest in a single motion.
+    setInstantPositioning(true);
+    setActiveIndex((current) => (current + glide.indexDelta + suggestions.length) % suggestions.length);
+    dragX.set(glide.visualOffset + glide.indexDelta * glide.cardAdvanceDistance);
+    glideFrame.current = window.requestAnimationFrame(() => {
+      glideFrame.current = null;
+      const inertia = animate(dragX, 0, reducedMotion
+        ? { duration: 0.01 }
+        : {
+            type: "spring",
+            stiffness: 104 + glide.strength * 46,
+            damping: 24,
+            mass: 0.9,
+            velocity: glide.velocityX * 420,
+          });
+      void inertia.then(() => {
+        if (interactionSequence.current !== glide.sequence) return;
+        setSettling(false);
+        setInstantPositioning(false);
+      });
+    });
+  }, [dragX, glideRequest, reducedMotion, suggestions.length]);
+
+  useEffect(() => () => {
+    if (glideFrame.current !== null) window.cancelAnimationFrame(glideFrame.current);
+  }, []);
 
   const selectIndex = (nextIndex: number) => {
     if (suggestions.length < 2) return;
@@ -146,6 +215,12 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
     setActiveIndex((current) => (current + delta + suggestions.length) % suggestions.length);
   };
 
+  const applyKeyboardAction = (action: number | "start" | "end") => {
+    if (action === "start") setActiveIndex(0);
+    else if (action === "end") setActiveIndex(Math.max(0, suggestions.length - 1));
+    else selectRelative(action);
+  };
+
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
     if (Math.abs(event.deltaY) < 4) return;
     event.preventDefault();
@@ -155,13 +230,25 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented) return;
     const action = promptDeckKeyboardAction(event.key, suggestions.length);
     if (action === null) return;
     event.preventDefault();
-    if (action === "start") setActiveIndex(0);
-    else if (action === "end") setActiveIndex(Math.max(0, suggestions.length - 1));
-    else selectRelative(action);
+    applyKeyboardAction(action);
   };
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (event: globalThis.KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const action = promptDeckKeyboardAction(event.key, suggestions.length);
+      if (action === null) return;
+      event.preventDefault();
+      applyKeyboardAction(action);
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown, true);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown, true);
+  }, [suggestions.length]);
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     const drag = dragState.current;
@@ -194,6 +281,11 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     const now = performance.now();
+    interactionSequence.current += 1;
+    if (glideFrame.current !== null) {
+      window.cancelAnimationFrame(glideFrame.current);
+      glideFrame.current = null;
+    }
     dragX.stop();
     dragX.set(0);
     dragState.current = {
@@ -205,6 +297,8 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
       velocityX: 0,
     };
     setReleaseStrength(0);
+    setSettling(false);
+    setInstantPositioning(false);
     setDragging(true);
     setHovering(true);
   };
@@ -219,16 +313,31 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
     suppressClick.current = didDrag;
     const release = resolvePromptDeckRelease(drag.deltaX, drag.velocityX, suggestions.length);
     setReleaseStrength(release.strength);
-    selectRelative(release.indexDelta);
-    void animate(dragX, 0, reducedMotion
-      ? { duration: 0.01 }
-      : {
-          type: "spring",
-          stiffness: 360 + release.strength * 160,
-          damping: 30 + release.strength * 5,
-          mass: 0.56,
-          velocity: drag.velocityX * 1000,
-        });
+    const cardAdvanceDistance = compactDeck
+      ? COMPACT_CARD_ADVANCE_DISTANCE
+      : WIDE_CARD_ADVANCE_DISTANCE;
+    if (release.indexDelta === 0) {
+      void animate(dragX, 0, reducedMotion
+        ? { duration: 0.01 }
+        : {
+            type: "spring",
+            stiffness: 220,
+            damping: 26,
+            mass: 0.68,
+            velocity: drag.velocityX * 580,
+          });
+    } else {
+      setSettling(true);
+      pendingGlide.current = {
+        indexDelta: release.indexDelta,
+        visualOffset: dragX.get(),
+        cardAdvanceDistance,
+        strength: release.strength,
+        velocityX: drag.velocityX,
+        sequence: interactionSequence.current,
+      };
+      setGlideRequest((current) => current + 1);
+    }
     dragState.current = null;
     setDragging(false);
   };
@@ -241,14 +350,14 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
 
   return (
     <div
+      ref={deckRef}
       className={`prompt-particle-deck${hovering ? " is-exploring" : ""}${autoPlaying ? " is-autoplaying" : ""}`}
       role="region"
-      tabIndex={0}
       aria-label="Suggested prompt drafts"
       aria-roledescription="prompt carousel"
       data-autoplay={autoPlaying ? "true" : "false"}
       onWheel={handleWheel}
-      onKeyDown={handleKeyDown}
+      onKeyDownCapture={handleKeyDown}
     >
       <div
         className="prompt-particle-deck__stage"
@@ -294,6 +403,8 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
               }}
               transition={reducedMotion
                 ? { duration: 0.01 }
+                : instantPositioning
+                  ? { duration: 0.01 }
                 : {
                     type: "spring",
                     stiffness: 300 + releaseStrength * 180,

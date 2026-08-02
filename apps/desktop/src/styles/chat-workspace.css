@@ -160,8 +160,7 @@
 }
 
 /* Isolated 3D prompt deck: wheel rotates a compact, visible arc of drafts. */
-.prompt-particle-deck { width: min(100%, 56rem); outline: none; }
-.prompt-particle-deck:focus-visible { border-radius: 0.85rem; box-shadow: 0 0 0 2px rgb(var(--app-focus) / 0.62); }
+.prompt-particle-deck { width: min(100%, 60rem); outline: none; }
 .prompt-particle-deck__stage { position: relative; display: grid; height: 13.2rem; place-items: center; isolation: isolate; perspective: 1650px; perspective-origin: 50% 44%; contain: layout; cursor: grab; touch-action: pan-y; user-select: none; }
 .prompt-particle-deck__stage:active { cursor: grabbing; }
 .prompt-particle-deck__stage::before { position: absolute; inset: 1.7rem 6%; z-index: -2; border-radius: 50%; background: radial-gradient(ellipse at center, rgb(var(--app-accent-soft) / 0.74), rgb(var(--app-info-soft) / 0.16) 45%, transparent 76%); content: ""; filter: blur(7px); opacity: 0.24; transform: scale(0.92); transition: opacity 180ms var(--app-ease-out), transform 280ms var(--app-ease-out); }
