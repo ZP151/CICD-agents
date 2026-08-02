@@ -103,30 +103,29 @@ export function PipelineRowCard({
             <p className="text-[10px] font-semibold uppercase text-[rgb(var(--app-text-muted))]">
               AI analysis
             </p>
-            <span
-              className={`rounded-full border px-2 py-0.5 text-[10px] ${
-                state.phase === "analysis_error"
-                  ? "border-[rgb(var(--app-warning))]/35 bg-[rgb(var(--app-warning)_/_0.10)] text-[rgb(var(--app-warning))]"
-                  : "border-[rgb(var(--app-border))] text-[rgb(var(--app-text-muted))]"
-              }`}
-            >
+            <StatusBadge className={
+              state.phase === "analysis_error"
+                ? "bg-[rgb(var(--app-warning)_/_0.10)] text-[rgb(var(--app-warning))] ring-[rgb(var(--app-warning))]/35"
+                : "bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text-muted))] ring-[rgb(var(--app-border))]"
+            }>
               {state.phase === "analyzing"
                 ? "Analyzing"
                 : state.phase === "analysis_error"
                   ? "Error"
               : "Ready"}
-            </span>
+            </StatusBadge>
           </div>
           <div className={pipelineAnalysisPreviewClass()}>
             <MarkdownContent markdown={state.analysis || "Starting analysis..."} />
           </div>
-          <button
+          <ActionButton
             type="button"
+            tone="quiet"
             onClick={() => onOpenDetails(row)}
-            className="mt-2 text-xs text-[rgb(var(--app-accent-readable))] hover:underline"
+            className="mt-2 min-h-7 px-0 py-1 text-[rgb(var(--app-accent-readable))] hover:underline"
           >
             Open analysis
-          </button>
+          </ActionButton>
         </div>
       )}
 
@@ -144,6 +143,7 @@ export function PipelineRowCard({
         {row.source === "discovered" && (
           <ActionButton
             type="button"
+            tone="quiet"
             disabled={state.phase === "loading"}
             onClick={() => onSave(row)}
           >
@@ -157,6 +157,7 @@ export function PipelineRowCard({
           state.phase === "error") && (
           <ActionButton
             type="button"
+            tone="quiet"
             onClick={() => onOpenDetails(row)}
           >
             Details
@@ -164,6 +165,7 @@ export function PipelineRowCard({
         )}
         <ActionButton
           type="button"
+          tone="quiet"
           disabled={state.phase === "loading" || state.phase === "analyzing"}
           onClick={() => onInspect(row)}
           loading={state.phase === "loading"}
@@ -172,6 +174,7 @@ export function PipelineRowCard({
         </ActionButton>
         <ActionButton
           type="button"
+          tone="quiet"
           disabled={state.phase === "loading" || state.phase === "analyzing"}
           onClick={() => onAnalyze(row)}
           loading={state.phase === "analyzing"}
