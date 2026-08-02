@@ -40,6 +40,22 @@ storage_account = ""
 key_vault_url = ""
 cosmos_endpoint = ""
 
+# A Project Link may opt into this locally managed Azure DevOps MCP server.
+# credential_env names a local .env/OS variable; it never contains a secret.
+[connectors.azure_devops_mcp]
+enabled = false
+command = ""
+args_json = "[]"
+credential_env = ""
+
+# Optional read-only web research connector. It is available to all chats
+# once configured locally; no Project Link can supply its command or key.
+[connectors.web_research_mcp]
+enabled = false
+command = ""
+args_json = "[]"
+credential_env = ""
+
 [review]
 auto_approve_enabled = true
 stale_age_hours = 24
@@ -62,8 +78,26 @@ export interface MergePilotUserConfig {
   azureStorageAccount?: string;
   azureKeyVaultUrl?: string;
   azureCosmosEndpoint?: string;
+  azureDevOpsMcp?: AzureDevOpsMcpUserConfig;
+  webResearchMcp?: WebResearchMcpUserConfig;
   reviewAutoApproveEnabled?: boolean;
   reviewStaleAgeHours?: number;
+}
+
+export interface AzureDevOpsMcpUserConfig {
+  enabled: boolean;
+  command: string;
+  args: string[];
+  /** One of the supported local credential variable names, never its value. */
+  credentialEnv: "" | "AZURE_DEVOPS_EXT_PAT" | "AZURE_DEVOPS_PAT";
+}
+
+export interface WebResearchMcpUserConfig {
+  enabled: boolean;
+  command: string;
+  args: string[];
+  /** A locally held API-key variable, never the key itself. */
+  credentialEnv: "" | "BRAVE_SEARCH_API_KEY" | "TAVILY_API_KEY" | "SERPER_API_KEY";
 }
 
 export function mergePilotHomeDir(): string {
@@ -92,6 +126,10 @@ export function ensureMergePilotLocalEnvFile(envFile = mergePilotLocalEnvFile())
         "# Keep this file on your machine only. Do not commit it.",
         "AZURE_OPENAI_API_KEY=",
         "OPENAI_API_KEY=",
+        "AZURE_DEVOPS_EXT_PAT=",
+        "BRAVE_SEARCH_API_KEY=",
+        "TAVILY_API_KEY=",
+        "SERPER_API_KEY=",
         "",
       ].join("\n"),
       "utf8",
@@ -211,7 +249,10 @@ function applyUserConfigToEnv(config: MergePilotUserConfig, explicitProcessEnv: 
 function loadLocalEnvSecrets(explicitProcessEnv: Set<string>): void {
   const envFile = mergePilotLocalEnvFile();
   if (!nodeFs.existsSync(envFile)) return;
-  const allowedSecretKeys = new Set(["AZURE_OPENAI_API_KEY", "OPENAI_API_KEY"]);
+  const allowedSecretKeys = new Set([
+    "AZURE_OPENAI_API_KEY", "OPENAI_API_KEY", "AZURE_DEVOPS_EXT_PAT", "AZURE_DEVOPS_PAT",
+    "BRAVE_SEARCH_API_KEY", "TAVILY_API_KEY", "SERPER_API_KEY",
+  ]);
   for (const rawLine of nodeFs.readFileSync(envFile, "utf8").split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#")) continue;
@@ -294,6 +335,8 @@ function configFromToml(content: string): MergePilotUserConfig {
     azureStorageAccount: sections["cloud"]?.["storage_account"],
     azureKeyVaultUrl: sections["cloud"]?.["key_vault_url"],
     azureCosmosEndpoint: sections["cloud"]?.["cosmos_endpoint"],
+    azureDevOpsMcp: azureDevOpsMcpConfig(sections["connectors.azure_devops_mcp"]),
+    webResearchMcp: webResearchMcpConfig(sections["connectors.web_research_mcp"]),
     reviewAutoApproveEnabled: booleanValue(sections["review"]?.["auto_approve_enabled"]),
     reviewStaleAgeHours: Number.isFinite(staleAge) && staleAge > 0 ? staleAge : undefined,
   };
@@ -340,6 +383,18 @@ function configToToml(config: MergePilotUserConfig): string {
     `key_vault_url = ${tomlString(config.azureKeyVaultUrl ?? "")}`,
     `cosmos_endpoint = ${tomlString(config.azureCosmosEndpoint ?? "")}`,
     "",
+    "[connectors.azure_devops_mcp]",
+    `enabled = ${(config.azureDevOpsMcp?.enabled ?? false) ? "true" : "false"}`,
+    `command = ${tomlString(config.azureDevOpsMcp?.command ?? "")}`,
+    `args_json = ${tomlString(JSON.stringify(config.azureDevOpsMcp?.args ?? []))}`,
+    `credential_env = ${tomlString(config.azureDevOpsMcp?.credentialEnv ?? "")}`,
+    "",
+    "[connectors.web_research_mcp]",
+    `enabled = ${(config.webResearchMcp?.enabled ?? false) ? "true" : "false"}`,
+    `command = ${tomlString(config.webResearchMcp?.command ?? "")}`,
+    `args_json = ${tomlString(JSON.stringify(config.webResearchMcp?.args ?? []))}`,
+    `credential_env = ${tomlString(config.webResearchMcp?.credentialEnv ?? "")}`,
+    "",
     "[review]",
     `auto_approve_enabled = ${config.reviewAutoApproveEnabled ?? true}`,
     `stale_age_hours = ${config.reviewStaleAgeHours ?? 24}`,
@@ -383,6 +438,43 @@ function booleanValue(value: string | undefined): boolean | undefined {
   if (value === "true") return true;
   if (value === "false") return false;
   return undefined;
+}
+
+function azureDevOpsMcpConfig(values: Record<string, string> | undefined): AzureDevOpsMcpUserConfig | undefined {
+  if (!values) return undefined;
+  const credentialEnv = values["credential_env"];
+  const args = jsonStringArray(values["args_json"]);
+  return {
+    enabled: booleanValue(values["enabled"]) ?? false,
+    command: values["command"] ?? "",
+    args,
+    credentialEnv: credentialEnv === "AZURE_DEVOPS_EXT_PAT" || credentialEnv === "AZURE_DEVOPS_PAT"
+      ? credentialEnv
+      : "",
+  };
+}
+
+function webResearchMcpConfig(values: Record<string, string> | undefined): WebResearchMcpUserConfig | undefined {
+  if (!values) return undefined;
+  const credentialEnv = values["credential_env"];
+  return {
+    enabled: booleanValue(values["enabled"]) ?? false,
+    command: values["command"] ?? "",
+    args: jsonStringArray(values["args_json"]),
+    credentialEnv: credentialEnv === "BRAVE_SEARCH_API_KEY" || credentialEnv === "TAVILY_API_KEY" || credentialEnv === "SERPER_API_KEY"
+      ? credentialEnv
+      : "",
+  };
+}
+
+function jsonStringArray(value: string | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 function keyVaultAccessMessage(action: "read" | "write", err: unknown): string {

@@ -54,6 +54,80 @@ describe("chat SSE timeline projection", () => {
     expect(sent.find((entry) => entry.payload.type === "turn.tool.completed")?.payload.output).toBe("## main");
   });
 
+  it("projects a realistic Git → Web Research → Azure DevOps MCP → approval workflow as one ordered Turn", () => {
+    const sent: Array<{ event: string; payload: Record<string, unknown> }> = [];
+    const reply = {
+      raw: {
+        setHeader: () => undefined,
+        flushHeaders: () => undefined,
+        write: (wire: string) => {
+          const event = wire.match(/^event: ([^\n]+)/m)?.[1] ?? "";
+          const payload = JSON.parse(wire.match(/^data: (.+)$/m)?.[1] ?? "{}");
+          sent.push({ event, payload });
+        },
+        end: () => undefined,
+      },
+    } as never;
+    const writer = createChatSseWriter(reply);
+    writer.startTurn("turn-release");
+
+    writer.sendChatEvent({ type: "work_statement", blockId: "scope", text: "I will confirm the local change scope before checking the linked pull request and its policies.", replace: true });
+    writer.sendChatEvent({ type: "tool_group_start", groupId: "git-evidence", connector: { kind: "built-in", id: "git", label: "Git" } });
+    writer.sendChatEvent({ type: "tool_start", toolCallId: "status", name: "git_status", args: { short: true, branch: true } });
+    writer.sendChatEvent({ type: "tool_end", toolCallId: "status", name: "git_status", ok: true, summary: "two modified files", output: "## feature/release\n M src/app.ts", result: {} });
+    writer.sendChatEvent({ type: "tool_group_end", groupId: "git-evidence" });
+
+    writer.sendChatEvent({ type: "work_statement", blockId: "service-contract", text: "The local scope is clear, so I will verify the current policy requirement before comparing it with the linked pull request.", replace: true });
+    writer.sendChatEvent({ type: "tool_group_start", groupId: "web-contract", connector: { kind: "mcp", id: "web-research", label: "Web Research" } });
+    writer.sendChatEvent({ type: "tool_start", toolCallId: "policy-docs", name: "mcp_web_research_search_policy_requirements", args: { query: "Azure DevOps pull request policy API" } });
+    writer.sendChatEvent({ type: "tool_end", toolCallId: "policy-docs", name: "mcp_web_research_search_policy_requirements", ok: true, summary: "official API requirement found", output: "https://learn.microsoft.com/azure/devops", result: {} });
+    writer.sendChatEvent({ type: "tool_group_end", groupId: "web-contract" });
+
+    writer.sendChatEvent({ type: "work_statement", blockId: "pr-risk", text: "The local scope is clear, so I will read the linked pull request and policy state before deciding whether a pipeline run is appropriate.", replace: true });
+    writer.sendChatEvent({ type: "tool_group_start", groupId: "ado-read", connector: { kind: "mcp", id: "azure-devops", label: "Azure DevOps" } });
+    writer.sendChatEvent({ type: "tool_start", toolCallId: "pr", name: "mcp_azure_devops_get_pull_request", args: { pullRequestId: 42 } });
+    writer.sendChatEvent({ type: "tool_end", toolCallId: "pr", name: "mcp_azure_devops_get_pull_request", ok: true, summary: "PR is active", output: "active", result: {} });
+    writer.sendChatEvent({ type: "tool_start", toolCallId: "policies", name: "mcp_azure_devops_list_policy_evaluations", args: { pullRequestId: 42 } });
+    writer.sendChatEvent({ type: "tool_end", toolCallId: "policies", name: "mcp_azure_devops_list_policy_evaluations", ok: true, summary: "one pending policy", output: "pending", result: {} });
+    writer.sendChatEvent({ type: "tool_group_end", groupId: "ado-read" });
+
+    writer.sendChatEvent({ type: "work_statement", blockId: "pipeline-decision", text: "The policy is pending; a new pipeline run changes remote state, so I need approval before requesting it.", replace: true });
+    writer.sendChatEvent({
+      type: "approval_required",
+      approval: {
+        id: "run-pipeline",
+        riskLevel: "high",
+        action: { tool: "mcp_azure_devops_run_pipeline", args: { pipelineId: 18, branch: "feature/release" }, description: "Run the linked Azure Pipeline" },
+      },
+    });
+    writer.sendChatEvent({ type: "approval_resolved", approvalId: "run-pipeline", approved: true });
+    writer.sendChatEvent({ type: "work_statement", blockId: "pipeline-run", text: "Approval is recorded, so I will request the configured pipeline and report its run identifier.", replace: true });
+    writer.sendChatEvent({ type: "tool_group_start", groupId: "ado-write", connector: { kind: "mcp", id: "azure-devops", label: "Azure DevOps" } });
+    writer.sendChatEvent({ type: "tool_start", toolCallId: "run", name: "mcp_azure_devops_run_pipeline", args: { pipelineId: 18, branch: "feature/release" } });
+    writer.sendChatEvent({ type: "tool_end", toolCallId: "run", name: "mcp_azure_devops_run_pipeline", ok: true, summary: "run 908 queued", output: "908", result: {} });
+    writer.sendChatEvent({ type: "tool_group_end", groupId: "ado-write" });
+    writer.sendChatEvent({ type: "done", result: { response: "Findings: the pull request remains active, one policy was pending, and approved pipeline run 908 was queued.", riskLevel: "high", actionsTaken: [], suggestions: [], toolCallsMade: [], usedLlm: true } });
+
+    const projected = sent.filter((entry) => entry.payload.type?.startsWith("turn."));
+    const sequences = projected.map((entry) => Number(entry.payload.sequence));
+    expect(sequences).toEqual([...sequences].sort((a, b) => a - b));
+    expect(projected.map((entry) => entry.payload.type)).toEqual(expect.arrayContaining([
+      "turn.narrative.delta",
+      "turn.tool_group.started",
+      "turn.tool.started",
+      "turn.tool.completed",
+      "turn.approval.requested",
+      "turn.approval.resolved",
+      "turn.execution.completed",
+      "turn.final.completed",
+      "turn.finished",
+    ]));
+    expect(projected.filter((entry) => entry.payload.groupId === "ado-read")[0]?.payload.connector).toEqual({ kind: "mcp", id: "azure-devops", label: "Azure DevOps" });
+    expect(projected.filter((entry) => entry.payload.groupId === "web-contract")[0]?.payload.connector).toEqual({ kind: "mcp", id: "web-research", label: "Web Research" });
+    expect(projected.findIndex((entry) => entry.payload.type === "turn.execution.completed")).toBeLessThan(projected.findIndex((entry) => entry.payload.type === "turn.final.delta"));
+    expect(projected.findIndex((entry) => entry.payload.type === "turn.approval.requested")).toBeLessThan(projected.findIndex((entry) => entry.payload.groupId === "ado-write" && entry.payload.type === "turn.tool.started"));
+  });
+
   it("emits a public Timeline payload without provider results or approval explanations", () => {
     const sent: Array<{ event: string; payload: Record<string, unknown> }> = [];
     const reply = {

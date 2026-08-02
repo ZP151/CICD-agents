@@ -7,15 +7,17 @@ describe("streamActionNarrative", () => {
     const llm = {
       configured: true,
       actionNarrativeModel: () => "fast-narrative-model",
-    async *chatStream(options: { messages: Array<{ role: string; content: unknown }>; tools?: unknown; maxTokens?: number; reasoningEffort?: "minimal" | "low" | "medium" | "high" }) {
+    async *chatStream(options: { messages: Array<{ role: string; content: unknown }>; tools?: unknown; maxTokens?: number; reasoningEffort?: "minimal" | "low" | "medium" | "high"; verbosity?: "low" | "medium" | "high" }) {
       expect(options.tools).toBeUndefined();
-      expect(options.maxTokens).toBeLessThanOrEqual(320);
+      expect(options.maxTokens).toBe(320);
       expect(options.reasoningEffort).toBe("minimal");
+      expect(options.verbosity).toBe("low");
       expect((options as { model?: string }).model).toBe("fast-narrative-model");
       expect(JSON.stringify(options.messages)).toContain("Review the current project changes");
       expect(JSON.stringify(options.messages)).toContain("Always use English");
       expect(JSON.stringify(options.messages)).toContain("two complete, natural sentences");
-      expect(JSON.stringify(options.messages)).toContain("normally 45–95 words total");
+      expect(JSON.stringify(options.messages)).toContain("normally 35–75 words total");
+      expect(JSON.stringify(options.messages)).toContain("one natural sentence of at most 35 words");
       expect(JSON.stringify(options.messages)).toContain("never end in an ellipsis");
       expect(JSON.stringify(options.messages)).toContain("Do not use generic framing such as 'Based on the request'");
       expect(JSON.stringify(options.messages)).toContain("No repository evidence is available yet");
@@ -23,6 +25,8 @@ describe("streamActionNarrative", () => {
       expect(JSON.stringify(options.messages)).toContain("terminal syntax, or a predeclared command list");
       expect(JSON.stringify(options.messages)).toContain("Do not ask the user to run a command");
       expect(JSON.stringify(options.messages)).toContain("state facts to check");
+      expect(JSON.stringify(options.messages)).toContain("task constraint, not evidence");
+      expect(JSON.stringify(options.messages)).toContain("'you indicated', 'you asked'");
       expect(JSON.stringify(options.messages)).toContain("independent requested facts in one note");
       expect(JSON.stringify(options.messages)).toContain("why it answers the user's exact request or unlocks the next decision");
       expect(JSON.stringify(options.messages)).toContain("Never propose unrelated build, test, commit, PR, deployment");

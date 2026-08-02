@@ -264,10 +264,13 @@ export function withoutProjectLinkFallbacks<T extends ProjectLinkInput>(link: T)
   return {
     ...link,
     adoPat: "",
-    adoMcpEnabled: false,
+    // A Project Link may select the locally managed MCP connector and choose
+    // its domain allow-list. It must never persist an executable command or
+    // authentication setting: those live only in local config.toml/.env.
+    adoMcpEnabled: link.adoMcpEnabled,
     adoMcpCommand: "",
     adoMcpAuthentication: "",
-    adoMcpDomains: "repositories,pipelines,work-items",
+    adoMcpDomains: link.adoMcpDomains,
   };
 }
 

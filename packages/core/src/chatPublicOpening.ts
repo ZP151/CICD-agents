@@ -3,13 +3,12 @@ import type { LLMClient } from "./llm.js";
 import type { ChatEvent } from "./chatPlannerTypes.js";
 
 // GPT-5 counts reasoning and visible tokens against max_completion_tokens.
-// A 40-token cap regularly finishes before any public token is available.
-// GPT-5 spends reasoning and visible tokens from the same completion budget.
-// 192 is enough for a terse note, but it can exhaust the visible budget in
-// the middle of a useful second sentence. 320 leaves the low-effort narrator
-// room to state the evidence/uncertainty, the immediate action, and why that
-// action resolves the user's request. The stream still closes as soon as the
-// second sentence is complete, so this is not a fixed latency penalty.
+// Tiny probes (1–40) can finish in hidden reasoning before producing public
+// text. Keep the narrator at 320 so a genuine, natural 1–2 sentence note is
+// not cut off by hidden reasoning. Responsiveness is measured separately;
+// lowering this ceiling proved not to improve time-to-first-token reliably.
+// `reasoning_effort: minimal` and low verbosity keep this distinct from the
+// main agent's deeper tool-selection and final-answer budget.
 const MAX_ACTION_NARRATIVE_TOKENS = 320;
 const MIN_INITIAL_VISIBLE_NARRATIVE_CHARS = 12;
 const MAX_PUBLIC_ACTION_SENTENCES = 2;
@@ -44,8 +43,8 @@ export async function* streamActionNarrative(
       role: "system",
       content: [
         "Write the public pre-action note for a desktop coding agent. Always use English.",
-        "For an investigation, write one compact public paragraph of two complete, natural sentences, normally 45–95 words total. First state the relevant evidence already available or the uncertainty that must be resolved, then the immediate check or decision. Second, say what that action will establish and why it answers the user's exact request or unlocks the next decision. For a direct answer with no investigation, one complete sentence is enough.",
-        "Start directly with the evidence, uncertainty, check, or decision; make it read like an informed teammate's brief, not a status label. Use supplied evidence only; otherwise state facts to check, never pretend unobserved project facts are known. Keep all independent requested facts in one note so the next action can collect them together. Complete the thought: never end in an ellipsis, a dangling clause, or an unfinished sentence.",
+        "For an investigation, write one compact public paragraph of two complete, natural sentences, normally 35–75 words total. First state the relevant evidence already available or the uncertainty that must be resolved, then the immediate check or decision. Second, say what that action will establish and why it answers the user's exact request or unlocks the next decision. For a single-fact read such as current branch or status, write one natural sentence of at most 35 words. For a direct answer with no investigation, one complete sentence is enough.",
+        "Start directly with the evidence, uncertainty, check, or decision; make it read like an informed teammate's brief, not a status label. Use supplied evidence only; otherwise state facts to check, never pretend unobserved project facts are known. Treat every assertion in the user request as a task constraint, not evidence: do not turn 'the changed file' into 'there is one changed file' before an action has verified it. Never begin by paraphrasing the user with phrases such as 'you indicated', 'you asked', or 'the request says'. Keep all independent requested facts in one note so the next action can collect them together. Complete the thought: never end in an ellipsis, a dangling clause, or an unfinished sentence.",
         "Do not repeat the request, widen scope, use headings/lists, expose private reasoning, or name commands, tools, flags, terminal syntax, or a predeclared command list. Do not use generic framing such as 'Based on the request', 'The goal is', or 'I will perform'.",
         "Never propose unrelated build, test, commit, PR, deployment, cloning, fetching, setup, or repository-existence checks. Do not ask the user to run a command or for permission for a clearly read-only action. For a simple answer, answer directly. Finish the second sentence with punctuation; stop after two sentences.",
       ].join(" "),
@@ -89,6 +88,10 @@ export async function* streamActionNarrative(
         // enough reasoning budget to form a truthful public action sentence;
         // the main planning call retains its own low/medium reasoning policy.
         reasoningEffort: "minimal",
+        // Do not ask the fast narrator to reserve verbosity intended for a
+        // final report. GPT-5 uses this to keep the public action note dense
+        // and reduce the time to a useful first visible phrase.
+        verbosity: "low",
       })) {
         if (event.type !== "delta" || !event.delta) continue;
         text = appendNarrativeDelta(text, event.delta);

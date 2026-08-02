@@ -78,6 +78,7 @@ describe("LLMClient GPT-5 parameter compatibility", () => {
       model: "gpt5mini",
       maxTokens: 64,
       reasoningEffort: "minimal",
+      verbosity: "low",
     })) {
       // Exhaust the stream so the request completes.
     }
@@ -86,6 +87,7 @@ describe("LLMClient GPT-5 parameter compatibility", () => {
       model: "gpt5mini",
       max_completion_tokens: 64,
       reasoning_effort: "minimal",
+      verbosity: "low",
     });
     expect(create.mock.calls[0]?.[0]).not.toHaveProperty("max_tokens");
     expect(create.mock.calls[0]?.[0]).not.toHaveProperty("temperature");

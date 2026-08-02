@@ -48,6 +48,20 @@ describe("MCP tool bridge", () => {
     expect(result.content).toEqual([{ type: "text", text: "repos for Demo" }]);
   });
 
+  it("does not leak daemon model credentials to an MCP child by default", async () => {
+    const serverPath = writeEnvironmentMcpServer();
+    const previous = process.env.AZURE_OPENAI_API_KEY;
+    try {
+      process.env.AZURE_OPENAI_API_KEY = "model-key-must-not-reach-mcp";
+      client = new StdioMcpClient({ name: "ado", command: process.execPath, args: [serverPath] });
+      const result = await client.callTool("environment", {});
+      expect(JSON.stringify(result)).not.toContain("model-key-must-not-reach-mcp");
+    } finally {
+      if (previous === undefined) delete process.env.AZURE_OPENAI_API_KEY;
+      else process.env.AZURE_OPENAI_API_KEY = previous;
+    }
+  });
+
   it("wraps MCP tool definitions as local ToolExecutor tools", async () => {
     const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
     const [tool] = createMcpToolWrappers(
@@ -105,11 +119,29 @@ describe("MCP tool bridge", () => {
 
     expect(toolCapability(readTool).category).toBe("ado");
     expect(toolCapability(readTool).riskLevel).toBe("low");
+    expect(toolCapability(readTool).readOnly).toBe(true);
     expect(toolCapability(readTool).requiresApproval).toBe(false);
     expect(toolCapability(writeTool).riskLevel).toBe("high");
     expect(toolCapability(writeTool).requiresApproval).toBe(true);
     expect(toolCapability(pipelineTool).riskLevel).toBe("high");
     expect(toolCapability(pipelineTool).requiresApproval).toBe(true);
+  });
+
+  it("keeps low-risk Web Research reads available in an explicit read-only turn", () => {
+    const tool = {
+      name: mcpLocalToolName("web_research", "search_official_documentation"),
+      description: "Search official documentation.",
+      parameters: { type: "object", properties: {} },
+      handler: async () => ({}),
+      connector: { kind: "mcp" as const, id: "web-research", label: "Web Research" },
+    };
+
+    expect(toolCapability(tool)).toMatchObject({
+      riskLevel: "low",
+      readOnly: true,
+      requiresApproval: false,
+      connector: { kind: "mcp", id: "web-research", label: "Web Research" },
+    });
   });
 });
 
@@ -188,5 +220,23 @@ function readFrame(input) {
 `,
     "utf8",
   );
+  return scriptPath;
+}
+
+function writeEnvironmentMcpServer(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mergepilot-mcp-env-"));
+  const scriptPath = path.join(dir, "environment-mcp-server.mjs");
+  fs.writeFileSync(scriptPath, `
+let buffer = Buffer.alloc(0);
+process.stdin.on("data", (chunk) => { buffer = Buffer.concat([buffer, chunk]); while (true) { const parsed = read(buffer); if (!parsed) return; buffer = parsed.rest; handle(parsed.message); } });
+function handle(message) {
+  if (!message.id) return;
+  if (message.method === "initialize") return send(message.id, { capabilities: {} });
+  if (message.method === "tools/call") return send(message.id, { content: [{ type: "text", text: process.env.AZURE_OPENAI_API_KEY || "absent" }] });
+  send(message.id, { tools: [] });
+}
+function send(id, result) { const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id, result })); process.stdout.write(Buffer.concat([Buffer.from("Content-Length: " + body.length + "\\r\\n\\r\\n"), body])); }
+function read(input) { const end = input.indexOf("\\r\\n\\r\\n"); if (end < 0) return null; const length = Number(/content-length:\\s*(\\d+)/i.exec(input.subarray(0, end).toString("ascii"))?.[1]); const start = end + 4; if (input.length < start + length) return null; return { message: JSON.parse(input.subarray(start, start + length)), rest: input.subarray(start + length) }; }
+`, "utf8");
   return scriptPath;
 }

@@ -21,6 +21,7 @@ import {
 } from "@mergepilot/core/chatContext";
 import { inlineProjectLinkToChatContextProjectLink } from "./chatContextPrompt.js";
 import type { InlineProjectLink } from "./chatHistoryStore.js";
+import { createAzureDevOpsMcpConnector, createWebResearchMcpConnector } from "./chatMcpConnectors.js";
 
 type ChatExecutorMode = "planner" | "confirmed-action";
 
@@ -31,13 +32,22 @@ export interface ChatToolExecutors {
 }
 
 export async function createChatToolExecutors(ctx: ToolContext, llm = new LLMClient()): Promise<ChatToolExecutors> {
-  const tools = [...chatTools(), ...chatContextTools(llm)];
+  const [azureDevOpsMcp, webResearchMcp] = await Promise.all([
+    createAzureDevOpsMcpConnector(ctx),
+    createWebResearchMcpConnector(ctx),
+  ]);
+  const tools = [
+    ...chatTools(),
+    ...chatContextTools(llm),
+    ...(azureDevOpsMcp?.tools ?? []),
+    ...(webResearchMcp?.tools ?? []),
+  ];
   const plannerExecutor = createChatToolExecutor(ctx, "planner", tools);
   const actionExecutor = createChatToolExecutor(ctx, "confirmed-action", tools);
   return {
     plannerExecutor,
     actionExecutor,
-    close: async () => {},
+    close: async () => { await Promise.all([azureDevOpsMcp?.close(), webResearchMcp?.close()]); },
   };
 }
 
