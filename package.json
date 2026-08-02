@@ -1,6 +1,6 @@
 {
   "name": "mergepilot-monorepo",
-  "version": "0.5.24",
+  "version": "0.5.25",
   "description": "Local-first AI workspace for pull requests, repository context, Azure DevOps, and delivery workflows.",
   "private": true,
   "author": "ZP151 <zhouping151140@gmail.com>",
