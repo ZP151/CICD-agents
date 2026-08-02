@@ -1,4 +1,5 @@
 import { AdditionalModelEditor } from "./AdditionalModelEditor.js";
+import { ActionButton } from "../../components/workbench/WorkbenchPrimitives.js";
 import { SettingsRow, SettingsSection, ToggleSwitch } from "./SettingsControls.js";
 import {
   additionalModelDescription,
@@ -49,14 +50,13 @@ export function AdditionalModelsSettingsSection({
         description={<AvailableModelsDescription models={availableAdditionalModels} />}
       />
       <SettingsRow title="Models" description="Optional model choices for Chat.">
-        <button
-          type="button"
+        <ActionButton
+          tone="secondary"
           onClick={onAddModel}
-          className="settings-text-button"
           disabled={editingModelId !== null}
         >
           Add model
-        </button>
+        </ActionButton>
       </SettingsRow>
 
       {additionalModels.length === 0 && editingModelId === null && (
@@ -82,28 +82,19 @@ export function AdditionalModelsSettingsSection({
                   onTestModel(model);
                 }}
               />
-              <button
-                type="button"
-                className="settings-text-button"
+              <ActionButton
+                tone="quiet"
                 onClick={() => onTestModel(model)}
-                disabled={testingModelId === model.id}
+                loading={testingModelId === model.id}
               >
-                {testingModelId === model.id ? "Testing..." : "Test"}
-              </button>
-              <button
-                type="button"
-                className="settings-text-button"
-                onClick={() => onEditModel(model)}
-              >
+                Test
+              </ActionButton>
+              <ActionButton tone="quiet" onClick={() => onEditModel(model)}>
                 Edit
-              </button>
-              <button
-                type="button"
-                className="settings-text-button"
-                onClick={() => onDeleteModel(model)}
-              >
+              </ActionButton>
+              <ActionButton tone="danger" onClick={() => onDeleteModel(model)}>
                 Delete
-              </button>
+              </ActionButton>
             </div>
             {model.testError && (
               <p className="settings-feedback-line text-[rgb(var(--app-danger))]">{model.testError}</p>

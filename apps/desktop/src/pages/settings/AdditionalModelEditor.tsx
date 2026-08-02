@@ -1,4 +1,5 @@
 import { SegmentedChoice, SettingsRow, TextInput, ToggleSwitch } from "./SettingsControls.js";
+import { ActionButton } from "../../components/workbench/WorkbenchPrimitives.js";
 import type { AdditionalModelConfig, AdditionalModelProvider } from "./settingsTypes.js";
 
 export function AdditionalModelEditor({
@@ -64,20 +65,19 @@ export function AdditionalModelEditor({
       <SettingsRow title="Actions">
         <div className="settings-action-stack">
           <div className="settings-action-row">
-            <button
-              type="button"
-              className="settings-text-button"
+            <ActionButton
+              tone="secondary"
               onClick={() => onTest(modelDraft, "draft")}
-              disabled={testingModelId === modelDraft.id}
+              loading={testingModelId === modelDraft.id}
             >
-              {testingModelId === modelDraft.id ? "Testing..." : "Test connection"}
-            </button>
-            <button type="button" className="settings-text-button" onClick={onSave}>
+              Test connection
+            </ActionButton>
+            <ActionButton tone="primary" onClick={onSave}>
               Save
-            </button>
-            <button type="button" className="settings-text-button" onClick={onCancel}>
+            </ActionButton>
+            <ActionButton tone="quiet" onClick={onCancel}>
               Cancel
-            </button>
+            </ActionButton>
           </div>
           {modelDraft.available && (
             <p className="settings-feedback-line text-[rgb(var(--app-success))]">Connection verified.</p>

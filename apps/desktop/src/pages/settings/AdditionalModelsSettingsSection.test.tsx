@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { AvailableModelsDescription } from "./AdditionalModelsSettingsSection.js";
+import { AdditionalModelsSettingsSection, AvailableModelsDescription } from "./AdditionalModelsSettingsSection.js";
 import type { AdditionalModelConfig } from "./settingsTypes.js";
 
 function model(overrides: Partial<AdditionalModelConfig> = {}): AdditionalModelConfig {
@@ -50,5 +50,34 @@ describe("AvailableModelsDescription", () => {
 
     expect(html).toContain("No custom models are available yet.");
     expect(html).not.toContain("settings-model-badge");
+  });
+});
+
+describe("AdditionalModelsSettingsSection actions", () => {
+  it("uses the shared workbench action states for model operations", () => {
+    const configuredModel = model();
+    const html = renderToStaticMarkup(
+      <AdditionalModelsSettingsSection
+        additionalModels={[configuredModel]}
+        availableAdditionalModels={[configuredModel]}
+        editingModelId={null}
+        modelDraft={configuredModel}
+        testingModelId={configuredModel.id}
+        onAddModel={() => undefined}
+        onCancelModelEdit={() => undefined}
+        onDeleteModel={() => undefined}
+        onDisableModel={() => undefined}
+        onEditModel={() => undefined}
+        onModelDraftChange={() => undefined}
+        onModelDraftDirectChange={() => undefined}
+        onSaveModelDraft={() => undefined}
+        onTestModel={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Add model");
+    expect(html).toContain("workbench-loading-indicator");
+    expect(html).toContain("Delete");
+    expect(html).not.toContain("settings-text-button");
   });
 });
