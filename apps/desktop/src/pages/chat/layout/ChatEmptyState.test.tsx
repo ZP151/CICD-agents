@@ -61,7 +61,11 @@ describe("ChatEmptyState", () => {
     expect(html).toContain('aria-label="Suggested prompt drafts"');
     expect(html).toContain("Choose a starting point, then edit the prompt before MergePilot does any work.");
     expect(html).toContain("Understand this project");
-    expect((html.match(/prompt-particle-deck__card/g) ?? [])).toHaveLength(5);
+    // Five cards are visually present; two transparent edge positions stay
+    // mounted so a long inertial swipe can move through three cards without a
+    // DOM handoff mid-flight.
+    expect((html.match(/prompt-particle-deck__card/g) ?? [])).toHaveLength(7);
+    expect((html.match(/data-depth="3"/g) ?? [])).toHaveLength(2);
     expect(html).not.toContain("prompt-particle-deck__glyph");
     expect(html).toContain('data-autoplay="true"');
     expect(html).not.toContain("animate-pulse");

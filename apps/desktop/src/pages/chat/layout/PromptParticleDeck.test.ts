@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  promptDeckGlideTarget,
+  promptDeckContinuationOffset,
+  promptDeckInertiaDuration,
   promptDeckKeyboardAction,
   resolvePromptDeckRelease,
 } from "./PromptParticleDeck.js";
@@ -19,10 +20,16 @@ describe("PromptParticleDeck gestures", () => {
   });
 
   it("keeps a short drag local but lets a long drag glide across every selected card", () => {
-    expect(promptDeckGlideTarget(0, 205)).toBe(0);
-    expect(promptDeckGlideTarget(1, 205)).toBe(-205);
-    expect(promptDeckGlideTarget(3, 205)).toBe(-615);
-    expect(promptDeckGlideTarget(-2, 146)).toBe(292);
+    expect(promptDeckContinuationOffset(-40, 0, 205)).toBe(-40);
+    expect(promptDeckContinuationOffset(-100, 1, 205)).toBe(105);
+    expect(promptDeckContinuationOffset(-300, 3, 205)).toBe(315);
+    expect(promptDeckContinuationOffset(40, -2, 146)).toBe(-252);
+  });
+
+  it("uses a longer non-bouncy coast for a larger continuation distance", () => {
+    expect(promptDeckInertiaDuration(40, 0.12)).toBeGreaterThanOrEqual(0.28);
+    expect(promptDeckInertiaDuration(340, 1.2)).toBeGreaterThan(promptDeckInertiaDuration(40, 0.12));
+    expect(promptDeckInertiaDuration(4000, 8)).toBe(0.72);
   });
 
   it("maps left and right keys to browsing while retaining home and end", () => {

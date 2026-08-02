@@ -25,19 +25,23 @@ const PARTICLES = [
 ] as const;
 
 const DECK_POSITIONS = {
+  "-3": { x: -615, y: 38, z: -160, rotateY: 42, rotateZ: -2.1, scale: 0.54, opacity: 0, zIndex: 0 },
   "-2": { x: -410, y: 24, z: -94, rotateY: 34, rotateZ: -1.4, scale: 0.7, opacity: 0.56, zIndex: 1 },
   "-1": { x: -205, y: 5, z: -30, rotateY: 20, rotateZ: -0.5, scale: 0.88, opacity: 0.87, zIndex: 2 },
   "0": { x: 0, y: -10, z: 28, rotateY: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 3 },
   "1": { x: 205, y: 5, z: -30, rotateY: -20, rotateZ: 0.5, scale: 0.88, opacity: 0.87, zIndex: 2 },
   "2": { x: 410, y: 24, z: -94, rotateY: -34, rotateZ: 1.4, scale: 0.7, opacity: 0.56, zIndex: 1 },
+  "3": { x: 615, y: 38, z: -160, rotateY: -42, rotateZ: 2.1, scale: 0.54, opacity: 0, zIndex: 0 },
 } as const;
 
 const COMPACT_DECK_POSITIONS = {
+  "-3": { x: -426, y: 29, z: -116, rotateY: 37, rotateZ: -1.6, scale: 0.5, opacity: 0, zIndex: 0 },
   "-2": { x: -284, y: 19, z: -70, rotateY: 30, rotateZ: -1, scale: 0.66, opacity: 0.5, zIndex: 1 },
   "-1": { x: -146, y: 4, z: -22, rotateY: 16, rotateZ: -0.4, scale: 0.84, opacity: 0.8, zIndex: 2 },
   "0": { x: 0, y: -8, z: 20, rotateY: 0, rotateZ: 0, scale: 1, opacity: 1, zIndex: 3 },
   "1": { x: 146, y: 4, z: -22, rotateY: -16, rotateZ: 0.4, scale: 0.84, opacity: 0.8, zIndex: 2 },
   "2": { x: 284, y: 19, z: -70, rotateY: -30, rotateZ: 1, scale: 0.66, opacity: 0.5, zIndex: 1 },
+  "3": { x: 426, y: 29, z: -116, rotateY: -37, rotateZ: 1.6, scale: 0.5, opacity: 0, zIndex: 0 },
 } as const;
 
 const DRAG_VISUAL_LIMIT = 172;
@@ -61,7 +65,6 @@ interface PendingGlide {
   indexDelta: number;
   visualOffset: number;
   cardAdvanceDistance: number;
-  strength: number;
   velocityX: number;
   sequence: number;
 }
@@ -114,8 +117,21 @@ export function promptDeckKeyboardAction(key: string, suggestionCount: number): 
   return null;
 }
 
-export function promptDeckGlideTarget(indexDelta: number, cardAdvanceDistance: number): number {
-  return indexDelta === 0 ? 0 : -indexDelta * cardAdvanceDistance;
+export function promptDeckContinuationOffset(
+  visualOffset: number,
+  indexDelta: number,
+  cardAdvanceDistance: number,
+): number {
+  return visualOffset + indexDelta * cardAdvanceDistance;
+}
+
+export function promptDeckInertiaDuration(continuationOffset: number, velocityX: number): number {
+  const travel = Math.abs(continuationOffset);
+  const velocity = Math.abs(velocityX);
+  // A UIKit-style deceleration has one non-bouncy trajectory. Longer releases
+  // take longer to coast, while velocity can extend the motion slightly without
+  // making a fast flick feel like a spring rebound.
+  return Math.min(0.72, Math.max(0.28, 0.28 + travel / 900 + Math.min(velocity / 12, 0.1)));
 }
 
 /**
@@ -180,17 +196,20 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
     // changes, then the ring itself coasts to rest in a single motion.
     setInstantPositioning(true);
     setActiveIndex((current) => (current + glide.indexDelta + suggestions.length) % suggestions.length);
-    dragX.set(glide.visualOffset + glide.indexDelta * glide.cardAdvanceDistance);
+    const continuationOffset = promptDeckContinuationOffset(
+      glide.visualOffset,
+      glide.indexDelta,
+      glide.cardAdvanceDistance,
+    );
+    dragX.set(continuationOffset);
     glideFrame.current = window.requestAnimationFrame(() => {
       glideFrame.current = null;
       const inertia = animate(dragX, 0, reducedMotion
         ? { duration: 0.01 }
         : {
-            type: "spring",
-            stiffness: 104 + glide.strength * 46,
-            damping: 24,
-            mass: 0.9,
-            velocity: glide.velocityX * 420,
+            type: "tween",
+            duration: promptDeckInertiaDuration(continuationOffset, glide.velocityX),
+            ease: [0.16, 1, 0.3, 1],
           });
       void inertia.then(() => {
         if (interactionSequence.current !== glide.sequence) return;
@@ -309,9 +328,20 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    const didDrag = Math.abs(drag.deltaX) > 10;
+    // Pointer events can be coalesced during a fast drag. The release event is
+    // the only coordinate we are guaranteed to receive, so fold it into the
+    // gesture before resolving momentum instead of trusting the last move.
+    const releaseTime = performance.now();
+    const finalDeltaX = event.clientX - drag.startX;
+    const releaseElapsed = Math.max(8, releaseTime - drag.lastTime);
+    const releaseVelocity = (event.clientX - drag.lastX) / releaseElapsed;
+    drag.deltaX = finalDeltaX;
+    drag.velocityX = drag.velocityX * 0.32 + releaseVelocity * 0.68;
+    const finalVisualOffset = resistedDragOffset(finalDeltaX);
+    dragX.set(finalVisualOffset);
+    const didDrag = Math.abs(finalDeltaX) > 10;
     suppressClick.current = didDrag;
-    const release = resolvePromptDeckRelease(drag.deltaX, drag.velocityX, suggestions.length);
+    const release = resolvePromptDeckRelease(finalDeltaX, drag.velocityX, suggestions.length);
     setReleaseStrength(release.strength);
     const cardAdvanceDistance = compactDeck
       ? COMPACT_CARD_ADVANCE_DISTANCE
@@ -320,19 +350,16 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
       void animate(dragX, 0, reducedMotion
         ? { duration: 0.01 }
         : {
-            type: "spring",
-            stiffness: 220,
-            damping: 26,
-            mass: 0.68,
-            velocity: drag.velocityX * 580,
+            type: "tween",
+            duration: promptDeckInertiaDuration(dragX.get(), drag.velocityX) * 0.72,
+            ease: [0.2, 0.8, 0.2, 1],
           });
     } else {
       setSettling(true);
       pendingGlide.current = {
         indexDelta: release.indexDelta,
-        visualOffset: dragX.get(),
+        visualOffset: finalVisualOffset,
         cardAdvanceDistance,
-        strength: release.strength,
         velocityX: drag.velocityX,
         sequence: interactionSequence.current,
       };
@@ -346,7 +373,7 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
 
   const visibleSuggestions = suggestions
     .map((suggestion, index) => ({ suggestion, index, offset: deckOffset(index, activeIndex, suggestions.length) }))
-    .filter(({ offset }) => Math.abs(offset) <= 2);
+    .filter(({ offset }) => Math.abs(offset) <= 3);
 
   return (
     <div
@@ -393,6 +420,7 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
               type="button"
               className="prompt-particle-deck__card"
               data-active={isActive ? "true" : "false"}
+              data-depth={Math.abs(offset)}
               data-tone={promptTone(index)}
               initial={false}
               animate={{

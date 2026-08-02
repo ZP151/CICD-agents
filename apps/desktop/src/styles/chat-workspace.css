@@ -179,6 +179,7 @@
 .prompt-particle-deck__card[data-active="true"][data-tone="violet"] { background: color-mix(in srgb, rgb(var(--app-surface-raised)) 30%, rgb(var(--app-info-soft))); }
 .prompt-particle-deck__card[data-active="true"][data-tone="mint"] { background: color-mix(in srgb, rgb(var(--app-surface-raised)) 30%, rgb(var(--app-success-soft))); }
 .prompt-particle-deck__card[data-active="true"] { border-color: rgb(var(--app-border-strong)); box-shadow: 0 18px 30px rgb(var(--app-overlay) / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.72); }
+.prompt-particle-deck__card[data-depth="3"] { pointer-events: none; }
 .prompt-particle-deck.is-exploring .prompt-particle-deck__card[data-active="true"] { border-color: rgb(var(--app-accent)); box-shadow: 0 19px 32px rgb(var(--app-accent) / 0.2), inset 0 1px 0 rgb(255 255 255 / 0.76); }
 .prompt-particle-deck__card:hover:not(:disabled) { border-color: rgb(var(--app-accent)); }
 .prompt-particle-deck__card:focus-visible { outline: 2px solid rgb(var(--app-focus) / 0.7); outline-offset: 3px; }
