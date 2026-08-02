@@ -19,6 +19,33 @@ export function commandCodeViewerSetup(output: boolean) {
   };
 }
 
+/**
+ * WebView clipboard support differs across packaged desktop runtimes. Prefer
+ * the modern API, then retain a small DOM fallback so the transcript copy
+ * affordance remains useful outside a secure browser context.
+ */
+export async function copyCommandText(value: string): Promise<boolean> {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      // Fall through for WebViews that expose the API but deny it at runtime.
+    }
+  }
+  if (typeof document === "undefined") return false;
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.cssText = "position:fixed;opacity:0;pointer-events:none";
+  document.body.append(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  return copied;
+}
+
 export function CommandCodeViewer({
   value,
   language,
@@ -36,12 +63,7 @@ export function CommandCodeViewer({
 
   const copy = async () => {
     if (!copyValue) return;
-    try {
-      await navigator.clipboard.writeText(copyValue);
-      setCopyStatus("copied");
-    } catch {
-      setCopyStatus("failed");
-    }
+    setCopyStatus((await copyCommandText(copyValue)) ? "copied" : "failed");
     window.setTimeout(() => setCopyStatus("idle"), 1200);
   };
 
