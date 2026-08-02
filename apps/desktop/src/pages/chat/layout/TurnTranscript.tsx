@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type Disp
 import { turnTranscriptElapsedMs } from "../chatTurnTranscript.js";
 import type { Bubble, TurnTranscriptBlock } from "../chat.types.js";
 import { PendingActionCard } from "../approval/PendingActionCard.js";
-import { commandLanguage, type CommandCodeLanguage } from "./commandLanguage.js";
+import { commandLanguage, commandOutputLanguage, type CommandCodeLanguage } from "./commandLanguage.js";
 
 const CommandCodeViewer = lazy(() => import("./CommandCodeViewer.js").then(({ CommandCodeViewer: Viewer }) => ({ default: Viewer })));
 // The transcript is also rendered in Node-side tests/history previews where a
@@ -198,11 +198,23 @@ function TranscriptBlockView({
                   <div className="ml-1 mt-1 overflow-hidden rounded-[11px] border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised)_/_0.18)] animate-[turn-command-open_220ms_cubic-bezier(.22,.8,.24,1)]">
                     <div className="px-4 pb-1 pt-2 text-xs text-[rgb(var(--app-text-muted))]">Shell</div>
                     <LazyCommandCodeViewer
-                      value={commandTerminalTranscript(command.command, command.output)}
+                      value={`$ ${command.command}`}
                       language={commandLanguage(command.command)}
-                      ariaLabel="Executed command and response"
-                      output={Boolean(command.output)}
+                      ariaLabel="Executed command"
+                      copyValue={command.command}
                     />
+                    {command.output && (
+                      <>
+                        <div className="mx-4 h-px bg-[rgb(var(--app-border))]" />
+                        <div className="px-4 pb-1 pt-2 text-xs text-[rgb(var(--app-text-muted))]">Output</div>
+                        <LazyCommandCodeViewer
+                          value={command.output}
+                          language={commandOutputLanguage(command.command)}
+                          ariaLabel="Command output"
+                          output
+                        />
+                      </>
+                    )}
                     <div className="flex justify-end px-3 pb-2 pt-1 text-[11px] text-[rgb(var(--app-text-subtle))]">{commandStatusLabel(command.status)}</div>
                   </div>
                 )}
@@ -220,11 +232,13 @@ function LazyCommandCodeViewer({
   language,
   ariaLabel,
   output = false,
+  copyValue,
 }: {
   value: string;
   language: "shell" | "powershell" | "diff";
   ariaLabel: string;
   output?: boolean;
+  copyValue?: string;
 }) {
   return (
     <Suspense
@@ -239,7 +253,7 @@ function LazyCommandCodeViewer({
         </pre>
       )}
     >
-      <CommandCodeViewer value={value} language={language} ariaLabel={ariaLabel} output={output} />
+      <CommandCodeViewer value={value} language={language} ariaLabel={ariaLabel} output={output} copyValue={copyValue} />
     </Suspense>
   );
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { commandActivityLabel, commandDisclosureKey, commandTerminalTranscript } from "./TurnTranscript.js";
+import { commandOutputLanguage } from "./commandLanguage.js";
 
 describe("TurnTranscript command presentation", () => {
   it("shows a compact real command summary while retaining duration", () => {
@@ -9,6 +10,7 @@ describe("TurnTranscript command presentation", () => {
 
   it("renders the executed command and its real response in one terminal transcript", () => {
     expect(commandTerminalTranscript("git branch --show-current", "main")).toBe("$ git branch --show-current\nmain");
+    expect(commandOutputLanguage("git diff --staged")).toBe("diff");
   });
 
   it("scopes duplicate command ids to their own action groups", () => {
