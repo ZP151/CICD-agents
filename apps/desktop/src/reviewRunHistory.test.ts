@@ -3,6 +3,7 @@ import type { ReviewQueueItem, ReviewRunResult } from "./api";
 import {
   applyReviewRunToQueueItem,
   isReviewQueueItemStale,
+  resolveReviewRunFindings,
   reviewQueueFreshnessStatus,
   reviewQueueItemKey,
   staleReviewQueueItems,
@@ -233,5 +234,44 @@ describe("applyReviewRunToQueueItem", () => {
 
     expect(next.autoApprovedAt).toBe("");
     expect(next.autoApprovalActor).toBe("");
+  });
+});
+
+describe("resolveReviewRunFindings", () => {
+  it("persists an explicit findings payload, including an explicit clean result", () => {
+    const explicit = resolveReviewRunFindings(reviewRun({ findings: [] }), [{
+      file: "stale.ts",
+      line: 3,
+      severity: "warning",
+      category: "bug",
+      message: "Old detail",
+    }]);
+
+    expect(explicit).toMatchObject({ findings: [], shouldPersist: true, source: "result" });
+  });
+
+  it("clears stored detail only when a summary-only rerun is explicitly clean", () => {
+    const clean = resolveReviewRunFindings(reviewRun({ findingCount: 0, findings: undefined }), [{
+      file: "stale.ts",
+      line: 3,
+      severity: "warning",
+      category: "bug",
+      message: "Old detail",
+    }]);
+
+    expect(clean).toMatchObject({ findings: [], shouldPersist: true, source: "clean_result" });
+  });
+
+  it("does not erase inspectable findings when a non-clean rerun returns summary only", () => {
+    const stored = [{
+      file: "src/auth.ts",
+      line: 18,
+      severity: "blocking" as const,
+      category: "security" as const,
+      message: "Validate the token audience.",
+    }];
+    const summaryOnly = resolveReviewRunFindings(reviewRun({ findings: undefined, findingCount: 3 }), stored);
+
+    expect(summaryOnly).toEqual({ findings: stored, shouldPersist: false, source: "stored" });
   });
 });

@@ -7,10 +7,11 @@ import {
   type ReviewFinding,
   type ReviewQueueItem,
 } from "../../api.js";
-import { saveFindingsLocal } from "../../reviewHistoryLocal.js";
+import { loadFindingsLocal, saveFindingsLocal } from "../../reviewHistoryLocal.js";
 import type { ReviewOperationEvent } from "../../reviewOperations.js";
 import {
   applyReviewRunToQueueItem,
+  resolveReviewRunFindings,
   reviewQueueItemKey,
 } from "../../reviewRunHistory.js";
 import {
@@ -142,8 +143,14 @@ export function useReviewQueueActions({
         selectedProjectLink?.targetBranch || "main",
       );
       const next = applyReviewRunToQueueItem(item, result);
+      const findings = resolveReviewRunFindings(
+        result,
+        loadFindingsLocal(result.repository, result.pullRequestId, projectLinkId),
+      );
       await recordProjectLinkReviewHistory(projectLinkId, next);
-      saveFindingsLocal(result.repository, result.pullRequestId, result.findings ?? [], projectLinkId);
+      if (findings.shouldPersist) {
+        saveFindingsLocal(result.repository, result.pullRequestId, findings.findings, projectLinkId);
+      }
       recordOperation({
         kind: "rerun",
         repository: result.repository,
@@ -156,7 +163,7 @@ export function useReviewQueueActions({
       setPanelFindings((current) =>
         selectedItem?.repository === item.repository &&
         selectedItem.pullRequestId === item.pullRequestId
-          ? (result.findings ?? [])
+          ? findings.findings
           : current,
       );
     } catch (err) {

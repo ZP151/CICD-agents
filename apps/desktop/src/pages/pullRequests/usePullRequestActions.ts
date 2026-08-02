@@ -18,6 +18,7 @@ import {
   type PrInsightArtifact,
 } from "../../prInsightArtifacts.js";
 import { saveFindingsLocal } from "../../reviewHistoryLocal.js";
+import { resolveReviewRunFindings } from "../../reviewRunHistory.js";
 import {
   previewOperationDetails,
   reviewRunOperationDetails,
@@ -130,8 +131,9 @@ export function usePullRequestActions({
         manualDispositionWriteBackUrl: "",
         manualDispositionWriteBackEvents: [],
       });
-      if (result.findings && result.findings.length > 0) {
-        saveFindingsLocal(result.repository, result.pullRequestId, result.findings, actionProjectLinkId);
+      const findings = resolveReviewRunFindings(result);
+      if (findings.shouldPersist) {
+        saveFindingsLocal(result.repository, result.pullRequestId, findings.findings, actionProjectLinkId);
       }
       const artifact = savePrReviewRunArtifact({
         projectLinkId: actionProjectLinkId,
