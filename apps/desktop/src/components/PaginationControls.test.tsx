@@ -46,5 +46,9 @@ describe("pagination helpers", () => {
     expect(html).toContain('aria-label="Next pipelines page"');
     expect(html).not.toContain(">Previous<");
     expect(html).not.toContain(">Next<");
+    expect(html).toContain("border-t");
+    expect(html).not.toContain("rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))]");
+    expect(html).toContain("focus-visible:ring-[rgb(var(--app-focus))]/45");
+    expect(html).toContain('aria-label="pipelines page size"');
   });
 });
