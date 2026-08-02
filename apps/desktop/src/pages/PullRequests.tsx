@@ -474,42 +474,43 @@ function PullRequestInsightSidePanel({
       description={`${pr.sourceBranch} -> ${pr.targetBranch}`}
     >
       <div className="flex flex-wrap gap-2 border-b border-[rgb(var(--app-border))] pb-3">
-        <button
+        <ActionButton
           type="button"
-          disabled={previewState.phase === "loading"}
           onClick={() => onPreviewInsight(pr)}
-          className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60"
+          loading={previewState.phase === "loading"}
+          className="min-h-7 px-2.5 py-1"
         >
           {previewState.phase === "loading"
             ? "Generating..."
             : hasExistingInsight
               ? "Refresh insight"
               : "Generate insight"}
-        </button>
-        <button
-          type="button"
-          disabled={isRunning || queueState.phase === "done"}
-          onClick={() => onQueueForReview(pr)}
-          className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))] disabled:cursor-wait disabled:opacity-60"
-        >
-          {queueState.phase === "watching"
-            ? "Preparing..."
-            : queueState.phase === "reviewing"
-              ? "Analyzing..."
-              : "Run review"}
-        </button>
+        </ActionButton>
+        {queueState.phase !== "done" && (
+          <ActionButton
+            type="button"
+            tone="primary"
+            onClick={() => onQueueForReview(pr)}
+            loading={isRunning}
+            className="min-h-7 px-2.5 py-1"
+          >
+            {queueState.phase === "watching"
+              ? "Preparing..."
+              : queueState.phase === "reviewing"
+                ? "Analyzing..."
+                : queueState.phase === "error"
+                  ? "Retry review"
+                  : "Run review"}
+          </ActionButton>
+        )}
       </div>
 
       <div className="space-y-3">
         {previewState.phase === "error" && (
-          <p className="rounded-md border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] p-3 text-xs leading-relaxed text-[rgb(var(--app-danger))]">
-            {previewState.message}
-          </p>
+          <InlineNotice tone="danger" title="Insight generation failed">{previewState.message}</InlineNotice>
         )}
         {queueState.phase === "error" && (
-          <p className="rounded-md border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] p-3 text-xs leading-relaxed text-[rgb(var(--app-danger))]">
-            {queueState.message}
-          </p>
+          <InlineNotice tone="danger" title="Review failed">{queueState.message}</InlineNotice>
         )}
         {previewState.phase === "done" && (
           <InsightPreviewPanel previewState={previewState} insightTone={previewTone} />
