@@ -1,5 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import type {
+  AnchorHTMLAttributes,
   ButtonHTMLAttributes,
   HTMLAttributes,
   InputHTMLAttributes,
@@ -154,6 +155,27 @@ export function ActionButton({
       {loading && <span aria-hidden="true" className="workbench-loading-indicator" />}
       {children}
     </button>
+  );
+}
+
+/**
+ * Route recovery actions are links semantically, but must look and focus like
+ * their adjacent workbench actions. Keeping this separate from ActionButton
+ * preserves keyboard and navigation semantics without a second visual system.
+ */
+export function ActionLink({
+  tone = "secondary",
+  className = "",
+  children,
+  ...props
+}: PropsWithChildren<AnchorHTMLAttributes<HTMLAnchorElement> & { tone?: ActionTone }>) {
+  return (
+    <a
+      {...props}
+      className={`inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-[background-color,border-color,color,transform] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45 active:translate-y-px ${actionToneClass[tone]} ${className}`.trim()}
+    >
+      {children}
+    </a>
   );
 }
 

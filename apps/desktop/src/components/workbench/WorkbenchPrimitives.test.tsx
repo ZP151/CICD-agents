@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
+  ActionLink,
   ActionButton,
   InlineNotice,
   StatusBadge,
@@ -41,6 +42,7 @@ describe("WorkbenchPrimitives", () => {
     const html = renderToStaticMarkup(
       <>
         <ActionButton tone="danger" loading>Delete</ActionButton>
+        <ActionLink href="#/project-links" tone="primary">Open Project Links</ActionLink>
         <InlineNotice tone="warning" title="Refresh delayed">Try again when the connection returns.</InlineNotice>
         <WorkbenchEmptyState title="No pull requests" description="Choose a Project Link to begin." />
         <WorkbenchSkeleton rows={1} />
@@ -48,6 +50,8 @@ describe("WorkbenchPrimitives", () => {
     );
 
     expect(html).toContain("Delete");
+    expect(html).toContain('href="#/project-links"');
+    expect(html).toContain("Open Project Links");
     expect(html).toContain("disabled");
     expect(html).toContain("Refresh delayed");
     expect(html).toContain("No pull requests");

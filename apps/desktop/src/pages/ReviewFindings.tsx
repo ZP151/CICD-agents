@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAppData } from "../App.js";
 import { PaginationControls } from "../components/PaginationControls.js";
-import { InlineNotice, WorkbenchPage } from "../components/workbench/WorkbenchPrimitives.js";
+import { ActionLink, InlineNotice, WorkbenchPage } from "../components/workbench/WorkbenchPrimitives.js";
 import {
   loadStoredActiveProjectLinkId,
   resolveActiveProjectLinkId,
@@ -302,12 +302,13 @@ export function ReviewQueueNoProjectLinkState(): JSX.Element {
         <p className="mt-1 text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
           Connect one Azure DevOps repository before using the Review Queue.
         </p>
-        <a
+        <ActionLink
           href="#/project-links"
-          className="mt-3 inline-flex min-h-8 items-center justify-center rounded-md border border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent))] px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110"
+          tone="primary"
+          className="mt-3"
         >
           Open Project Links
-        </a>
+        </ActionLink>
       </div>
     </section>
   );

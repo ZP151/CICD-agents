@@ -23,6 +23,7 @@ import { ReviewActivitySection } from "./ReviewActivitySection.js";
 import { partitionActivity } from "./activityGrouping.js";
 import {
   ActionButton,
+  ActionLink,
   InlineNotice,
   WorkbenchFilterTabs,
 } from "../../components/workbench/WorkbenchPrimitives.js";
@@ -438,12 +439,11 @@ export function ActivitySidebarUnavailableState({
         {onRefresh && (
           <ActionButton type="button" onClick={onRefresh}>Refresh activity</ActionButton>
         )}
-        <a
+        <ActionLink
           href="#/settings"
-          className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs font-medium text-[rgb(var(--app-text-muted))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-bg-muted))] hover:text-[rgb(var(--app-text))]"
         >
           Open Settings
-        </a>
+        </ActionLink>
       </div>
     </div>
   );

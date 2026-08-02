@@ -4,6 +4,7 @@ import { PaginationControls } from "../components/PaginationControls.js";
 import { MarkdownContent } from "../components/conversation/ConversationPartRenderer.js";
 import {
   ActionButton,
+  ActionLink,
   InlineNotice,
   WorkbenchHeader,
   WorkbenchPage,
@@ -339,19 +340,19 @@ export function PipelineEmptyState({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {hasBlockingError && recovery.primaryHref ? (
-            <a
+            <ActionLink
               href={recovery.primaryHref}
-              className="inline-flex min-h-8 items-center justify-center rounded-md border border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent))] px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110"
+              tone="primary"
             >
               {recovery.primaryAction}
-            </a>
+            </ActionLink>
           ) : !hasProjectLinks && (
-            <a
+            <ActionLink
               href="#/project-links"
-              className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-1.5 text-sm font-medium text-[rgb(var(--app-text))] transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-surface-raised))]"
+              className="text-sm"
             >
               Open Project Links
-            </a>
+            </ActionLink>
           )}
           {(hasProjectLinks || hasBlockingError) && !recovery.primaryHref && (
             <ActionButton
