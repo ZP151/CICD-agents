@@ -26,7 +26,8 @@ describe("UserFooter", () => {
 
     expect(html).toContain("Signed in as Zhou Ping (Zhou.Ping@totalebizsolutions.com)");
     expect(html).not.toContain("<p ");
-    expect(html).toContain('title="Zhou Ping (Zhou.Ping@totalebizsolutions.com)"');
+    expect(html).toContain('aria-label="Account: Zhou Ping"');
+    expect(html).not.toContain('title="Zhou Ping (Zhou.Ping@totalebizsolutions.com)"');
     expect(html).toContain("h-9 w-9");
     expect(html).toContain("app-shell-account-footer");
     expect(html).toContain("justify-start");
