@@ -163,6 +163,8 @@ describe("AppShell workspace routes", () => {
       expect(html).toContain("overflow-auto");
       expect(html).toContain("app-shell-nav-icon");
       expect(html).toContain("app-shell-nav-link");
+      expect(html).toContain('aria-label="New chat"');
+      expect(html).not.toContain('title="New chat"');
       expect(html).not.toContain("({ isActive })");
     } finally {
       consoleError.mockRestore();

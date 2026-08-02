@@ -395,7 +395,6 @@ export function FullLayout() {
                   <Tooltip key={item.to} content={item.label} contentClassName="app-shell-compact-tooltip">
                     <NavLink
                       to={item.to}
-                      title={item.label}
                       aria-label={item.label}
                       className={appShellNavLinkClass(
                         item.match ? location.pathname === item.match : location.pathname === item.to,
