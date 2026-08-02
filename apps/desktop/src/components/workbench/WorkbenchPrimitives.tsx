@@ -260,13 +260,15 @@ export function WorkbenchEmptyState({
   title,
   description,
   action,
+  className = "",
 }: {
   title: string;
   description: string;
   action?: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="flex min-h-48 flex-col items-start justify-center rounded-lg border border-dashed border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-5 py-6">
+    <section className={`flex min-h-48 flex-col items-start justify-center rounded-lg border border-dashed border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-5 py-6 ${className}`.trim()}>
       <h3 className="text-sm font-semibold text-[rgb(var(--app-text))]">{title}</h3>
       <p className="mt-1 max-w-xl text-sm leading-5 text-[rgb(var(--app-text-muted))]">{description}</p>
       {action && <div className="mt-3">{action}</div>}

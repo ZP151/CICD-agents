@@ -127,13 +127,13 @@ describe("ActivityEmptyDetail", () => {
     expect(detailClass).not.toContain("xl:max-w-[74rem]");
   });
 
-  it("renders a visible right-panel placeholder before an operation is selected", () => {
+  it("uses the shared low-chrome empty state before an operation is selected", () => {
     const html = renderToStaticMarkup(<ActivityEmptyDetail />);
 
-    expect(html).toContain("Detail");
     expect(html).toContain("Select an operation");
     expect(html).toContain("inspect its source, result, and");
-    expect(html).toContain("border");
+    expect(html).toContain("border-dashed");
+    expect(html).not.toContain(">Detail<");
     expect(html).not.toContain("No operation selected");
   });
 

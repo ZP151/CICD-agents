@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppData } from "../App.js";
-import { WorkbenchPage } from "../components/workbench/WorkbenchPrimitives.js";
+import { WorkbenchEmptyState, WorkbenchPage } from "../components/workbench/WorkbenchPrimitives.js";
 import {
   CHAT_HANDOFF_KEY,
   PULL_REQUESTS_HANDOFF_KEY,
@@ -235,17 +235,11 @@ export function ActivityEmptyDetail({
   const content = activityEmptyDetailContent({ activityCount, error, loading });
 
   return (
-    <div className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4">
-      <p className="text-xs font-semibold uppercase text-[rgb(var(--app-text-subtle))]">
-        Detail
-      </p>
-      <h3 className="mt-2 text-sm font-semibold text-[rgb(var(--app-text))]">
-        {content.title}
-      </h3>
-      <p className="mt-1 max-w-xl text-sm leading-relaxed text-[rgb(var(--app-text-muted))]">
-        {content.description}
-      </p>
-    </div>
+    <WorkbenchEmptyState
+      className="min-h-[18rem]"
+      title={content.title}
+      description={content.description}
+    />
   );
 }
 
