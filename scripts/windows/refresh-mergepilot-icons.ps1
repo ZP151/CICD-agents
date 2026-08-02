@@ -172,6 +172,7 @@ public static class MergePilotIconSurface
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\\..")
 $desktopRoot = Join-Path $repoRoot "apps\\desktop"
+$approvedArtworkPath = Join-Path $desktopRoot "src\\assets\\mergepilot-icon-reference.png"
 $masterSourcePath = Join-Path $desktopRoot "src\\assets\\mergepilot-icon-source.png"
 
 if ($SourceImage) {
@@ -179,15 +180,25 @@ if ($SourceImage) {
     throw "Source image does not exist: $SourceImage"
   }
 
-  # Keep the approved artwork at its supplied native resolution. In particular,
-  # do not first reduce a 1254px source to the 512px web asset and then use that
-  # smaller raster to build the Windows ICO. Every platform size below is
-  # rendered directly from this master, so the 16–256px frames retain the best
-  # available edge detail.
-  [System.IO.File]::Copy($SourceImage, $masterSourcePath, $true)
+  # Keep the supplied artwork byte-for-byte as the approved reference. The
+  # reference includes a checkerboard presentation surface, so Windows cannot
+  # consume it directly; it is intentionally separate from the transparent
+  # master below. This prevents a later refresh from silently treating an
+  # already-processed 16px/512px derivative as the new source of truth.
+  [System.IO.File]::Copy($SourceImage, $approvedArtworkPath, $true)
+
+  # Every runtime asset is rendered from a full-resolution transparent master,
+  # never from a previously resized PNG. This preserves the supplied cloud
+  # geometry while removing only the outer presentation surface.
+  [System.IO.File]::Copy($approvedArtworkPath, $masterSourcePath, $true)
   [MergePilotIconSurface]::RemoveOuterSurface($masterSourcePath)
-  $SourceImage = $masterSourcePath
 }
+
+# Even when the caller supplied a new reference image, generate the platform
+# variants from the transparent master, not from the opaque presentation copy.
+# This makes reruns deterministic and prevents checkerboard pixels becoming
+# anti-aliased edge colour in the 16–32px taskbar frames.
+$runtimeSourcePath = if (Test-Path -LiteralPath $masterSourcePath) { $masterSourcePath } else { $SourceImage }
 
 $iconPaths = @(
   "src\\assets\\mergepilot-icon.png",
@@ -206,16 +217,17 @@ $iconPaths = @(
 
 foreach ($relativePath in $iconPaths) {
   $path = Join-Path $desktopRoot $relativePath
-  if ($SourceImage) {
+  if ($runtimeSourcePath) {
     # The React shell renders this source at multiple Windows scale factors.
     # Keep a 512px web source rather than letting the title bar fall back to a
     # 256px raster while the native ICO selects its high-density payload.
     $sourceSize = if ($relativePath -eq "src\\assets\\mergepilot-icon.png") { 512 } else { 0 }
-    [MergePilotIconSurface]::ReplaceWithSource($SourceImage, $path, $sourceSize, $sourceSize)
+    [MergePilotIconSurface]::ReplaceWithSource($runtimeSourcePath, $path, $sourceSize, $sourceSize)
   }
-  # The accepted master artwork is the only geometry source. Do not widen or
-  # redraw its blue contour at taskbar size: that was the source of the blurry,
-  # flattened fallback icon. Only remove the outer checkerboard surface.
+  # The transparent master is the only geometry source. Do not widen or redraw
+  # its blue contour at taskbar size: doing so changes the approved mark and
+  # introduces blur in the smallest Windows frames. Only remove any outer
+  # presentation pixels that remain connected to the canvas edge.
   [MergePilotIconSurface]::RemoveOuterSurface($path)
 }
 
