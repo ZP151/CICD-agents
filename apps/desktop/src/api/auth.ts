@@ -1,5 +1,6 @@
 import { RUNTIME_URL, messageFromErrorResponse } from "./runtime.js";
 import { readSseJsonStream } from "./sse.js";
+import type { AdoDiscoveryAuthStatus } from "./projectLinkTypes.js";
 
 export interface AuthUser {
   authenticated: boolean;
@@ -103,10 +104,40 @@ export function authLoginStream(
   return () => controller.abort();
 }
 
+export interface AzureDevOpsOAuthEnableResult {
+  ok: boolean;
+  authMode: "oauth";
+  tokenAvailable: boolean;
+  message: string;
+  user?: AuthUser;
+}
+
+/**
+ * Typed failure for the OAuth enable call. The daemon answers with
+ * `authStatus`/`retryable`; callers keep that structure so declined,
+ * unavailable and unknown outcomes are not conflated with a plain HTTP error.
+ */
+export class AzureDevOpsOAuthError extends Error {
+  readonly status: number;
+  readonly authStatus: AdoDiscoveryAuthStatus | undefined;
+  readonly retryable: boolean;
+
+  constructor(
+    message: string,
+    opts: { status: number; authStatus?: AdoDiscoveryAuthStatus; retryable?: boolean },
+  ) {
+    super(message);
+    this.name = "AzureDevOpsOAuthError";
+    this.status = opts.status;
+    this.authStatus = opts.authStatus;
+    this.retryable = opts.retryable ?? false;
+  }
+}
+
 export async function enableAzureDevOpsOAuth(
   browser: AuthBrowserChoice = "default",
   opts: { loginHint?: string; accountHomeId?: string } = {},
-): Promise<{ ok: boolean; authMode: "oauth"; tokenAvailable: boolean; message: string; user?: AuthUser }> {
+): Promise<AzureDevOpsOAuthEnableResult> {
   const r = await fetch(`${RUNTIME_URL}/auth/azure-devops/enable`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -118,14 +149,20 @@ export async function enableAzureDevOpsOAuth(
     tokenAvailable?: boolean;
     message?: string;
     authMessage?: string;
+    authStatus?: AdoDiscoveryAuthStatus;
+    retryable?: boolean;
     user?: AuthUser;
   };
   if (!r.ok || !body.ok) {
-    throw new Error(
+    const message =
       body.authMessage ??
-        body.message ??
-        (await messageFromErrorResponse(`Azure DevOps OAuth HTTP ${r.status}`, r)),
-    );
+      body.message ??
+      (await messageFromErrorResponse(`Azure DevOps OAuth HTTP ${r.status}`, r));
+    throw new AzureDevOpsOAuthError(message, {
+      status: r.status,
+      authStatus: body.authStatus,
+      retryable: body.retryable,
+    });
   }
   return {
     ok: true,

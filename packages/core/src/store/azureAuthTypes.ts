@@ -35,3 +35,25 @@ export class AzureAuthenticationRequiredError extends Error {
     this.name = "AzureAuthenticationRequiredError";
   }
 }
+
+/**
+ * The user explicitly declined (or closed) the interactive Azure DevOps
+ * consent. Kept distinct from a missing/expired token so the UI can offer
+ * "retry authorization" without claiming the connection is broken.
+ */
+export class AzureDevOpsConsentDeclinedError extends Error {
+  readonly code = "user_declined";
+
+  constructor(message = "Azure DevOps authorization was declined. Retry consent when ready.") {
+    super(message);
+    this.name = "AzureDevOpsConsentDeclinedError";
+  }
+}
+
+export function isAzureDevOpsConsentDeclinedError(err: unknown): boolean {
+  return (
+    err instanceof AzureDevOpsConsentDeclinedError ||
+    (err as { errorCode?: string })?.errorCode === "user_canceled" ||
+    (err as { code?: string })?.code === "user_declined"
+  );
+}

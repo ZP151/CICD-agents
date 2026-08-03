@@ -90,6 +90,9 @@ export function ProjectLinkForm({
             discovered={runtime.discovered}
             discovering={runtime.discovering}
             discoveryError={runtime.discoveryError}
+            discoveryFailure={runtime.discoveryFailure}
+            recovery={runtime.recovery}
+            onRecoverOAuth={(kind) => void runtime.recoverOAuthAccess(kind)}
             onApplyDiscovery={runtime.applyDiscovery}
             onManualProjectChange={runtime.setManualProject}
             onManualRepositoryChange={runtime.setManualRepository}

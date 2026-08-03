@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   discoverAdoProjectLinkOptions,
+  type AdoDiscoveryAuthStatus,
   type AdoDiscoveryKind,
   type AdoDiscoveryOption,
   type ProjectLinkInput,
 } from "../../api.js";
+import { enableAzureDevOpsOAuth, AzureDevOpsOAuthError } from "../../api/auth.js";
+import { AdoDiscoveryError } from "../../api/projectLinks.js";
 import {
   adoDiscoverySignature,
   applyAdoDiscoveryToProjectLinkInput,
@@ -14,6 +17,24 @@ import {
   pickRecommendedPipeline,
   withoutProjectLinkFallbacks,
 } from "../../projectLinks.js";
+import {
+  ADO_OAUTH_RECOVERY_IDLE,
+  adoOauthRecoveryAuthorized,
+  adoOauthRecoveryDeclined,
+  adoOauthRecoveryFailed,
+  adoOauthRecoverySettled,
+  adoOauthRecoveryStart,
+  adoRecoveryMessageForOAuthError,
+  type AdoOauthRecoveryState,
+} from "./adoOauthRecovery.js";
+
+export interface AdoDiscoveryFailure {
+  kind: AdoDiscoveryKind;
+  message: string;
+  authStatus?: AdoDiscoveryAuthStatus;
+  authMode?: "oauth" | "pat";
+  retryable: boolean;
+}
 
 export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
   const [form, setForm] = useState<ProjectLinkInput>(initial);
@@ -22,6 +43,8 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
   const [branchError, setBranchError] = useState(false);
   const [discovering, setDiscovering] = useState<AdoDiscoveryKind | null>(null);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+  const [discoveryFailure, setDiscoveryFailure] = useState<AdoDiscoveryFailure | null>(null);
+  const [recovery, setRecovery] = useState<AdoOauthRecoveryState>(ADO_OAUTH_RECOVERY_IDLE);
   const [discovered, setDiscovered] = useState<Record<AdoDiscoveryKind, AdoDiscoveryOption[]>>({
     projects: [],
     repositories: [],
@@ -29,6 +52,12 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
   });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const discoveryAutoRef = useRef<Partial<Record<AdoDiscoveryKind, string>>>({});
+  const recoveryRef = useRef<AdoOauthRecoveryState>(ADO_OAUTH_RECOVERY_IDLE);
+
+  const updateRecovery = useCallback((next: AdoOauthRecoveryState) => {
+    recoveryRef.current = next;
+    setRecovery(next);
+  }, []);
 
   const set =
     <K extends keyof ProjectLinkInput>(key: K) =>
@@ -77,6 +106,7 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
 
   const applyDiscovery = useCallback((kind: AdoDiscoveryKind, option: AdoDiscoveryOption) => {
     setDiscoveryError(null);
+    setDiscoveryFailure(null);
     if (kind === "projects") {
       setDiscovered((current) => ({ ...current, repositories: [], pipelines: [] }));
       setForm((current) => applyAdoDiscoveryToProjectLinkInput(current, kind, option));
@@ -97,6 +127,7 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
     if (mode === "auto") discoveryAutoRef.current[kind] = signature;
     setDiscovering(kind);
     setDiscoveryError(null);
+    setDiscoveryFailure(null);
     try {
       const result = await discoverAdoProjectLinkOptions(kind, withoutProjectLinkFallbacks(form));
       setDiscovered((current) => ({ ...current, [kind]: result.items }));
@@ -110,11 +141,26 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
         if (recommended) applyDiscovery(kind, recommended);
       }
     } catch (err) {
-      setDiscoveryError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setDiscoveryError(message);
+      if (err instanceof AdoDiscoveryError) {
+        setDiscoveryFailure({
+          kind,
+          message,
+          authStatus: err.authStatus,
+          authMode: err.authMode,
+          retryable: err.retryable,
+        });
+      } else {
+        setDiscoveryFailure({ kind, message, retryable: false });
+      }
     } finally {
       setDiscovering(null);
+      // The one-shot OAuth recovery retry settled; return to idle so the
+      // user can start a fresh attempt if the retried discovery also failed.
+      updateRecovery(adoOauthRecoverySettled());
     }
-  }, [applyDiscovery, form]);
+  }, [applyDiscovery, form, updateRecovery]);
 
   useEffect(() => {
     if (!form.adoOrgUrl.trim()) return;
@@ -140,8 +186,41 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
     return () => clearTimeout(timer);
   }, [form.adoOrgUrl, form.adoProject, form.adoRepoName, runDiscovery]);
 
+  /**
+   * User-triggered inline OAuth recovery (MP-001). Never called from a
+   * typing/debounce path: the browser only opens on an explicit click.
+   * Success retries the original discovery kind exactly once.
+   */
+  const recoverOAuthAccess = useCallback(async (kind: AdoDiscoveryKind) => {
+    const current = recoveryRef.current;
+    if (current.phase === "authorizing" || current.phase === "retrying_discovery") return;
+    updateRecovery(adoOauthRecoveryStart(current, kind));
+    try {
+      await enableAzureDevOpsOAuth();
+      updateRecovery(adoOauthRecoveryAuthorized(recoveryRef.current));
+      await runDiscovery(kind, "manual");
+    } catch (err) {
+      if (err instanceof AzureDevOpsOAuthError) {
+        const message = adoRecoveryMessageForOAuthError(err);
+        updateRecovery(
+          err.authStatus === "user_declined"
+            ? adoOauthRecoveryDeclined(recoveryRef.current, message)
+            : adoOauthRecoveryFailed(recoveryRef.current, message),
+        );
+      } else {
+        updateRecovery(
+          adoOauthRecoveryFailed(
+            recoveryRef.current,
+            err instanceof Error ? err.message : String(err),
+          ),
+        );
+      }
+    }
+  }, [runDiscovery, updateRecovery]);
+
   const setManualProject = useCallback((value: string) => {
     setDiscoveryError(null);
+    setDiscoveryFailure(null);
     setDiscovered((current) => ({ ...current, repositories: [], pipelines: [] }));
     setForm((current) => ({
       ...current,
@@ -152,6 +231,7 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
 
   const setManualRepository = useCallback((value: string) => {
     setDiscoveryError(null);
+    setDiscoveryFailure(null);
     setDiscovered((current) => ({ ...current, pipelines: [] }));
     setForm((current) => ({
       ...current,
@@ -161,6 +241,7 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
 
   const setManualPipeline = useCallback((value: string) => {
     setDiscoveryError(null);
+    setDiscoveryFailure(null);
     setForm((current) => ({
       ...current,
       adoPipelineId: current.adoPipelineName === value ? current.adoPipelineId : "",
@@ -188,6 +269,9 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
     loadBranches,
     discovering,
     discoveryError,
+    discoveryFailure,
+    recovery,
+    recoverOAuthAccess,
     discovered,
     applyDiscovery,
     runDiscovery,

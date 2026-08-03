@@ -25,6 +25,14 @@ export type ProjectLinkInput = Omit<ProjectLink, "id" | "createdAt" | "updatedAt
 
 export type AdoDiscoveryKind = "projects" | "repositories" | "pipelines";
 
+export type AdoDiscoveryAuthStatus =
+  | "ok"
+  | "oauth_unavailable"
+  | "oauth_no_org_access"
+  | "pat_invalid_or_missing_scope"
+  | "user_declined"
+  | "unknown_error";
+
 export interface AdoDiscoveryOption {
   id: string;
   name: string;
@@ -37,12 +45,7 @@ export interface AdoDiscoveryResult {
   kind: AdoDiscoveryKind;
   items: AdoDiscoveryOption[];
   authMode?: "oauth" | "pat";
-  authStatus?:
-    | "ok"
-    | "oauth_unavailable"
-    | "oauth_no_org_access"
-    | "pat_invalid_or_missing_scope"
-    | "unknown_error";
+  authStatus?: AdoDiscoveryAuthStatus;
   authMessage?: string;
   retryable?: boolean;
 }

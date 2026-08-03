@@ -1,5 +1,11 @@
 import type { AdoDiscoveryKind, AdoDiscoveryOption, ProjectLinkInput } from "../../api.js";
-import { InlineNotice } from "../../components/workbench/WorkbenchPrimitives.js";
+import { ActionButton, InlineNotice } from "../../components/workbench/WorkbenchPrimitives.js";
+import {
+  adoRecoveryAction,
+  adoRecoveryActionLabel,
+  type AdoOauthRecoveryState,
+} from "./adoOauthRecovery.js";
+import type { AdoDiscoveryFailure } from "./useProjectLinkFormRuntime.js";
 import { Field, ProjectDiscoveryField } from "./ProjectLinkFormControls.js";
 
 interface ProjectLinkAdoSectionProps {
@@ -8,6 +14,9 @@ interface ProjectLinkAdoSectionProps {
   discovered: Record<AdoDiscoveryKind, AdoDiscoveryOption[]>;
   discovering: AdoDiscoveryKind | null;
   discoveryError: string | null;
+  discoveryFailure: AdoDiscoveryFailure | null;
+  recovery: AdoOauthRecoveryState;
+  onRecoverOAuth: (kind: AdoDiscoveryKind) => void;
   onApplyDiscovery: (kind: AdoDiscoveryKind, option: AdoDiscoveryOption) => void;
   onManualProjectChange: (value: string) => void;
   onManualRepositoryChange: (value: string) => void;
@@ -20,6 +29,9 @@ export function ProjectLinkAdoSection({
   discovered,
   discovering,
   discoveryError,
+  discoveryFailure,
+  recovery,
+  onRecoverOAuth,
   onApplyDiscovery,
   onManualProjectChange,
   onManualRepositoryChange,
@@ -97,8 +109,86 @@ export function ProjectLinkAdoSection({
           </div>
         )}
       </fieldset>
-      {discoveryError && <InlineNotice tone="danger" title="Azure DevOps discovery failed">{discoveryError}</InlineNotice>}
+      {discoveryError && (
+        <AdoDiscoveryNotice
+          errorMessage={discoveryError}
+          failure={discoveryFailure}
+          recovery={recovery}
+          onRecoverOAuth={onRecoverOAuth}
+        />
+      )}
     </section>
+  );
+}
+
+/**
+ * MP-001: discovery failures with a typed auth status get an explicit,
+ * user-triggered recovery action instead of a bare error line. Typing the
+ * organisation never opens the browser; only the button does.
+ */
+function AdoDiscoveryNotice({
+  errorMessage,
+  failure,
+  recovery,
+  onRecoverOAuth,
+}: {
+  errorMessage: string;
+  failure: AdoDiscoveryFailure | null;
+  recovery: AdoOauthRecoveryState;
+  onRecoverOAuth: (kind: AdoDiscoveryKind) => void;
+}): JSX.Element | null {
+  if (recovery.phase === "retrying_discovery") {
+    return (
+      <InlineNotice tone="success" title="Azure DevOps access enabled">
+        Signed in. Re-running discovery…
+      </InlineNotice>
+    );
+  }
+
+  const action = failure ? adoRecoveryAction(failure.authStatus, failure.retryable, failure.authMode) : null;
+  if (!action) {
+    return <InlineNotice tone="danger" title="Azure DevOps discovery failed">{errorMessage}</InlineNotice>;
+  }
+
+  if (action === "pat_update") {
+    return (
+      <InlineNotice tone="warning" title="Azure DevOps discovery failed">
+        {errorMessage} Update the stored PAT or use the OAuth flow instead.
+      </InlineNotice>
+    );
+  }
+
+  const inFlight = recovery.phase === "authorizing";
+  const label =
+    recovery.phase === "declined" || recovery.phase === "failed"
+      ? recovery.phase === "declined"
+        ? "Authorization declined"
+        : "Azure DevOps access failed"
+      : action === "reauthorize"
+        ? "Azure DevOps authorization expired"
+        : "Azure DevOps access required";
+  const kind = recovery.kind ?? (failure?.kind ?? "projects");
+
+  return (
+    <InlineNotice tone={recovery.phase === "declined" || recovery.phase === "failed" ? "danger" : "warning"} title={label}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="min-w-0 flex-1">
+          {recovery.phase === "declined" || recovery.phase === "failed"
+            ? (recovery.message ?? errorMessage)
+            : `${errorMessage} Authorize in your browser to retry discovery in this form.`}
+        </span>
+        <ActionButton
+          type="button"
+          tone="primary"
+          loading={inFlight}
+          disabled={inFlight}
+          onClick={() => onRecoverOAuth(kind)}
+          className="shrink-0"
+        >
+          {inFlight ? "Waiting for browser sign-in…" : adoRecoveryActionLabel(action)}
+        </ActionButton>
+      </div>
+    </InlineNotice>
   );
 }
 

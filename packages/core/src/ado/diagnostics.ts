@@ -1,4 +1,7 @@
-import { isAzureAuthenticationRequiredError } from "../store/azureAuth.js";
+import {
+  isAzureAuthenticationRequiredError,
+  isAzureDevOpsConsentDeclinedError,
+} from "../store/azureAuth.js";
 import { ToolError } from "../tools/executor.js";
 
 export type AdoAuthMode = "oauth" | "pat";
@@ -7,6 +10,7 @@ export type AdoAuthStatus =
   | "oauth_unavailable"
   | "oauth_no_org_access"
   | "pat_invalid_or_missing_scope"
+  | "user_declined"
   | "unknown_error";
 
 export interface AdoAuthDiagnostic {
@@ -28,6 +32,14 @@ export class AdoAuthDiagnosticError extends ToolError {
 
 export function adoAuthDiagnosticFromError(err: unknown, authMode?: AdoAuthMode): AdoAuthDiagnostic {
   if (err instanceof AdoAuthDiagnosticError) return err.diagnostic;
+  if (isAzureDevOpsConsentDeclinedError(err)) {
+    return {
+      status: "user_declined",
+      authMode: "oauth",
+      message: err instanceof Error ? err.message : "Azure DevOps authorization was declined.",
+      retryable: true,
+    };
+  }
   if (isAzureAuthenticationRequiredError(err)) {
     return {
       status: "oauth_unavailable",
