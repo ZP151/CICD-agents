@@ -1,6 +1,7 @@
 import {
   StdioMcpClient,
   createMcpToolsFromClient,
+  mcpDomainForTool,
   type Tool,
   type ToolContext,
 } from "@mergepilot/core";
@@ -108,34 +109,25 @@ function parseDomains(value: unknown): string[] {
 /**
  * Domain filtering is an allow-list at registration time, not a prompt
  * suggestion. It prevents a repositories-only Project Link from exposing an
- * unrelated tool surface to the model.
+ * unrelated tool surface to the model. The matching rules live in one place:
+ * core's `mcpDomainForTool`.
  */
 export function filterAzureDevOpsDomains(tools: Tool[], domains: string[]): Tool[] {
   if (domains.length === 0) return tools;
-  return tools.filter((tool) => domains.some((domain) => toolMatchesDomain(tool.name, domain)));
+  const canonical = domains.map(canonicalAdoDomain).filter((domain): domain is string => domain !== undefined);
+  if (canonical.length === 0) return [];
+  return tools.filter((tool) => {
+    const domain = mcpDomainForTool(tool.name);
+    return domain !== undefined && canonical.includes(domain);
+  });
 }
 
-function toolMatchesDomain(toolName: string, domain: string): boolean {
-  const name = toolName.toLowerCase();
-  switch (domain) {
-    case "repositories":
-    case "repository":
-    case "repos":
-      return /(?:repo|repository)/.test(name);
-    case "pipelines":
-    case "pipeline":
-    case "builds":
-      return /(?:pipeline|build)/.test(name);
-    case "work-items":
-    case "work_items":
-    case "workitems":
-      return /(?:work_?item|wi_)/.test(name);
-    case "pull-requests":
-    case "pull_requests":
-    case "prs":
-      return /(?:pull_?request|pr_)/.test(name);
-    default:
-      // Unknown allow-list entries must not widen the connector surface.
-      return false;
-  }
+function canonicalAdoDomain(entry: string): string | undefined {
+  const value = entry.trim().toLowerCase();
+  if (value === "repositories" || value === "repository" || value === "repos") return "repositories";
+  if (value === "pipelines" || value === "pipeline" || value === "builds") return "pipelines";
+  if (value === "work-items" || value === "work_items" || value === "workitems") return "work-items";
+  if (value === "pull-requests" || value === "pull_requests" || value === "prs") return "pull-requests";
+  // Unknown allow-list entries must not widen the connector surface.
+  return undefined;
 }

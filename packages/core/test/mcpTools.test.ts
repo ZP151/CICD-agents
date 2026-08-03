@@ -145,34 +145,46 @@ describe("MCP tool bridge", () => {
   });
 });
 
-function writeFakeMcpServer(): string {
+/**
+ * Fixture servers speak the official newline-delimited stdio framing and a
+ * complete initialize result (protocolVersion + serverInfo), matching the
+ * 2025-06-18 specification baseline enforced by the SDK-backed client.
+ */
+function newlineFixtureServer(scriptBody: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mergepilot-mcp-"));
   const scriptPath = path.join(dir, "fake-mcp-server.mjs");
   fs.writeFileSync(
     scriptPath,
     `
-let buffer = Buffer.alloc(0);
-
-process.stdin.on("data", (chunk) => {
-  buffer = Buffer.concat([buffer, chunk]);
-  while (true) {
-    const parsed = readFrame(buffer);
-    if (!parsed) return;
-    buffer = parsed.rest;
-    handle(parsed.message);
-  }
+import { createInterface } from "node:readline";
+const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
+rl.on("line", (line) => {
+  if (!line.trim()) return;
+  handle(JSON.parse(line));
 });
-
 function handle(message) {
-  if (!message.id) return;
+  if (message.id === undefined || message.id === null) return;
   if (message.method === "initialize") {
     send(message.id, {
-      protocolVersion: "2024-11-05",
+      protocolVersion: "2025-11-25",
       capabilities: { tools: {} },
       serverInfo: { name: "fake", version: "1.0.0" }
     });
     return;
   }
+  ${scriptBody}
+}
+function send(id, result) {
+  process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\\n");
+}
+`,
+    "utf8",
+  );
+  return scriptPath;
+}
+
+function writeFakeMcpServer(): string {
+  return newlineFixtureServer(`
   if (message.method === "tools/list") {
     send(message.id, {
       tools: [{
@@ -195,48 +207,12 @@ function handle(message) {
     return;
   }
   send(message.id, null);
-}
-
-function send(id, result) {
-  const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id, result }), "utf8");
-  process.stdout.write(Buffer.concat([Buffer.from("Content-Length: " + body.length + "\\r\\n\\r\\n"), body]));
-}
-
-function readFrame(input) {
-  const headerEnd = input.indexOf("\\r\\n\\r\\n");
-  if (headerEnd < 0) return null;
-  const header = input.subarray(0, headerEnd).toString("ascii");
-  const match = header.match(/content-length:\\s*(\\d+)/i);
-  if (!match) throw new Error("missing content-length");
-  const length = Number(match[1]);
-  const bodyStart = headerEnd + 4;
-  const bodyEnd = bodyStart + length;
-  if (input.length < bodyEnd) return null;
-  return {
-    message: JSON.parse(input.subarray(bodyStart, bodyEnd).toString("utf8")),
-    rest: input.subarray(bodyEnd)
-  };
-}
-`,
-    "utf8",
-  );
-  return scriptPath;
+`);
 }
 
 function writeEnvironmentMcpServer(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mergepilot-mcp-env-"));
-  const scriptPath = path.join(dir, "environment-mcp-server.mjs");
-  fs.writeFileSync(scriptPath, `
-let buffer = Buffer.alloc(0);
-process.stdin.on("data", (chunk) => { buffer = Buffer.concat([buffer, chunk]); while (true) { const parsed = read(buffer); if (!parsed) return; buffer = parsed.rest; handle(parsed.message); } });
-function handle(message) {
-  if (!message.id) return;
-  if (message.method === "initialize") return send(message.id, { capabilities: {} });
+  return newlineFixtureServer(`
   if (message.method === "tools/call") return send(message.id, { content: [{ type: "text", text: process.env.AZURE_OPENAI_API_KEY || "absent" }] });
   send(message.id, { tools: [] });
-}
-function send(id, result) { const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id, result })); process.stdout.write(Buffer.concat([Buffer.from("Content-Length: " + body.length + "\\r\\n\\r\\n"), body])); }
-function read(input) { const end = input.indexOf("\\r\\n\\r\\n"); if (end < 0) return null; const length = Number(/content-length:\\s*(\\d+)/i.exec(input.subarray(0, end).toString("ascii"))?.[1]); const start = end + 4; if (input.length < start + length) return null; return { message: JSON.parse(input.subarray(start, start + length)), rest: input.subarray(start + length) }; }
-`, "utf8");
-  return scriptPath;
+`);
 }

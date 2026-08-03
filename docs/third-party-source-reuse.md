@@ -50,6 +50,7 @@ When source files are copied, add a row here:
 | Date | Package | Version | License | Added To | Reason | Compatibility Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | 2026-07-31 | `@assistant-ui/react` | `0.15.1` | MIT | `apps/desktop` | Progressive reuse of desktop-agent Thread, Composer, tool-call, and approval primitives. | Wrapped through `assistantUi/mergepilotThreadMessages.ts`; MergePilot's current SSE events, tool policy, and approval gate are unchanged. |
+| 2026-08-03 | `@modelcontextprotocol/sdk` | `^1.30.0` | MIT | `packages/core` | MP-015: replace hand-written stdio frame/parser with the official SDK-backed `McpConnectionManager` (lifecycle, capability negotiation, pagination, `tools/list_changed`, standard cancellation, structured results). | Node >=18 (repo runtime 22 ✓); zod `^3.25 \|\| ^4` resolves nested under the SDK while repo keeps `zod@^3.23` at its own boundary; v2 remains pre-release and is NOT a baseline. Wrapped behind local `McpConnectionManager`/`StdioMcpClient` interface; upstream types never reach UI/domain. |
 
 ## Evaluation Notes
 

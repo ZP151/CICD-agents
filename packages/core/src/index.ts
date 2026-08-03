@@ -22,6 +22,8 @@ export * from "./tools/validation.js";
 export * from "./tools/azureDevOps.js";
 export * from "./tools/gitIntent.js";
 export * from "./tools/mcp.js";
+export * from "./tools/capabilityRegistry.js";
+export * from "./tools/actionPolicy.js";
 export * from "./failures.js";
 export * from "./telemetry.js";
 export * from "./safeDate.js";

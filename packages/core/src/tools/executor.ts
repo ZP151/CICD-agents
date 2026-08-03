@@ -167,6 +167,8 @@ export interface Tool {
    * function name in the chat renderer.
    */
   connector?: { kind: "mcp"; id: string; label: string };
+  /** Original server tool name for MCP tools (lossless provenance). */
+  originalName?: string;
 }
 
 export function toolSchema(tool: Tool): {
