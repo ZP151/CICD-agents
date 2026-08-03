@@ -15,6 +15,7 @@ export type FailureKind =
   | "capability_missing"
   | "invalid_arguments"
   | "ambiguous_target"
+  | "target_not_found"
   | "timeout"
   | "cancelled_by_user"
   | "tool_error"
@@ -68,6 +69,7 @@ const KIND_RECOVERY: Record<FailureKind, FailureRecovery> = {
   capability_missing: { action: "enable_connector", label: "Adjust domain or refresh tools" },
   invalid_arguments: { action: "retry", label: "Correct arguments and retry" },
   ambiguous_target: { action: "choose_target", label: "Choose the intended target" },
+  target_not_found: { action: "retry", label: "Refresh and choose a pipeline" },
   timeout: { action: "retry", label: "Retry" },
   cancelled_by_user: { action: "resume", label: "Continue" },
   tool_error: { action: "retry", label: "Retry" },

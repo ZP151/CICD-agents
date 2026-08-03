@@ -5,8 +5,11 @@ import {
   getAzureDevOpsAuth,
   listAzureBuildDefinitions,
   listAzurePipelineRuns,
+  PipelineTargetResolver,
   redact,
+  type AdoAuth,
   type PendingToolAction,
+  type PipelineTargetResolution,
 } from "@mergepilot/core";
 import type { ChatSessionManager } from "../chatSession.js";
 import type { ChatWorkflowActionPayload } from "../routes/chat-workflow.routes.js";
@@ -28,10 +31,48 @@ export async function runAdoPipelineWorkflowAction(
 ) {
   const { action, repoPath } = payload;
   const projectLink = adoPipelineProjectLinkFromWorkflowPayload(payload);
-  const pipelineId = pipelineIdFromWorkflowPayload(payload, projectLink);
+  let pipelineId = pipelineIdFromWorkflowPayload(payload, projectLink);
 
   if (!pipelineId) {
-    return await pipelineSetupRequiredResult(chatSessions, payload, projectLink);
+    // MP-010: resolve the single target through the typed resolver instead of
+    // falling into a blob message. Ambiguity and authorization keep their own
+    // typed failure shapes so the page can offer the right recovery.
+    let auth: AdoAuth;
+    try {
+      auth = await getAzureDevOpsAuth(projectLink.adoPat);
+    } catch (err) {
+      return pipelineTargetFailureResult(payload, projectLink, {
+        status: "unauthorized",
+        source: "none",
+        message: adoAuthDiagnosticFromError(err, projectLink.adoPat ? "pat" : "oauth").message,
+      });
+    }
+    const resolver = new PipelineTargetResolver({
+      listDefinitions: async (input) =>
+        (
+          await listAzureBuildDefinitions({
+            organization: input.organization,
+            project: input.project,
+            repositoryId: input.repositoryId,
+            repositoryType: input.repositoryType,
+            auth: input.auth,
+            top: input.top,
+          })
+        ).map((definition) => ({
+          id: Number(definition.id),
+          name: definition.name,
+          description: definition.description,
+        })),
+    });
+    const resolution = await resolver.resolve({
+      explicitId: payload.pipelineId,
+      projectLink,
+      auth,
+    });
+    if (resolution.status !== "resolved" || resolution.pipelineId === undefined) {
+      return pipelineTargetFailureResult(payload, projectLink, resolution);
+    }
+    pipelineId = resolution.pipelineId;
   }
 
   const auth = await getAzureDevOpsAuth(projectLink.adoPat);
@@ -77,7 +118,9 @@ export async function runAdoPipelineWorkflowAction(
     };
   }
 
-  const sessionId = payload.sessionId ?? chatSessions.createSession(repoPath, payload.projectLinkId);
+  // MP-006: a page-originated action (no sessionId) stays on the page; only
+  // an explicit Chat handoff carries a session. Never create a session here.
+  const sessionId = payload.sessionId;
   const runs = await listAzurePipelineRuns({
     organization: projectLink.adoOrgUrl,
     project: projectLink.adoProject,
@@ -151,75 +194,52 @@ function pipelineIdFromWorkflowPayload(
   return pipelineId;
 }
 
-async function pipelineSetupRequiredResult(
-  chatSessions: ChatSessionManager,
+/**
+ * MP-010/MP-006: typed target resolution failure. The page keeps the result
+ * in its own run surface; no chat session is created or written.
+ */
+function pipelineTargetFailureResult(
   payload: ChatWorkflowActionPayload,
   projectLink: WorkflowProjectLink,
+  resolution: PipelineTargetResolution,
 ) {
-  let definitions: Awaited<ReturnType<typeof listAzureBuildDefinitions>> = [];
-  let discoveryError = "";
-
-  try {
-    const auth = await getAzureDevOpsAuth(projectLink.adoPat);
-    definitions = await listAzureBuildDefinitions({
-      organization: projectLink.adoOrgUrl,
-      project: projectLink.adoProject,
-      repositoryId: projectLink.adoRepoName || undefined,
-      repositoryType: projectLink.adoRepoName ? "TfsGit" : undefined,
-      auth,
-      top: 20,
-    });
-  } catch (err) {
-    discoveryError = adoAuthDiagnosticFromError(err, projectLink.adoPat ? "pat" : "oauth").message;
-  }
-
-  const visibleDefinitions = definitions.slice(0, 10);
-  const lines = [
-    "No Azure Pipeline is configured on this Project Link yet.",
-    payload.action === "trigger_pipeline"
-      ? "I did not trigger a pipeline. Select a pipeline first, then rerun the action."
-      : "Select a pipeline for this Project Link before inspecting or running CI.",
-  ];
-  if (discoveryError) {
-    lines.push(
-      "",
-      "Pipeline candidates could not be discovered yet.",
-      discoveryError,
-    );
-  } else if (visibleDefinitions.length > 0) {
-    lines.push(
-      "",
-      "Available pipeline candidates:",
-      ...visibleDefinitions.map((definition) => {
-        const description = definition.description ? ` - ${definition.description}` : "";
-        return `- #${definition.id} ${definition.name}${description}`;
-      }),
-    );
-  } else {
-    lines.push("", "No pipeline candidates were returned for the current Azure DevOps project/repository mapping.");
-  }
-
-  const sessionId = payload.sessionId ?? chatSessions.createSession(payload.repoPath, payload.projectLinkId);
-  const result = adoWorkflowDoneResult({
+  const kind =
+    resolution.status === "ambiguous"
+      ? "ambiguous_target"
+      : resolution.status === "unauthorized"
+        ? "unauthorized"
+        : resolution.status === "capability_missing"
+          ? "capability_missing"
+          : resolution.status === "connector_unavailable"
+            ? "connector_unavailable"
+            : "target_not_found";
+  return {
+    ok: false,
     action: payload.action,
     repoPath: payload.repoPath,
-    sessionId,
-    workflowKind: "ci",
-    phase: "pipeline_setup_required",
-    currentStep: "Pipeline configuration required",
-    summary: lines.join("\n"),
-    tools: [
-      adoWorkflowTool("ado_discover_pipelines", {
-        project: projectLink.adoProject,
-        repository: projectLink.adoRepoName,
-        candidates: visibleDefinitions,
-        count: definitions.length,
-        discoveryError,
-      }),
-    ],
-  });
-  await appendWorkflowActionAssistantBubble(chatSessions, sessionId, result.summary, undefined);
-  return result;
+    sessionId: payload.sessionId,
+    summary: resolution.message,
+    workflowState: {
+      status: "blocked" as const,
+      currentStep: resolution.message,
+      completedTools: [],
+      workflowKind: "ci" as const,
+      workflowPhase:
+        resolution.status === "ambiguous"
+          ? "pipeline_target_ambiguous"
+          : resolution.status === "unauthorized"
+            ? "pipeline_target_unauthorized"
+            : resolution.status === "capability_missing"
+              ? "pipeline_target_capability_missing"
+              : "pipeline_target_not_found",
+    },
+    tools: [],
+    failure: {
+      kind,
+      message: resolution.message,
+      ...(resolution.candidates ? { candidates: resolution.candidates } : {}),
+    },
+  };
 }
 
 async function pipelineFailureTimeline(

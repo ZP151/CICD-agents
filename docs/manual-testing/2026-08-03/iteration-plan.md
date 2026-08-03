@@ -32,6 +32,7 @@
 | P0-A（MP-001） | 已实现 | `adoDiagnostics.test.ts`、`adoOauthRecovery.test.ts`（api + 状态机）、`ProjectLinkAdoSection.test.tsx`；core 315 / desktop 749 测试通过；desktop typecheck+build 通过 | 真实 OAuth 浏览器流程、declined 与过期 token 的桌面 smoke（自动化不能替代） |
 | P1-A 之一（MP-011 typed failure） | 已实现 | `failures.test.ts`（11）、`chatSse.test.ts` 终端映射（14）、`useChatRuntime.test.ts`；daemon 304 / core 全量通过；core 重新构建供 daemon 消费 | 真实 Stop/timeout 桌面 smoke；resume/retry 执行机制随 P1-C 补齐 |
 | P1-A 之二（MP-015 MCP + CapabilityRegistry + ActionPolicy） | 已实现 | `mcpSdkAdapter.test.ts`（9：lifecycle/分页/list_changed/cancel/structured）、`capabilityActionPolicy.test.ts`（10）、`mcpTools.test.ts`（6，fixture 改为官方换行 framing）、`chatSessionAdoMcpDisabled.test.ts`（4）；core 345 / daemon 304 通过 | 真实 connector（managed Azure DevOps MCP stdio）smoke；RA-080 远端 token 过期恢复随 P1-C 恢复机制联动 |
+| P1-B（MP-010 PipelineTargetResolver + MP-006 状态隔离） | 已实现 | `pipelineTargetResolver.test.ts`（10：ID/唯一名/重名/不存在/无权限/connector/capability/选择恢复）、`serverAdoWorkflowRoutes.test.ts`（5，含 typed not_found 与 session 隔离断言）、`PipelineRowCard.test.tsx`（13，含 target_failure 各状态）；core 355 / daemon 305 / desktop 753 通过，desktop build 通过 | 桌面真实交互 smoke：歧义候选选择、Open in Chat 导航；重名场景真实 ADO 复测 |
 
 敏感材料处置：本迭代未向文档、fixture、日志或 Chat 写入原始测试材料中的凭据、账号、内部地址、UUID、头像或本机路径；测试数据一律使用 `example-org`、`example-project`、`C:\repo\example` 等占位符。
 

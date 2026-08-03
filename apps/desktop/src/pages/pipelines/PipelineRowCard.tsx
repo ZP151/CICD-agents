@@ -1,3 +1,4 @@
+import type { ChatWorkflowActionResult } from "../../api.js";
 import { formatDate, runTone } from "./pipelineModel.js";
 import type { PipelineInspectState, PipelineRow } from "./pipelineTypes.js";
 import { MarkdownContent } from "../../components/conversation/ConversationPartRenderer.js";
@@ -16,6 +17,9 @@ interface PipelineRowCardProps {
   onAnalyze: (row: PipelineRow) => void;
   onSave: (row: PipelineRow) => void;
   onOpenDetails: (row: PipelineRow) => void;
+  onSelectCandidate: (row: PipelineRow, candidateId: number) => void;
+  onOpenInChat: (row: PipelineRow, result: ChatWorkflowActionResult) => void;
+  onRefreshPipelines: (row: PipelineRow) => void;
 }
 
 export function PipelineRowCard({
@@ -26,6 +30,9 @@ export function PipelineRowCard({
   onAnalyze,
   onSave,
   onOpenDetails,
+  onSelectCandidate,
+  onOpenInChat,
+  onRefreshPipelines,
 }: PipelineRowCardProps): JSX.Element {
   const tone = runTone(row.latestRun);
   const dateLabel = formatDate(row.latestRun?.finishedDate || row.latestRun?.createdDate);
@@ -76,9 +83,19 @@ export function PipelineRowCard({
 
       {state.phase === "done" && (
         <div className="mt-3 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3">
-          <p className="text-xs text-[rgb(var(--app-text-muted))]">
-            {pipelineInspectionSummary(state.result.summary, inspectedRuns.length)}
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <p className="min-w-0 flex-1 text-xs text-[rgb(var(--app-text-muted))]">
+              {pipelineInspectionSummary(state.result.summary, inspectedRuns.length)}
+            </p>
+            <ActionButton
+              type="button"
+              tone="quiet"
+              className="shrink-0 min-h-7 px-2 text-[rgb(var(--app-accent-readable))]"
+              onClick={() => onOpenInChat(row, state.result)}
+            >
+              Open in Chat
+            </ActionButton>
+          </div>
           {inspectedRuns.length > 0 && (
             <div className="mt-3 divide-y divide-[rgb(var(--app-border))] rounded-md border border-[rgb(var(--app-border))]">
               {inspectedRuns.slice(0, 5).map((run) => {
@@ -143,6 +160,14 @@ export function PipelineRowCard({
             Open Chat approval
           </ActionLink>
         </InlineNotice>
+      )}
+
+      {state.phase === "target_failure" && (
+        <PipelineTargetFailureNotice
+          failure={state.failure}
+          onSelectCandidate={(candidateId) => onSelectCandidate(row, candidateId)}
+          onRefresh={() => onRefreshPipelines(row)}
+        />
       )}
 
       {state.phase === "error" && (
@@ -217,6 +242,86 @@ export function pipelineAnalysisPreviewClass(): string {
 
 export function pipelineFieldGridClass(): string {
   return "mt-3 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-[rgb(var(--app-text-muted))]";
+}
+
+/**
+ * MP-010: typed target-resolution failures with per-kind recovery. The page
+ * keeps the user in control: ambiguous targets require an explicit choice,
+ * authorization failures point at the reauthorize path, and connector or
+ * capability problems are never disguised as a missing pipeline.
+ */
+function PipelineTargetFailureNotice({
+  failure,
+  onSelectCandidate,
+  onRefresh,
+}: {
+  failure: NonNullable<ChatWorkflowActionResult["failure"]>;
+  onSelectCandidate: (candidateId: number) => void;
+  onRefresh: () => void;
+}): JSX.Element {
+  if (failure.kind === "ambiguous_target" && failure.candidates && failure.candidates.length > 0) {
+    return (
+      <InlineNotice tone="warning" title="Multiple pipelines match">
+        <p>{failure.message}</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {failure.candidates.map((candidate) => (
+            <ActionButton
+              key={candidate.id}
+              type="button"
+              tone="secondary"
+              className="min-h-7 px-2"
+              onClick={() => onSelectCandidate(candidate.id)}
+            >
+              #{candidate.id} {candidate.name}
+            </ActionButton>
+          ))}
+        </div>
+      </InlineNotice>
+    );
+  }
+  if (failure.kind === "unauthorized") {
+    return (
+      <InlineNotice tone="warning" title="Azure DevOps access required">
+        <p>{failure.message}</p>
+        <ActionLink href="#/project-links" tone="secondary" className="mt-2 w-fit">
+          Re-authorize in Project Link
+        </ActionLink>
+      </InlineNotice>
+    );
+  }
+  if (failure.kind === "capability_missing" || failure.kind === "connector_unavailable") {
+    return (
+      <InlineNotice tone="warning" title="Pipeline connector unavailable">
+        <p>{failure.message}</p>
+        <ActionLink href="#/project-links" tone="secondary" className="mt-2 w-fit">
+          Open connector settings
+        </ActionLink>
+      </InlineNotice>
+    );
+  }
+  return (
+    <InlineNotice tone="warning" title="Pipeline not found">
+      <p>{failure.message}</p>
+      {failure.candidates && failure.candidates.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {failure.candidates.map((candidate) => (
+            <ActionButton
+              key={candidate.id}
+              type="button"
+              tone="secondary"
+              className="min-h-7 px-2"
+              onClick={() => onSelectCandidate(candidate.id)}
+            >
+              #{candidate.id} {candidate.name}
+            </ActionButton>
+          ))}
+        </div>
+      )}
+      <ActionButton type="button" tone="quiet" className="mt-2 min-h-7" onClick={onRefresh}>
+        Refresh pipeline list
+      </ActionButton>
+    </InlineNotice>
+  );
 }
 
 /** A compact card must never render raw tool output; full evidence lives in Details. */

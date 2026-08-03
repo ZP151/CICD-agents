@@ -6,6 +6,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   analyzePipelineEvidence,
@@ -15,10 +16,13 @@ import {
   listPipelineConnections,
   runChatWorkflowAction,
   type AdoDiscoveryOption,
+  type ChatWorkflowActionResult,
   type PipelineConnection,
   type ProjectLink,
   type PullRequestSummary,
 } from "../../api.js";
+import { CHAT_HANDOFF_KEY } from "../../checkpointHandoff.js";
+import { buildPipelineChatHandoffDraft } from "../../checkpointHandoff.js";
 import { paginateItems } from "../../components/PaginationControls.js";
 import { extractPipelineRuns } from "./pipelineActions.js";
 import {
@@ -32,6 +36,7 @@ import type { PipelineInspectState, PipelineRow, PipelineStatusFilter } from "./
 const ALL_PROJECTS = "";
 
 export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
+  const navigate = useNavigate();
   const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS);
   const [filter, setFilter] = useState<PipelineStatusFilter>("all");
   const [page, setPage] = useState(1);
@@ -218,10 +223,18 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
         row.repoPath,
         row.projectLinkId,
         {
-          pipelineId: Number(row.pipelineId),
+          pipelineId: Number(row.pipelineId) || undefined,
           branch: row.defaultBranch,
         },
       );
+      if (!result.ok && result.failure) {
+        const failure = result.failure;
+        setInspectState((current) => ({
+          ...current,
+          [rowKey(row)]: { phase: "target_failure", result, failure },
+        }));
+        return;
+      }
       setInspectState((current) => ({ ...current, [rowKey(row)]: { phase: "approval", result } }));
     } catch (err) {
       setInspectState((current) => ({
@@ -233,6 +246,55 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
       }));
     }
   }, []);
+
+  /**
+   * RA-044/RA-047: the user picks one candidate from an ambiguous result;
+   * the workflow retries with the explicit ID. RA-023: explicit Open in Chat
+   * handoff carries a source reference and never copies the page payload.
+   */
+  const selectPipelineCandidate = useCallback(async (row: PipelineRow, candidateId: number) => {
+    setInspectState((current) => ({ ...current, [rowKey(row)]: { phase: "loading" } }));
+    try {
+      const result = await runChatWorkflowAction(
+        "inspect_pipeline",
+        row.repoPath,
+        row.projectLinkId,
+        { pipelineId: candidateId },
+      );
+      if (!result.ok && result.failure) {
+        const failure = result.failure;
+        setInspectState((current) => ({
+          ...current,
+          [rowKey(row)]: { phase: "target_failure", result, failure },
+        }));
+        return;
+      }
+      const runs = extractPipelineRuns(result);
+      setInspectState((current) => ({
+        ...current,
+        [rowKey(row)]: { phase: "done", result, runs },
+      }));
+    } catch (err) {
+      setInspectState((current) => ({
+        ...current,
+        [rowKey(row)]: { phase: "error", message: err instanceof Error ? err.message : String(err) },
+      }));
+    }
+  }, []);
+
+  const openPipelineInChat = useCallback((row: PipelineRow, result: ChatWorkflowActionResult) => {
+    const draft = buildPipelineChatHandoffDraft({
+      pipelineId: row.pipelineId,
+      pipelineName: row.pipelineName,
+      project: row.project,
+      repository: row.repository,
+      repoPath: row.repoPath,
+      projectLinkId: row.projectLinkId,
+      summary: result.summary,
+    });
+    sessionStorage.setItem(CHAT_HANDOFF_KEY, JSON.stringify(draft));
+    navigate("/chat");
+  }, [navigate]);
 
   const analyzePipeline = useCallback(async (row: PipelineRow) => {
     const result = await inspectPipelineRow(row, setInspectState);
@@ -303,6 +365,8 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
     triggerPipeline,
     analyzePipeline,
     savePipeline,
+    selectPipelineCandidate,
+    openPipelineInChat,
   };
 }
 
@@ -327,9 +391,19 @@ async function inspectPipelineRow(
       row.repoPath,
       row.projectLinkId,
       {
-        pipelineId: Number(row.pipelineId),
+        pipelineId: Number(row.pipelineId) || undefined,
       },
     );
+    // MP-010: typed target-resolution failures stay on the page with their
+    // own recovery surface instead of a generic error line.
+    if (!result.ok && result.failure) {
+      const failure = result.failure;
+      setInspectState((current) => ({
+        ...current,
+        [rowKey(row)]: { phase: "target_failure", result, failure },
+      }));
+      return result;
+    }
     const runs = extractPipelineRuns(result);
     setInspectState((current) => ({
       ...current,

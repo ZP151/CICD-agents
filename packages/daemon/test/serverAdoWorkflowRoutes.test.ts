@@ -350,18 +350,24 @@ describe("daemon ADO workflow routes", () => {
       },
     });
     expect(inspect.statusCode, inspect.body).toBe(200);
+    // MP-010: no ID/name resolves to a typed target_not_found with the
+    // discovered candidates, never a blob or a disguised connector failure.
     expect(inspect.json()).toMatchObject({
-      ok: true,
+      ok: false,
       workflowState: {
-        status: "done",
+        status: "blocked",
         workflowKind: "ci",
-        workflowPhase: "pipeline_setup_required",
-        completedTools: ["ado_discover_pipelines"],
+        workflowPhase: "pipeline_target_not_found",
+      },
+      failure: {
+        kind: "target_not_found",
+        candidates: [{ id: 117, name: "ClaimBot_API" }],
       },
     });
-    expect(inspect.json().summary).toContain("No Azure Pipeline is configured");
-    expect(inspect.json().summary).toContain("#117 ClaimBot_API");
+    expect(inspect.json().summary).toContain("No pipeline ID or name is configured");
     expect(inspect.json().workflowState.pendingApproval).toBeUndefined();
+    // MP-006: page-originated action must not create a chat session.
+    expect(inspect.json().sessionId).toBeUndefined();
 
     const trigger = await app.inject({
       method: "POST",
@@ -375,14 +381,15 @@ describe("daemon ADO workflow routes", () => {
     });
     expect(trigger.statusCode, trigger.body).toBe(200);
     expect(trigger.json()).toMatchObject({
+      ok: false,
       workflowState: {
-        status: "done",
+        status: "blocked",
         workflowKind: "ci",
-        workflowPhase: "pipeline_setup_required",
-        completedTools: ["ado_discover_pipelines"],
+        workflowPhase: "pipeline_target_not_found",
       },
+      failure: { kind: "target_not_found" },
     });
-    expect(trigger.json().summary).toContain("I did not trigger a pipeline");
+    expect(trigger.json().summary).toContain("No pipeline ID or name is configured");
     expect(trigger.json().workflowState.pendingApproval).toBeUndefined();
     expect(seenUrls.some((url) => url.includes("/_apis/pipelines/"))).toBe(false);
   });
@@ -492,3 +499,42 @@ function parseSse(body: string): Array<{ event: string; data: unknown }> {
       return { event, data: JSON.parse(dataText) as unknown };
     });
 }
+
+describe("daemon pipeline workflow session isolation (MP-006)", () => {
+  it("keeps page-originated pipeline actions out of chat sessions", async () => {
+    app = await buildApp();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ value: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const historyPath = path.join(process.env.RUNTIME_DATA_DIR!, "chat-history.json");
+    fs.rmSync(historyPath, { force: true });
+
+    const inspect = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "inspect_pipeline",
+        repoPath: process.cwd(),
+        projectLink: {
+          repoPath: process.cwd(),
+          defaultBranch: "main",
+          targetBranch: "main",
+          adoOrgUrl: "https://example-org.visualstudio.com/",
+          adoProject: "example-project",
+          adoRepoName: "example-repo",
+          adoPipelineId: "117",
+          adoPipelineName: "example-pipeline",
+          adoPat: "example-pat",
+        },
+      },
+    });
+    expect(inspect.statusCode, inspect.body).toBe(200);
+    const body = inspect.json() as { sessionId?: string };
+    // MP-006: no implicit session creation, no bubble write for page actions.
+    expect(body.sessionId).toBeUndefined();
+    expect(fs.existsSync(historyPath)).toBe(false);
+  });
+});

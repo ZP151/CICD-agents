@@ -38,6 +38,7 @@ export type PipelineInspectState =
   | { phase: "analysis_done"; result: ChatWorkflowActionResult; runs: PipelineRunSummary[]; analysis: string }
   | { phase: "analysis_error"; result: ChatWorkflowActionResult; runs: PipelineRunSummary[]; analysis: string; message: string }
   | { phase: "approval"; result: ChatWorkflowActionResult }
+  | { phase: "target_failure"; result: ChatWorkflowActionResult; failure: NonNullable<ChatWorkflowActionResult["failure"]> }
   | { phase: "error"; message: string };
 
 export interface RunTone {

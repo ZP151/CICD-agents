@@ -95,6 +95,36 @@ export function buildCheckpointRollbackHandoffDraft(input: {
   };
 }
 
+/** MP-006: explicit Pipeline page -> Chat handoff with a source reference. */
+export function buildPipelineChatHandoffDraft(input: {
+  pipelineId: string;
+  pipelineName: string;
+  project: string;
+  repository: string;
+  repoPath: string;
+  projectLinkId?: string;
+  summary?: string;
+}): ChatHandoffDraft {
+  const message = [
+    `Continue from the pipeline inspection for #${input.pipelineId} (${input.pipelineName}).`,
+    "",
+    "Summarize the current pipeline state from the page result below, then recommend the next practical action.",
+    "Do not rerun Azure DevOps analysis unless I explicitly ask for a fresh result.",
+    "",
+    `Project: ${input.project}`,
+    `Repository: ${input.repository}`,
+    `Pipeline: #${input.pipelineId} ${input.pipelineName}`,
+    input.summary ? `Page summary: ${input.summary}` : "",
+  ].filter(Boolean).join("\n");
+
+  return {
+    message,
+    repoPath: input.repoPath,
+    projectLinkId: input.projectLinkId,
+    source: "pipelines-inspection",
+  };
+}
+
 export function buildPrInsightChatHandoffDraft(input: {
   pullRequestId: number;
   title: string;

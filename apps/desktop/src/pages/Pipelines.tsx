@@ -154,6 +154,9 @@ export default function Pipelines(): JSX.Element {
                   }}
                   onSave={(selected) => void runtime.savePipeline(selected)}
                   onOpenDetails={(selected) => setSelectedDetailKey(rowKey(selected))}
+                  onSelectCandidate={(selected, candidateId) => void runtime.selectPipelineCandidate(selected, candidateId)}
+                  onOpenInChat={(selected, result) => runtime.openPipelineInChat(selected, result)}
+                  onRefreshPipelines={(selected) => void runtime.discoverPipelines()}
                 />
               ))}
             </div>
