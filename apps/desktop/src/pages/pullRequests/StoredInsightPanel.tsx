@@ -67,6 +67,9 @@ export function StoredInsightPanel({
       {storedInsightFreshness?.state === "stale" && (
         <ActionButton
           type="button"
+          title={storedInsight.kind === "review_run"
+            ? "Reruns the automated review and updates the Review Queue"
+            : "Read-only: refreshes the cached preview without creating a review run"}
           onClick={() => storedInsight.kind === "review_run"
             ? onQueueForReview(pr)
             : onPreviewInsight(pr)}

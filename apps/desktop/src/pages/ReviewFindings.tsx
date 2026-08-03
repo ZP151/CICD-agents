@@ -15,6 +15,7 @@ import {
   reviewQueueLaneGridClass,
 } from "./reviewFindings/ReviewQueueControls.js";
 import { ReviewQueuePageHeader } from "./reviewFindings/ReviewQueuePageHeader.js";
+import { WriteBackConfirmationPanel } from "./reviewFindings/WriteBackConfirmationPanel.js";
 import { useReviewQueueRuntime } from "./reviewFindings/useReviewQueueRuntime.js";
 
 export const REVIEW_ACTIVITY_PANEL_STORAGE_KEY = "mergepilot_review_activity_panel_open_v2";
@@ -118,6 +119,9 @@ export default function ReviewFindings(): JSX.Element {
     rerunReview,
     rerunVisibleReviews,
     rerunStaleReviews,
+    pendingWriteBack,
+    confirmDispositionWriteBack,
+    keepDispositionLocal,
   } = reviewQueue;
 
   return (
@@ -134,6 +138,15 @@ export default function ReviewFindings(): JSX.Element {
         onProjectLinkChange={setProjectLinkId}
         onRefresh={() => void load()}
       />
+
+      {pendingWriteBack && (
+        <WriteBackConfirmationPanel
+          item={pendingWriteBack.item}
+          disposition={pendingWriteBack.disposition}
+          onConfirm={() => void confirmDispositionWriteBack()}
+          onKeepLocal={() => void keepDispositionLocal()}
+        />
+      )}
 
       {!configured && (
         <InlineNotice tone="info" title="Local review history">

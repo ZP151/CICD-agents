@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import {
+  loadPersistedUser,
   upsertLocalReviewHistory,
 } from "@mergepilot/core";
 import { z } from "zod";
@@ -33,7 +34,19 @@ export function registerReviewDispositionRoutes(
     const repository = projectLink.adoRepoName.trim();
     if (!repository) return reply.code(400).send({ error: PROJECT_LINK_REPOSITORY_MISSING });
 
-    const record = reviewHistoryRecord(repository, parsedBody.data);
+    // MP-009/RA-041: the audit actor must be the real signed-in identity. The
+    // daemon never trusts a client-supplied placeholder as the decision actor.
+    const persistedUser = loadPersistedUser(settings.dataDir);
+    const actor =
+      parsedBody.data.manualDispositionActor &&
+      parsedBody.data.manualDispositionActor !== "desktop-user"
+        ? parsedBody.data.manualDispositionActor
+        : persistedUser?.name?.trim() || persistedUser?.upn?.trim() || "desktop-user";
+
+    const record = reviewHistoryRecord(repository, {
+      ...parsedBody.data,
+      manualDispositionActor: actor,
+    });
     let saved = upsertLocalReviewHistory(settings.dataDir, record);
     let adoWriteBack: { attempted: boolean; ok: boolean; error?: string; at?: string; threadId?: string; url?: string } = {
       attempted: false,
@@ -50,7 +63,7 @@ export function registerReviewDispositionRoutes(
           manualDisposition: parsedBody.data.manualDisposition,
           manualDispositionNote: parsedBody.data.manualDispositionNote,
           decisionReason: parsedBody.data.decisionReason,
-          manualDispositionActor: parsedBody.data.manualDispositionActor,
+          manualDispositionActor: actor,
         });
       } catch (err) {
         adoWriteBack = {
@@ -74,7 +87,7 @@ export function registerReviewDispositionRoutes(
             disposition: parsedBody.data.manualDisposition,
             at: adoWriteBack.at ?? new Date().toISOString(),
             ok: adoWriteBack.ok,
-            actor: parsedBody.data.manualDispositionActor || "MergePilot",
+            actor,
             note: parsedBody.data.manualDispositionNote || parsedBody.data.decisionReason || "",
             error: adoWriteBack.error ?? "",
             threadId: adoWriteBack.threadId ?? "",

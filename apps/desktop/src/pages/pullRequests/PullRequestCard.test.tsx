@@ -69,7 +69,7 @@ describe("PullRequestCard", () => {
     );
 
     expect(html).toContain("Open insight");
-    expect(html).toContain("Run review");
+    expect(html).toContain("Run automated review");
     expect(html).toContain("focus-visible:ring-2");
     expect(html).not.toContain("Preview Insight");
     expect(html).toContain("Author:");

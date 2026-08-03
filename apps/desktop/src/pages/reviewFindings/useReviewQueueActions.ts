@@ -1,5 +1,6 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
+  fetchAuthStatus,
   recordProjectLinkReviewDisposition,
   recordProjectLinkReviewHistory,
   runProjectLinkReviewRun,
@@ -49,23 +50,41 @@ export function useReviewQueueActions({
   const [writeBackRetrying, setWriteBackRetrying] = useState<Record<string, boolean>>({});
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [dispositionSaving, setDispositionSaving] = useState<Record<string, boolean>>({});
+  // MP-009/RA-041: dispositions that write back to ADO require an explicit
+  // approval showing the target and content first. The disposition itself is
+  // always recorded; only the remote mutation waits for confirmation.
+  const [pendingWriteBack, setPendingWriteBack] = useState<{
+    item: ReviewQueueItem;
+    disposition: ReviewQueueItem["manualDisposition"];
+  } | null>(null);
+  const actorRef = useRef<string | null>(null);
 
-  async function applyDisposition(
+  const currentActor = useCallback(async (): Promise<string> => {
+    if (actorRef.current) return actorRef.current;
+    try {
+      const user = await fetchAuthStatus();
+      const actor = user.name?.trim() || user.upn?.trim() || "desktop-user";
+      actorRef.current = actor;
+      return actor;
+    } catch {
+      return "desktop-user";
+    }
+  }, []);
+
+  async function submitDisposition(
     item: ReviewQueueItem,
     disposition: ReviewQueueItem["manualDisposition"],
+    writeBackToAdo: boolean,
   ): Promise<void> {
-    if (!projectLinkId) return;
     const itemKey = reviewQueueItemKey(item);
-    if (dispositionSaving[itemKey]) return;
-    setDispositionSaving((prev) => ({ ...prev, [itemKey]: true }));
     const next = buildManualDispositionUpdate(item, disposition, {
-      actor: "desktop-user",
+      actor: await currentActor(),
       now: new Date().toISOString(),
     });
     replaceItem(item, next);
     try {
       const saved = await recordProjectLinkReviewDisposition(projectLinkId, next, {
-        writeBackToAdo: requiresDispositionWriteBack(disposition),
+        writeBackToAdo,
       });
       recordOperation({
         kind: "disposition",
@@ -90,6 +109,40 @@ export function useReviewQueueActions({
     } finally {
       setDispositionSaving((prev) => ({ ...prev, [itemKey]: false }));
     }
+  }
+
+  /** RA-041: disposition recorded + writeback only after explicit approval. */
+  async function applyDisposition(
+    item: ReviewQueueItem,
+    disposition: ReviewQueueItem["manualDisposition"],
+  ): Promise<void> {
+    if (!projectLinkId) return;
+    const itemKey = reviewQueueItemKey(item);
+    if (dispositionSaving[itemKey]) return;
+    if (requiresDispositionWriteBack(disposition)) {
+      setPendingWriteBack({ item, disposition });
+      return;
+    }
+    setDispositionSaving((prev) => ({ ...prev, [itemKey]: true }));
+    await submitDisposition(item, disposition, false);
+  }
+
+  async function confirmDispositionWriteBack(): Promise<void> {
+    if (!pendingWriteBack) return;
+    const { item, disposition } = pendingWriteBack;
+    setPendingWriteBack(null);
+    const itemKey = reviewQueueItemKey(item);
+    setDispositionSaving((prev) => ({ ...prev, [itemKey]: true }));
+    await submitDisposition(item, disposition, true);
+  }
+
+  async function keepDispositionLocal(): Promise<void> {
+    if (!pendingWriteBack) return;
+    const { item, disposition } = pendingWriteBack;
+    setPendingWriteBack(null);
+    const itemKey = reviewQueueItemKey(item);
+    setDispositionSaving((prev) => ({ ...prev, [itemKey]: true }));
+    await submitDisposition(item, disposition, false);
   }
 
   async function retryDispositionWriteBack(item: ReviewQueueItem): Promise<void> {
@@ -186,7 +239,10 @@ export function useReviewQueueActions({
     writeBackRetrying,
     rerunning,
     dispositionSaving,
+    pendingWriteBack,
     applyDisposition,
+    confirmDispositionWriteBack,
+    keepDispositionLocal,
     retryDispositionWriteBack,
     rerunReview,
   };

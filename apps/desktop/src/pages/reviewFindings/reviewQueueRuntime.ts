@@ -17,6 +17,25 @@ export function requiresDispositionWriteBack(disposition: ManualDisposition): bo
   return disposition === "marked_blocked" || disposition === "changes_requested";
 }
 
+/**
+ * MP-009/RA-041: the write-back confirmation must show exactly what will be
+ * written and where, before any ADO mutation. Pure so the copy is testable.
+ */
+export function writeBackConfirmationText(
+  item: ReviewQueueItem,
+  disposition: ManualDisposition,
+): { target: string; content: string } {
+  const note = dispositionLabel(disposition);
+  const target =
+    disposition === "marked_blocked"
+      ? `Post a blocking comment on PR #${item.pullRequestId} in ${item.repository}`
+      : `Post a "request changes" comment on PR #${item.pullRequestId} in ${item.repository}`;
+  return {
+    target,
+    content: `${note}${item.manualDispositionNote ? `\n\n${item.manualDispositionNote}` : ""}`,
+  };
+}
+
 export function buildManualDispositionUpdate(
   item: ReviewQueueItem,
   disposition: ManualDisposition,

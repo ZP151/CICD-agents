@@ -238,3 +238,45 @@ describe("daemon review disposition ADO write-back routes", () => {
     });
   });
 });
+
+describe("review disposition audit actor (MP-009/RA-041)", () => {
+  it("replaces a client placeholder actor with the signed-in user identity", async () => {
+    const { persistUserCache } = await import("@mergepilot/core");
+    persistUserCache(
+      { oid: "example-oid", name: "Ada Example", upn: "ada@example.test" },
+      process.env.RUNTIME_DATA_DIR!,
+    );
+    app = await buildApp();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({}), { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    const id = await createProjectLink("Actor Test Link", "example-repo");
+
+    const disposition = await app.inject({
+      method: "POST",
+      url: `/project-links/${id}/review-disposition`,
+      payload: {
+        pullRequestId: 99,
+        lastIterationId: 1,
+        findingCount: 0,
+        lastRunAt: "2026-08-03T00:00:00.000Z",
+        sourceCommit: "",
+        decisionQueue: "blocked",
+        decisionRiskLevel: "high",
+        decisionReason: "Requested changes.",
+        decisionReasonCodes: ["manual.changes_requested"],
+        contextConfidence: "medium",
+        manualDisposition: "changes_requested",
+        manualDispositionAt: "2026-08-03T00:01:00.000Z",
+        manualDispositionActor: "desktop-user",
+        manualDispositionNote: "Please address the findings.",
+        writeBackToAdo: false,
+      },
+    });
+
+    expect(disposition.statusCode).toBe(200);
+    const record = disposition.json().record;
+    expect(record.manualDispositionActor).toBe("Ada Example");
+    expect(record.manualDispositionWriteBackAttempted).toBe(false);
+  });
+});

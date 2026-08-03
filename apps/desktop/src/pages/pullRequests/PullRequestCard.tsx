@@ -173,7 +173,7 @@ export function PullRequestCard({
                 {qState.phase === "watching" ? "Preparing..."
                 : qState.phase === "reviewing" ? "Analyzing..."
                 : isError ? "Retry"
-                : "Run review"}
+                : "Run automated review"}
               </ActionButton>
             )}
             {pr.url && (
