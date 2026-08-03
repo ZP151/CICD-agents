@@ -177,6 +177,29 @@
 | RA-085 失败/Reject | Maintainer；候选 license/安全不合格 | 运行依赖评估 | 无产品 UI 变化；decision 记录 Reject | 不安装/不复制候选 | 不出现未登记源码 | dependency/license CI |
 | RA-086 恢复/退出 | Maintainer；上游 breaking change | 切换 adapter 版本或回退 | 用户工作流不中断或有明确迁移提示 | pinned version、rollback 与 migration 可执行 | 不同时启用两个默认 runtime/state owner | adapter compatibility suite |
 
+## 18.1 自动化状态总览（2026-08-04 回归运行）
+
+| 问题 | 自动化覆盖 | 证据 | 剩余人工验收 |
+| --- | --- | --- | --- |
+| MP-001 (RA-001..004) | ✅ | `adoDiagnostics`、`adoOauthRecovery`（api+状态机）、`ProjectLinkAdoSection`、`userFacingErrors` | 真实浏览器 OAuth 流程 |
+| MP-002 (RA-005..008) | ✅ | `toolCallDedup`（8）、planner 去重接线 | 真实模型循环中的抑制可见性 |
+| MP-003 (RA-009..011) | ✅ | `chatPlannerEvidence`（15）、`FinalEvidencePanel`、chatSse evidence | 无 |
+| MP-004 (RA-012..016) | ✅ | chatSse exitCode、`TurnTranscript`（折叠/状态）、`chatTurnTranscript` | 真实长命令流式 smoke |
+| MP-005 (RA-017..020) | ✅ | `sessionTitle`（9） | 真实会话首条消息标题 |
+| MP-006 (RA-021..024) | ✅ | `serverAdoWorkflowRoutes` session 隔离断言 | Open in Chat 导航 |
+| MP-007 (RA-025..028) | ✅ | `environmentHealth`（6） | Re-check 桌面交互 |
+| MP-008 (RA-029..034) | ✅ | `workspace.test`（403/404 typed）、空状态引导 | 真实文件入口 |
+| MP-009 (RA-035..041) | ✅ | `WriteBackConfirmationPanel`（5）、disposition audit actor | 真实 ADO 写回（canary 阶段） |
+| MP-010 (RA-042..048) | ✅ | `pipelineTargetResolver`（10）、route typed failure | 真实重名/权限场景 |
+| MP-011 (RA-049..054) | ✅ | `failures`（11）、chatSse 终端映射、local cancellation | 真实 Stop/timeout smoke |
+| MP-012 (RA-055..059) | ✅ | `ProjectLinkCombobox`（11） | 真实键盘/缩放交互 |
+| MP-013 (RA-060..067) | ✅ | 附件 typed errors、`imageEditCanvas` | 真实裁剪交互 |
+| MP-014 (RA-068..074) | ✅ | `typographyTokens`（5） | 125%/150% 缩放桌面复测 |
+| MP-015 (RA-075..080) | ✅ | `mcpSdkAdapter`（9）、`capabilityActionPolicy`（10）、`mcpTools`（6）、bridge（4） | 真实 connector smoke、RA-080 授权过期恢复 |
+| MP-016 (RA-081..086) | ✅（过程性） | 单一 timeline 事件源、复用 registry 更新（MCP SDK/popover/react-easy-crop）、CLAUDE.md 复用闸门 | 上游差异检查节奏、adapter 退出演练 |
+
+运行证据：core 365 passed / daemon 317 passed / desktop 794 passed；desktop build 通过（2026-08-04，分支 `claudecode/optimize-bugfix`，12 个本地 commit）。
+
 ## 18. 追踪完整性
 
 | 问题 | 正常路径 | 失败路径 | 恢复路径 |
