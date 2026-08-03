@@ -24,6 +24,7 @@
 | 2026-08-04 | MP-010 | RA-042..048 | Pipeline run | run-4822 | 在测试 branch 触发 pipeline #117 + 验证 sourceBranch | canary-20260804a | ok（notStarted → inProgress） | 已 cancel（复核 completed/canceled） |
 | 2026-08-04 | MP-009 | RA-038..041 | Work Item | WI-7911 | 创建 [MergePilot E2E] Task + 验证标题 | canary-20260804a | ok | 已删除（复核 404） |
 | 2026-08-04 | MP-001 | RA-001..004 | OAuth | — | 静默令牌真实获取；显式授权流程保持本地 UI 覆盖 | canary-20260804a | ok（token 2070 chars） | n/a |
+| 2026-08-04 | MP-006/010 | RA-021..024, RA-042..048 | Daemon 真实流 | — | daemon 启动 → auth/status（authenticated）→ check-ado-tools（authStatus ok）→ inspect_pipeline 真实 #117（含 timeline/log excerpt） | canary-20260804c | ok（sessionId=None，P1-B 隔离确认；读到 run-4823 canceled） | n/a |
 | 2026-08-04 | MP-010 | RA-042..048 | Pipeline run（产品路径） | run-4823 | 用产品函数 `triggerAzurePipelineRun` 在测试 branch（claudecode/test-mp010-20260804b）触发 #117 + 验证 sourceBranch | canary-20260804b | ok（inProgress，name 20260804.2） | 已 cancel（复核 completed/canceled）+ branch 已删（复核 0 剩余） |
 
 ## Canary 结论
