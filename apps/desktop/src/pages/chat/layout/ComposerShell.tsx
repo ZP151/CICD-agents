@@ -12,6 +12,7 @@ import type {
 } from "../../../components/conversation/SuggestionReplyBar.js";
 import { SuggestionReplyBar } from "../../../components/conversation/SuggestionReplyBar.js";
 import { ProjectLinkCombobox } from "../../../components/workbench/ProjectLinkCombobox.js";
+import { ImageEditModal } from "../ImageEditModal.js";
 import type { ProjectLink } from "../../../api.js";
 import type {
   ConversationModelChoice,
@@ -144,6 +145,10 @@ export function ComposerShell({
     pendingImageAttachmentCount,
     removeImageAttachment,
     setImageDragActive,
+    editingImage,
+    editImageAttachment,
+    applyImageEdit,
+    cancelImageEdit,
   } = useComposerImageAttachments();
   const activeWorkflow = busy || workflowState?.status === "planning" || workflowState?.status === "running";
   const visibleComposerNotice = composerStateNotice?.tone === "queued" ? composerStateNotice : null;
@@ -359,6 +364,14 @@ export function ComposerShell({
                 <span className="min-w-0 truncate">{attachment.name}</span>
                 <button
                   type="button"
+                  aria-label={`Edit ${attachment.name}`}
+                  onClick={() => editImageAttachment(attachment.id)}
+                  className="shrink-0 rounded px-0.5 text-[rgb(var(--app-text-subtle))] transition hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))]"
+                >
+                  ✎
+                </button>
+                <button
+                  type="button"
                   aria-label={`Remove ${attachment.name}`}
                   onClick={() => removeImageAttachment(attachment.id)}
                   className="shrink-0 rounded px-0.5 text-[rgb(var(--app-text-subtle))] transition hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))]"
@@ -506,6 +519,13 @@ export function ComposerShell({
           )}
         </div>
       </div>
+      {editingImage && (
+        <ImageEditModal
+          editing={editingImage}
+          onConfirm={(dataUrl, size) => applyImageEdit(dataUrl, size)}
+          onCancel={cancelImageEdit}
+        />
+      )}
     </div>
   );
 }

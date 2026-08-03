@@ -4,6 +4,8 @@ export interface ComposerImageAttachment {
   mimeType: string;
   size: number;
   dataUrl: string;
+  /** MP-013: bumped when the image is edited before sending. */
+  revision?: number;
 }
 
 export function imageAttachmentLabel(attachment: ComposerImageAttachment): string {

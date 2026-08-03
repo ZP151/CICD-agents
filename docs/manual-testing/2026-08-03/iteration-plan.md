@@ -37,6 +37,7 @@
 | P1-D（MP-009 Insight/Review Run/Queue 边界 + ADO 写回） | 已实现 | `WriteBackConfirmationPanel.test.tsx`（5：写回目标/内容/审批文案）、`serverReviewDispositionWritebackRoutes.test.ts`（3，含 audit actor 服务端推导）、`PullRequestCard.test.tsx` 标签更新；daemon 308 / desktop 765 通过；insight-preview 路由确认无 review run 副作用 | 真实 ADO 写回 smoke（RA-041 目标/审批/结果展示）；Review Run 版本化记录与 attempt 链随真实评审复测 |
 | P2-A（MP-005 Session 标题 + MP-007 Environment + MP-008 File workspace） | 已实现 | `sessionTitle.test.ts`（9：首条目标/内部文本排除/截断/脱敏/手动锁定）、`environmentHealth.test.ts`（6：not_configured/checking/ready/degraded/blocked）、`workspace.test.ts`（403/404 typed）、Artifact workspace 空状态引导；daemon 317 / desktop 773 通过 | 桌面真实交互 smoke：标题在首条消息后更新、Environment Re-check、文件入口引导；敏感首句标题在真实会话复测 |
 | P2-B（MP-012 Project Link Combobox + MP-014 字体排版） | 已实现 | `ProjectLinkCombobox.test.tsx`（11：过滤/键盘环绕/trigger aria/loading/长名 tooltip）、`typographyTokens.test.ts`（5：--font-ui/--font-mono/无网络字体/tailwind 映射）、ComposerShell 已改用 Radix Popover Combobox；desktop 789 通过，build 通过 | 真实键盘交互 smoke（搜索/Enter/Escape/焦点环）；125%/150% 缩放桌面复测 |
+| P2-C（MP-013 Composer 图片编辑 + 附件类型化） | 已实现 | `useComposerImageAttachments.test.ts`（8：too_many/too_large typed）、`imageEditCanvas.test.ts`（2：canvas 不可用 typed 失败）、ImageEditModal（react-easy-crop crop/zoom/rotate，发送前替换同 id 附件 + revision）、缩略图 Edit 按钮；desktop 794 通过，build 通过 | 真实浏览器裁剪交互 smoke；粘贴/拖放与编辑组合复测；Tiptap 富文本按计划保持 textarea（round-trip PoC 未达标前不替换） |
 
 敏感材料处置：本迭代未向文档、fixture、日志或 Chat 写入原始测试材料中的凭据、账号、内部地址、UUID、头像或本机路径；测试数据一律使用 `example-org`、`example-project`、`C:\repo\example` 等占位符。
 
