@@ -12,6 +12,8 @@ import { WorkspaceCommitMenu } from "./WorkspaceCommitMenu.js";
 import { WorkspaceEnvironmentHeader } from "./WorkspaceEnvironmentHeader.js";
 import { WorkspaceGitRecoveryPanel } from "./WorkspaceGitRecoveryPanel.js";
 import { WorkspaceProjectLinkPanel } from "./WorkspaceProjectLinkPanel.js";
+import { environmentHealth } from "./environmentHealth.js";
+import { EnvironmentHealthSummary } from "./EnvironmentHealthSummary.js";
 import type { DiffStats } from "./workspacePanel.types.js";
 
 interface WorkspaceEnvironmentCardProps {
@@ -61,6 +63,16 @@ export function WorkspaceEnvironmentCard({
   const added = diffStats?.added ?? 0;
   const removed = diffStats?.removed ?? 0;
   const gitRecovery = gitRecoveryPanelState(workflowState);
+  // MP-007: one typed health snapshot drives the summary line, reason and the
+  // single primary action; the panels below stay secondary entry points.
+  const health = environmentHealth({
+    repoPath,
+    busy,
+    gitKnown,
+    adoReady,
+    projectLinkCount: projectLinks.length,
+    blockedReason: workflowState?.status === "blocked" ? workflowState.currentStep : undefined,
+  });
 
   const handleProjectLinkSelect = (id: string) => {
     setActiveProjectLinkId(id || null);
@@ -102,6 +114,13 @@ export function WorkspaceEnvironmentCard({
         if (event.key === "Escape") setActiveMenu(null);
       }}
     >
+      <EnvironmentHealthSummary
+        health={health}
+        onRecheck={() => {
+          if (busy) return;
+          runAction({ type: "inspect_environment" });
+        }}
+      />
       <WorkspaceEnvironmentHeader hasRepoPath={hasRepoPath} busy={busy} runAction={runAction} />
       <WorkspaceChangesButton
         hasRepoPath={hasRepoPath}

@@ -39,7 +39,17 @@ export function registerWorkspaceRoutes(app: FastifyInstance): void {
     }
     if (!isPathInside(realTarget, realRepoRoot)) return reply.code(400).send({ error: "filePath escapes repoPath" });
 
-    const stat = fs.statSync(realTarget);
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(realTarget);
+    } catch (err) {
+      // MP-008/RA-033: distinguish a missing file from a permission failure
+      // instead of one generic 500.
+      if ((err as NodeJS.ErrnoException)?.code === "EACCES" || (err as NodeJS.ErrnoException)?.code === "EPERM") {
+        return reply.code(403).send({ error: "permission denied reading file" });
+      }
+      return reply.code(404).send({ error: "file not found" });
+    }
     if (!stat.isFile()) return reply.code(400).send({ error: "path is not a file" });
     if (stat.size > MAX_PREVIEW_BYTES) {
       return reply.code(413).send({
@@ -49,7 +59,15 @@ export function registerWorkspaceRoutes(app: FastifyInstance): void {
       });
     }
 
-    const buffer = fs.readFileSync(realTarget);
+    let buffer: Buffer;
+    try {
+      buffer = fs.readFileSync(realTarget);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException)?.code === "EACCES" || (err as NodeJS.ErrnoException)?.code === "EPERM") {
+        return reply.code(403).send({ error: "permission denied reading file" });
+      }
+      return reply.code(404).send({ error: "file not found" });
+    }
     if (buffer.includes(0)) return reply.code(415).send({ error: "binary file preview is not supported" });
     const content = buffer.toString("utf8");
     return reply.send({

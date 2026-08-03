@@ -6,6 +6,7 @@ import {
   storedSessionProjectLinkId,
   type InlineProjectLink,
 } from "./chatHistoryStore.js";
+import { shouldAutoTitle, sessionTitleFromFirstGoal } from "./sessionTitle.js";
 import { saveSession } from "./chatSessionRecords.js";
 import { handleChatMessageApproval } from "./chatMessageApprovals.js";
 import {
@@ -103,6 +104,10 @@ export async function* runChatSessionTurn(args: RunChatSessionTurnArgs): AsyncGe
       await adapters.appendBubble(sessionId, { role: "user", content: storedMessage, timestamp: now(), repoPath });
       await adapters.appendMessage(sessionId, "user", storedMessage);
     }
+    // MP-005: the first user goal seeds the session title once. The auto
+    // title never overwrites a manual rename; failures fall back to the
+    // cleaned first sentence by construction (no model call involved).
+    await ensureAutoSessionTitle(sessionId);
 
     const handledApproval = yield* handleChatMessageApproval({
       sessionId,
@@ -151,6 +156,20 @@ export function resolveTurnRepoPath(repoPath: string, projectLink?: Pick<InlineP
 
 function now(): number {
   return Math.floor(Date.now() / 1000);
+}
+
+async function ensureAutoSessionTitle(sessionId: string): Promise<void> {
+  try {
+    const session = await loadSession(sessionId);
+    if (!session || !shouldAutoTitle(session)) return;
+    const title = sessionTitleFromFirstGoal(session.messages);
+    if (!title) return;
+    session.title = title;
+    session.titleSource = "auto";
+    await saveSession(session);
+  } catch {
+    // Non-fatal: the read-time preview fallback still labels the session.
+  }
 }
 
 export function messageWithImageNames(message: string, imageAttachments: ChatImageAttachment[]): string {

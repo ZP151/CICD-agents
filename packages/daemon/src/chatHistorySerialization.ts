@@ -27,6 +27,7 @@ export function chatHistoryEntryFromSession(session: StoredSession): ChatHistory
     createdAt: session.createdAt,
     updatedAt: session.updatedAt ?? session.createdAt,
     title,
+    titleSource: session.titleSource,
     pinned: Boolean(session.pinned),
   };
 }
@@ -35,7 +36,7 @@ function lastDisplayableHistoryMessage(messages: ChatMessage[]): ChatMessage | u
   return [...messages].reverse().find((message) => !isInternalHistoryText(message.content));
 }
 
-function isInternalHistoryText(content: string): boolean {
+export function isInternalHistoryText(content: string): boolean {
   const text = content.trim();
   return /^\[(?:confirmed & executed|executed)\]\s+\w+\(/.test(text) ||
     /^WORKFLOW STEP (?:COMPLETED|FAILED):/i.test(text);

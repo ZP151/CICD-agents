@@ -54,6 +54,8 @@ export interface StoredSession {
   createdAt: number;
   updatedAt?: number;
   title?: string;
+  /** MP-005: user-renamed titles are locked and never overwritten by auto. */
+  titleSource?: "user" | "auto";
   pinned?: boolean;
   repoPath: string;
   projectLinkId?: string;
@@ -77,5 +79,6 @@ export interface ChatHistoryEntry {
   createdAt: number;
   updatedAt: number;
   title?: string;
+  titleSource?: "user" | "auto";
   pinned?: boolean;
 }
