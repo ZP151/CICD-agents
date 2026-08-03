@@ -7,6 +7,11 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        // MP-014: semantic stacks from base.css tokens; no web fonts.
+        sans: ["var(--font-ui)"],
+        mono: ["var(--font-mono)"],
+      },
       colors: {
         background: "rgb(var(--app-bg) / <alpha-value>)",
         foreground: "rgb(var(--app-text) / <alpha-value>)",

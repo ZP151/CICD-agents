@@ -11,6 +11,7 @@ import type {
   SuggestionReply,
 } from "../../../components/conversation/SuggestionReplyBar.js";
 import { SuggestionReplyBar } from "../../../components/conversation/SuggestionReplyBar.js";
+import { ProjectLinkCombobox } from "../../../components/workbench/ProjectLinkCombobox.js";
 import type { ProjectLink } from "../../../api.js";
 import type {
   ConversationModelChoice,
@@ -237,17 +238,18 @@ export function ComposerShell({
                 <svg className="h-3 w-3 shrink-0 text-[rgb(var(--app-text-subtle))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
-                <select
-                  aria-label="Composer Project Link"
-                  className="min-w-0 flex-1 cursor-pointer bg-transparent text-[11px] text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))] focus:outline-none"
-                  value={activeProjectLinkId ?? ""}
-                  onChange={(event) => onProjectLinkSelect(event.target.value)}
-                >
-                  <option value="">No Project Link selected</option>
-                  {availableProjectLinks.map((projectLink) => (
-                    <option key={projectLink.id} value={projectLink.id}>{projectLink.name}</option>
-                  ))}
-                </select>
+                <ProjectLinkCombobox
+                  options={availableProjectLinks.map((projectLink) => ({
+                    id: projectLink.id,
+                    name: projectLink.name,
+                    orgUrl: projectLink.adoOrgUrl,
+                    project: projectLink.adoProject,
+                    repoName: projectLink.adoRepoName,
+                  }))}
+                  value={activeProjectLinkId}
+                  onSelect={(id) => onProjectLinkSelect(id ?? "")}
+                  ariaLabel="Composer Project Link"
+                />
               </>
             ) : (
               <span className="text-[11px] text-[rgb(var(--app-text-subtle))]">
