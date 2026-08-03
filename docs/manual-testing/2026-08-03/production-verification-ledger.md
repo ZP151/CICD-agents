@@ -5,13 +5,13 @@
 
 ## Preflight snapshot
 
-- Git remote: `tebssg.visualstudio.com/MyTeBS/_git/DevAgent_CICD`（当前 workspace 仓库）
-- 本地 Project Links：全部指向 `tebssg / TeBS-ClaimBot / ClaimBot_API|TeBS-ClaimBot`，**与当前 workspace 仓库（MyTeBS/DevAgent_CICD）不一致**
-- OAuth identity：本地缓存存在（tenant 与 tebssg 组织一致），有效性待运行时确认
+- Git remote: `<org>.visualstudio.com/<project>/_git/<repo>`（当前 workspace 仓库）
+- 本地 Project Links：全部指向 `<org> / <project> / <repo>`，**与当前 workspace 仓库（<project>/<repo>）不一致**
+- OAuth identity：本地缓存存在（tenant 与 <org> 组织一致），有效性待运行时确认
 - Connector：Project Link 均未启用 managed MCP；native ADO adapter 路径可用
 - 结论：**生产写入暂缓**。Git remote 与 Project Link 不一致（不同 project），
-  且 TeBS-ClaimBot 属既有用户资源，未经本 Goal 选定，不得写入。
-  需要维护者决策：为 `MyTeBS/DevAgent_CICD` 创建测试用 Project Link，
+  且 <project> 属既有用户资源，未经本 Goal 选定，不得写入。
+  需要维护者决策：为 `<project>/<repo>` 创建测试用 Project Link，
   或指定其它测试 workspace 后再恢复 canary 阶段。
 
 ## Write ledger

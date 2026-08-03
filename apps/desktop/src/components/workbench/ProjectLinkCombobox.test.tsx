@@ -8,8 +8,8 @@ import {
 } from "./ProjectLinkCombobox.js";
 
 const links = [
-  { id: "a", name: "ClaimBot API", project: "TeBS-ClaimBot", repoName: "ClaimBot_API" },
-  { id: "b", name: "DevAgent CICD", project: "MyTeBS", repoName: "DevAgent_CICD" },
+  { id: "a", name: "Example API", project: "Example-Project", repoName: "example-api" },
+  { id: "b", name: "Example CICD", project: "Another-Project", repoName: "example-cicd" },
   { id: "c", name: "e2e link", project: "Example", repoName: "example-repo" },
 ];
 
@@ -19,9 +19,9 @@ describe("filterProjectLinks (MP-012/RA-056)", () => {
   });
 
   it("matches by name, project or repository case-insensitively", () => {
-    expect(filterProjectLinks(links, "claimbot")).toHaveLength(1);
-    expect(filterProjectLinks(links, "mytebs")).toHaveLength(1);
-    expect(filterProjectLinks(links, "DEVAGENT")).toHaveLength(1);
+    expect(filterProjectLinks(links, "example api")).toHaveLength(1);
+    expect(filterProjectLinks(links, "another")).toHaveLength(1);
+    expect(filterProjectLinks(links, "EXAMPLE-CICD")).toHaveLength(1);
   });
 
   it("returns no matches for unknown queries without picking the old item", () => {
@@ -47,7 +47,7 @@ describe("comboboxMoveHighlight (MP-012/RA-055)", () => {
 
 describe("comboboxOptionLabel", () => {
   it("joins project and repository context for long-name tooltips", () => {
-    expect(comboboxOptionLabel(links[0]!)).toBe("ClaimBot API · TeBS-ClaimBot / ClaimBot_API");
+    expect(comboboxOptionLabel(links[0]!)).toBe("Example API · Example-Project / example-api");
   });
 });
 
@@ -57,7 +57,7 @@ describe("ProjectLinkCombobox (MP-012)", () => {
       <ProjectLinkCombobox options={links} value="b" onSelect={() => undefined} />,
     );
 
-    expect(html).toContain("DevAgent CICD");
+    expect(html).toContain("Example CICD");
     expect(html).toContain('aria-label="Project Link"');
     expect(html).toContain('aria-haspopup="listbox"');
     expect(html).toContain('aria-expanded="false"');
@@ -84,6 +84,6 @@ describe("ProjectLinkCombobox (MP-012)", () => {
       <ProjectLinkCombobox options={links} value="a" onSelect={() => undefined} />,
     );
 
-    expect(html).toContain('title="ClaimBot API · TeBS-ClaimBot / ClaimBot_API"');
+    expect(html).toContain('title="Example API · Example-Project / example-api"');
   });
 });
