@@ -26,6 +26,7 @@ export * from "./tools/capabilityRegistry.js";
 export * from "./tools/actionPolicy.js";
 export * from "./failures.js";
 export * from "./pipelineTargetResolver.js";
+export * from "./toolCallDedup.js";
 export * from "./telemetry.js";
 export * from "./safeDate.js";
 export * from "./chatPlanner.js";

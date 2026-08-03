@@ -12,6 +12,7 @@ import {
 } from "../../../chatBubbles.js";
 import { ConversationPartRenderer } from "../../../components/conversation/ConversationPartRenderer.js";
 import { visibleConversationParts } from "../../../components/conversation/ConversationPartRenderer.js";
+import { FinalEvidencePanel } from "../../../components/conversation/FinalEvidencePanel.js";
 import {
   PendingActionCard,
 } from "../approval/ApprovalCards.js";
@@ -230,6 +231,7 @@ function ChatBubbleRow({
             onArtifactSelect={selectArtifact}
             onSourceSelect={selectSource}
           />
+          {bubble.meta?.evidence && <FinalEvidencePanel evidence={bubble.meta.evidence} />}
           {bubble.meta && (
             <ChatAssistantMetaPanel
               meta={bubble.meta}

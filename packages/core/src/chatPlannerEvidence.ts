@@ -1,31 +1,49 @@
+import type { FinalEvidenceReference } from "./chatPlannerTypes.js";
+
 export interface PublicToolEvidence {
   name: string;
   ok: boolean;
   output?: string;
+  /** Stable tool-call id linking this evidence to the transcript call. */
+  callId?: string;
 }
 
 /**
- * A model-written final remains the primary conclusion. This small guard only
- * adds facts that were actually returned by a completed public tool when the
- * model omitted them altogether. It prevents a conclusion with empty
- * headings from discarding the evidence users just watched the agent gather.
+ * A model-written final remains the primary conclusion. This guard cleans the
+ * response so Final owns only the conclusion, gaps and next steps. Facts that
+ * were actually returned by completed public tools are NOT appended as text:
+ * they travel as structured evidence references (MP-003) and the UI expands
+ * them by call/artifact. No fixed "Verified facts:" heading is part of the
+ * product contract.
  */
 export function groundFinalResponse(response: string, evidence: PublicToolEvidence[]): string {
-  const conclusion = removeDanglingFinalSections(
+  return removeDanglingFinalSections(
     removeFinalEvidenceAndMenuSections(
       removeUnrequestedNextActions(removeRepeatedExecutionPreamble(response, evidence).split(/\r?\n/)).join("\n"),
     ),
   );
-  const additions = evidence
+}
+
+/**
+ * Structured evidence references for the final outcome (MP-003). Each entry
+ * references the transcript call (callId) instead of replaying its output;
+ * summaries stay bounded so the conclusion is never flooded.
+ */
+export function finalEvidenceReferences(evidence: PublicToolEvidence[]): FinalEvidenceReference[] {
+  return evidence
     .filter((entry) => entry.ok && entry.output?.trim())
-    .map(publicFactForTool)
-    .filter((fact): fact is string => Boolean(fact))
-    .filter((fact) => !responseContainsFact(conclusion, fact));
-  if (additions.length === 0) return conclusion;
-  // These are user-facing facts, not a replay of the commands. The command
-  // group already lives inside the collapsed Working transcript, so avoid
-  // resurrecting an "evidence collected" activity log below the conclusion.
-  return `${conclusion.trimEnd()}\n\nVerified facts:\n${additions.map((fact) => `- ${fact}`).join("\n")}`;
+    .map((entry) => ({
+      tool: entry.name,
+      ok: true,
+      callId: entry.callId,
+      summary: publicFactForTool(entry) ?? boundedOutputSummary(entry.output!),
+    }));
+}
+
+function boundedOutputSummary(output: string): string {
+  const firstLine = output.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "";
+  const compact = firstLine.replace(/\s+/g, " ").trim();
+  return compact.length > 140 ? `${compact.slice(0, 137)}...` : compact;
 }
 
 /**

@@ -106,6 +106,17 @@ export interface PendingToolAction {
   };
 }
 
+/**
+ * MP-003: bounded evidence reference for the final outcome. Points at the
+ * transcript call (callId) instead of replaying its output.
+ */
+export interface FinalEvidenceReference {
+  tool: string;
+  ok: boolean;
+  summary: string;
+  callId?: string;
+}
+
 export interface ChatPlannerResult {
   response: string;
   streamedResponse?: string;
@@ -115,7 +126,8 @@ export interface ChatPlannerResult {
   suggestions: string[];
   sources?: ChatPlannerSource[];
   artifacts?: ChatPlannerArtifact[];
-  toolCallsMade: Array<{ name: string; args: Record<string, unknown>; ok: boolean }>;
+  toolCallsMade: Array<{ name: string; args: Record<string, unknown>; ok: boolean; suppressed?: boolean }>;
+  evidence?: FinalEvidenceReference[];
   usedLlm: boolean;
   approvalProposal?: PendingToolAction;
 }

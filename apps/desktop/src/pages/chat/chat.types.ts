@@ -31,6 +31,8 @@ export type TurnTranscriptBlock =
         args?: Record<string, unknown>;
         command: string;
         status: "running" | "succeeded" | "failed" | "cancelled";
+        /** MP-004: real process exit code for failed cards. */
+        exitCode?: number;
         durationMs?: number;
         summary?: string;
         output?: string;

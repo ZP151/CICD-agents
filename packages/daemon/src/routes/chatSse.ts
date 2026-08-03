@@ -244,6 +244,11 @@ function timelineProjection(
       type: "turn.tool.completed", ...base, groupId: turn?.activeToolGroupId ?? event.toolCallId ?? event.name,
       commandId, toolCallId: event.toolCallId, name: event.name, ok: event.ok, summary: event.summary,
       output: event.output,
+      // MP-004: the failed card shows the real exit code instead of a generic
+      // error line. The result is stripped from the public payload afterwards.
+      exitCode: event.result && typeof event.result === "object"
+        ? (event.result as Record<string, unknown>)["returncode"] ?? (event.result as Record<string, unknown>)["returnCode"]
+        : undefined,
       durationMs: startedAt === undefined ? undefined : Math.max(0, (correlated.emittedAt ?? Date.now()) - startedAt),
     } }];
   }
@@ -260,6 +265,9 @@ function timelineProjection(
     const final = nextTimelineBase(turn, base);
     events.push({ event: "turn.final.completed", payload: {
       type: "turn.final.completed", ...final, finalText: event.result.response,
+      // MP-003: bounded evidence references travel with the final outcome;
+      // the transcript shows them expandable instead of replaying output.
+      evidence: event.result.evidence,
     } });
     const finished = nextTimelineBase(turn, base);
     events.push({ event: "turn.finished", payload: { type: "turn.finished", ...finished, status: "completed" } });

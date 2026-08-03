@@ -1,18 +1,41 @@
 import { describe, expect, it } from "vitest";
-import { groundFinalResponse } from "../src/chatPlannerEvidence.js";
+import { finalEvidenceReferences, groundFinalResponse } from "../src/chatPlannerEvidence.js";
 
-describe("groundFinalResponse", () => {
-  it("adds only omitted public Git facts to a sparse model conclusion", () => {
+describe("groundFinalResponse (MP-003)", () => {
+  it("never appends a hardcoded Verified facts section to the final", () => {
     const result = groundFinalResponse("Inspection complete.", [
       { name: "git_current_branch", ok: true, output: "main\n" },
       { name: "git_status", ok: true, output: "## main...origin/main\n M app.ts\n?? notes.md\n" },
       { name: "git_log", ok: true, output: "dffeecd Dev 2026-07-05 fix: validation\n" },
     ]);
 
-    expect(result).toContain("Verified facts:");
-    expect(result).toContain("Active branch: `main`.");
-    expect(result).toContain("Working tree: 1 modified file; 1 untracked file.");
-    expect(result).toContain("Most recent commit: `dffeecd Dev 2026-07-05 fix: validation`.");
+    expect(result).toBe("Inspection complete.");
+    expect(result).not.toContain("Verified facts");
+    expect(result).not.toContain("Active branch");
+  });
+
+  it("produces bounded evidence references keyed by call instead of text", () => {
+    const references = finalEvidenceReferences([
+      { name: "git_current_branch", ok: true, output: "main\n", callId: "call-1" },
+      { name: "git_status", ok: true, output: "## main...origin/main\n M app.ts\n?? notes.md\n", callId: "call-2" },
+      { name: "git_log", ok: true, output: "dffeecd Dev 2026-07-05 fix: validation\n" },
+      { name: "git_status", ok: false, output: "fatal: failed" },
+    ]);
+
+    expect(references).toEqual([
+      { tool: "git_current_branch", ok: true, callId: "call-1", summary: "Active branch: `main`." },
+      { tool: "git_status", ok: true, callId: "call-2", summary: "Working tree: 1 modified file; 1 untracked file." },
+      { tool: "git_log", ok: true, callId: undefined, summary: "Most recent commit: `dffeecd Dev 2026-07-05 fix: validation`." },
+    ]);
+  });
+
+  it("falls back to a bounded output summary when no fact derives", () => {
+    const references = finalEvidenceReferences([
+      { name: "custom_tool", ok: true, output: "line one\nline two with a very long tail" },
+    ]);
+
+    expect(references[0]?.summary.length).toBeLessThanOrEqual(140);
+    expect(references[0]?.summary).toBe("line one");
   });
 
   it("does not duplicate a branch or working-tree fact already in the model conclusion", () => {
@@ -143,6 +166,12 @@ describe("groundFinalResponse", () => {
       { name: "git_status", ok: false, output: "fatal: failed" },
       { name: "custom_tool", ok: true, output: "internal payload" },
     ])).toBe("The check failed.");
+    expect(finalEvidenceReferences([
+      { name: "git_status", ok: false, output: "fatal: failed" },
+      { name: "custom_tool", ok: true, output: "internal payload" },
+    ])).toEqual([
+      { tool: "custom_tool", ok: true, callId: undefined, summary: "internal payload" },
+    ]);
   });
 
   it("removes empty final headings and retains a bounded fact for an inspected diff", () => {
@@ -167,42 +196,22 @@ describe("groundFinalResponse", () => {
       },
     ]);
 
-    expect(result).toBe([
-      "Current branch: main.",
-      "",
-      "Verified facts:",
-      "- Reviewed diff: `config/app.yml` (1 added line, 1 removed line).",
-    ].join("\n"));
+    expect(result).toBe("Current branch: main.");
+    expect(result).not.toContain("Verified facts");
     expect(result).not.toContain("Most relevant changed config:");
     expect(result).not.toContain("Suggestions:");
   });
 
-  it("removes consecutive empty conclusion sections and their action offer", () => {
+  it("keeps a model-authored Verified facts heading when it carries facts", () => {
     const result = groundFinalResponse([
       "I reviewed the working tree: two tracked files have unstaged edits and there is one untracked file; nothing is staged on branch `main`.",
-      "",
-      "Findings:",
-      "",
-      "Risks and quick checks:",
-      "",
-      "Recommended next steps (you can tell me which to run):",
-      "",
-      "If you want a deeper review, I can display the diffs for these files, run a secrets search, or prepare a commit with a suggested message.",
       "",
       "Verified facts:",
       "- Active branch: `main`.",
     ].join("\n"), []);
 
-    expect(result).toBe([
-      "I reviewed the working tree: two tracked files have unstaged edits and there is one untracked file; nothing is staged on branch `main`.",
-      "",
-      "Verified facts:",
-      "- Active branch: `main`.",
-    ].join("\n"));
-    expect(result).not.toContain("Findings:");
-    expect(result).not.toContain("Risks and quick checks:");
-    expect(result).not.toContain("Recommended next steps");
-    expect(result).not.toContain("If you want a deeper review");
+    expect(result).toContain("Verified facts:");
+    expect(result).toContain("- Active branch: `main`.");
   });
 
   it("keeps a verdict but removes raw evidence, source ledgers, and recommendation menus", () => {
@@ -225,11 +234,28 @@ describe("groundFinalResponse", () => {
           "-endpoint: old",
           "+endpoint: new",
         ].join("\n"),
+        callId: "call-diff",
       },
     ]);
 
     expect(result).toContain("Verdict: The deployment change is high risk");
-    expect(result).toContain("Reviewed diff: `config/app.yml`");
+    expect(result).not.toContain("Reviewed diff:");
+    expect(finalEvidenceReferences([
+      {
+        name: "git_diff",
+        ok: true,
+        output: [
+          "diff --git a/config/app.yml b/config/app.yml",
+          "--- a/config/app.yml",
+          "+++ b/config/app.yml",
+          "-endpoint: old",
+          "+endpoint: new",
+        ].join("\n"),
+        callId: "call-diff",
+      },
+    ])).toEqual([
+      { tool: "git_diff", ok: true, callId: "call-diff", summary: "Reviewed diff: `config/app.yml` (1 added line, 1 removed line)." },
+    ]);
     expect(result).not.toContain("Data Source");
     expect(result).not.toContain("Immediate recommendations");
     expect(result).not.toContain("I ran git status");
@@ -259,7 +285,7 @@ describe("groundFinalResponse", () => {
     ]);
 
     expect(result).toContain("Verdict: The configuration change needs deployment review");
-    expect(result).toContain("Reviewed diff: `config/app.yml`");
+    expect(result).not.toContain("Reviewed diff:");
     expect(result).not.toContain("internal.example.test");
     expect(result).not.toContain("I ran git diff");
   });

@@ -31,7 +31,8 @@ import {
   updateToolFailureTracker,
 } from "./chatPlannerToolExecution.js";
 import { streamActionNarrative } from "./chatPublicOpening.js";
-import { groundFinalResponse, type PublicToolEvidence } from "./chatPlannerEvidence.js";
+import { finalEvidenceReferences, groundFinalResponse, type PublicToolEvidence } from "./chatPlannerEvidence.js";
+import { CallDedupGate } from "./toolCallDedup.js";
 import type {
   ChatEvent,
   ChatImageAttachment,
@@ -113,6 +114,9 @@ export class ChatPlanner {
     const capabilitiesByName = buildToolCapabilitiesByName(registeredTools);
     const toolCallsMade: ChatPlannerResult["toolCallsMade"] = [];
     const publicToolEvidence: PublicToolEvidence[] = [];
+    // MP-002: one turn never repeats an equivalent completed read-only call.
+    const dedupGate = new CallDedupGate();
+    const toolBudget = getSettings().plannerToolBudget;
     let lastText = "";
     let streamedVisibleResponse = "";
     let confirmedOnce = false;
@@ -369,6 +373,28 @@ export class ChatPlanner {
               connector: capability?.connector,
             };
           }
+          const dedup = dedupGate.propose(tc.name, args);
+          if (dedup.decision === "suppress" && dedup.suppressedByCallId) {
+            // RA-006: the UI marks the suppression instead of faking success;
+            // the model still receives an explicit tool result so it can move on.
+            yield {
+              type: "progress",
+              message: `Skipped repeated equivalent call to ${tc.name} (no new state; earlier call ${dedup.suppressedByCallId}).`,
+            };
+            yield { type: "turn_step", stepId: tc.id, status: "blocked", label: `Suppressed repeated call: ${actionLabel}` };
+            toolCallsMade.push({ name: tc.name, args, ok: true, suppressed: true });
+            messages.push({
+              role: "tool",
+              tool_call_id: tc.id,
+              content: JSON.stringify({
+                ok: true,
+                suppressed: true,
+                reason: `An equivalent call to ${tc.name} already completed this turn as call ${dedup.suppressedByCallId}. No new state was requested. If the repo state changed, make that explicit and re-run.`,
+                previousCallId: dedup.suppressedByCallId,
+              }),
+            });
+            continue;
+          }
           yield { type: "turn_step", stepId: tc.id, status: "started", label: actionLabel };
           const { ok, toolResult, output } = yield* executePlannerToolCall(this.executor, tc, args);
           yield {
@@ -378,13 +404,29 @@ export class ChatPlanner {
             label: ok ? actionLabel : `Could not complete: ${actionLabel}`,
           };
           toolCallsMade.push({ name: tc.name, args, ok });
-          publicToolEvidence.push({ name: tc.name, ok, output });
+          publicToolEvidence.push({ name: tc.name, ok, output, callId: tc.id });
+          if (ok) {
+            if (capability?.readOnly === true) {
+              dedupGate.recordCompleted(tc.name, args, tc.id);
+            } else {
+              // RA-008: a state-changing call may have changed the repo;
+              // equivalent reads must be allowed to re-run afterwards.
+              dedupGate.markStateChanged();
+            }
+          }
 
           toolFailureTracker = updateToolFailureTracker(toolFailureTracker, tc.name, ok);
           if (toolFailureTracker.consecutiveFailCount >= 2) {
             yield {
               type: "done",
               result: repeatedToolFailureResult(tc.name, toolResult, toolCallsMade),
+            };
+            return;
+          }
+          if (toolCallsMade.length >= toolBudget) {
+            yield {
+              type: "done",
+              result: toolBudgetExhaustedResult(toolCallsMade, dedupGate.suppressedCalls),
             };
             return;
           }
@@ -496,7 +538,26 @@ function withGroundedToolEvidence(
 ): ChatPlannerResult {
   return {
     ...result,
+    // MP-003: Final owns the conclusion; evidence is a structured reference
+    // list keyed by call, never replayed text.
     response: groundFinalResponse(result.response, evidence),
+    evidence: finalEvidenceReferences(evidence),
+  };
+}
+
+function toolBudgetExhaustedResult(
+  toolCallsMade: ChatPlannerResult["toolCallsMade"],
+  suppressedCalls: number,
+): ChatPlannerResult {
+  return {
+    response: `This turn reached its tool budget after ${toolCallsMade.length} tool calls${
+      suppressedCalls > 0 ? ` (${suppressedCalls} repeated equivalent calls were suppressed)` : ""
+    }. Summarize what was already gathered and propose the next step instead of running more commands.`,
+    riskLevel: "low",
+    actionsTaken: toolCallsMade.map((t) => t.name),
+    suggestions: [],
+    toolCallsMade,
+    usedLlm: true,
   };
 }
 

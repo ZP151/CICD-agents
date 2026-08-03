@@ -499,14 +499,19 @@ function finishTurnUi(
 
 function finalMeta(event: ChatEventPayload): Bubble["meta"] | undefined {
   const timestamp = event.emittedAt ?? Date.now();
-  if (!event.result) return { timestamp };
+  if (!event.result && !event.evidence) return { timestamp };
   return {
-    riskLevel: event.result.riskLevel,
-    finalizationMode: event.result.finalizationMode,
-    actionsTaken: event.result.actionsTaken,
-    suggestions: event.result.suggestions,
-    sources: event.result.sources,
-    artifacts: event.result.artifacts,
+    ...(event.result
+      ? {
+          riskLevel: event.result.riskLevel,
+          finalizationMode: event.result.finalizationMode,
+          actionsTaken: event.result.actionsTaken,
+          suggestions: event.result.suggestions,
+          sources: event.result.sources,
+          artifacts: event.result.artifacts,
+        }
+      : {}),
+    ...(event.evidence ? { evidence: event.evidence } : {}),
     timestamp,
   };
 }

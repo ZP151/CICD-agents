@@ -88,6 +88,8 @@ export interface ChatEventPayload {
   stepId?: string;
   stepStatus?: "started" | "completed" | "blocked";
   planItems?: string[];
+  /** MP-003: bounded evidence references on turn.final.completed. */
+  evidence?: Array<{ tool: string; ok: boolean; summary: string; callId?: string }>;
   /** MP-011: typed termination reason on turn.failed / turn.cancelled. */
   failureKind?:
     | "cancelled_by_user"
@@ -120,6 +122,8 @@ export interface ChatEventPayload {
   args?: Record<string, unknown>;
   stream?: "stdout" | "stderr";
   ok?: boolean;
+  /** MP-004: real process exit code on tool completion. */
+  exitCode?: number;
   summary?: string;
   output?: string;
   toolResult?: unknown;

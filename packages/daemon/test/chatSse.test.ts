@@ -418,3 +418,81 @@ describe("chat SSE typed terminal failures (MP-011)", () => {
     expect(writer.hasActiveTurn()).toBe(true);
   });
 });
+
+describe("chat SSE final evidence references (MP-003)", () => {
+  it("carries bounded evidence references on turn.final.completed", () => {
+    const sent: Array<{ event: string; payload: Record<string, unknown> }> = [];
+    const reply = {
+      raw: {
+        setHeader: () => undefined,
+        flushHeaders: () => undefined,
+        write: (wire: string) => {
+          const event = wire.match(/^event: ([^\n]+)/m)?.[1] ?? "";
+          const payload = JSON.parse(wire.match(/^data: (.+)$/m)?.[1] ?? "{}");
+          sent.push({ event, payload });
+        },
+        end: () => undefined,
+      },
+    } as never;
+    const writer = createChatSseWriter(reply);
+    writer.startTurn("turn-9");
+    writer.sendChatEvent({
+      type: "done",
+      result: {
+        response: "The branch is ready.",
+        riskLevel: "low",
+        actionsTaken: [],
+        suggestions: [],
+        toolCallsMade: [{ name: "git_status", args: {}, ok: true }],
+        usedLlm: true,
+        evidence: [
+          { tool: "git_status", ok: true, callId: "call-1", summary: "Working tree: clean." },
+        ],
+      },
+    });
+
+    const final = sent.find((entry) => entry.event === "turn.final.completed")?.payload;
+    expect(final?.finalText).toBe("The branch is ready.");
+    expect(final?.evidence).toEqual([
+      { tool: "git_status", ok: true, callId: "call-1", summary: "Working tree: clean." },
+    ]);
+  });
+});
+
+describe("chat SSE tool completion exit codes (MP-004)", () => {
+  it("carries the real process exit code on failed tool completion", () => {
+    const sent: Array<{ event: string; payload: Record<string, unknown> }> = [];
+    const reply = {
+      raw: {
+        setHeader: () => undefined,
+        flushHeaders: () => undefined,
+        write: (wire: string) => {
+          const event = wire.match(/^event: ([^\n]+)/m)?.[1] ?? "";
+          const payload = JSON.parse(wire.match(/^data: (.+)$/m)?.[1] ?? "{}");
+          sent.push({ event, payload });
+        },
+        end: () => undefined,
+      },
+    } as never;
+    const writer = createChatSseWriter(reply);
+    writer.startTurn("turn-10");
+    writer.sendChatEvent({
+      type: "tool_start",
+      toolCallId: "npm-test",
+      name: "npm_test",
+      args: {},
+    });
+    writer.sendChatEvent({
+      type: "tool_end",
+      toolCallId: "npm-test",
+      name: "npm_test",
+      ok: false,
+      summary: "tests failed",
+      output: "1 failing",
+      result: { returncode: 1, stdout: "", stderr: "1 failing" },
+    });
+
+    const completed = sent.find((entry) => entry.event === "turn.tool.completed")?.payload;
+    expect(completed).toMatchObject({ ok: false, exitCode: 1 });
+  });
+});

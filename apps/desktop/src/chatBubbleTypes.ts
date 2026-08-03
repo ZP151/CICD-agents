@@ -82,6 +82,8 @@ export interface AssistantBubbleMeta {
   suggestions?: string[];
   sources?: AssistantBubbleSource[];
   artifacts?: ConversationArtifactPart[];
+  /** MP-003: bounded evidence references for the final outcome. */
+  evidence?: Array<{ tool: string; ok: boolean; summary: string; callId?: string }>;
   timestamp?: number;
 }
 

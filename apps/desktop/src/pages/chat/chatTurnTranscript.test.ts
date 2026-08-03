@@ -329,3 +329,35 @@ describe("Turn transcript reducer", () => {
     }));
   });
 });
+
+describe("Turn transcript failed command details (MP-004)", () => {
+  it("keeps the real exit code on a failed command card", () => {
+    const optimistic = createOptimisticTurnTranscriptBubble("local", "Run tests", 1_000);
+    const started = upsertTurnStartedTranscript([optimistic], {
+      type: "turn.started", turnId: "turn-t", emittedAt: 1_100, sequence: 0,
+    }, () => "unused");
+    const withCommand = applyTurnTimelineEvent(started, {
+      type: "turn.tool.started",
+      turnId: "turn-t",
+      sequence: 1,
+      groupId: "g",
+      commandId: "cmd",
+      name: "npm_test",
+    });
+    const completed = applyTurnTimelineEvent(withCommand, {
+      type: "turn.tool.completed",
+      turnId: "turn-t",
+      sequence: 2,
+      groupId: "g",
+      commandId: "cmd",
+      name: "npm_test",
+      ok: false,
+      exitCode: 1,
+      summary: "tests failed",
+    });
+
+    const command = completed[0]?.turnTranscript?.blocks
+      .find((block) => block.kind === "tool_group")?.commands[0];
+    expect(command).toMatchObject({ status: "failed", exitCode: 1 });
+  });
+});

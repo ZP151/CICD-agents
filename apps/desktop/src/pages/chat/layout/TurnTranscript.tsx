@@ -156,7 +156,18 @@ function TranscriptBlockView({
       <button
         type="button"
         aria-expanded={groupOpen}
-        onClick={() => setOpenGroups((current) => ({ ...current, [block.id]: !groupOpen }))}
+        onClick={() => {
+          // RA-013: parent collapse closes the whole subtree; re-expanding
+          // restores a clean default instead of stale per-command state.
+          const next = collapseGroupDisclosure(
+            openGroups,
+            openCommands,
+            block.id,
+            block.commands.map((command) => command.id),
+          );
+          setOpenGroups(next.openGroups);
+          setOpenCommands(next.openCommands);
+        }}
         className="inline-flex min-h-7 items-center gap-1 rounded px-1 text-[rgb(var(--app-text-muted))] transition-[background,color] duration-150 hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-[rgb(var(--app-text))]"
       >
         {block.connector?.kind === "mcp" ? <McpConnectorIcon /> : <TerminalIcon />}
@@ -214,7 +225,12 @@ function TranscriptBlockView({
                         />
                       </>
                     )}
-                    <div className="flex justify-end px-3 pb-2 pt-1 text-[11px] text-[rgb(var(--app-text-subtle))]">{commandStatusLabel(command.status)}</div>
+                    <div className="flex justify-end px-3 pb-2 pt-1 text-[11px] text-[rgb(var(--app-text-subtle))]">
+                      {commandStatusLabel(command.status, command.exitCode)}
+                      {command.status === "running" && command.durationMs !== undefined && (
+                        <span className="ml-2">· {formatDuration(command.durationMs)} elapsed</span>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -268,11 +284,34 @@ export function commandDisclosureKey(groupId: string, commandId: string): string
   return `${groupId}:${commandId}`;
 }
 
-function commandStatusLabel(status: "running" | "succeeded" | "failed" | "cancelled"): string {
+export function commandStatusLabel(status: "running" | "succeeded" | "failed" | "cancelled", exitCode?: number): string {
   if (status === "succeeded") return "Success";
-  if (status === "failed") return "Failed";
+  // MP-004: the failed card shows the real exit code, not a generic error.
+  if (status === "failed") return exitCode === undefined ? "Failed" : `Failed · exit ${exitCode}`;
   if (status === "cancelled") return "Cancelled";
   return "Running";
+}
+
+/**
+ * RA-013: collapsing a parent group also collapses its children. Re-expanding
+ * restores a clear default (children closed) instead of a stale mix of open
+ * command cards. Pure so the disclosure rules are unit-testable.
+ */
+export function collapseGroupDisclosure(
+  openGroups: Record<string, boolean>,
+  openCommands: Record<string, boolean>,
+  groupId: string,
+  commandIds: string[],
+): { openGroups: Record<string, boolean>; openCommands: Record<string, boolean> } {
+  const nextGroups = { ...openGroups, [groupId]: !openGroups[groupId] };
+  if (!nextGroups[groupId]) {
+    const nextCommands = { ...openCommands };
+    for (const commandId of commandIds) {
+      delete nextCommands[commandDisclosureKey(groupId, commandId)];
+    }
+    return { openGroups: nextGroups, openCommands: nextCommands };
+  }
+  return { openGroups: nextGroups, openCommands };
 }
 
 function formatElapsed(elapsedMs: number): string {
