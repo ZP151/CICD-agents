@@ -1,3 +1,5 @@
+import type { TurnFailureKind } from "./failures.js";
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -170,6 +172,13 @@ export interface ChatWorkflowState {
   pendingApproval?: ChatApprovalRequest;
 }
 
+/** Typed turn-termination detail attached to error/cancelled events (MP-011). */
+export interface ChatEventFailure {
+  kind: TurnFailureKind;
+  retryable: boolean;
+  diagnosticId?: string;
+}
+
 export type ChatEvent =
   | { type: "assistant_delta"; delta: string }
   | { type: "work_statement"; blockId: string; text: string; replace?: boolean }
@@ -195,5 +204,5 @@ export type ChatEvent =
   | { type: "executing" }
   | { type: "message"; text: string }
   | { type: "done"; result: ChatPlannerResult }
-  | { type: "error"; message: string }
-  | { type: "cancelled" };
+  | { type: "error"; message: string; failure?: ChatEventFailure }
+  | { type: "cancelled"; failure?: ChatEventFailure };

@@ -88,6 +88,18 @@ export interface ChatEventPayload {
   stepId?: string;
   stepStatus?: "started" | "completed" | "blocked";
   planItems?: string[];
+  /** MP-011: typed termination reason on turn.failed / turn.cancelled. */
+  failureKind?:
+    | "cancelled_by_user"
+    | "client_cancelled"
+    | "deadline_exceeded"
+    | "tool_failed"
+    | "model_failed"
+    | "daemon_restarted"
+    | "internal";
+  recoveryAction?: "resume" | "retry" | "reauthorize" | "enable_connector" | "choose_target" | "start_new_turn" | "view_diagnostics";
+  retryable?: boolean;
+  diagnosticId?: string;
   /** Canonical transcript identity. These are intentionally separate from legacy tool ids. */
   blockId?: string;
   groupId?: string;

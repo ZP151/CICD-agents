@@ -1,4 +1,10 @@
 import type { FastifyReply } from "fastify";
+import {
+  createDiagnosticId,
+  explainTurnFailure,
+  turnFailureRecovery,
+  type TurnFailureKind,
+} from "@mergepilot/core";
 import { redact, type ChatEvent, type TurnTimelineEvent } from "@mergepilot/core";
 import { sessionStartedEvent } from "../chatEvents.js";
 
@@ -9,6 +15,8 @@ export interface ChatSseWriter {
   /** A network/model diagnostic, intentionally not a persisted narrative part. */
   sendWaitingForModel(): void;
   sendChatEvent(event: ChatEvent): void;
+  /** True once startTurn/resumeTurn set an active turn envelope. */
+  hasActiveTurn(): boolean;
   end(): void;
 }
 
@@ -53,6 +61,7 @@ export function createChatSseWriter(
 
   return {
     send,
+    hasActiveTurn: () => activeTurn !== undefined,
     startTurn(turnId, openingStatement, clientTurnId) {
       activeTurn = {
         id: turnId,
@@ -258,9 +267,15 @@ function timelineProjection(
   }
   if (event.type === "cancelled" || event.type === "error") {
     const cancelled = event.type === "cancelled";
+    const typed = event.failure;
+    const failureKind: TurnFailureKind = cancelled
+      ? "cancelled_by_user"
+      : typed?.kind ?? "internal";
     const summary = cancelled
-      ? "This turn was cancelled before the work completed. You can send the next instruction when ready."
-      : `I could not complete this turn: ${event.message || "an unexpected error occurred"}. Please adjust the request or try again.`;
+      ? explainTurnFailure("cancelled_by_user")
+      : typed
+        ? explainTurnFailure(typed.kind, typed.diagnosticId)
+        : `I could not complete this turn: ${event.message || "an unexpected error occurred"}. Please adjust the request or try again.`;
     const finalDelta = nextTimelineBase(turn, base);
     const finalCompleted = nextTimelineBase(turn, base);
     const terminal = nextTimelineBase(turn, base);
@@ -275,12 +290,21 @@ function timelineProjection(
           ...terminal,
           status: cancelled ? "cancelled" : "failed",
           message: cancelled ? undefined : event.message,
+          // MP-011: the terminal event carries a typed kind and recovery
+          // action so Chat, the step panel and persistence never guess from
+          // text. Untyped legacy errors classify as internal; the message
+          // stays available for the caller that produced it.
+          failureKind,
+          recoveryAction: turnFailureRecovery(failureKind).action,
+          retryable: typed?.retryable ?? false,
+          diagnosticId: typed?.diagnosticId ?? (failureKind === "internal" ? createDiagnosticId() : undefined),
         },
       },
     ];
   }
   return [];
 }
+
 
 /**
  * Timeline SSE is a public transcript protocol, not a transport for planner

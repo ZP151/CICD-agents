@@ -42,6 +42,7 @@ import type {
 export type {
   ChatApprovalRequest,
   ChatEvent,
+  ChatEventFailure,
   ChatImageAttachment,
   ChatMessage,
   ChatPlannerArtifact,

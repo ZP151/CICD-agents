@@ -133,12 +133,14 @@ export function approvalDenialMessage(feedback?: string): string {
   return feedback?.trim() || "no";
 }
 
-const LOCAL_CANCELLED_FINAL = "This turn was cancelled before the work completed. You can send the next instruction when you're ready.";
+const LOCAL_CANCELLED_FINAL =
+  "Cancelled by you. The evidence already gathered stays visible; continue the unfinished steps when ready.";
 
 /**
  * A browser abort prevents the daemon from sending its terminal event back to
  * this client. Keep cancellation in the same public Timeline as every other
- * terminal path so a Working transcript cannot be left orphaned.
+ * terminal path so a Working transcript cannot be left orphaned. The local
+ * terminal carries the same typed kind as the daemon's (MP-011).
  */
 export function localTurnCancellationEvents(
   turnId: string,
@@ -152,7 +154,17 @@ export function localTurnCancellationEvents(
     { type: "turn.execution.completed", turnId, sequence, emittedAt: now, elapsedMs },
     { type: "turn.final.delta", turnId, sequence: sequence + 1, emittedAt: now, delta: LOCAL_CANCELLED_FINAL },
     { type: "turn.final.completed", turnId, sequence: sequence + 2, emittedAt: now, finalText: LOCAL_CANCELLED_FINAL },
-    { type: "turn.cancelled", turnId, sequence: sequence + 3, emittedAt: now, elapsedMs, status: "cancelled" },
+    {
+      type: "turn.cancelled",
+      turnId,
+      sequence: sequence + 3,
+      emittedAt: now,
+      elapsedMs,
+      status: "cancelled",
+      failureKind: "cancelled_by_user",
+      recoveryAction: "resume",
+      retryable: false,
+    },
   ];
 }
 

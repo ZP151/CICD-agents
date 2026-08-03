@@ -1,9 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { logger } from "@mergepilot/core";
 import {
   LLMClient,
   streamActionNarrative,
+  turnFailureFromError,
   type ChatEvent,
+  type ChatEventFailure,
   type Settings,
 } from "@mergepilot/core";
 import { getChatIndexStatus, refreshChatIndex } from "@mergepilot/core/chatContext";
@@ -241,6 +244,20 @@ export function explainChatSseError(
   return message;
 }
 
+/**
+ * MP-011: attach a typed termination reason to the terminal SSE event instead
+ * of a bare message. The kind drives the UI recovery action; the raw detail is
+ * logged (redacted) rather than shown for internal failures.
+ */
+export function chatTurnFailure(err: unknown, phase: string): ChatEventFailure {
+  const failure = turnFailureFromError(err, { phase });
+  return {
+    kind: failure.kind,
+    retryable: failure.retryable,
+    diagnosticId: failure.diagnosticId,
+  };
+}
+
 export function registerChatRoutes(
   app: FastifyInstance,
   {
@@ -450,9 +467,15 @@ export function registerChatRoutes(
           clearTimeout(waitingForModelTimer);
           active = false;
           chatSessions.cancel(sessionId);
+          const failure = chatTurnFailure(err, "planning");
+          logger().warn(
+            { failureKind: failure.kind, retryable: failure.retryable, diagnosticId: failure.diagnosticId },
+            "chat turn failed",
+          );
           sseWriter.sendChatEvent({
             type: "error",
             message: explainChatSseError(err, settings, envSourceLabel),
+            failure,
           });
         }
         disposeUnusedPrewarmedRuntime();
@@ -472,6 +495,20 @@ export function registerChatRoutes(
         clearTimeout(waitingForModelTimer);
         chatSessions.cancel(sessionId);
         disposeUnusedPrewarmedRuntime();
+        // Best-effort typed terminal (MP-011): the browser may already be
+        // gone, but the persisted turn timeline still records a real
+        // cancellation reason instead of leaving the turn orphaned.
+        if (sseWriter.hasActiveTurn()) {
+          try {
+            sseWriter.sendChatEvent({
+              type: "cancelled",
+              failure: { kind: "cancelled_by_user", retryable: false },
+            });
+          } catch {
+            // Socket already destroyed; the desktop's local cancellation
+            // keeps this client's transcript consistent.
+          }
+        }
         resolve();
       };
       req.raw.once("aborted", cancelDisconnectedTurn);
@@ -523,9 +560,15 @@ export function registerChatRoutes(
             }
           }
         } catch (err) {
+          const failure = chatTurnFailure(err, "continuation");
+          logger().warn(
+            { failureKind: failure.kind, retryable: failure.retryable, diagnosticId: failure.diagnosticId },
+            "chat continuation failed",
+          );
           sseWriter.sendChatEvent({
             type: "error",
             message: explainChatSseError(err, settings, envSourceLabel),
+            failure,
           });
         }
         sseWriter.end();
@@ -575,9 +618,15 @@ export function registerChatRoutes(
             }
           }
         } catch (err) {
+          const failure = chatTurnFailure(err, "approval-execution");
+          logger().warn(
+            { failureKind: failure.kind, retryable: failure.retryable, diagnosticId: failure.diagnosticId },
+            "chat approval execution failed",
+          );
           sseWriter.sendChatEvent({
             type: "error",
             message: explainChatSseError(err, settings, envSourceLabel),
+            failure,
           });
         }
         continuationActive = false;

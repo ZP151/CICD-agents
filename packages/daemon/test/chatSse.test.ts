@@ -326,3 +326,95 @@ describe("chat SSE timeline projection", () => {
     ]);
   });
 });
+
+describe("chat SSE typed terminal failures (MP-011)", () => {
+  function captureWriter() {
+    const sent: Array<{ event: string; payload: Record<string, unknown> }> = [];
+    const reply = {
+      raw: {
+        setHeader: () => undefined,
+        flushHeaders: () => undefined,
+        write: (wire: string) => {
+          const event = wire.match(/^event: ([^\n]+)/m)?.[1] ?? "";
+          const payload = JSON.parse(wire.match(/^data: (.+)$/m)?.[1] ?? "{}");
+          sent.push({ event, payload });
+        },
+        end: () => undefined,
+      },
+    } as never;
+    return { sent, writer: createChatSseWriter(reply) };
+  }
+
+  it("classifies a cancelled event as cancelled_by_user with resume recovery", () => {
+    const { sent, writer } = captureWriter();
+    writer.startTurn("turn-1");
+    writer.sendChatEvent({ type: "cancelled", failure: { kind: "cancelled_by_user", retryable: false } });
+
+    const terminal = sent.find((entry) => entry.event === "turn.cancelled")?.payload;
+    expect(terminal).toMatchObject({
+      type: "turn.cancelled",
+      status: "cancelled",
+      failureKind: "cancelled_by_user",
+      recoveryAction: "resume",
+      retryable: false,
+    });
+    const finalText = sent.find((entry) => entry.event === "turn.final.completed")?.payload.finalText;
+    expect(String(finalText)).toContain("Cancelled by you");
+  });
+
+  it("maps a typed deadline failure to timeout text and retry recovery", () => {
+    const { sent, writer } = captureWriter();
+    writer.startTurn("turn-2");
+    writer.sendChatEvent({
+      type: "error",
+      message: "request timed out",
+      failure: { kind: "deadline_exceeded", retryable: true },
+    });
+
+    const terminal = sent.find((entry) => entry.event === "turn.failed")?.payload;
+    expect(terminal).toMatchObject({
+      type: "turn.failed",
+      status: "failed",
+      failureKind: "deadline_exceeded",
+      recoveryAction: "retry",
+      retryable: true,
+    });
+    expect(String(sent.find((entry) => entry.event === "turn.final.completed")?.payload.finalText)).toContain(
+      "time limit",
+    );
+  });
+
+  it("keeps legacy error text when no typed failure is attached", () => {
+    const { sent, writer } = captureWriter();
+    writer.startTurn("turn-3");
+    writer.sendChatEvent({ type: "error", message: "No approval proposal for this session" });
+
+    const terminal = sent.find((entry) => entry.event === "turn.failed")?.payload;
+    expect(terminal).toMatchObject({ type: "turn.failed", failureKind: "internal" });
+    expect(String(terminal?.diagnosticId)).toMatch(/^dia_/);
+    expect(String(sent.find((entry) => entry.event === "turn.final.completed")?.payload.finalText)).toContain(
+      "No approval proposal for this session",
+    );
+  });
+
+  it("never leaks the raw message for typed internal failures", () => {
+    const { sent, writer } = captureWriter();
+    writer.startTurn("turn-4");
+    writer.sendChatEvent({
+      type: "error",
+      message: "secret payload detail",
+      failure: { kind: "internal", retryable: false, diagnosticId: "dia_abc123" },
+    });
+
+    const finalText = String(sent.find((entry) => entry.event === "turn.final.completed")?.payload.finalText);
+    expect(finalText).toContain("diagnostic id dia_abc123");
+    expect(finalText).not.toContain("secret payload detail");
+  });
+
+  it("reports active turn state for the disconnect path", () => {
+    const { writer } = captureWriter();
+    expect(writer.hasActiveTurn()).toBe(false);
+    writer.startTurn("turn-5");
+    expect(writer.hasActiveTurn()).toBe(true);
+  });
+});

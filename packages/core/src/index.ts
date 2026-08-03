@@ -22,6 +22,7 @@ export * from "./tools/validation.js";
 export * from "./tools/azureDevOps.js";
 export * from "./tools/gitIntent.js";
 export * from "./tools/mcp.js";
+export * from "./failures.js";
 export * from "./telemetry.js";
 export * from "./safeDate.js";
 export * from "./chatPlanner.js";
