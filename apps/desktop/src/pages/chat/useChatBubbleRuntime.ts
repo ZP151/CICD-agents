@@ -7,21 +7,12 @@ import {
 import {
   cancelPlan,
   confirmPlan,
-  type ChatUiChunk,
 } from "../../api.js";
-import type { ToolCallPartSnapshot } from "../../chatBubbles.js";
 import { reduceChatBubbles, type ChatBubbleAction } from "./chatBubbleReducer.js";
 import type { ApprovalRequest, Bubble, WorkflowEventState } from "./chat.types.js";
 import { uid } from "./chatStreamDispatcher.js";
-import { dispatchChatUiChunk, type ChatUiChunkCorrelation } from "./chatUiChunkDispatcher.js";
 
-interface AssistantVisibleStreamActions {
-  appendAssistantDelta: (delta: string, textPartId?: string) => void;
-  startAssistantTextPart: (textPartId: string) => void;
-  stopStreaming: (textPartId?: string) => void;
-}
-
-interface UseChatBubbleRuntimeArgs extends AssistantVisibleStreamActions {
+interface UseChatBubbleRuntimeArgs {
   cancelRef: MutableRefObject<(() => void) | null>;
   forceNextScrollToBottom: () => void;
   markIncomingContentScrollIntent: () => void;
@@ -30,41 +21,17 @@ interface UseChatBubbleRuntimeArgs extends AssistantVisibleStreamActions {
   setBusy: Dispatch<SetStateAction<boolean>>;
   setStatusText: Dispatch<SetStateAction<string | null>>;
   setWorkflowState: Dispatch<SetStateAction<WorkflowEventState | null>>;
-  uiStreamAvailableRef: MutableRefObject<boolean>;
 }
 
 export interface ChatBubbleRuntime {
   addBubble: (bubble: Bubble, options?: { forceScroll?: boolean }) => void;
-  addErrorBubbleOnce: (message: string) => void;
-  appendToolOutputDelta: (
-    toolName: string | undefined,
-    stream: "stdout" | "stderr" | undefined,
-    delta: string | undefined,
-    toolCallId?: string,
-  ) => void;
   finaliseWithResponse: (cleanText: string, meta?: Bubble["meta"], streamedText?: string) => void;
-  handleUiChunk: (chunk?: ChatUiChunk, correlation?: ChatUiChunkCorrelation) => void;
-  mergeAssistantMetadata: (metadata: unknown) => void;
   resolveConfirm: (bubbleId: string, confirmed: boolean) => Promise<void>;
   showApprovalRequest: (approval: ApprovalRequest) => void;
   toggleTool: (id: string) => void;
-  upsertToolBubble: (
-    snapshot: ToolCallPartSnapshot,
-    options?: {
-      ok?: boolean;
-      result?: unknown;
-      open?: boolean;
-      liveOutput?: string;
-      turnId?: string;
-      sequence?: number;
-      timestamp?: number;
-      connector?: Bubble["connector"];
-    },
-  ) => void;
 }
 
 export function useChatBubbleRuntime({
-  appendAssistantDelta,
   cancelRef,
   forceNextScrollToBottom,
   markIncomingContentScrollIntent,
@@ -73,9 +40,6 @@ export function useChatBubbleRuntime({
   setBusy,
   setStatusText,
   setWorkflowState,
-  startAssistantTextPart,
-  stopStreaming,
-  uiStreamAvailableRef,
 }: UseChatBubbleRuntimeArgs): ChatBubbleRuntime {
   const dispatchBubbleAction = useCallback((action: ChatBubbleAction) => {
     setBubbles((prev) => reduceChatBubbles(prev, action, uid));
@@ -86,11 +50,6 @@ export function useChatBubbleRuntime({
     else markIncomingContentScrollIntent();
     dispatchBubbleAction({ type: "add", bubble });
   }, [dispatchBubbleAction, forceNextScrollToBottom, markIncomingContentScrollIntent]);
-
-  const addErrorBubbleOnce = useCallback((message: string) => {
-    markIncomingContentScrollIntent();
-    dispatchBubbleAction({ type: "add_error_once", message });
-  }, [dispatchBubbleAction, markIncomingContentScrollIntent]);
 
   const finaliseWithResponse = useCallback((
     cleanText: string,
@@ -105,74 +64,6 @@ export function useChatBubbleRuntime({
     markIncomingContentScrollIntent();
     dispatchBubbleAction({ type: "show_approval", approval, turnId });
   }, [dispatchBubbleAction, markIncomingContentScrollIntent]);
-
-  const upsertToolBubble = useCallback((
-    snapshot: ToolCallPartSnapshot,
-    options: {
-      ok?: boolean;
-      result?: unknown;
-      open?: boolean;
-      liveOutput?: string;
-    } = {},
-  ) => {
-    if (!snapshot.toolName) return;
-    markIncomingContentScrollIntent();
-    dispatchBubbleAction({ type: "upsert_tool", snapshot, options });
-  }, [dispatchBubbleAction, markIncomingContentScrollIntent]);
-
-  const appendToolOutputDelta = useCallback((
-    toolName: string | undefined,
-    stream: "stdout" | "stderr" | undefined,
-    delta: string | undefined,
-    toolCallId?: string,
-  ) => {
-    if (!toolName || !delta) return;
-    markIncomingContentScrollIntent();
-    dispatchBubbleAction({ type: "append_tool_output_delta", toolName, stream, delta, toolCallId });
-  }, [dispatchBubbleAction, markIncomingContentScrollIntent]);
-
-  const mergeAssistantMetadata = useCallback((metadata: unknown) => {
-    markIncomingContentScrollIntent();
-    dispatchBubbleAction({ type: "merge_assistant_metadata", metadata });
-  }, [dispatchBubbleAction, markIncomingContentScrollIntent]);
-
-  const handleUiChunk = useCallback((chunk?: ChatUiChunk, correlation?: ChatUiChunkCorrelation) => {
-    dispatchChatUiChunk(chunk, {
-      addErrorBubbleOnce,
-      appendAssistantDelta,
-      appendToolOutputDelta,
-      clearCancel: () => {
-        cancelRef.current = null;
-      },
-      mergeAssistantMetadata,
-      setBusy,
-      setStatusText,
-      setUiChunkStreamAvailable: (available) => {
-        uiStreamAvailableRef.current = available;
-      },
-      updateBubbles: setBubbles,
-      setWorkflowState,
-      showApprovalRequest,
-      startAssistantTextPart,
-      stopStreaming,
-      upsertToolBubble,
-    }, correlation);
-  }, [
-    addErrorBubbleOnce,
-    appendAssistantDelta,
-    appendToolOutputDelta,
-    cancelRef,
-    mergeAssistantMetadata,
-    setBusy,
-    setBubbles,
-    setStatusText,
-    setWorkflowState,
-    showApprovalRequest,
-    startAssistantTextPart,
-    stopStreaming,
-    uiStreamAvailableRef,
-    upsertToolBubble,
-  ]);
 
   const toggleTool = useCallback((id: string) => {
     dispatchBubbleAction({ type: "toggle_tool", id });
@@ -190,14 +81,9 @@ export function useChatBubbleRuntime({
 
   return {
     addBubble,
-    addErrorBubbleOnce,
-    appendToolOutputDelta,
     finaliseWithResponse,
-    handleUiChunk,
-    mergeAssistantMetadata,
     resolveConfirm,
     showApprovalRequest,
     toggleTool,
-    upsertToolBubble,
   };
 }

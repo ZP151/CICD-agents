@@ -34,7 +34,6 @@ export function useChatPageState(locationSearch: string) {
   const [titleEditing, setTitleEditing] = useState(false);
   const [customTitle, setCustomTitle] = useState<string | null>(initialDraft?.customTitle ?? null);
   const cancelRef = useRef<(() => void) | null>(null);
-  const uiStreamAvailableRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
@@ -75,7 +74,6 @@ export function useChatPageState(locationSearch: string) {
     textareaRef,
     titleEditing,
     titleInputRef,
-    uiStreamAvailableRef,
     workflowState,
   };
 }

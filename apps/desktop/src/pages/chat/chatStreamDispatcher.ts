@@ -1,33 +1,18 @@
-import type { ChatEventPayload, ChatUiChunk } from "../../api.js";
-import type { ToolCallPartSnapshot } from "../../chatBubbles.js";
-import { reduceChatBubbles } from "./chatBubbleReducer.js";
+import type { ChatEventPayload } from "../../api.js";
 import type { ApprovalRequest, Bubble, WorkflowEventState } from "./chat.types.js";
-import type { ChatUiChunkCorrelation } from "./chatUiChunkDispatcher.js";
-import { reduceChatEvent } from "./chatEventReducer.js";
-import {
-  makeToolCallId,
-} from "./chatToolStreamState.js";
-import { visibleProgressStatusText } from "./chatStatusText.js";
-import {
-  handleCancelledEvent,
-  handleDoneEvent,
-  handleErrorEvent,
-} from "./chatTerminalStreamState.js";
-import {
-  statusTextForApprovalResolved,
-  statusTextForWorkflowState,
-  workflowStateAfterApprovalResolved,
-  workflowStateFromApprovalRequired,
-  type WorkflowStateUpdate,
-} from "./chatWorkflowStreamState.js";
 import {
   applyTurnTimelineEvent,
   isTranscriptEvent,
   sealTurnTranscriptExecution,
   upsertTurnStartedTranscript,
 } from "./chatTurnTranscript.js";
-import { adoptTurnMetrics, markPendingTurnMetric, markTurnMetric } from "./chatTurnMetrics.js";
+import { adoptTurnMetrics, markTurnMetric } from "./chatTurnMetrics.js";
 import { acceptCanonicalTimelineSequence } from "./chatTimelineSequence.js";
+import {
+  workflowStateAfterApprovalResolved,
+  workflowStateFromApprovalRequired,
+  type WorkflowStateUpdate,
+} from "./chatWorkflowStreamState.js";
 
 const pendingFinalDeltas = new Map<string, string[]>();
 const pendingFinalCompletions = new Map<string, {
@@ -45,21 +30,19 @@ export interface ChatStreamDispatchOptions {
   refreshHistoryOnDone?: boolean;
 }
 
+/**
+ * The live stream is the canonical Timeline protocol only. Legacy render
+ * events (ui.chunk, assistant_delta, tool_start, tool_output_delta, tool_end,
+ * message, done, error, …) are no longer emitted by the daemon; anything not
+ * part of the turn.* protocol is dropped here instead of being rendered a
+ * second time beside the transcript. History restore of old sessions stays a
+ * migration concern of the session loader, not of the live path.
+ */
 export interface ChatStreamDispatcherAdapter {
-  uiChunkStreamAvailable: () => boolean;
-  setUiChunkStreamAvailable: (available: boolean) => void;
-  handleUiChunk: (chunk?: ChatUiChunk, correlation?: ChatUiChunkCorrelation) => void;
   setSessionId: (sessionId: string) => void;
   setStatusText: (status: string | null) => void;
   appendAssistantDelta: (delta: string) => void;
   stopStreaming: () => void;
-  upsertToolBubble: (snapshot: ToolCallPartSnapshot) => void;
-  appendToolOutputDelta: (
-    toolName: string | undefined,
-    stream: "stdout" | "stderr" | undefined,
-    delta: string | undefined,
-    toolCallId?: string,
-  ) => void;
   updateBubbles: (updater: (prev: Bubble[]) => Bubble[]) => void;
   addBubble: (bubble: Bubble) => void;
   currentSessionId: () => string | null;
@@ -69,7 +52,6 @@ export interface ChatStreamDispatcherAdapter {
   setBusy: (busy: boolean) => void;
   clearCancel: () => void;
   refreshHistory: () => void;
-  addErrorBubbleOnce: (text: string) => void;
 }
 
 export function dispatchChatStreamEvent(
@@ -91,177 +73,16 @@ export function dispatchChatStreamEvent(
     return;
   }
 
-  // The daemon continues to send legacy UI chunks while other clients migrate.
-  // Once a turn is timeline-aware, those chunks must never create a second
-  // assistant/tool transcript beside the canonical one.
-  if (ev.turnId && isLegacyPresentationEvent(ev.type)) return;
-
-  if (ev.type === "turn.started") markTurnMetric(ev.turnId, "turn_started");
-  if (ev.type === "turn.phase") {
-    markTurnMetric(ev.turnId, ev.phase === "context" ? "context_started" : ev.phase === "planning" ? "planner_started" : "sse_flushed");
-  }
-  if (ev.type === "assistant_delta" || ev.type === "text.delta") markTurnMetric(ev.turnId, "first_text_delta");
-  if (ev.type === "turn.completed" || ev.type === "turn.cancelled" || ev.type === "turn.failed") markTurnMetric(ev.turnId, "finished");
-  if (ev.type === "ui.chunk") markPendingTurnMetric("sse_flushed");
-  const eventReduction = reduceChatEvent(
-    { uiChunkStreamAvailable: adapter.uiChunkStreamAvailable() },
-    ev,
-  );
-  if (eventReduction.acceptance.kind === "ignored") {
-    adapter.setUiChunkStreamAvailable(eventReduction.nextState.uiChunkStreamAvailable);
+  // Session assignment is the only remaining control event. Every other
+  // event type is a legacy live-render event that would create a second
+  // assistant/tool transcript beside the canonical one, so it is dropped.
+  if (ev.type === "session") {
+    if (ev.sessionId) {
+      options.onSession?.(ev.sessionId);
+      adapter.setSessionId(ev.sessionId);
+    }
     return;
   }
-
-  switch (ev.type) {
-    case "ui.chunk":
-      adapter.handleUiChunk(ev.uiChunk, ev);
-      break;
-
-    case "session":
-      if (ev.sessionId) {
-        options.onSession?.(ev.sessionId);
-        adapter.setSessionId(ev.sessionId);
-      }
-      break;
-
-    case "turn.started":
-      adapter.setStatusText("Working");
-      adapter.updateBubbles((prev) => upsertTurnStartedTranscript(prev, ev, uid));
-      break;
-
-    case "turn.phase":
-      adapter.setStatusText("Thinking");
-      break;
-
-    case "turn.plan":
-      adaptLegacyStatementToTranscript(adapter, [ev.message, ...(ev.planItems ?? [])].filter(Boolean).join(": "), ev);
-      break;
-
-    case "turn.step":
-      // Running/completed steps already have a command group as their public
-      // evidence. Keep the compact transcript for an actual blocked decision.
-      if (ev.stepStatus === "blocked") {
-        adaptLegacyStatementToTranscript(adapter, ev.message, ev);
-      }
-      break;
-
-    case "turn.completed":
-    case "turn.cancelled":
-    case "turn.failed":
-      adapter.stopStreaming();
-      adapter.updateBubbles((bubbles) => applyTurnTimelineEvent(bubbles, ev));
-      break;
-
-    case "assistant_delta":
-      adapter.setStatusText(null);
-      adapter.appendAssistantDelta(ev.delta ?? "");
-      break;
-
-    case "progress":
-      adapter.stopStreaming();
-      adapter.setStatusText(visibleProgressStatusText(ev.message));
-      break;
-
-    case "tool_start": {
-      adapter.setStatusText(`Running ${ev.name}`);
-      adapter.stopStreaming();
-      const toolName = ev.name ?? "unknown";
-      const toolCallId = ev.toolCallId ?? makeToolCallId(toolName, ev.args);
-      adapter.upsertToolBubble({
-        toolCallId,
-        toolName,
-        state: "input-available",
-        input: ev.args,
-      });
-      break;
-    }
-
-    case "tool_output_delta":
-    case "tool.output.delta":
-      adapter.appendToolOutputDelta(ev.name, ev.stream, ev.delta, ev.toolCallId);
-      break;
-
-    case "tool_end":
-      adapter.updateBubbles((prev) => reduceChatBubbles(prev, { type: "tool_end", event: ev }, uid));
-      if (options.pendingBubbleId) {
-        adapter.updateBubbles((prev) => reduceChatBubbles(prev, {
-          type: "mark_pending_done",
-          id: options.pendingBubbleId,
-        }, uid));
-      }
-      adapter.setStatusText("Processing");
-      break;
-
-    case "confirm_required":
-      adapter.stopStreaming();
-      adapter.addBubble({
-        id: uid(),
-        kind: "confirm",
-        riskLevel: ev.riskLevel,
-        plan: ev.plan,
-        sessionId: options.confirmSessionId ?? adapter.currentSessionId() ?? undefined,
-        confirmed: null,
-      });
-      adapter.setStatusText("Waiting for confirmation");
-      break;
-
-    case "workflow_state":
-      adapter.setWorkflowState(ev.state ?? null);
-      if (ev.state?.pendingApproval) adapter.showApprovalRequest(ev.state.pendingApproval, ev.turnId);
-      {
-        const statusText = statusTextForWorkflowState(ev.state);
-        if (statusText !== undefined) adapter.setStatusText(statusText);
-      }
-      if (ev.state?.pendingApproval) pauseForApproval(adapter);
-      break;
-
-    case "approval_required":
-      if (ev.approval) {
-        adapter.setWorkflowState(workflowStateFromApprovalRequired(ev.approval));
-        adapter.showApprovalRequest(ev.approval, ev.turnId);
-      }
-      adapter.setStatusText("Waiting for approval");
-      pauseForApproval(adapter);
-      break;
-
-    case "approval_resolved":
-      adapter.setWorkflowState(workflowStateAfterApprovalResolved(ev.approved));
-      adapter.setStatusText(statusTextForApprovalResolved(ev.approved));
-      break;
-
-    case "executing":
-      adapter.addBubble({ id: uid(), kind: "system", text: "Executing actions..." });
-      adapter.setStatusText("Executing");
-      break;
-
-    case "message":
-      if (ev.text) {
-        adapter.stopStreaming();
-        adapter.addBubble({ id: uid(), kind: "assistant", text: ev.text, meta: { timestamp: Date.now() } });
-      }
-      break;
-
-    case "done":
-      handleDoneEvent(ev, adapter, {
-        refreshHistoryOnDone: options.refreshHistoryOnDone,
-      });
-      break;
-
-    case "cancelled":
-      handleCancelledEvent(adapter, {
-        pendingBubbleId: options.pendingBubbleId,
-        makeId: uid,
-      });
-      break;
-
-    case "error":
-      handleErrorEvent(ev, adapter, {
-        pendingBubbleId: options.pendingBubbleId,
-      });
-      break;
-  }
-
-  adapter.setUiChunkStreamAvailable(eventReduction.nextState.uiChunkStreamAvailable);
 }
 
 function pauseForApproval(adapter: ChatStreamDispatcherAdapter): void {
@@ -269,55 +90,14 @@ function pauseForApproval(adapter: ChatStreamDispatcherAdapter): void {
   adapter.clearCancel();
 }
 
-function updateTurnActivityMarker(event: ChatEventPayload, adapter: ChatStreamDispatcherAdapter): void {
-  adapter.updateBubbles((bubbles) => applyTurnTimelineEvent(bubbles, event));
-}
-
-function adaptLegacyStatementToTranscript(
-  adapter: Pick<ChatStreamDispatcherAdapter, "updateBubbles">,
-  detail: string | null | undefined,
-  event?: Pick<ChatEventPayload, "turnId" | "sequence" | "emittedAt">,
-): void {
-  if (!detail?.trim() || !event?.turnId) return;
-  adapter.updateBubbles((bubbles) => applyTurnTimelineEvent(bubbles, {
-    type: "turn.work.statement",
-    turnId: event.turnId,
-    sequence: event.sequence,
-    emittedAt: event.emittedAt,
-    blockId: `legacy-statement-${event.sequence ?? "unknown"}`,
-    message: detail,
-  }));
-}
-
 function isCanonicalTurnTimelineEvent(type: ChatEventPayload["type"]): boolean {
   return type === "turn.started"
-    || type === "turn.narrative.delta"
     || type === "turn.waiting"
+    || type === "turn.narrative.delta"
     || type === "turn.workflow.updated"
     || type === "turn.final.delta"
     || type === "turn.final.completed"
     || isTranscriptEvent(type);
-}
-
-function isLegacyPresentationEvent(type: ChatEventPayload["type"]): boolean {
-  return type === "ui.chunk"
-    || type === "assistant_delta"
-    || type === "text.delta"
-    || type === "tool_start"
-    || type === "tool.started"
-    || type === "tool_output_delta"
-    || type === "tool.output.delta"
-    || type === "tool_end"
-    || type === "tool.completed"
-    || type === "work_statement"
-    || type === "tool_group_start"
-    || type === "tool_group_end"
-    || type === "final_delta"
-    || type === "done"
-    || type === "final"
-    || type === "progress"
-    || type === "error"
-    || type === "cancelled";
 }
 
 function dispatchCanonicalTurnTimelineEvent(
@@ -401,7 +181,6 @@ function dispatchCanonicalTurnTimelineEvent(
   }
   if (ev.type === "turn.completed") {
     adapter.stopStreaming();
-    adapter.setUiChunkStreamAvailable(false);
   }
   if (ev.type === "turn.failed" || ev.type === "turn.cancelled") {
     markTurnMetric(ev.turnId, "finished");
