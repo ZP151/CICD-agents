@@ -182,8 +182,12 @@ export class DeliveryActionRuntime {
       return { record: failed, execution, error: { kind: "execution", message: execution.outcome.summary } };
     }
 
+    // Creation actions (pull_request.create, work_item.create, pipeline.trigger)
+    // learn their real remote id from the execution result before the verifier
+    // re-reads; predicates referencing the creation target follow it.
+    const resolved = resolveCreatedTarget(executing, execution.outcome.result);
     const verifying: ActionRecord = {
-      ...executing,
+      ...resolved,
       status: "verifying",
       executedAt: now,
       audit: this.audit(executing, "executed", execution.outcome.summary),
@@ -352,6 +356,41 @@ export class DeliveryActionRuntime {
   private audit(record: ActionRecord, event: ActionAuditEntry["event"], detail?: string): ActionAuditEntry[] {
     return [...record.audit, { at: this.options.now?.() ?? Date.now(), event, detail }];
   }
+}
+
+/**
+ * Copy the remote id returned by an execution into the record's target and
+ * into matching verification predicates so the re-read hits the real artifact.
+ */
+export function resolveCreatedTarget(record: ActionRecord, result: unknown): ActionRecord {
+  if (!result || typeof result !== "object") return record;
+  const payload = result as Record<string, unknown>;
+  const target = record.target;
+  let nextTarget = target;
+  if (target.kind === "pull_request" && typeof payload["pullRequestId"] === "number") {
+    nextTarget = { ...target, id: payload["pullRequestId"] as number };
+  } else if (target.kind === "work_item" && typeof payload["workItemId"] === "number") {
+    nextTarget = { ...target, id: payload["workItemId"] as number };
+  } else if (target.kind === "build" && typeof payload["runId"] === "number") {
+    nextTarget = { ...target, buildId: payload["runId"] as number };
+  }
+  if (nextTarget === target) return record;
+  return {
+    ...record,
+    target: nextTarget,
+    expectedResult: record.expectedResult.map((predicate) => ({
+      ...predicate,
+      artifact: predicate.artifact.kind === nextTarget.kind
+        ? { ...predicate.artifact, ...idFieldsFor(nextTarget) }
+        : predicate.artifact,
+    })),
+  };
+}
+
+function idFieldsFor(ref: ArtifactRef): { id?: number; buildId?: number } {
+  if (ref.kind === "pull_request" || ref.kind === "work_item") return { id: ref.id };
+  if (ref.kind === "build") return { buildId: ref.buildId };
+  return {};
 }
 
 export function actionId(projectLinkId: string, idempotencyKey: string): string {

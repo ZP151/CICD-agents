@@ -32,11 +32,17 @@ function deliveryProposeActionTool(): Tool {
   return {
     name: "delivery_propose_action",
     description:
-      "Propose a persisted, verifiable Azure DevOps action (for example a work item comment). " +
-      "The exact action is stored locally and shown for approval; after approval it is executed " +
-      "once and verified by re-reading Azure DevOps. Returns the action id, status, and verification evidence. " +
+      "Propose a persisted, verifiable Azure DevOps action. The exact action is stored locally and shown for " +
+      "approval; after approval it is executed once and verified by re-reading Azure DevOps. Returns the action " +
+      "id, status, and verification evidence. " +
+      "Target templates (projectLinkId is filled in automatically; never use placeholders): " +
+      "work_item.comment -> target {kind: work_item, id: 7912}; " +
+      "pull_request.create -> target {kind: pull_request, id: 0} with payload repositoryId, sourceBranch, " +
+      "targetBranch, title, workItemId; " +
+      "pipeline.trigger -> target {kind: build, definitionId: 117, buildId: 0} with payload pipelineId and branch. " +
       "For work_item.comment use expected_result with condition revision_gt (expectedRevision = the work item's current revision) " +
-      "and/or condition comment_contains (expected = the exact comment text).",
+      "and/or condition comment_contains (expected = the exact comment text). " +
+      "For pipeline.trigger use expected_result run_visible with correlation = the source commit sha.",
     parameters: {
       type: "object",
       required: ["kind", "target", "payload", "risk", "reason", "idempotency_key", "expires_at"],
@@ -98,7 +104,7 @@ function deliveryProposeActionTool(): Tool {
             .filter(isScopedArtifactShape)
             .map((ref) => ({ ...(ref as ArtifactRef), projectLinkId }))
         : [];
-      const expectedResult = Array.isArray(payload["expected_result"])
+      const expectedResult = Array.isArray(payload["expected_result"]) && payload["expected_result"].length > 0
         ? (payload["expected_result"] as unknown[])
             .filter(isVerificationPredicate)
             .map((predicate) => ({
@@ -112,10 +118,18 @@ function deliveryProposeActionTool(): Tool {
               correlation: (predicate as { correlation?: string }).correlation,
               expectedRevision: (predicate as { expectedRevision?: number }).expectedRevision,
             }))
-        : [];
+        : defaultPredicatesFor(
+            String(payload["kind"] ?? ""),
+            scopedTarget,
+            (payload["payload"] as Record<string, unknown>) ?? {},
+          );
 
       const idempotencyKey = String(payload["idempotency_key"] ?? "");
-      const expiresAt = Number(payload["expires_at"] ?? 0);
+      // A missing/zero expiry cannot produce an instantly-stale proposal;
+      // default to one hour so the approval window stays human-sized.
+      const expiresAt = Number(payload["expires_at"] ?? 0) > 0
+        ? Number(payload["expires_at"])
+        : Date.now() + 3_600_000;
       const store = new SqliteDeliveryActionStore();
       const recordId = actionId(projectLinkId, idempotencyKey);
 
@@ -215,6 +229,49 @@ function summarizeApprovedAction(record: Awaited<ReturnType<DeliveryActionRuntim
   return `Action ended in status ${record.status}.`;
 }
 
+/**
+ * Every write must carry verification predicates; when the model omits them
+ * the tool derives a kind-appropriate re-read predicate so a write can never
+ * be declared complete without re-reading ADO.
+ */
+function defaultPredicatesFor(
+  kind: string,
+  target: ArtifactRef,
+  actionPayload: Record<string, unknown>,
+): Array<{
+  artifact: ArtifactRef;
+  condition: "exists" | "field_eq" | "run_visible" | "comment_contains";
+  field?: string;
+  expected?: unknown;
+  correlation?: string;
+}> {
+  if (kind === "work_item.comment") {
+    const text = String(actionPayload["text"] ?? "");
+    return text
+      ? [{ artifact: target, condition: "comment_contains", expected: text }]
+      : [{ artifact: target, condition: "exists" }];
+  }
+  if (kind === "work_item.create") {
+    return [{
+      artifact: target,
+      condition: "field_eq",
+      field: "System.Title",
+      expected: String(actionPayload["title"] ?? ""),
+    }];
+  }
+  if (kind === "pull_request.create") {
+    return [{ artifact: target, condition: "exists" }];
+  }
+  if (kind === "pipeline.trigger") {
+    return [{
+      artifact: target,
+      condition: "run_visible",
+      correlation: String(actionPayload["sourceCommit"] ?? actionPayload["commit"] ?? ""),
+    }];
+  }
+  return [{ artifact: target, condition: "exists" }];
+}
+
 /** The model provides kind + identity fields; projectLinkId is injected from context. */
 function isScopedArtifactShape(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
@@ -222,10 +279,11 @@ function isScopedArtifactShape(value: unknown): boolean {
   const kind = String(candidate["kind"] ?? "");
   if (kind === "work_item") return Number.isInteger(Number(candidate["id"] ?? 0)) && Number(candidate["id"]) > 0;
   if (kind === "pull_request") {
-    return Number.isInteger(Number(candidate["id"] ?? 0)) && Boolean(candidate["repositoryId"] ?? candidate["repository_id"]);
+    // Creation targets carry no id yet; identity comes from the payload.
+    return true;
   }
   if (kind === "build") {
-    return Number.isInteger(Number(candidate["buildId"] ?? candidate["build_id"] ?? 0));
+    return Number.isInteger(Number(candidate["definitionId"] ?? candidate["definition_id"] ?? 0));
   }
   if (kind === "branch") {
     return Boolean(candidate["name"]) && Boolean(candidate["repositoryId"] ?? candidate["repository_id"]);

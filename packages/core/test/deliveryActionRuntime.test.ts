@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   artifactStableKey,
+  resolveCreatedTarget,
   type ActionRecord,
   type ActionTransport,
   type ArtifactObservation,
@@ -353,6 +354,37 @@ describe("delivery action runtime", () => {
     expect(retried.verdict.decision).toBe("deny");
     expect(retried.verdict.reasons.join()).toContain("already touched");
     expect(transport.executeCalls).toHaveLength(1);
+  });
+
+  it("resolves a created target id into the record and its predicates after execution", async () => {
+    const prTarget = {
+      kind: "pull_request" as const,
+      projectLinkId: "pl-1",
+      repositoryId: "repo-1",
+      id: 0,
+      sourceCommit: "",
+      iterationId: 1,
+    };
+    const record: ActionRecord = {
+      id: "act-1",
+      turnId: "t",
+      projectLinkId: "pl-1",
+      kind: "pull_request.create",
+      target: prTarget,
+      basedOn: [],
+      payload: { title: "x" },
+      risk: "high",
+      reason: "r",
+      expectedResult: [{ artifact: prTarget, condition: "exists" }],
+      idempotencyKey: "k",
+      expiresAt: 1_800_000_000_000,
+      status: "executing",
+      createdAt: 1_700_000_000_000,
+      audit: [],
+    };
+    const resolved = resolveCreatedTarget(record, { pullRequestId: 777, url: "https://x" });
+    expect(resolved.target).toMatchObject({ kind: "pull_request", id: 777 });
+    expect(resolved.expectedResult[0]!.artifact).toMatchObject({ kind: "pull_request", id: 777 });
   });
 
   it("rejects an awaiting approval on user feedback", async () => {

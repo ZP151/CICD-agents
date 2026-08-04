@@ -18,7 +18,7 @@ const ArtifactRefSchema = z.custom<ArtifactRef>(isArtifactRef, {
 
 const VerificationPredicateSchema = z.object({
   artifact: ArtifactRefSchema,
-  condition: z.enum(["exists", "field_eq", "relation_present", "revision_gt", "run_visible"]),
+  condition: z.enum(["exists", "field_eq", "relation_present", "revision_gt", "run_visible", "comment_contains"]),
   field: z.string().optional(),
   expected: z.unknown().optional(),
   correlation: z.string().optional(),
@@ -54,8 +54,8 @@ export interface DeliveryRoutesOptions {
 export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRoutesOptions): void {
   const { projectLinkStore, writes } = options;
 
-  function createRuntime(): DeliveryActionRuntime {
-    const transport = new AdoActionTransport({
+  function createTransport(): AdoActionTransport {
+    return new AdoActionTransport({
       resolveProjectLink: async (projectLinkId) => {
         const projectLink = await projectLinkStore.getProjectLink(projectLinkId);
         if (!projectLink) {
@@ -67,6 +67,10 @@ export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRo
         };
       },
     });
+  }
+
+  function createRuntime(): DeliveryActionRuntime {
+    const transport = createTransport();
     return new DeliveryActionRuntime(
       new SqliteDeliveryActionStore(),
       new DeliveryActionPolicy(),
@@ -144,6 +148,39 @@ export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRo
       return reply.code(500).send({
         error: err instanceof Error ? err.message : String(err),
       });
+    }
+  });
+
+  app.get("/delivery/artifacts/:kind/:id", async (request, reply) => {
+    const { kind, id } = request.params as { kind: string; id: string };
+    const projectLinkId = String((request.query as Record<string, string | undefined>)["projectLinkId"] ?? "");
+    if (!projectLinkId) {
+      return reply.code(400).send({ error: "projectLinkId query parameter is required" });
+    }
+    const numericId = Number(id);
+    if (!Number.isInteger(numericId) || numericId <= 0) {
+      return reply.code(400).send({ error: "id must be a positive integer" });
+    }
+    let ref: ArtifactRef | undefined;
+    if (kind === "work_item") {
+      ref = { kind: "work_item", projectLinkId, id: numericId, revision: 0 };
+    } else if (kind === "pull_request") {
+      const repositoryId = String((request.query as Record<string, string | undefined>)["repositoryId"] ?? "");
+      if (!repositoryId) return reply.code(400).send({ error: "repositoryId query parameter is required" });
+      ref = { kind: "pull_request", projectLinkId, repositoryId, id: numericId, sourceCommit: "", iterationId: 1 };
+    } else if (kind === "build") {
+      const definitionId = Number((request.query as Record<string, string | undefined>)["definitionId"] ?? 0);
+      ref = { kind: "build", projectLinkId, definitionId, buildId: numericId };
+    } else {
+      return reply.code(400).send({ error: `unsupported artifact kind ${kind}` });
+    }
+    try {
+      const transport = createTransport();
+      const observation = await transport.readArtifact(ref);
+      if (!observation) return reply.code(404).send({ error: `artifact ${kind}/${id} not found` });
+      return observation;
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 

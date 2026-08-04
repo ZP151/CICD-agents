@@ -7,12 +7,13 @@
  * Every read may record a canonical snapshot into the delivery graph when a
  * graph store is attached.
  */
-import { addAzureWorkItemComment, readAzureWorkItem } from "../ado/workItems.js";
+import { addAzureWorkItemComment, createAzureWorkItem, linkAzureWorkItemToPullRequest, readAzureWorkItem } from "../ado/workItems.js";
 import { getAzureDevOpsAuth } from "../ado/auth.js";
 import { createAzurePullRequest } from "../ado/pullRequestMutations.js";
 import { getAzurePullRequestById } from "../ado/pullRequests.js";
 import { readAzureBranchObjectId } from "../ado/refs.js";
-import { linkAzureWorkItemToPullRequest } from "../ado/workItems.js";
+import { triggerAzurePipelineRun } from "../ado/pipelines.js";
+import { getAzureBuildTimeline, listAzureBuilds } from "../ado/builds.js";
 import { ToolError } from "../tools/executor.js";
 import type { ArtifactRef } from "./artifactRef.js";
 import type { ActionRecord } from "./actions/actionTypes.js";
@@ -33,7 +34,12 @@ export interface AdoActionTransportOptions {
   graphStore?: DeliveryGraphStore;
 }
 
-const SUPPORTED_KINDS = new Set(["work_item.comment", "pull_request.create"]);
+const SUPPORTED_KINDS = new Set([
+  "work_item.comment",
+  "work_item.create",
+  "pull_request.create",
+  "pipeline.trigger",
+]);
 
 export class AdoActionTransport implements ActionTransport {
   constructor(private readonly options: AdoActionTransportOptions) {}
@@ -52,6 +58,12 @@ export class AdoActionTransport implements ActionTransport {
     if (record.kind === "pull_request.create") {
       return this.executePullRequestCreate(record);
     }
+    if (record.kind === "work_item.create") {
+      return this.executeWorkItemCreate(record);
+    }
+    if (record.kind === "pipeline.trigger") {
+      return this.executePipelineTrigger(record);
+    }
     return { ok: false, result: undefined, summary: `unsupported kind ${record.kind}` };
   }
 
@@ -61,6 +73,9 @@ export class AdoActionTransport implements ActionTransport {
     }
     if (ref.kind === "pull_request") {
       return this.readPullRequest(ref);
+    }
+    if (ref.kind === "build") {
+      return this.readBuild(ref);
     }
     if (ref.kind === "branch") {
       const target = await this.resolveTarget(ref);
@@ -115,6 +130,10 @@ export class AdoActionTransport implements ActionTransport {
     const target = await this.resolveTarget(ref);
     const auth = await this.authFor(ref.projectLinkId);
     try {
+      // Creation targets (id 0) have no current revision; the staleness guard
+      // applies to the basedOn branch refs instead, and the runtime resolves
+      // the real id from the execution result before verification.
+      if (ref.id === 0) return undefined;
       const pr = await getAzurePullRequestById({
         organization: target.organization,
         project: target.project,
@@ -244,6 +263,111 @@ export class AdoActionTransport implements ActionTransport {
       result: { pullRequestId: created.pull_request_id, url: created.url, workItemId: workItemId || undefined },
       summary: `PR #${created.pull_request_id} created (${sourceBranch} -> ${targetBranch})`,
     };
+  }
+
+  private async executeWorkItemCreate(record: ActionRecord): Promise<ExecuteOutcome> {
+    const payload = record.payload as { type?: unknown; title?: unknown; description?: unknown };
+    const type = String(payload.type ?? "Task");
+    const title = String(payload.title ?? "");
+    if (type !== "Task" && type !== "Bug") {
+      return { ok: false, result: undefined, summary: "work_item.create payload type must be Task or Bug" };
+    }
+    if (!title.trim()) {
+      return { ok: false, result: undefined, summary: "work_item.create payload must include a title" };
+    }
+    const target = record.target as Extract<ArtifactRef, { kind: "work_item" }>;
+    const resolution = await this.resolveTarget(target);
+    const auth = await this.authFor(target.projectLinkId);
+    const created = await createAzureWorkItem({
+      organization: resolution.organization,
+      project: resolution.project,
+      type,
+      title,
+      description: payload.description === undefined ? undefined : String(payload.description),
+      auth,
+    });
+    if (!created.ok || !created.id) {
+      return {
+        ok: false,
+        result: undefined,
+        summary: `work item create rejected by ADO (${created.status_code ?? "unknown"}): ${created.error ?? "no error detail"}`,
+      };
+    }
+    return {
+      ok: true,
+      result: { workItemId: created.id, revision: created.revision },
+      summary: `${type} #${created.id} created`,
+    };
+  }
+
+  private async executePipelineTrigger(record: ActionRecord): Promise<ExecuteOutcome> {
+    const payload = record.payload as { pipelineId?: unknown; branch?: unknown };
+    const pipelineId = Number(payload.pipelineId ?? 0);
+    const branch = String(payload.branch ?? "");
+    if (!pipelineId || !branch) {
+      return { ok: false, result: undefined, summary: "pipeline.trigger payload must include pipelineId and branch" };
+    }
+    const target = record.target as Extract<ArtifactRef, { kind: "build" }>;
+    const resolution = await this.resolveTarget(target);
+    const auth = await this.authFor(target.projectLinkId);
+    const triggered = await triggerAzurePipelineRun({
+      organization: resolution.organization,
+      project: resolution.project,
+      pipelineId,
+      branch,
+      auth,
+    });
+    if (!triggered.run_id) {
+      return {
+        ok: false,
+        result: undefined,
+        summary: "ADO did not return a pipeline run id",
+      };
+    }
+    return {
+      ok: true,
+      result: { runId: triggered.run_id, name: triggered.name },
+      summary: `pipeline #${pipelineId} run ${triggered.run_id} triggered on ${branch}`,
+    };
+  }
+
+  private async readBuild(ref: Extract<ArtifactRef, { kind: "build" }>): Promise<ArtifactObservation | undefined> {
+    const target = await this.resolveTarget(ref);
+    const auth = await this.authFor(ref.projectLinkId);
+    try {
+      const builds = await listAzureBuilds({
+        organization: target.organization,
+        project: target.project,
+        definitions: [ref.definitionId],
+        top: 1,
+        auth,
+      });
+      const latest = builds[0];
+      if (!latest) return undefined;
+      const observation: ArtifactObservation = {
+        ref: {
+          kind: "build",
+          projectLinkId: ref.projectLinkId,
+          definitionId: ref.definitionId,
+          buildId: latest.id,
+        },
+        revision: latest.id,
+        fields: {
+          buildNumber: latest.buildNumber,
+          status: latest.status,
+          result: latest.result,
+          sourceBranch: latest.sourceBranch,
+          sourceVersion: latest.sourceVersion,
+          definitionName: latest.definitionName,
+        },
+        relations: [],
+        correlationIds: [String(latest.sourceVersion), String(latest.buildNumber)],
+      };
+      await this.recordSnapshot(observation);
+      return observation;
+    } catch {
+      return undefined;
+    }
   }
 
   private async recordSnapshot(observation: ArtifactObservation): Promise<void> {
