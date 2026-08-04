@@ -33,6 +33,23 @@
 - 一次只操作一个资源；timeout 场景未触发；全部临时资源已清理并远端复核。
 - 未触碰 ClaimBot_API 现有 branch/PR/pipeline；未对非测试资源做任何写操作。
 
+## Desktop runtime follow-up (2026-08-04)
+
+| Scope | Evidence | Result |
+| --- | --- | --- |
+| Latest sidecar | Fresh `build:sidecar` followed by `packaged-sidecar-smoke.ps1` | Passed: version and desktop version `0.5.26`, `runtimeMode=desktop-sidecar`, index refresh and read-only chat completed. |
+| Native desktop auth recovery | Latest Tauri dev shell on an isolated runtime port; `/auth/status` and live `/auth/me` | Passed: cached user state and refreshed credential both authenticated. No identity or token values recorded here. |
+| Turn terminal lifecycle | Read-only Project Link SSE run | Passed: observed `turn.started → turn.narrative.delta → tool groups → turn.execution.completed → turn.final.delta → turn.final.completed → turn.finished`. |
+| Empty finalization regression | `agent_final` sends whitespace response before a valid finalization | Fixed and covered by `chatPlannerAgentFinalTool.test.ts`; the blank finalization is rejected and the same Turn continues to a non-empty conclusion. |
+| First public narrative latency | Three fresh sidecar SSE measurements against the selected Project Link | **Not yet accepted.** `turn.started`: 297 ms, 310 ms, 1789 ms; first genuine public narrative: 3464 ms, 4153 ms, 3770 ms. Local Working still appears immediately, but the 500 ms model-first-public-text target is not met. |
+| Managed Azure DevOps MCP | Live connector check | Not runnable: every local Project Link currently has `adoMcpEnabled=false` and no MCP command/auth configuration. Adapter and contract tests are not treated as live-connector proof. |
+
+### Follow-up acceptance conditions
+
+- Do not replace the measured model delay with a fixed opening sentence. Any remedy must preserve model-authored public narration and be re-measured against the 500 ms target.
+- Configure one disposable/read-only Azure DevOps MCP connector before claiming managed-MCP live acceptance; record only the connector kind, operation class and outcome.
+- Repeat the native OAuth browser return path after the latest sidecar build when an interactive sign-in is intentionally initiated; the current check proves credential recovery in the current shell, not a new consent journey.
+
 ## Rule reminders
 
 - 一次只操作一个资源；写前读、写后验证；timeout 后先查询远端结果再决定是否重试；
