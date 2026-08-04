@@ -32,6 +32,7 @@ export interface AzurePullRequestDetail extends AzurePullRequestSummary {
   description: string;
   closedDate: string;
   workItemRefs: Array<{ id: string; url: string }>;
+  reviewerDetails: Array<{ id: string; displayName: string; vote: number }>;
 }
 
 export async function listAzurePullRequests(args: {
@@ -168,6 +169,11 @@ function toPullRequestDetail(
       id: ref.id ?? "",
       url: ref.url ?? "",
     })).filter((ref) => ref.id || ref.url),
+    reviewerDetails: (pr.reviewers ?? []).map((reviewer) => ({
+      id: reviewer.id ?? "",
+      displayName: reviewer.displayName ?? "",
+      vote: reviewer.vote ?? 0,
+    })),
   };
 }
 

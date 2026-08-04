@@ -8,6 +8,11 @@
  * graph store is attached.
  */
 import { addAzureWorkItemComment, createAzureWorkItem, linkAzureWorkItemToPullRequest, readAzureWorkItem } from "../ado/workItems.js";
+import { addAzurePullRequestComment, addAzurePullRequestReviewer } from "../ado/pullRequestMutations.js";
+import { getAzureDevOpsCurrentUser } from "../ado/core.js";
+import { API_VERSION_GIT } from "../ado/constants.js";
+import { adoBase, adoFetch } from "../ado/client.js";
+import { parseAdoJson } from "../ado/response.js";
 import { getAzureDevOpsAuth } from "../ado/auth.js";
 import { createAzurePullRequest } from "../ado/pullRequestMutations.js";
 import { getAzurePullRequestById } from "../ado/pullRequests.js";
@@ -38,6 +43,8 @@ const SUPPORTED_KINDS = new Set([
   "work_item.comment",
   "work_item.create",
   "pull_request.create",
+  "pull_request.comment",
+  "pull_request.vote",
   "pipeline.trigger",
 ]);
 
@@ -60,6 +67,12 @@ export class AdoActionTransport implements ActionTransport {
     }
     if (record.kind === "work_item.create") {
       return this.executeWorkItemCreate(record);
+    }
+    if (record.kind === "pull_request.comment") {
+      return this.executePullRequestComment(record);
+    }
+    if (record.kind === "pull_request.vote") {
+      return this.executePullRequestVote(record);
     }
     if (record.kind === "pipeline.trigger") {
       return this.executePipelineTrigger(record);
@@ -152,6 +165,17 @@ export class AdoActionTransport implements ActionTransport {
         auth,
       });
       const sourceCommit = sourceBranch?.objectId ?? ref.sourceCommit;
+      const currentUser = await getAzureDevOpsCurrentUser({ organization: target.organization, auth }).catch(() => undefined);
+      const myVote = currentUser
+        ? await readMyVote(pr, currentUser.id, currentUser.displayName)
+        : undefined;
+      const comments = await readPullRequestComments({
+        organization: target.organization,
+        project: target.project,
+        repository: ref.repositoryId,
+        pullRequestId: ref.id,
+        auth,
+      });
       const observation: ArtifactObservation = {
         ref: { ...ref, sourceCommit },
         revision: sourceCommit,
@@ -161,9 +185,11 @@ export class AdoActionTransport implements ActionTransport {
           isDraft: pr.isDraft,
           sourceBranch: pr.sourceBranch,
           targetBranch: pr.targetBranch,
+          ...(myVote !== undefined ? { myVote } : {}),
         },
         relations: pr.workItemRefs.map((workItem) => workItem.url),
         correlationIds: [sourceCommit],
+        comments,
       };
       await this.recordSnapshot(observation);
       return observation;
@@ -370,6 +396,83 @@ export class AdoActionTransport implements ActionTransport {
     }
   }
 
+  private async executePullRequestComment(record: ActionRecord): Promise<ExecuteOutcome> {
+    const payload = record.payload as { repositoryId?: unknown; pullRequestId?: unknown; content?: unknown };
+    const repositoryId = String(payload.repositoryId ?? "");
+    const pullRequestId = Number(payload.pullRequestId ?? 0);
+    const content = String(payload.content ?? "");
+    if (!repositoryId || !pullRequestId || !content.trim()) {
+      return { ok: false, result: undefined, summary: "pull_request.comment payload must include repositoryId, pullRequestId, and content" };
+    }
+    const target = record.target as Extract<ArtifactRef, { kind: "pull_request" }>;
+    const resolution = await this.resolveTarget(target);
+    const auth = await this.authFor(target.projectLinkId);
+    const written = await addAzurePullRequestComment({
+      organization: resolution.organization,
+      project: resolution.project,
+      repository: repositoryId,
+      pullRequestId,
+      content,
+      auth,
+    });
+    if (!written.ok) {
+      return {
+        ok: false,
+        result: undefined,
+        summary: `PR comment rejected by ADO (${written.status_code ?? "unknown"}): ${written.error ?? "no error detail"}`,
+      };
+    }
+    return {
+      ok: true,
+      result: { threadId: written.threadId, commentId: written.commentId },
+      summary: `comment posted on PR #${pullRequestId} (thread ${written.threadId ?? "?"})`,
+    };
+  }
+
+  private async executePullRequestVote(record: ActionRecord): Promise<ExecuteOutcome> {
+    const payload = record.payload as { repositoryId?: unknown; pullRequestId?: unknown; vote?: unknown; reviewerId?: unknown };
+    const repositoryId = String(payload.repositoryId ?? "");
+    const pullRequestId = Number(payload.pullRequestId ?? 0);
+    const voteName = String(payload.vote ?? "");
+    const voteValue: Record<string, number> = { approve: 10, wait: -5, reject: -10, reset: 0 };
+    const vote = voteValue[voteName];
+    if (!repositoryId || !pullRequestId || vote === undefined) {
+      return {
+        ok: false,
+        result: undefined,
+        summary: "pull_request.vote payload must include repositoryId, pullRequestId, and vote (approve|wait|reject|reset)",
+      };
+    }
+    const target = record.target as Extract<ArtifactRef, { kind: "pull_request" }>;
+    const resolution = await this.resolveTarget(target);
+    const auth = await this.authFor(target.projectLinkId);
+    let reviewerId = String(payload.reviewerId ?? "");
+    if (!reviewerId) {
+      const me = await getAzureDevOpsCurrentUser({ organization: resolution.organization, auth });
+      if (!me?.id) {
+        return { ok: false, result: undefined, summary: "could not resolve the authenticated reviewer id" };
+      }
+      reviewerId = me.id;
+    }
+    const voted = await addAzurePullRequestReviewer({
+      organization: resolution.organization,
+      project: resolution.project,
+      repository: repositoryId,
+      pullRequestId,
+      reviewerId,
+      vote,
+      auth,
+    });
+    if (!voted.pullRequestId) {
+      return { ok: false, result: undefined, summary: "ADO did not confirm the reviewer vote" };
+    }
+    return {
+      ok: true,
+      result: { reviewerId, vote: voteName },
+      summary: `vote ${voteName} recorded on PR #${pullRequestId}`,
+    };
+  }
+
   private async recordSnapshot(observation: ArtifactObservation): Promise<void> {
     if (!this.options.graphStore) return;
     const snapshot: ArtifactSnapshot = {
@@ -398,5 +501,48 @@ export class AdoActionTransport implements ActionTransport {
   private async authFor(projectLinkId: string) {
     if (this.options.auth) return this.options.auth(projectLinkId);
     return getAzureDevOpsAuth();
+  }
+}
+
+async function readMyVote(
+  pr: Awaited<ReturnType<typeof getAzurePullRequestById>>,
+  userId: string,
+  displayName: string,
+): Promise<string | undefined> {
+  const reviewers = pr.reviewerDetails ?? [];
+  const match = reviewers.find((reviewer) =>
+    reviewer.id === userId
+    || (reviewer.displayName?.trim() ?? "").toLowerCase() === displayName.toLowerCase(),
+  );
+  if (!match || match.vote === undefined) return undefined;
+  if (match.vote === 10) return "approved";
+  if (match.vote === -5) return "rejected";
+  if (match.vote === -10) return "waiting";
+  if (match.vote === 0) return "no_vote";
+  return String(match.vote);
+}
+
+async function readPullRequestComments(args: {
+  organization: string;
+  project: string;
+  repository: string;
+  pullRequestId: number;
+  auth: Awaited<ReturnType<typeof getAzureDevOpsAuth>>;
+}): Promise<string[]> {
+  try {
+    const url =
+      `${adoBase(args.organization)}/${encodeURIComponent(args.project)}/_apis/git/repositories/` +
+      `${encodeURIComponent(args.repository)}/pullRequests/${args.pullRequestId}/threads?api-version=${API_VERSION_GIT}`;
+    const resp = await adoFetch(url, args.auth);
+    if (!resp.ok) return [];
+    const body = await parseAdoJson(resp, "list pull request threads") as {
+      value?: Array<{ comments?: Array<{ content?: string }> }>;
+    };
+    return (body.value ?? [])
+      .flatMap((thread) => thread.comments ?? [])
+      .map((comment) => String(comment.content ?? ""))
+      .filter(Boolean);
+  } catch {
+    return [];
   }
 }
