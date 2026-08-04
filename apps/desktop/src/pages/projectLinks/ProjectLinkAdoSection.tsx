@@ -80,35 +80,6 @@ export function ProjectLinkAdoSection({
         onApply={onApplyDiscovery}
         onManualChange={onManualPipelineChange}
       />
-      <fieldset className="space-y-2 border-t border-[rgb(var(--app-border))] pt-3">
-        <label className="flex cursor-pointer items-start gap-2.5 text-sm text-[rgb(var(--app-text))]">
-          <input
-            type="checkbox"
-            checked={form.adoMcpEnabled}
-            onChange={(event) => set("adoMcpEnabled")(event.target.checked)}
-            className="mt-0.5 h-3.5 w-3.5 rounded border-[rgb(var(--app-border-strong))] text-[rgb(var(--app-accent))] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--app-accent))]"
-          />
-          <span>
-            <span className="block font-medium">Use managed Azure DevOps MCP</span>
-            <span className="mt-0.5 block text-xs leading-5 text-[rgb(var(--app-text-muted))]">
-              This Project Link selects a connector configured locally. Commands and credentials stay in local config and are never saved here.
-            </span>
-          </span>
-        </label>
-        {form.adoMcpEnabled && (
-          <div className="pl-6">
-            <Field
-              label="Allowed MCP domains"
-              value={form.adoMcpDomains}
-              onChange={set("adoMcpDomains")}
-              placeholder="repositories,pipelines,work-items"
-            />
-            <p className="mt-1.5 text-[11px] leading-4 text-[rgb(var(--app-text-subtle))]">
-              Choose from repositories, pipelines, work-items, and pull-requests. Remote write tools still require approval.
-            </p>
-          </div>
-        )}
-      </fieldset>
       {discoveryError && (
         <AdoDiscoveryNotice
           errorMessage={discoveryError}
