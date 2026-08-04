@@ -88,8 +88,12 @@ export interface AzureDevOpsMcpUserConfig {
   enabled: boolean;
   command: string;
   args: string[];
-  /** One of the supported local credential variable names, never its value. */
-  credentialEnv: "" | "AZURE_DEVOPS_EXT_PAT" | "AZURE_DEVOPS_PAT";
+  /**
+   * One approved local credential variable name, never its value. The first
+   * two are MergePilot compatibility names; the latter two are the names
+   * accepted by Microsoft's current @azure-devops/mcp stdio server.
+   */
+  credentialEnv: "" | "AZURE_DEVOPS_EXT_PAT" | "AZURE_DEVOPS_PAT" | "ADO_MCP_AUTH_TOKEN" | "PERSONAL_ACCESS_TOKEN";
 }
 
 export interface WebResearchMcpUserConfig {
@@ -485,7 +489,10 @@ function azureDevOpsMcpConfig(values: Record<string, string> | undefined): Azure
     enabled: booleanValue(values["enabled"]) ?? false,
     command: values["command"] ?? "",
     args,
-    credentialEnv: credentialEnv === "AZURE_DEVOPS_EXT_PAT" || credentialEnv === "AZURE_DEVOPS_PAT"
+    credentialEnv: credentialEnv === "AZURE_DEVOPS_EXT_PAT"
+      || credentialEnv === "AZURE_DEVOPS_PAT"
+      || credentialEnv === "ADO_MCP_AUTH_TOKEN"
+      || credentialEnv === "PERSONAL_ACCESS_TOKEN"
       ? credentialEnv
       : "",
   };

@@ -41,14 +41,17 @@ narrative_deployment = "your-low-latency-deployment"
 
 or `AZURE_OPENAI_NARRATIVE_DEPLOYMENT` / `OPENAI_NARRATIVE_MODEL`. Empty values
 fall back to the normal chat deployment. This makes the 500 ms first-public-
-token objective a deployment/runtime capability rather than a UI template.
+token target a deployment/runtime optimization objective rather than a UI
+template or release gate.
 
 ## Re-evaluation gate
 
 Reconsider Cline Core only if an adapter proves all of the following against a
 separate Project Link fixture: Azure/OpenAI configuration, project-root
 selection, existing read/write approval policy, output redaction, cancellation
-and resume, history migration, and warmed first-token P95 of 500 ms or below.
+and resume, history migration, and a first-token latency analysis against the
+current P50/P95 baseline. A 500 ms P95 remains a stretch optimization target,
+not an adoption gate for the current runtime.
 
 ## Attribution
 

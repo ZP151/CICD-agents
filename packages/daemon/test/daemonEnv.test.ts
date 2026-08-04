@@ -227,6 +227,28 @@ describe("daemonEnv", () => {
     expect(fs.readFileSync(localEnvFile, "utf8")).toContain("AZURE_OPENAI_API_KEY=");
   });
 
+  it.each([
+    ["envvar", "ADO_MCP_AUTH_TOKEN"],
+    ["pat", "PERSONAL_ACCESS_TOKEN"],
+  ] as const)("accepts the official Azure DevOps MCP %s credential variable", (authentication, credentialEnv) => {
+    const configFile = path.join(tmp, `.mergepilot-${authentication}`, "config.toml");
+    writeMergePilotUserConfig({
+      azureDevOpsMcp: {
+        enabled: true,
+        command: "npx",
+        args: ["--yes", "@azure-devops/mcp", "example-org", "--authentication", authentication],
+        credentialEnv,
+      },
+    }, configFile);
+
+    expect(readMergePilotUserConfig(configFile).azureDevOpsMcp).toEqual({
+      enabled: true,
+      command: "npx",
+      args: ["--yes", "@azure-devops/mcp", "example-org", "--authentication", authentication],
+      credentialEnv,
+    });
+  });
+
   it("persists a locally entered model key only in the user .env file", () => {
     const localEnvFile = path.join(tmp, "user", ".env");
     const configFile = path.join(tmp, "user", "config.toml");
