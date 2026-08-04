@@ -14,6 +14,7 @@ import {
   KEY_VAULT_SECRET_SOURCE,
   LOCAL_ENV_SECRET_SOURCE,
   loadLocalSecretEnvNow,
+  upsertMergePilotLocalSecret,
   writeMergePilotUserConfig,
 } from "../daemonEnv.js";
 import { z } from "zod";
@@ -36,6 +37,11 @@ const TestLlmConfigSchema = z.object({
     message: "llmConfig is required",
   }),
 });
+
+// GPT-5 spends from max_completion_tokens on reasoning before visible output.
+// Keep the user-triggered Settings connection check above the minimum that can
+// be exhausted before the deployment emits a response.
+export const LLM_CONNECTION_TEST_MAX_TOKENS = 128;
 
 const DaemonConfigureSchema = z.object({
   llmProvider:     z.enum(["azure", "openai"]).optional(),
@@ -143,6 +149,12 @@ async function persistModelSecretRefs(
   const effectiveSecretSource =
     cfg.secretSource ?? existing.secretSource ?? settings.secretSource ?? LOCAL_ENV_SECRET_SOURCE;
   if (effectiveSecretSource === LOCAL_ENV_SECRET_SOURCE) {
+    // The browser/UI may hold a newly typed key transiently for the immediate
+    // connection test. Persist it in the user-owned local `.env`, not the
+    // TOML configuration and not the repository, so the daemon can restart
+    // with the same credential without returning it to the frontend.
+    if (cfg.azureApiKey) upsertMergePilotLocalSecret("AZURE_OPENAI_API_KEY", cfg.azureApiKey);
+    if (cfg.openaiApiKey) upsertMergePilotLocalSecret("OPENAI_API_KEY", cfg.openaiApiKey);
     return { ok: true, refs: {} };
   }
   const storedInKeyVault = await persistAoaiKeyIfPossible(cfg, settings);
@@ -308,8 +320,13 @@ export function registerDaemonConfigRoutes(
           { role: "system", content: "Reply with ok." },
           { role: "user", content: "health" },
         ],
-        temperature: 0,
-        maxTokens: 1,
+        // GPT-5 spends from this completion budget on reasoning before visible
+        // text. A one-token legacy probe reports a healthy deployment as a
+        // failure; retain enough budget for a real response without making
+        // this explicit user-triggered test compete with a normal Turn.
+        maxTokens: LLM_CONNECTION_TEST_MAX_TOKENS,
+        reasoningEffort: "minimal",
+        verbosity: "low",
         retries: 1,
       });
       return { ok: true, message: "Connection verified." };

@@ -9,6 +9,7 @@ import {
   loadDaemonEnv,
   readMergePilotUserConfig,
   resetDaemonEnvForTests,
+  upsertMergePilotLocalSecret,
   writeMergePilotUserConfig,
 } from "../src/daemonEnv.js";
 
@@ -224,6 +225,21 @@ describe("daemonEnv", () => {
     ensureMergePilotLocalEnvFile(localEnvFile);
 
     expect(fs.readFileSync(localEnvFile, "utf8")).toContain("AZURE_OPENAI_API_KEY=");
+  });
+
+  it("persists a locally entered model key only in the user .env file", () => {
+    const localEnvFile = path.join(tmp, "user", ".env");
+    const configFile = path.join(tmp, "user", "config.toml");
+    ensureMergePilotUserConfigFile(configFile);
+
+    upsertMergePilotLocalSecret("AZURE_OPENAI_API_KEY", "local-model-key", localEnvFile);
+    upsertMergePilotLocalSecret("AZURE_OPENAI_API_KEY", "rotated-model-key", localEnvFile);
+
+    const env = fs.readFileSync(localEnvFile, "utf8");
+    const config = fs.readFileSync(configFile, "utf8");
+    expect(env).toContain("AZURE_OPENAI_API_KEY=rotated-model-key");
+    expect(env).not.toContain("local-model-key");
+    expect(config).not.toContain("rotated-model-key");
   });
 
   it("does not load Key Vault refs unless Key Vault source is selected", () => {

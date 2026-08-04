@@ -1,25 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import {
-  completionTemperature,
-  completionTokenLimit,
-  isReasoningDeployment,
   type Settings,
 } from "@mergepilot/core";
 import { keyVaultSecretError } from "../daemonEnv.js";
-
-let azureDeploymentProbeCache: {
-  key: string;
-  checkedAt: number;
-  available: boolean;
-  error: string;
-} | null = null;
-
-// GPT-5-mini can spend several seconds producing the first visible token even
-// with minimal reasoning. A shorter health deadline turns a healthy, queued
-// deployment into a false configuration failure and prevents the desktop from
-// using its configured narrator. Keep this bounded so health remains useful
-// when Azure is genuinely unavailable.
-export const AZURE_DEPLOYMENT_PROBE_TIMEOUT_MS = 10_000;
 
 function gpt5ApiVersionConfigurationError(model: string, apiVersion: string): string | undefined {
   const isGpt5 = /^(?:gpt-?5(?:$|[-_.]|mini|nano|pro))/.test(
@@ -29,84 +12,17 @@ function gpt5ApiVersionConfigurationError(model: string, apiVersion: string): st
   return "Azure GPT-5 model version 2025-08-07 is not a Chat Completions API version. Use 2025-04-01-preview (or the Azure v1 endpoint) in the local MergePilot configuration.";
 }
 
-function azureDeploymentProbeKey(settings: Settings, deployment: string): string {
-  return [
-    settings.azureOpenAiEndpoint,
-    settings.azureOpenAiApiVersion,
-    deployment,
-    settings.azureOpenAiApiKey ? settings.azureOpenAiApiKey.slice(0, 8) : "",
-  ].join("|");
-}
-
-async function probeAzureDeployment(
+function azureDeploymentConfiguration(
   settings: Settings,
   deployment = settings.azureOpenAiChatDeployment,
-): Promise<{ available: boolean; error: string }> {
+): { available: boolean; error: string } {
   if (settings.llmProvider !== "azure") return { available: false, error: "" };
   if (!settings.azureOpenAiEndpoint || !settings.azureOpenAiApiKey || !deployment) {
     return { available: false, error: "Azure OpenAI endpoint, key, or chat deployment is missing." };
   }
   const configurationError = gpt5ApiVersionConfigurationError(deployment, settings.azureOpenAiApiVersion);
   if (configurationError) return { available: false, error: configurationError };
-
-  const key = azureDeploymentProbeKey(settings, deployment);
-  const now = Date.now();
-  if (azureDeploymentProbeCache?.key === key && now - azureDeploymentProbeCache.checkedAt < 30_000) {
-    return {
-      available: azureDeploymentProbeCache.available,
-      error: azureDeploymentProbeCache.error,
-    };
-  }
-
-  const ctrl = new AbortController();
-  const timeout = setTimeout(() => ctrl.abort(), AZURE_DEPLOYMENT_PROBE_TIMEOUT_MS);
-  try {
-    const endpoint = settings.azureOpenAiEndpoint.replace(/\/+$/, "");
-    const encodedDeployment = encodeURIComponent(deployment);
-    const apiVersion = encodeURIComponent(settings.azureOpenAiApiVersion);
-    const response = await fetch(`${endpoint}/openai/deployments/${encodedDeployment}/chat/completions?api-version=${apiVersion}`, {
-      method: "POST",
-      headers: {
-        "api-key": settings.azureOpenAiApiKey,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        messages: [
-          { role: "system", content: "Reply with ok." },
-          { role: "user", content: "health" },
-        ],
-        // GPT-5 reasoning deployments can consume a small completion budget
-        // before emitting the one-word probe response. A one-token check is
-        // therefore reported as a false deployment outage by Azure.
-        ...completionTokenLimit(deployment, 128),
-        ...completionTemperature(deployment, 0),
-        ...(isReasoningDeployment(deployment)
-          ? { reasoning_effort: "minimal" }
-          : {}),
-      }),
-      signal: ctrl.signal,
-    });
-    const body = response.ok ? "" : (await response.text()).trim();
-    const probeReachedOutputLimit = /max_tokens or model output limit was reached/i.test(body);
-    const error = response.ok || probeReachedOutputLimit
-      ? ""
-      : response.status === 404
-        ? "Azure OpenAI deployment was not found on this resource."
-        : body || `Azure OpenAI deployment check failed with HTTP ${response.status}.`;
-    // Azure only returns this specific output-limit response after accepting
-    // the endpoint, deployment, authentication and parameter shape. Treat it
-    // as an available deployment rather than disabling desktop chat.
-    const result = { available: response.ok || probeReachedOutputLimit, error };
-    azureDeploymentProbeCache = { key, checkedAt: now, ...result };
-    return result;
-  } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
-    const result = { available: false, error };
-    azureDeploymentProbeCache = { key, checkedAt: now, ...result };
-    return result;
-  } finally {
-    clearTimeout(timeout);
-  }
+  return { available: true, error: "" };
 }
 
 export function registerHealthRoutes(
@@ -122,10 +38,16 @@ export function registerHealthRoutes(
   },
 ): void {
   app.get("/healthz", async () => {
-    const azureDeployment = await probeAzureDeployment(settings);
+    // This route is polled while the desktop starts and by local runtime
+    // recovery. It reports daemon ownership and validates local configuration
+    // only. Calling the configured main and narrator deployments here used to
+    // create two hidden GPT-5 requests per poll; with a single-entry cache the
+    // deployments evicted one another and added seconds of avoidable queueing
+    // before a user's first public narrative.
+    const azureDeployment = azureDeploymentConfiguration(settings);
     const azureNarrativeDeployment = settings.azureOpenAiNarrativeDeployment;
     const azureNarrator = azureNarrativeDeployment
-      ? await probeAzureDeployment(settings, azureNarrativeDeployment)
+      ? azureDeploymentConfiguration(settings, azureNarrativeDeployment)
       : undefined;
     const cloudProjectLinkStore = !!settings.azureStorageAccount;
     return {

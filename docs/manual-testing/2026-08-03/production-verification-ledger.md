@@ -43,6 +43,8 @@
 | Empty finalization regression | `agent_final` sends whitespace response before a valid finalization | Fixed and covered by `chatPlannerAgentFinalTool.test.ts`; the blank finalization is rejected and the same Turn continues to a non-empty conclusion. |
 | First public narrative latency | Three fresh sidecar SSE measurements against the selected Project Link | **Not yet accepted.** `turn.started`: 297 ms, 310 ms, 1789 ms; first genuine public narrative: 3464 ms, 4153 ms, 3770 ms. Local Working still appears immediately, but the 500 ms model-first-public-text target is not met. |
 | Managed Azure DevOps MCP | Live connector check | Not runnable: every local Project Link currently has `adoMcpEnabled=false` and no MCP command/auth configuration. Adapter and contract tests are not treated as live-connector proof. |
+| Health and GPT-5 configuration | Latest sidecar `/healthz`, Settings connection route and config persistence tests | Passed locally: health responds in 1–111 ms without issuing hidden GPT-5 requests; explicit connection checks use `max_completion_tokens=128`, `reasoning_effort=minimal`, and low verbosity. `config.toml` stores only configuration/reference data; local model keys are written to user `.env` and removed from WebView persistence. |
+| Narrator isolation check | Three request-cancelled opening-only samples against the dedicated narrator deployment | **Not accepted for 500 ms target.** Even with no Planner tool execution, first public model text was 3090 ms, 3218 ms and 3472 ms. This is model/service latency, not a fixed opening, health probe, or Timeline render delay. |
 
 ### Follow-up acceptance conditions
 

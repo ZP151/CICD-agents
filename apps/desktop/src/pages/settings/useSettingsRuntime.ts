@@ -33,6 +33,10 @@ export function useSettingsRuntime() {
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didHydrateDaemonRef = useRef(false);
   const didSyncAvailableModelRef = useRef(false);
+  // Older desktop builds persisted model keys in WebView localStorage. Keep
+  // that legacy value only long enough to transfer it to the daemon-owned
+  // `.env` / Key Vault, then let the normal save path remove it.
+  const pendingLegacySecretMigrationRef = useRef(settings.additionalModels.some(hasTransientModelSecret));
 
   useEffect(() => {
     setDaemonStatus("checking");
@@ -66,6 +70,39 @@ export function useSettingsRuntime() {
   }, []);
 
   useEffect(() => {
+    if (!pendingLegacySecretMigrationRef.current) return;
+    const legacyModel = settings.additionalModels.find(hasTransientModelSecret);
+    if (!legacyModel) {
+      pendingLegacySecretMigrationRef.current = false;
+      return;
+    }
+    let cancelled = false;
+    void configureDaemon({
+      secretSource: settings.secretSource,
+      ...llmConfigFromModel(legacyModel),
+    })
+      .then(() => {
+        if (cancelled) return;
+        pendingLegacySecretMigrationRef.current = false;
+        setSettings((current) => ({
+          ...current,
+          additionalModels: current.additionalModels.map((model) => ({
+            ...model,
+            azureApiKey: "",
+            openaiApiKey: "",
+          })),
+        }));
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setDaemonConfigKeyVaultError(err instanceof Error ? err.message : String(err));
+        }
+      });
+    return () => { cancelled = true; };
+  }, [settings.additionalModels, settings.secretSource]);
+
+  useEffect(() => {
+    if (pendingLegacySecretMigrationRef.current) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       saveSettings(settings);
@@ -284,4 +321,8 @@ export function useSettingsRuntime() {
     disableModel,
     deleteModel,
   };
+}
+
+function hasTransientModelSecret(model: AdditionalModelConfig): boolean {
+  return Boolean(model.azureApiKey.trim() || model.openaiApiKey.trim());
 }

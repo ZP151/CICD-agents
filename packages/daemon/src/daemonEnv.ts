@@ -137,6 +137,35 @@ export function ensureMergePilotLocalEnvFile(envFile = mergePilotLocalEnvFile())
   }
 }
 
+/**
+ * Store a model secret in the user's local secret file, never in config.toml.
+ * The desktop passes a newly entered key only for the save/test request; on
+ * the next daemon start `loadLocalEnvSecrets` rehydrates it from this file.
+ */
+export function upsertMergePilotLocalSecret(
+  key: "AZURE_OPENAI_API_KEY" | "OPENAI_API_KEY",
+  secret: string,
+  envFile = mergePilotLocalEnvFile(),
+): void {
+  const value = secret.trim();
+  if (!value) return;
+  ensureMergePilotLocalEnvFile(envFile);
+  const existing = nodeFs.readFileSync(envFile, "utf8");
+  const lines = existing.split(/\r?\n/);
+  const entry = `${key}=${envFileValue(value)}`;
+  let replaced = false;
+  const updated = lines.map((line) => {
+    if (!new RegExp(`^\\s*${key}\\s*=`).test(line)) return line;
+    replaced = true;
+    return entry;
+  });
+  if (!replaced) {
+    if (updated.length && updated[updated.length - 1] !== "") updated.push("");
+    updated.push(entry, "");
+  }
+  nodeFs.writeFileSync(envFile, updated.join("\n"), "utf8");
+}
+
 export function ensureMergePilotUserConfigFile(configFile = mergePilotUserConfigFile()): void {
   nodeFs.mkdirSync(nodePath.dirname(configFile), { recursive: true });
   if (!nodeFs.existsSync(configFile)) {
@@ -420,6 +449,14 @@ function parseEnvValue(value: string): string {
     return trimmed.slice(1, -1);
   }
   return trimmed;
+}
+
+function envFileValue(value: string): string {
+  // Azure/OpenAI keys are normally shell-safe. Quote only the exceptional
+  // forms so comments and whitespace cannot alter the persisted value.
+  return /[\s#'"\\]/.test(value)
+    ? `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
+    : value;
 }
 
 function tomlString(value: string): string {

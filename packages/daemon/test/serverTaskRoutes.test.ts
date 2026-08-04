@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { resetSettingsForTests, type TaskHandle } from "@mergepilot/core";
 import { buildApp } from "../src/server.js";
-import { AZURE_DEPLOYMENT_PROBE_TIMEOUT_MS } from "../src/routes/health.routes.js";
+import { LLM_CONNECTION_TEST_MAX_TOKENS } from "../src/routes/daemon-config.routes.js";
 
 let app: Awaited<ReturnType<typeof buildApp>> | null = null;
 
@@ -30,8 +30,8 @@ afterEach(async () => {
 });
 
 describe("daemon basic and task routes", () => {
-  it("allows a bounded GPT-5 probe window instead of reporting normal first-token latency as unavailable", () => {
-    expect(AZURE_DEPLOYMENT_PROBE_TIMEOUT_MS).toBe(10_000);
+  it("keeps the explicit GPT-5 connection test above the reasoning-only budget", () => {
+    expect(LLM_CONNECTION_TEST_MAX_TOKENS).toBe(128);
   });
 
   it("responds to /healthz with runtime ownership metadata", async () => {
@@ -106,7 +106,7 @@ describe("daemon basic and task routes", () => {
     }
   });
 
-  it("does not mark a reachable GPT-5 deployment unavailable when a probe exhausts its output budget", async () => {
+  it("keeps /healthz local and validates a configured GPT-5 deployment without issuing a hidden model request", async () => {
     const previous = {
       endpoint: process.env.AZURE_OPENAI_ENDPOINT,
       apiKey: process.env.AZURE_OPENAI_API_KEY,
@@ -117,9 +117,7 @@ describe("daemon basic and task routes", () => {
     process.env.AZURE_OPENAI_API_KEY = "test-key";
     process.env.AZURE_OPENAI_CHAT_DEPLOYMENT = "gpt-5-mini";
     process.env.AZURE_OPENAI_API_VERSION = "2025-04-01-preview";
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
-      error: { message: "Could not finish the message because max_tokens or model output limit was reached." },
-    }), { status: 400 }));
+    const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     resetSettingsForTests();
     try {
@@ -128,12 +126,7 @@ describe("daemon basic and task routes", () => {
       const body = r.json() as { azureDeploymentAvailable: boolean; azureDeploymentError: string };
       expect(body.azureDeploymentAvailable).toBe(true);
       expect(body.azureDeploymentError).toBe("");
-      expect(fetchMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
-        body: expect.stringContaining("max_completion_tokens"),
-      }));
-      const requestBody = String((fetchMock.mock.calls[0]?.[1] as RequestInit).body);
-      expect(requestBody).toContain("128");
-      expect(requestBody).toContain("\"reasoning_effort\":\"minimal\"");
+      expect(fetchMock).not.toHaveBeenCalled();
     } finally {
       if (previous.endpoint === undefined) delete process.env.AZURE_OPENAI_ENDPOINT;
       else process.env.AZURE_OPENAI_ENDPOINT = previous.endpoint;

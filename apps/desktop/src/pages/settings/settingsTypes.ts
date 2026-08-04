@@ -103,24 +103,22 @@ export function additionalModelName(model: AdditionalModelConfig): string {
 
 export function additionalModelDescription(model: AdditionalModelConfig): string {
   const provider = model.provider === "openai" ? "OpenAI" : "Azure OpenAI";
-  const configured =
-    model.provider === "openai"
-      ? Boolean(model.openaiApiKey.trim() && model.openaiModel.trim())
-      : Boolean(
-          model.azureEndpoint.trim() && model.azureApiKey.trim() && model.azureDeployment.trim(),
-        );
-  if (!configured) return `${provider} · missing required fields`;
+  if (!additionalModelIsConfigured(model)) return `${provider} · missing required fields`;
   if (model.available) return `${provider} · available`;
   if (model.testError) return `${provider} · test failed`;
   return `${provider} · not tested`;
 }
 
 export function additionalModelIsConfigured(model: AdditionalModelConfig): boolean {
+  // A newly entered secret is transient UI state. Once the daemon validates
+  // and saves it to the local `.env` or Key Vault, a reloaded model remains
+  // usable without putting that secret back into browser storage.
+  const secretAvailable = model.provider === "openai"
+    ? Boolean(model.openaiApiKey.trim() || model.available)
+    : Boolean(model.azureApiKey.trim() || model.available);
   return model.provider === "openai"
-    ? Boolean(model.openaiApiKey.trim() && model.openaiModel.trim())
-    : Boolean(
-        model.azureEndpoint.trim() && model.azureApiKey.trim() && model.azureDeployment.trim(),
-      );
+    ? Boolean(secretAvailable && model.openaiModel.trim())
+    : Boolean(secretAvailable && model.azureEndpoint.trim() && model.azureDeployment.trim());
 }
 
 export function llmConfigFromModel(model: AdditionalModelConfig): LlmProviderConfig {
@@ -168,7 +166,18 @@ export function loadSettings(): AppSettings {
 }
 
 export function saveSettings(settings: AppSettings): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  // Credentials belong in the daemon-owned user `.env` / Key Vault. The
+  // renderer may briefly hold a value while the user tests a draft model, but
+  // it must never persist it into WebView localStorage.
+  const safeSettings: AppSettings = {
+    ...settings,
+    additionalModels: settings.additionalModels.map((model) => ({
+      ...model,
+      azureApiKey: "",
+      openaiApiKey: "",
+    })),
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(safeSettings));
 }
 
 export function accountLabel(authUser: AuthUser): string {

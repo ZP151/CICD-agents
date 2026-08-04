@@ -220,15 +220,28 @@ export class LLMClient {
     temperature?: number;
     maxTokens?: number;
     retries?: number;
+    /** GPT-5 reasoning level for an explicit, bounded model health check. */
+    reasoningEffort?: "minimal" | "low" | "medium" | "high";
+    /** GPT-5 output density for an explicit, bounded model health check. */
+    verbosity?: "low" | "medium" | "high";
   }): Promise<ChatResult> {
     const retries = opts.retries ?? 3;
     const model = this.chatModel();
-    const params: ChatCompletionCreateParamsNonStreaming = {
+    // The installed SDK declaration predates GPT-5's `minimal` reasoning
+    // value for non-streaming Chat Completions. Keep the compatibility cast at
+    // the provider boundary, matching the streaming implementation below.
+    const params = {
       model,
       messages: opts.messages,
       ...completionTemperature(model, opts.temperature ?? 0.2),
       ...completionTokenLimit(model, opts.maxTokens ?? 1024),
-    };
+      ...(opts.reasoningEffort && isReasoningDeployment(model)
+        ? { reasoning_effort: opts.reasoningEffort }
+        : {}),
+      ...(opts.verbosity && isReasoningDeployment(model)
+        ? { verbosity: opts.verbosity }
+        : {}),
+    } as unknown as ChatCompletionCreateParamsNonStreaming;
     if (opts.tools && opts.tools.length > 0) {
       params.tools = opts.tools;
       params.tool_choice = "auto";
