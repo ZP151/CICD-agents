@@ -163,9 +163,31 @@ describe("AppShell workspace routes", () => {
       expect(html).toContain("overflow-auto");
       expect(html).toContain("app-shell-nav-icon");
       expect(html).toContain("app-shell-nav-link");
-      expect(html).toContain('aria-label="New chat"');
-      expect(html).not.toContain('title="New chat"');
+      expect(html).toContain('aria-label="Agent"');
+      expect(html).not.toContain('title="Agent"');
       expect(html).not.toContain("({ isActive })");
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("uses the target outcome navigation and keeps Work disabled", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const html = renderToStaticMarkup(
+        createElement(MemoryRouter, { initialEntries: ["/chat"] }, createElement(FullLayout)),
+      );
+
+      for (const label of ["Agent", "Changes", "Delivery", "Settings"]) {
+        expect(html).toContain(`aria-label="${label}"`);
+      }
+      expect(html).toContain('aria-disabled="true"');
+      expect(html).toContain("Work");
+      // Review Queue and Activity are no longer primary navigation entries.
+      expect(html).not.toContain("Review Queue");
+      expect(html).not.toContain('aria-label="Activity"');
+      expect(html).not.toContain('aria-label="Pull Requests"');
+      expect(html).not.toContain('aria-label="Pipelines"');
     } finally {
       consoleError.mockRestore();
     }

@@ -124,19 +124,6 @@ function IconChat() {
   );
 }
 
-function IconRepos() {
-  return (
-    <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.8}
-        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-      />
-    </svg>
-  );
-}
-
 function IconPR() {
   return (
     <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -150,40 +137,14 @@ function IconPR() {
   );
 }
 
-function IconReview() {
+function IconWork() {
   return (
     <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={1.8}
-        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-      />
-    </svg>
-  );
-}
-
-function IconActivity() {
-  return (
-    <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.8}
-        d="M4 19V5m0 14h16M8 16v-5m4 5V8m4 8v-3"
-      />
-    </svg>
-  );
-}
-
-function IconProjectLinks() {
-  return (
-    <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.8}
-        d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
       />
     </svg>
   );
@@ -221,27 +182,31 @@ function IconPipeline() {
   );
 }
 
-const NAV_GROUPS = [
+/**
+ * Target navigation (Cycle 00 product simplification). Navigation is
+ * organized by user outcomes: Agent, Work, Changes, Delivery, Settings.
+ * Work stays disabled until Cycle 04 — no fake page is shipped. Pull
+ * Requests → Changes and Pipelines → Delivery are temporary compatibility
+ * routes until the new workspaces land.
+ */
+type NavItem =
+  | { kind: "link"; to: string; match?: string; label: string; Icon: () => JSX.Element }
+  | { kind: "disabled"; label: string; note: string; Icon: () => JSX.Element };
+
+const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
   {
-    label: "Workspace",
+    label: "Outcomes",
     items: [
-      { to: "/chat?new=1", match: "/chat", label: "New chat", Icon: IconChat },
-      { to: "/pulls", label: "Pull Requests", Icon: IconPR },
-      { to: "/project-links", label: "Project Links", Icon: IconProjectLinks },
-    ],
-  },
-  {
-    label: "Quality",
-    items: [
-      { to: "/findings", label: "Review Queue", Icon: IconReview },
-      { to: "/pipelines", label: "Pipelines", Icon: IconPipeline },
+      { kind: "link", to: "/chat", match: "/chat", label: "Agent", Icon: IconChat },
+      { kind: "disabled", label: "Work", note: "Available in a later cycle", Icon: IconWork },
+      { kind: "link", to: "/pulls", match: "/pulls", label: "Changes", Icon: IconPR },
+      { kind: "link", to: "/pipelines", match: "/pipelines", label: "Delivery", Icon: IconPipeline },
     ],
   },
   {
     label: "System",
     items: [
-      { to: "/activity", label: "Activity", Icon: IconActivity },
-      { to: "/settings", label: "Settings", Icon: IconSettings },
+      { kind: "link", to: "/settings", match: "/settings", label: "Settings", Icon: IconSettings },
     ],
   },
 ];
@@ -391,22 +356,40 @@ export function FullLayout() {
             {NAV_GROUPS.map((group) => (
               <div key={group.label}>
                 <p className={appShellGroupLabelClass()}>{group.label}</p>
-                {group.items.map((item) => (
-                  <Tooltip key={item.to} content={item.label} contentClassName="app-shell-compact-tooltip">
-                    <NavLink
-                      to={item.to}
-                      aria-label={item.label}
-                      className={appShellNavLinkClass(
-                        item.match ? location.pathname === item.match : location.pathname === item.to,
-                      )}
-                    >
-                      <span aria-hidden="true" className="app-shell-nav-icon">
-                        <item.Icon />
-                      </span>
-                      <span className={appShellNavLabelClass()}>{item.label}</span>
-                    </NavLink>
-                  </Tooltip>
-                ))}
+                {group.items.map((item) => {
+                  if (item.kind === "disabled") {
+                    return (
+                      <Tooltip key={item.label} content={item.note} contentClassName="app-shell-compact-tooltip">
+                        <div
+                          aria-disabled="true"
+                          aria-label={item.label}
+                          className="app-shell-nav-link pointer-events-none flex items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-[13px] font-medium leading-5 text-[rgb(var(--app-sidebar-muted))]/60"
+                        >
+                          <span aria-hidden="true" className="app-shell-nav-icon opacity-50">
+                            <item.Icon />
+                          </span>
+                          <span className={appShellNavLabelClass()}>{item.label}</span>
+                        </div>
+                      </Tooltip>
+                    );
+                  }
+                  return (
+                    <Tooltip key={item.to} content={item.label} contentClassName="app-shell-compact-tooltip">
+                      <NavLink
+                        to={item.to}
+                        aria-label={item.label}
+                        className={appShellNavLinkClass(
+                          item.match ? location.pathname === item.match : location.pathname === item.to,
+                        )}
+                      >
+                        <span aria-hidden="true" className="app-shell-nav-icon">
+                          <item.Icon />
+                        </span>
+                        <span className={appShellNavLabelClass()}>{item.label}</span>
+                      </NavLink>
+                    </Tooltip>
+                  );
+                })}
               </div>
             ))}
           </nav>
