@@ -48,6 +48,12 @@ export function WorkspaceProjectLinkPanel({
       ) : (
         <p className="text-xs text-[rgb(var(--app-text-subtle))]">No Project Link</p>
       )}
+      <a
+        href="#/project-links"
+        className="mt-1 inline-block text-[11px] font-medium text-[rgb(var(--app-accent))] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgb(var(--app-focus))]/70"
+      >
+        Manage Project Links
+      </a>
       {showRepositoryContext && (
         <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-subtle))]" title={repoPath}>
           {repoName || repoPath || "No local repository selected"}

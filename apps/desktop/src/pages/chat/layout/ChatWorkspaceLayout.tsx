@@ -204,7 +204,6 @@ export function ChatWorkspaceLayout({
               onStop={stopCurrentTurn}
               onCancelQueuedSuggestion={cancelQueuedSuggestion}
               onSuggestionPick={handleSuggestionReply}
-              onProjectLinkSelect={selectProjectLink}
               onModelMenuOpenChange={setModelMenuOpen}
               onActiveModelChange={setActiveModel}
             />

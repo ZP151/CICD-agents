@@ -11,7 +11,7 @@ import type {
   SuggestionReply,
 } from "../../../components/conversation/SuggestionReplyBar.js";
 import { SuggestionReplyBar } from "../../../components/conversation/SuggestionReplyBar.js";
-import { ProjectLinkCombobox } from "../../../components/workbench/ProjectLinkCombobox.js";
+
 import { ImageEditModal } from "../ImageEditModal.js";
 import type { ProjectLink } from "../../../api.js";
 import type {
@@ -57,7 +57,6 @@ interface ComposerShellProps {
   onStop: () => void;
   onCancelQueuedSuggestion: () => void;
   onSuggestionPick: (suggestion: SuggestionReply) => void;
-  onProjectLinkSelect: (id: string) => void;
   onModelMenuOpenChange: (open: boolean | ((value: boolean) => boolean)) => void;
   onActiveModelChange: (model: ConversationModelChoice) => void;
 }
@@ -125,7 +124,6 @@ export function ComposerShell({
   onStop,
   onCancelQueuedSuggestion,
   onSuggestionPick,
-  onProjectLinkSelect,
   onModelMenuOpenChange,
   onActiveModelChange,
 }: ComposerShellProps) {
@@ -238,27 +236,16 @@ export function ComposerShell({
               <span className="text-[11px] text-[rgb(var(--app-text-subtle))]">
                 Loading Project Link...
               </span>
-            ) : availableProjectLinks.length > 0 ? (
-              <>
-                <svg className="h-3 w-3 shrink-0 text-[rgb(var(--app-text-subtle))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                <ProjectLinkCombobox
-                  options={availableProjectLinks.map((projectLink) => ({
-                    id: projectLink.id,
-                    name: projectLink.name,
-                    orgUrl: projectLink.adoOrgUrl,
-                    project: projectLink.adoProject,
-                    repoName: projectLink.adoRepoName,
-                  }))}
-                  value={activeProjectLinkId}
-                  onSelect={(id) => onProjectLinkSelect(id ?? "")}
-                  ariaLabel="Composer Project Link"
-                />
-              </>
+            ) : activeProjectLinkId ? (
+              <span
+                className="text-[11px] text-[rgb(var(--app-text-subtle))]"
+                title="Context manages the Project Link"
+              >
+                {availableProjectLinks.find((link) => link.id === activeProjectLinkId)?.name ?? "Project Link"}
+              </span>
             ) : (
               <span className="text-[11px] text-[rgb(var(--app-text-subtle))]">
-                No Project Link yet — create one above
+                No Project Link — select one in Context
               </span>
             )}
           </div>
