@@ -323,14 +323,14 @@ describe("deriveSuggestionReplies", () => {
     });
 
     expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
+      "Check PR risks",
       "Rerun validation",
       "Check policy",
-      "List work items",
     ]);
     expect(suggestions.map((suggestion) => suggestion.action)).toEqual([
+      { kind: "workspace_action", action: "inspect_pr_insight" },
       { kind: "workspace_action", action: "run_tests" },
       { kind: "workspace_action", action: "check_pr_policy" },
-      { kind: "workspace_action", action: "list_pr_work_items" },
     ]);
   });
 

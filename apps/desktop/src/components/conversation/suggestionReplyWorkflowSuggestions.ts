@@ -250,6 +250,12 @@ export function addPrSuggestions(context: SuggestionReplyContext, text: string, 
   const hasStructuredPolicyBlocker = /\b(policy blockers?|failedpolicies=[1-9]|failed policies?:\s*[1-9]|failed\/error policy)\b/.test(text);
   const hasStructuredWorkItemSignal = /\b(linked work items?|workitems=0|work items?:\s*0|no linked work items?)\b/.test(text);
   if (hasStructuredBuildBlocker || hasStructuredPolicyBlocker || hasStructuredWorkItemSignal) {
+    // The PR-risks action is the most task-relevant follow-up for a readiness
+    // result; keep it first so the compact suggestion bar never cuts it.
+    add("pr-risks", "Check PR risks", "Summarize the main PR risks and what evidence supports them.", {
+      kind: "workspace_action",
+      action: "inspect_pr_insight",
+    });
     if (hasStructuredBuildBlocker) {
       add("pr-rerun-validation", "Rerun validation", "Rerun relevant validation after reviewing saved PR readiness blockers.", {
         kind: "workspace_action",
@@ -268,10 +274,6 @@ export function addPrSuggestions(context: SuggestionReplyContext, text: string, 
         action: "list_pr_work_items",
       });
     }
-    add("pr-risks", "Check PR risks", "Summarize the main PR risks and what evidence supports them.", {
-      kind: "workspace_action",
-      action: "inspect_pr_insight",
-    });
     return;
   }
   if (hasCiReadinessBlocker) {
