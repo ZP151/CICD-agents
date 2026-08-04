@@ -168,6 +168,30 @@ export class ChatPlanner {
         if (finalizationCalls.length > 0 && executableToolCalls.length === 0) {
           const finalCall = finalizationCalls[finalizationCalls.length - 1]!;
           const args = parseToolArguments(finalCall.arguments);
+          // A tool schema's `required` field only guarantees that a provider
+          // supplied the key. GPT tool calls can still contain `response: ""`.
+          // Treat that as an incomplete finalization instead of sealing a Turn
+          // with no visible conclusion (and therefore no copy/footer UI).
+          if (!hasUserFacingFinalResponse(args, accumulated)) {
+            messages.push({
+              role: "assistant",
+              content: accumulated || null,
+              tool_calls: [{
+                id: finalCall.id,
+                type: "function" as const,
+                function: { name: finalCall.name, arguments: finalCall.arguments },
+              }],
+            });
+            messages.push({
+              role: "tool",
+              tool_call_id: finalCall.id,
+              content: JSON.stringify({
+                ok: false,
+                error: "agent_final.response must contain a concise user-facing conclusion. Call agent_final again with non-empty response text.",
+              }),
+            });
+            continue;
+          }
           const result = withGroundedToolEvidence(guardReviewOnlyFinalResult(
             plannerResultFromControl(args, {
               visibleText: accumulated,
@@ -520,6 +544,11 @@ export class ChatPlanner {
       },
     };
   }
+}
+
+function hasUserFacingFinalResponse(control: Record<string, unknown>, visibleText: string): boolean {
+  return typeof control["response"] === "string" && control["response"].trim().length > 0
+    || visibleText.trim().length > 0;
 }
 
 /**

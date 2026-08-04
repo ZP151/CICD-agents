@@ -14,6 +14,7 @@ export function finalizationToolSchema() {
         properties: {
           response: {
             type: "string",
+            minLength: 1,
             description: "The complete user-facing response text.",
           },
           risk_level: {

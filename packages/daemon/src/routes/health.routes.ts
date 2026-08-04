@@ -14,6 +14,13 @@ let azureDeploymentProbeCache: {
   error: string;
 } | null = null;
 
+// GPT-5-mini can spend several seconds producing the first visible token even
+// with minimal reasoning. A shorter health deadline turns a healthy, queued
+// deployment into a false configuration failure and prevents the desktop from
+// using its configured narrator. Keep this bounded so health remains useful
+// when Azure is genuinely unavailable.
+export const AZURE_DEPLOYMENT_PROBE_TIMEOUT_MS = 10_000;
+
 function gpt5ApiVersionConfigurationError(model: string, apiVersion: string): string | undefined {
   const isGpt5 = /^(?:gpt-?5(?:$|[-_.]|mini|nano|pro))/.test(
     model.trim().toLowerCase(),
@@ -52,7 +59,7 @@ async function probeAzureDeployment(
   }
 
   const ctrl = new AbortController();
-  const timeout = setTimeout(() => ctrl.abort(), 3000);
+  const timeout = setTimeout(() => ctrl.abort(), AZURE_DEPLOYMENT_PROBE_TIMEOUT_MS);
   try {
     const endpoint = settings.azureOpenAiEndpoint.replace(/\/+$/, "");
     const encodedDeployment = encodeURIComponent(deployment);

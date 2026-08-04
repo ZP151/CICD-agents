@@ -32,7 +32,7 @@ export function plannerResultFromControl(
   const rawApprovalProposal = control["approval_proposal"] ?? control["pending_action"];
   const approvalProposal = pendingActionFromControl(rawApprovalProposal);
   return {
-    response: String(control["response"] ?? opts.visibleText ?? opts.fallbackText),
+    response: firstNonEmptyText(control["response"], opts.visibleText, opts.fallbackText),
     streamedResponse: opts.streamedResponse,
     finalizationMode: opts.finalizationMode,
     riskLevel: String(control["risk_level"] ?? control["riskLevel"] ?? "low"),
@@ -44,6 +44,13 @@ export function plannerResultFromControl(
     usedLlm: opts.usedLlm,
     approvalProposal: approvalProposal?.tool ? approvalProposal : undefined,
   };
+}
+
+function firstNonEmptyText(...candidates: unknown[]): string {
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+  }
+  return "";
 }
 
 export function parseControlResponse(text: string): {

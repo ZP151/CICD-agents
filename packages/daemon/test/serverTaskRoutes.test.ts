@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { resetSettingsForTests, type TaskHandle } from "@mergepilot/core";
 import { buildApp } from "../src/server.js";
+import { AZURE_DEPLOYMENT_PROBE_TIMEOUT_MS } from "../src/routes/health.routes.js";
 
 let app: Awaited<ReturnType<typeof buildApp>> | null = null;
 
@@ -29,6 +30,10 @@ afterEach(async () => {
 });
 
 describe("daemon basic and task routes", () => {
+  it("allows a bounded GPT-5 probe window instead of reporting normal first-token latency as unavailable", () => {
+    expect(AZURE_DEPLOYMENT_PROBE_TIMEOUT_MS).toBe(10_000);
+  });
+
   it("responds to /healthz with runtime ownership metadata", async () => {
     const previousRuntimeMode = process.env.MERGEPILOT_RUNTIME_MODE;
     const previousDesktopVersion = process.env.MERGEPILOT_DESKTOP_VERSION;
