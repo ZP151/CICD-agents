@@ -165,3 +165,103 @@ async function resolvePullRequestArtifactIds(args: {
 function extractWorkItemId(url: string): string {
   return url.match(/workItems\/(\d+)/i)?.[1] ?? "";
 }
+
+export interface AzureWorkItemRead {
+  id: number;
+  revision: number;
+  type: string;
+  title: string;
+  state: string;
+  fields: Record<string, unknown>;
+  relations: string[];
+}
+
+/** Read one work item with its current revision, fields and relations. */
+export async function readAzureWorkItem(args: {
+  organization: string;
+  project: string;
+  workItemId: string | number;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzureWorkItemRead> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const workItemId = Number(args.workItemId ?? 0);
+  if (!org || !project || !workItemId) {
+    throw new ToolError("ADO organization, project, and work item ID are required.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/wit/workitems/${workItemId}` +
+    `?$expand=Relations&api-version=${API_VERSION_WI}`;
+  const resp = await adoFetch(url, auth);
+  if (!resp.ok) {
+    throw new ToolError(`read work item ${workItemId} failed (${resp.status}): ${(await resp.text()).slice(0, 400)}`);
+  }
+  const body = await parseAdoJson(resp, "get work item") as {
+    id?: number;
+    rev?: number;
+    fields?: Record<string, unknown>;
+    relations?: Array<{ rel?: string; url?: string }>;
+  };
+  return {
+    id: Number(body.id ?? workItemId),
+    revision: Number(body.rev ?? 0),
+    type: String(body.fields?.["System.WorkItemType"] ?? ""),
+    title: String(body.fields?.["System.Title"] ?? ""),
+    state: String(body.fields?.["System.State"] ?? ""),
+    fields: body.fields ?? {},
+    relations: (body.relations ?? []).map((relation) => String(relation.url ?? "")),
+  };
+}
+
+export interface AzureWorkItemCommentResult {
+  ok: boolean;
+  revision?: number;
+  commentId?: number;
+  status_code?: number;
+  error?: string;
+}
+
+/** Add a comment to a work item (low-risk, reversible fixture write). */
+export async function addAzureWorkItemComment(args: {
+  organization: string;
+  project: string;
+  workItemId: string | number;
+  text: string;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzureWorkItemCommentResult> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const workItemId = Number(args.workItemId ?? 0);
+  const text = args.text.trim();
+  if (!org || !project || !workItemId || !text) {
+    throw new ToolError("add_work_item_comment requires organization, project, work_item_id, and text.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/wit/workItems/${workItemId}/comments` +
+    `?api-version=${API_VERSION_WI}`;
+  const resp = await adoFetch(url, auth, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  if (!resp.ok) {
+    return {
+      ok: false,
+      status_code: resp.status,
+      error: (await resp.text()).slice(0, 400),
+    };
+  }
+  const body = await parseAdoJson(resp, "add work item comment") as {
+    id?: number;
+    workItemRevision?: number;
+  };
+  return {
+    ok: true,
+    commentId: Number(body.id ?? 0) || undefined,
+    revision: Number(body.workItemRevision ?? 0) || undefined,
+  };
+}

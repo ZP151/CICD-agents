@@ -25,6 +25,7 @@ import {
 import { inlineProjectLinkToChatContextProjectLink } from "./chatContextPrompt.js";
 import type { InlineProjectLink } from "./chatHistoryStore.js";
 import { createAzureDevOpsMcpConnector, createWebResearchMcpConnector } from "./chatMcpConnectors.js";
+import { deliveryTools } from "./deliveryTools.js";
 
 type ChatExecutorMode = "planner" | "confirmed-action";
 
@@ -62,6 +63,7 @@ function chatTools(): Tool[] {
     ...pytestTools(),
     ...validationTools(),
     ...azureDevOpsTools(),
+    ...deliveryTools(),
   ];
 }
 

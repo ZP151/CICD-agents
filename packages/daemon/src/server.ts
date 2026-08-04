@@ -20,6 +20,8 @@ import { registerChatWorkflowRoutes } from "./routes/chat-workflow.routes.js";
 import { registerChatRoutes } from "./routes/chat.routes.js";
 import { registerCheckpointRoutes } from "./routes/checkpoints.routes.js";
 import { registerDaemonConfigRoutes } from "./routes/daemon-config.routes.js";
+import { registerDeliveryRoutes } from "./routes/delivery.routes.js";
+import { deliveryWritesState } from "./deliveryWritesState.js";
 import { registerGitRoutes } from "./routes/git.routes.js";
 import { registerHealthRoutes } from "./routes/health.routes.js";
 import { registerPipelineRoutes } from "./routes/pipelines.routes.js";
@@ -103,6 +105,16 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   registerPipelineRoutes(app, { queue, settings });
 
   registerProjectLinkRoutes(app, { projectLinkStore });
+
+  registerDeliveryRoutes(app, {
+    projectLinkStore,
+    writes: {
+      isEnabled: () => deliveryWritesState.enabled,
+      setEnabled: (enabled) => {
+        deliveryWritesState.enabled = enabled;
+      },
+    },
+  });
 
   registerPullRequestRoutes(app, { projectLinkStore, buildReviewLlmSettings: buildEffectiveLlmSettings });
 

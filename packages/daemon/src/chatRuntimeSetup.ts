@@ -52,6 +52,7 @@ function buildToolContext(options: ChatRuntimeSetupOptions): ToolContext {
 
 function buildToolExtra(options: ChatRuntimeSetupOptions): Record<string, unknown> {
   return {
+    ...(options.projectLinkId ? { project_link_id: options.projectLinkId } : {}),
     ...resolveProjectLinkExtra(options),
     ...(options.chatMessage ? { chat_message: options.chatMessage } : {}),
     ...(options.chatMessage && options.inlineProjectLink
