@@ -37,7 +37,7 @@ Goal: complete Cycles 00–06 in order, each gated by acceptance evidence.
 | 03 — Delivery CI/test | **completed 2026-08-05** | `cycle03-acceptance-evidence.md` + `cycle03-evidence.json`; evidence bundle + classification + Inspector; real run 4834 classified code_regression |
 | 04 — Work intelligence | pending | — |
 | 05 — Deployment readiness | pending | — |
-| 06 — Hardening and pilot | pending | — |
+| 06 — Hardening and pilot | **completed 2026-08-05** | `cycle06-acceptance-evidence.md` + `support-runbook.md`; diagnostics + telemetry (20 verified / 11 failed) |
 
 ## Cycle 00 real-ADO write ledger
 
@@ -68,6 +68,16 @@ Goal: complete Cycles 00–06 in order, each gated by acceptance evidence.
 | 2026-08-05 | Action records | act-1hrkgtx, act-92i10t, act-10b2mgz, act-1lljl2v | verified Fixture A/B writes | verified | keep as audit evidence |
 | 2026-08-05 | Action record | act-1thxfgc / act-1u45z0 | duplicate PR refused (TF401179) | failed (correct) | keep as safety evidence |
 | 2026-08-05 | Action record | act-1ukj2y | stale write-back refused (rev 1 vs 3) | failed (correct) | keep as safety evidence |
+
+## Cleanup performed at goal end (2026-08-05)
+
+| Resource | ID | Action | Verified |
+| --- | --- | --- | --- |
+| PR | 2798, 2799, 2801 | abandoned via pull_request.update | field_eq status=abandoned re-read |
+| Branch | 6 x mergepilot-e2e/cycle01-* | deleted from origin | git push --delete confirmed |
+| ClaimBot_API local state | Web.config etc. | stash restored | git status matches initial snapshot |
+| Work Items | 7912, 7913 | **remaining** — standalone auth unavailable; delete via ADO portal (marked [MergePilot Fixture]) | — |
+| Action records | all act-* | kept as audit evidence | — |
 
 ## Write/Resource Rules (recap)
 

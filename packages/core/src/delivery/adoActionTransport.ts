@@ -8,7 +8,7 @@
  * graph store is attached.
  */
 import { addAzureWorkItemComment, createAzureWorkItem, linkAzureWorkItemToPullRequest, readAzureWorkItem, updateAzureWorkItem } from "../ado/workItems.js";
-import { addAzurePullRequestComment, addAzurePullRequestReviewer } from "../ado/pullRequestMutations.js";
+import { addAzurePullRequestComment, addAzurePullRequestReviewer, updateAzurePullRequest } from "../ado/pullRequestMutations.js";
 import { getAzureDevOpsCurrentUser } from "../ado/core.js";
 import { API_VERSION_GIT } from "../ado/constants.js";
 import { updateAzureDeploymentApproval } from "../ado/environments.js";
@@ -47,6 +47,7 @@ const SUPPORTED_KINDS = new Set([
   "pull_request.create",
   "pull_request.comment",
   "pull_request.vote",
+  "pull_request.update",
   "pipeline.trigger",
   "deployment.approve",
 ]);
@@ -79,6 +80,9 @@ export class AdoActionTransport implements ActionTransport {
     }
     if (record.kind === "pull_request.vote") {
       return this.executePullRequestVote(record);
+    }
+    if (record.kind === "pull_request.update") {
+      return this.executePullRequestUpdate(record);
     }
     if (record.kind === "pipeline.trigger") {
       return this.executePipelineTrigger(record);
@@ -438,6 +442,39 @@ export class AdoActionTransport implements ActionTransport {
       ok: true,
       result: { approvalId, status: updated.status },
       summary: `deployment approval ${approvalId} set to ${status}`,
+    };
+  }
+
+  private async executePullRequestUpdate(record: ActionRecord): Promise<ExecuteOutcome> {
+    const payload = record.payload as { repositoryId?: unknown; pullRequestId?: unknown; status?: unknown };
+    const repositoryId = String(payload.repositoryId ?? "");
+    const pullRequestId = Number(payload.pullRequestId ?? 0);
+    const status = String(payload.status ?? "");
+    if (!repositoryId || !pullRequestId || (status !== "active" && status !== "abandoned")) {
+      return {
+        ok: false,
+        result: undefined,
+        summary: "pull_request.update payload must include repositoryId, pullRequestId, and status (active|abandoned)",
+      };
+    }
+    const target = record.target as Extract<ArtifactRef, { kind: "pull_request" }>;
+    const resolution = await this.resolveTarget(target);
+    const auth = await this.authFor(target.projectLinkId);
+    const updated = await updateAzurePullRequest({
+      organization: resolution.organization,
+      project: resolution.project,
+      repository: repositoryId,
+      pullRequestId,
+      status,
+      auth,
+    });
+    if (!updated.id) {
+      return { ok: false, result: undefined, summary: "ADO did not confirm the PR update" };
+    }
+    return {
+      ok: true,
+      result: { pullRequestId, status: updated.status },
+      summary: `PR #${pullRequestId} set to ${status}`,
     };
   }
 
