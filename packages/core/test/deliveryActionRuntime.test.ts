@@ -323,6 +323,38 @@ describe("delivery action runtime", () => {
     expect(pending).toHaveLength(0);
   });
 
+  it("retry re-proposes a failed-before-execution record with the same idempotency key", async () => {
+    transport.seedObservation(workItem(1));
+    // First proposal carries no predicates → policy refuses before any write.
+    const noPredicates = {
+      ...commentProposal(),
+      expectedResult: [],
+    };
+    const first = await runtime.propose(noPredicates);
+    expect(first.record.status).toBe("failed");
+    expect(transport.executeCalls).toHaveLength(0);
+
+    const retried = await runtime.retry(first.record.id, {
+      expectedResult: commentProposal().expectedResult,
+    });
+    expect(retried.record.status).toBe("awaiting_approval");
+
+    const approved = await runtime.approve(retried.record.id);
+    expect(approved.record.status).toBe("verified");
+    expect(transport.executeCalls).toHaveLength(1);
+  });
+
+  it("retry refuses a record that already executed", async () => {
+    transport.seedObservation(workItem(1));
+    const { record } = await runtime.propose(commentProposal());
+    await runtime.approve(record.id);
+
+    const retried = await runtime.retry(record.id, { reason: "again" });
+    expect(retried.verdict.decision).toBe("deny");
+    expect(retried.verdict.reasons.join()).toContain("already touched");
+    expect(transport.executeCalls).toHaveLength(1);
+  });
+
   it("rejects an awaiting approval on user feedback", async () => {
     transport.seedObservation(workItem(1));
     const { record } = await runtime.propose(commentProposal());

@@ -222,6 +222,55 @@ export class DeliveryActionRuntime {
     };
   }
 
+  /**
+   * Retry a proposal that failed BEFORE any remote write (failed without
+   * executedAt, or stale/rejected). The same idempotency key stays in place:
+   * no remote mutation happened, so re-proposing cannot duplicate a write.
+   * Records that already executed are never retried.
+   */
+  async retry(
+    id: string,
+    input: Partial<Pick<ProposeInput, "payload" | "expectedResult" | "expiresAt" | "reason">>,
+  ): Promise<ProposeResult> {
+    const existing = await this.store.get(id);
+    if (!existing) {
+      return {
+        record: undefined as unknown as ActionRecord,
+        verdict: { decision: "deny", reasons: [`no action ${id}`] },
+      };
+    }
+    if (existing.executedAt || existing.status === "executing" || existing.status === "verifying") {
+      return {
+        record: existing,
+        verdict: { decision: "deny", reasons: [`action ${existing.status} already touched the remote; retry is refused`] },
+      };
+    }
+    const now = this.options.now?.() ?? Date.now();
+    const record: ActionRecord = {
+      ...existing,
+      payload: input.payload ?? existing.payload,
+      expectedResult: input.expectedResult ?? existing.expectedResult,
+      expiresAt: input.expiresAt ?? existing.expiresAt,
+      reason: input.reason ?? existing.reason,
+      status: "awaiting_approval",
+      failure: undefined,
+      audit: this.audit(existing, "awaiting_approval", "retried with corrected proposal"),
+    };
+    const verdict = this.policy.evaluate(record, await this.policyContext(record));
+    if (verdict.decision === "deny") {
+      const failed: ActionRecord = {
+        ...record,
+        status: "failed",
+        failure: { kind: "policy", message: verdict.reasons.join("; ") },
+        audit: this.audit(record, "failed", verdict.reasons.join("; ")),
+      };
+      await this.store.updateStatus(failed);
+      return { record: failed, verdict };
+    }
+    await this.store.updateStatus(record);
+    return { record, verdict };
+  }
+
   async reject(id: string, feedback?: string): Promise<ActionRecord | undefined> {
     const record = await this.store.get(id);
     if (!record || isTerminalActionStatus(record.status)) return record;

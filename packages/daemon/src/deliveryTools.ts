@@ -34,7 +34,9 @@ function deliveryProposeActionTool(): Tool {
     description:
       "Propose a persisted, verifiable Azure DevOps action (for example a work item comment). " +
       "The exact action is stored locally and shown for approval; after approval it is executed " +
-      "once and verified by re-reading Azure DevOps. Returns the action id, status, and verification evidence.",
+      "once and verified by re-reading Azure DevOps. Returns the action id, status, and verification evidence. " +
+      "For work_item.comment use expected_result with condition revision_gt (expectedRevision = the work item's current revision) " +
+      "and/or condition comment_contains (expected = the exact comment text).",
     parameters: {
       type: "object",
       required: ["kind", "target", "payload", "risk", "reason", "idempotency_key", "expires_at"],
@@ -75,17 +77,35 @@ function deliveryProposeActionTool(): Tool {
         throw new ToolError("delivery_propose_action requires the Project Link's ADO org and project.");
       }
       const target = payload["target"] as unknown;
-      if (!isArtifactRef(target)) {
-        throw new ToolError("delivery_propose_action requires a valid target ArtifactRef.");
+      if (!isScopedArtifactShape(target)) {
+        throw new ToolError("delivery_propose_action requires a valid target ArtifactRef (kind and identity fields).");
+      }
+      // The Project Link identity comes from the tool context, never from the
+      // model payload: the model cannot choose a different workspace.
+      const scopedTarget: ArtifactRef = { ...(target as ArtifactRef), projectLinkId };
+      const { runtime, transport } = createDeliveryRuntime(projectLinkId, organization, project);
+      // The proposal must carry the current revision so the staleness guard
+      // has a baseline. The model cannot invent it; read it from ADO.
+      if (scopedTarget.kind === "work_item" && typeof scopedTarget.revision !== "number") {
+        const observation = await transport.readArtifact(scopedTarget);
+        const observed = observation?.ref;
+        if (observed && observed.kind === "work_item" && typeof observed.revision === "number") {
+          scopedTarget.revision = observed.revision;
+        }
       }
       const basedOn = Array.isArray(payload["based_on"])
-        ? (payload["based_on"] as unknown[]).filter(isArtifactRef)
+        ? (payload["based_on"] as unknown[])
+            .filter(isScopedArtifactShape)
+            .map((ref) => ({ ...(ref as ArtifactRef), projectLinkId }))
         : [];
       const expectedResult = Array.isArray(payload["expected_result"])
         ? (payload["expected_result"] as unknown[])
             .filter(isVerificationPredicate)
             .map((predicate) => ({
-              artifact: (predicate as { artifact: unknown }).artifact as ArtifactRef,
+              artifact: {
+                ...(predicate as { artifact: unknown }).artifact as ArtifactRef,
+                projectLinkId,
+              },
               condition: (predicate as { condition: string }).condition as "exists",
               field: (predicate as { field?: string }).field,
               expected: (predicate as { expected?: unknown }).expected,
@@ -94,15 +114,56 @@ function deliveryProposeActionTool(): Tool {
             }))
         : [];
 
-      const runtime = createDeliveryRuntime(projectLinkId, organization, project);
       const idempotencyKey = String(payload["idempotency_key"] ?? "");
       const expiresAt = Number(payload["expires_at"] ?? 0);
-
-      // Approved re-call: the same deterministic id resolves the stored
-      // action and executes + verifies it, without model regeneration.
       const store = new SqliteDeliveryActionStore();
-      const existing = await store.get(actionId(projectLinkId, idempotencyKey));
-      if (existing && (existing.status === "awaiting_approval" || existing.status === "approved")) {
+      const recordId = actionId(projectLinkId, idempotencyKey);
+
+      // The tool runs only after the user approved the exact action payload
+      // in the approval card. Persist the stored action first, then execute
+      // and verify it — never a regenerated model action. A repeated call
+      // resolves the same deterministic record: terminal results are replayed
+      // without re-executing; in-flight records resume verification.
+      const existing = await store.get(recordId);
+      if (existing && existing.status === "verified") {
+        return {
+          action_id: existing.id,
+          status: existing.status,
+          verification: existing.audit
+            .filter((entry) => entry.event === "verified")
+            .map((entry) => entry.detail ?? ""),
+          summary: summarizeApprovedAction(existing),
+        };
+      }
+      if (existing) {
+        // A retry with the same idempotency key is allowed only when the
+        // record never executed (no remote write happened). In-flight records
+        // resume verification; everything else is refused.
+        if (existing.status === "failed" && !existing.executedAt) {
+          const retried = await runtime.retry(existing.id, {
+            payload: (payload["payload"] as Record<string, unknown>) ?? existing.payload,
+            expectedResult,
+            expiresAt,
+            reason: String(payload["reason"] ?? existing.reason),
+          });
+          if (retried.verdict.decision === "deny") {
+            return {
+              action_id: existing.id,
+              status: retried.record.status,
+              failure: retried.verdict.reasons.join("; "),
+              verification: [],
+              summary: summarizeApprovedAction(retried.record),
+            };
+          }
+          const result = await runtime.approve(retried.record.id);
+          return {
+            action_id: existing.id,
+            status: result.record.status,
+            failure: result.error?.message,
+            verification: result.verification?.evidence ?? [],
+            summary: summarizeApprovedAction(result.record),
+          };
+        }
         const result = await runtime.approve(existing.id);
         return {
           action_id: existing.id,
@@ -119,7 +180,7 @@ function deliveryProposeActionTool(): Tool {
         turnId: "chat",
         projectLinkId,
         kind: String(payload["kind"] ?? ""),
-        target,
+        target: scopedTarget,
         basedOn,
         payload: (payload["payload"] as Record<string, unknown>) ?? {},
         risk: String(payload["risk"] ?? "medium") as "low" | "medium" | "high" | "critical",
@@ -127,13 +188,18 @@ function deliveryProposeActionTool(): Tool {
         expectedResult,
         idempotencyKey,
         expiresAt,
+        // The user's approval of this tool call IS the approval of the stored
+        // action; the record is persisted before the write, then executed and
+        // verified through the same approve path.
+        forceApproval: true,
       });
+      const result = await runtime.approve(proposal.record.id);
       return {
         action_id: proposal.record.id,
-        status: proposal.record.status,
-        decision: proposal.verdict.decision,
-        reasons: proposal.verdict.reasons,
-        summary: `Action proposed for approval (${proposal.record.kind}, risk ${proposal.record.risk}).`,
+        status: result.record.status,
+        failure: result.error?.message,
+        verification: result.verification?.evidence ?? [],
+        summary: summarizeApprovedAction(result.record),
       };
     },
   };
@@ -149,6 +215,27 @@ function summarizeApprovedAction(record: Awaited<ReturnType<DeliveryActionRuntim
   return `Action ended in status ${record.status}.`;
 }
 
+/** The model provides kind + identity fields; projectLinkId is injected from context. */
+function isScopedArtifactShape(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  const kind = String(candidate["kind"] ?? "");
+  if (kind === "work_item") return Number.isInteger(Number(candidate["id"] ?? 0)) && Number(candidate["id"]) > 0;
+  if (kind === "pull_request") {
+    return Number.isInteger(Number(candidate["id"] ?? 0)) && Boolean(candidate["repositoryId"] ?? candidate["repository_id"]);
+  }
+  if (kind === "build") {
+    return Number.isInteger(Number(candidate["buildId"] ?? candidate["build_id"] ?? 0));
+  }
+  if (kind === "branch") {
+    return Boolean(candidate["name"]) && Boolean(candidate["repositoryId"] ?? candidate["repository_id"]);
+  }
+  if (kind === "commit") {
+    return Boolean(candidate["commitId"] ?? candidate["commit_id"]) && Boolean(candidate["repositoryId"] ?? candidate["repository_id"]);
+  }
+  return false;
+}
+
 function isVerificationPredicate(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
@@ -161,11 +248,11 @@ function createDeliveryRuntime(
   projectLinkId: string,
   organization: string,
   project: string,
-): DeliveryActionRuntime {
+): { runtime: DeliveryActionRuntime; transport: AdoActionTransport } {
   const transport = new AdoActionTransport({
     resolveProjectLink: async () => ({ organization, project }),
   });
-  return new DeliveryActionRuntime(
+  const runtime = new DeliveryActionRuntime(
     new SqliteDeliveryActionStore(),
     new DeliveryActionPolicy(),
     new DeliveryActionExecutor(transport),
@@ -173,4 +260,5 @@ function createDeliveryRuntime(
     transport,
     { writesEnabled: () => deliveryWritesState.enabled },
   );
+  return { runtime, transport };
 }

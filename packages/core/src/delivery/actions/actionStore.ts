@@ -127,9 +127,14 @@ export class SqliteDeliveryActionStore implements DeliveryActionStore {
   }
 
   async updateStatus(record: ActionRecord): Promise<void> {
+    // Payload-bearing columns are rewritten too: retry() may replace the
+    // proposal payload/expectedResult before re-approval.
     this.db.prepare(`
       UPDATE delivery_actions SET
-        status = @status, approved_at = @approvedAt, executed_at = @executedAt,
+        status = @status, target = @target, based_on = @basedOn,
+        payload = @payload, risk = @risk, reason = @reason,
+        expected_result = @expectedResult, expires_at = @expiresAt,
+        approved_at = @approvedAt, executed_at = @executedAt,
         verified_at = @verifiedAt, failure = @failure, audit = @audit
       WHERE id = @id
     `).run(toRow(record));

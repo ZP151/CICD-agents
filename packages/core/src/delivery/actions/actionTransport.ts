@@ -17,6 +17,8 @@ export interface ArtifactObservation {
   relations: string[];
   /** Correlation markers observed (run names, commit ids, …). */
   correlationIds: string[];
+  /** Comments observed on the artifact (work items). */
+  comments?: string[];
 }
 
 export interface ExecuteOutcome {

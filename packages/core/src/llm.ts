@@ -12,7 +12,12 @@ import { logger } from "./logger.js";
 // provider accepts a connection but never emits its first chunk. The desktop
 // shows a truthful waiting diagnostic after five seconds; this bounded request
 // turns a persistent transport failure into the canonical failed Turn.
-const STREAM_REQUEST_TIMEOUT_MS = 15_000;
+// GPT-5 reasoning requests with tool schemas routinely exceed fifteen seconds
+// before their first chunk; the timeout is configurable via env so a slow but
+// healthy provider is not aborted as a failure.
+const STREAM_REQUEST_TIMEOUT_MS = Number(
+  process.env.MERGEPILOT_STREAM_TIMEOUT_MS ?? 60_000,
+);
 
 export class LLMUnavailableError extends Error {}
 
@@ -372,7 +377,12 @@ export class LLMClient {
         lastErr = err;
         const backoff = 2 ** attempt * 1000 + Math.random() * 500;
         logger().warn(
-          { attempt: attempt + 1, retries, backoff },
+          {
+            attempt: attempt + 1,
+            retries,
+            backoff,
+            error: err instanceof Error ? `${err.name}: ${err.message.slice(0, 300)}` : String(err),
+          },
           "embed call failed; retrying",
         );
         await new Promise((r) => setTimeout(r, backoff));

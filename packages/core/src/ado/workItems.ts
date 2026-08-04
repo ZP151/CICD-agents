@@ -174,6 +174,7 @@ export interface AzureWorkItemRead {
   state: string;
   fields: Record<string, unknown>;
   relations: string[];
+  comments: string[];
 }
 
 /** Read one work item with its current revision, fields and relations. */
@@ -212,7 +213,29 @@ export async function readAzureWorkItem(args: {
     state: String(body.fields?.["System.State"] ?? ""),
     fields: body.fields ?? {},
     relations: (body.relations ?? []).map((relation) => String(relation.url ?? "")),
+    comments: await readWorkItemCommentTexts({ organization: org, project, workItemId, auth }),
   };
+}
+
+async function readWorkItemCommentTexts(args: {
+  organization: string;
+  project: string;
+  workItemId: number;
+  auth: AdoAuth;
+}): Promise<string[]> {
+  try {
+    const url =
+      `${adoBase(args.organization)}/${encodeURIComponent(args.project)}/_apis/wit/workItems/${args.workItemId}/comments` +
+      `?api-version=${API_VERSION_WI}`;
+    const resp = await adoFetch(url, args.auth);
+    if (!resp.ok) return [];
+    const body = await parseAdoJson(resp, "list work item comments") as {
+      comments?: Array<{ text?: string }>;
+    };
+    return (body.comments ?? []).map((comment) => String(comment.text ?? "")).filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 export interface AzureWorkItemCommentResult {

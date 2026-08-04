@@ -59,6 +59,7 @@ export class AdoActionTransport implements ActionTransport {
           fields: workItem.fields,
           relations: workItem.relations,
           correlationIds: [],
+          comments: workItem.comments,
         };
       } catch {
         return undefined;

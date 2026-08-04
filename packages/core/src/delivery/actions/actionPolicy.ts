@@ -52,6 +52,12 @@ export class DeliveryActionPolicy {
         reasons: [`action expired at ${record.expiresAt}`],
       };
     }
+    if (record.expectedResult.length === 0) {
+      return {
+        decision: "deny",
+        reasons: ["action carries no verification predicates; a write without an expected re-read result is refused"],
+      };
+    }
     if (record.status === "verified" || record.status === "executing" || record.status === "verifying") {
       return {
         decision: "deny",

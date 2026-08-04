@@ -470,7 +470,13 @@ export function registerChatRoutes(
           chatSessions.cancel(sessionId);
           const failure = chatTurnFailure(err, "planning");
           logger().warn(
-            { failureKind: failure.kind, retryable: failure.retryable, diagnosticId: failure.diagnosticId },
+            {
+              failureKind: failure.kind,
+              retryable: failure.retryable,
+              diagnosticId: failure.diagnosticId,
+              error: err instanceof Error ? `${err.name}: ${err.message.slice(0, 400)}` : String(err),
+              stack: err instanceof Error ? err.stack?.slice(0, 800) : undefined,
+            },
             "chat turn failed",
           );
           sseWriter.sendChatEvent({

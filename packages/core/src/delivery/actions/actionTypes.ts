@@ -28,7 +28,8 @@ export type VerificationCondition =
   | "field_eq"
   | "relation_present"
   | "revision_gt"
-  | "run_visible";
+  | "run_visible"
+  | "comment_contains";
 
 /**
  * A predicate over the authoritative artifact after the write. HTTP success

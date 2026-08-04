@@ -39,6 +39,16 @@ export class ActionVerifier {
     const started = options.now?.() ?? Date.now();
     const deadline = started + timeoutMs;
 
+    // Verification means re-reading the authoritative artifact. An action
+    // without predicates cannot be verified; refusing here prevents a write
+    // from being declared complete on HTTP success alone.
+    if (record.expectedResult.length === 0) {
+      return {
+        status: "contradicted",
+        evidence: ["action carries no verification predicates; re-read verification is impossible"],
+      };
+    }
+
     const evidence: string[] = [];
     let attempt = 0;
     while (attempt < attempts) {
@@ -124,6 +134,14 @@ export class ActionVerifier {
         }
         return { kind: "satisfied", detail: `run ${predicate.correlation ?? ""} visible` };
       }
+      case "comment_contains": {
+        const expected = String(predicate.expected ?? "");
+        const comments = observation.comments ?? [];
+        if (expected && !comments.some((comment) => comment.includes(expected))) {
+          return { kind: "pending", detail: `comment with expected text not yet visible (${comments.length} comments)` };
+        }
+        return { kind: "satisfied", detail: `comment present (${comments.length} total)` };
+      }
       default:
         return { kind: "contradicted", detail: "unsupported predicate condition" };
     }
@@ -143,6 +161,8 @@ export function describePredicate(predicate: VerificationPredicate): string {
       return `${target} revision > ${predicate.expectedRevision ?? 0}`;
     case "run_visible":
       return `${target} run ${predicate.correlation ?? ""} visible`;
+    case "comment_contains":
+      return `${target} comment contains ${String(predicate.expected ?? "")}`;
   }
 }
 
