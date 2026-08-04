@@ -31,13 +31,22 @@ Goal: complete Cycles 00–06 in order, each gated by acceptance evidence.
 
 | Cycle | Status | Evidence |
 | --- | --- | --- |
-| 00 — Reset and foundation | pending | — |
+| 00 — Reset and foundation | **completed 2026-08-05** | `cycle00-acceptance-evidence.md`; commits 1377c2a, 8e05713, 280ea97, e8d3f11, MP-PROD-001..003 commits; real-ADO E2E verified |
 | 01 — Work Item → PR → CI → write-back | pending | — |
 | 02 — Changes lifecycle | pending | — |
 | 03 — Delivery CI/test | pending | — |
 | 04 — Work intelligence | pending | — |
 | 05 — Deployment readiness | pending | — |
 | 06 — Hardening and pilot | pending | — |
+
+## Cycle 00 real-ADO write ledger
+
+| Date | Resource | ID | Operation | Result | Cleanup |
+| --- | --- | --- | --- | --- | --- |
+| 2026-08-05 | Work Item | 7912 | Create `[MergePilot Fixture] Cycle00 demo work item` | ok, revision 1 | delete after all cycles |
+| 2026-08-05 | Action record | act-d3d0cz | work_item.comment demo run 1 (key cycle00-demo-msf4g7b8) | verified (revision 3) | keep as audit evidence |
+| 2026-08-05 | Action record | act-gek1mz | work_item.comment demo run 2 (key cycle00-demo-mqf7s89) | verified (revision 4) | keep as audit evidence |
+| 2026-08-05 | Work Item comments | WI-7912 | 3 demo comments (2 verified runs + 1 earlier unverified run) | each written exactly once | removed with WI-7912 |
 
 ## Write/Resource Rules (recap)
 
