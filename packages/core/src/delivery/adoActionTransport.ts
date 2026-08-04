@@ -4,13 +4,21 @@
  * Executes supported action kinds against the real ADO API and re-reads the
  * authoritative artifact afterwards. The daemon supplies a Project Link
  * resolver so the transport never holds credentials or org/project state.
+ * Every read may record a canonical snapshot into the delivery graph when a
+ * graph store is attached.
  */
 import { addAzureWorkItemComment, readAzureWorkItem } from "../ado/workItems.js";
 import { getAzureDevOpsAuth } from "../ado/auth.js";
+import { createAzurePullRequest } from "../ado/pullRequestMutations.js";
+import { getAzurePullRequestById } from "../ado/pullRequests.js";
+import { readAzureBranchObjectId } from "../ado/refs.js";
+import { linkAzureWorkItemToPullRequest } from "../ado/workItems.js";
 import { ToolError } from "../tools/executor.js";
 import type { ArtifactRef } from "./artifactRef.js";
 import type { ActionRecord } from "./actions/actionTypes.js";
 import type { ActionTransport, ArtifactObservation, ExecuteOutcome } from "./actions/actionTransport.js";
+import type { DeliveryGraphStore } from "./snapshotStore.js";
+import type { ArtifactSnapshot } from "./observations.js";
 
 export interface AdoProjectLinkResolution {
   organization: string;
@@ -21,9 +29,11 @@ export interface AdoActionTransportOptions {
   resolveProjectLink: (projectLinkId: string) => Promise<AdoProjectLinkResolution>;
   /** Injected auth (tests) or real OAuth/PAT resolution when omitted. */
   auth?: (projectLinkId: string) => Promise<Awaited<ReturnType<typeof getAzureDevOpsAuth>>>;
+  /** When attached, every read records a canonical snapshot (delivery graph). */
+  graphStore?: DeliveryGraphStore;
 }
 
-const SUPPORTED_KINDS = new Set(["work_item.comment"]);
+const SUPPORTED_KINDS = new Set(["work_item.comment", "pull_request.create"]);
 
 export class AdoActionTransport implements ActionTransport {
   constructor(private readonly options: AdoActionTransportOptions) {}
@@ -39,33 +49,108 @@ export class AdoActionTransport implements ActionTransport {
     if (record.kind === "work_item.comment") {
       return this.executeWorkItemComment(record);
     }
+    if (record.kind === "pull_request.create") {
+      return this.executePullRequestCreate(record);
+    }
     return { ok: false, result: undefined, summary: `unsupported kind ${record.kind}` };
   }
 
   async readArtifact(ref: ArtifactRef): Promise<ArtifactObservation | undefined> {
     if (ref.kind === "work_item") {
+      return this.readWorkItem(ref);
+    }
+    if (ref.kind === "pull_request") {
+      return this.readPullRequest(ref);
+    }
+    if (ref.kind === "branch") {
       const target = await this.resolveTarget(ref);
       const auth = await this.authFor(ref.projectLinkId);
-      try {
-        const workItem = await readAzureWorkItem({
-          organization: target.organization,
-          project: target.project,
-          workItemId: ref.id,
-          auth,
-        });
-        return {
-          ref: { ...ref, revision: workItem.revision },
-          revision: workItem.revision,
-          fields: workItem.fields,
-          relations: workItem.relations,
-          correlationIds: [],
-          comments: workItem.comments,
-        };
-      } catch {
-        return undefined;
-      }
+      const branch = await readAzureBranchObjectId({
+        organization: target.organization,
+        project: target.project,
+        repository: ref.repositoryId,
+        branch: ref.name,
+        auth,
+      });
+      if (!branch) return undefined;
+      return {
+        ref: { ...ref, objectId: branch.objectId },
+        revision: branch.objectId,
+        fields: { objectId: branch.objectId },
+        relations: [],
+        correlationIds: [],
+      };
     }
     return undefined;
+  }
+
+  private async readWorkItem(ref: Extract<ArtifactRef, { kind: "work_item" }>): Promise<ArtifactObservation | undefined> {
+    const target = await this.resolveTarget(ref);
+    const auth = await this.authFor(ref.projectLinkId);
+    try {
+      const workItem = await readAzureWorkItem({
+        organization: target.organization,
+        project: target.project,
+        workItemId: ref.id,
+        auth,
+      });
+      const observation: ArtifactObservation = {
+        ref: { ...ref, revision: workItem.revision },
+        revision: workItem.revision,
+        fields: workItem.fields,
+        relations: workItem.relations,
+        correlationIds: [],
+        comments: workItem.comments,
+      };
+      await this.recordSnapshot(observation);
+      return observation;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async readPullRequest(
+    ref: Extract<ArtifactRef, { kind: "pull_request" }>,
+  ): Promise<ArtifactObservation | undefined> {
+    const target = await this.resolveTarget(ref);
+    const auth = await this.authFor(ref.projectLinkId);
+    try {
+      const pr = await getAzurePullRequestById({
+        organization: target.organization,
+        project: target.project,
+        repository: ref.repositoryId,
+        pullRequestId: ref.id,
+        auth,
+        includeWorkItemRefs: true,
+      });
+      // The authoritative source commit is the current tip of the source
+      // branch at re-read time.
+      const sourceBranch = await readAzureBranchObjectId({
+        organization: target.organization,
+        project: target.project,
+        repository: ref.repositoryId,
+        branch: pr.sourceBranch,
+        auth,
+      });
+      const sourceCommit = sourceBranch?.objectId ?? ref.sourceCommit;
+      const observation: ArtifactObservation = {
+        ref: { ...ref, sourceCommit },
+        revision: sourceCommit,
+        fields: {
+          title: pr.title,
+          status: pr.status,
+          isDraft: pr.isDraft,
+          sourceBranch: pr.sourceBranch,
+          targetBranch: pr.targetBranch,
+        },
+        relations: pr.workItemRefs.map((workItem) => workItem.url),
+        correlationIds: [sourceCommit],
+      };
+      await this.recordSnapshot(observation);
+      return observation;
+    } catch {
+      return undefined;
+    }
   }
 
   private async executeWorkItemComment(record: ActionRecord): Promise<ExecuteOutcome> {
@@ -95,6 +180,87 @@ export class AdoActionTransport implements ActionTransport {
       result: { commentId: written.commentId, revision: written.revision },
       summary: `comment written to work item ${target.id} (revision ${written.revision ?? "?"})`,
     };
+  }
+
+  private async executePullRequestCreate(record: ActionRecord): Promise<ExecuteOutcome> {
+    const payload = record.payload as {
+      sourceBranch?: unknown;
+      targetBranch?: unknown;
+      repositoryId?: unknown;
+      title?: unknown;
+      description?: unknown;
+      draft?: unknown;
+      workItemId?: unknown;
+    };
+    const sourceBranch = String(payload.sourceBranch ?? "");
+    const targetBranch = String(payload.targetBranch ?? "main");
+    const repositoryId = String(payload.repositoryId ?? "");
+    const title = String(payload.title ?? "");
+    if (!sourceBranch || !title || !repositoryId) {
+      return {
+        ok: false,
+        result: undefined,
+        summary: "pull_request.create payload must include sourceBranch, repositoryId, and title",
+      };
+    }
+    const target = record.target as Extract<ArtifactRef, { kind: "pull_request" }>;
+    const resolution = await this.resolveTarget(target);
+    const auth = await this.authFor(target.projectLinkId);
+
+    const created = await createAzurePullRequest({
+      organization: resolution.organization,
+      project: resolution.project,
+      repository: repositoryId,
+      sourceBranch,
+      targetBranch,
+      title,
+      description: payload.description === undefined ? undefined : String(payload.description),
+      draft: payload.draft === undefined ? undefined : Boolean(payload.draft),
+      auth,
+    });
+    if (!created.pull_request_id) {
+      return { ok: false, result: undefined, summary: "ADO did not return a pull request id" };
+    }
+    const workItemId = Number(payload.workItemId ?? 0);
+    if (workItemId > 0) {
+      const linked = await linkAzureWorkItemToPullRequest({
+        organization: resolution.organization,
+        project: resolution.project,
+        repository: repositoryId,
+        pullRequestId: created.pull_request_id,
+        workItemId,
+        auth,
+      });
+      if (!linked.ok) {
+        return {
+          ok: false,
+          result: { pullRequestId: created.pull_request_id, url: created.url },
+          summary: `PR created but work item link failed (${linked.status_code ?? "unknown"}): ${linked.error ?? "no error detail"}`,
+        };
+      }
+    }
+    return {
+      ok: true,
+      result: { pullRequestId: created.pull_request_id, url: created.url, workItemId: workItemId || undefined },
+      summary: `PR #${created.pull_request_id} created (${sourceBranch} -> ${targetBranch})`,
+    };
+  }
+
+  private async recordSnapshot(observation: ArtifactObservation): Promise<void> {
+    if (!this.options.graphStore) return;
+    const snapshot: ArtifactSnapshot = {
+      ref: observation.ref,
+      projectLinkId: observation.ref.projectLinkId,
+      observedAt: Date.now(),
+      source: "poll",
+      fields: observation.fields,
+      relations: observation.relations,
+    };
+    try {
+      await this.options.graphStore.upsertSnapshot(snapshot);
+    } catch {
+      // Snapshot recording is observational; a store failure must not break reads.
+    }
   }
 
   private async resolveTarget(ref: ArtifactRef): Promise<AdoProjectLinkResolution> {

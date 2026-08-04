@@ -288,3 +288,52 @@ export async function addAzureWorkItemComment(args: {
     revision: Number(body.workItemRevision ?? 0) || undefined,
   };
 }
+
+export interface AzureWorkItemCreateResult {
+  ok: boolean;
+  id?: number;
+  revision?: number;
+  status_code?: number;
+  error?: string;
+}
+
+/** Create a work item of the given type (Task/Bug) in the project. */
+export async function createAzureWorkItem(args: {
+  organization: string;
+  project: string;
+  type: "Task" | "Bug";
+  title: string;
+  description?: string;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzureWorkItemCreateResult> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const title = args.title.trim();
+  if (!org || !project || !title) {
+    throw new ToolError("create work item requires organization, project, type, and title.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/wit/workitems/$${args.type}` +
+    `?api-version=${API_VERSION_WI}`;
+  const body = [
+    { op: "add", path: "/fields/System.Title", value: title },
+    ...(args.description
+      ? [{ op: "add", path: "/fields/System.Description", value: args.description }]
+      : []),
+  ];
+  const resp = await adoFetch(url, auth, {
+    method: "POST",
+    headers: { "Content-Type": "application/json-patch+json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    return { ok: false, status_code: resp.status, error: (await resp.text()).slice(0, 400) };
+  }
+  const created = await parseAdoJson(resp, "create work item") as {
+    id?: number;
+    rev?: number;
+  };
+  return { ok: true, id: Number(created.id ?? 0) || undefined, revision: Number(created.rev ?? 0) || undefined };
+}

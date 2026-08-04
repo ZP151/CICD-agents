@@ -123,10 +123,13 @@ export class ActionVerifier {
         return { kind: "pending", detail: `${predicate.field}=${String(value)} still differs from expected` };
       }
       case "relation_present": {
-        if (predicate.expected !== undefined && !observation.relations.includes(String(predicate.expected))) {
-          return { kind: "pending", detail: `relation ${String(predicate.expected)} not yet present` };
+        // ADO relation urls are opaque (vstfs://...); a substring match on
+        // the target id is the robust equivalent of "relation exists".
+        const expected = String(predicate.expected ?? "");
+        if (expected && !observation.relations.some((relation) => relation.includes(expected))) {
+          return { kind: "pending", detail: `relation ${expected} not yet present` };
         }
-        return { kind: "satisfied", detail: `relation ${String(predicate.expected ?? "")} present` };
+        return { kind: "satisfied", detail: `relation ${expected} present` };
       }
       case "run_visible": {
         if (predicate.correlation && !observation.correlationIds.includes(predicate.correlation)) {
