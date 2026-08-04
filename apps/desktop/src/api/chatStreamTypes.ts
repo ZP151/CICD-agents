@@ -80,6 +80,8 @@ export interface ChatEventPayload {
   turnId?: string;
   /** Matches the locally-created optimistic Turn when the server starts it. */
   clientTurnId?: string;
+  /** Server-reported request receipt time on turn.started (latency telemetry). */
+  requestReceivedAt?: number;
   sequence?: number;
   emittedAt?: number;
   elapsedMs?: number;

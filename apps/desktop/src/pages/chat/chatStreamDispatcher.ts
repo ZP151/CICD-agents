@@ -6,7 +6,11 @@ import {
   sealTurnTranscriptExecution,
   upsertTurnStartedTranscript,
 } from "./chatTurnTranscript.js";
-import { adoptTurnMetrics, markTurnMetric } from "./chatTurnMetrics.js";
+import {
+  adoptRequestReceivedMetric,
+  adoptTurnMetrics,
+  markTurnMetric,
+} from "./chatTurnMetrics.js";
 import { acceptCanonicalTimelineSequence } from "./chatTimelineSequence.js";
 import {
   workflowStateAfterApprovalResolved,
@@ -107,16 +111,28 @@ function dispatchCanonicalTurnTimelineEvent(
 ): void {
   if (ev.type === "turn.started") {
     adoptTurnMetrics(ev.clientTurnId, ev.turnId);
+    adoptRequestReceivedMetric(ev.turnId, ev.requestReceivedAt);
     markTurnMetric(ev.turnId, "turn_started");
     markTurnMetric(ev.turnId, "sse_flushed");
     adapter.setStatusText(null);
     adapter.updateBubbles((bubbles) => upsertTurnStartedTranscript(bubbles, ev, uid));
     return;
   }
+  if (ev.type === "turn.waiting") {
+    markTurnMetric(ev.turnId, "model_request_started");
+    return;
+  }
   if (ev.type === "turn.narrative.delta" || ev.type === "turn.work.statement") {
     markTurnMetric(ev.turnId, "first_public_work_statement");
+    markTurnMetric(ev.turnId, "first_model_token");
     adapter.updateBubbles((bubbles) => applyTurnTimelineEvent(bubbles, ev));
     return;
+  }
+  if (ev.type === "turn.tool.started") {
+    markTurnMetric(ev.turnId, "first_tool_started");
+  }
+  if (ev.type === "turn.tool.completed") {
+    markTurnMetric(ev.turnId, "first_tool_completed");
   }
   if (ev.type === "turn.approval.requested") {
     adapter.updateBubbles((bubbles) => applyTurnTimelineEvent(bubbles, ev));

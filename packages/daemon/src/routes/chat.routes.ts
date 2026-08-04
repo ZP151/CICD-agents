@@ -297,6 +297,7 @@ export function registerChatRoutes(
   });
 
   app.post("/chat", async (req, reply) => {
+    const requestReceivedAt = Date.now();
     const parsed = ChatStartSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
 
@@ -319,7 +320,7 @@ export function registerChatRoutes(
     // planning or executing any action. This is a real behavioural boundary:
     // buffering a command event until after a narrative only changes what the
     // user sees; it does not stop the command from already having run.
-    sseWriter.startTurn(turnId, undefined, clientTurnId);
+    sseWriter.startTurn(turnId, undefined, clientTurnId, requestReceivedAt);
     let active = true;
     let openingNarrativeVisible = false;
     // A slow provider is surfaced only as a transport diagnostic after a

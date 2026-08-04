@@ -10,7 +10,7 @@ import { sessionStartedEvent } from "../chatEvents.js";
 
 export interface ChatSseWriter {
   send(event: string, payload: unknown): void;
-  startTurn(turnId: string, openingStatement?: string, clientTurnId?: string): void;
+  startTurn(turnId: string, openingStatement?: string, clientTurnId?: string, requestReceivedAt?: number): void;
   resumeTurn(turnId: string, options: { startedAt?: number; lastSequence?: number; statement?: string }): void;
   /** A network/model diagnostic, intentionally not a persisted narrative part. */
   sendWaitingForModel(): void;
@@ -62,7 +62,7 @@ export function createChatSseWriter(
   return {
     send,
     hasActiveTurn: () => activeTurn !== undefined,
-    startTurn(turnId, openingStatement, clientTurnId) {
+    startTurn(turnId, openingStatement, clientTurnId, requestReceivedAt) {
       activeTurn = {
         id: turnId,
         nextSequence: 1,
@@ -73,6 +73,8 @@ export function createChatSseWriter(
         hasNarrative: false,
         activeToolGroupId: undefined,
       };
+      // requestReceivedAt rides on turn.started so the desktop can compute
+      // daemon-side queueing (request_received → sse_flushed) from one clock.
       sendTimeline("turn.started", {
         type: "turn.started",
         turnId,
@@ -80,6 +82,7 @@ export function createChatSseWriter(
         emittedAt: activeTurn.startedAt,
         sessionId,
         clientTurnId,
+        ...(typeof requestReceivedAt === "number" ? { requestReceivedAt } : {}),
       });
       if (openingStatement) {
         const base = nextTimelineBase(activeTurn);
