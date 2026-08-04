@@ -3,6 +3,8 @@ import {
   ActionVerifier,
   AdoActionTransport,
   classifyEvidenceCoverage,
+  detectWorkItemDrift,
+  queryAzureWorkItems,
   classifyFailure,
   DeliveryActionExecutor,
   DeliveryActionPolicy,
@@ -262,6 +264,62 @@ export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRo
         classification,
         coverage,
       };
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.get("/delivery/work-items", async (request, reply) => {
+    const projectLinkId = String((request.query as Record<string, string | undefined>)["projectLinkId"] ?? "");
+    if (!projectLinkId) {
+      return reply.code(400).send({ error: "projectLinkId query parameter is required" });
+    }
+    try {
+      const projectLink = await projectLinkStore.getProjectLink(projectLinkId);
+      if (!projectLink) return reply.code(404).send({ error: "project_link_not_found" });
+      const auth = await getAzureDevOpsAuth(projectLink.adoPat);
+      const items = await queryAzureWorkItems({
+        organization: projectLink.adoOrgUrl,
+        project: projectLink.adoProject,
+        query:
+          "SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType], [System.IterationPath] " +
+          "FROM WorkItems WHERE ([System.AssignedTo] = @me OR [System.Title] CONTAINS '[MergePilot Fixture]') " +
+          "AND [System.State] <> 'Closed' AND [System.State] <> 'Done' ORDER BY [System.ChangedDate] DESC",
+        top: 50,
+        auth,
+      });
+      const workItems = items.map((item) => {
+        const ref = { kind: "work_item" as const, projectLinkId, id: item.id, revision: item.revision };
+        const findings = detectWorkItemDrift({
+          workItem: ref,
+          state: item.state,
+          activeStates: ["To Do", "New", "Approved", "Active", "Committed", "In Progress", "In Review", "Resolved"],
+          ageMs: Date.now() - (Date.parse(String(item.fields["System.CreatedDate"] ?? "")) || Date.now()),
+          linkedPullRequests: [],
+          buildResults: [],
+          comments: item.comments,
+          acceptanceCriteria: item.fields["System.AcceptanceCriteria"] ? String(item.fields["System.AcceptanceCriteria"]) : undefined,
+          changedFiles: [],
+          children: [],
+          evidenceAgeMs: 86_400_000 * 7,
+        });
+        return {
+          id: item.id,
+          type: item.type,
+          title: item.title,
+          state: item.state,
+          revision: item.revision,
+          iterationPath: item.iterationPath,
+          comments: item.comments.slice(-3),
+          drift: findings.map((finding) => ({
+            kind: finding.kind,
+            evidence: finding.deterministicEvidence,
+            followUp: finding.proposedFollowUp,
+            question: finding.question ?? false,
+          })),
+        };
+      });
+      return { workItems };
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
     }

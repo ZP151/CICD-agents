@@ -19,6 +19,7 @@ import { Tooltip, TooltipProvider } from "../components/ui/Tooltip.js";
 type RouteModuleLoader = () => Promise<unknown>;
 
 const loadChat = () => import("../pages/Chat.js");
+const loadWork = () => import("../pages/Work.js");
 const loadDashboard = () => import("../pages/Dashboard.js");
 const loadRepos = () => import("../pages/Repos.js");
 const loadTaskViewer = () => import("../pages/TaskViewer.js");
@@ -40,6 +41,7 @@ const routeModuleLoaders: RouteModuleLoader[] = [
 ];
 
 const Chat = lazy(loadChat);
+const Work = lazy(loadWork);
 const Dashboard = lazy(loadDashboard);
 const Repos = lazy(loadRepos);
 const TaskViewer = lazy(loadTaskViewer);
@@ -198,7 +200,7 @@ const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
     label: "Outcomes",
     items: [
       { kind: "link", to: "/chat", match: "/chat", label: "Agent", Icon: IconChat },
-      { kind: "disabled", label: "Work", note: "Available in a later cycle", Icon: IconWork },
+      { kind: "link", to: "/work", match: "/work", label: "Work", Icon: IconWork },
       { kind: "link", to: "/pulls", match: "/pulls", label: "Changes", Icon: IconPR },
       { kind: "link", to: "/pipelines", match: "/pipelines", label: "Delivery", Icon: IconPipeline },
     ],
@@ -427,6 +429,14 @@ export function FullLayout() {
             element={
               <LazyPageShell>
                 <TaskViewer />
+              </LazyPageShell>
+            }
+          />
+          <Route
+            path="/work"
+            element={
+              <LazyPageShell>
+                <Work />
               </LazyPageShell>
             }
           />

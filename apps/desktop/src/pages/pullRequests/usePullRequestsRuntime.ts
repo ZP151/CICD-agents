@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppData } from "../../App.js";
+import { fetchAuthMe } from "../../api/auth.js";
 import { paginateItems } from "../../components/PaginationControls.js";
 import {
   fetchProjectLinkPrInsightArtifacts,

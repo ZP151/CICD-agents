@@ -337,3 +337,119 @@ export async function createAzureWorkItem(args: {
   };
   return { ok: true, id: Number(created.id ?? 0) || undefined, revision: Number(created.rev ?? 0) || undefined };
 }
+
+export interface AzureWorkItemUpdateResult {
+  ok: boolean;
+  id?: number;
+  revision?: number;
+  status_code?: number;
+  error?: string;
+}
+
+/** Update work item fields via JSON-patch (state transitions, titles, etc.). */
+export async function updateAzureWorkItem(args: {
+  organization: string;
+  project: string;
+  workItemId: string | number;
+  fields: Record<string, string | number | boolean>;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzureWorkItemUpdateResult> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const workItemId = Number(args.workItemId ?? 0);
+  const entries = Object.entries(args.fields).filter(([, value]) => value !== undefined && value !== "");
+  if (!org || !project || !workItemId || entries.length === 0) {
+    throw new ToolError("update_work_item requires organization, project, work_item_id, and fields.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/wit/workitems/${workItemId}` +
+    `?api-version=${API_VERSION_WI}`;
+  const body = entries.map(([path, value]) => ({
+    op: "replace",
+    path: `/fields/${path}`,
+    value,
+  }));
+  const resp = await adoFetch(url, auth, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json-patch+json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    return { ok: false, status_code: resp.status, error: (await resp.text()).slice(0, 400) };
+  }
+  const updated = await parseAdoJson(resp, "update work item") as { id?: number; rev?: number };
+  return { ok: true, id: Number(updated.id ?? 0) || undefined, revision: Number(updated.rev ?? 0) || undefined };
+}
+
+export interface AzureWorkItemSummaryEntry {
+  id: number;
+  type: string;
+  title: string;
+  state: string;
+  revision: number;
+  iterationPath?: string;
+  fields: Record<string, unknown>;
+  relations: string[];
+  comments: string[];
+}
+
+/** Query work items (WIQL) and batch-read their details. */
+export async function queryAzureWorkItems(args: {
+  organization: string;
+  project: string;
+  query: string;
+  top?: number;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzureWorkItemSummaryEntry[]> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  if (!org || !project) throw new ToolError("ADO organization and project are required to query work items.");
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const queryUrl = `${adoBase(org)}/${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.1`;
+  const queryResp = await adoFetch(queryUrl, auth, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query: args.query, top: args.top ?? 50 }),
+  });
+  if (!queryResp.ok) {
+    throw new ToolError(`WIQL query failed (${queryResp.status}): ${(await queryResp.text()).slice(0, 400)}`);
+  }
+  const queryBody = await parseAdoJson(queryResp, "run work item query") as {
+    workItems?: Array<{ id?: number }>;
+  };
+  const ids = (queryBody.workItems ?? []).map((entry) => Number(entry.id ?? 0)).filter((id) => id > 0);
+  if (ids.length === 0) return [];
+  const detailsUrl =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/wit/workitems` +
+    `?ids=${ids.join(",")}&$expand=Relations&api-version=${API_VERSION_WI}`;
+  const detailsResp = await adoFetch(detailsUrl, auth);
+  if (!detailsResp.ok) return [];
+  const details = await parseAdoJson(detailsResp, "get work item details") as {
+    value?: Array<{
+      id?: number;
+      rev?: number;
+      fields?: Record<string, unknown>;
+      relations?: Array<{ rel?: string; url?: string }>;
+    }>;
+  };
+  const entries: AzureWorkItemSummaryEntry[] = [];
+  for (const item of details.value ?? []) {
+    const id = Number(item.id ?? 0);
+    if (!id) continue;
+    entries.push({
+      id,
+      type: String(item.fields?.["System.WorkItemType"] ?? ""),
+      title: String(item.fields?.["System.Title"] ?? ""),
+      state: String(item.fields?.["System.State"] ?? ""),
+      revision: Number(item.rev ?? 0),
+      iterationPath: item.fields?.["System.IterationPath"] ? String(item.fields["System.IterationPath"]) : undefined,
+      fields: item.fields ?? {},
+      relations: (item.relations ?? []).map((relation) => String(relation.url ?? "")),
+      comments: await readWorkItemCommentTexts({ organization: org, project, workItemId: id, auth }),
+    });
+  }
+  return entries;
+}

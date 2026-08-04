@@ -41,6 +41,7 @@ export * from "./reviewQueue.js";
 export * from "./reviewHistoryLocal.js";
 export * from "./reviewOperationsLocal.js";
 export * from "./prInsightArtifactsLocal.js";
+export * from "./ado/index.js";
 export * from "./delivery/index.js";
 export * from "./review/index.js";
 

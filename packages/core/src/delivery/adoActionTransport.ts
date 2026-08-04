@@ -7,7 +7,7 @@
  * Every read may record a canonical snapshot into the delivery graph when a
  * graph store is attached.
  */
-import { addAzureWorkItemComment, createAzureWorkItem, linkAzureWorkItemToPullRequest, readAzureWorkItem } from "../ado/workItems.js";
+import { addAzureWorkItemComment, createAzureWorkItem, linkAzureWorkItemToPullRequest, readAzureWorkItem, updateAzureWorkItem } from "../ado/workItems.js";
 import { addAzurePullRequestComment, addAzurePullRequestReviewer } from "../ado/pullRequestMutations.js";
 import { getAzureDevOpsCurrentUser } from "../ado/core.js";
 import { API_VERSION_GIT } from "../ado/constants.js";
@@ -42,6 +42,7 @@ export interface AdoActionTransportOptions {
 const SUPPORTED_KINDS = new Set([
   "work_item.comment",
   "work_item.create",
+  "work_item.update",
   "pull_request.create",
   "pull_request.comment",
   "pull_request.vote",
@@ -67,6 +68,9 @@ export class AdoActionTransport implements ActionTransport {
     }
     if (record.kind === "work_item.create") {
       return this.executeWorkItemCreate(record);
+    }
+    if (record.kind === "work_item.update") {
+      return this.executeWorkItemUpdate(record);
     }
     if (record.kind === "pull_request.comment") {
       return this.executePullRequestComment(record);
@@ -394,6 +398,37 @@ export class AdoActionTransport implements ActionTransport {
     } catch {
       return undefined;
     }
+  }
+
+  private async executeWorkItemUpdate(record: ActionRecord): Promise<ExecuteOutcome> {
+    const payload = record.payload as { fields?: Record<string, unknown> };
+    const fields = payload.fields ?? {};
+    const entries = Object.entries(fields).filter(([, value]) => value !== undefined && value !== "");
+    if (entries.length === 0) {
+      return { ok: false, result: undefined, summary: "work_item.update payload must include fields" };
+    }
+    const target = record.target as Extract<ArtifactRef, { kind: "work_item" }>;
+    const resolution = await this.resolveTarget(target);
+    const auth = await this.authFor(target.projectLinkId);
+    const updated = await updateAzureWorkItem({
+      organization: resolution.organization,
+      project: resolution.project,
+      workItemId: target.id,
+      fields: Object.fromEntries(entries) as Record<string, string | number | boolean>,
+      auth,
+    });
+    if (!updated.ok || !updated.id) {
+      return {
+        ok: false,
+        result: undefined,
+        summary: `work item update rejected by ADO (${updated.status_code ?? "unknown"}): ${updated.error ?? "no error detail"}`,
+      };
+    }
+    return {
+      ok: true,
+      result: { workItemId: updated.id, revision: updated.revision },
+      summary: `work item ${updated.id} updated to revision ${updated.revision ?? "?"} (${entries.map(([key]) => key).join(", ")})`,
+    };
   }
 
   private async executePullRequestComment(record: ActionRecord): Promise<ExecuteOutcome> {

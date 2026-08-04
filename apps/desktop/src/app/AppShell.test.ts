@@ -172,7 +172,7 @@ describe("AppShell workspace routes", () => {
     }
   });
 
-  it("uses the target outcome navigation and keeps Work disabled", () => {
+  it("uses the target outcome navigation with Work enabled", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       const html = renderToStaticMarkup(
@@ -182,8 +182,8 @@ describe("AppShell workspace routes", () => {
       for (const label of ["Agent", "Changes", "Delivery", "Settings"]) {
         expect(html).toContain(`aria-label="${label}"`);
       }
-      expect(html).toContain('aria-disabled="true"');
-      expect(html).toContain("Work");
+      // Work is live from Cycle 04.
+      expect(html).toContain('aria-label="Work"');
       // Review Queue and Activity are no longer primary navigation entries.
       expect(html).not.toContain("Review Queue");
       expect(html).not.toContain('aria-label="Activity"');
