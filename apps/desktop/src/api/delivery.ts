@@ -83,3 +83,20 @@ export async function fetchDeliveryEvidence(
   if (!r.ok) throw new Error(await messageFromErrorResponse(`Evidence HTTP ${r.status}`, r));
   return r.json() as Promise<DeliveryEvidenceBundle>;
 }
+
+export interface DeliveryDiagnostics {
+  correlationId: string;
+  generatedAt: number;
+  telemetry: {
+    totals: Record<string, number>;
+    byKind: Record<string, Record<string, number>>;
+    lastVerifiedAt?: number;
+  };
+  killSwitch: { writesEnabled: boolean };
+}
+
+export async function fetchDeliveryDiagnostics(): Promise<DeliveryDiagnostics> {
+  const r = await fetch(`${RUNTIME_URL}/delivery/diagnostics`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Diagnostics HTTP ${r.status}`, r));
+  return r.json() as Promise<DeliveryDiagnostics>;
+}

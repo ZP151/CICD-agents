@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AuthUser, HealthStatus } from "../../api";
-import { fetchDeliveryWritesState, setDeliveryWritesEnabled } from "../../api/delivery.js";
+import { fetchDeliveryDiagnostics, fetchDeliveryWritesState, setDeliveryWritesEnabled } from "../../api/delivery.js";
 import {
   StatusBadge,
   WorkbenchSegmentedControl,
@@ -97,6 +97,52 @@ export function AccountSettingsSection({
         </div>
       </details>
       <BuiltInCapabilitiesSection authUser={authUser} />
+      <DiagnosticsSection />
+    </WorkbenchSettingsSection>
+  );
+}
+
+/**
+ * Diagnostics (Cycle 06): a user-visible correlation id and the redacted
+ * verified-loop telemetry from the action store.
+ */
+function DiagnosticsSection(): JSX.Element {
+  const [diagnostics, setDiagnostics] = useState<Awaited<ReturnType<typeof fetchDeliveryDiagnostics>> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchDeliveryDiagnostics()
+      .then((data) => {
+        if (!cancelled) setDiagnostics(data);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Diagnostics unavailable.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const totals = diagnostics?.telemetry.totals ?? {};
+  return (
+    <WorkbenchSettingsSection title="Diagnostics">
+      <WorkbenchSettingsRow
+        title="Correlation ID"
+        description="Include this id when reporting an issue; it is regenerated per request and contains no personal data."
+      >
+        <span className="font-mono text-xs text-[rgb(var(--app-text-muted))]">
+          {diagnostics?.correlationId ?? (error ?? "loading…")}
+        </span>
+      </WorkbenchSettingsRow>
+      <WorkbenchSettingsRow
+        title="Verified delivery loops"
+        description="Actions recorded by the verified action runtime (audit only, redacted)."
+      >
+        <span className="text-xs text-[rgb(var(--app-text-muted))]">
+          verified {totals["verified"] ?? 0} · failed {totals["failed"] ?? 0} · awaiting approval {totals["awaiting_approval"] ?? 0}
+        </span>
+      </WorkbenchSettingsRow>
     </WorkbenchSettingsSection>
   );
 }

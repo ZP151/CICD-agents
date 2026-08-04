@@ -3,6 +3,7 @@ import {
   ActionVerifier,
   AdoActionTransport,
   buildDeploymentReadiness,
+  deliveryTelemetry,
   classifyEvidenceCoverage,
   detectWorkItemDrift,
   listAzureDeployments,
@@ -403,6 +404,17 @@ export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRo
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
     }
+  });
+
+  app.get("/delivery/diagnostics", async () => {
+    const store = new SqliteDeliveryActionStore();
+    const telemetry = await deliveryTelemetry(store);
+    return {
+      correlationId: `diag-${Date.now().toString(36)}`,
+      generatedAt: Date.now(),
+      telemetry,
+      killSwitch: { writesEnabled: writes.isEnabled() },
+    };
   });
 
   app.get("/delivery/writes-enabled", async () => ({ enabled: writes.isEnabled() }));

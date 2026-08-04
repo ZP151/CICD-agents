@@ -20,6 +20,8 @@ export interface DeliveryActionStore {
   markStaleForTarget(projectLinkId: string, ref: ArtifactRef): Promise<number>;
   /** Actions that may need verification recovery after a restart. */
   listInFlight(): Promise<ActionRecord[]>;
+  /** All records regardless of project link (telemetry/audit). */
+  listAll(): Promise<ActionRecord[]>;
   close(): void;
 }
 
@@ -165,6 +167,11 @@ export class SqliteDeliveryActionStore implements DeliveryActionStore {
     return rows.map(fromRow);
   }
 
+  async listAll(): Promise<ActionRecord[]> {
+    const rows = this.db.prepare("SELECT * FROM delivery_actions").all() as DeliveryActionRow[];
+    return rows.map(fromRow);
+  }
+
   close(): void {
     this.db.close();
   }
@@ -241,4 +248,29 @@ function fromRow(row: DeliveryActionRow): ActionRecord {
     failure: row.failure ? JSON.parse(row.failure) as ActionRecord["failure"] : undefined,
     audit: JSON.parse(row.audit) as ActionAuditEntry[],
   };
+}
+
+
+export interface DeliveryTelemetrySummary {
+  totals: Record<string, number>;
+  byKind: Record<string, Record<string, number>>;
+  lastVerifiedAt?: number;
+}
+
+/** Aggregate action outcomes for product telemetry (verified loops). */
+export async function deliveryTelemetry(store: DeliveryActionStore): Promise<DeliveryTelemetrySummary> {
+  const records = await store.listAll();
+  const totals: Record<string, number> = {};
+  const byKind: Record<string, Record<string, number>> = {};
+  let lastVerifiedAt: number | undefined;
+  for (const record of records) {
+    totals[record.status] = (totals[record.status] ?? 0) + 1;
+    const kindBucket = byKind[record.kind] ?? {};
+    kindBucket[record.status] = (kindBucket[record.status] ?? 0) + 1;
+    byKind[record.kind] = kindBucket;
+    if (record.status === "verified" && record.verifiedAt) {
+      lastVerifiedAt = Math.max(lastVerifiedAt ?? 0, record.verifiedAt);
+    }
+  }
+  return { totals, byKind, lastVerifiedAt };
 }
