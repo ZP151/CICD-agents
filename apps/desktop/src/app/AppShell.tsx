@@ -22,7 +22,6 @@ const loadChat = () => import("../pages/Chat.js");
 const loadDashboard = () => import("../pages/Dashboard.js");
 const loadRepos = () => import("../pages/Repos.js");
 const loadTaskViewer = () => import("../pages/TaskViewer.js");
-const loadReviewFindings = () => import("../pages/ReviewFindings.js");
 const loadPullRequests = () => import("../pages/PullRequests.js");
 const loadPipelines = () => import("../pages/Pipelines.js");
 const loadSettings = () => import("../pages/Settings.js");
@@ -32,7 +31,6 @@ const routeModuleLoaders: RouteModuleLoader[] = [
   loadDashboard,
   loadRepos,
   loadTaskViewer,
-  loadReviewFindings,
   loadPullRequests,
   loadPipelines,
   loadSettings,
@@ -43,7 +41,6 @@ const Chat = lazy(loadChat);
 const Dashboard = lazy(loadDashboard);
 const Repos = lazy(loadRepos);
 const TaskViewer = lazy(loadTaskViewer);
-const ReviewFindings = lazy(loadReviewFindings);
 const PullRequests = lazy(loadPullRequests);
 const Pipelines = lazy(loadPipelines);
 const Settings = lazy(loadSettings);
@@ -97,7 +94,7 @@ export function appShellNavLabelClass(): string {
 
 export function workspaceRouteFallbackTarget(pathname: string): string {
   const normalized = pathname.replace(/\/+$/, "") || "/";
-  if (normalized === "/review" || normalized === "/review-queue") return "/findings";
+  if (normalized === "/review" || normalized === "/review-queue" || normalized === "/findings") return "/pulls";
   if (normalized === "/pull-requests") return "/pulls";
   if (normalized === "/tasks") return "/activity";
   return "/chat";
@@ -418,8 +415,9 @@ export function FullLayout() {
             }
           />
           <Route path="/tasks" element={<Navigate to="/activity" replace />} />
-          <Route path="/review" element={<Navigate to="/findings" replace />} />
-          <Route path="/review-queue" element={<Navigate to="/findings" replace />} />
+          <Route path="/review" element={<Navigate to="/pulls" replace />} />
+          <Route path="/review-queue" element={<Navigate to="/pulls" replace />} />
+          <Route path="/findings" element={<Navigate to="/pulls" replace />} />
           <Route path="/pull-requests" element={<Navigate to="/pulls" replace />} />
           <Route
             path="/activity"
@@ -434,14 +432,6 @@ export function FullLayout() {
             element={
               <LazyPageShell>
                 <PullRequests />
-              </LazyPageShell>
-            }
-          />
-          <Route
-            path="/findings"
-            element={
-              <LazyPageShell>
-                <ReviewFindings />
               </LazyPageShell>
             }
           />

@@ -157,7 +157,7 @@ export function PullRequestCard({
               <>
                 <StatusBadge className={decisionTone}>{decisionLabel}</StatusBadge>
                 {opensReviewQueue && (
-                  <ActionLink href="#/findings" tone="quiet" className="min-h-7 px-2.5 py-1">
+                  <ActionLink href="#/pulls" tone="quiet" className="min-h-7 px-2.5 py-1">
                     Open Review Queue
                   </ActionLink>
                 )}

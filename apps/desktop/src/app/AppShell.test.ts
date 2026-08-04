@@ -46,9 +46,10 @@ describe("AppShell route preloading", () => {
 
 describe("AppShell route fallbacks", () => {
   it("keeps stale workspace URLs from rendering a blank page", () => {
-    expect(workspaceRouteFallbackTarget("/review")).toBe("/findings");
-    expect(workspaceRouteFallbackTarget("/review/")).toBe("/findings");
-    expect(workspaceRouteFallbackTarget("/review-queue")).toBe("/findings");
+    expect(workspaceRouteFallbackTarget("/review")).toBe("/pulls");
+    expect(workspaceRouteFallbackTarget("/review/")).toBe("/pulls");
+    expect(workspaceRouteFallbackTarget("/review-queue")).toBe("/pulls");
+    expect(workspaceRouteFallbackTarget("/findings")).toBe("/pulls");
     expect(workspaceRouteFallbackTarget("/pull-requests")).toBe("/pulls");
     expect(workspaceRouteFallbackTarget("/tasks")).toBe("/activity");
   });

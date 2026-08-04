@@ -168,7 +168,7 @@ describe("PullRequestCard", () => {
     );
 
     expect(html).toContain("Needs review");
-    expect(html).toContain('href="#/findings"');
+    expect(html).toContain('href="#/pulls"');
     expect(html).toContain("Open Review Queue");
   });
 });
