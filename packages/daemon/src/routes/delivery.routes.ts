@@ -2,10 +2,18 @@ import type { FastifyInstance } from "fastify";
 import {
   ActionVerifier,
   AdoActionTransport,
+  classifyEvidenceCoverage,
+  classifyFailure,
   DeliveryActionExecutor,
   DeliveryActionPolicy,
   DeliveryActionRuntime,
+  failureSignatureFor,
+  getAzureBuildLogExcerpt,
+  getAzureBuildTimeline,
+  getAzureDevOpsAuth,
   isArtifactRef,
+  listAzureBuilds,
+  redactLogText,
   SqliteDeliveryActionStore,
   type ArtifactRef,
 } from "@mergepilot/core";
@@ -179,6 +187,81 @@ export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRo
       const observation = await transport.readArtifact(ref);
       if (!observation) return reply.code(404).send({ error: `artifact ${kind}/${id} not found` });
       return observation;
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.get("/delivery/evidence/:buildId", async (request, reply) => {
+    const { buildId } = request.params as { buildId: string };
+    const query = request.query as Record<string, string | undefined>;
+    const projectLinkId = String(query["projectLinkId"] ?? "");
+    const definitionId = Number(query["definitionId"] ?? 0);
+    const numericBuildId = Number(buildId);
+    if (!projectLinkId || !definitionId || !Number.isInteger(numericBuildId)) {
+      return reply.code(400).send({ error: "projectLinkId and definitionId query parameters are required" });
+    }
+    try {
+      const projectLink = await projectLinkStore.getProjectLink(projectLinkId);
+      if (!projectLink) return reply.code(404).send({ error: "project_link_not_found" });
+      const organization = projectLink.adoOrgUrl;
+      const project = projectLink.adoProject;
+      const auth = await getAzureDevOpsAuth(projectLink.adoPat);
+      const [builds, timeline] = await Promise.all([
+        listAzureBuilds({ organization, project, buildIds: [numericBuildId], auth }),
+        getAzureBuildTimeline({ organization, project, buildId: numericBuildId, auth }).catch(() => null),
+      ]);
+      const build = builds[0];
+      if (!build) return reply.code(404).send({ error: `build ${buildId} not found` });
+      const failedRecords = timeline?.failedRecords ?? [];
+      const errorIssueMessages = (timeline?.errorIssues ?? []).map((issue) => issue.message ?? "").filter(Boolean);
+      const logExcerpts: Array<{ taskName: string; excerpt: string; contentHash: string }> = [];
+      const rawTexts: string[] = [...errorIssueMessages];
+      for (const record of failedRecords) {
+        const logId = (record as unknown as { log?: { id?: number } }).log?.id;
+        if (!logId) continue;
+        try {
+          const excerpt = await getAzureBuildLogExcerpt({ organization, project, buildId: numericBuildId, logId, auth, maxChars: 6000 });
+          const redacted = redactLogText(excerpt.excerpt ?? "");
+          logExcerpts.push({ taskName: record.name, excerpt: redacted.excerpt, contentHash: redacted.contentHash });
+          rawTexts.push(redacted.excerpt);
+        } catch {
+          // missing log access -> coverage partial
+        }
+      }
+      const signature = failureSignatureFor(definitionId, failedRecords[0]?.name ?? "unknown", rawTexts.join("\n") || "no log");
+      const classification = classifyFailure({
+        taskNames: failedRecords.map((r) => r.name),
+        logExcerpts: rawTexts,
+        changedFiles: [],
+        hasPublishedTests: false,
+        cancelledByUser: build.result === "canceled",
+      });
+      const coverage = classifyEvidenceCoverage(
+        failedRecords.map((r) => ({ taskName: r.name, result: "failed" })),
+        logExcerpts,
+        [],
+      );
+      return {
+        build: {
+          id: build.id,
+          buildNumber: build.buildNumber,
+          status: build.status,
+          result: build.result,
+          branch: build.sourceBranch,
+          sourceVersion: build.sourceVersion,
+          definitionName: build.definitionName,
+        },
+        timelineIssues: failedRecords.map((r) => ({ taskName: r.name, result: "failed" })),
+        errorIssues: (timeline?.errorIssues ?? []).slice(0, 5).map((issue) => ({
+          type: issue.type,
+          message: issue.message?.slice(0, 300),
+        })),
+        logExcerpts: logExcerpts.map((entry) => ({ taskName: entry.taskName, excerpt: entry.excerpt.slice(0, 1_200), contentHash: entry.contentHash })),
+        signature,
+        classification,
+        coverage,
+      };
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
     }

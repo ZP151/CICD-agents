@@ -39,6 +39,13 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
   const navigate = useNavigate();
   const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS);
   const [filter, setFilter] = useState<PipelineStatusFilter>("all");
+  const [inspectorRun, setInspectorRun] = useState<{
+    buildId: number;
+    definitionId: number;
+    projectLinkId: string;
+    branch: string;
+    repositoryId: string;
+  } | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -282,19 +289,17 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
     }
   }, []);
 
-  const openPipelineInChat = useCallback((row: PipelineRow, result: ChatWorkflowActionResult) => {
-    const draft = buildPipelineChatHandoffDraft({
-      pipelineId: row.pipelineId,
-      pipelineName: row.pipelineName,
-      project: row.project,
-      repository: row.repository,
-      repoPath: row.repoPath,
+  const openRunInspector = useCallback((row: PipelineRow) => {
+    const run = row.latestRun;
+    if (!run) return;
+    setInspectorRun({
+      buildId: run.id,
+      definitionId: Number(row.pipelineId ?? 0),
       projectLinkId: row.projectLinkId,
-      summary: result.summary,
+      branch: run.sourceBranch,
+      repositoryId: row.repository,
     });
-    sessionStorage.setItem(CHAT_HANDOFF_KEY, JSON.stringify(draft));
-    navigate("/chat");
-  }, [navigate]);
+  }, []);
 
   const analyzePipeline = useCallback(async (row: PipelineRow) => {
     const result = await inspectPipelineRow(row, setInspectState);
@@ -366,7 +371,9 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
     analyzePipeline,
     savePipeline,
     selectPipelineCandidate,
-    openPipelineInChat,
+    inspectorRun,
+    openRunInspector,
+    setInspectorRun,
   };
 }
 

@@ -54,3 +54,32 @@ export async function approveDeliveryAction(id: string): Promise<DeliveryActionR
   }
   return body as DeliveryActionRecord;
 }
+
+export interface DeliveryEvidenceBundle {
+  build: {
+    id: number;
+    buildNumber: string;
+    status: string;
+    result: string;
+    branch: string;
+    sourceVersion: string;
+    definitionName: string;
+  };
+  timelineIssues: Array<{ taskName: string; result: string }>;
+  errorIssues: Array<{ type: string; message: string }>;
+  logExcerpts: Array<{ taskName: string; excerpt: string; contentHash: string }>;
+  signature: { definitionId: number; taskName: string; errorClass: string; normalizedText: string };
+  classification: { class: string; confidence: number; decisiveEvidence: string[]; missingEvidence: string[] };
+  coverage: "complete" | "partial" | "missing";
+}
+
+export async function fetchDeliveryEvidence(
+  buildId: number,
+  projectLinkId: string,
+  definitionId: number,
+): Promise<DeliveryEvidenceBundle> {
+  const query = new URLSearchParams({ projectLinkId, definitionId: String(definitionId) });
+  const r = await fetch(`${RUNTIME_URL}/delivery/evidence/${buildId}?${query.toString()}`);
+  if (!r.ok) throw new Error(await messageFromErrorResponse(`Evidence HTTP ${r.status}`, r));
+  return r.json() as Promise<DeliveryEvidenceBundle>;
+}

@@ -18,7 +18,6 @@ interface PipelineRowCardProps {
   onSave: (row: PipelineRow) => void;
   onOpenDetails: (row: PipelineRow) => void;
   onSelectCandidate: (row: PipelineRow, candidateId: number) => void;
-  onOpenInChat: (row: PipelineRow, result: ChatWorkflowActionResult) => void;
   onRefreshPipelines: (row: PipelineRow) => void;
 }
 
@@ -31,7 +30,6 @@ export function PipelineRowCard({
   onSave,
   onOpenDetails,
   onSelectCandidate,
-  onOpenInChat,
   onRefreshPipelines,
 }: PipelineRowCardProps): JSX.Element {
   const tone = runTone(row.latestRun);
@@ -91,9 +89,9 @@ export function PipelineRowCard({
               type="button"
               tone="quiet"
               className="shrink-0 min-h-7 px-2 text-[rgb(var(--app-accent-readable))]"
-              onClick={() => onOpenInChat(row, state.result)}
+              onClick={() => onAnalyze(row)}
             >
-              Open in Chat
+              Diagnose in Inspector
             </ActionButton>
           </div>
           {inspectedRuns.length > 0 && (

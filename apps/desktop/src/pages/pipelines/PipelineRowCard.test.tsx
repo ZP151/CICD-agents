@@ -55,7 +55,6 @@ describe("PipelineRowCard", () => {
         onSave={() => undefined}
         onOpenDetails={() => undefined}
         onSelectCandidate={() => undefined}
-        onOpenInChat={() => undefined}
         onRefreshPipelines={() => undefined}
       />,
     );
@@ -96,7 +95,6 @@ describe("PipelineRowCard", () => {
         onSave={() => undefined}
         onOpenDetails={() => undefined}
         onSelectCandidate={() => undefined}
-        onOpenInChat={() => undefined}
         onRefreshPipelines={() => undefined}
       />,
     );
@@ -142,7 +140,6 @@ describe("PipelineRowCard", () => {
         onSave={() => undefined}
         onOpenDetails={() => undefined}
         onSelectCandidate={() => undefined}
-        onOpenInChat={() => undefined}
         onRefreshPipelines={() => undefined}
       />,
     );
@@ -174,7 +171,6 @@ describe("PipelineRowCard", () => {
         onSave={() => undefined}
         onOpenDetails={() => undefined}
         onSelectCandidate={() => undefined}
-        onOpenInChat={() => undefined}
         onRefreshPipelines={() => undefined}
       />,
     );
@@ -240,7 +236,6 @@ describe("PipelineRowCard typed target failures (MP-010)", () => {
         onSave={() => undefined}
         onOpenDetails={() => undefined}
         onSelectCandidate={() => undefined}
-        onOpenInChat={() => undefined}
         onRefreshPipelines={() => undefined}
       />,
     );

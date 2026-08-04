@@ -34,7 +34,7 @@ Goal: complete Cycles 00–06 in order, each gated by acceptance evidence.
 | 00 — Reset and foundation | **completed 2026-08-05** | `cycle00-acceptance-evidence.md`; commits 1377c2a, 8e05713, 280ea97, e8d3f11, MP-PROD-001..003 commits; real-ADO E2E verified |
 | 01 — Work Item → PR → CI → write-back | **completed 2026-08-05** | `cycle01-acceptance-evidence.md` + `cycle01-evidence.json`; commits 9e3ea93 (graph), 293762d (kinds/target resolution); real-ADO Fixtures A+B verified |
 | 02 — Changes lifecycle | **completed 2026-08-05** | `cycle02-acceptance-evidence.md` + `cycle02-reviewer-evidence.json`; commits 81d139f (workspace), 1d624c5 (assessment/reviewer/your-turn) |
-| 03 — Delivery CI/test | pending | — |
+| 03 — Delivery CI/test | **completed 2026-08-05** | `cycle03-acceptance-evidence.md` + `cycle03-evidence.json`; evidence bundle + classification + Inspector; real run 4834 classified code_regression |
 | 04 — Work intelligence | pending | — |
 | 05 — Deployment readiness | pending | — |
 | 06 — Hardening and pilot | pending | — |

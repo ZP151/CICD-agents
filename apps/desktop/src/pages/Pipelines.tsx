@@ -13,6 +13,7 @@ import {
   WorkbenchSidePanel,
 } from "../components/workbench/WorkbenchPrimitives.js";
 import { PipelineRowCard } from "./pipelines/PipelineRowCard.js";
+import { DeliveryRunInspector } from "./pipelines/DeliveryRunInspector.js";
 import { PipelineStatusFilters } from "./pipelines/PipelineStatusFilters.js";
 import { runTone } from "./pipelines/pipelineModel.js";
 import type { PipelineInspectState, PipelineRow } from "./pipelines/pipelineTypes.js";
@@ -149,17 +150,27 @@ export default function Pipelines(): JSX.Element {
                   onInspect={(selected) => void runtime.inspectPipeline(selected)}
                   onTrigger={(selected) => void runtime.triggerPipeline(selected)}
                   onAnalyze={(selected) => {
-                    setSelectedDetailKey(rowKey(selected));
-                    void runtime.analyzePipeline(selected);
+                    // Cycle 03: the run Inspector owns the diagnosis; no
+                    // pipeline navigation creates a chat message.
+                    runtime.openRunInspector(selected);
                   }}
                   onSave={(selected) => void runtime.savePipeline(selected)}
                   onOpenDetails={(selected) => setSelectedDetailKey(rowKey(selected))}
                   onSelectCandidate={(selected, candidateId) => void runtime.selectPipelineCandidate(selected, candidateId)}
-                  onOpenInChat={(selected, result) => runtime.openPipelineInChat(selected, result)}
                   onRefreshPipelines={(selected) => void runtime.discoverPipelines()}
                 />
               ))}
             </div>
+            {runtime.inspectorRun && (
+              <DeliveryRunInspector
+                buildId={runtime.inspectorRun.buildId}
+                definitionId={runtime.inspectorRun.definitionId}
+                projectLinkId={runtime.inspectorRun.projectLinkId}
+                repositoryId={runtime.inspectorRun.repositoryId}
+                branch={runtime.inspectorRun.branch}
+                onClose={() => runtime.setInspectorRun(null)}
+              />
+            )}
             {selectedDetailRow && selectedDetailState && (
               <PipelineDetailPanel
                 row={selectedDetailRow}

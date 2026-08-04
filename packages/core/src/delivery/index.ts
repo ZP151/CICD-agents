@@ -4,6 +4,8 @@ export * from "./deliveryEdges.js";
 export * from "./snapshotStore.js";
 export * from "./reviewAssessment.js";
 export * from "./yourTurn.js";
+export * from "./failureEvidence.js";
+export * from "./failureClassification.js";
 export * from "./adoActionTransport.js";
 export * from "./actions/actionTypes.js";
 export * from "./actions/actionPolicy.js";
