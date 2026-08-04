@@ -17,6 +17,7 @@ export interface AzurePullRequestSummary {
   repository: string;
   url: string;
   reviewerCount: number;
+  reviewers: string[];
   voteSummary: {
     approved: number;
     waiting: number;
@@ -112,7 +113,7 @@ interface PullRequestPayload {
   closedDate?: string;
   createdBy?: { displayName?: string };
   repository?: { name?: string; project?: { id?: string; name?: string } };
-  reviewers?: Array<{ vote?: number }>;
+  reviewers?: Array<{ vote?: number; displayName?: string; id?: string }>;
   workItemRefs?: Array<{ id?: string; url?: string }>;
 }
 
@@ -136,6 +137,9 @@ function toPullRequestSummary(
     repository: pr.repository?.name ?? repository,
     url: id ? `${adoBase(org)}/${project}/_git/${repository}/pullrequest/${id}` : "",
     reviewerCount: reviewers.length,
+    reviewers: reviewers
+      .map((reviewer) => reviewer.displayName?.trim() ?? "")
+      .filter(Boolean),
     voteSummary: summarizeVotes(reviewers),
   };
 }

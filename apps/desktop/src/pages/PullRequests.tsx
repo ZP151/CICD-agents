@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { PaginationControls } from "../components/PaginationControls.js";
 import {
   ActionButton,
@@ -49,6 +50,7 @@ export function pullRequestLoadingMetaGridClass(): string {
 }
 
 export default function PullRequests(): JSX.Element {
+  const navigate = useNavigate();
   const runtime = usePullRequestsRuntime();
   const {
     projectLinks,
@@ -113,6 +115,7 @@ export default function PullRequests(): JSX.Element {
         onProjectLinkChange={setProjectLinkId}
         onStatusChange={setStatus}
         onRefresh={() => void load()}
+        onCreatePr={() => navigate("/pulls/new")}
       />
 
       {error && prs.length > 0 && (

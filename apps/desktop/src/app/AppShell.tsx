@@ -23,6 +23,7 @@ const loadDashboard = () => import("../pages/Dashboard.js");
 const loadRepos = () => import("../pages/Repos.js");
 const loadTaskViewer = () => import("../pages/TaskViewer.js");
 const loadPullRequests = () => import("../pages/PullRequests.js");
+const loadCreatePullRequest = () => import("../pages/CreatePullRequest.js");
 const loadPipelines = () => import("../pages/Pipelines.js");
 const loadSettings = () => import("../pages/Settings.js");
 const loadProjectLinks = () => import("../pages/ProjectLinks.js");
@@ -32,6 +33,7 @@ const routeModuleLoaders: RouteModuleLoader[] = [
   loadRepos,
   loadTaskViewer,
   loadPullRequests,
+  loadCreatePullRequest,
   loadPipelines,
   loadSettings,
   loadProjectLinks,
@@ -42,6 +44,7 @@ const Dashboard = lazy(loadDashboard);
 const Repos = lazy(loadRepos);
 const TaskViewer = lazy(loadTaskViewer);
 const PullRequests = lazy(loadPullRequests);
+const CreatePullRequest = lazy(loadCreatePullRequest);
 const Pipelines = lazy(loadPipelines);
 const Settings = lazy(loadSettings);
 const ProjectLinks = lazy(loadProjectLinks);
@@ -432,6 +435,14 @@ export function FullLayout() {
             element={
               <LazyPageShell>
                 <PullRequests />
+              </LazyPageShell>
+            }
+          />
+          <Route
+            path="/pulls/new"
+            element={
+              <LazyPageShell>
+                <CreatePullRequest />
               </LazyPageShell>
             }
           />

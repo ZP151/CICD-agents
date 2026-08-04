@@ -26,6 +26,7 @@ function pr(overrides: Partial<DisplayPullRequest> = {}): DisplayPullRequest {
     creationDate: "2026-01-01T00:00:00.000Z",
     createdBy: "user",
     reviewerCount: 1,
+    reviewers: ["Reviewer Name"],
     voteSummary: {
       approved: 0,
       rejected: 0,
@@ -92,9 +93,13 @@ describe("pullRequestViewModel", () => {
   });
 
   it("filters pull requests by product categories", () => {
-    expect(prMatchesCategory(pr({ isDraft: true }), "draft")).toBe(true);
-    expect(prMatchesCategory(pr({ voteSummary: { approved: 1, rejected: 0, waiting: 0 } }), "reviewed")).toBe(true);
-    expect(prMatchesCategory(pr({ voteSummary: { approved: 0, rejected: 0, waiting: 1 } }), "attention")).toBe(true);
+    expect(prMatchesCategory(pr({ isDraft: true }), "waiting")).toBe(true);
+    expect(prMatchesCategory(pr({ voteSummary: { approved: 0, rejected: 0, waiting: 1 } }), "waiting")).toBe(true);
+    expect(prMatchesCategory(pr({ createdBy: "Author Name", reviewers: [] }), "mine", "Author Name")).toBe(true);
+    expect(prMatchesCategory(pr({ createdBy: "Author Name", reviewers: [] }), "mine", "Someone Else")).toBe(false);
+    expect(prMatchesCategory(pr({ reviewers: ["Reviewer Name"] }), "needs_review", "Reviewer Name")).toBe(true);
+    expect(prMatchesCategory(pr({ reviewers: ["Other Reviewer"] }), "needs_review", "Reviewer Name")).toBe(false);
+    expect(prMatchesCategory(pr({ voteSummary: { approved: 1, rejected: 0, waiting: 0 } }), "all")).toBe(true);
   });
 
   it("matches the Project Link branch scope unless the scope is main or empty", () => {

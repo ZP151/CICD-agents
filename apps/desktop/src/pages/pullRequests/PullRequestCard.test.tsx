@@ -23,6 +23,7 @@ const pr: DisplayPullRequest = {
   repository: "ClaimBot_API",
   url: "https://dev.azure.com/example",
   reviewerCount: 1,
+      reviewers: [],
   voteSummary: {
     approved: 1,
     waiting: 0,

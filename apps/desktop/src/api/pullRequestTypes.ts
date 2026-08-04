@@ -21,6 +21,7 @@ export interface PullRequestSummary {
   repository: string;
   url: string;
   reviewerCount: number;
+  reviewers: string[];
   voteSummary: {
     approved: number;
     waiting: number;

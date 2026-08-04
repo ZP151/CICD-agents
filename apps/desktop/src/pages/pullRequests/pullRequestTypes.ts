@@ -14,7 +14,7 @@ export function pullRequestRuntimeKey(pr: Pick<DisplayPullRequest, "id" | "repos
   return `${pr.sourceProjectLinkId || "project-link"}:${pr.repository}:${pr.id}`;
 }
 
-export type PullRequestCategory = "all" | "attention" | "draft" | "reviewed";
+export type PullRequestCategory = "all" | "mine" | "needs_review" | "waiting";
 
 export type ContextState =
   | { phase: "idle" }

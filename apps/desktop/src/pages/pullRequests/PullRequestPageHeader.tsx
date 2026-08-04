@@ -1,6 +1,7 @@
 import type { ProjectLink } from "../../api.js";
 import {
   ActionButton,
+  ActionLink,
   WorkbenchHeader,
   WorkbenchSelect,
 } from "../../components/workbench/WorkbenchPrimitives.js";
@@ -26,6 +27,7 @@ export interface PullRequestPageHeaderProps {
   onProjectLinkChange: (projectLinkId: string) => void;
   onStatusChange: (status: string) => void;
   onRefresh: () => void;
+  onCreatePr: () => void;
 }
 
 export function PullRequestPageHeader({
@@ -38,6 +40,7 @@ export function PullRequestPageHeader({
   onProjectLinkChange,
   onStatusChange,
   onRefresh,
+  onCreatePr,
 }: PullRequestPageHeaderProps): JSX.Element {
   return (
     <>
@@ -75,6 +78,7 @@ export function PullRequestPageHeader({
             <option value="all">All</option>
           </WorkbenchSelect>
           <ActionButton onClick={onRefresh}>Refresh</ActionButton>
+          <ActionButton tone="primary" onClick={onCreatePr}>Create PR</ActionButton>
         </div>}
       />
 

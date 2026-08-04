@@ -61,8 +61,9 @@ Goal: complete Cycles 00–06 in order, each gated by acceptance evidence.
 | 2026-08-05 | PR | 2798 | [MergePilot Fixture] PR (run 2, chat attempt) | created | abandon |
 | 2026-08-05 | PR | 2799 | [MergePilot Fixture] PR (run 3) | created | abandon |
 | 2026-08-05 | PR | 2801 | [MergePilot Fixture] PR (run 4, verified) | created | abandon |
-| 2026-08-05 | Pipeline run | 4830 | fixture run 3 (passing) | observed | n/a (run completes) |
-| 2026-08-05 | Pipeline run | 4831/4832 | failing fixture branch (compile error) | triggered+verified | n/a (run completes) |
+| 2026-08-05 | Pipeline run | 4830 | fixture run 3 (passing) | **completed succeeded** | n/a |
+| 2026-08-05 | Pipeline run | 4831/4832 | first fail branch (file not in csproj -> passed) | observed | n/a |
+| 2026-08-05 | Pipeline run | 4834 | **deterministic compile failure** (BundleConfig.cs syntax error) | **completed failed** | n/a |
 | 2026-08-05 | Pipeline run | 4833 | fixture run 4 (passing) | triggered+verified | n/a (run completes) |
 | 2026-08-05 | Action records | act-1hrkgtx, act-92i10t, act-10b2mgz, act-1lljl2v | verified Fixture A/B writes | verified | keep as audit evidence |
 | 2026-08-05 | Action record | act-1thxfgc / act-1u45z0 | duplicate PR refused (TF401179) | failed (correct) | keep as safety evidence |

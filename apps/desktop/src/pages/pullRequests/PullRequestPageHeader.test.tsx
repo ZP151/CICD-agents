@@ -18,6 +18,7 @@ describe("PullRequestPageHeader", () => {
         onProjectLinkChange={() => undefined}
         onStatusChange={() => undefined}
         onRefresh={() => undefined}
+        onCreatePr={() => undefined}
       />,
     );
 
@@ -58,6 +59,7 @@ describe("PullRequestPageHeader", () => {
         onProjectLinkChange={() => undefined}
         onStatusChange={() => undefined}
         onRefresh={() => undefined}
+        onCreatePr={() => undefined}
       />,
     );
 
@@ -113,6 +115,7 @@ describe("PullRequestPageHeader", () => {
         onProjectLinkChange={() => undefined}
         onStatusChange={() => undefined}
         onRefresh={() => undefined}
+        onCreatePr={() => undefined}
       />,
     );
 

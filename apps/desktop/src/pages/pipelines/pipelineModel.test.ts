@@ -52,6 +52,7 @@ function pullRequestWithPipelineRun(
     repository: "TeBS-ClaimBot",
     url: "https://dev.azure.com/demo/pr/2670",
     reviewerCount: 1,
+      reviewers: [],
     voteSummary: {
       approved: 1,
       waiting: 0,

@@ -13,9 +13,9 @@ import { formatSortableDate, parseSortableDate } from "../../safeDate.js";
 
 export const prCategories: Array<{ key: PullRequestCategory; label: string }> = [
   { key: "all", label: "All" },
-  { key: "attention", label: "Needs attention" },
-  { key: "draft", label: "Draft" },
-  { key: "reviewed", label: "Reviewed" },
+  { key: "mine", label: "Authored by me" },
+  { key: "needs_review", label: "Needs my review" },
+  { key: "waiting", label: "Waiting" },
 ];
 
 export function formatDate(value: string): string {
@@ -119,10 +119,21 @@ export function dedupePullRequests(items: DisplayPullRequest[]): DisplayPullRequ
   return [...byKey.values()];
 }
 
-export function prMatchesCategory(pr: DisplayPullRequest, category: PullRequestCategory): boolean {
+export function prMatchesCategory(
+  pr: DisplayPullRequest,
+  category: PullRequestCategory,
+  currentUserName?: string,
+): boolean {
   if (category === "all") return true;
-  if (category === "draft") return pr.isDraft;
-  if (category === "reviewed") return pr.voteSummary.approved > 0 && pr.voteSummary.rejected === 0;
+  if (category === "mine") {
+    return Boolean(currentUserName) && pr.createdBy.localeCompare(currentUserName ?? "", undefined, { sensitivity: "accent" }) === 0;
+  }
+  if (category === "needs_review") {
+    return Boolean(currentUserName) && pr.reviewers.some((reviewer) =>
+      reviewer.localeCompare(currentUserName ?? "", undefined, { sensitivity: "accent" }) === 0,
+    );
+  }
+  // waiting: draft, changes requested, or not yet reviewed by anyone.
   return pr.isDraft || pr.voteSummary.rejected > 0 || pr.voteSummary.approved === 0;
 }
 
