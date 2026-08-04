@@ -11,6 +11,7 @@ import { addAzureWorkItemComment, createAzureWorkItem, linkAzureWorkItemToPullRe
 import { addAzurePullRequestComment, addAzurePullRequestReviewer } from "../ado/pullRequestMutations.js";
 import { getAzureDevOpsCurrentUser } from "../ado/core.js";
 import { API_VERSION_GIT } from "../ado/constants.js";
+import { updateAzureDeploymentApproval } from "../ado/environments.js";
 import { adoBase, adoFetch } from "../ado/client.js";
 import { parseAdoJson } from "../ado/response.js";
 import { getAzureDevOpsAuth } from "../ado/auth.js";
@@ -47,6 +48,7 @@ const SUPPORTED_KINDS = new Set([
   "pull_request.comment",
   "pull_request.vote",
   "pipeline.trigger",
+  "deployment.approve",
 ]);
 
 export class AdoActionTransport implements ActionTransport {
@@ -80,6 +82,9 @@ export class AdoActionTransport implements ActionTransport {
     }
     if (record.kind === "pipeline.trigger") {
       return this.executePipelineTrigger(record);
+    }
+    if (record.kind === "deployment.approve") {
+      return this.executeDeploymentApprove(record);
     }
     return { ok: false, result: undefined, summary: `unsupported kind ${record.kind}` };
   }
@@ -398,6 +403,42 @@ export class AdoActionTransport implements ActionTransport {
     } catch {
       return undefined;
     }
+  }
+
+  private async executeDeploymentApprove(record: ActionRecord): Promise<ExecuteOutcome> {
+    const payload = record.payload as { approvalId?: unknown; status?: unknown; comment?: unknown };
+    const approvalId = Number(payload.approvalId ?? 0);
+    const status = String(payload.status ?? "");
+    if (!approvalId || (status !== "approved" && status !== "rejected")) {
+      return {
+        ok: false,
+        result: undefined,
+        summary: "deployment.approve payload must include approvalId and status (approved|rejected)",
+      };
+    }
+    const target = record.target as Extract<ArtifactRef, { kind: "deployment" }>;
+    const resolution = await this.resolveTarget(target);
+    const auth = await this.authFor(target.projectLinkId);
+    const updated = await updateAzureDeploymentApproval({
+      organization: resolution.organization,
+      project: resolution.project,
+      approvalId,
+      status,
+      comment: payload.comment === undefined ? undefined : String(payload.comment),
+      auth,
+    });
+    if (!updated.ok) {
+      return {
+        ok: false,
+        result: undefined,
+        summary: `deployment approval rejected by ADO (${updated.status_code ?? "unknown"}): ${updated.error ?? "no error detail"}`,
+      };
+    }
+    return {
+      ok: true,
+      result: { approvalId, status: updated.status },
+      summary: `deployment approval ${approvalId} set to ${status}`,
+    };
   }
 
   private async executeWorkItemUpdate(record: ActionRecord): Promise<ExecuteOutcome> {

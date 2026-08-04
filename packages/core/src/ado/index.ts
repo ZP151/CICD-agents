@@ -4,6 +4,7 @@ export * from "./client.js";
 export * from "./constants.js";
 export * from "./core.js";
 export * from "./diagnostics.js";
+export * from "./environments.js";
 export * from "./policy.js";
 export * from "./pipelines.js";
 export * from "./pullRequestChanges.js";

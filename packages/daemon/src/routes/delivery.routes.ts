@@ -2,8 +2,12 @@ import type { FastifyInstance } from "fastify";
 import {
   ActionVerifier,
   AdoActionTransport,
+  buildDeploymentReadiness,
   classifyEvidenceCoverage,
   detectWorkItemDrift,
+  listAzureDeployments,
+  listAzureEnvironmentApprovals,
+  listAzureEnvironments,
   queryAzureWorkItems,
   classifyFailure,
   DeliveryActionExecutor,
@@ -320,6 +324,82 @@ export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRo
         };
       });
       return { workItems };
+    } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.get("/delivery/environments", async (request, reply) => {
+    const projectLinkId = String((request.query as Record<string, string | undefined>)["projectLinkId"] ?? "");
+    if (!projectLinkId) {
+      return reply.code(400).send({ error: "projectLinkId query parameter is required" });
+    }
+    try {
+      const projectLink = await projectLinkStore.getProjectLink(projectLinkId);
+      if (!projectLink) return reply.code(404).send({ error: "project_link_not_found" });
+      const auth = await getAzureDevOpsAuth(projectLink.adoPat);
+      const environments = await listAzureEnvironments({
+        organization: projectLink.adoOrgUrl,
+        project: projectLink.adoProject,
+        auth,
+      });
+      const rows = [];
+      for (const environment of environments) {
+        const [deployments, approvals] = await Promise.all([
+          listAzureDeployments({
+            organization: projectLink.adoOrgUrl,
+            project: projectLink.adoProject,
+            environmentId: environment.id,
+            auth,
+            top: 5,
+          }),
+          listAzureEnvironmentApprovals({
+            organization: projectLink.adoOrgUrl,
+            project: projectLink.adoProject,
+            environmentId: environment.id,
+            auth,
+          }),
+        ]);
+        const lastGood = [...deployments].reverse().find((deployment) => deployment.result === "succeeded");
+        const readiness = buildDeploymentReadiness({
+          environment: { kind: "environment", projectLinkId, environmentId: environment.id },
+          pendingDeployment: deployments.find((deployment) => deployment.status === "inProgress")
+            ? { kind: "deployment", projectLinkId, environmentId: environment.id, deploymentId: deployments.find((d) => d.status === "inProgress")!.id }
+            : undefined,
+          lastGoodDeployment: lastGood
+            ? { kind: "deployment", projectLinkId, environmentId: environment.id, deploymentId: lastGood.id }
+            : undefined,
+          commits: [],
+          workItems: [],
+          pullRequests: [],
+          builds: [],
+          tests: [],
+          checks: [],
+          approvals: approvals.map((approval) => ({ name: approval.approver ?? `approval ${approval.id}`, status: approval.status, owner: approval.approver })),
+          openIncidents: [],
+          unreadEvidence: [],
+        });
+        rows.push({
+          id: environment.id,
+          name: environment.name,
+          description: environment.description,
+          deployments: deployments.map((deployment) => ({
+            id: deployment.id,
+            name: deployment.name,
+            status: deployment.status,
+            result: deployment.result,
+            requestedFor: deployment.requestedFor,
+          })),
+          approvals: approvals.map((approval) => ({
+            id: approval.id,
+            status: approval.status,
+            approver: approval.approver,
+            approvalType: approval.approvalType,
+          })),
+          readiness,
+        });
+      }
+      return { environments: rows };
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
     }
