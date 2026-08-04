@@ -41,6 +41,7 @@ export * from "./reviewQueue.js";
 export * from "./reviewHistoryLocal.js";
 export * from "./reviewOperationsLocal.js";
 export * from "./prInsightArtifactsLocal.js";
+export * from "./delivery/index.js";
 export * from "./review/index.js";
 
 // Azure cloud persistence (opt-in — requires env vars)
