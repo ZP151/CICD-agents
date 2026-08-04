@@ -1,17 +1,21 @@
 {
-  "runId": "msf5sjpq",
-  "branch": "mergepilot-e2e/cycle01-fixture-1785878231",
-  "commit": "4b4b07f5b3d63538d970c712b5156080aec278d4",
+  "runId": "msf5uihy",
+  "branch": "mergepilot-e2e/cycle01-fixture-1785878322",
+  "commit": "f1ddd0787e591f78e50ee362eb0becfad10af1de",
   "workItemId": 7913,
+  "fixtureB": {
+    "branch": "mergepilot-e2e/cycle01-fail-1785878302",
+    "runId": 4832
+  },
   "pr": {
-    "id": 2799,
-    "url": "https://tebssg.visualstudio.com/TeBS-ClaimBot/_git/ClaimBot_API/pullrequest/2799"
+    "id": 2801,
+    "url": "https://tebssg.visualstudio.com/TeBS-ClaimBot/_git/ClaimBot_API/pullrequest/2801"
   },
   "pipelineRun": {
-    "id": 4830
+    "id": 4833
   },
   "writeBack": {
-    "id": "act-qtxes4",
+    "id": "act-10b2mgz",
     "status": "verified"
   }
 }

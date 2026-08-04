@@ -32,7 +32,7 @@ Goal: complete Cycles 00–06 in order, each gated by acceptance evidence.
 | Cycle | Status | Evidence |
 | --- | --- | --- |
 | 00 — Reset and foundation | **completed 2026-08-05** | `cycle00-acceptance-evidence.md`; commits 1377c2a, 8e05713, 280ea97, e8d3f11, MP-PROD-001..003 commits; real-ADO E2E verified |
-| 01 — Work Item → PR → CI → write-back | pending | — |
+| 01 — Work Item → PR → CI → write-back | **completed 2026-08-05** | `cycle01-acceptance-evidence.md` + `cycle01-evidence.json`; commits 9e3ea93 (graph), 293762d (kinds/target resolution); real-ADO Fixtures A+B verified |
 | 02 — Changes lifecycle | pending | — |
 | 03 — Delivery CI/test | pending | — |
 | 04 — Work intelligence | pending | — |
@@ -47,6 +47,26 @@ Goal: complete Cycles 00–06 in order, each gated by acceptance evidence.
 | 2026-08-05 | Action record | act-d3d0cz | work_item.comment demo run 1 (key cycle00-demo-msf4g7b8) | verified (revision 3) | keep as audit evidence |
 | 2026-08-05 | Action record | act-gek1mz | work_item.comment demo run 2 (key cycle00-demo-mqf7s89) | verified (revision 4) | keep as audit evidence |
 | 2026-08-05 | Work Item comments | WI-7912 | 3 demo comments (2 verified runs + 1 earlier unverified run) | each written exactly once | removed with WI-7912 |
+
+## Cycle 01 real-ADO write ledger
+
+| Date | Resource | ID | Operation | Result | Cleanup |
+| --- | --- | --- | --- | --- | --- |
+| 2026-08-05 | Work Item | 7913 | Create `[MergePilot Fixture] Cycle01 demo work item` | ok | delete after all cycles |
+| 2026-08-05 | Branch | mergepilot-e2e/cycle01-fixture-1785876925 | doc-only fixture (commit 6ae18f8) | pushed | delete branch |
+| 2026-08-05 | Branch | mergepilot-e2e/cycle01-fixture-1785878166 | fixture run 2 (484865a) | pushed | delete branch |
+| 2026-08-05 | Branch | mergepilot-e2e/cycle01-fixture-1785878231 | fixture run 3 (4b4b07f) | pushed | delete branch |
+| 2026-08-05 | Branch | mergepilot-e2e/cycle01-fixture-1785878322 | fixture run 4 (f1ddd07) | pushed | delete branch |
+| 2026-08-05 | Branch | mergepilot-e2e/cycle01-fail-1785878302 | deterministic compile failure (160a517) | pushed | delete branch |
+| 2026-08-05 | PR | 2798 | [MergePilot Fixture] PR (run 2, chat attempt) | created | abandon |
+| 2026-08-05 | PR | 2799 | [MergePilot Fixture] PR (run 3) | created | abandon |
+| 2026-08-05 | PR | 2801 | [MergePilot Fixture] PR (run 4, verified) | created | abandon |
+| 2026-08-05 | Pipeline run | 4830 | fixture run 3 (passing) | observed | n/a (run completes) |
+| 2026-08-05 | Pipeline run | 4831/4832 | failing fixture branch (compile error) | triggered+verified | n/a (run completes) |
+| 2026-08-05 | Pipeline run | 4833 | fixture run 4 (passing) | triggered+verified | n/a (run completes) |
+| 2026-08-05 | Action records | act-1hrkgtx, act-92i10t, act-10b2mgz, act-1lljl2v | verified Fixture A/B writes | verified | keep as audit evidence |
+| 2026-08-05 | Action record | act-1thxfgc / act-1u45z0 | duplicate PR refused (TF401179) | failed (correct) | keep as safety evidence |
+| 2026-08-05 | Action record | act-1ukj2y | stale write-back refused (rev 1 vs 3) | failed (correct) | keep as safety evidence |
 
 ## Write/Resource Rules (recap)
 
