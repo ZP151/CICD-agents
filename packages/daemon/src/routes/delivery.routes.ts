@@ -33,7 +33,7 @@ const ArtifactRefSchema = z.custom<ArtifactRef>(isArtifactRef, {
 
 const VerificationPredicateSchema = z.object({
   artifact: ArtifactRefSchema,
-  condition: z.enum(["exists", "field_eq", "relation_present", "revision_gt", "run_visible", "comment_contains"]),
+  condition: z.enum(["exists", "not_exists", "field_eq", "relation_present", "revision_gt", "run_visible", "comment_contains"]),
   field: z.string().optional(),
   expected: z.unknown().optional(),
   correlation: z.string().optional(),

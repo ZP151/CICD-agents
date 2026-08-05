@@ -96,6 +96,9 @@ export class ActionVerifier {
       return { kind: "pending", detail: "artifact read failed; retrying" };
     }
     if (!observation) {
+      if (predicate.condition === "not_exists") {
+        return { kind: "satisfied", detail: "artifact is gone" };
+      }
       return predicate.condition === "exists"
         ? { kind: "pending", detail: "artifact not yet visible" }
         : { kind: "contradicted", detail: "artifact does not exist" };
@@ -103,6 +106,8 @@ export class ActionVerifier {
     switch (predicate.condition) {
       case "exists":
         return { kind: "satisfied", detail: `revision ${String(observation.revision ?? "")}` };
+      case "not_exists":
+        return { kind: "contradicted", detail: "artifact still exists" };
       case "revision_gt": {
         const current = observation.revision;
         const base = predicate.expectedRevision ?? 0;
@@ -156,6 +161,8 @@ export function describePredicate(predicate: VerificationPredicate): string {
   switch (predicate.condition) {
     case "exists":
       return `${target} exists`;
+    case "not_exists":
+      return `${target} no longer exists`;
     case "field_eq":
       return `${target} ${predicate.field ?? "?"}=${String(predicate.expected ?? "")}`;
     case "relation_present":

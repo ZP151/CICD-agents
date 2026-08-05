@@ -31,13 +31,13 @@ Goal: complete Cycles 00–06 in order, each gated by acceptance evidence.
 
 | Cycle | Status | Evidence |
 | --- | --- | --- |
-| 00 — Reset and foundation | **completed 2026-08-05** | `cycle00-acceptance-evidence.md`; commits 1377c2a, 8e05713, 280ea97, e8d3f11, MP-PROD-001..003 commits; real-ADO E2E verified |
-| 01 — Work Item → PR → CI → write-back | **completed 2026-08-05** | `cycle01-acceptance-evidence.md` + `cycle01-evidence.json`; commits 9e3ea93 (graph), 293762d (kinds/target resolution); real-ADO Fixtures A+B verified |
-| 02 — Changes lifecycle | **completed 2026-08-05** | `cycle02-acceptance-evidence.md` + `cycle02-reviewer-evidence.json`; commits 81d139f (workspace), 1d624c5 (assessment/reviewer/your-turn) |
-| 03 — Delivery CI/test | **completed 2026-08-05** | `cycle03-acceptance-evidence.md` + `cycle03-evidence.json`; evidence bundle + classification + Inspector; real run 4834 classified code_regression |
+| 00 — Reset and foundation | **UNVERIFIED (2026-08-05 reopen)** | `cycle00-acceptance-evidence.md`; commits 1377c2a, 8e05713, 280ea97, e8d3f11, MP-PROD-001..003 commits; real-ADO E2E verified |
+| 01 — Work Item → PR → CI → write-back | **UNVERIFIED (2026-08-05 reopen)** | `cycle01-acceptance-evidence.md` + `cycle01-evidence.json`; commits 9e3ea93 (graph), 293762d (kinds/target resolution); real-ADO Fixtures A+B verified |
+| 02 — Changes lifecycle | **UNVERIFIED (2026-08-05 reopen)** | `cycle02-acceptance-evidence.md` + `cycle02-reviewer-evidence.json`; commits 81d139f (workspace), 1d624c5 (assessment/reviewer/your-turn) |
+| 03 — Delivery CI/test | **UNVERIFIED (2026-08-05 reopen)** | `cycle03-acceptance-evidence.md` + `cycle03-evidence.json`; evidence bundle + classification + Inspector; real run 4834 classified code_regression |
 | 04 — Work intelligence | pending | — |
 | 05 — Deployment readiness | pending | — |
-| 06 — Hardening and pilot | **completed 2026-08-05** | `cycle06-acceptance-evidence.md` + `support-runbook.md`; diagnostics + telemetry (20 verified / 11 failed) |
+| 06 — Hardening and pilot | **UNVERIFIED (2026-08-05 reopen)** | `cycle06-acceptance-evidence.md` + `support-runbook.md`; diagnostics + telemetry (20 verified / 11 failed) |
 
 ## Cycle 00 real-ADO write ledger
 
@@ -86,3 +86,12 @@ Goal: complete Cycles 00–06 in order, each gated by acceptance evidence.
 - Remote `main` (both repos): never force-push, never rewrite, never delete.
 - Test resources marked `[MergePilot Fixture]`; cleanup recorded in this
   ledger with IDs before deletion.
+
+## Verification reopen (2026-08-05, second goal)
+
+Prior "completed" claims are INVALID per the re-opened goal. All cycles are
+unverified until: the gate harness (goal-verification.json) passes required
+gates 3x consecutively, real desktop E2E and real ADO re-reads are recorded
+against the current HEAD, and the user performs installed-desktop
+acceptance. Evidence recorded before this reopen does not count for the
+current HEAD.

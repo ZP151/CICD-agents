@@ -7,7 +7,7 @@
  * Every read may record a canonical snapshot into the delivery graph when a
  * graph store is attached.
  */
-import { addAzureWorkItemComment, createAzureWorkItem, linkAzureWorkItemToPullRequest, readAzureWorkItem, updateAzureWorkItem } from "../ado/workItems.js";
+import { addAzureWorkItemComment, createAzureWorkItem, deleteAzureWorkItem, linkAzureWorkItemToPullRequest, readAzureWorkItem, updateAzureWorkItem } from "../ado/workItems.js";
 import { addAzurePullRequestComment, addAzurePullRequestReviewer, updateAzurePullRequest } from "../ado/pullRequestMutations.js";
 import { getAzureDevOpsCurrentUser } from "../ado/core.js";
 import { API_VERSION_GIT } from "../ado/constants.js";
@@ -44,6 +44,7 @@ const SUPPORTED_KINDS = new Set([
   "work_item.comment",
   "work_item.create",
   "work_item.update",
+  "work_item.delete",
   "pull_request.create",
   "pull_request.comment",
   "pull_request.vote",
@@ -74,6 +75,9 @@ export class AdoActionTransport implements ActionTransport {
     }
     if (record.kind === "work_item.update") {
       return this.executeWorkItemUpdate(record);
+    }
+    if (record.kind === "work_item.delete") {
+      return this.executeWorkItemDelete(record);
     }
     if (record.kind === "pull_request.comment") {
       return this.executePullRequestComment(record);
@@ -506,6 +510,30 @@ export class AdoActionTransport implements ActionTransport {
       ok: true,
       result: { workItemId: updated.id, revision: updated.revision },
       summary: `work item ${updated.id} updated to revision ${updated.revision ?? "?"} (${entries.map(([key]) => key).join(", ")})`,
+    };
+  }
+
+  private async executeWorkItemDelete(record: ActionRecord): Promise<ExecuteOutcome> {
+    const target = record.target as Extract<ArtifactRef, { kind: "work_item" }>;
+    const resolution = await this.resolveTarget(target);
+    const auth = await this.authFor(target.projectLinkId);
+    const deleted = await deleteAzureWorkItem({
+      organization: resolution.organization,
+      project: resolution.project,
+      workItemId: target.id,
+      auth,
+    });
+    if (!deleted.ok) {
+      return {
+        ok: false,
+        result: undefined,
+        summary: `work item delete rejected by ADO (${deleted.status_code ?? "unknown"}): ${deleted.error ?? "no error detail"}`,
+      };
+    }
+    return {
+      ok: true,
+      result: { workItemId: target.id },
+      summary: `work item ${target.id} deleted`,
     };
   }
 

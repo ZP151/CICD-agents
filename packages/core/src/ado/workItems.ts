@@ -453,3 +453,34 @@ export async function queryAzureWorkItems(args: {
   }
   return entries;
 }
+
+export interface AzureWorkItemDeleteResult {
+  ok: boolean;
+  status_code?: number;
+  error?: string;
+}
+
+/** Permanently delete a work item (fixture cleanup; ADO allows delete). */
+export async function deleteAzureWorkItem(args: {
+  organization: string;
+  project: string;
+  workItemId: string | number;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzureWorkItemDeleteResult> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const workItemId = Number(args.workItemId ?? 0);
+  if (!org || !project || !workItemId) {
+    throw new ToolError("delete work item requires organization, project, and work_item_id.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/wit/workitems/${workItemId}` +
+    `?api-version=7.1-preview.3`;
+  const resp = await adoFetch(url, auth, { method: "DELETE" });
+  if (!resp.ok) {
+    return { ok: false, status_code: resp.status, error: (await resp.text()).slice(0, 400) };
+  }
+  return { ok: true };
+}

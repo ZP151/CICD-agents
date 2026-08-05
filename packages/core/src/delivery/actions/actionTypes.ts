@@ -25,6 +25,7 @@ export type ActionStatus =
 
 export type VerificationCondition =
   | "exists"
+  | "not_exists"
   | "field_eq"
   | "relation_present"
   | "revision_gt"

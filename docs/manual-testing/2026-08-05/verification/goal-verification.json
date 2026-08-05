@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "runId": "verify-msg80eqy",
+  "status": "PASS",
+  "commit": {
+    "sha": "dddf81843fe15ebe4362775ba9c5d80df6dc0a81",
+    "ref": "refs/heads/claudecode/optimize-bugfix",
+    "message": "docs(goal): completion report for Cycle 00-06\n\nCo-Authored-By: Claude <noreply@anthropic.com>"
+  },
+  "appVersion": "0.5.26",
+  "productModel": "unknown",
+  "startedAt": "2026-08-05T15:07:10.378Z",
+  "finishedAt": "2026-08-05T15:08:17.622Z",
+  "repeat": 1,
+  "summary": {
+    "required": 6,
+    "passed": 6,
+    "failed": 0,
+    "notRun": 0
+  },
+  "gates": [
+    {
+      "id": "core-typecheck",
+      "tier": "unit",
+      "required": true,
+      "requireNoSkips": false,
+      "timeoutMs": 300000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/core typecheck",
+      "description": "core typecheck",
+      "runs": [
+        {
+          "attempt": 1,
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2778,
+          "status": "PASS"
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "core-test",
+      "tier": "unit",
+      "required": true,
+      "requireNoSkips": true,
+      "timeoutMs": 900000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/core test",
+      "description": "core vitest suite",
+      "runs": [
+        {
+          "attempt": 1,
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 13479,
+          "status": "PASS"
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "daemon-typecheck",
+      "tier": "unit",
+      "required": true,
+      "requireNoSkips": false,
+      "timeoutMs": 300000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/daemon typecheck",
+      "description": "daemon typecheck",
+      "runs": [
+        {
+          "attempt": 1,
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 2446,
+          "status": "PASS"
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "daemon-test",
+      "tier": "unit",
+      "required": true,
+      "requireNoSkips": true,
+      "timeoutMs": 900000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/daemon test",
+      "description": "daemon vitest suite",
+      "runs": [
+        {
+          "attempt": 1,
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 30610,
+          "status": "PASS"
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "desktop-typecheck",
+      "tier": "unit",
+      "required": true,
+      "requireNoSkips": false,
+      "timeoutMs": 300000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/desktop typecheck",
+      "description": "desktop typecheck",
+      "runs": [
+        {
+          "attempt": 1,
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 3615,
+          "status": "PASS"
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "desktop-test",
+      "tier": "unit",
+      "required": true,
+      "requireNoSkips": true,
+      "timeoutMs": 900000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/desktop test",
+      "description": "desktop vitest suite",
+      "runs": [
+        {
+          "attempt": 1,
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 14314,
+          "status": "PASS"
+        }
+      ],
+      "status": "PASS"
+    }
+  ]
+}

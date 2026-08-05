@@ -131,7 +131,11 @@ describe("McpConnectionManager tool discovery (RA-075/RA-077)", () => {
     const manager = managerFor(clientTransport, { onToolsListChanged });
     expect((await manager.listTools()).length).toBe(3);
     await server.sendToolListChanged();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // The notification is delivered on the transport event loop; wait for it
+    // deterministically instead of racing a fixed 20 ms sleep on a loaded CI.
+    await vi.waitFor(() => {
+      expect(onToolsListChanged).toHaveBeenCalledTimes(1);
+    }, { timeout: 5_000, interval: 25 });
 
     expect(onToolsListChanged).toHaveBeenCalledTimes(1);
     // Second call after the notification refetches instead of serving the cache.

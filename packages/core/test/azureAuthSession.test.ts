@@ -230,9 +230,13 @@ describe("azureAuthSession", () => {
     });
     global.fetch = vi.fn(() => new Promise<Response>(() => {}));
 
+    // Race with a generous timeout: the test asserts the browser-redirect
+    // path returns the persisted identity, not that the race itself is fast.
+    // A 40 ms budget is flaky under a loaded CI; the timeout is a guard
+    // against a hang, not a timing assertion.
     const outcome = await Promise.race([
       loginWithBrowser("default"),
-      new Promise<"timed-out">((resolve) => setTimeout(() => resolve("timed-out"), 40)),
+      new Promise<"timed-out">((resolve) => setTimeout(() => resolve("timed-out"), 15_000)),
     ]);
 
     expect(outcome).not.toBe("timed-out");
