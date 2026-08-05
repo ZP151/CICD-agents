@@ -5,25 +5,17 @@ import { ProjectLinkAdoSection } from "./ProjectLinkAdoSection.js";
 import { ProjectLinkWorkspaceSection } from "./ProjectLinkWorkspaceSection.js";
 import { useProjectLinkFormRuntime } from "./useProjectLinkFormRuntime.js";
 
-export const BLANK_PROJECT_LINK: ProjectLinkInput = {
+// V2 Project Links persist only the stable identity mapping. The legacy
+// fields (branches, pipeline, MCP settings, template, commands) are read-only
+// and are not part of the create/edit form.
+export const BLANK_PROJECT_LINK = {
   name: "",
   repoPath: "",
-  defaultBranch: "main",
-  targetBranch: "main",
   adoOrgUrl: DEFAULT_ADO_ORG_URL,
   adoProject: "",
   adoRepoName: "",
-  adoPipelineId: "",
-  adoPipelineName: "",
   adoPat: "",
-  adoMcpEnabled: false,
-  adoMcpCommand: "",
-  adoMcpAuthentication: "",
-  adoMcpDomains: "repositories,pipelines,work-items",
-  projectTemplate: "",
-  buildCommand: "",
-  testCommand: "",
-};
+} as ProjectLinkInput;
 
 export function ProjectLinkForm({
   initial,
@@ -96,7 +88,6 @@ export function ProjectLinkForm({
             onApplyDiscovery={runtime.applyDiscovery}
             onManualProjectChange={runtime.setManualProject}
             onManualRepositoryChange={runtime.setManualRepository}
-            onManualPipelineChange={runtime.setManualPipeline}
           />
         </div>
 

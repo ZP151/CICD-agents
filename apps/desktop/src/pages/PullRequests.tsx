@@ -14,7 +14,6 @@ import { PullRequestCard } from "./pullRequests/PullRequestCard.js";
 import { PullRequestPageHeader } from "./pullRequests/PullRequestPageHeader.js";
 import {
   InsightPreviewPanel,
-  ReviewRunPanel,
   StoredInsightPanel,
 } from "./pullRequests/PullRequestInsightPanels.js";
 import { prCategories, insightReadinessTone } from "./pullRequests/pullRequestViewModel.js";
@@ -23,7 +22,6 @@ import {
   type ContextState,
   type DisplayPullRequest,
   type PreviewState,
-  type QueueState,
 } from "./pullRequests/pullRequestTypes.js";
 import { usePullRequestsRuntime } from "./pullRequests/usePullRequestsRuntime.js";
 import {
@@ -68,7 +66,6 @@ export default function PullRequests(): JSX.Element {
     expandedPrKey,
     highlightedPrKey,
     contexts,
-    queueing,
     previews,
     insightArtifacts,
     selectedProjectLink,
@@ -76,7 +73,6 @@ export default function PullRequests(): JSX.Element {
     categoryCounts,
     filteredPrs,
     paginatedPrs,
-    setProjectLinkId,
     setStatus,
     setCategory,
     setPage,
@@ -84,7 +80,6 @@ export default function PullRequests(): JSX.Element {
     load,
     toggleContext,
     handlePreviewInsight,
-    handleQueueForReview,
     openSavedInsightInChat,
   } = runtime;
   const [selectedInsightPrKey, setSelectedInsightPrKey] = useState<string | null>(null);
@@ -106,13 +101,9 @@ export default function PullRequests(): JSX.Element {
   return (
     <WorkbenchPage className={pullRequestsPageShellClass()}>
       <PullRequestPageHeader
-        projectLinks={projectLinks}
-        projectLinksLoading={projectLinksLoading}
-        projectLinkId={projectLinkId}
         status={status}
         selectedProjectLink={selectedProjectLink}
         branchScope={branchScope}
-        onProjectLinkChange={setProjectLinkId}
         onStatusChange={setStatus}
         onRefresh={() => void load()}
         onCreatePr={() => navigate("/pulls/new")}
@@ -191,7 +182,6 @@ export default function PullRequests(): JSX.Element {
                     key={prKey}
                     pr={pr}
                     projectLinkId={projectLinkId}
-                    queueState={queueing[prKey] ?? { phase: "idle" }}
                     previewState={previews[prKey] ?? { phase: "idle" }}
                     insightArtifacts={insightArtifacts}
                     contextState={contexts[prKey]}
@@ -199,7 +189,6 @@ export default function PullRequests(): JSX.Element {
                     highlighted={highlightedPrKey === prKey}
                     onToggleContext={(target) => void toggleContext(target)}
                     onPreviewInsight={(target) => void handlePreviewInsight(target)}
-                    onQueueForReview={(target) => void handleQueueForReview(target)}
                     onOpenInsight={(target) => setSelectedInsightPrKey(pullRequestRuntimeKey(target))}
                     onOpenSavedInsightInChat={openSavedInsightInChat}
                   />
@@ -223,13 +212,11 @@ export default function PullRequests(): JSX.Element {
           {selectedInsightPr && (
             <PullRequestInsightSidePanel
               pr={selectedInsightPr}
-              queueState={queueing[pullRequestRuntimeKey(selectedInsightPr)] ?? { phase: "idle" }}
               previewState={previews[pullRequestRuntimeKey(selectedInsightPr)] ?? { phase: "idle" }}
               insightArtifacts={insightArtifacts}
               contextState={contexts[pullRequestRuntimeKey(selectedInsightPr)]}
               onClose={() => setSelectedInsightPrKey(null)}
               onPreviewInsight={(target) => void handlePreviewInsight(target)}
-              onQueueForReview={(target) => void handleQueueForReview(target)}
               onOpenSavedInsightInChat={openSavedInsightInChat}
             />
           )}
@@ -414,23 +401,19 @@ export function pullRequestRecovery(
 
 function PullRequestInsightSidePanel({
   pr,
-  queueState,
   previewState,
   insightArtifacts,
   contextState,
   onClose,
   onPreviewInsight,
-  onQueueForReview,
   onOpenSavedInsightInChat,
 }: {
   pr: DisplayPullRequest;
-  queueState: QueueState;
   previewState: PreviewState;
   insightArtifacts: PrInsightArtifact[];
   contextState: ContextState | undefined;
   onClose: () => void;
   onPreviewInsight: (pr: DisplayPullRequest) => void;
-  onQueueForReview: (pr: DisplayPullRequest) => void;
   onOpenSavedInsightInChat: (pr: DisplayPullRequest, artifact: PrInsightArtifact) => void;
 }): JSX.Element {
   const storedInsightHistory = insightArtifacts.filter(
@@ -442,7 +425,7 @@ function PullRequestInsightSidePanel({
   );
   const storedInsight = storedInsightHistory[0] ?? null;
   const hasExistingInsight =
-    Boolean(storedInsight) || previewState.phase === "done" || queueState.phase === "done";
+    Boolean(storedInsight) || previewState.phase === "done";
   const previousStoredInsights = storedInsightHistory.slice(1, 4);
   const storedInsightTone = storedInsight?.readiness
     ? insightReadinessTone(storedInsight.readiness)
@@ -459,9 +442,6 @@ function PullRequestInsightSidePanel({
     : null;
   const previewTone =
     previewState.phase === "done" ? insightReadinessTone(previewState.result.readiness) : null;
-  const reviewTone =
-    queueState.phase === "done" ? insightReadinessTone(queueState.result.readiness) : null;
-  const isRunning = queueState.phase === "watching" || queueState.phase === "reviewing";
   const scopeLabel = pr.sourceProjectLinkName || pr.repository;
 
   return (
@@ -486,39 +466,16 @@ function PullRequestInsightSidePanel({
               ? "Refresh insight"
               : "Generate insight"}
         </ActionButton>
-        {queueState.phase !== "done" && (
-          <ActionButton
-            type="button"
-            tone="primary"
-            onClick={() => onQueueForReview(pr)}
-            loading={isRunning}
-            className="min-h-7 px-2.5 py-1"
-          >
-            {queueState.phase === "watching"
-              ? "Preparing..."
-              : queueState.phase === "reviewing"
-                ? "Analyzing..."
-                : queueState.phase === "error"
-                  ? "Retry review"
-                  : "Run review"}
-          </ActionButton>
-        )}
       </div>
 
       <div className="space-y-3">
         {previewState.phase === "error" && (
           <InlineNotice tone="danger" title="Insight generation failed">{previewState.message}</InlineNotice>
         )}
-        {queueState.phase === "error" && (
-          <InlineNotice tone="danger" title="Review failed">{queueState.message}</InlineNotice>
-        )}
         {previewState.phase === "done" && (
           <InsightPreviewPanel previewState={previewState} insightTone={previewTone} />
         )}
-        {queueState.phase === "done" && (
-          <ReviewRunPanel result={queueState.result} reviewTone={reviewTone} />
-        )}
-        {storedInsight && previewState.phase !== "done" && queueState.phase !== "done" && (
+        {storedInsight && previewState.phase !== "done" && (
           <StoredInsightPanel
             pr={pr}
             storedInsight={storedInsight}
@@ -526,20 +483,16 @@ function PullRequestInsightSidePanel({
             storedInsightFreshness={storedInsightFreshness}
             storedInsightHistory={storedInsightHistory}
             previousStoredInsights={previousStoredInsights}
-            isRunning={isRunning}
             previewLoading={previewState.phase === "loading"}
             onOpenSavedInsightInChat={onOpenSavedInsightInChat}
             onPreviewInsight={onPreviewInsight}
-            onQueueForReview={onQueueForReview}
           />
         )}
         {!storedInsight &&
           previewState.phase !== "done" &&
-          previewState.phase !== "error" &&
-          queueState.phase !== "done" &&
-          queueState.phase !== "error" && (
+          previewState.phase !== "error" && (
             <p className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3 text-xs text-[rgb(var(--app-text-muted))]">
-              Generate an insight or run a review to inspect AI evidence here.
+              Generate an insight to inspect AI evidence here.
             </p>
           )}
         {scopeLabel && (

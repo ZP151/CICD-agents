@@ -105,22 +105,21 @@ describe("daemon ADO workflow routes", () => {
     });
     const projectLink = {
       repoPath: process.cwd(),
-      defaultBranch: "main",
-      targetBranch: "main",
       adoOrgUrl: "https://tebssg.visualstudio.com/",
       adoProject: "TeBS-ClaimBot",
       adoRepoName: "ClaimBot_API",
-      adoPipelineId: "117",
-      adoPipelineName: "ClaimBot_API",
       adoPat: "test-pat",
     };
 
+    // V2 Project Links no longer persist pipeline fields; the action carries
+    // the explicit pipelineId instead.
     const inspect = await app.inject({
       method: "POST",
       url: "/chat/workflow-action",
       payload: {
         action: "inspect_pipeline",
         repoPath: process.cwd(),
+        pipelineId: 117,
         projectLink: projectLink,
       },
     });
@@ -166,6 +165,7 @@ describe("daemon ADO workflow routes", () => {
         action: "trigger_pipeline",
         repoPath: process.cwd(),
         branch: "main",
+        pipelineId: 117,
         projectLink: projectLink,
       },
     });

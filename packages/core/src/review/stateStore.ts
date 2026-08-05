@@ -3,7 +3,7 @@ import {
   listLocalReviewHistory,
   upsertLocalReviewHistory,
   type ReviewHistoryRecord,
-} from "../reviewHistoryLocal.js";
+} from "./localHistory.js";
 import {
   normalizeContextConfidence,
   normalizeDispositionEvents,

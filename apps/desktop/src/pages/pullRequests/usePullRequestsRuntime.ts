@@ -33,7 +33,6 @@ import {
   type DisplayPullRequest,
   type PreviewState,
   type PullRequestCategory,
-  type QueueState,
 } from "./pullRequestTypes.js";
 import { usePullRequestActions } from "./usePullRequestActions.js";
 import { usePullRequestHandoff } from "./usePullRequestHandoff.js";
@@ -70,7 +69,6 @@ export function usePullRequestsRuntime() {
   const [expandedPrKey, setExpandedPrKey] = useState<string | null>(null);
   const [highlightedPrKey, setHighlightedPrKey] = useState<string | null>(null);
   const [contexts, setContexts] = useState<Record<string, ContextState>>({});
-  const [queueing, setQueueing] = useState<Record<string, QueueState>>({});
   const [previews, setPreviews] = useState<Record<string, PreviewState>>({});
   const queryClient = useQueryClient();
 
@@ -230,7 +228,6 @@ export function usePullRequestsRuntime() {
   }, [page, paginatedPrs.pageCount]);
 
   const {
-    handleQueueForReview,
     handlePreviewInsight,
     openSavedInsightInChat,
   } = usePullRequestActions({
@@ -238,7 +235,6 @@ export function usePullRequestsRuntime() {
     projectLinks,
     selectedProjectLink,
     projectLinkForPullRequest,
-    setQueueing,
     setPreviews,
     onInsightArtifactSaved,
   });
@@ -303,7 +299,6 @@ export function usePullRequestsRuntime() {
     setExpandedPrKey(null);
     setHighlightedPrKey(null);
     setContexts({});
-    setQueueing({});
     setPreviews({});
   }, [projectLinkId, status]);
 
@@ -331,7 +326,6 @@ export function usePullRequestsRuntime() {
     expandedPrKey,
     highlightedPrKey,
     contexts,
-    queueing,
     previews,
     insightArtifacts,
     selectedProjectLink,
@@ -347,7 +341,6 @@ export function usePullRequestsRuntime() {
     load,
     toggleContext,
     handlePreviewInsight,
-    handleQueueForReview,
     openSavedInsightInChat,
   };
 }

@@ -206,7 +206,7 @@ describe("ProjectLinks layout", () => {
     expect(projectLinksTemporarySectionClass()).toContain("border-t");
   });
 
-  it("preserves the managed MCP selection but clears legacy executable and credential fields", () => {
+  it("keeps only the stable identity mapping and clears every legacy field", () => {
     const safe = withoutProjectLinkFallbacks({
       name: "ADO",
       repoPath: "C:\\repo",
@@ -227,12 +227,13 @@ describe("ProjectLinks layout", () => {
       testCommand: "",
     });
 
-    expect(safe).toMatchObject({
+    expect(safe).toEqual({
+      name: "ADO",
+      repoPath: "C:\\repo",
+      adoOrgUrl: "https://dev.azure.com/demo",
+      adoProject: "Demo",
+      adoRepoName: "repo",
       adoPat: "",
-      adoMcpEnabled: true,
-      adoMcpCommand: "",
-      adoMcpAuthentication: "",
-      adoMcpDomains: "repositories,pull-requests",
     });
   });
 });

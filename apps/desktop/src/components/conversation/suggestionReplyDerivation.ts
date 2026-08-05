@@ -120,7 +120,7 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
     });
   }
 
-  addCiSuggestions(context, text, phase, add, rawText);
+  addCiSuggestions(context, text, phase, add);
   addCommitSuggestions(context, phase, add);
   addGitSuggestions(context, phase, add);
   addPrSuggestions(context, text, add);

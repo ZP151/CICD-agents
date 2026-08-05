@@ -7,7 +7,6 @@ import {
 } from "../../components/workbench/WorkbenchPrimitives.js";
 import { ProjectLinkContextHint } from "../projectLinks/ProjectLinkContextHint.js";
 
-const projectLinkSelectClass = "truncate text-sm sm:min-w-[14rem]";
 const statusSelectClass = "text-sm sm:w-[9rem]";
 
 export function pullRequestHeaderControlsClass(): string {
@@ -18,26 +17,18 @@ export function pullRequestHeaderControlsClass(): string {
   ].join(" ");
 }
 export interface PullRequestPageHeaderProps {
-  projectLinks: ProjectLink[];
-  projectLinksLoading: boolean;
-  projectLinkId: string;
   status: string;
   selectedProjectLink: ProjectLink | null;
   branchScope: string;
-  onProjectLinkChange: (projectLinkId: string) => void;
   onStatusChange: (status: string) => void;
   onRefresh: () => void;
   onCreatePr: () => void;
 }
 
 export function PullRequestPageHeader({
-  projectLinks,
-  projectLinksLoading,
-  projectLinkId,
   status,
   selectedProjectLink,
   branchScope,
-  onProjectLinkChange,
   onStatusChange,
   onRefresh,
   onCreatePr,
@@ -49,23 +40,6 @@ export function PullRequestPageHeader({
         description="Triage active changes, inspect evidence, and decide what needs human review."
         descriptionClassName="hidden max-w-2xl xl:block"
         actions={<div className={pullRequestHeaderControlsClass()}>
-          <WorkbenchSelect
-            aria-label="Pull Requests Project Link"
-            className={projectLinkSelectClass}
-            value={projectLinkId}
-            disabled={projectLinksLoading || projectLinks.length === 0}
-            onChange={(e) => onProjectLinkChange(e.target.value)}
-          >
-            {projectLinks.length === 0 && (
-              <option value="">
-                {projectLinksLoading ? "Loading Project Links..." : "No Project Links"}
-              </option>
-            )}
-            {projectLinks.length > 0 && <option value="">All Project Links</option>}
-            {projectLinks.map((projectLink) => (
-              <option key={projectLink.id} value={projectLink.id}>{projectLink.name}</option>
-            ))}
-          </WorkbenchSelect>
           <WorkbenchSelect
             aria-label="Pull Requests status"
             className={statusSelectClass}

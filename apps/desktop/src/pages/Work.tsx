@@ -11,7 +11,6 @@ import {
   InlineNotice,
   WorkbenchFilterTabs,
   WorkbenchPage,
-  WorkbenchSelect,
 } from "../components/workbench/WorkbenchPrimitives.js";
 
 interface WorkItemView {
@@ -47,7 +46,8 @@ const VIEWS = [
  */
 export default function Work(): JSX.Element {
   const { projectLinks, projectLinksLoading } = useAppData();
-  const [projectLinkId, setProjectLinkId] = useState("");
+  const activeProjectLink = projectLinks[0] ?? null;
+  const projectLinkId = activeProjectLink?.id ?? "";
   const [items, setItems] = useState<WorkItemView[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,18 +167,14 @@ export default function Work(): JSX.Element {
         </div>
         {projectLinksLoading ? (
           <p className="text-xs text-[rgb(var(--app-text-subtle))]">Loading Project Links...</p>
+        ) : activeProjectLink ? (
+          <p className="text-xs text-[rgb(var(--app-text-muted))]">
+            Project Link:{" "}
+            <span className="font-medium text-[rgb(var(--app-text))]">{activeProjectLink.name}</span>
+            {" "}(selected in Context)
+          </p>
         ) : (
-          <WorkbenchSelect
-            aria-label="Project Link"
-            className="text-sm"
-            value={projectLinkId}
-            onChange={(event) => setProjectLinkId(event.target.value)}
-          >
-            <option value="">Select a Project Link</option>
-            {projectLinks.map((link) => (
-              <option key={link.id} value={link.id}>{link.name}</option>
-            ))}
-          </WorkbenchSelect>
+          <p className="text-xs text-[rgb(var(--app-text-subtle))]">Select a Project Link in Context</p>
         )}
       </div>
 

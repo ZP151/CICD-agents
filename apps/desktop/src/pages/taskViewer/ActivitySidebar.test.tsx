@@ -6,7 +6,6 @@ import type {
   ProjectLink,
   TaskView,
 } from "../../api.js";
-import type { ReviewActivityItem } from "./activityTypes.js";
 import {
   ActivitySidebar,
   ActivitySidebarLoadingState,
@@ -84,41 +83,23 @@ const prInsight: PrInsightActivityItem = {
   tokensOut: 5,
 };
 
-const reviewEvent: ReviewActivityItem = {
-  id: "review-1",
-  projectLinkId: projectLink.id,
-  projectLinkName: projectLink.name,
-  kind: "review_run",
-  repository: projectLink.adoRepoName,
-  pullRequestId: 2670,
-  actor: "desktop-user",
-  label: "Review completed",
-  ok: true,
-  details: "One warning remains",
-  at: "2026-07-07T02:16:32.000Z",
-};
-
 function renderActivitySidebar({
   tasks = [task],
   checkpointActivity = [checkpoint],
   prInsightActivity = [prInsight],
-  reviewActivity = [reviewEvent],
   loading = false,
   refreshing = false,
   checkpointLoading = false,
   prInsightLoading = false,
-  reviewLoading = false,
   error = null,
 }: {
   tasks?: TaskView[];
   checkpointActivity?: ChatCheckpointActivity[];
   prInsightActivity?: PrInsightActivityItem[];
-  reviewActivity?: ReviewActivityItem[];
   loading?: boolean;
   refreshing?: boolean;
   checkpointLoading?: boolean;
   prInsightLoading?: boolean;
-  reviewLoading?: boolean;
   error?: string | null;
 } = {}) {
   return renderToStaticMarkup(
@@ -139,21 +120,13 @@ function renderActivitySidebar({
       prInsightKindFilter={"all" satisfies PrInsightArtifactRecord["kind"] | "all"}
       prInsightHistoryMeta={new Map()}
       selectedPrInsightId={prInsightActivity[0]?.id ?? null}
-      reviewActivity={reviewActivity}
-      reviewLoading={reviewLoading}
-      reviewProjectLinkFilter="all"
-      reviewKindFilter="all"
-      selectedReviewId={reviewActivity[0]?.id ?? null}
       onRefreshAll={() => undefined}
       onSelectTask={() => undefined}
       onSelectCheckpoint={() => undefined}
       onSelectPrInsight={() => undefined}
-      onSelectReview={() => undefined}
       onClearSelection={() => undefined}
       onPrInsightProjectLinkFilterChange={() => undefined}
       onPrInsightKindFilterChange={() => undefined}
-      onReviewProjectLinkFilterChange={() => undefined}
-      onReviewKindFilterChange={() => undefined}
     />,
   );
 }
@@ -198,14 +171,14 @@ describe("ActivitySidebar", () => {
     expect(className).not.toContain("auto-fit");
     expect(className).not.toContain("grid-cols-2");
     expect(html).toContain("Activity sections");
-    expect(html).toContain("title=\"All: 3\"");
+    expect(html).toContain("title=\"All: 2\"");
     expect(html).toContain("title=\"Checkpoints: 0\"");
     expect(html).toContain("title=\"PR Insights: 1\"");
     expect(html).toContain("All");
     expect(html).toContain("Runs");
     expect(html).toContain("Git");
     expect(html).toContain("PR");
-    expect(html).toContain("Reviews");
+    expect(html).not.toContain("Reviews");
     expect(html).toContain("min-h-8");
     expect(html).toContain("focus:ring-[rgb(var(--app-focus))]/35");
   });
@@ -215,7 +188,6 @@ describe("ActivitySidebar", () => {
 
     expect(html).toContain("Pipeline submission");
     expect(html).toContain("Update pipeline");
-    expect(html).toContain("Review completed");
     expect(html).toContain("Temporary history");
     expect(html).not.toContain("git_status");
     expect(html).not.toContain("...\\mergepilot-live-push-j2JDBp\\work");
@@ -227,7 +199,6 @@ describe("ActivitySidebar", () => {
     });
 
     expect(html).toContain("Update pipeline");
-    expect(html).toContain("Review completed");
     expect(html).toContain("Temporary history");
     expect(html).not.toContain("git_status");
     expect(html).not.toContain("No agent runs recorded yet.");
@@ -239,7 +210,6 @@ describe("ActivitySidebar", () => {
       tasks: [],
       checkpointActivity: [],
       prInsightActivity: [],
-      reviewActivity: [],
     });
 
     expect(html).toContain("No activity recorded");
@@ -253,16 +223,13 @@ describe("ActivitySidebar", () => {
       runs: 0,
       checkpoints: 1,
       prInsights: 0,
-      reviewOperations: 0,
       loading: false,
       checkpointLoading: false,
       prInsightLoading: false,
-      reviewLoading: false,
     })).toEqual({
       runs: false,
       checkpoints: true,
       prInsights: false,
-      reviewOperations: false,
     });
 
     expect(activityVisibleSections({
@@ -270,16 +237,13 @@ describe("ActivitySidebar", () => {
       runs: 0,
       checkpoints: 1,
       prInsights: 0,
-      reviewOperations: 0,
       loading: false,
       checkpointLoading: false,
       prInsightLoading: false,
-      reviewLoading: false,
     })).toEqual({
       runs: true,
       checkpoints: false,
       prInsights: false,
-      reviewOperations: false,
     });
   });
 
@@ -292,47 +256,11 @@ describe("ActivitySidebar", () => {
     expect(html).not.toContain("max-h-[320px]");
   });
 
-  it("summarizes structured review-operation details in the list preview", () => {
-    const html = renderActivitySidebar({
-      reviewActivity: [{
-        ...reviewEvent,
-        details: JSON.stringify({
-          error: {
-            fieldErrors: {
-              sessionId: ["Expected string, received null"],
-            },
-            formErrors: [],
-          },
-        }),
-      }],
-    });
-
-    expect(html).toContain("sessionId: Expected string, received null");
-    expect(html).toContain("fieldErrors");
-    expect(html).not.toContain("fieldErrors</p>");
-  });
-
-  it("keeps review operation metric previews short while preserving full details in title", () => {
-    const details =
-      "readiness=needs_attention; risks=2; files=2; threads=6; failedBuilds=0; tokens=156/254; source=llm";
-    const html = renderActivitySidebar({
-      reviewActivity: [{
-        ...reviewEvent,
-        details,
-      }],
-    });
-
-    expect(html).toContain("readiness=needs_attention; risks=2; files=2");
-    expect(html).toContain(`title="${details}"`);
-    expect(html).not.toContain("tokens=156/254; source=llm</p>");
-  });
-
   it("replaces empty section lists with one source unavailable state when local activity cannot load", () => {
     const html = renderActivitySidebar({
       tasks: [],
       checkpointActivity: [],
       prInsightActivity: [],
-      reviewActivity: [],
       error: "Failed to fetch",
     });
 
@@ -346,7 +274,6 @@ describe("ActivitySidebar", () => {
     expect(html).not.toContain("No agent runs recorded yet");
     expect(html).not.toContain("No Git checkpoints yet");
     expect(html).not.toContain("No saved PR insights yet");
-    expect(html).not.toContain("No review operations yet");
   });
 
   it("keeps cached activity visible when a refresh error arrives after records loaded", () => {
@@ -363,14 +290,13 @@ describe("ActivitySidebar", () => {
       tasks: [],
       checkpointActivity: [],
       prInsightActivity: [],
-      reviewActivity: [],
       loading: true,
       error: "Failed to fetch",
     });
 
     expect(html).toContain("Activity sections");
     expect(html).toContain("Checking activity sources");
-    expect(html).toContain("Runs, checkpoints, PR insights, and reviews are loading.");
+    expect(html).toContain("Runs, checkpoints, and PR insights are loading.");
     expect(html).not.toContain("Activity unavailable");
     expect(html).not.toContain("No agent runs recorded yet");
     expect(html).not.toContain("No Git checkpoints yet");
@@ -382,7 +308,7 @@ describe("ActivitySidebarLoadingState", () => {
     const html = renderToStaticMarkup(<ActivitySidebarLoadingState />);
 
     expect(html).toContain("Checking activity sources");
-    expect(html).toContain("Runs, checkpoints, PR insights, and reviews are loading.");
+    expect(html).toContain("Runs, checkpoints, and PR insights are loading.");
     expect(html).toContain("animate-pulse");
   });
 });

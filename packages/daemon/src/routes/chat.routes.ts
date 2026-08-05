@@ -78,31 +78,25 @@ const LlmConfigSchema = z
   })
   .optional();
 
+// V2 inline Project Links carry only the stable identity mapping; the legacy
+// fields are read-only (migration reads) and are never persisted from API
+// payloads. They remain readable on stored links and on session history.
 const InlineProjectLinkObjectSchema = z.object({
   id: z.string().optional(),
   name: z.string().optional(),
   repoPath: z.string().default(""),
-  defaultBranch: z.string().default("main"),
-  targetBranch: z.string().default("main"),
   adoOrgUrl: z.string().default(""),
   adoProject: z.string().default(""),
   adoRepoName: z.string().default(""),
   adoPat: z.string().default(""),
-  adoPipelineId: z.string().default(""),
-  adoPipelineName: z.string().default(""),
-  adoMcpEnabled: z.coerce.boolean().default(false),
-  adoMcpCommand: z.string().default(""),
-  adoMcpAuthentication: z.string().default(""),
-  adoMcpDomains: z.string().default("repositories,pipelines,work-items"),
-  projectTemplate: z.string().default(""),
-  buildCommand: z.string().default(""),
-  testCommand: z.string().default(""),
   ignoredGlobs: z.array(z.string()).default([]),
 });
 
 const InlineProjectLinkSchema = InlineProjectLinkObjectSchema.nullable()
   .optional()
   .transform((value) => value ?? undefined);
+
+type ParsedInlineProjectLink = z.infer<typeof InlineProjectLinkObjectSchema>;
 
 const OptionalSessionIdSchema = z
   .string()
@@ -202,10 +196,15 @@ function inlineProjectLinkToIndexProjectLink(projectLink?: InlineProjectLink) {
   };
 }
 
+// V2 API payloads carry only the stable identity mapping; the legacy fields
+// are read-only (migration reads). The parsed payload is widened structurally
+// for downstream readers that still type them — no values are fabricated, so
+// legacy reads resolve through their existing fallbacks and the narrow value
+// (without legacy fields) is what gets snapshotted into session history.
 function inlineProjectLinkFromPayload(payload: {
-  projectLink?: InlineProjectLink;
+  projectLink?: ParsedInlineProjectLink;
 }): InlineProjectLink | undefined {
-  return payload.projectLink;
+  return payload.projectLink as unknown as InlineProjectLink | undefined;
 }
 
 async function resolveProjectLinkForChat(

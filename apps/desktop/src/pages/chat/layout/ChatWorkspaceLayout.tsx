@@ -217,14 +217,11 @@ export function ChatWorkspaceLayout({
           setRepoPath={setRepoPath}
           currentBranch={currentBranch}
           branchList={branchList}
-          gitStatus={gitStatus}
-          diffStats={diffStats}
           taskState={taskState}
           workflowState={workflowState}
           busy={busy}
           projectLinks={availableProjectLinks}
           activeProjectLinkId={activeProjectLinkId}
-          setActiveProjectLinkId={setActiveProjectLinkId}
           codePanelOpen={rightPanelOpen}
           codePanelWidth={codePanelWidth}
           onAction={runWorkspaceAction}

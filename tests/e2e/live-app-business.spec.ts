@@ -1404,8 +1404,8 @@ test.describe("Live app business workflows", () => {
       await page.goto("/chat?new=1");
       await expect(page.getByText("Environment")).toBeVisible();
       await expect(page.getByRole("button", { name: pushRepo.branchName })).toBeVisible();
-      await expect(page.getByLabel("Composer Project Link")).toHaveValue(projectLinkId);
-      await expect(page.getByLabel("Pinned Summary Project Link")).toHaveValue(projectLinkId);
+      await expect(page.getByTitle("Context manages the Project Link")).toHaveText(projectLink.name);
+      await expect(page.getByLabel("Pinned Summary Project Link")).toHaveCount(0);
       await page.getByRole("button", { name: "Commit or push", exact: true }).click();
       await page.getByRole("button", { name: "Push branch", exact: true }).click();
 

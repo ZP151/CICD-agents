@@ -76,6 +76,9 @@ describe("daemon Project Link routes", () => {
   it("exposes Project Link CRUD on /project-links while preserving /project-links compatibility", async () => {
     app = await buildApp();
 
+    // The legacy payload fields (defaultBranch, targetBranch, adoPipelineId,
+    // adoPipelineName, ...) are read-only in V2: create must persist only the
+    // stable identity mapping and must not store them.
     const created = await app.inject({
       method: "POST",
       url: "/project-links",
@@ -86,15 +89,15 @@ describe("daemon Project Link routes", () => {
       id: string;
       name: string;
       adoRepoName: string;
-      adoPipelineId: string;
-      adoPipelineName: string;
+      adoPipelineId?: string;
+      adoPipelineName?: string;
     };
     expect(body).toMatchObject({
       name: "Official Project Link",
       adoRepoName: "mergepilot",
-      adoPipelineId: "12",
-      adoPipelineName: "MergePilot CI",
     });
+    expect(body.adoPipelineId).toBeUndefined();
+    expect(body.adoPipelineName).toBeUndefined();
 
     const listed = await app.inject({ method: "GET", url: "/project-links" });
     expect(listed.statusCode, listed.body).toBe(200);
@@ -117,9 +120,9 @@ describe("daemon Project Link routes", () => {
     expect(updated.json()).toMatchObject({
       id: body.id,
       adoRepoName: "mergepilot-renamed",
-      adoPipelineId: "34",
-      adoPipelineName: "MergePilot Release",
     });
+    expect((updated.json() as { adoPipelineId?: string }).adoPipelineId).toBeUndefined();
+    expect((updated.json() as { adoPipelineName?: string }).adoPipelineName).toBeUndefined();
 
     const deleted = await app.inject({ method: "DELETE", url: `/project-links/${body.id}` });
     expect(deleted.statusCode).toBe(200);

@@ -6,57 +6,33 @@ import {
 } from "./PullRequestPageHeader.js";
 
 describe("PullRequestPageHeader", () => {
-  it("labels the Project Link selector as loading before claiming no links exist", () => {
+  it("keeps the header free of a Project Link selector; Context owns selection", () => {
     const html = renderToStaticMarkup(
       <PullRequestPageHeader
-        projectLinks={[]}
-        projectLinksLoading
-        projectLinkId=""
         status="active"
         selectedProjectLink={null}
         branchScope=""
-        onProjectLinkChange={() => undefined}
         onStatusChange={() => undefined}
         onRefresh={() => undefined}
         onCreatePr={() => undefined}
       />,
     );
 
-    expect(html).toContain("Loading Project Links...");
-    expect(html).not.toContain(">No Project Links<");
+    expect(html).not.toContain('aria-label="Pull Requests Project Link"');
+    expect(html).not.toContain("Loading Project Links...");
+    expect(html).not.toContain("No Project Links");
+    expect(html).not.toContain("All Project Links");
+    expect(html).toContain('aria-label="Pull Requests status"');
+    expect(html).toContain("Refresh");
+    expect(html).toContain("Create PR");
   });
 
   it("uses responsive header controls for long Project Link names", () => {
     const html = renderToStaticMarkup(
       <PullRequestPageHeader
-        projectLinks={[{
-          id: "pl-live-long",
-          name: "mp-live-claimbot-pipeline-20260716181319",
-          repoPath: "C:\\repos\\ClaimBot_API",
-          defaultBranch: "main",
-          targetBranch: "main",
-          adoOrgUrl: "https://tebssg.visualstudio.com/",
-          adoProject: "TeBS-ClaimBot",
-          adoRepoName: "ClaimBot_API",
-          adoPat: "",
-          adoPipelineId: "",
-          adoPipelineName: "",
-          adoMcpEnabled: false,
-          adoMcpCommand: "",
-          adoMcpAuthentication: "",
-          adoMcpDomains: "",
-          projectTemplate: "",
-          buildCommand: "",
-          testCommand: "",
-          createdAt: 1,
-          updatedAt: 1,
-        }]}
-        projectLinksLoading={false}
-        projectLinkId="pl-live-long"
         status="active"
         selectedProjectLink={null}
         branchScope="main"
-        onProjectLinkChange={() => undefined}
         onStatusChange={() => undefined}
         onRefresh={() => undefined}
         onCreatePr={() => undefined}
@@ -74,7 +50,7 @@ describe("PullRequestPageHeader", () => {
     expect(html).toContain("hidden max-w-2xl");
     expect(html).toContain("xl:block");
     expect(html).not.toContain("lg:block");
-    expect(html).toContain("sm:min-w-[14rem]");
+    expect(html).not.toContain("sm:min-w-[14rem]");
     expect(html).toContain("sm:w-[9rem]");
     expect(html).toContain("min-h-9");
     expect(html).toContain("focus:ring-[rgb(var(--app-focus))]/35");
@@ -85,9 +61,6 @@ describe("PullRequestPageHeader", () => {
   it("combines selected Project Link scope into compact hover-detail chips", () => {
     const html = renderToStaticMarkup(
       <PullRequestPageHeader
-        projectLinks={[]}
-        projectLinksLoading={false}
-        projectLinkId="pl-1"
         status="active"
         selectedProjectLink={{
           id: "pl-1",
@@ -112,7 +85,6 @@ describe("PullRequestPageHeader", () => {
           updatedAt: 1,
         }}
         branchScope="feature/cicd-agent-20260719-responsive"
-        onProjectLinkChange={() => undefined}
         onStatusChange={() => undefined}
         onRefresh={() => undefined}
         onCreatePr={() => undefined}

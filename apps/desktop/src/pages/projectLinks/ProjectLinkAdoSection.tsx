@@ -20,7 +20,6 @@ interface ProjectLinkAdoSectionProps {
   onApplyDiscovery: (kind: AdoDiscoveryKind, option: AdoDiscoveryOption) => void;
   onManualProjectChange: (value: string) => void;
   onManualRepositoryChange: (value: string) => void;
-  onManualPipelineChange: (value: string) => void;
 }
 
 export function ProjectLinkAdoSection({
@@ -35,7 +34,6 @@ export function ProjectLinkAdoSection({
   onApplyDiscovery,
   onManualProjectChange,
   onManualRepositoryChange,
-  onManualPipelineChange,
 }: ProjectLinkAdoSectionProps): JSX.Element {
   return (
     <section className="space-y-3.5 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4">
@@ -70,16 +68,6 @@ export function ProjectLinkAdoSection({
           onManualChange={onManualRepositoryChange}
         />
       </div>
-      <ProjectDiscoveryField
-        kind="pipelines"
-        label="Pipeline"
-        options={discovered.pipelines}
-        value={form.adoPipelineName}
-        discovering={discovering}
-        placeholder="CI pipeline"
-        onApply={onApplyDiscovery}
-        onManualChange={onManualPipelineChange}
-      />
       {discoveryError && (
         <AdoDiscoveryNotice
           errorMessage={discoveryError}

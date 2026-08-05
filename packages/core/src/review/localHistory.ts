@@ -1,8 +1,40 @@
 import fs from "node:fs";
 import path from "node:path";
-import { compareReviewQueueItems, type ReviewQueueItem } from "./reviewQueue.js";
+import { parseSortableDate } from "../safeDate.js";
 
-/** Durable review history record (matches Azure ReviewHistory + queue UI fields). */
+/** Review decision queue states shared by the review runtime history row. */
+export type ReviewQueueDecision = "auto_approved" | "needs_human_review" | "blocked" | "watching";
+/** Review risk levels shared by the review runtime history row. */
+export type ReviewQueueRiskLevel = "low" | "medium" | "high";
+/** Context confidence labels shared by the review runtime history row. */
+export type ReviewContextConfidence = "high" | "medium" | "low" | "";
+/** Manual disposition labels shared by the review runtime history row. */
+export type ReviewManualDisposition =
+  | ""
+  | "acknowledged"
+  | "marked_safe"
+  | "marked_blocked"
+  | "changes_requested";
+
+export interface ReviewDispositionEvent {
+  disposition: ReviewManualDisposition;
+  at: string;
+  actor: string;
+  note: string;
+}
+
+export interface ReviewWriteBackEvent {
+  disposition: ReviewManualDisposition;
+  at: string;
+  ok: boolean;
+  actor: string;
+  note: string;
+  error: string;
+  threadId: string;
+  url: string;
+}
+
+/** Durable review history record (matches Azure ReviewHistory + review runtime fields). */
 export interface ReviewHistoryRecord {
   repository: string;
   pullRequestId: number;
@@ -10,11 +42,11 @@ export interface ReviewHistoryRecord {
   findingCount: number;
   lastRunAt: string;
   sourceCommit: string;
-  decisionQueue: ReviewQueueItem["decisionQueue"];
-  decisionRiskLevel: ReviewQueueItem["decisionRiskLevel"];
+  decisionQueue: ReviewQueueDecision;
+  decisionRiskLevel: ReviewQueueRiskLevel;
   decisionReason: string;
   decisionReasonCodes?: string[];
-  contextConfidence?: ReviewQueueItem["contextConfidence"];
+  contextConfidence?: ReviewContextConfidence;
   autoApprovedAt: string;
   autoApprovalActor: string;
   lastTokensIn?: number;
@@ -23,18 +55,51 @@ export interface ReviewHistoryRecord {
   hunkCoverageFiles?: number;
   wholeFileFallbackFiles?: number;
   changedHunkLines?: number;
-  manualDisposition?: ReviewQueueItem["manualDisposition"];
+  manualDisposition?: ReviewManualDisposition;
   manualDispositionAt?: string;
   manualDispositionActor?: string;
   manualDispositionNote?: string;
-  manualDispositionEvents?: ReviewQueueItem["manualDispositionEvents"];
+  manualDispositionEvents?: ReviewDispositionEvent[];
   manualDispositionWriteBackAttempted?: boolean;
   manualDispositionWriteBackOk?: boolean;
   manualDispositionWriteBackError?: string;
   manualDispositionWriteBackAt?: string;
   manualDispositionWriteBackThreadId?: string;
   manualDispositionWriteBackUrl?: string;
-  manualDispositionWriteBackEvents?: ReviewQueueItem["manualDispositionWriteBackEvents"];
+  manualDispositionWriteBackEvents?: ReviewWriteBackEvent[];
+}
+
+/** Fully materialized review history item returned by local list/read helpers. */
+export interface ReviewHistoryItem {
+  repository: string;
+  pullRequestId: number;
+  lastIterationId: number;
+  findingCount: number;
+  lastRunAt: string;
+  sourceCommit: string;
+  decisionQueue: ReviewQueueDecision;
+  decisionRiskLevel: ReviewQueueRiskLevel;
+  decisionReason: string;
+  decisionReasonCodes: string[];
+  contextConfidence: ReviewContextConfidence;
+  autoApprovedAt: string;
+  autoApprovalActor: string;
+  discardedFindingCount: number;
+  hunkCoverageFiles: number;
+  wholeFileFallbackFiles: number;
+  changedHunkLines: number;
+  manualDisposition: ReviewManualDisposition;
+  manualDispositionAt: string;
+  manualDispositionActor: string;
+  manualDispositionNote: string;
+  manualDispositionEvents: ReviewDispositionEvent[];
+  manualDispositionWriteBackAttempted: boolean;
+  manualDispositionWriteBackOk: boolean;
+  manualDispositionWriteBackError: string;
+  manualDispositionWriteBackAt: string;
+  manualDispositionWriteBackThreadId: string;
+  manualDispositionWriteBackUrl: string;
+  manualDispositionWriteBackEvents: ReviewWriteBackEvent[];
 }
 
 type ReviewHistoryStore = Record<string, Record<string, ReviewHistoryRecord>>;
@@ -59,7 +124,7 @@ function saveStore(dataDir: string, store: ReviewHistoryStore): void {
   fs.writeFileSync(p, JSON.stringify(store, null, 2), "utf8");
 }
 
-export function recordToQueueItem(record: ReviewHistoryRecord): ReviewQueueItem {
+function recordToItem(record: ReviewHistoryRecord): ReviewHistoryItem {
   return {
     repository: record.repository,
     pullRequestId: record.pullRequestId,
@@ -93,6 +158,36 @@ export function recordToQueueItem(record: ReviewHistoryRecord): ReviewQueueItem 
   };
 }
 
+const queuePriority: Record<ReviewQueueDecision, number> = {
+  blocked: 4000,
+  needs_human_review: 3000,
+  watching: 2000,
+  auto_approved: 1000,
+};
+
+const riskPriority: Record<ReviewQueueRiskLevel, number> = {
+  high: 300,
+  medium: 200,
+  low: 100,
+};
+
+function priorityScore(item: ReviewHistoryItem): number {
+  return (
+    queuePriority[item.decisionQueue] +
+    riskPriority[item.decisionRiskLevel] +
+    item.findingCount * 10 +
+    item.discardedFindingCount * 12 +
+    item.wholeFileFallbackFiles * 35 +
+    (item.hunkCoverageFiles === 0 && item.wholeFileFallbackFiles > 0 ? 50 : 0)
+  );
+}
+
+function compareReviewHistoryItems(a: ReviewHistoryItem, b: ReviewHistoryItem): number {
+  const priorityDelta = priorityScore(b) - priorityScore(a);
+  if (priorityDelta !== 0) return priorityDelta;
+  return parseSortableDate(b.lastRunAt) - parseSortableDate(a.lastRunAt);
+}
+
 export function upsertLocalReviewHistory(dataDir: string, record: ReviewHistoryRecord): ReviewHistoryRecord {
   const repository = record.repository.trim();
   const pullRequestId = record.pullRequestId;
@@ -111,12 +206,12 @@ export function listLocalReviewHistory(args: {
   dataDir: string;
   repository: string;
   limit?: number;
-}): ReviewQueueItem[] {
+}): ReviewHistoryItem[] {
   const repository = args.repository.trim();
   if (!repository) return [];
   const store = loadStore(args.dataDir);
-  const items = Object.values(store[repository] ?? {}).map(recordToQueueItem);
-  const sorted = items.sort(compareReviewQueueItems);
+  const items = Object.values(store[repository] ?? {}).map(recordToItem);
+  const sorted = items.sort(compareReviewHistoryItems);
   if (args.limit && args.limit > 0) return sorted.slice(0, args.limit);
   return sorted;
 }

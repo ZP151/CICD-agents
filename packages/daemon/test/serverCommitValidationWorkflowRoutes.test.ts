@@ -261,7 +261,9 @@ describe("daemon commit and validation workflow routes", () => {
       "utf8",
     );
 
-    const testCommand = ".\\scripts\\windows\\pnpm-project.ps1 --filter @mergepilot/desktop test";
+    // V2 Project Links no longer persist build/test commands, so the inline
+    // fixture commands are ignored and the workflow falls back to the default
+    // test command.
     const response = await app.inject({
       method: "POST",
       url: "/chat/workflow-action",
@@ -270,7 +272,7 @@ describe("daemon commit and validation workflow routes", () => {
         repoPath: repo,
         projectLink: projectLink(repo, {
           buildCommand: ".\\scripts\\windows\\pnpm-project.ps1 --filter @mergepilot/desktop build",
-          testCommand,
+          testCommand: ".\\scripts\\windows\\pnpm-project.ps1 --filter @mergepilot/desktop test",
         }),
       },
     });
@@ -296,19 +298,19 @@ describe("daemon commit and validation workflow routes", () => {
     expect(body.workflowState.workflowPhase).toBe("waiting_for_test_approval");
     expect(body.workflowState.pendingApproval?.action.tool).toBe("validation_command");
     expect(body.workflowState.pendingApproval?.action.args).toEqual({
-      command: testCommand,
+      command: "npm test",
       kind: "test",
     });
     expect(body.workflowState.pendingApproval?.action.workflow).toMatchObject({
       kind: "ci",
       phase: "test",
-      message: testCommand,
+      message: "npm test",
     });
     expect(body.workflowState.pendingApproval?.action.preflight).toMatchObject({
       kind: "validation",
-      status: "ready",
+      status: "default_command",
       validationKind: "test",
-      commandSource: "project_link",
+      commandSource: "default",
       changedFiles: ["src.test.ts"],
     });
   });

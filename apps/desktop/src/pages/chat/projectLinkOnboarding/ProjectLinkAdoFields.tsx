@@ -14,7 +14,6 @@ export interface ProjectLinkAdoFieldsProps {
   setDiscoveryError: React.Dispatch<React.SetStateAction<string | null>>;
   setField: <K extends keyof ProjectLinkInput>(key: K) => (value: ProjectLinkInput[K]) => void;
   setForm: React.Dispatch<React.SetStateAction<ProjectLinkInput>>;
-  runDiscovery: (kind: AdoDiscoveryKind, mode?: "manual" | "auto") => Promise<void>;
 }
 
 export function ProjectLinkAdoFields({
@@ -27,7 +26,6 @@ export function ProjectLinkAdoFields({
   setDiscoveryError,
   setField,
   setForm,
-  runDiscovery,
 }: ProjectLinkAdoFieldsProps) {
   return (
     <div className="grid min-w-0 gap-3 overflow-hidden rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3">
@@ -61,87 +59,11 @@ export function ProjectLinkAdoFields({
           setForm={setForm}
         />
       </div>
-      <PipelineSelect
-        applyDiscovery={applyDiscovery}
-        discovered={discovered.pipelines}
-        discovering={discovering}
-        form={form}
-        runDiscovery={runDiscovery}
-        setDiscoveryError={setDiscoveryError}
-        setForm={setForm}
-      />
       {discoveryError && (
         <p className="rounded-md border border-[rgb(var(--app-danger))]/30 bg-[rgb(var(--app-danger)_/_0.10)] px-2.5 py-1.5 text-[11px] text-[rgb(var(--app-danger))]">
           {discoveryError}
         </p>
       )}
-    </div>
-  );
-}
-
-interface PipelineSelectProps {
-  applyDiscovery: (kind: AdoDiscoveryKind, option: AdoDiscoveryOption) => void;
-  discovered: AdoDiscoveryOption[];
-  discovering: AdoDiscoveryKind | null;
-  form: ProjectLinkInput;
-  runDiscovery: (kind: AdoDiscoveryKind, mode?: "manual" | "auto") => Promise<void>;
-  setDiscoveryError: React.Dispatch<React.SetStateAction<string | null>>;
-  setForm: React.Dispatch<React.SetStateAction<ProjectLinkInput>>;
-}
-
-function PipelineSelect({
-  applyDiscovery,
-  discovered,
-  discovering,
-  form,
-  runDiscovery,
-  setDiscoveryError,
-  setForm,
-}: PipelineSelectProps) {
-  if (discovered.length > 0) {
-    return (
-      <select
-        aria-label="Azure Pipeline"
-        className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-[rgb(var(--app-accent))]"
-        value={discovered.some((option) => option.id === form.adoPipelineId) ? form.adoPipelineId : ""}
-        onChange={(e) => {
-          const selected = discovered.find((option) => option.id === e.target.value);
-          if (selected) applyDiscovery("pipelines", selected);
-        }}
-      >
-        <option value="">{discovering === "pipelines" ? "Discovering pipelines..." : "Select pipeline"}</option>
-        {discovered.map((option) => (
-          <option key={option.id} value={option.id}>{option.name}</option>
-        ))}
-      </select>
-    );
-  }
-
-  return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
-      <input
-        aria-label="Azure Pipeline name"
-        className="w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text))] outline-none focus:border-[rgb(var(--app-accent))]"
-        value={form.adoPipelineName}
-        onChange={(e) => {
-          const value = e.target.value;
-          setDiscoveryError(null);
-          setForm((current) => ({
-            ...current,
-            adoPipelineId: current.adoPipelineName === value ? current.adoPipelineId : "",
-            adoPipelineName: value,
-          }));
-        }}
-        placeholder={discovering === "pipelines" ? "Discovering pipelines..." : "Pipeline name"}
-      />
-      <button
-        type="button"
-        onClick={() => void runDiscovery("pipelines")}
-        disabled={discovering === "pipelines" || !form.adoOrgUrl.trim() || !form.adoProject.trim()}
-        className="rounded-md border border-[rgb(var(--app-border))] px-2.5 py-1.5 text-xs text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))] disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {discovering === "pipelines" ? "Loading..." : "Find"}
-      </button>
     </div>
   );
 }

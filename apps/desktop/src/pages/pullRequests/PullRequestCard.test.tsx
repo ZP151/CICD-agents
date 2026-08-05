@@ -2,8 +2,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   PullRequestCard,
-  pullRequestActionDetailClass,
-  pullRequestActionRowClass,
   pullRequestActionsClass,
   pullRequestInsightPreviewClass,
   pullRequestInsightPreviewText,
@@ -39,7 +37,6 @@ describe("PullRequestCard", () => {
       <PullRequestCard
         pr={pr}
         projectLinkId="pl-1"
-        queueState={{ phase: "idle" }}
         previewState={{
           phase: "done",
           result: {
@@ -63,14 +60,13 @@ describe("PullRequestCard", () => {
         highlighted={false}
         onToggleContext={() => undefined}
         onPreviewInsight={() => undefined}
-        onQueueForReview={() => undefined}
         onOpenInsight={() => undefined}
         onOpenSavedInsightInChat={() => undefined}
       />,
     );
 
     expect(html).toContain("Open insight");
-    expect(html).toContain("Run automated review");
+    expect(html).not.toContain("Run automated review");
     expect(html).toContain("focus-visible:ring-2");
     expect(html).not.toContain("Preview Insight");
     expect(html).toContain("Author:");
@@ -86,91 +82,6 @@ describe("PullRequestCard", () => {
     expect(html).not.toContain("<strong>Ready:");
     expect(html).not.toContain("<li>");
     expect(html).toContain("only documentation changed.");
-  });
-
-  it("presents a completed review as state rather than a disabled action button", () => {
-    const html = renderToStaticMarkup(
-      <PullRequestCard
-        pr={pr}
-        projectLinkId="pl-1"
-        queueState={{
-          phase: "done",
-          result: {
-            ok: true,
-            pullRequestId: pr.id,
-            repository: pr.repository,
-            iterationId: 1,
-            decisionQueue: "auto_approved",
-            decisionRiskLevel: "low",
-            decisionReason: "No blocking findings.",
-            findingCount: 0,
-            readiness: "ready",
-            lastRunAt: "2026-08-02T12:00:00.000Z",
-            autoApprovalActor: "MergePilot",
-            tokensIn: 0,
-            tokensOut: 0,
-            summary: "No blocking findings.",
-          },
-        }}
-        previewState={{ phase: "idle" }}
-        insightArtifacts={[]}
-        contextState={undefined}
-        isExpanded={false}
-        highlighted={false}
-        onToggleContext={() => undefined}
-        onPreviewInsight={() => undefined}
-        onQueueForReview={() => undefined}
-        onOpenInsight={() => undefined}
-        onOpenSavedInsightInChat={() => undefined}
-      />,
-    );
-
-    expect(html).toContain("Auto-approved");
-    expect(html).toContain("No blocking findings.");
-    expect(html).not.toContain("disabled=\"\"");
-    expect(html).not.toContain("Open Review Queue");
-  });
-
-  it("provides a direct review-queue handoff only when a human decision is needed", () => {
-    const html = renderToStaticMarkup(
-      <PullRequestCard
-        pr={pr}
-        projectLinkId="pl-1"
-        queueState={{
-          phase: "done",
-          result: {
-            ok: true,
-            pullRequestId: pr.id,
-            repository: pr.repository,
-            iterationId: 1,
-            decisionQueue: "needs_human_review",
-            decisionRiskLevel: "medium",
-            decisionReason: "Review the security-sensitive change.",
-            findingCount: 2,
-            readiness: "needs_attention",
-            lastRunAt: "2026-08-02T12:00:00.000Z",
-            autoApprovalActor: "",
-            tokensIn: 0,
-            tokensOut: 0,
-            summary: "Two findings require a human decision.",
-          },
-        }}
-        previewState={{ phase: "idle" }}
-        insightArtifacts={[]}
-        contextState={undefined}
-        isExpanded={false}
-        highlighted={false}
-        onToggleContext={() => undefined}
-        onPreviewInsight={() => undefined}
-        onQueueForReview={() => undefined}
-        onOpenInsight={() => undefined}
-        onOpenSavedInsightInChat={() => undefined}
-      />,
-    );
-
-    expect(html).toContain("Needs review");
-    expect(html).toContain('href="#/pulls"');
-    expect(html).toContain("Open Review Queue");
   });
 });
 
@@ -196,22 +107,6 @@ describe("pullRequestActionsClass", () => {
     expect(className).toContain("items-start");
     expect(className).toContain("md:items-end");
     expect(className).not.toContain("shrink-0");
-  });
-
-  it("left-aligns PR actions on narrow cards and restores right alignment on wider cards", () => {
-    const className = pullRequestActionRowClass();
-
-    expect(className).toContain("justify-start");
-    expect(className).toContain("md:justify-end");
-    expect(className).not.toContain("justify-end gap-2");
-  });
-
-  it("lets PR action detail text use the full row before right-aligning at wider widths", () => {
-    expect(pullRequestActionDetailClass("muted")).toContain("w-full");
-    expect(pullRequestActionDetailClass("muted")).toContain("text-left");
-    expect(pullRequestActionDetailClass("muted")).toContain("md:max-w-xs");
-    expect(pullRequestActionDetailClass("muted")).toContain("md:text-right");
-    expect(pullRequestActionDetailClass("danger")).toContain("text-[rgb(var(--app-danger))]");
   });
 
   it("clips Markdown insight previews even when Markdown renders nested block content", () => {

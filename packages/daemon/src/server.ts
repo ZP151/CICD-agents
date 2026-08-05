@@ -27,7 +27,6 @@ import { registerHealthRoutes } from "./routes/health.routes.js";
 import { registerPipelineRoutes } from "./routes/pipelines.routes.js";
 import { registerProjectLinkRoutes } from "./routes/project-links.routes.js";
 import { registerPullRequestRoutes } from "./routes/pull-requests.routes.js";
-import { registerReviewRunRoutes } from "./routes/review-run.routes.js";
 import { registerReviewRoutes } from "./routes/review.routes.js";
 import { registerTaskRoutes } from "./routes/tasks.routes.js";
 import { registerWorkspaceRoutes } from "./routes/workspace.routes.js";
@@ -119,12 +118,6 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   registerPullRequestRoutes(app, { projectLinkStore, buildReviewLlmSettings: buildEffectiveLlmSettings });
 
   registerReviewRoutes(app, { settings, projectLinkStore });
-
-  registerReviewRunRoutes(app, {
-    settings,
-    projectLinkStore,
-    buildReviewLlmSettings: buildEffectiveLlmSettings,
-  });
 
   registerChatRoutes(app, {
     settings,

@@ -30,7 +30,6 @@ interface WorkspacePanelProps {
   projectLinks: ProjectLink[];
   activeProjectLinkId: string | null;
   setActiveProjectLinkId: (id: string | null) => void;
-  statusText: string | null;
   selectedArtifact: ConversationArtifactPart | null;
   selectedArtifactLookupState: ArtifactLookupState | null;
   contextSources: string[];
@@ -52,7 +51,6 @@ export function WorkspacePanel({
   projectLinks,
   activeProjectLinkId,
   setActiveProjectLinkId,
-  statusText,
   selectedArtifact,
   selectedArtifactLookupState,
   contextSources,
@@ -75,7 +73,6 @@ export function WorkspacePanel({
           projectLinks={projectLinks}
           activeProjectLinkId={activeProjectLinkId}
           setActiveProjectLinkId={setActiveProjectLinkId}
-          statusText={statusText}
           onAction={onAction}
         />
 

@@ -1,31 +1,26 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { InlineProjectLink } from "../chatHistoryTypes.js";
 
+// V2 inline Project Links carry only the stable identity mapping; the legacy
+// fields are read-only (migration reads) and are never accepted from API
+// payloads.
 const InlineProjectLinkObjectSchema = z.object({
   id: z.string().optional(),
   name: z.string().optional(),
   repoPath: z.string().default(""),
-  defaultBranch: z.string().default("main"),
-  targetBranch: z.string().default("main"),
   adoOrgUrl: z.string().default(""),
   adoProject: z.string().default(""),
   adoRepoName: z.string().default(""),
   adoPat: z.string().default(""),
-  adoPipelineId: z.string().default(""),
-  adoPipelineName: z.string().default(""),
-  adoMcpEnabled: z.coerce.boolean().default(false),
-  adoMcpCommand: z.string().default(""),
-  adoMcpAuthentication: z.string().default(""),
-  adoMcpDomains: z.string().default("repositories,pipelines,work-items"),
-  projectTemplate: z.string().default(""),
-  buildCommand: z.string().default(""),
-  testCommand: z.string().default(""),
   ignoredGlobs: z.array(z.string()).default([]),
 });
 
 export const InlineProjectLinkSchema = InlineProjectLinkObjectSchema.nullable()
   .optional()
   .transform((value) => value ?? undefined);
+
+type ParsedInlineProjectLink = z.infer<typeof InlineProjectLinkObjectSchema>;
 
 const OptionalSessionIdSchema = z
   .string()
@@ -100,7 +95,17 @@ export const ChatWorkflowActionSchema = z.object({
   projectLink: InlineProjectLinkSchema,
 });
 
-export type ChatWorkflowActionPayload = z.infer<typeof ChatWorkflowActionSchema>;
+// V2 API payloads carry only the stable identity mapping on projectLink; the
+// legacy fields are read-only (migration reads). The declared payload type
+// keeps the full InlineProjectLink shape so downstream readers compile, while
+// the parsed value stays narrow at runtime (legacy reads resolve through their
+// existing fallbacks, and the narrow value is what gets persisted).
+export type ChatWorkflowActionPayload = Omit<
+  z.infer<typeof ChatWorkflowActionSchema>,
+  "projectLink"
+> & {
+  projectLink?: InlineProjectLink;
+};
 
 export interface ChatWorkflowFailureResponse {
   httpStatus: number;
@@ -119,9 +124,9 @@ export function projectLinkIdFromWorkflowActionPayload(payload: {
 }
 
 export function projectLinkFromWorkflowActionPayload(
-  payload: ChatWorkflowActionPayload,
+  payload: { projectLink?: ParsedInlineProjectLink },
 ): ChatWorkflowActionPayload["projectLink"] {
-  return payload.projectLink;
+  return payload.projectLink as unknown as ChatWorkflowActionPayload["projectLink"];
 }
 
 export function registerChatWorkflowRoutes(

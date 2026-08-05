@@ -1,5 +1,4 @@
 import type { ProjectLinkInput } from "../../../api.js";
-import { BranchSelect } from "./BranchSelect.js";
 
 export interface ProjectLinkBasicFieldsProps {
   branches: string[];
@@ -61,26 +60,6 @@ export function ProjectLinkBasicFields({
           <span className="text-[10px] text-[rgb(var(--app-warning))]">Could not read branches. Check this is a valid git repository.</span>
         )}
       </label>
-      <div className={projectLinkOnboardingBranchGridClass()}>
-        <BranchSelect
-          branches={branches}
-          branchLoading={branchLoading}
-          label="Default branch"
-          value={form.defaultBranch}
-          onChange={setField("defaultBranch")}
-        />
-        <BranchSelect
-          branches={branches}
-          branchLoading={branchLoading}
-          label="PR target branch"
-          value={form.targetBranch}
-          onChange={setField("targetBranch")}
-        />
-      </div>
     </>
   );
-}
-
-export function projectLinkOnboardingBranchGridClass(): string {
-  return "grid min-w-0 gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))]";
 }

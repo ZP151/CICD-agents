@@ -47,16 +47,6 @@ export function previewOperationDetails(result: PullRequestInsightPreview): stri
   ].join("; ");
 }
 
-export function reviewRunOperationDetails(result: ReviewRunResult): string {
-  return [
-    `queue=${result.decisionQueue}`,
-    `risk=${result.decisionRiskLevel}`,
-    `confidence=${result.contextConfidence ?? "not available"}`,
-    `findings=${result.findingCount}`,
-    `discarded=${result.discardedFindings?.length ?? 0}`,
-    `tokens=${result.tokensIn}/${result.tokensOut}`,
-  ].join("; ");
-}
 
 export function mergeInsightArtifacts(items: PrInsightArtifact[]): PrInsightArtifact[] {
   const byId = new Map<string, PrInsightArtifact>();

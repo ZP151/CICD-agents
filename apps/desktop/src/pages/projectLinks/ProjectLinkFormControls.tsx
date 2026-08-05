@@ -84,61 +84,6 @@ export function Field({
   );
 }
 
-export function BranchSelect({
-  label,
-  value,
-  onChange,
-  branches,
-  branchLoading,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  branches: string[];
-  branchLoading: boolean;
-}): JSX.Element {
-  if (branchLoading) {
-    return (
-      <div className="flex min-w-0 flex-col gap-1">
-        <span className="text-xs font-medium text-[rgb(var(--app-text-muted))]">{label}</span>
-        <div className="flex items-center gap-2 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-sm text-[rgb(var(--app-text-muted))]">
-          <svg className="h-3 w-3 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none">
-            <circle
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeDasharray="30 70"
-              strokeWidth="3"
-            />
-          </svg>
-          Detecting branches...
-        </div>
-      </div>
-    );
-  }
-  if (branches.length > 0) {
-    return (
-      <label className="flex min-w-0 flex-col gap-1">
-        <span className="text-xs font-medium text-[rgb(var(--app-text-muted))]">{label}</span>
-        <WorkbenchSelect
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="border-[rgb(var(--app-success-border))] text-sm focus:border-[rgb(var(--app-success))]"
-        >
-          {branches.map((branch) => (
-            <option key={branch} value={branch}>
-              {branch}
-            </option>
-          ))}
-          {!branches.includes(value) && value && <option value={value}>{value} (saved)</option>}
-        </WorkbenchSelect>
-      </label>
-    );
-  }
-  return <Field label={label} value={value} onChange={onChange} placeholder="main" />;
-}
-
 export function ProjectDiscoveryField({
   kind,
   label,

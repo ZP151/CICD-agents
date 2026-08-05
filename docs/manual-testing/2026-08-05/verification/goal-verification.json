@@ -1,137 +1,44 @@
 {
   "schemaVersion": 1,
-  "runId": "verify-msg80eqy",
-  "status": "PASS",
+  "runId": "verify-msg95lg6",
+  "status": "INCOMPLETE",
   "commit": {
-    "sha": "dddf81843fe15ebe4362775ba9c5d80df6dc0a81",
+    "sha": "b3de45225836c43c338fdb292b518808ba580dc0",
     "ref": "refs/heads/claudecode/optimize-bugfix",
-    "message": "docs(goal): completion report for Cycle 00-06\n\nCo-Authored-By: Claude <noreply@anthropic.com>"
+    "message": "docs(verify): record installed desktop state and gate notes\n\nCo-Authored-By: Claude <noreply@anthropic.com>"
   },
   "appVersion": "0.5.26",
   "productModel": "unknown",
-  "startedAt": "2026-08-05T15:07:10.378Z",
-  "finishedAt": "2026-08-05T15:08:17.622Z",
+  "startedAt": "2026-08-05T15:39:11.958Z",
+  "finishedAt": "2026-08-05T15:45:57.705Z",
   "repeat": 1,
   "summary": {
-    "required": 6,
-    "passed": 6,
-    "failed": 0,
+    "required": 1,
+    "passed": 0,
+    "failed": 1,
     "notRun": 0
   },
   "gates": [
     {
-      "id": "core-typecheck",
-      "tier": "unit",
-      "required": true,
-      "requireNoSkips": false,
-      "timeoutMs": 300000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/core typecheck",
-      "description": "core typecheck",
-      "runs": [
-        {
-          "attempt": 1,
-          "exitCode": 0,
-          "timedOut": false,
-          "durationMs": 2778,
-          "status": "PASS"
-        }
-      ],
-      "status": "PASS"
-    },
-    {
-      "id": "core-test",
-      "tier": "unit",
+      "id": "browser-e2e-mocked",
+      "tier": "mocked-browser-e2e",
       "required": true,
       "requireNoSkips": true,
-      "timeoutMs": 900000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/core test",
-      "description": "core vitest suite",
+      "timeoutMs": 1800000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/chat-layout.spec.ts && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/settings-permissions.spec.ts && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/route-cache.spec.ts",
+      "description": "mocked browser E2E (chat-layout, settings-permissions, route-cache)",
       "runs": [
         {
           "attempt": 1,
-          "exitCode": 0,
+          "exitCode": 1,
           "timedOut": false,
-          "durationMs": 13479,
-          "status": "PASS"
+          "durationMs": 405746,
+          "status": "FAIL",
+          "skipped": 0,
+          "outputTail": "\n    ────────────────────────────────────────────────────────────────────────────────────────────────\n\n  34 failed\n    [chromium] › tests\\e2e\\chat-layout.spec.ts:1093:7 › Chat layout › @smoke @mocked keeps the project-linked chat shell inside the viewport \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:1112:7 › Chat layout › @smoke @mocked gives the chat workspace usable width when maximized \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:1133:7 › Chat layout › keeps the Project Link onboarding form usable on narrow screens \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:1154:7 › Chat layout › keeps empty New Chat free of preloaded command templates \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:1195:7 › Chat layout › shows branch divergence before commit or push actions \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:1276:7 › Chat layout › refreshes branch readiness from the synced progress follow-up \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:1419:7 › Chat layout › keeps the pinned summary hidden during empty Project Link onboarding \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:1447:7 › Chat layout › infers Azure DevOps fields while creating a Project Link from a local repo \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:1524:7 › Chat layout › recommends the ClaimBot_API pipeline during Project Link creation when multiple pipelines exist \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:1633:7 › Chat layout › sends image attachments from the compact composer add menu \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:1708:7 › Chat layout › accepts dropped image attachments in the composer \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:1767:7 › Chat layout › accepts pasted image attachments in the composer \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:2401:7 › Chat layout › shows approval composer notice and disables composer controls \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:2417:7 › Chat layout › keeps active Project Link long workflow transcript clear of the pinned summary \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:2440:7 › Chat layout › keeps suggestion replies hidden while a restored workflow is running \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:2453:7 › Chat layout › routes Git workflow follow-up chips as structured actions \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:2503:7 › Chat layout › routes review stage follow-up chip as a structured commit workflow \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:2557:7 › Chat layout › routes staged diff follow-up chip as a read-only workflow action \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:2605:7 › Chat layout › routes draft commit message follow-up chip as a read-only workflow action \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:2653:7 › Chat layout › routes change-scope follow-up chip as a read-only workflow action \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:2701:7 › Chat layout › routes remote-target follow-up chip as a read-only workflow action \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:2749:7 › Chat layout › routes pushed-commit summary follow-up chip as a read-only workflow action \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:2797:7 › Chat layout › routes validation failure analysis follow-up chip as a read-only workflow action \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:2856:7 › Chat layout › routes PR validation recovery chip as a structured CI recovery workflow action \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:2923:7 › Chat layout › shows right-panel PR readiness step states during an active workflow \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:2952:7 › Chat layout › renders tool lifecycle from UI stream chunks without legacy tool events \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:3104:7 › Chat layout › deduplicates legacy text and tool events after canonical UI chunks start \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:3211:7 › Chat layout › renders approval cards from canonical UI chunks without legacy approval events \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:3267:7 › Chat layout › renders long streamed markdown with sources and tool output \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:3453:7 › Chat layout › preserves manual history scroll when a delayed response arrives \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:3611:7 › Chat layout › releases the composer after a UI-stream-only finish \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:3666:7 › Chat layout › deduplicates legacy and UI stream error events \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:3911:7 › Chat layout › loads a saved PR insight artifact source into the result workspace \n    [chromium] › tests\\e2e\\chat-layout.spec.ts:3976:7 › Chat layout › shows persisted PR insight lookup errors in the result workspace \n  17 passed (6.7m)\n"
         }
       ],
-      "status": "PASS"
-    },
-    {
-      "id": "daemon-typecheck",
-      "tier": "unit",
-      "required": true,
-      "requireNoSkips": false,
-      "timeoutMs": 300000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/daemon typecheck",
-      "description": "daemon typecheck",
-      "runs": [
-        {
-          "attempt": 1,
-          "exitCode": 0,
-          "timedOut": false,
-          "durationMs": 2446,
-          "status": "PASS"
-        }
-      ],
-      "status": "PASS"
-    },
-    {
-      "id": "daemon-test",
-      "tier": "unit",
-      "required": true,
-      "requireNoSkips": true,
-      "timeoutMs": 900000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/daemon test",
-      "description": "daemon vitest suite",
-      "runs": [
-        {
-          "attempt": 1,
-          "exitCode": 0,
-          "timedOut": false,
-          "durationMs": 30610,
-          "status": "PASS"
-        }
-      ],
-      "status": "PASS"
-    },
-    {
-      "id": "desktop-typecheck",
-      "tier": "unit",
-      "required": true,
-      "requireNoSkips": false,
-      "timeoutMs": 300000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/desktop typecheck",
-      "description": "desktop typecheck",
-      "runs": [
-        {
-          "attempt": 1,
-          "exitCode": 0,
-          "timedOut": false,
-          "durationMs": 3615,
-          "status": "PASS"
-        }
-      ],
-      "status": "PASS"
-    },
-    {
-      "id": "desktop-test",
-      "tier": "unit",
-      "required": true,
-      "requireNoSkips": true,
-      "timeoutMs": 900000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/desktop test",
-      "description": "desktop vitest suite",
-      "runs": [
-        {
-          "attempt": 1,
-          "exitCode": 0,
-          "timedOut": false,
-          "durationMs": 14314,
-          "status": "PASS"
-        }
-      ],
-      "status": "PASS"
+      "status": "FAIL"
     }
   ]
 }

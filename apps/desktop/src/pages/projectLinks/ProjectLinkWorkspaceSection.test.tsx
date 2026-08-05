@@ -1,14 +1,46 @@
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { projectLinkBranchGridClass } from "./ProjectLinkWorkspaceSection.js";
+import type { ProjectLinkInput } from "../../api.js";
+import { ProjectLinkWorkspaceSection } from "./ProjectLinkWorkspaceSection.js";
+
+const baseForm: ProjectLinkInput = {
+  name: "example link",
+  repoPath: "C:\\repo\\example",
+  defaultBranch: "main",
+  targetBranch: "main",
+  adoOrgUrl: "https://example-org.visualstudio.com/",
+  adoProject: "example-project",
+  adoRepoName: "example-repo",
+  adoPipelineId: "",
+  adoPipelineName: "",
+  adoPat: "",
+  adoMcpEnabled: false,
+  adoMcpCommand: "",
+  adoMcpAuthentication: "",
+  adoMcpDomains: "repositories,pipelines,work-items",
+  projectTemplate: "",
+  buildCommand: "",
+  testCommand: "",
+};
 
 describe("ProjectLinkWorkspaceSection layout", () => {
-  it("keeps branch controls single-column until there is enough width", () => {
-    const className = projectLinkBranchGridClass();
+  it("renders the identity fields without branch selectors (V2: branches are read-only)", () => {
+    const html = renderToStaticMarkup(
+      <ProjectLinkWorkspaceSection
+        form={baseForm}
+        set={() => () => undefined}
+        branches={["main", "develop"]}
+        branchLoading={false}
+        branchError={false}
+        repoInputClass=""
+        onReloadBranches={() => undefined}
+      />,
+    );
 
-    expect(className).toContain("auto-fit");
-    expect(className).toContain("minmax(min(100%,14rem),1fr)");
-    expect(className).toContain("gap-3");
-    expect(className).not.toContain("grid-cols-2 gap-4");
-    expect(className).not.toContain("md:grid-cols-2");
+    expect(html).toContain("Project Link name");
+    expect(html).toContain("Repo path");
+    expect(html).toContain("2 branches");
+    expect(html).not.toContain("Default branch");
+    expect(html).not.toContain("Target branch (PRs)");
   });
 });

@@ -51,7 +51,6 @@ function renderSection(overrides: {
       onApplyDiscovery={noop}
       onManualProjectChange={noop}
       onManualRepositoryChange={noop}
-      onManualPipelineChange={noop}
     />,
   );
 }

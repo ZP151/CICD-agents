@@ -5,7 +5,6 @@ import {
 import { PullRequestContextPanel } from "./PullRequestContextPanel.js";
 import {
   ActionButton,
-  ActionLink,
   InlineNotice,
   StatusBadge,
 } from "../../components/workbench/WorkbenchPrimitives.js";
@@ -18,13 +17,11 @@ import type {
   ContextState,
   DisplayPullRequest,
   PreviewState,
-  QueueState,
 } from "./pullRequestTypes.js";
 
 export interface PullRequestCardProps {
   pr: DisplayPullRequest;
   projectLinkId: string;
-  queueState: QueueState;
   previewState: PreviewState;
   insightArtifacts: PrInsightArtifact[];
   contextState: ContextState | undefined;
@@ -32,7 +29,6 @@ export interface PullRequestCardProps {
   highlighted: boolean;
   onToggleContext: (pr: DisplayPullRequest) => void;
   onPreviewInsight: (pr: DisplayPullRequest) => void;
-  onQueueForReview: (pr: DisplayPullRequest) => void;
   onOpenInsight: (pr: DisplayPullRequest) => void;
   onOpenSavedInsightInChat: (pr: DisplayPullRequest, artifact: PrInsightArtifact) => void;
 }
@@ -40,7 +36,6 @@ export interface PullRequestCardProps {
 export function PullRequestCard({
   pr,
   projectLinkId,
-  queueState,
   previewState,
   insightArtifacts,
   contextState,
@@ -48,16 +43,11 @@ export function PullRequestCard({
   highlighted,
   onToggleContext,
   onPreviewInsight,
-  onQueueForReview,
   onOpenInsight,
 }: PullRequestCardProps): JSX.Element {
   const state = readiness(pr);
-  const qState = queueState;
   const insightTone = previewState.phase === "done"
     ? insightReadinessTone(previewState.result.readiness)
-    : null;
-  const reviewTone = qState.phase === "done"
-    ? insightReadinessTone(qState.result.readiness)
     : null;
   const storedInsightHistory = insightArtifacts.filter((artifact) => (
     artifact.repository === pr.repository &&
@@ -72,33 +62,11 @@ export function PullRequestCard({
   const createdLabel = formatDate(pr.creationDate) || "Not available";
   const reviewerLabel = `${pr.voteSummary.approved} approved / ${pr.reviewerCount} total`;
 
-  const isRunning = qState.phase === "watching" || qState.phase === "reviewing";
-  const isDone = qState.phase === "done";
-  const isError = qState.phase === "error";
-  const hasInsight = Boolean(storedInsight || previewState.phase === "done" || isDone);
-  const latestInsightSummary = isDone
-    ? qState.result.summary || "Review completed."
-    : previewState.phase === "done"
-      ? previewState.result.summary || "Insight preview generated."
-      : storedInsight?.summary || "Saved insight available.";
+  const hasInsight = Boolean(storedInsight || previewState.phase === "done");
+  const latestInsightSummary = previewState.phase === "done"
+    ? previewState.result.summary || "Insight preview generated."
+    : storedInsight?.summary || "Saved insight available.";
   const latestInsightPreview = pullRequestInsightPreviewText(latestInsightSummary);
-
-  const decisionLabel = isDone
-    ? qState.result.decisionQueue === "auto_approved" ? "Auto-approved"
-    : qState.result.decisionQueue === "needs_human_review" ? "Needs review"
-    : qState.result.decisionQueue === "blocked" ? "Blocked"
-    : "Reviewed"
-    : "";
-
-  const decisionTone = isDone
-    ? qState.result.decisionQueue === "auto_approved" ? "border-[rgb(var(--app-success))]/35 bg-[rgb(var(--app-success)_/_0.10)] text-[rgb(var(--app-success))]"
-    : qState.result.decisionQueue === "needs_human_review" ? "border-[rgb(var(--app-warning))]/35 bg-[rgb(var(--app-warning)_/_0.10)] text-[rgb(var(--app-warning))]"
-    : qState.result.decisionQueue === "blocked" ? "border-[rgb(var(--app-danger))]/35 bg-[rgb(var(--app-danger)_/_0.10)] text-[rgb(var(--app-danger))]"
-    : "border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-accent-readable))]"
-    : "";
-  const opensReviewQueue = isDone && (
-    qState.result.decisionQueue === "needs_human_review" || qState.result.decisionQueue === "blocked"
-  );
 
   return (
     <article
@@ -141,10 +109,6 @@ export function PullRequestCard({
               type="button"
               tone="quiet"
               onClick={() => {
-                if (hasInsight) {
-                  onOpenInsight(pr);
-                  return;
-                }
                 onOpenInsight(pr);
                 onPreviewInsight(pr);
               }}
@@ -153,29 +117,6 @@ export function PullRequestCard({
             >
               {previewState.phase === "loading" ? "Generating..." : hasInsight ? "Open insight" : "Generate insight"}
             </ActionButton>
-            {isDone ? (
-              <>
-                <StatusBadge className={decisionTone}>{decisionLabel}</StatusBadge>
-                {opensReviewQueue && (
-                  <ActionLink href="#/pulls" tone="quiet" className="min-h-7 px-2.5 py-1">
-                    Open Review Queue
-                  </ActionLink>
-                )}
-              </>
-            ) : (
-              <ActionButton
-                type="button"
-                tone={isError ? "danger" : "primary"}
-                onClick={() => onQueueForReview(pr)}
-                loading={isRunning}
-                className="min-h-7 px-2.5 py-1"
-              >
-                {qState.phase === "watching" ? "Preparing..."
-                : qState.phase === "reviewing" ? "Analyzing..."
-                : isError ? "Retry"
-                : "Run automated review"}
-              </ActionButton>
-            )}
             {pr.url && (
               <a
                 href={pr.url}
@@ -187,16 +128,6 @@ export function PullRequestCard({
               </a>
             )}
           </div>
-          {isDone && (
-            <p className={pullRequestActionDetailClass("muted")} title={qState.result.decisionReason}>
-              {qState.result.findingCount} finding{qState.result.findingCount === 1 ? "" : "s"} · {qState.result.decisionReason}
-            </p>
-          )}
-          {isError && (
-            <p className={pullRequestActionDetailClass("danger")} title={qState.message}>
-              {qState.message}
-            </p>
-          )}
         </div>
       </div>
 
@@ -226,9 +157,9 @@ export function PullRequestCard({
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-semibold text-[rgb(var(--app-text-muted))]">Latest insight</p>
-            {(reviewTone || insightTone || storedInsightTone) && (
-              <StatusBadge className={(reviewTone ?? insightTone ?? storedInsightTone)!.tone}>
-                {(reviewTone ?? insightTone ?? storedInsightTone)!.label}
+            {(insightTone || storedInsightTone) && (
+              <StatusBadge className={(insightTone ?? storedInsightTone)!.tone}>
+                {(insightTone ?? storedInsightTone)!.label}
               </StatusBadge>
             )}
           </div>
@@ -262,14 +193,6 @@ export function pullRequestInsightPreviewClass(): string {
   return "mt-1 max-w-[72ch] truncate text-xs leading-relaxed text-[rgb(var(--app-text-muted))]";
 }
 
-export function pullRequestActionDetailClass(tone: "muted" | "danger"): string {
-  const color =
-    tone === "danger"
-      ? "text-[rgb(var(--app-danger))]"
-      : "text-[rgb(var(--app-text-subtle))]";
-  return `w-full max-w-full truncate text-left text-[10px] leading-relaxed ${color} md:max-w-xs md:text-right`;
-}
-
 export function pullRequestInsightPreviewText(markdown: string): string {
   const fallback = "Open the latest insight details.";
   const meaningfulLine = markdown
@@ -288,14 +211,9 @@ export function pullRequestInsightPreviewText(markdown: string): string {
 
 function stripMarkdownLine(line: string): string {
   return line
-    .trim()
+    .replace(/^\s*[-*+]\s+/, "")
     .replace(/^#{1,6}\s+/, "")
-    .replace(/^>\s*/, "")
-    .replace(/^[-*+]\s+/, "")
-    .replace(/^\d+\.\s+/, "")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[*_`~]/g, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .trim();
 }

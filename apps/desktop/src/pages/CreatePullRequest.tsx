@@ -11,7 +11,6 @@ import {
   InlineNotice,
   WorkbenchPage,
 } from "../components/workbench/WorkbenchPrimitives.js";
-import { WorkbenchSelect } from "../components/workbench/WorkbenchPrimitives.js";
 import { TextInput } from "./settings/SettingsControls.js";
 
 /**
@@ -23,7 +22,8 @@ import { TextInput } from "./settings/SettingsControls.js";
 export default function CreatePullRequest(): JSX.Element {
   const navigate = useNavigate();
   const { projectLinks, projectLinksLoading } = useAppData();
-  const [projectLinkId, setProjectLinkId] = useState("");
+  const projectLink = projectLinks[0] ?? null;
+  const projectLinkId = projectLink?.id ?? "";
   const [sourceBranch, setSourceBranch] = useState("");
   const [targetBranch, setTargetBranch] = useState("main");
   const [title, setTitle] = useState("");
@@ -33,8 +33,6 @@ export default function CreatePullRequest(): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verification, setVerification] = useState<string[]>([]);
-
-  const projectLink = projectLinks.find((link) => link.id === projectLinkId) ?? null;
 
   const submit = useCallback(async () => {
     setError(null);
@@ -127,21 +125,14 @@ export default function CreatePullRequest(): JSX.Element {
       <div className="mt-4 space-y-3.5 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4">
         {projectLinksLoading ? (
           <p className="text-xs text-[rgb(var(--app-text-subtle))]">Loading Project Links...</p>
+        ) : projectLink ? (
+          <p className="text-xs text-[rgb(var(--app-text-muted))]">
+            Project Link:{" "}
+            <span className="font-medium text-[rgb(var(--app-text))]">{projectLink.name}</span>
+            {" "}(selected in Context)
+          </p>
         ) : (
-          <label className="block">
-            <span className="text-xs font-medium text-[rgb(var(--app-text))]">Project Link</span>
-            <WorkbenchSelect
-              aria-label="Project Link"
-              className="mt-1 w-full"
-              value={projectLinkId}
-              onChange={(event) => setProjectLinkId(event.target.value)}
-            >
-              <option value="">Select a Project Link</option>
-              {projectLinks.map((link) => (
-                <option key={link.id} value={link.id}>{link.name}</option>
-              ))}
-            </WorkbenchSelect>
-          </label>
+          <p className="text-xs text-[rgb(var(--app-text-subtle))]">Select a Project Link in Context</p>
         )}
         <div className="grid gap-3.5 sm:grid-cols-2">
           <TextInput label="Source branch" placeholder="feature/my-change" value={sourceBranch} onChange={setSourceBranch} />

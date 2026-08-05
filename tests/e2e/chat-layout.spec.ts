@@ -1411,7 +1411,8 @@ test.describe("Chat layout", () => {
     await expect(page.getByText("Refresh branch state")).toBeHidden();
     await expect(page.getByText("Include unstaged changes")).toBeVisible();
 
-    await page.getByLabel("Pinned Summary Project Link").click();
+    await expect(page.getByLabel("Pinned Summary Project Link")).toHaveCount(0);
+    await page.keyboard.press("Escape");
     await expect(page.getByText("Include unstaged changes")).toBeHidden();
   });
 
@@ -1514,7 +1515,8 @@ test.describe("Chat layout", () => {
       adoPat: "",
       adoMcpEnabled: false,
     });
-    await expect(page.getByLabel("Composer Project Link")).toHaveValue("created-claimbot-link");
+    await expect(page.getByTitle("Context manages the Project Link")).toHaveText("ClaimBot_API link");
+    await expect(page.locator('select[aria-label="Composer Project Link"]')).toHaveCount(0);
     await expect(page.getByPlaceholder("Ask MergePilot...")).toBeEnabled();
     await expectNoVisibleHorizontalOverflow(page);
   });
@@ -1623,7 +1625,8 @@ test.describe("Chat layout", () => {
     expect(discoveryPayloads.map((payload) => payload.kind)).toEqual(
       expect.arrayContaining(["projects", "repositories", "pipelines"]),
     );
-    await expect(page.getByLabel("Composer Project Link")).toHaveValue("created-claimbot-pipeline-link");
+    await expect(page.getByTitle("Context manages the Project Link")).toHaveText("ClaimBot_API link");
+    await expect(page.locator('select[aria-label="Composer Project Link"]')).toHaveCount(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
 
@@ -2427,8 +2430,8 @@ test.describe("Chat layout", () => {
     await expect(page.getByText("git add -- src/app.ts src/api.ts")).toBeVisible();
     await expect(page.getByRole("button", { name: "Yes, run this action" })).toBeVisible();
     await expect(environmentCard).toBeVisible();
-    await expect(page.getByLabel("Composer Project Link")).toHaveValue(profile.id);
-    await expect(page.getByLabel("Pinned Summary Project Link")).toHaveValue(profile.id);
+    await expect(page.getByTitle("Context manages the Project Link")).toHaveText(profile.name);
+    await expect(page.getByLabel("Pinned Summary Project Link")).toHaveCount(0);
     await expect(transcriptColumn).toBeVisible();
     await expect(approvalCard).toBeVisible();
     await expectNoVisibleHorizontalOverflow(page);
@@ -3972,9 +3975,13 @@ test.describe("Chat layout", () => {
 
   test("shows persisted PR insight lookup errors in the result workspace", async ({ page }) => {
     await seedSavedPrInsightSourceDraft(page);
+    // The composer no longer switches Project Links; simulate "no active link"
+    // the way Context would after a Project Link is removed.
+    await page.addInitScript(() => {
+      localStorage.removeItem("mergepilot_active_project_link_id");
+    });
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat");
-    await page.getByLabel("Composer Project Link").selectOption("");
 
     await page.getByRole("button", { name: "Open workspace" }).click();
 

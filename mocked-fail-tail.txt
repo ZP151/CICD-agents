@@ -1,0 +1,39 @@
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  34 failed
+    [chromium] › tests\e2e\chat-layout.spec.ts:1093:7 › Chat layout › @smoke @mocked keeps the project-linked chat shell inside the viewport 
+    [chromium] › tests\e2e\chat-layout.spec.ts:1112:7 › Chat layout › @smoke @mocked gives the chat workspace usable width when maximized 
+    [chromium] › tests\e2e\chat-layout.spec.ts:1133:7 › Chat layout › keeps the Project Link onboarding form usable on narrow screens 
+    [chromium] › tests\e2e\chat-layout.spec.ts:1154:7 › Chat layout › keeps empty New Chat free of preloaded command templates 
+    [chromium] › tests\e2e\chat-layout.spec.ts:1195:7 › Chat layout › shows branch divergence before commit or push actions 
+    [chromium] › tests\e2e\chat-layout.spec.ts:1276:7 › Chat layout › refreshes branch readiness from the synced progress follow-up 
+    [chromium] › tests\e2e\chat-layout.spec.ts:1419:7 › Chat layout › keeps the pinned summary hidden during empty Project Link onboarding 
+    [chromium] › tests\e2e\chat-layout.spec.ts:1447:7 › Chat layout › infers Azure DevOps fields while creating a Project Link from a local repo 
+    [chromium] › tests\e2e\chat-layout.spec.ts:1524:7 › Chat layout › recommends the ClaimBot_API pipeline during Project Link creation when multiple pipelines exist 
+    [chromium] › tests\e2e\chat-layout.spec.ts:1633:7 › Chat layout › sends image attachments from the compact composer add menu 
+    [chromium] › tests\e2e\chat-layout.spec.ts:1708:7 › Chat layout › accepts dropped image attachments in the composer 
+    [chromium] › tests\e2e\chat-layout.spec.ts:1767:7 › Chat layout › accepts pasted image attachments in the composer 
+    [chromium] › tests\e2e\chat-layout.spec.ts:2401:7 › Chat layout › shows approval composer notice and disables composer controls 
+    [chromium] › tests\e2e\chat-layout.spec.ts:2417:7 › Chat layout › keeps active Project Link long workflow transcript clear of the pinned summary 
+    [chromium] › tests\e2e\chat-layout.spec.ts:2440:7 › Chat layout › keeps suggestion replies hidden while a restored workflow is running 
+    [chromium] › tests\e2e\chat-layout.spec.ts:2453:7 › Chat layout › routes Git workflow follow-up chips as structured actions 
+    [chromium] › tests\e2e\chat-layout.spec.ts:2503:7 › Chat layout › routes review stage follow-up chip as a structured commit workflow 
+    [chromium] › tests\e2e\chat-layout.spec.ts:2557:7 › Chat layout › routes staged diff follow-up chip as a read-only workflow action 
+    [chromium] › tests\e2e\chat-layout.spec.ts:2605:7 › Chat layout › routes draft commit message follow-up chip as a read-only workflow action 
+    [chromium] › tests\e2e\chat-layout.spec.ts:2653:7 › Chat layout › routes change-scope follow-up chip as a read-only workflow action 
+    [chromium] › tests\e2e\chat-layout.spec.ts:2701:7 › Chat layout › routes remote-target follow-up chip as a read-only workflow action 
+    [chromium] › tests\e2e\chat-layout.spec.ts:2749:7 › Chat layout › routes pushed-commit summary follow-up chip as a read-only workflow action 
+    [chromium] › tests\e2e\chat-layout.spec.ts:2797:7 › Chat layout › routes validation failure analysis follow-up chip as a read-only workflow action 
+    [chromium] › tests\e2e\chat-layout.spec.ts:2856:7 › Chat layout › routes PR validation recovery chip as a structured CI recovery workflow action 
+    [chromium] › tests\e2e\chat-layout.spec.ts:2923:7 › Chat layout › shows right-panel PR readiness step states during an active workflow 
+    [chromium] › tests\e2e\chat-layout.spec.ts:2952:7 › Chat layout › renders tool lifecycle from UI stream chunks without legacy tool events 
+    [chromium] › tests\e2e\chat-layout.spec.ts:3104:7 › Chat layout › deduplicates legacy text and tool events after canonical UI chunks start 
+    [chromium] › tests\e2e\chat-layout.spec.ts:3211:7 › Chat layout › renders approval cards from canonical UI chunks without legacy approval events 
+    [chromium] › tests\e2e\chat-layout.spec.ts:3267:7 › Chat layout › renders long streamed markdown with sources and tool output 
+    [chromium] › tests\e2e\chat-layout.spec.ts:3453:7 › Chat layout › preserves manual history scroll when a delayed response arrives 
+    [chromium] › tests\e2e\chat-layout.spec.ts:3611:7 › Chat layout › releases the composer after a UI-stream-only finish 
+    [chromium] › tests\e2e\chat-layout.spec.ts:3666:7 › Chat layout › deduplicates legacy and UI stream error events 
+    [chromium] › tests\e2e\chat-layout.spec.ts:3911:7 › Chat layout › loads a saved PR insight artifact source into the result workspace 
+    [chromium] › tests\e2e\chat-layout.spec.ts:3976:7 › Chat layout › shows persisted PR insight lookup errors in the result workspace 
+  17 passed (6.7m)

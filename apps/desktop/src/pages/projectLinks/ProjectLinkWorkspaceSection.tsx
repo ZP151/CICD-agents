@@ -1,7 +1,7 @@
 import { useId } from "react";
 import type { ProjectLinkInput } from "../../api.js";
 import { ActionButton, WorkbenchTextInput } from "../../components/workbench/WorkbenchPrimitives.js";
-import { BranchSelect, Field } from "./ProjectLinkFormControls.js";
+import { Field } from "./ProjectLinkFormControls.js";
 
 interface ProjectLinkWorkspaceSectionProps {
   form: ProjectLinkInput;
@@ -87,26 +87,6 @@ export function ProjectLinkWorkspaceSection({
           </p>
         )}
       </div>
-      <div className={projectLinkBranchGridClass()}>
-        <BranchSelect
-          label="Default branch"
-          value={form.defaultBranch}
-          onChange={set("defaultBranch")}
-          branches={branches}
-          branchLoading={branchLoading}
-        />
-        <BranchSelect
-          label="Target branch (PRs)"
-          value={form.targetBranch}
-          onChange={set("targetBranch")}
-          branches={branches}
-          branchLoading={branchLoading}
-        />
-      </div>
     </section>
   );
-}
-
-export function projectLinkBranchGridClass(): string {
-  return "grid min-w-0 gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))]";
 }

@@ -389,9 +389,13 @@ describe("daemon validation artifact workflow routes", () => {
     expect(body.workflowState.pendingApproval).toBeUndefined();
     expect(body.summary).toContain("Architecture context prepared.");
     expect(body.summary).toContain("Project Link settings:");
-    expect(body.summary).toContain("Build command: npm run build");
+    // V2 Project Links no longer persist build/test commands, so the inline
+    // fixture commands are ignored and the summary only shows the fallback
+    // target branch.
+    expect(body.summary).not.toContain("Build command:");
+    expect(body.summary).not.toContain("Test command:");
+    expect(body.summary).toContain("Target branch: main");
     expect(body.summary).not.toContain("# Test project");
-    expect(body.summary).toContain("Test command: npm test");
     expect(body.summary).toContain("Repository context is ready for focused follow-up questions.");
     expect(body.summary).toContain("project structure signal");
     expect(body.summary).toContain("relevant source reference");
@@ -655,7 +659,9 @@ describe("daemon validation artifact workflow routes", () => {
     expect(body.workflowState.pendingApproval?.action.preflight).toMatchObject({
       kind: "validation",
       validationKind: "build",
-      commandSource: "project_link",
+      // V2 Project Links no longer persist build commands; the kind-mismatched
+      // artifact stays ignored and the default build command is used.
+      commandSource: "default",
       command: "npm run build",
     });
   });

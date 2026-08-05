@@ -15,28 +15,10 @@ export function addCiSuggestions(
   text: string,
   phase: string,
   add: AddSuggestion,
-  rawText = text,
 ): void {
   if (context.workflowKind !== "ci") return;
-  if (phase.includes("pipeline_setup_required") || text.includes("no azure pipeline is configured")) {
-    const candidates = pipelineCandidatesFromText(rawText);
-    const configuredPipelineId = context.adoPipelineId?.trim();
-    for (const candidate of candidates.filter((item) => item.id !== configuredPipelineId).slice(0, 3)) {
-      add(
-        `ci-use-pipeline-${candidate.id}`,
-        `Use #${candidate.id} ${candidate.name}`,
-        `Save Azure Pipeline #${candidate.id} ${candidate.name} to this Project Link.`,
-        {
-          kind: "project_link_update",
-          update: {
-            adoPipelineId: candidate.id,
-            adoPipelineName: candidate.name,
-          },
-        },
-      );
-    }
-    if (candidates.length > 0) return;
-  }
+  // V2 Project Links never persist pipeline fields, so pipeline-save
+  // suggestions are no longer offered.
   const pipelineFailure = phase.includes("pipeline") && /\b(failed|failure|canceled|cancelled)\b/.test(text);
   const failed = phase.includes("failed") || /\b(test|build|validation).{0,32}\bfailed\b/.test(text);
   const isBuild = phase.includes("build") || /\bbuild failed\b/.test(text);
@@ -90,28 +72,6 @@ export function addCiSuggestions(
       action: "inspect_pr_insight",
     });
   }
-}
-
-function pipelineCandidatesFromText(text: string): Array<{ id: string; name: string }> {
-  const candidates: Array<{ id: string; name: string }> = [];
-  const seen = new Set<string>();
-  const candidatePattern = /(?:^|\n)\s*[-*]?\s*#(\d+)\s+([^\n#-][^\n]*?)(?=\s+-\s+|\r?\n|$)/g;
-  for (const match of text.matchAll(candidatePattern)) {
-    const id = match[1]?.trim() ?? "";
-    const name = cleanPipelineCandidateName(match[2] ?? "");
-    if (!id || !name || seen.has(id)) continue;
-    seen.add(id);
-    candidates.push({ id, name });
-  }
-  return candidates;
-}
-
-function cleanPipelineCandidateName(value: string): string {
-  return value
-    .replace(/\s+·\s+.*$/, "")
-    .replace(/\s+repo:.*$/i, "")
-    .trim()
-    .slice(0, 80);
 }
 
 export function addCommitSuggestions(

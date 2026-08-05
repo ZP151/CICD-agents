@@ -388,7 +388,7 @@ describe("deriveSuggestionReplies", () => {
     expect(suggestions[2]?.action).toEqual({ kind: "workspace_action", action: "run_tests" });
   });
 
-  it("suggests saving a discovered pipeline candidate when setup is required", () => {
+  it("no longer offers to save a discovered pipeline candidate (V2 Project Links never persist pipeline fields)", () => {
     const suggestions = deriveSuggestionReplies({
       workflowKind: "ci",
       workflowPhase: "pipeline_setup_required",
@@ -402,16 +402,7 @@ describe("deriveSuggestionReplies", () => {
       ].join("\n"),
     });
 
-    expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
-      "Use #117 ClaimBot_API",
-    ]);
-    expect(suggestions[0]?.action).toEqual({
-      kind: "project_link_update",
-      update: {
-        adoPipelineId: "117",
-        adoPipelineName: "ClaimBot_API",
-      },
-    });
+    expect(suggestions).toEqual([]);
   });
 
   it("does not suggest saving the already configured pipeline candidate", () => {

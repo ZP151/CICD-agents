@@ -176,8 +176,12 @@ describe("ADO Project Link discovery state", () => {
     });
   });
 
-  it("applies a discovered pipeline id and name", () => {
-    const next = applyAdoDiscoveryToProjectLinkInput({} as ProjectLink, "pipelines", {
+  it("does not apply a discovered pipeline to the form (V2 Project Links never persist pipeline fields)", () => {
+    const next = applyAdoDiscoveryToProjectLinkInput({
+      adoOrgUrl: "https://dev.azure.com/example/",
+      adoProject: "Claims",
+      adoRepoName: "claimbot_api",
+    } as ProjectLink, "pipelines", {
       id: "117",
       name: "ClaimBot_API",
       description: "",
@@ -185,9 +189,12 @@ describe("ADO Project Link discovery state", () => {
     });
 
     expect(next).toMatchObject({
-      adoPipelineId: "117",
-      adoPipelineName: "ClaimBot_API",
+      adoOrgUrl: "https://dev.azure.com/example/",
+      adoProject: "Claims",
+      adoRepoName: "claimbot_api",
     });
+    expect(next.adoPipelineId ?? "").toBe("");
+    expect(next.adoPipelineName ?? "").toBe("");
   });
 });
 

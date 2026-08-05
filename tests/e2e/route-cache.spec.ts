@@ -540,8 +540,8 @@ test.describe("workspace route caching", () => {
 
     await page.goto("/#/chat");
     await expect(page.getByRole("button", { name: "Understand this project" })).toBeVisible();
-    await page.getByLabel("Composer Project Link").selectOption(secondaryProjectLink.id);
-    await expect(page.getByLabel("Composer Project Link")).toHaveValue(secondaryProjectLink.id);
+    await expect(page.getByTitle("Context manages the Project Link")).toHaveText(projectLink.name);
+    await expect(page.locator('select[aria-label="Composer Project Link"]')).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Understand this project" })).toBeVisible();
     await expect(page.locator(".animate-pulse")).toHaveCount(0);
     await page.waitForTimeout(120);
@@ -822,7 +822,7 @@ test.describe("workspace route caching", () => {
 
     await page.goto("/#/pulls");
     await expect(page.getByText("Update CommonFunctions.cs and ClaimController.cs")).toBeVisible();
-    await expect(page.getByLabel("Pull Requests Project Link")).toBeVisible();
+    await expect(page.getByLabel("Pull Requests Project Link")).toHaveCount(0);
     await expect(page.getByLabel("Pull Requests status")).toBeVisible();
     await expect(page.getByText("Author")).toBeVisible();
     await expect(page.getByText("Reviewers")).toBeVisible();
@@ -830,7 +830,7 @@ test.describe("workspace route caching", () => {
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
     await page.setViewportSize({ width: 760, height: 760 });
-    await expect(page.getByLabel("Pull Requests Project Link")).toBeVisible();
+    await expect(page.getByLabel("Pull Requests Project Link")).toHaveCount(0);
     await expect(page.getByLabel("Pull Requests status")).toBeVisible();
     await expect(page.getByText("Author")).toBeVisible();
     await expect(page.getByText("Reviewers")).toBeVisible();
@@ -1090,7 +1090,13 @@ test.describe("workspace route caching", () => {
 
     await page.goto("/#/pulls");
     await expect(page.getByText("Update CommonFunctions.cs and ClaimController.cs")).toBeVisible();
-    await page.getByLabel("Pull Requests Project Link").selectOption(secondaryProjectLink.id);
+    // The Pull Requests header no longer switches Project Links; the page
+    // follows the active Project Link selected in Context, so the switch is
+    // driven through shared storage.
+    await page.evaluate((id) => {
+      localStorage.setItem("mergepilot_active_project_link_id", id);
+    }, secondaryProjectLink.id);
+    await page.reload();
     await expect(page.getByText("Update CommonFunctions.cs and ClaimController.cs")).toBeHidden();
     await expect(page.getByLabel("Preparing pull requests")).toBeVisible();
     releaseSecondaryPulls?.();
@@ -1472,8 +1478,15 @@ test.describe("workspace route caching", () => {
     );
 
     await page.goto("/#/pulls");
-    await page.getByLabel("Pull Requests Project Link").selectOption("");
     await expect(page.getByText("Primary duplicate PR")).toBeVisible();
+    await expect(page.getByText("Secondary duplicate PR")).toHaveCount(0);
+    // The Pull Requests header no longer offers an "all links" aggregate; the
+    // page follows the active Project Link, so switch through shared storage
+    // and verify each link keeps its own distinct PR #2670.
+    await page.evaluate((id) => {
+      localStorage.setItem("mergepilot_active_project_link_id", id);
+    }, secondaryProjectLink.id);
+    await page.reload();
     await expect(page.getByText("Secondary duplicate PR")).toBeVisible();
     const secondaryCard = page.locator("article").filter({ hasText: "Secondary duplicate PR" });
     await secondaryCard.getByRole("button", { name: "Open insight" }).click();

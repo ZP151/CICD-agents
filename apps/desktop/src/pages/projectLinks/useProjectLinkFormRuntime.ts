@@ -14,7 +14,6 @@ import {
   applyAzureDevOpsRemoteSuggestion,
   fetchAzureDevOpsRemoteSuggestion,
   fetchGitBranches,
-  pickRecommendedPipeline,
   withoutProjectLinkFallbacks,
 } from "../../projectLinks.js";
 import {
@@ -108,12 +107,9 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
     setDiscoveryError(null);
     setDiscoveryFailure(null);
     if (kind === "projects") {
-      setDiscovered((current) => ({ ...current, repositories: [], pipelines: [] }));
+      setDiscovered((current) => ({ ...current, repositories: [] }));
       setForm((current) => applyAdoDiscoveryToProjectLinkInput(current, kind, option));
     } else if (kind === "repositories") {
-      setDiscovered((current) => ({ ...current, pipelines: [] }));
-      setForm((current) => applyAdoDiscoveryToProjectLinkInput(current, kind, option));
-    } else if (kind === "pipelines") {
       setForm((current) => applyAdoDiscoveryToProjectLinkInput(current, kind, option));
     }
   }, []);
@@ -132,14 +128,6 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
       const result = await discoverAdoProjectLinkOptions(kind, withoutProjectLinkFallbacks(form));
       setDiscovered((current) => ({ ...current, [kind]: result.items }));
       if (result.items.length === 1) applyDiscovery(kind, result.items[0]!);
-      if (kind === "pipelines" && result.items.length > 1) {
-        const recommended = pickRecommendedPipeline(result.items, {
-          repoPath: form.repoPath,
-          adoRepoName: form.adoRepoName,
-          adoProject: form.adoProject,
-        });
-        if (recommended) applyDiscovery(kind, recommended);
-      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setDiscoveryError(message);
@@ -178,14 +166,6 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
     return () => clearTimeout(timer);
   }, [form.adoOrgUrl, form.adoProject, runDiscovery]);
 
-  useEffect(() => {
-    if (!form.adoOrgUrl.trim() || !form.adoProject.trim() || !form.adoRepoName.trim()) return;
-    const timer = setTimeout(() => {
-      void runDiscovery("pipelines", "auto");
-    }, 650);
-    return () => clearTimeout(timer);
-  }, [form.adoOrgUrl, form.adoProject, form.adoRepoName, runDiscovery]);
-
   /**
    * User-triggered inline OAuth recovery (MP-001). Never called from a
    * typing/debounce path: the browser only opens on an explicit click.
@@ -221,7 +201,7 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
   const setManualProject = useCallback((value: string) => {
     setDiscoveryError(null);
     setDiscoveryFailure(null);
-    setDiscovered((current) => ({ ...current, repositories: [], pipelines: [] }));
+    setDiscovered((current) => ({ ...current, repositories: [] }));
     setForm((current) => ({
       ...current,
       adoProject: value,
@@ -232,20 +212,9 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
   const setManualRepository = useCallback((value: string) => {
     setDiscoveryError(null);
     setDiscoveryFailure(null);
-    setDiscovered((current) => ({ ...current, pipelines: [] }));
     setForm((current) => ({
       ...current,
       adoRepoName: value,
-    }));
-  }, []);
-
-  const setManualPipeline = useCallback((value: string) => {
-    setDiscoveryError(null);
-    setDiscoveryFailure(null);
-    setForm((current) => ({
-      ...current,
-      adoPipelineId: current.adoPipelineName === value ? current.adoPipelineId : "",
-      adoPipelineName: value,
     }));
   }, []);
 
@@ -277,6 +246,5 @@ export function useProjectLinkFormRuntime(initial: ProjectLinkInput) {
     runDiscovery,
     setManualProject,
     setManualRepository,
-    setManualPipeline,
   };
 }
