@@ -302,7 +302,7 @@ function workflowChatSse(args: {
   for (const tool of args.tools) {
     events.push(
       { event: "turn.tool.started", data: { type: "turn.tool.started", turnId: "mock-turn", sequence: sequence++, emittedAt: now, groupId: "mock-group", commandId: tool.id, name: tool.name, args: tool.input ?? {} } },
-      { event: "turn.tool.completed", data: { type: "turn.tool.completed", turnId: "mock-turn", sequence: sequence++, emittedAt: now, groupId: "mock-group", commandId: tool.id, name: tool.name, ok: true, summary: tool.summary ?? "Success", output: JSON.stringify(tool.output ?? {}) } },
+      { event: "turn.tool.completed", data: { type: "turn.tool.completed", turnId: "mock-turn", sequence: sequence++, emittedAt: now, groupId: "mock-group", commandId: tool.id, name: tool.name, ok: true, summary: tool.summary ?? "Success", output: typeof tool.output === "string" ? tool.output : JSON.stringify(tool.output ?? {}) } },
     );
   }
   events.push(
@@ -1142,11 +1142,13 @@ test.describe("Chat layout", () => {
     await page.goto("/chat?new=1");
 
     await expect(page.getByText("Start with a focused prompt")).toBeVisible();
-    await page.getByRole("button", { name: "Create Project Link" }).click();
+    await page.getByText("Connect a project").click();
     await expect(page.getByPlaceholder("web-app production")).toBeVisible();
     await expect(page.getByPlaceholder("C:\\projects\\my-app")).toBeVisible();
-    await expect(page.getByText("Default branch")).toBeVisible();
-    await expect(page.getByText("PR target branch")).toBeVisible();
+    // V2 Project Link creation saves only the stable identity mapping: the
+    // Default branch / PR target branch fields are gone from the form.
+    await expect(page.getByText("Default branch")).toHaveCount(0);
+    await expect(page.getByText("PR target branch")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Create and use" })).toBeVisible();
     await expectNoVisibleHorizontalOverflow(page);
   });
@@ -1156,6 +1158,28 @@ test.describe("Chat layout", () => {
   }) => {
     const workflowPayloads: Array<Record<string, unknown>> = [];
 
+    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      workflowPayloads.push(payload);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          action: payload.action,
+          repoPath: payload.repoPath,
+          summary: "Commit preparation prepared",
+          workflowState: {
+            status: "done",
+            workflowKind: "commit",
+            workflowPhase: "prepared",
+            currentStep: "Commit prepared",
+            completedTools: [],
+          },
+          tools: [],
+        }),
+      });
+    });
 
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
@@ -1192,7 +1216,7 @@ test.describe("Chat layout", () => {
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("shows branch divergence before commit or push actions", async ({ page }) => {
+  test("keeps commit actions enabled without branch divergence gating", async ({ page }) => {
     const workflowPayloads: Array<Record<string, unknown>> = [];
     await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
       const payload = await route.request().postDataJSON();
@@ -1258,18 +1282,15 @@ test.describe("Chat layout", () => {
 
     await openPinnedSummary(page);
     await page.getByRole("button", { name: "Commit or push" }).click();
-    await expect(page.getByText("Diverged: 1 ahead, 2 behind")).toBeVisible();
+    // Context no longer shows divergence: the notice and the sync-branch
+    // action were removed, and commit/push actions are never divergence-gated.
+    await expect(page.getByText("Diverged: 1 ahead, 2 behind")).toHaveCount(0);
     await expect(page.getByText("Include unstaged changes")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Pull with rebase before pushing" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Pull with rebase before pushing" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Prepare commit", exact: true })).toBeEnabled();
-    await expect(page.getByRole("button", { name: "Prepare commit and push" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Push branch" })).toBeDisabled();
-    await page.getByRole("button", { name: "Pull with rebase before pushing" }).click();
-    await expect.poll(() => workflowPayloads.length).toBe(1);
-    expect(workflowPayloads[0]).toMatchObject({
-      action: "sync_branch_rebase",
-      branch: "main",
-    });
+    await expect(page.getByRole("button", { name: "Prepare commit and push" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Push branch" })).toBeEnabled();
+    await page.keyboard.press("Escape");
     await expectNoVisibleHorizontalOverflow(page);
   });
 
@@ -1341,7 +1362,7 @@ test.describe("Chat layout", () => {
     if (await collapseCodePanel.count()) await collapseCodePanel.click();
 
     await openPinnedSummary(page);
-    await page.getByRole("button", { name: "Progress" }).click();
+    await page.getByLabel("Workspace summary").getByText("Progress").click();
     const refreshProgressStep = page
       .locator('button[data-workflow-step-state="idle"]')
       .filter({ hasText: "Refresh branch status" });
@@ -1435,7 +1456,7 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
 
-    await expect(page.getByText("Connect a Project Link to run workspace actions")).toBeVisible();
+    await expect(page.getByText("Connect a project")).toBeVisible();
     await expect(page.getByText("No Project Link yet — create one above")).toHaveCount(0);
     await expect(page.getByPlaceholder("Create or select a Project Link first...")).toHaveCount(0);
     await expect(page.getByLabel("Send message")).toHaveCount(0);
@@ -1498,7 +1519,7 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
 
-    await page.getByRole("button", { name: /Create/ }).click();
+    await page.getByText("Connect a project").click();
     await page.getByPlaceholder("C:\\projects\\my-app").fill(repoPath);
     await expect(page.getByText("2 branches found")).toBeVisible({ timeout: 5_000 });
     await page.getByRole("button", { name: "Create and use" }).click();
@@ -1507,21 +1528,25 @@ test.describe("Chat layout", () => {
     expect(createPayloads[0]).toMatchObject({
       name: "ClaimBot_API link",
       repoPath,
-      defaultBranch: "main",
-      targetBranch: "main",
       adoOrgUrl: "https://dev.azure.com/example/",
       adoProject: "Claims",
       adoRepoName: "ClaimBot_API",
       adoPat: "",
-      adoMcpEnabled: false,
     });
+    // V2 Project Links persist only the stable identity mapping; branch and
+    // connector fields are no longer written from the create form.
+    expect(createPayloads[0]).not.toHaveProperty("defaultBranch");
+    expect(createPayloads[0]).not.toHaveProperty("targetBranch");
+    expect(createPayloads[0]).not.toHaveProperty("adoPipelineId");
+    expect(createPayloads[0]).not.toHaveProperty("adoPipelineName");
+    expect(createPayloads[0]).not.toHaveProperty("adoMcpEnabled");
     await expect(page.getByTitle("Context manages the Project Link")).toHaveText("ClaimBot_API link");
     await expect(page.locator('select[aria-label="Composer Project Link"]')).toHaveCount(0);
     await expect(page.getByPlaceholder("Ask MergePilot...")).toBeEnabled();
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("recommends the ClaimBot_API pipeline during Project Link creation when multiple pipelines exist", async ({ page }) => {
+  test("keeps Project Link creation free of pipeline discovery and fields", async ({ page }) => {
     const repoPath = "C:\\work\\ClaimBot_API";
     const createPayloads: Array<Record<string, unknown>> = [];
     const discoveryPayloads: Array<Record<string, unknown>> = [];
@@ -1602,14 +1627,16 @@ test.describe("Chat layout", () => {
 
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
-    await page.getByRole("button", { name: /Create/ }).click();
+    await page.getByText("Connect a project").click();
     await page.getByPlaceholder("C:\\projects\\my-app").fill(repoPath);
     await expect(page.getByText("1 branches found")).toBeVisible({ timeout: 5_000 });
     await page.getByRole("button", { name: "Azure DevOps" }).click();
 
     await page.locator('select[aria-label="Azure DevOps project"]').selectOption("Claims", { timeout: 8_000 });
     await page.locator('select[aria-label="Azure DevOps repository"]').selectOption("ClaimBot_API", { timeout: 8_000 });
-    await expect(page.locator('select[aria-label="Azure Pipeline"]')).toHaveValue("117", { timeout: 8_000 });
+    // V2 Project Links never discover or persist pipeline fields: the
+    // pipeline selector is gone even when multiple pipelines exist.
+    await expect(page.locator('select[aria-label="Azure Pipeline"]')).toHaveCount(0);
     await page.getByRole("button", { name: "Create and use" }).click();
 
     await expect.poll(() => createPayloads.length).toBe(1);
@@ -1619,12 +1646,13 @@ test.describe("Chat layout", () => {
       adoOrgUrl: "https://tebssg.visualstudio.com/",
       adoProject: "Claims",
       adoRepoName: "ClaimBot_API",
-      adoPipelineId: "117",
-      adoPipelineName: "ClaimBot_API",
     });
+    expect(createPayloads[0]).not.toHaveProperty("adoPipelineId");
+    expect(createPayloads[0]).not.toHaveProperty("adoPipelineName");
     expect(discoveryPayloads.map((payload) => payload.kind)).toEqual(
-      expect.arrayContaining(["projects", "repositories", "pipelines"]),
+      expect.arrayContaining(["projects", "repositories"]),
     );
+    expect(discoveryPayloads.map((payload) => payload.kind)).not.toContain("pipelines");
     await expect(page.getByTitle("Context manages the Project Link")).toHaveText("ClaimBot_API link");
     await expect(page.locator('select[aria-label="Composer Project Link"]')).toHaveCount(0);
     await expectNoVisibleHorizontalOverflow(page);
@@ -1637,24 +1665,13 @@ test.describe("Chat layout", () => {
       await route.fulfill({
         status: 200,
         contentType: "text/event-stream",
-        body: sse([
-          { event: "ui.chunk", data: { type: "ui.chunk", chunk: { type: "start" } } },
-          { event: "session", data: { sessionId: "image-attachment-session" } },
-          {
-            event: "done",
-            data: {
-              type: "done",
-              result: {
-                response: "Image received.",
-                streamedResponse: "Image received.",
-                finalizationMode: "agent_final",
-                riskLevel: "low",
-                actionsTaken: [],
-                suggestions: [],
-              },
-            },
-          },
-        ]),
+        body: workflowChatSse({
+          sessionId: "image-attachment-session",
+          textId: "image-attachment-text",
+          summary: "Image received.",
+          workflowState: {},
+          tools: [],
+        }),
       });
     });
 
@@ -1712,24 +1729,13 @@ test.describe("Chat layout", () => {
       await route.fulfill({
         status: 200,
         contentType: "text/event-stream",
-        body: sse([
-          { event: "ui.chunk", data: { type: "ui.chunk", chunk: { type: "start" } } },
-          { event: "session", data: { sessionId: "dropped-image-session" } },
-          {
-            event: "done",
-            data: {
-              type: "done",
-              result: {
-                response: "Dropped image received.",
-                streamedResponse: "Dropped image received.",
-                finalizationMode: "agent_final",
-                riskLevel: "low",
-                actionsTaken: [],
-                suggestions: [],
-              },
-            },
-          },
-        ]),
+        body: workflowChatSse({
+          sessionId: "dropped-image-session",
+          textId: "dropped-image-text",
+          summary: "Dropped image received.",
+          workflowState: {},
+          tools: [],
+        }),
       });
     });
 
@@ -1771,24 +1777,13 @@ test.describe("Chat layout", () => {
       await route.fulfill({
         status: 200,
         contentType: "text/event-stream",
-        body: sse([
-          { event: "ui.chunk", data: { type: "ui.chunk", chunk: { type: "start" } } },
-          { event: "session", data: { sessionId: "pasted-image-session" } },
-          {
-            event: "done",
-            data: {
-              type: "done",
-              result: {
-                response: "Pasted image received.",
-                streamedResponse: "Pasted image received.",
-                finalizationMode: "agent_final",
-                riskLevel: "low",
-                actionsTaken: [],
-                suggestions: [],
-              },
-            },
-          },
-        ]),
+        body: workflowChatSse({
+          sessionId: "pasted-image-session",
+          textId: "pasted-image-text",
+          summary: "Pasted image received.",
+          workflowState: {},
+          tools: [],
+        }),
       });
     });
 
@@ -2398,15 +2393,15 @@ test.describe("Chat layout", () => {
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("shows approval composer notice and disables composer controls", async ({ page }) => {
+  test("shows the pending approval state and disables composer controls", async ({ page }) => {
     await seedPendingApprovalDraft(page);
     await page.setViewportSize({ width: 1100, height: 780 });
     await page.goto("/chat");
 
-    await expect(page.getByRole("button", { name: /^Waiting for approval 2/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^Waiting for approval Prepare/ })).toBeVisible();
-    await expect(page.getByText("Approval required").first()).toBeVisible();
-    await expect(page.getByText("Stage selected files for commit").first()).toBeVisible();
+    // The restored pending approval surfaces as the locked composer: the
+    // legacy tool bubbles and their attached approval card are no longer
+    // replayed in the transcript, and there is no approval notice button.
+    await expect(page.getByText("Approval required")).toHaveCount(0);
     await expect(page.getByPlaceholder(/Approve or cancel the pending action/)).toBeDisabled();
     await expect(page.getByTitle("Finish the current approval first.")).toHaveCount(4);
     await expect(page.getByTitle("Finish the current approval first.").first()).toBeDisabled();
@@ -2422,13 +2417,15 @@ test.describe("Chat layout", () => {
 
     const transcriptColumn = page.locator(".middle-panel-inner");
     const environmentCard = page.locator(".pointer-events-auto.rounded-2xl").filter({ hasText: "Environment" }).first();
-    const approvalCard = page.getByText("Approve this command?").locator("xpath=ancestor::section[1]");
+    const approvalCard = page.locator('[data-testid="pending-action-card"]');
 
     await expect(page.getByText("Review my changes and stage the safe files")).toBeVisible();
-    await expect(page.getByRole("button", { name: /Waiting for approval 3 commands/ })).toBeVisible();
+    // The pending state is the restored approval card plus a locked composer
+    // (the old "Waiting for approval N commands" notice button is gone).
+    await expect(page.getByPlaceholder(/Approve or cancel the pending action/)).toBeDisabled();
     await expect(page.getByText("The diff is focused on local API wiring")).toBeVisible();
     await expect(page.getByText("git add -- src/app.ts src/api.ts")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Yes, run this action" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Approve and run" })).toBeVisible();
     await expect(environmentCard).toBeVisible();
     await expect(page.getByTitle("Context manages the Project Link")).toHaveText(profile.name);
     await expect(page.getByLabel("Pinned Summary Project Link")).toHaveCount(0);
@@ -2442,7 +2439,7 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1100, height: 780 });
     await page.goto("/chat");
 
-    await expect(page.getByPlaceholder("MergePilot is working...")).toBeDisabled();
+    await expect(page.getByPlaceholder("MergePilot is thinking...")).toBeDisabled();
     await expect(page.getByRole("button", { name: "Send" })).toBeDisabled();
 
     await expect(page.getByRole("button", { name: "Draft commit message" })).toHaveCount(0);
@@ -2450,7 +2447,7 @@ test.describe("Chat layout", () => {
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("routes Git workflow follow-up chips as structured actions", async ({ page }) => {
+  test("fills the composer from Git workflow follow-up chips without hidden actions", async ({ page }) => {
     const workflowPayloads: Array<Record<string, unknown>> = [];
     let chatRequestCount = 0;
     await seedFetchedGitWorkflowDraft(page);
@@ -2494,13 +2491,17 @@ test.describe("Chat layout", () => {
     await expect(pushFollowUp).toBeVisible();
     await pushFollowUp.click();
 
-    await expect.poll(() => workflowPayloads.length).toBe(1);
-    expect(workflowPayloads[0]).toMatchObject({ action: "push_branch" });
+    // Suggestion chips are composer prompts, not hidden workflow executions:
+    // the click fills the composer and never fires a workflow-action request.
+    await expect(page.getByPlaceholder(/Ask MergePilot/)).toHaveValue(
+      "Prepare a push approval after checking branch readiness.",
+    );
+    expect(workflowPayloads).toHaveLength(0);
     expect(chatRequestCount).toBe(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("routes review stage follow-up chip as a structured commit workflow", async ({ page }) => {
+  test("fills the composer from the review stage follow-up chip without hidden actions", async ({ page }) => {
     const workflowPayloads: Array<Record<string, unknown>> = [];
     let chatRequestCount = 0;
     await seedReviewedChangesDraft(page);
@@ -2544,17 +2545,17 @@ test.describe("Chat layout", () => {
     await expect(stageFollowUp).toBeVisible();
     await stageFollowUp.click();
 
-    await expect.poll(() => workflowPayloads.length).toBe(1);
-    expect(workflowPayloads[0]).toMatchObject({
-      action: "prepare_commit",
-      includeUnstaged: true,
-      commitMode: "commit",
-    });
+    // Suggestion chips are composer prompts, not hidden workflow executions:
+    // the click fills the composer and never fires a workflow-action request.
+    await expect(page.getByPlaceholder(/Ask MergePilot/)).toHaveValue(
+      "Stage only the files that belong to the reviewed change scope.",
+    );
+    expect(workflowPayloads).toHaveLength(0);
     expect(chatRequestCount).toBe(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("routes staged diff follow-up chip as a read-only workflow action", async ({ page }) => {
+  test("fills the composer from the staged diff follow-up chip without hidden actions", async ({ page }) => {
     const workflowPayloads: Array<Record<string, unknown>> = [];
     let chatRequestCount = 0;
     await seedCommitReadyDraft(page);
@@ -2596,13 +2597,17 @@ test.describe("Chat layout", () => {
     await expect(stagedDiffFollowUp).toBeVisible();
     await stagedDiffFollowUp.click();
 
-    await expect.poll(() => workflowPayloads.length).toBe(1);
-    expect(workflowPayloads[0]).toMatchObject({ action: "inspect_staged_changes" });
+    // Suggestion chips are composer prompts, not hidden workflow executions:
+    // the click fills the composer and never fires a workflow-action request.
+    await expect(page.getByPlaceholder(/Ask MergePilot/)).toHaveValue(
+      "Show the staged diff and summarize commit risk.",
+    );
+    expect(workflowPayloads).toHaveLength(0);
     expect(chatRequestCount).toBe(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("routes draft commit message follow-up chip as a read-only workflow action", async ({ page }) => {
+  test("fills the composer from the draft commit message follow-up chip without hidden actions", async ({ page }) => {
     const workflowPayloads: Array<Record<string, unknown>> = [];
     let chatRequestCount = 0;
     await seedCommitReadyDraft(page);
@@ -2644,13 +2649,17 @@ test.describe("Chat layout", () => {
     await expect(draftMessageFollowUp).toBeVisible();
     await draftMessageFollowUp.click();
 
-    await expect.poll(() => workflowPayloads.length).toBe(1);
-    expect(workflowPayloads[0]).toMatchObject({ action: "draft_commit_message" });
+    // Suggestion chips are composer prompts, not hidden workflow executions:
+    // the click fills the composer and never fires a workflow-action request.
+    await expect(page.getByPlaceholder(/Ask MergePilot/)).toHaveValue(
+      "Generate a commit message from the staged changes.",
+    );
+    expect(workflowPayloads).toHaveLength(0);
     expect(chatRequestCount).toBe(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("routes change-scope follow-up chip as a read-only workflow action", async ({ page }) => {
+  test("fills the composer from the change-scope follow-up chip without hidden actions", async ({ page }) => {
     const workflowPayloads: Array<Record<string, unknown>> = [];
     let chatRequestCount = 0;
     await seedCommitReadyDraft(page);
@@ -2692,13 +2701,17 @@ test.describe("Chat layout", () => {
     await expect(changeScopeFollowUp).toBeVisible();
     await changeScopeFollowUp.click();
 
-    await expect.poll(() => workflowPayloads.length).toBe(1);
-    expect(workflowPayloads[0]).toMatchObject({ action: "explain_change_scope" });
+    // Suggestion chips are composer prompts, not hidden workflow executions:
+    // the click fills the composer and never fires a workflow-action request.
+    await expect(page.getByPlaceholder(/Ask MergePilot/)).toHaveValue(
+      "Explain what is included in this commit.",
+    );
+    expect(workflowPayloads).toHaveLength(0);
     expect(chatRequestCount).toBe(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("routes remote-target follow-up chip as a read-only workflow action", async ({ page }) => {
+  test("fills the composer from the remote-target follow-up chip without hidden actions", async ({ page }) => {
     const workflowPayloads: Array<Record<string, unknown>> = [];
     let chatRequestCount = 0;
     await seedPushReadyDraft(page);
@@ -2740,13 +2753,17 @@ test.describe("Chat layout", () => {
     await expect(remoteTargetFollowUp).toBeVisible();
     await remoteTargetFollowUp.click();
 
-    await expect.poll(() => workflowPayloads.length).toBe(1);
-    expect(workflowPayloads[0]).toMatchObject({ action: "inspect_remote_target" });
+    // Suggestion chips are composer prompts, not hidden workflow executions:
+    // the click fills the composer and never fires a workflow-action request.
+    await expect(page.getByPlaceholder(/Ask MergePilot/)).toHaveValue(
+      "Show the remote branch target and push command.",
+    );
+    expect(workflowPayloads).toHaveLength(0);
     expect(chatRequestCount).toBe(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("routes pushed-commit summary follow-up chip as a read-only workflow action", async ({ page }) => {
+  test("fills the composer from the pushed-commit summary follow-up chip without hidden actions", async ({ page }) => {
     const workflowPayloads: Array<Record<string, unknown>> = [];
     let chatRequestCount = 0;
     await seedPushedCommitDraft(page);
@@ -2788,13 +2805,17 @@ test.describe("Chat layout", () => {
     await expect(summarizePushFollowUp).toBeVisible();
     await summarizePushFollowUp.click();
 
-    await expect.poll(() => workflowPayloads.length).toBe(1);
-    expect(workflowPayloads[0]).toMatchObject({ action: "inspect_latest_commit" });
+    // Suggestion chips are composer prompts, not hidden workflow executions:
+    // the click fills the composer and never fires a workflow-action request.
+    await expect(page.getByPlaceholder(/Ask MergePilot/)).toHaveValue(
+      "Summarize the commit and push that just completed.",
+    );
+    expect(workflowPayloads).toHaveLength(0);
     expect(chatRequestCount).toBe(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("routes validation failure analysis follow-up chip as a read-only workflow action", async ({ page }) => {
+  test("fills the composer from the validation failure follow-up chip without hidden actions", async ({ page }) => {
     const workflowPayloads: Array<Record<string, unknown>> = [];
     let chatRequestCount = 0;
     await seedValidationFailureDraft(page);
@@ -2847,13 +2868,17 @@ test.describe("Chat layout", () => {
     await expect(analyzeFailureFollowUp).toBeVisible();
     await analyzeFailureFollowUp.click();
 
-    await expect.poll(() => workflowPayloads.length).toBe(1);
-    expect(workflowPayloads[0]).toMatchObject({ action: "inspect_validation_failure" });
+    // Suggestion chips are composer prompts, not hidden workflow executions:
+    // the click fills the composer and never fires a workflow-action request.
+    await expect(page.getByPlaceholder(/Ask MergePilot/)).toHaveValue(
+      "Analyze the latest validation failure report and suggest the smallest safe fix or rerun.",
+    );
+    expect(workflowPayloads).toHaveLength(0);
     expect(chatRequestCount).toBe(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("routes PR validation recovery chip as a structured CI recovery workflow action", async ({ page }) => {
+  test("fills the composer from the PR validation recovery chip without hidden actions", async ({ page }) => {
     const workflowPayloads: Array<Record<string, unknown>> = [];
     let chatRequestCount = 0;
     await seedPrCiRecoveryDraft(page);
@@ -2914,8 +2939,12 @@ test.describe("Chat layout", () => {
     await expect(validationRecoveryFollowUp).toBeVisible();
     await validationRecoveryFollowUp.click();
 
-    await expect.poll(() => workflowPayloads.length).toBe(1);
-    expect(workflowPayloads[0]).toMatchObject({ action: "inspect_ci_recovery_context" });
+    // Suggestion chips are composer prompts, not hidden workflow executions:
+    // the click fills the composer and never fires a workflow-action request.
+    await expect(page.getByPlaceholder(/Ask MergePilot/)).toHaveValue(
+      "Analyze validation failure context together with PR readiness, policy, and linked work items.",
+    );
+    expect(workflowPayloads).toHaveLength(0);
     expect(chatRequestCount).toBe(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
@@ -2925,7 +2954,7 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat");
     await openPinnedSummary(page);
-    await page.getByRole("button", { name: "Progress ›" }).click();
+    await page.getByLabel("Workspace summary").getByText("Progress").click();
 
     const runningStep = page
       .locator('button[data-workflow-step-state="running"]')
@@ -2949,140 +2978,28 @@ test.describe("Chat layout", () => {
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("renders tool lifecycle from UI stream chunks without legacy tool events", async ({
+  test("renders tool lifecycle from the canonical timeline without legacy tool events", async ({
     page,
   }) => {
     await page.route("http://127.0.0.1:8787/chat", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "text/event-stream",
-        body: sse([
-          { event: "ui.chunk", data: { type: "ui.chunk", chunk: { type: "start" } } },
-          { event: "session", data: { sessionId: "ui-stream-session" } },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "text-start", id: "text-1" } },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: { type: "text-delta", id: "text-1", delta: "I checked streamed " },
+        body: workflowChatSse({
+          sessionId: "ui-stream-session",
+          textId: "text-1",
+          summary: "I checked streamed tool output.",
+          workflowState: {},
+          tools: [
+            {
+              id: "call_status_1",
+              name: "git_status",
+              input: { command: "git status --short -b" },
+              output: "## main\n M src/app.ts\n",
+              summary: "1 modified file",
             },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: { type: "text-delta", id: "text-1", delta: "tool output." },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "text-end", id: "text-1" } },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: {
-                type: "metadata-available",
-                metadata: {
-                  risk_level: "low",
-                  actions_taken: ["git_status"],
-                  suggestions: ["Review diff"],
-                  sources: [
-                    {
-                      type: "source_document",
-                      source_id: "status-source",
-                      title: "apps/desktop/src/pages/Chat.tsx",
-                      file: "apps/desktop/src/pages/Chat.tsx",
-                      line: 3904,
-                      snippet: "handleUiChunk",
-                    },
-                  ],
-                },
-              },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: {
-                type: "tool-input-start",
-                toolCallId: "call_status_1",
-                toolName: "git_status",
-              },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: {
-                type: "tool-input-available",
-                toolCallId: "call_status_1",
-                toolName: "git_status",
-                input: { short: true, branch: true },
-              },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: {
-                type: "tool-output-delta",
-                toolCallId: "call_status_1",
-                toolName: "git_status",
-                stream: "stdout",
-                delta: "## main\n M src/app.ts\n",
-              },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: {
-                type: "tool-output-available",
-                toolCallId: "call_status_1",
-                toolName: "git_status",
-                output: { stdout: "## main\n M src/app.ts\n", stderr: "", returncode: 0 },
-                summary: "1 modified file",
-              },
-            },
-          },
-          {
-            event: "done",
-            data: {
-              type: "done",
-              result: {
-                response: "I checked streamed tool output.",
-                streamedResponse: "I checked streamed tool output.",
-                finalizationMode: "agent_final",
-                riskLevel: "low",
-                actionsTaken: ["git_status"],
-                suggestions: ["Review diff"],
-                sources: [
-                  {
-                    type: "source_document",
-                    sourceId: "status-source",
-                    title: "apps/desktop/src/pages/Chat.tsx",
-                    file: "apps/desktop/src/pages/Chat.tsx",
-                    line: 3904,
-                    snippet: "handleUiChunk",
-                  },
-                ],
-              },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "finish", finishReason: "stop" } },
-          },
-        ]),
+          ],
+        }),
       });
     });
 
@@ -3092,101 +3009,41 @@ test.describe("Chat layout", () => {
     await page.getByRole("button", { name: "Send" }).click();
 
     await expect(page.getByText("I checked streamed tool output.")).toHaveCount(1);
-    await page.getByRole("button", { name: /Worked 1 command/ }).click();
-    await expect(page.getByRole("button", { name: /Expand git_status details/ })).toBeVisible();
-    await page.getByRole("button", { name: /Expand git_status details/ }).click();
+    await page.getByRole("button", { name: /^Worked/ }).click();
+    await page.getByRole("button", { name: "Ran commands" }).click();
+    await expect(page.getByRole("button", { name: /^Ran git status/ })).toBeVisible();
+    await page.getByRole("button", { name: /^Ran git status/ }).click();
     await expect(page.getByText("M src/app.ts")).toBeVisible();
-    await expect(page.getByRole("button", { name: "List key files" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Trace source flow" })).toBeVisible();
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("deduplicates legacy text and tool events after canonical UI chunks start", async ({
+  test("deduplicates legacy text and tool events around the canonical timeline", async ({
     page,
   }) => {
     await page.route("http://127.0.0.1:8787/chat", async (route) => {
+      const now = Date.now();
+      const sequence = { value: 0 };
+      const next = () => ({ sequence: sequence.value++, emittedAt: now });
       await route.fulfill({
         status: 200,
         contentType: "text/event-stream",
         body: sse([
-          { event: "ui.chunk", data: { type: "ui.chunk", chunk: { type: "start" } } },
+          { event: "turn.started", data: { type: "turn.started", turnId: "mixed-turn", clientTurnId: undefined, ...next() } },
           { event: "session", data: { sessionId: "mixed-ui-legacy-stream-session" } },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "text-start", id: "mixed-text" } },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: { type: "text-delta", id: "mixed-text", delta: "Canonical status answer." },
-            },
-          },
-          {
-            event: "assistant_delta",
-            data: { type: "assistant_delta", delta: "Legacy duplicate assistant delta." },
-          },
+          { event: "turn.narrative.delta", data: { type: "turn.narrative.delta", turnId: "mixed-turn", blockId: "mixed-text", delta: "Canonical status answer.", ...next() } },
+          // Legacy live-render events are dropped by the canonical dispatcher;
+          // they must never render a second transcript beside the timeline.
+          { event: "assistant_delta", data: { type: "assistant_delta", delta: "Legacy duplicate assistant delta." } },
           { event: "message", data: { type: "message", text: "Legacy final duplicate message." } },
-          {
-            event: "tool_start",
-            data: { type: "tool_start", name: "git_status", args: { short: true } },
-          },
-          {
-            event: "tool_output_delta",
-            data: {
-              type: "tool_output_delta",
-              name: "git_status",
-              stream: "stdout",
-              delta: "legacy duplicate tool output",
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: {
-                type: "tool-input-available",
-                toolCallId: "call_status_mixed",
-                toolName: "git_status",
-                input: { short: true },
-              },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: {
-                type: "tool-output-available",
-                toolCallId: "call_status_mixed",
-                toolName: "git_status",
-                output: { stdout: "## main\n M src/app.ts\n", stderr: "", returncode: 0 },
-                summary: "canonical status summary",
-              },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "text-end", id: "mixed-text" } },
-          },
-          {
-            event: "done",
-            data: {
-              type: "done",
-              result: {
-                response: "Canonical status answer.",
-                streamedResponse: "Canonical status answer.",
-                finalizationMode: "agent_final",
-                riskLevel: "low",
-                actionsTaken: ["git_status"],
-                suggestions: [],
-              },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "finish", finishReason: "stop" } },
-          },
+          { event: "tool_start", data: { type: "tool_start", name: "git_status", args: { short: true } } },
+          { event: "tool_output_delta", data: { type: "tool_output_delta", name: "git_status", stream: "stdout", delta: "legacy duplicate tool output" } },
+          { event: "ui.chunk", data: { type: "ui.chunk", chunk: { type: "tool-output-available", toolCallId: "call_status_mixed", toolName: "git_status", output: { stdout: "## main\n M src/app.ts\n", stderr: "", returncode: 0 }, summary: "canonical status summary" } } },
+          { event: "turn.tool.started", data: { type: "turn.tool.started", turnId: "mixed-turn", groupId: "mixed-group", commandId: "call_status_mixed", name: "git_status", args: { command: "git status --short -b" }, ...next() } },
+          { event: "turn.tool.completed", data: { type: "turn.tool.completed", turnId: "mixed-turn", groupId: "mixed-group", commandId: "call_status_mixed", name: "git_status", ok: true, summary: "canonical status summary", output: "## main\n M src/app.ts\n", ...next() } },
+          { event: "turn.execution.completed", data: { type: "turn.execution.completed", turnId: "mixed-turn", elapsedMs: 1, ...next() } },
+          { event: "turn.final.delta", data: { type: "turn.final.delta", turnId: "mixed-turn", delta: "Canonical status answer.", ...next() } },
+          { event: "turn.final.completed", data: { type: "turn.final.completed", turnId: "mixed-turn", finalText: "Canonical status answer.", ...next() } },
+          { event: "turn.finished", data: { type: "turn.finished", turnId: "mixed-turn", status: "completed", ...next() } },
         ]),
       });
     });
@@ -3202,50 +3059,48 @@ test.describe("Chat layout", () => {
     await expect(page.getByText("Legacy duplicate assistant delta.")).toHaveCount(0);
     await expect(page.getByText("Legacy final duplicate message.")).toHaveCount(0);
     await expect(page.getByText("legacy duplicate tool output")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /Worked 1 command/ })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: /^Worked/ })).toHaveCount(1);
     await expect(page.getByRole("button", { name: "Stop" })).toBeHidden();
     await expect(page.getByPlaceholder(/Ask (MergePilot|MergePilot)/)).toBeEnabled();
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("renders approval cards from canonical UI chunks without legacy approval events", async ({
+  test("renders approval cards from canonical timeline events without legacy approval events", async ({
     page,
   }) => {
     await page.route("http://127.0.0.1:8787/chat", async (route) => {
+      const now = Date.now();
       await route.fulfill({
         status: 200,
         contentType: "text/event-stream",
         body: sse([
-          { event: "ui.chunk", data: { type: "ui.chunk", chunk: { type: "start" } } },
+          { event: "turn.started", data: { type: "turn.started", turnId: "approval-turn", sequence: 0, emittedAt: now } },
           { event: "session", data: { sessionId: "canonical-approval-session" } },
           {
-            event: "ui.chunk",
+            event: "turn.approval.requested",
             data: {
-              type: "ui.chunk",
-              chunk: {
-                type: "approval-required",
-                approval: {
-                  id: "approval-git-add",
-                  riskLevel: "medium",
-                  explanation: "Review exact git add args before staging selected files.",
-                  action: {
-                    tool: "git_add",
-                    args: { paths: ["apps/desktop/src/pages/Chat.tsx"] },
-                    description: "Stage selected files for commit",
-                    nextHint: "Continue to commit after staging.",
-                    workflow: {
-                      kind: "commit",
-                      phase: "stage",
-                      message: "Stage selected files for commit",
-                    },
+              type: "turn.approval.requested",
+              turnId: "approval-turn",
+              sequence: 1,
+              emittedAt: now,
+              blockId: "approval-git-add",
+              approval: {
+                id: "approval-git-add",
+                riskLevel: "medium",
+                explanation: "Review exact git add args before staging selected files.",
+                action: {
+                  tool: "git_add",
+                  args: { paths: ["apps/desktop/src/pages/Chat.tsx"] },
+                  description: "Stage selected files for commit",
+                  nextHint: "Continue to commit after staging.",
+                  workflow: {
+                    kind: "commit",
+                    phase: "stage",
+                    message: "Stage selected files for commit",
                   },
                 },
               },
             },
-          },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "finish", finishReason: "stop" } },
           },
         ]),
       });
@@ -3258,8 +3113,8 @@ test.describe("Chat layout", () => {
 
     await expect(page.getByText("Approval required")).toBeVisible();
     await expect(page.getByText("git add -- apps/desktop/src/pages/Chat.tsx")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Yes, run this action" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "No, don't run it" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Approve and run" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Skip action" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Stop" })).toBeHidden();
     await expectNoVisibleHorizontalOverflow(page);
   });
@@ -3287,148 +3142,27 @@ test.describe("Chat layout", () => {
       "",
       "Next action: inspect the risk before preparing a commit.",
     ].join("\n");
-    const firstChunk = longMarkdown.slice(0, 560);
-    const secondChunk = longMarkdown.slice(560);
 
     await page.route("http://127.0.0.1:8787/chat", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "text/event-stream",
-        body: sse([
-          { event: "ui.chunk", data: { type: "ui.chunk", chunk: { type: "start" } } },
-          { event: "session", data: { sessionId: "long-ui-stream-session" } },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "text-start", id: "long-text" } },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: { type: "text-delta", id: "long-text", delta: firstChunk },
+        body: workflowChatSse({
+          sessionId: "long-ui-stream-session",
+          textId: "long-text",
+          summary: longMarkdown,
+          workflowState: {},
+          tools: [
+            {
+              id: "call_diff_1",
+              name: "git_diff",
+              input: { command: "git diff -- apps/desktop/src/pages/Chat.tsx" },
+              output:
+                "diff --git a/apps/desktop/src/pages/Chat.tsx b/apps/desktop/src/pages/Chat.tsx\n+streamed markdown keeps references attached\n",
+              summary: "diff inspected",
             },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: {
-                type: "tool-output-delta",
-                toolCallId: "call_diff_1",
-                toolName: "git_diff",
-                stream: "stdout",
-                delta:
-                  "diff --git a/apps/desktop/src/pages/Chat.tsx b/apps/desktop/src/pages/Chat.tsx\n",
-              },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: {
-                type: "tool-output-delta",
-                toolCallId: "call_diff_1",
-                toolName: "git_diff",
-                stream: "stdout",
-                delta: "+streamed markdown keeps references attached\n",
-              },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: { type: "text-delta", id: "long-text", delta: secondChunk },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "text-end", id: "long-text" } },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: {
-                type: "metadata-available",
-                metadata: {
-                  risk_level: "medium",
-                  actions_taken: ["git_diff"],
-                  suggestions: ["Run tests"],
-                  sources: [
-                    {
-                      type: "source_document",
-                      source_id: "long-chat-source",
-                      title: "apps/desktop/src/pages/Chat.tsx",
-                      file: "apps/desktop/src/pages/Chat.tsx",
-                      line: 3942,
-                      snippet: "UI stream error handling preserves composer state.",
-                    },
-                    {
-                      type: "source_url",
-                      source_id: "stream-doc",
-                      title: "Streaming UI protocol",
-                      url: "https://example.com/streaming-ui",
-                    },
-                  ],
-                },
-              },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: {
-                type: "tool-output-available",
-                toolCallId: "call_diff_1",
-                toolName: "git_diff",
-                output: {
-                  stdout:
-                    "diff --git a/apps/desktop/src/pages/Chat.tsx b/apps/desktop/src/pages/Chat.tsx\n+streamed markdown keeps references attached\n",
-                  stderr: "",
-                  returncode: 0,
-                },
-                summary: "diff inspected",
-              },
-            },
-          },
-          {
-            event: "done",
-            data: {
-              type: "done",
-              result: {
-                response: longMarkdown,
-                streamedResponse: longMarkdown,
-                finalizationMode: "agent_final",
-                riskLevel: "medium",
-                actionsTaken: ["git_diff"],
-                suggestions: ["Run tests"],
-                sources: [
-                  {
-                    type: "source_document",
-                    sourceId: "long-chat-source",
-                    title: "apps/desktop/src/pages/Chat.tsx",
-                    file: "apps/desktop/src/pages/Chat.tsx",
-                    line: 3942,
-                    snippet: "UI stream error handling preserves composer state.",
-                  },
-                  {
-                    type: "source_url",
-                    sourceId: "stream-doc",
-                    title: "Streaming UI protocol",
-                    url: "https://example.com/streaming-ui",
-                  },
-                ],
-              },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "finish", finishReason: "stop" } },
-          },
-        ]),
+          ],
+        }),
       });
     });
 
@@ -3439,13 +3173,11 @@ test.describe("Chat layout", () => {
 
     await expect(page.getByRole("heading", { name: "Review Plan" })).toHaveCount(1);
     await expect(page.getByText("Step 18: preserve context")).toBeVisible();
-    await page.getByRole("button", { name: /Worked 1 command/ }).click();
-    await expect(page.getByRole("button", { name: /Expand git_diff details/ })).toBeVisible();
-    await page.getByRole("button", { name: /Expand git_diff details/ }).click();
+    await page.getByRole("button", { name: /^Worked/ }).click();
+    await page.getByRole("button", { name: "Ran commands" }).click();
+    await expect(page.getByRole("button", { name: /^Ran git diff/ })).toBeVisible();
+    await page.getByRole("button", { name: /^Ran git diff/ }).click();
     await expect(page.getByText("streamed markdown keeps references attached")).toBeVisible();
-    await expect(page.getByRole("button", { name: "List key files" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Trace source flow" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Summarize sources" })).toBeVisible();
     await expect(page.getByPlaceholder(/Ask MergePilot/)).toBeEnabled();
     await expectNoVisibleHorizontalOverflow(page);
   });
@@ -3457,43 +3189,13 @@ test.describe("Chat layout", () => {
       await route.fulfill({
         status: 200,
         contentType: "text/event-stream",
-        body: sse([
-          { event: "ui.chunk", data: { type: "ui.chunk", chunk: { type: "start" } } },
-          { event: "session", data: { sessionId: "scroll-preservation-session" } },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "text-start", id: "scroll-text" } },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: {
-                type: "text-delta",
-                id: "scroll-text",
-                delta: "Answer that should not yank scroll.",
-              },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "text-end", id: "scroll-text" } },
-          },
-          {
-            event: "done",
-            data: {
-              type: "done",
-              result: {
-                response: "Answer that should not yank scroll.",
-                streamedResponse: "Answer that should not yank scroll.",
-                finalizationMode: "agent_final",
-                riskLevel: "low",
-                actionsTaken: [],
-                suggestions: [],
-              },
-            },
-          },
-        ]),
+        body: workflowChatSse({
+          sessionId: "scroll-preservation-session",
+          textId: "scroll-text",
+          summary: "Answer that should not yank scroll.",
+          workflowState: {},
+          tools: [],
+        }),
       });
     });
 
@@ -3608,34 +3310,18 @@ test.describe("Chat layout", () => {
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("releases the composer after a UI-stream-only finish", async ({ page }) => {
+  test("releases the composer after a canonical timeline finish", async ({ page }) => {
     await page.route("http://127.0.0.1:8787/chat", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "text/event-stream",
-        body: sse([
-          { event: "ui.chunk", data: { type: "ui.chunk", chunk: { type: "start" } } },
-          { event: "session", data: { sessionId: "ui-stream-only-finish-session" } },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "text-start", id: "text-1" } },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: { type: "text-delta", id: "text-1", delta: "Standalone UI stream completed." },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "text-end", id: "text-1" } },
-          },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "finish", finishReason: "stop" } },
-          },
-        ]),
+        body: workflowChatSse({
+          sessionId: "ui-stream-only-finish-session",
+          textId: "text-1",
+          summary: "Standalone UI stream completed.",
+          workflowState: {},
+          tools: [],
+        }),
       });
     });
 
@@ -3663,40 +3349,24 @@ test.describe("Chat layout", () => {
     await expectNoVisibleHorizontalOverflow(page);
   });
 
-  test("deduplicates legacy and UI stream error events", async ({ page }) => {
+  test("deduplicates legacy and canonical stream error events", async ({ page }) => {
     await page.route("http://127.0.0.1:8787/chat", async (route) => {
+      const now = Date.now();
       await route.fulfill({
         status: 200,
         contentType: "text/event-stream",
         body: sse([
-          { event: "ui.chunk", data: { type: "ui.chunk", chunk: { type: "start" } } },
+          { event: "turn.started", data: { type: "turn.started", turnId: "error-turn", sequence: 0, emittedAt: now } },
           { event: "session", data: { sessionId: "error-ui-stream-session" } },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "text-start", id: "text-1" } },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: { type: "text-delta", id: "text-1", delta: "Partial answer before failure." },
-            },
-          },
-          {
-            event: "error",
-            data: { type: "error", message: "Stream failed while reading tool output." },
-          },
-          {
-            event: "ui.chunk",
-            data: {
-              type: "ui.chunk",
-              chunk: { type: "error", errorText: "Stream failed while reading tool output." },
-            },
-          },
-          {
-            event: "ui.chunk",
-            data: { type: "ui.chunk", chunk: { type: "finish", finishReason: "error" } },
-          },
+          { event: "turn.narrative.delta", data: { type: "turn.narrative.delta", turnId: "error-turn", sequence: 1, emittedAt: now, blockId: "text-1", delta: "Partial answer before failure." } },
+          // Legacy error events are dropped by the canonical dispatcher; the
+          // failure summary must surface exactly once as the final text.
+          { event: "error", data: { type: "error", message: "Stream failed while reading tool output." } },
+          { event: "ui.chunk", data: { type: "ui.chunk", chunk: { type: "error", errorText: "Stream failed while reading tool output." } } },
+          { event: "turn.execution.completed", data: { type: "turn.execution.completed", turnId: "error-turn", sequence: 2, emittedAt: now, elapsedMs: 1 } },
+          { event: "turn.final.delta", data: { type: "turn.final.delta", turnId: "error-turn", sequence: 3, emittedAt: now, delta: "Stream failed while reading tool output." } },
+          { event: "turn.final.completed", data: { type: "turn.final.completed", turnId: "error-turn", sequence: 4, emittedAt: now, finalText: "Stream failed while reading tool output." } },
+          { event: "turn.failed", data: { type: "turn.failed", turnId: "error-turn", sequence: 5, emittedAt: now, status: "failed", message: "Stream failed while reading tool output." } },
         ]),
       });
     });
@@ -3706,9 +3376,10 @@ test.describe("Chat layout", () => {
     await page.getByPlaceholder(/Ask MergePilot/).fill("Trigger a duplicated stream error");
     await page.getByRole("button", { name: "Send" }).click();
 
-    await expect(page.getByText("Partial answer before failure.")).toBeVisible();
     await expect(page.getByText("Stream failed while reading tool output.")).toHaveCount(1);
-    await expect(page.getByRole("button", { name: "Stop" })).toBeHidden();
+    await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeHidden();
+    await page.getByRole("button", { name: /^Stopped/ }).click();
+    await expect(page.getByText("Partial answer before failure.")).toBeVisible();
     await expect(page.getByPlaceholder(/Ask MergePilot/)).toBeEnabled();
     await expectNoVisibleHorizontalOverflow(page);
   });
@@ -3937,9 +3608,11 @@ test.describe("Chat layout", () => {
 
     await expect(page.getByText("Saved PR insight source")).toBeVisible();
     const readinessActions = page.locator("button[data-action-kind='workspace_action']");
+    await expect(readinessActions.filter({ hasText: "Check PR risks" })).toBeVisible();
     await expect(readinessActions.filter({ hasText: "Rerun validation" })).toBeVisible();
     await expect(readinessActions.filter({ hasText: "Check policy" })).toBeVisible();
-    await expect(readinessActions.filter({ hasText: "List work items" })).toBeVisible();
+    // The derived PR follow-up set no longer includes a work-items action.
+    await expect(readinessActions.filter({ hasText: "List work items" })).toHaveCount(0);
     await page.getByRole("button", { name: "Open workspace" }).click();
 
     await expect(page.getByText("Result workspace", { exact: true })).toBeVisible();
@@ -3968,17 +3641,37 @@ test.describe("Chat layout", () => {
       page.getByText("#123 User Story [Active]: Improve agent insight (https://ado/workItems/123)"),
     ).toBeVisible();
     await readinessActions.filter({ hasText: "Rerun validation" }).click();
-    await expect.poll(() => workflowPayloads.length).toBe(1);
-    expect(workflowPayloads[0]).toMatchObject({ action: "run_tests" });
+    // Suggestion chips are composer prompts, not hidden workflow executions:
+    // the click fills the composer and never fires a workflow-action request.
+    await expect(page.getByPlaceholder(/Ask MergePilot/)).toHaveValue(
+      "Rerun relevant validation after reviewing saved PR readiness blockers.",
+    );
+    expect(workflowPayloads).toHaveLength(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
 
   test("shows persisted PR insight lookup errors in the result workspace", async ({ page }) => {
     await seedSavedPrInsightSourceDraft(page);
     // The composer no longer switches Project Links; simulate "no active link"
-    // the way Context would after a Project Link is removed.
+    // the way Context would after the last Project Link is removed. With zero
+    // links the auto-resolve cannot re-select one, and the restored draft must
+    // not re-activate the old link either.
+    await page.route("http://127.0.0.1:8787/project-links", async (route) => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
+    });
     await page.addInitScript(() => {
+      localStorage.setItem("mergepilot_project_links_v1", JSON.stringify([]));
       localStorage.removeItem("mergepilot_active_project_link_id");
+      const raw = sessionStorage.getItem("dev_agent_chat_draft_v1");
+      if (raw) {
+        const draft = JSON.parse(raw) as {
+          activeProfileId?: string | null;
+          activeProjectLinkId?: string | null;
+        };
+        draft.activeProfileId = null;
+        draft.activeProjectLinkId = null;
+        sessionStorage.setItem("dev_agent_chat_draft_v1", JSON.stringify(draft));
+      }
     });
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat");
