@@ -1,21 +1,21 @@
 {
   "schemaVersion": 1,
-  "runId": "verify-msgbja9o",
-  "status": "INCOMPLETE",
+  "runId": "verify-msgfdoej",
+  "status": "PASS",
   "commit": {
-    "sha": "0ac318c44d416e5cec730ba5243bd400c8627640",
+    "sha": "d36cccb81b5541c5086886333e3b13516b640022",
     "ref": "refs/heads/claudecode/optimize-bugfix",
-    "message": "test(e2e): align chat-layout spec with cycle-00 product intent (51/51)\n\n- Context/commit menu: divergence + change counts asserted absent;\n  commit actions enabled without divergence gating.\n- Project Link onboarding: V2 identity-only payload asserted (no branch,\n  pipeline, or MCP fields); no pipeline discovery.\n- Canonical Timeline rewrites: image/tool/approval/final tests migrated\n  from legacy ui.chunk SSE to workflowChatSse turn events; legacy event\n  duplication asserted absent.\n- Review Queue surfaces replaced by the derived Changes flows.\n- No true regressions found; assertions match shipped behavior.\n\nCo-Authored-By: Claude <noreply@anthropic.com>"
+    "message": "test(verify): run mocked tier sequentially (-Workers 1) to remove first-load races\n\nCo-Authored-By: Claude <noreply@anthropic.com>"
   },
   "appVersion": "0.5.26",
   "productModel": "unknown",
-  "startedAt": "2026-08-05T16:45:49.883Z",
-  "finishedAt": "2026-08-05T16:49:47.608Z",
+  "startedAt": "2026-08-05T18:33:26.730Z",
+  "finishedAt": "2026-08-05T18:37:16.093Z",
   "repeat": 1,
   "summary": {
     "required": 1,
-    "passed": 0,
-    "failed": 1,
+    "passed": 1,
+    "failed": 0,
     "notRun": 0
   },
   "gates": [
@@ -24,21 +24,20 @@
       "tier": "mocked-browser-e2e",
       "required": true,
       "requireNoSkips": true,
-      "timeoutMs": 1800000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/chat-layout.spec.ts && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/settings-permissions.spec.ts && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/route-cache.spec.ts",
-      "description": "mocked browser E2E (chat-layout, settings-permissions, route-cache)",
+      "timeoutMs": 2700000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/warmup.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/chat-layout.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/settings-permissions.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/route-cache.spec.ts -Workers 1",
+      "description": "mocked browser E2E (warmup, chat-layout, settings-permissions, route-cache)",
       "runs": [
         {
           "attempt": 1,
-          "exitCode": 1,
+          "exitCode": 0,
           "timedOut": false,
-          "durationMs": 237722,
-          "status": "FAIL",
-          "skipped": 0,
-          "outputTail": "  1) [chromium] › tests\\e2e\\settings-permissions.spec.ts:117:5 › @smoke @mocked settings explains missing Key Vault permission and can switch built-in model secrets to local env \n\n    Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\n    Locator: getByRole('heading', { name: 'Settings' })\n    Expected: visible\n    Timeout: 10000ms\n    Error: element(s) not found\n\n    Call log:\n    \u001b[2m  - Expect \"toBeVisible\" with timeout 10000ms\u001b[22m\n    \u001b[2m  - waiting for getByRole('heading', { name: 'Settings' })\u001b[22m\n\n\n      126 |   await page.goto(\"/#/settings\");\n      127 |\n    > 128 |   await expect(page.getByRole(\"heading\", { name: \"Settings\" })).toBeVisible();\n          |                                                                 ^\n      129 |   await expect(page.getByText(\"Azure Key Vault permission is missing\")).toBeVisible();\n      130 |   await expect(page.getByText(\"secrets/get access to https://devagentkv001.vault.azure.net/\")).toBeVisible();\n      131 |   await expect(page.getByRole(\"button\", { name: \"Key Vault\" })).toHaveAttribute(\"aria-pressed\", \"true\");\n        at C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\tests\\e2e\\settings-permissions.spec.ts:128:65\n\n    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────\n    output\\playwright\\test-results\\settings-permissions--smok-ba816--model-secrets-to-local-env-chromium\\test-failed-1.png\n    ────────────────────────────────────────────────────────────────────────────────────────────────\n\n    Error Context: output\\playwright\\test-results\\settings-permissions--smok-ba816--model-secrets-to-local-env-chromium\\error-context.md\n\n    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────\n    output\\playwright\\test-results\\settings-permissions--smok-ba816--model-secrets-to-local-env-chromium\\trace.zip\n    Usage:\n\n        pnpm exec playwright show-trace output\\playwright\\test-results\\settings-permissions--smok-ba816--model-secrets-to-local-env-chromium\\trace.zip\n\n    ────────────────────────────────────────────────────────────────────────────────────────────────\n\n  1 failed\n    [chromium] › tests\\e2e\\settings-permissions.spec.ts:117:5 › @smoke @mocked settings explains missing Key Vault permission and can switch built-in model secrets to local env \n"
+          "durationMs": 229360,
+          "status": "PASS",
+          "skipped": 0
         }
       ],
-      "status": "FAIL"
+      "status": "PASS"
     }
   ]
 }
