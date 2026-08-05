@@ -82,3 +82,23 @@ not count for the current HEAD. Tiers:
 See `goal-verification.json` for per-gate PASS/FAIL/NOT_RUN with exit
 codes, durations, and skip counts. Any required gate with a skip or
 timeout is FAIL.
+
+## Installed desktop state (2026-08-05 probe)
+
+- `C:\Program Files\MergePilot\` has mergepilot-desktop.exe 0.5.26 and
+  mergepilot-daemon.exe (FileVersion 0.5.26) — matches the repo version,
+  but the binary predates the reopened-HEAD changes; the installed-desktop
+  tier must rebuild + reinstall from the current HEAD before its runs count
+  as evidence.
+- Build path: `pnpm --filter @mergepilot/desktop tauri:build` (icons +
+  build-sidecar + tauri build) then `install-and-verify-msi-state.ps1`.
+
+## Phase-0 gate notes
+
+- Unit tier: 6/6 PASS on HEAD 794f8f0 (first run) — 3x consecutive runs
+  are re-executed on the final reopened HEAD after the slice agents land.
+- source-live tier: runs with `-LiveAdo` so the 4 live-ADO tests run
+  instead of skipping (no required skips).
+- mocked-browser tier: currently FAILS because
+  `tests/e2e/review-queue.spec.ts` still exists and chat-layout /
+  route-cache reference removed selectors; fixed by slice agents.
