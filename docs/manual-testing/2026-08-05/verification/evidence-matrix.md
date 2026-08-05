@@ -21,7 +21,7 @@ not count for the current HEAD. Tiers:
 | ADO re-read proves the mutation exactly once | PASS | RA | `verification/real-ado-evidence.json` (create/comment/delete each once, re-read proven) |
 | P50/P95 latency breakdown | NOT_RUN | SL | to re-measure on current HEAD during source-live tier |
 | Search confirms removed runtime selectors and Review Queue/Activity nav | PASS | U | phase-1 slice 68a673a: Work/Changes/CreatePR/TaskViewer selectors removed; Context-only; Review Queue page/API/storage deleted |
-| All relevant core, daemon, desktop, and E2E tests pass through the local toolchain | PASS (unit) / in progress (MB) | U/MB | unit 6/6 PASS on 68a673a; mocked-browser tier in progress (chat-layout spec repair) |
+| All relevant core, daemon, desktop, and E2E tests pass through the local toolchain | PASS | U/MB | unit 6/6 + mocked tier PASS on HEAD 2c82bd7 (warmup + chat-layout 51 + settings 1 + route-cache 34, sequential) |
 | Context is the sole Project Link selector; no changes/ahead/behind in Context | PASS | U | verified in phase-1 slice (grep + unit tests) |
 | Project Link V2 stores stable identity only; legacy fields not written | PASS | U | verified: daemon schemas + desktop forms stop writing legacy fields |
 | MCP is internal transport only (no install/register/marketplace) | PASS | U | audit verified no user-visible MCP management |
@@ -81,7 +81,15 @@ not count for the current HEAD. Tiers:
 | Reliability/safety guardrails meet agreed thresholds | NOT_RUN | U/ID | kill-switch + recovery unit tests exist; 3x gate pending |
 | Product/engineering/security/support readiness reviews are recorded | NOT_RUN | — | no review records |
 
-## Current gate run (unit tier)
+## Current gate run
+
+- unit tier: 6/6 PASS (2c82bd7).
+- mocked-browser tier: PASS (warmup + 86 tests sequential, -Workers 1).
+- source-live tier: FAIL — 6 live-app approval-flow tests failing; repair in
+  progress (stale approval-card button labels vs canonical PendingActionCard;
+  LLM nondeterminism under evaluation).
+- installed-desktop tier: NOT_RUN (rebuild from HEAD pending).
+- real-ado tier: PASS (WI-7916 on 68a673a; rerun on final HEAD).
 
 See `goal-verification.json` for per-gate PASS/FAIL/NOT_RUN with exit
 codes, durations, and skip counts. Any required gate with a skip or
