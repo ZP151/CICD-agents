@@ -1,6 +1,6 @@
 # Goal Verification Evidence Matrix (2026-08-05 reopen)
 
-HEAD baseline: `dddf81843fe15ebe4362775ba9c5d80df6dc0a81`
+HEAD baseline: `68a673adb83aeab925fc1217ee3bf3526b72fcff` (phase-1 slice; earlier baseline dddf818 superseded)
 Machine-readable result: `goal-verification.json` (repo root) and
 `verification/goal-verification.json`.
 
@@ -16,20 +16,24 @@ not count for the current HEAD. Tiers:
 
 | Exit Evidence | Status | Tier | Evidence / gap |
 | --- | --- | --- | --- |
-| Recorded desktop E2E video/log of the demo scenario | NOT_RUN | ID | no installed-desktop run on current HEAD |
-| Event replay proves the same Turn after restart | NOT_RUN | ID | unit-level restart recovery exists only |
+| Recorded desktop E2E video/log of the demo scenario | NOT_RUN | ID | installed-desktop tier pending (rebuild from HEAD required) |
+| Event replay proves the same Turn after restart | NOT_RUN | ID | unit-level restart recovery exists; desktop replay pending |
 | ADO re-read proves the mutation exactly once | PASS | RA | `verification/real-ado-evidence.json` (create/comment/delete each once, re-read proven) |
-| P50/P95 latency breakdown | FAIL | SL | baseline recorded pre-reopen; not re-measured on current HEAD |
-| Search confirms removed runtime selectors and Review Queue/Activity nav | NOT_RUN | U | grep audit pending (agent B) |
-| All relevant core, daemon, desktop, and E2E tests pass through the local toolchain | NOT_RUN | U/MB | gate run pending |
+| P50/P95 latency breakdown | NOT_RUN | SL | to re-measure on current HEAD during source-live tier |
+| Search confirms removed runtime selectors and Review Queue/Activity nav | PASS | U | phase-1 slice 68a673a: Work/Changes/CreatePR/TaskViewer selectors removed; Context-only; Review Queue page/API/storage deleted |
+| All relevant core, daemon, desktop, and E2E tests pass through the local toolchain | PASS (unit) / in progress (MB) | U/MB | unit 6/6 PASS on 68a673a; mocked-browser tier in progress (chat-layout spec repair) |
+| Context is the sole Project Link selector; no changes/ahead/behind in Context | PASS | U | verified in phase-1 slice (grep + unit tests) |
+| Project Link V2 stores stable identity only; legacy fields not written | PASS | U | verified: daemon schemas + desktop forms stop writing legacy fields |
+| MCP is internal transport only (no install/register/marketplace) | PASS | U | audit verified no user-visible MCP management |
+| Review Queue page/state/API/storage deleted | PASS | U | core modules, daemon routes, desktop queue UI removed |
 
 ## Cycle 01 — Work Item → PR → CI → write-back
 
 | Exit Evidence | Status | Tier | Evidence / gap |
 | --- | --- | --- | --- |
 | Both fixtures complete through the installed desktop and local daemon | NOT_RUN | ID | prior runs were daemon-API only |
-| Artifact graph can traverse Work Item ↔ PR ↔ Build | NOT_RUN | U | traversal unit tests exist; not run on current HEAD |
-| ADO re-read proves each write exactly once | PASS | RA | driver proves exactly-once create/comment/delete |
+| Artifact graph can traverse Work Item ↔ PR ↔ Build | PASS | U | graph store + traversal unit tests green on current HEAD (deliveryGraphStore suite) |
+| ADO re-read proves each write exactly once | PASS | RA | driver PASS on HEAD 68a673a (WI-7916 create/comment/delete each exactly once, re-read proven) |
 | User-approved payload and final remote payload are diffable | NOT_RUN | U | design; no current-HEAD test |
 | No manual ADO edit needed to complete the expected loop | NOT_RUN | ID | needs installed-desktop fixture run |
 
@@ -55,7 +59,7 @@ not count for the current HEAD. Tiers:
 
 | Exit Evidence | Status | Tier | Evidence / gap |
 | --- | --- | --- | --- |
-| Real fixture proves read, propose, approve, update, and verify | PASS | RA | driver covers read/propose/approve/verify; update proven pre-reopen only → mark FAIL until re-run on current HEAD |
+| Real fixture proves read, propose, approve, update, and verify | PASS (RA) / NOT_RUN (update) | RA | driver covers create/comment/delete + re-read on current HEAD; work_item.update E2E re-run pending |
 | At least one drift detector shows useful precision on pilot data | NOT_RUN | U | drift unit tests exist; pilot data not available |
 | Users can always distinguish ADO facts from AI suggestions | NOT_RUN | ID | needs desktop usability run |
 | The Work page remains materially simpler than Azure Boards | NOT_RUN | ID | design assertion |
