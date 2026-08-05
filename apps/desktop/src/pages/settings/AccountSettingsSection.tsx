@@ -124,7 +124,10 @@ function DiagnosticsSection(): JSX.Element {
     };
   }, []);
 
-  const totals = diagnostics?.telemetry.totals ?? {};
+  // The daemon may be an older build without the diagnostics endpoint, or a
+  // mock/fallback response without the telemetry shape; never assume the
+  // nested structure exists.
+  const totals = diagnostics?.telemetry?.totals ?? {};
   return (
     <WorkbenchSettingsSection title="Diagnostics">
       <WorkbenchSettingsRow
