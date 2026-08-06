@@ -1940,7 +1940,7 @@ test.describe("Live app business workflows", () => {
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
       await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
-        `Create local git tag ${tagName} on HEAD with message "${tagMessage}" (git tag -a ${tagName} -m "${tagMessage}"). Do not push tags, do not push the branch, and do not create a PR.`,
+        `Create local git tag ${tagName} on HEAD with message "${tagMessage}" (git tag -a ${tagName} -m "${tagMessage}"). Do not push the branch and do not create a PR.`,
       );
       await page.getByRole("button", { name: "Send" }).click();
 
