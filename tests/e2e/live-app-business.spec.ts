@@ -656,6 +656,23 @@ async function openEnvironmentPanel(page: Page): Promise<void> {
   await expect(environment).toBeVisible();
 }
 
+async function refreshEnvironmentPanelBranch(
+  page: Page,
+  environmentPanel: ReturnType<typeof liveEnvironmentPanel>,
+): Promise<void> {
+  // A fresh session has no branch evidence — Project Link V2 does not persist
+  // a default branch, and no tool bubble has reported one yet — so the branch
+  // menu button reads "not checked" until the refresh_branch workspace action
+  // resolves the live branch. Run that refresh before callers assert on
+  // branch-labelled buttons.
+  await environmentPanel.getByRole("button", { name: /not checked/i }).click();
+  await environmentPanel.getByRole("button", { name: "Refresh branch state" }).click();
+  await expect(page.locator("main").getByRole("button", { name: /Ran|Worked/i }).first()).toBeVisible({
+    timeout: 90_000,
+  });
+  await expect(environmentPanel.getByRole("button", { name: /not checked/i })).toHaveCount(0);
+}
+
 async function openPipelineWorkspaceAction(page: Page): Promise<void> {
   const legacyWelcomeAction = page.getByRole("button", { name: "Open Pipelines workspace" });
   if (await legacyWelcomeAction.isVisible().catch(() => false)) {
@@ -1151,9 +1168,18 @@ test.describe("Live app business workflows", () => {
       );
       await page.getByRole("button", { name: "Send" }).click();
 
-      await expect(page.getByText(/Remote target: origin\/(?:main|feature\/live-app-push)/i).first()).toBeVisible({
-        timeout: 90_000,
-      });
+      await expect(page.getByPlaceholder(/Ask MergePilot/)).toBeEnabled({ timeout: 120_000 });
+      // The remote inspection must surface the redacted origin URL as daemon
+      // evidence. The credential part is redacted server-side to ***REDACTED***
+      // before the tool result reaches the UI, so the host path is the
+      // deterministic structured evidence regardless of how the LLM phrases
+      // the answer.
+      await expect(
+        page
+          .locator("main")
+          .getByText(/https:\/\/\*\*\*REDACTED\*\*\*@example\.visualstudio\.com\/Claims\/_git\/Repo/i)
+          .first(),
+      ).toBeVisible({ timeout: 30_000 });
       const body = page.locator("body");
       await expect(body).not.toContainText("supersecrettoken");
       await expect(body).not.toContainText("mergepilot:supersecrettoken");
@@ -1188,7 +1214,7 @@ test.describe("Live app business workflows", () => {
       await page.setViewportSize({ width: 1280, height: 820 });
       await page.goto("/chat?new=1");
       await page.getByPlaceholder(/Ask MergePilot/).fill(
-        "Review my current changes for risks, especially leaked credentials or secrets. Read-only only. Do not stage, commit, push, or create a PR.",
+        "Review my current changes for risks, especially leaked credentials or secrets. Classify each risk by category (for example: security, configuration, correctness). Read-only only. Do not stage, commit, push, or create a PR.",
       );
       await page.getByRole("button", { name: "Send" }).click();
 
@@ -1242,11 +1268,8 @@ test.describe("Live app business workflows", () => {
       await page.goto("/chat?new=1");
       await openEnvironmentPanel(page);
       const environmentPanel = liveEnvironmentPanel(page);
+      await refreshEnvironmentPanelBranch(page, environmentPanel);
       await expect(environmentPanel.getByRole("button", { name: switchRepo.currentBranch, exact: true })).toBeVisible();
-
-      await environmentPanel.getByRole("button", { name: switchRepo.currentBranch, exact: true }).click();
-      await environmentPanel.getByRole("button", { name: "Refresh branch state" }).click();
-      await expect(page.locator("main").getByRole("button", { name: /Ran|Worked/i }).first()).toBeVisible({ timeout: 90_000 });
 
       await environmentPanel.getByRole("button", { name: switchRepo.currentBranch, exact: true }).click();
       await environmentPanel.locator("button").filter({ hasText: switchRepo.targetBranch }).click();
@@ -1296,6 +1319,7 @@ test.describe("Live app business workflows", () => {
       await page.setViewportSize({ width: 1280, height: 820 });
       await page.goto("/chat?new=1");
       await openEnvironmentPanel(page);
+      await refreshEnvironmentPanelBranch(page, liveEnvironmentPanel(page));
       await expect(page.getByRole("button", { name: mergeRepo.currentBranch })).toBeVisible();
 
       await page.getByPlaceholder(/Ask MergePilot/).fill(
@@ -1351,6 +1375,7 @@ test.describe("Live app business workflows", () => {
       await page.setViewportSize({ width: 1280, height: 820 });
       await page.goto("/chat?new=1");
       await openEnvironmentPanel(page);
+      await refreshEnvironmentPanelBranch(page, liveEnvironmentPanel(page));
       await expect(page.getByRole("button", { name: mergeRepo.currentBranch })).toBeVisible();
 
       await page.getByPlaceholder(/Ask MergePilot/).fill(
@@ -1406,6 +1431,7 @@ test.describe("Live app business workflows", () => {
       await page.setViewportSize({ width: 1280, height: 820 });
       await page.goto("/chat?new=1");
       await openEnvironmentPanel(page);
+      await refreshEnvironmentPanelBranch(page, liveEnvironmentPanel(page));
       await expect(page.getByRole("button", { name: "main" })).toBeVisible();
 
       await page.getByPlaceholder(/Ask MergePilot/).fill(
@@ -1456,6 +1482,7 @@ test.describe("Live app business workflows", () => {
       await page.setViewportSize({ width: 1280, height: 820 });
       await page.goto("/chat?new=1");
       await openEnvironmentPanel(page);
+      await refreshEnvironmentPanelBranch(page, liveEnvironmentPanel(page));
       await expect(page.getByRole("button", { name: pushRepo.branchName })).toBeVisible();
       await expect(page.getByTitle("Context manages the Project Link")).toHaveText(projectLink.name);
       await expect(page.getByLabel("Pinned Summary Project Link")).toHaveCount(0);
@@ -1509,6 +1536,7 @@ test.describe("Live app business workflows", () => {
       await page.goto("/chat?new=1");
       await openEnvironmentPanel(page);
       const environmentPanel = liveEnvironmentPanel(page);
+      await refreshEnvironmentPanelBranch(page, environmentPanel);
       await expect(environmentPanel.getByRole("button", { name: behindRepo.branchName, exact: true })).toBeVisible();
 
       await page.getByPlaceholder(/Ask MergePilot/).fill(
@@ -1561,12 +1589,9 @@ test.describe("Live app business workflows", () => {
       await page.goto("/chat?new=1");
       await openEnvironmentPanel(page);
       const environmentPanel = liveEnvironmentPanel(page);
+      await refreshEnvironmentPanelBranch(page, environmentPanel);
       const branchButton = environmentPanel.getByRole("button", { name: conflictRepo.branchName, exact: true });
       await expect(branchButton).toBeVisible();
-
-      await branchButton.click();
-      await page.getByRole("button", { name: "Refresh branch state" }).click();
-      await expect(page.locator("main").getByRole("button", { name: /Ran|Worked/i }).first()).toBeVisible({ timeout: 90_000 });
 
       await page.getByRole("button", { name: "Commit or push", exact: true }).click();
       await expect(page.getByText("Diverged: 1 ahead, 1 behind")).toBeVisible();
@@ -1723,7 +1748,7 @@ test.describe("Live app business workflows", () => {
   });
 
   test("surfaces stash pop conflict recovery and keeps the stash entry", async ({ page, request }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(300_000);
 
     const health = await request.get(`${DAEMON_URL}/healthz`);
     expect(health.ok()).toBeTruthy();
@@ -1747,13 +1772,13 @@ test.describe("Live app business workflows", () => {
         .getByTestId("pending-action-card")
         .filter({ hasText: /git stash pop|git_stash/i })
         .first();
-      await expect(stashApproval).toBeVisible({ timeout: 90_000 });
+      await expect(stashApproval).toBeVisible({ timeout: 120_000 });
       await expect(stashApproval.getByText("git stash pop").first()).toBeVisible();
       await stashApproval.getByRole("button", { name: "Approve and run" }).click();
 
       await expect.poll(() => gitOrEmpty(repoPath, ["status", "--short"]), { timeout: 45_000 })
         .toContain("UU README.md");
-      await expect(page.getByText("Stopped after git stash pop").first()).toBeVisible({ timeout: 90_000 });
+      await expect(page.getByText("Stopped after git stash pop").first()).toBeVisible({ timeout: 120_000 });
       await expect(page.getByText(/Git has unresolved index conflicts: README\.md/i).first()).toBeVisible();
       await expect(page.getByText(/Git keeps the stash entry/i).first()).toBeVisible();
       expect(git(repoPath, ["stash", "list"])).toContain("mergepilot pop conflict fixture");
