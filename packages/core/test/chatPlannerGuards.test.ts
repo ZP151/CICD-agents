@@ -122,6 +122,53 @@ describe("chatPlannerGuards", () => {
     expect(isExplicitReadOnlyRequest(request)).toBe(false);
   });
 
+  it("treats a git tag creation request as a write request even when later pushes are forbidden", () => {
+    const request =
+      "Create local git tag v0.0.1-live-tag on HEAD with message 'release candidate'. Do not push tags, do not push the branch, and do not create a PR.";
+
+    expect(isExplicitReadOnlyRequest(request)).toBe(false);
+
+    const result: ChatPlannerResult = {
+      response: "Tag created.",
+      riskLevel: "low",
+      actionsTaken: ["git_tag"],
+      suggestions: ["Push the tag"],
+      toolCallsMade: [{ name: "git_tag", args: { name: "v0.0.1-live-tag" }, ok: true }],
+      usedLlm: true,
+      approvalProposal: {
+        tool: "git_tag",
+        args: { name: "v0.0.1-live-tag" },
+        description: "Create tag v0.0.1-live-tag",
+      },
+    };
+
+    const guarded = guardReviewOnlyFinalResult(result, request);
+    expect(guarded.approvalProposal).toBeDefined();
+  });
+
+  it("treats a git discard request as a write request even when staging and pushing are forbidden", () => {
+    const request =
+      "Discard changes in README.md only. Do not touch notes.txt. Do not stage, commit, push, or create a PR.";
+
+    expect(isExplicitReadOnlyRequest(request)).toBe(false);
+  });
+
+  it("treats a git revert request as a write request even when reset is forbidden", () => {
+    const request = "Revert the last commit using git revert HEAD. Do not reset, push, or create a PR.";
+
+    expect(isExplicitReadOnlyRequest(request)).toBe(false);
+  });
+
+  it("keeps genuinely read-only review requests read-only after the verb list grew", () => {
+    const review = "Assess changed files for correctness, security, config, tests, and deployment risk. Read-only only.";
+    const inspect = "Only inspect the current Project Link repository branch and uncommitted changes. Do not modify any files.";
+    const clean = "Only check for untracked files. Do not clean, reset, remove, or discard anything.";
+
+    expect(isExplicitReadOnlyRequest(review)).toBe(true);
+    expect(isExplicitReadOnlyRequest(inspect)).toBe(true);
+    expect(isExplicitReadOnlyRequest(clean)).toBe(true);
+  });
+
   it("requires direct Git evidence before indexing a live working-tree request", () => {
     const request = "Read-only: inspect the current working tree and uncommitted changes. Do not modify files.";
 
