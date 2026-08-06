@@ -717,6 +717,7 @@ test.describe("Live app business workflows", () => {
   // cache (~1s) and per-test timeouts budget turn work, not first-load
   // compilation.
   test.beforeAll(async ({ browser }) => {
+    test.setTimeout(300_000);
     const warmupPage = await browser.newPage();
     try {
       await warmupPage.setViewportSize({ width: 1280, height: 820 });
@@ -725,7 +726,7 @@ test.describe("Live app business workflows", () => {
     } finally {
       await warmupPage.close().catch(() => undefined);
     }
-  }, { timeout: 300_000 });
+  });
 
   test("stages only the requested file through the real Chat UI", async ({ page, request }) => {
     // Cold first load compiles the entire app module graph on demand in Vite
