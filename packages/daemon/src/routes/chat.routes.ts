@@ -18,7 +18,19 @@ import { createChatSseWriter, isTerminalChatEvent } from "./chatSse.js";
 
 const MAX_CHAT_IMAGE_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 const CHAT_IMAGE_DATA_URL_PATTERN = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([a-zA-Z0-9+/=\s]+)$/;
-const OPENING_NARRATIVE_DEADLINE_MS = 15_000;
+
+/**
+ * Time-to-first-visible-token budget for the opening narrative. The narrative
+ * is the first public content of a turn, so a slow narrator must not abort the
+ * whole turn: source-live E2E on a loaded dev machine measured first-token
+ * latencies beyond 15s several times per run, each killing the turn ("chat
+ * turn failed" in the daemon log). 60s is the default headroom; constrained
+ * environments can tighten it via MERGEPILOT_OPENING_NARRATIVE_DEADLINE_MS.
+ */
+const OPENING_NARRATIVE_DEADLINE_MS = (() => {
+  const configured = Number(process.env["MERGEPILOT_OPENING_NARRATIVE_DEADLINE_MS"] ?? "");
+  return Number.isFinite(configured) && configured > 0 ? configured : 60_000;
+})();
 
 /**
  * A single-producer / single-consumer bridge for planner events. It lets the
@@ -438,7 +450,9 @@ export function registerChatRoutes(
           // tool that is already ready to execute.
           const openingCompleted = await settlesWithin(openingNarrative, OPENING_NARRATIVE_DEADLINE_MS);
           if (!openingCompleted) {
-            const error = new Error("The model did not begin an action narrative within 15 seconds.");
+            const error = new Error(
+              `The model did not begin an action narrative within ${OPENING_NARRATIVE_DEADLINE_MS / 1000} seconds.`,
+            );
             rejectFirstTool?.(error);
             throw error;
           }
