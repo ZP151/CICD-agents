@@ -83,6 +83,40 @@ describe("groupChatRenderItems", () => {
     }]);
   });
 
+  it("keeps a follow-up approval in the same turn beside the canonical transcript", () => {
+    const items = groupChatRenderItems<TestBubble>([
+      { id: "turn", kind: "system", turnId: "turn-1", turnTranscript: {} },
+      { id: "approval-a", kind: "pending_confirm", turnId: "turn-1" },
+      { id: "approval-b", kind: "pending_confirm", turnId: "turn-1" },
+    ]);
+
+    expect(items).toMatchObject([
+      {
+        kind: "transcript",
+        transcript: { id: "turn" },
+        approval: { id: "approval-a" },
+      },
+      { kind: "bubble", bubble: { id: "approval-b" } },
+    ]);
+  });
+
+  it("keeps a follow-up approval without a turn id after the canonical transcript", () => {
+    const items = groupChatRenderItems<TestBubble>([
+      { id: "turn", kind: "system", turnId: "turn-1", turnTranscript: {} },
+      { id: "approval-a", kind: "pending_confirm", turnId: "turn-1" },
+      { id: "approval-b", kind: "pending_confirm" },
+    ]);
+
+    expect(items).toMatchObject([
+      {
+        kind: "transcript",
+        transcript: { id: "turn" },
+        approval: { id: "approval-a" },
+      },
+      { kind: "bubble", bubble: { id: "approval-b" } },
+    ]);
+  });
+
   it("suppresses an uncorrelated legacy tool immediately after a canonical transcript", () => {
     const items = groupChatRenderItems<TestBubble>([
       { id: "turn", kind: "system", turnId: "turn-1", turnTranscript: {} },

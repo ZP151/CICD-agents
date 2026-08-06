@@ -1091,10 +1091,15 @@ test.describe("Chat layout", () => {
   });
 
   test("@smoke @mocked keeps the project-linked chat shell inside the viewport", async ({ page }) => {
+    // This is the first chat-route hit in this Playwright process. A fresh
+    // Vite compiles the lazy chat chunk graph on demand; budget that compile
+    // here (it is the compilation, not assertion relaxation) so the shell
+    // assertions below measure layout, not the compiler.
+    test.setTimeout(240_000);
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.goto("/chat?new=1");
 
-    await expect(page.getByText("Start with a focused prompt")).toBeVisible();
+    await expect(page.getByText("Start with a focused prompt")).toBeVisible({ timeout: 120_000 });
     await expect(page.getByPlaceholder(/Ask MergePilot/)).toBeVisible();
     await expect(page.getByTitle("Conversation model")).toContainText("GPT-5 mini");
     await expectNoVisibleHorizontalOverflow(page);

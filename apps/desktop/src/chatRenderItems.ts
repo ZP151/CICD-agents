@@ -28,8 +28,23 @@ export function groupChatRenderItems<T extends ChatRenderBubbleLike>(bubbles: T[
   for (let index = 0; index < bubbles.length; index += 1) {
     const bubble = bubbles[index]!;
     if (transcriptOwnedExecution.has(bubble.id)) continue;
-    if (isExecutionBubble(bubble) && bubble.turnId && canonicalTurnIds.has(bubble.turnId)) continue;
-    if (afterCanonicalTranscript && isExecutionBubble(bubble)) continue;
+    // A canonical transcript is the sole rendering authority for its Turn:
+    // legacy tool replay must not create a second execution presentation.
+    // Pending approvals are excluded — the transcript attaches exactly one
+    // approval, so a follow-up approval in the same turn (stage -> commit ->
+    // push) must still reach the render list.
+    if (
+      isExecutionBubble(bubble)
+      && bubble.kind !== "pending_confirm"
+      && bubble.turnId
+      && canonicalTurnIds.has(bubble.turnId)
+    ) continue;
+    // After a canonical transcript, tools are owned by the transcript and must
+    // not create a second execution presentation. Pending approvals are NOT
+    // owned the same way: the transcript attaches exactly one approval, so a
+    // follow-up approval in the same turn (e.g. stage -> commit -> push) must
+    // still reach the render list.
+    if (afterCanonicalTranscript && isExecutionBubble(bubble) && bubble.kind !== "pending_confirm") continue;
     if (isTurnTranscriptBubble(bubble)) {
       appendExecutionItems(items, consecutiveExecution);
       consecutiveExecution = [];

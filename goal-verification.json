@@ -1,43 +1,44 @@
 {
   "schemaVersion": 1,
-  "runId": "verify-msgfdoej",
-  "status": "PASS",
+  "runId": "verify-msgfj8i0",
+  "status": "INCOMPLETE",
   "commit": {
-    "sha": "d36cccb81b5541c5086886333e3b13516b640022",
+    "sha": "2c82bd70ce518f081ad7199835a9f01b37547c9b",
     "ref": "refs/heads/claudecode/optimize-bugfix",
-    "message": "test(verify): run mocked tier sequentially (-Workers 1) to remove first-load races\n\nCo-Authored-By: Claude <noreply@anthropic.com>"
+    "message": "test(verify): source-live gate restarts a mismatched daemon\n\nCo-Authored-By: Claude <noreply@anthropic.com>"
   },
   "appVersion": "0.5.26",
   "productModel": "unknown",
-  "startedAt": "2026-08-05T18:33:26.730Z",
-  "finishedAt": "2026-08-05T18:37:16.093Z",
+  "startedAt": "2026-08-05T18:37:46.056Z",
+  "finishedAt": "2026-08-05T18:51:37.007Z",
   "repeat": 1,
   "summary": {
     "required": 1,
-    "passed": 1,
-    "failed": 0,
+    "passed": 0,
+    "failed": 1,
     "notRun": 0
   },
   "gates": [
     {
-      "id": "browser-e2e-mocked",
-      "tier": "mocked-browser-e2e",
+      "id": "browser-e2e-source-live",
+      "tier": "source-live-e2e",
       "required": true,
       "requireNoSkips": true,
-      "timeoutMs": 2700000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/warmup.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/chat-layout.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/settings-permissions.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/route-cache.spec.ts -Workers 1",
-      "description": "mocked browser E2E (warmup, chat-layout, settings-permissions, route-cache)",
+      "timeoutMs": 1800000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-live-app-e2e.ps1\" -LiveAdo -RestartMismatchedDaemon",
+      "description": "source Vite + daemon live E2E (real ADO reads)",
       "runs": [
         {
           "attempt": 1,
-          "exitCode": 0,
+          "exitCode": 1,
           "timedOut": false,
-          "durationMs": 229360,
-          "status": "PASS",
-          "skipped": 0
+          "durationMs": 830951,
+          "status": "FAIL",
+          "skipped": 0,
+          "outputTail": "pnpm.exe : To C:\\Users\\15492\\AppData\\Local\\Temp\\mergepilot-live-push-ot2gPP\\origin.git\r\nAt C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1:107 char:1\r\n+ & $pnpmExe @PnpmArgs\r\n+ ~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : NotSpecified: (To C:\\Users\\154...2gPP\\origin.git:String) [], RemoteException\r\n    + FullyQualifiedErrorId : NativeCommandError\r\n \r\n"
         }
       ],
-      "status": "PASS"
+      "status": "FAIL"
     }
   ]
 }
