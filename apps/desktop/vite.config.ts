@@ -74,6 +74,34 @@ export default defineConfig(() => {
     server: {
       port: devServerPort(),
       strictPort: true,
+      warmup: {
+        // Route chunks are dynamic imports (AppShell lazy()), so Vite's
+        // default warmup — which recurses static imports only — never reaches
+        // them. On a genuinely cold cache the first browser request pays
+        // optimizeDeps plus 15-32s per on-demand route chunk transform in the
+        // critical path (measured in the source-live E2E trace:
+        // /chat document 34.5s, pages/Chat.tsx 22s, api/* 15-32s each). Warm
+        // the whole route chunk graph plus the nested lazy chunks at server
+        // start so a cold browser loads already-compiled modules. The listed
+        // pages/*.tsx entries are the 10 route chunks; the remaining three are
+        // dynamic imports nested inside Chat/Work (MarkdownContent, artifact
+        // workspace content, source code viewport).
+        clientFiles: [
+          "./src/pages/Chat.tsx",
+          "./src/pages/Work.tsx",
+          "./src/pages/Dashboard.tsx",
+          "./src/pages/Repos.tsx",
+          "./src/pages/TaskViewer.tsx",
+          "./src/pages/PullRequests.tsx",
+          "./src/pages/CreatePullRequest.tsx",
+          "./src/pages/Pipelines.tsx",
+          "./src/pages/Settings.tsx",
+          "./src/pages/ProjectLinks.tsx",
+          "./src/components/conversation/MarkdownContent.tsx",
+          "./src/pages/chat/artifacts/ArtifactWorkspaceContent.tsx",
+          "./src/pages/chat/artifacts/SourceCodeViewport.tsx",
+        ],
+      },
     },
     envPrefix: ["VITE_", "TAURI_"],
     build: {

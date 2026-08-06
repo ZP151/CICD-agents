@@ -30,6 +30,11 @@ const loadSettings = () => import("../pages/Settings.js");
 const loadProjectLinks = () => import("../pages/ProjectLinks.js");
 
 const routeModuleLoaders: RouteModuleLoader[] = [
+  // Chat and Work are the default routes ("/" redirects to /chat), so they
+  // must be preloaded first; FullLayout() preloads this list on mount and the
+  // vite dev server warmup pre-transforms them at server start.
+  loadChat,
+  loadWork,
   loadDashboard,
   loadRepos,
   loadTaskViewer,
