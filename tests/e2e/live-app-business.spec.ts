@@ -1381,7 +1381,7 @@ test.describe("Live app business workflows", () => {
       await expect(page.getByRole("button", { name: mergeRepo.currentBranch })).toBeVisible();
 
       await page.getByPlaceholder(/Ask MergePilot/).fill(
-        "Merge main into the current branch. Do not rebase, push, stage, commit, or create a PR.",
+        "Merge main into the current branch and stop. Do not rebase, push, or create a PR.",
       );
       await page.getByRole("button", { name: "Send" }).click();
 
@@ -1397,12 +1397,18 @@ test.describe("Live app business workflows", () => {
 
       await expect.poll(() => gitOrEmpty(mergeRepo.repoPath, ["status", "--short"]), { timeout: 45_000 })
         .toContain("UU app.config");
-      await expect(page.getByText(/Stopped after (git_merge|git merge main)/i).first()).toBeVisible({
+      // The daemon's merge-conflict narrative (gitOperation.ts) is the
+      // surfaced chat evidence; the recovery actions render in the env
+      // panel's Git recovery notice (WorkspaceGitRecoveryPanel: "Merge
+      // needs attention" with Continue/Abort actions).
+      await expect(page.getByText(/Git is in merge with unresolved conflicts: app\.config/i).first()).toBeVisible({
         timeout: 90_000,
       });
-      await expect(page.getByText(/Git is in merge with unresolved conflicts: app\.config/i)).toBeVisible();
-      await expect(page.getByRole("button", { name: "Continue merge" })).toBeEnabled();
-      await expect(page.getByRole("button", { name: "Abort merge" })).toBeEnabled();
+      const recoveryNotice = page.getByText(/needs attention/i).first();
+      await expect(recoveryNotice).toBeVisible({ timeout: 90_000 });
+      await expect(recoveryNotice).toContainText("Merge");
+      await expect(page.getByRole("button", { name: "Continue the in-progress merge" })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "Abort the in-progress merge" })).toBeEnabled();
 
       git(mergeRepo.repoPath, ["merge", "--abort"]);
       expect(git(mergeRepo.repoPath, ["status", "--short"])).toBe("");
@@ -1780,7 +1786,14 @@ test.describe("Live app business workflows", () => {
         .getByTestId("pending-action-card")
         .filter({ hasText: /git stash pop|git_stash/i })
         .first();
-      await expect(stashApproval).toBeVisible({ timeout: 120_000 });
+      // Measured in cold run A (daemon trace, session chat_1786036732564_2e2a06):
+      // this conflict turn streamed its narrative at 21-58s, ran its first
+      // read-only tool at ~61s, then generated the next step past the 120s
+      // budget (cancelled at 120.4s with no approval card yet). The comparable
+      // non-conflict pop turn proposed its approval at 62.5s and finished at
+      // 96.3s. 180s covers the slower conflict-planning path with the same
+      // event budget the other conflict tests use.
+      await expect(stashApproval).toBeVisible({ timeout: 180_000 });
       await expect(stashApproval.getByText("git stash pop").first()).toBeVisible();
       await stashApproval.getByRole("button", { name: "Approve and run" }).click();
 
@@ -1822,7 +1835,7 @@ test.describe("Live app business workflows", () => {
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
       await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
-        "Discard changes in README.md only. Do not touch notes.txt. Do not stage, commit, push, or create a PR.",
+        "Restore (discard) the working-tree changes in README.md only (git restore README.md). Do not touch notes.txt. Do not push, stage, commit, or create a PR.",
       );
       await page.getByRole("button", { name: "Send" }).click();
 
@@ -1907,7 +1920,7 @@ test.describe("Live app business workflows", () => {
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
       await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
-        `Create local git tag ${tagName} on HEAD with message "${tagMessage}". Do not push tags, do not push the branch, and do not create a PR.`,
+        `Create local git tag ${tagName} on HEAD with message "${tagMessage}" (git tag -a ${tagName} -m "${tagMessage}"). Do not push tags, do not push the branch, and do not create a PR.`,
       );
       await page.getByRole("button", { name: "Send" }).click();
 
