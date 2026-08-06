@@ -644,6 +644,18 @@ function liveEnvironmentPanel(page: Page) {
     .first();
 }
 
+async function openLiveChat(page: Page): Promise<void> {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("/chat?new=1");
+  // Real readiness signal: on a cold Vite dev server the route chunk graph
+  // (all lazy route modules plus their static imports) compiles on demand,
+  // and the shell renders the "Preparing workspace" Suspense fallback until
+  // the chat route is interactive. Gate on the actual condition — the input
+  // being visible — as the documented first-load compile budget (see the
+  // playwright.config.ts note). Warm loads resolve this in ~1s.
+  await expect(page.getByPlaceholder(/Ask MergePilot/)).toBeVisible({ timeout: 240_000 });
+}
+
 async function openEnvironmentPanel(page: Page): Promise<void> {
   // Since v0.5.24 the Environment summary is only rendered while the pinned
   // summary is open (it starts closed). Pin it on demand, mirroring the
@@ -696,7 +708,12 @@ test.describe("Live app business workflows", () => {
   test.skip(!liveAppEnabled, "Set MERGEPILOT_E2E_LIVE_APP=1 to run against the live frontend and daemon.");
 
   test("stages only the requested file through the real Chat UI", async ({ page, request }) => {
-    test.setTimeout(120_000);
+    // Cold first load compiles the entire app module graph on demand in Vite
+    // dev (route chunks are dynamic imports; see vite.config server.warmup).
+    // The 240s gate below is the documented compile budget, matching the
+    // playwright.config.ts note on first-load compilation. Business
+    // assertions below keep their own waits.
+    test.setTimeout(300_000);
 
     const health = await request.get(`${DAEMON_URL}/healthz`);
     expect(health.ok()).toBeTruthy();
@@ -710,8 +727,7 @@ test.describe("Live app business workflows", () => {
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
 
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         "Stage only README.md. Do not stage notes.txt. Do not commit or push.",
       );
@@ -751,8 +767,7 @@ test.describe("Live app business workflows", () => {
       const projectLink = await createTempProjectLink(request, repoPath, "mp-live-approval-restore");
       projectLinkId = projectLink.id;
 
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.evaluate(({ activeProjectLinkId, activeRepoPath }) => {
         localStorage.setItem("mergepilot_active_project_link_id", activeProjectLinkId);
         localStorage.setItem("chat_repo", activeRepoPath);
@@ -823,8 +838,7 @@ test.describe("Live app business workflows", () => {
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
 
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         "Stage only README.md. Do not stage notes.txt. Do not commit or push.",
       );
@@ -860,8 +874,7 @@ test.describe("Live app business workflows", () => {
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
 
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         "Stage only README.md. Do not stage notes.txt. Do not commit or push.",
       );
@@ -933,8 +946,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         `Stage all changes and commit them with message "${commitMessage}". Do not push.`,
       );
@@ -993,8 +1005,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await openEnvironmentPanel(page);
       await page.getByRole("button", { name: "Commit or push", exact: true }).click();
       await page.getByPlaceholder("Commit message (leave blank to generate)...").fill(commitMessage);
@@ -1040,8 +1051,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         "Commit staged changes with message \"chore: should not happen\". Do not stage anything. If nothing is staged, explain and stop.",
       );
@@ -1077,8 +1087,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         "What will be committed? Read-only only. Do not stage, commit, or push.",
       );
@@ -1118,8 +1127,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         "Draft a commit message for the current changes. Read-only only. Do not stage, commit, push, or create a PR.",
       );
@@ -1161,8 +1169,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, remoteRepo.repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         "Where will this push go? Read-only only. Do not fetch, push, stage, or commit.",
       );
@@ -1171,14 +1178,13 @@ test.describe("Live app business workflows", () => {
       await expect(page.getByPlaceholder(/Ask MergePilot/)).toBeEnabled({ timeout: 120_000 });
       // The remote inspection must surface the redacted origin URL as daemon
       // evidence. The credential part is redacted server-side to ***REDACTED***
-      // before the tool result reaches the UI, so the host path is the
-      // deterministic structured evidence regardless of how the LLM phrases
-      // the answer.
+      // before the tool result reaches the UI, but the LLM is free to render
+      // the URL with or without the (redacted) userinfo — it normalizes
+      // "https://***REDACTED***@host/path" to "https://host/path". Assert the
+      // deterministic structured evidence: the origin host path is surfaced,
+      // and the secret never reaches the UI (asserts below).
       await expect(
-        page
-          .locator("main")
-          .getByText(/https:\/\/\*\*\*REDACTED\*\*\*@example\.visualstudio\.com\/Claims\/_git\/Repo/i)
-          .first(),
+        page.locator("main").getByText(/example\.visualstudio\.com\/Claims\/_git\/Repo/i).first(),
       ).toBeVisible({ timeout: 30_000 });
       const body = page.locator("body");
       await expect(body).not.toContainText("supersecrettoken");
@@ -1211,8 +1217,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, secretRepo.repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         "Review my current changes for risks, especially leaked credentials or secrets. Classify each risk by category (for example: security, configuration, correctness). Read-only only. Do not stage, commit, push, or create a PR.",
       );
@@ -1264,8 +1269,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, switchRepo.repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await openEnvironmentPanel(page);
       const environmentPanel = liveEnvironmentPanel(page);
       await refreshEnvironmentPanelBranch(page, environmentPanel);
@@ -1316,8 +1320,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, mergeRepo.repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await openEnvironmentPanel(page);
       await refreshEnvironmentPanelBranch(page, liveEnvironmentPanel(page));
       await expect(page.getByRole("button", { name: mergeRepo.currentBranch })).toBeVisible();
@@ -1372,8 +1375,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, mergeRepo.repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await openEnvironmentPanel(page);
       await refreshEnvironmentPanelBranch(page, liveEnvironmentPanel(page));
       await expect(page.getByRole("button", { name: mergeRepo.currentBranch })).toBeVisible();
@@ -1428,8 +1430,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await openEnvironmentPanel(page);
       await refreshEnvironmentPanelBranch(page, liveEnvironmentPanel(page));
       await expect(page.getByRole("button", { name: "main" })).toBeVisible();
@@ -1479,8 +1480,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, pushRepo.repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await openEnvironmentPanel(page);
       await refreshEnvironmentPanelBranch(page, liveEnvironmentPanel(page));
       await expect(page.getByRole("button", { name: pushRepo.branchName })).toBeVisible();
@@ -1532,8 +1532,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, behindRepo.repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await openEnvironmentPanel(page);
       const environmentPanel = liveEnvironmentPanel(page);
       await refreshEnvironmentPanelBranch(page, environmentPanel);
@@ -1585,32 +1584,45 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, conflictRepo.repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await openEnvironmentPanel(page);
       const environmentPanel = liveEnvironmentPanel(page);
       await refreshEnvironmentPanelBranch(page, environmentPanel);
       const branchButton = environmentPanel.getByRole("button", { name: conflictRepo.branchName, exact: true });
       await expect(branchButton).toBeVisible();
 
-      await page.getByRole("button", { name: "Commit or push", exact: true }).click();
-      await expect(page.getByText("Diverged: 1 ahead, 1 behind")).toBeVisible();
-      await page.getByRole("button", { name: "Pull with rebase before pushing", exact: true }).click();
+      // The workspace commit menu's static divergence banner ("Diverged:
+      // 1 ahead, 1 behind") and its "Pull with rebase before pushing"
+      // shortcut were removed in the Cycle 00 workspace controls refactor
+      // (68a673a). Divergence now surfaces through chat evidence (git_status
+      // tool output) and the push-readiness summary on approval cards, so
+      // initiate the rebase through the real Chat UI the same way the user
+      // would.
+      await page.getByPlaceholder(/Ask MergePilot/).fill(
+        "Pull latest from origin main with rebase. Do not push, stage, commit, or create a PR.",
+      );
+      await page.getByRole("button", { name: "Send" }).click();
 
       const pullApproval = page
         .getByTestId("pending-action-card")
         .filter({ hasText: /git pull --rebase origin main/i })
         .first();
-      await expect(pullApproval).toBeVisible({ timeout: 90_000 });
+      await expect(pullApproval).toBeVisible({ timeout: 120_000 });
       await pullApproval.getByRole("button", { name: "Approve and run" }).click();
 
       await expect.poll(() => gitOrEmpty(conflictRepo.repoPath, ["status", "--short"]), { timeout: 45_000 })
         .toContain("UU app.config");
-      await expect(page.getByText("Stopped after git pull --rebase origin main").first()).toBeVisible({
+      // The daemon's rebase-conflict narrative (gitOperation.ts) is the
+      // surfaced chat evidence; the recovery actions render in the env
+      // panel's Git recovery notice (WorkspaceGitRecoveryPanel: "Rebase
+      // needs attention" with Continue/Abort/Skip actions).
+      await expect(page.getByText(/Git is in rebase with unresolved conflicts: app\.config/i).first()).toBeVisible({
         timeout: 90_000,
       });
-      await expect(page.getByText(/Git is in rebase with unresolved conflicts: app\.config/i)).toBeVisible();
-      await expect(page.getByRole("button", { name: "Continue rebase" })).toBeEnabled();
+      const recoveryNotice = page.getByText(/needs attention/i).first();
+      await expect(recoveryNotice).toBeVisible({ timeout: 90_000 });
+      await expect(recoveryNotice).toContainText("Rebase");
+      await expect(page.getByRole("button", { name: "Continue the in-progress rebase" })).toBeEnabled();
 
       git(conflictRepo.repoPath, ["rebase", "--abort"]);
       expect(git(conflictRepo.repoPath, ["status", "--short"])).toBe("");
@@ -1638,8 +1650,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         `Stash my current work with message "${stashMessage}". Do not commit, push, or create a PR.`,
       );
@@ -1677,8 +1688,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         "Apply the latest stash without dropping it. Do not stage, commit, push, or create a PR.",
       );
@@ -1719,8 +1729,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         "Pop the latest stash and drop it if the restore succeeds. Do not stage, commit, push, or create a PR.",
       );
@@ -1761,8 +1770,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         "Pop the latest stash and explain conflict recovery if it fails. Do not stage, commit, push, or create a PR.",
       );
@@ -1778,8 +1786,14 @@ test.describe("Live app business workflows", () => {
 
       await expect.poll(() => gitOrEmpty(repoPath, ["status", "--short"]), { timeout: 45_000 })
         .toContain("UU README.md");
-      await expect(page.getByText("Stopped after git stash pop").first()).toBeVisible({ timeout: 120_000 });
-      await expect(page.getByText(/Git has unresolved index conflicts: README\.md/i).first()).toBeVisible();
+      // The old "Stopped after <command>" action line is no longer rendered
+      // in the desktop (the failure narrative replaced it — see the comment
+      // in the commit-validation test). The stash-pop conflict surfaces
+      // through the daemon's failure narrative (gitOperation.ts), which is
+      // what these asserts gate on.
+      await expect(page.getByText(/Git has unresolved index conflicts: README\.md/i).first()).toBeVisible({
+        timeout: 120_000,
+      });
       await expect(page.getByText(/Git keeps the stash entry/i).first()).toBeVisible();
       expect(git(repoPath, ["stash", "list"])).toContain("mergepilot pop conflict fixture");
     } finally {
@@ -1806,8 +1820,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         "Discard changes in README.md only. Do not touch notes.txt. Do not stage, commit, push, or create a PR.",
       );
@@ -1850,8 +1863,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         "Revert the last commit using git revert HEAD. Do not reset, push, or create a PR.",
       );
@@ -1893,8 +1905,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         `Create local git tag ${tagName} on HEAD with message "${tagMessage}". Do not push tags, do not push the branch, and do not create a PR.`,
       );
@@ -1946,8 +1957,7 @@ test.describe("Live app business workflows", () => {
       projectLinkId = projectLink.id;
 
       await selectProjectLinkInBrowser(page, projectLinkId, pushRepo.repoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         `Push only local git tag ${tagName} to origin. Do not push branch ${pushRepo.branchName}, do not push other tags, and do not create a PR.`,
       );
@@ -1995,8 +2005,7 @@ test.describe("Live app business workflows", () => {
 
     try {
       await selectProjectLinkInBrowser(page, projectLink.id, claimBotRepoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await openEnvironmentPanel(page);
       await expect(page.getByText("ClaimBot_API")).toBeVisible();
 
@@ -2045,8 +2054,7 @@ test.describe("Live app business workflows", () => {
 
     try {
       await selectProjectLinkInBrowser(page, projectLink.id, claimBotRepoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await openEnvironmentPanel(page);
       await expect(page.getByText("ClaimBot_API")).toBeVisible();
 
@@ -2096,8 +2104,7 @@ test.describe("Live app business workflows", () => {
 
     try {
       await selectProjectLinkInBrowser(page, projectLink.id, claimBotRepoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await openEnvironmentPanel(page);
       await expect(page.getByText("ClaimBot_API")).toBeVisible();
 
@@ -2157,8 +2164,7 @@ test.describe("Live app business workflows", () => {
 
     try {
       await selectProjectLinkInBrowser(page, projectLink.id, claimBotRepoPath);
-      await page.setViewportSize({ width: 1280, height: 820 });
-      await page.goto("/chat?new=1");
+      await openLiveChat(page);
       await openEnvironmentPanel(page);
       await expect(page.getByText("ClaimBot_API")).toBeVisible();
 
