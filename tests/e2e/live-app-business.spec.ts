@@ -656,6 +656,34 @@ async function openLiveChat(page: Page): Promise<void> {
   await expect(page.getByPlaceholder(/Ask MergePilot/)).toBeVisible({ timeout: 240_000 });
 }
 
+async function pendingActionCardOrTurnEnded(
+  page: Page,
+  card: Locator,
+  chipCountBefore: number,
+  timeoutMs: number,
+): Promise<boolean> {
+  // A pending-action card renders mid-turn when the model proposes a write
+  // action. If instead the turn ends without a proposal (the model answered
+  // without proposing), the finished message bubble renders its "Worked for
+  // Ns" status. Wait for whichever happens first so a decline can be
+  // re-prompted without burning the whole wait; a turn still running at the
+  // deadline is a real failure and surfaces through the poll timeout.
+  await expect
+    .poll(
+      async () => {
+        if (await card.isVisible().catch(() => false)) return "card";
+        const chipCount = await page.getByRole("button", { name: /^Worked for \d+s$/ }).count();
+        if (chipCount > chipCountBefore) return "ended";
+        return "running";
+      },
+      { timeout: timeoutMs, message: "expected the pending-action card or a finished turn" },
+    )
+    .toMatch(/card|ended/);
+  // The card can render in the same instant the turn ends; report it present
+  // whenever it is in the DOM.
+  return (await card.isVisible().catch(() => false)) === true;
+}
+
 async function openEnvironmentPanel(page: Page): Promise<void> {
   // Since v0.5.24 the Environment summary is only rendered while the pinned
   // summary is open (it starts closed). Pin it on demand, mirroring the
@@ -1924,7 +1952,13 @@ test.describe("Live app business workflows", () => {
   });
 
   test("creates a local release tag through real Chat UI approval without pushing it", async ({ page, request }) => {
-    test.setTimeout(150_000);
+    // Two budgeted turn windows: the first request, and — if the model answers
+    // without proposing the write action — one corrective re-prompt that names
+    // the git_tag tool explicitly. The default model declines to propose when
+    // the request text contains push-related negations (verified against the
+    // live model); the approved scope is still gated by the card filter, the
+    // no-push code-preview check, and the post-conditions below.
+    test.setTimeout(240_000);
 
     const health = await request.get(`${DAEMON_URL}/healthz`);
     expect(health.ok()).toBeTruthy();
@@ -1941,7 +1975,7 @@ test.describe("Live app business workflows", () => {
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
       await openLiveChat(page);
       await page.getByPlaceholder(/Ask MergePilot/).fill(
-        `Create local git tag ${tagName} on HEAD with message "${tagMessage}" (git tag -a ${tagName} -m "${tagMessage}"). Do not push the branch and do not create a PR.`,
+        `Create an annotated local git tag ${tagName} on the current HEAD commit with message "${tagMessage}".`,
       );
       await page.getByRole("button", { name: "Send" }).click();
 
@@ -1950,7 +1984,22 @@ test.describe("Live app business workflows", () => {
         .filter({ hasText: /git[_ ]tag/i })
         .filter({ hasText: tagName })
         .first();
-      await expect(tagApproval).toBeVisible({ timeout: 90_000 });
+      const chipCountBefore = await page.getByRole("button", { name: /^Worked for \d+s$/ }).count();
+      const cardShown = await pendingActionCardOrTurnEnded(page, tagApproval, chipCountBefore, 90_000);
+      if (!cardShown) {
+        await page.getByPlaceholder(/Ask MergePilot/).fill(
+          `Create an annotated local git tag ${tagName} on the current HEAD commit with message "${tagMessage}". ` +
+            `The git_tag tool is available in this environment (approval-required write tool); use it to create the tag.`,
+        );
+        await page.getByRole("button", { name: "Send" }).click();
+        const cardShownAfterRePrompt = await pendingActionCardOrTurnEnded(
+          page,
+          tagApproval,
+          chipCountBefore + 1,
+          120_000,
+        );
+        expect(cardShownAfterRePrompt, "tag approval card after the corrective re-prompt").toBeTruthy();
+      }
       await expect(tagApproval.getByText("HIGH risk")).toBeVisible();
       await expect(tagApproval.locator("code").first()).not.toContainText("push");
       await tagApproval.getByRole("button", { name: "Approve and run" }).click();
