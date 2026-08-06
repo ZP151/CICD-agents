@@ -707,6 +707,26 @@ async function openPipelineWorkspaceAction(page: Page): Promise<void> {
 test.describe("Live app business workflows", () => {
   test.skip(!liveAppEnabled, "Set MERGEPILOT_E2E_LIVE_APP=1 to run against the live frontend and daemon.");
 
+  // Vite dev compiles the chat route chunk graph on demand (dynamic imports;
+  // server.warmup in vite.config.ts covers only static graphs and yields to
+  // live requests under load). A cold first navigation measured 24-88s for
+  // the document plus 15-32s per module group, so the compile must not land
+  // inside any per-test budget. Compile it once here against the real
+  // readiness signal (the composer input, same gate openLiveChat uses), then
+  // close the page: every test's navigation then hits the warm transform
+  // cache (~1s) and per-test timeouts budget turn work, not first-load
+  // compilation.
+  test.beforeAll(async ({ browser }) => {
+    const warmupPage = await browser.newPage();
+    try {
+      await warmupPage.setViewportSize({ width: 1280, height: 820 });
+      await warmupPage.goto("/chat?new=1");
+      await expect(warmupPage.getByPlaceholder(/Ask MergePilot/)).toBeVisible({ timeout: 240_000 });
+    } finally {
+      await warmupPage.close().catch(() => undefined);
+    }
+  }, { timeout: 300_000 });
+
   test("stages only the requested file through the real Chat UI", async ({ page, request }) => {
     // Cold first load compiles the entire app module graph on demand in Vite
     // dev (route chunks are dynamic imports; see vite.config server.warmup).
