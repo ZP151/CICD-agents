@@ -3,8 +3,10 @@ import { WorkbenchDisclosure } from "../../../components/workbench/WorkbenchPrim
 import type { ProjectLink } from "../../../api.js";
 import type { WorkflowEventState } from "../chat.types.js";
 import type { TaskState, WorkspaceAction } from "../workflowTaskState.js";
+import { gitRecoveryPanelState } from "../workflowTaskState.js";
 import { WorkspaceBranchMenu } from "./WorkspaceBranchMenu.js";
 import { WorkspaceCommitMenu } from "./WorkspaceCommitMenu.js";
+import { WorkspaceGitRecoveryPanel } from "./WorkspaceGitRecoveryPanel.js";
 import { WorkflowProgressList } from "./WorkflowProgressList.js";
 
 interface PinnedSummaryPanelProps {
@@ -48,6 +50,7 @@ export function PinnedSummaryPanel({
   const branchName = currentBranch ?? activeProjectLink?.defaultBranch ?? "";
   const branchLabel = branchName || "not checked";
   const hasRepoPath = Boolean(repoPath.trim());
+  const gitRecovery = gitRecoveryPanelState(workflowState);
 
   const runAction = (action: WorkspaceAction) => {
     if (busy) return;
@@ -116,6 +119,10 @@ export function PinnedSummaryPanel({
             runAction={runAction}
             menuPositionClassName="right-full top-0 mr-2 w-80"
           />
+        </div>
+
+        <div className="mt-2">
+          <WorkspaceGitRecoveryPanel gitRecovery={gitRecovery} busy={busy} runAction={runAction} />
         </div>
 
         <WorkbenchDisclosure label="Progress" className="mt-3 border-t border-[rgb(var(--app-border))] pt-2">
