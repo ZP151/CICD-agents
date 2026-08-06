@@ -364,6 +364,14 @@ export function registerChatRoutes(
             releaseFirstTool = resolve;
             rejectFirstTool = reject;
           });
+          // The narrative failure paths reject the gate and then throw their
+          // own error (reported over SSE). If that rejection happens before
+          // the planner reaches its first-tool gate — e.g. the planner is
+          // still awaiting session persistence or project context — no handler
+          // is attached yet and Node reports an unhandled rejection, which
+          // kills the whole daemon. Claim the rejection immediately; the
+          // planner's own await still receives it through its own handler.
+          void firstToolGate.catch(() => undefined);
           const openingNarrative = (async () => {
             for await (const event of streamActionNarrative(narrativeLlm, {
               request: message,
