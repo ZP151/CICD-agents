@@ -10,6 +10,13 @@ requires the daemon version to match packages/daemon/package.json by default,
 writes Playwright and daemon logs under output/live-e2e, and cleans up the
 daemon port if it started the daemon.
 
+Vite dev compiles route chunks on demand and a cold compile is probabilistic
+(see scripts/prewarm-vite.mjs). Unless -SkipPrewarm is given, the wrapper
+starts Vite on 127.0.0.1:1420 (Playwright's webServer reuses it via
+reuseExistingServer:true), runs scripts/prewarm-vite.mjs to compile the full
+module graph, and aborts the run if the app is not interactive, so the suite's
+beforeAll never pays first-load compilation.
+
 .EXAMPLE
 .\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -Grep "ClaimBot_API pipeline #117"
 
@@ -29,7 +36,8 @@ param(
   [switch]$LiveAdo,
   [switch]$Destructive,
   [switch]$AllowExistingMismatchedDaemon,
-  [switch]$RestartMismatchedDaemon
+  [switch]$RestartMismatchedDaemon,
+  [switch]$SkipPrewarm
 )
 
 $ErrorActionPreference = "Stop"
@@ -131,6 +139,7 @@ function Start-SourceDaemon {
 
 $startedDaemon = $null
 $existingHealth = $null
+$startedVite = $null
 
 try {
   $existingHealth = Get-DaemonHealth
@@ -186,6 +195,101 @@ try {
   exit 1
 }
 
+# ---- Vite start + pre-warm ----
+# Vite dev compiles route chunks on demand; on this machine a cold compile is
+# probabilistic (observed 24-88s document, 15-98s per module group, and one
+# run where the final chat-runtime module wave hung server-side until
+# teardown). Playwright's webServer (reuseExistingServer:true) reuses the Vite
+# started here; scripts/prewarm-vite.mjs compiles the full module graph once so
+# every test navigation hits the warm transform cache and the suite's beforeAll
+# budget is not spent on first-load compilation.
+$viteUrl = "http://127.0.0.1:1420"
+$viteLog = Join-Path $LogDir "live-app-vite-$stamp.log"
+$prewarmLog = Join-Path $LogDir "live-app-prewarm-$stamp.log"
+
+try {
+  if (-not $SkipPrewarm) {
+    $viteListening = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+      Where-Object { $_.LocalAddress -in @("127.0.0.1", "0.0.0.0", "::", "::1") -and $_.LocalPort -eq 1420 }
+    if ($viteListening) {
+      # Reuse an existing listener (a developer's own Vite) — never kill it.
+      $startedVite = $null
+    } else {
+      $viteProcess = Start-Process -FilePath "powershell.exe" -ArgumentList @(
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        $pnpmProject,
+        "--dir",
+        "apps/desktop",
+        "exec",
+        "vite",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "1420"
+      ) -WorkingDirectory $repoRoot -RedirectStandardOutput $viteLog -RedirectStandardError $viteLog -WindowStyle Hidden -PassThru
+      $startedVite = $viteProcess
+
+      $viteReady = $false
+      for ($i = 0; $i -lt 90; $i++) {
+        try {
+          $null = Invoke-WebRequest -Uri $viteUrl -Method Get -TimeoutSec 3 -NoProxy
+          $viteReady = $true
+          break
+        } catch {
+          if ($viteProcess.HasExited) { break }
+          Start-Sleep -Milliseconds 1000
+        }
+      }
+      if (-not $viteReady) {
+        throw "Vite did not become reachable on $viteUrl. Log: $viteLog"
+      }
+    }
+
+    $prewarmOut = & $pnpmProject --dir $repoRoot exec node scripts/prewarm-vite.mjs 2>&1 | Out-String
+    $prewarmExit = $LASTEXITCODE
+    $prewarmOut | Set-Content -LiteralPath $prewarmLog -Encoding utf8
+    if ($prewarmExit -ne 0) {
+      throw "Vite pre-warm failed (exit $prewarmExit); not starting the suite against a cold server.`n$prewarmOut"
+    }
+  }
+} catch {
+  $prewarmError = $_.Exception.Message
+  if ($startedVite -and -not $startedVite.HasExited) {
+    Stop-Process -Id $startedVite.Id -Force -ErrorAction SilentlyContinue
+  }
+  $startedVite = $null
+  if ($startedDaemon -and $startedDaemon.process -and -not $startedDaemon.process.HasExited) {
+    Stop-Process -Id $startedDaemon.process.Id -Force -ErrorAction SilentlyContinue
+  }
+  if ($startedDaemon) {
+    Stop-DaemonPortOwner -OnlyRepoOwned
+  }
+  $startedDaemon = $null
+  [pscustomobject]@{
+    ok = $false
+    prewarmFailed = $true
+    error = $prewarmError
+    daemonUrl = $daemonUrl
+    daemonVersion = if ($existingHealth) { $existingHealth.version } else { $null }
+    expectedVersion = $expectedVersion
+    startedDaemon = ($null -ne $startedDaemon)
+    liveAdo = [bool]$LiveAdo
+    destructive = [bool]$Destructive
+    testPath = $TestPath
+    project = $Project
+    grep = $Grep
+    playwrightLog = $playwrightLog
+    daemonLog = $daemonOut
+    daemonErrorLog = $daemonErr
+    viteLog = $viteLog
+    prewarmLog = $prewarmLog
+  } | ConvertTo-Json -Depth 6
+  exit 1
+}
+
 $previousLiveApp = $env:MERGEPILOT_E2E_LIVE_APP
 $previousLiveAdo = $env:MERGEPILOT_E2E_LIVE_ADO
 $previousDestructive = $env:MERGEPILOT_E2E_DESTRUCTIVE
@@ -233,6 +337,8 @@ try {
     playwrightLog = $playwrightLog
     daemonLog = $daemonOut
     daemonErrorLog = $daemonErr
+    viteLog = $viteLog
+    prewarmLog = $prewarmLog
   } | ConvertTo-Json -Depth 6
   Write-Output $resultJson
 
@@ -260,4 +366,9 @@ try {
   if ($startedDaemon) {
     Stop-DaemonPortOwner -OnlyRepoOwned
   }
+
+  if ($startedVite -and -not $startedVite.HasExited) {
+    Stop-Process -Id $startedVite.Id -Force -ErrorAction SilentlyContinue
+  }
+  $startedVite = $null
 }
