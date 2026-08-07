@@ -66,14 +66,15 @@ function Get-DaemonHealth {
   }
 }
 
-function Stop-DaemonPortOwner {
+function Stop-PortOwner {
   param(
+    [int]$Port,
     [switch]$OnlyRepoOwned
   )
 
   $owners = @(
     Get-NetTCPConnection -ErrorAction SilentlyContinue |
-    Where-Object { $_.LocalAddress -in @("127.0.0.1", "0.0.0.0", "::", "::1") -and $_.LocalPort -eq 8787 } |
+    Where-Object { $_.LocalAddress -in @("127.0.0.1", "0.0.0.0", "::", "::1") -and $_.LocalPort -eq $Port } |
     Select-Object -ExpandProperty OwningProcess -Unique
   )
   foreach ($owner in $owners) {
@@ -89,7 +90,7 @@ function Stop-DaemonPortOwner {
         continue
       }
       if (-not $OnlyRepoOwned -and -not $isRepoOwned -and -not $isMergePilotDaemon) {
-        throw "Refusing to stop unexpected process on $daemonUrl. PID $owner, path '$executablePath', command '$commandLine'."
+        throw "Refusing to stop unexpected process on port $Port. PID $owner, path '$executablePath', command '$commandLine'."
       }
       Stop-Process -Id $owner -Force -ErrorAction SilentlyContinue
     }
@@ -147,7 +148,7 @@ try {
   if ($existingHealth) {
     if ($existingHealth.version -ne $expectedVersion) {
       if ($RestartMismatchedDaemon) {
-        Stop-DaemonPortOwner
+        Stop-PortOwner -Port 8787
         Start-Sleep -Milliseconds 500
         $startedDaemon = Start-SourceDaemon
         $existingHealth = $startedDaemon.health
@@ -173,7 +174,7 @@ try {
     Stop-Process -Id $startedDaemon.process.Id -Force -ErrorAction SilentlyContinue
   }
   if ($startedDaemon) {
-    Stop-DaemonPortOwner -OnlyRepoOwned
+    Stop-PortOwner -Port 8787 -OnlyRepoOwned
   }
   [pscustomobject]@{
     ok = $false
@@ -205,6 +206,7 @@ try {
 # budget is not spent on first-load compilation.
 $viteUrl = "http://127.0.0.1:1420"
 $viteLog = Join-Path $LogDir "live-app-vite-$stamp.log"
+$viteErrLog = Join-Path $LogDir "live-app-vite-$stamp.err.log"
 $prewarmLog = Join-Path $LogDir "live-app-prewarm-$stamp.log"
 
 try {
@@ -229,14 +231,19 @@ try {
         "127.0.0.1",
         "--port",
         "1420"
-      ) -WorkingDirectory $repoRoot -RedirectStandardOutput $viteLog -RedirectStandardError $viteLog -WindowStyle Hidden -PassThru
+      ) -WorkingDirectory $repoRoot -RedirectStandardOutput $viteLog -RedirectStandardError $viteErrLog -WindowStyle Hidden -PassThru
       $startedVite = $viteProcess
 
       $viteReady = $false
+      # Port-open is the signal here; an HTTP GET against a cold Vite can take
+      # >3s per request (observed 3.8s), so a TCP connect avoids false timeout
+      # failures. scripts/prewarm-vite.mjs performs the real HTTP readiness.
       for ($i = 0; $i -lt 90; $i++) {
         try {
-          $null = Invoke-WebRequest -Uri $viteUrl -Method Get -TimeoutSec 3 -NoProxy
+          $tcp = New-Object System.Net.Sockets.TcpClient
+          $tcp.Connect("127.0.0.1", 1420)
           $viteReady = $true
+          $tcp.Dispose()
           break
         } catch {
           if ($viteProcess.HasExited) { break }
@@ -260,12 +267,15 @@ try {
   if ($startedVite -and -not $startedVite.HasExited) {
     Stop-Process -Id $startedVite.Id -Force -ErrorAction SilentlyContinue
   }
+  if ($startedVite) {
+    Stop-PortOwner -Port 1420 -OnlyRepoOwned
+  }
   $startedVite = $null
   if ($startedDaemon -and $startedDaemon.process -and -not $startedDaemon.process.HasExited) {
     Stop-Process -Id $startedDaemon.process.Id -Force -ErrorAction SilentlyContinue
   }
   if ($startedDaemon) {
-    Stop-DaemonPortOwner -OnlyRepoOwned
+    Stop-PortOwner -Port 8787 -OnlyRepoOwned
   }
   $startedDaemon = $null
   [pscustomobject]@{
@@ -285,6 +295,7 @@ try {
     daemonLog = $daemonOut
     daemonErrorLog = $daemonErr
     viteLog = $viteLog
+    viteErrorLog = $viteErrLog
     prewarmLog = $prewarmLog
   } | ConvertTo-Json -Depth 6
   exit 1
@@ -338,6 +349,7 @@ try {
     daemonLog = $daemonOut
     daemonErrorLog = $daemonErr
     viteLog = $viteLog
+    viteErrorLog = $viteErrLog
     prewarmLog = $prewarmLog
   } | ConvertTo-Json -Depth 6
   Write-Output $resultJson
@@ -364,11 +376,16 @@ try {
     Stop-Process -Id $startedDaemon.process.Id -Force -ErrorAction SilentlyContinue
   }
   if ($startedDaemon) {
-    Stop-DaemonPortOwner -OnlyRepoOwned
+    Stop-PortOwner -Port 8787 -OnlyRepoOwned
   }
 
   if ($startedVite -and -not $startedVite.HasExited) {
     Stop-Process -Id $startedVite.Id -Force -ErrorAction SilentlyContinue
+  }
+  if ($startedVite) {
+    # The wrapper may orphan its node child; clear any repo-owned listener left
+    # on 1420. Never touch the port when we reused an existing server.
+    Stop-PortOwner -Port 1420 -OnlyRepoOwned
   }
   $startedVite = $null
 }
