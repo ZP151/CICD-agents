@@ -86,10 +86,72 @@ not count for the current HEAD. Tiers:
 - unit tier: 6/6 PASS (2c82bd7).
 - mocked-browser tier: PASS (warmup + 86 tests sequential, -Workers 1).
 - source-live tier: FAIL — 6 live-app approval-flow tests failing; repair in
-  progress (stale approval-card button labels vs canonical PendingActionCard;
-  LLM nondeterminism under evaluation).
+  progress. **Secret-review slice (this goal): the 2 credential/secret
+  scenarios are now green (run 9, 2026-08-07). The remaining 4 failures are
+  the ClaimBot_API Pipeline #117 scenarios — next goal.** The most recent
+  full source-live run remains 24/30; only the secret-review slice is marked
+  done here.
 - installed-desktop tier: NOT_RUN (rebuild from HEAD pending).
 - real-ado tier: PASS (WI-7916 on 68a673a; rerun on final HEAD).
+
+### Secret-review slice (2026-08-07, branch claudecode/optimize-bugfix)
+
+Goal: safe `read_text_file` capability so the credential/secret review
+scenarios pass stably with real structured tool evidence and no secret
+leakage. All commands run through the repo-local toolchain.
+
+**Toolchain (repo-local):**
+- `pnpm --filter @mergepilot/core build` (tsc → dist/, the build the live
+  daemon imports via package `main`) — exit 0.
+- `pnpm --filter @mergepilot/core exec vitest run test/readTextFile.test.ts`
+  — 9/9 PASS, exit 0, 2.3s (8 safety tests + git_show untracked-file
+  recovery hint).
+- `pnpm --filter @mergepilot/core exec tsc --noEmit` — exit 0, 2.3s.
+- `pnpm --filter @mergepilot/core exec vitest run` (full core suite) —
+  69 files / 420 tests passed (4 files / 6 tests skipped, pre-existing),
+  exit 0, 24.5s.
+- The e2e runner now rebuilds core before starting the source daemon
+  (`run-live-app-e2e.ps1` Start-SourceDaemon), so a stale `dist/` can never
+  silently strip the tool set again (root cause of the first 4 live runs).
+
+**Source-live scenarios (run 9, `output/live-e2e/live-app-e2e-20260807-213825.log`,
+daemon `output/live-e2e/live-app-source-daemon-20260807-213825.log`):**
+- `does not leak credentials when showing the remote push target` — PASS
+  (240s budget: the planner chain exceeded the previous 120s window twice).
+  Asserted: expanded `git_remote` command row surfaces the ADO origin host
+  (`example.visualstudio.com`) from the daemon-rendered evidence; body has
+  no `supersecrettoken` / `mergepilot:supersecrettoken`; no "Approval
+  required".
+- `redacts secret-like values while reviewing current changes` — PASS
+  **first turn, no re-prompt** (exactly 2 POST /chat turns in the daemon
+  log for the whole run). Asserted: quality checks pass (required file
+  `.env.sample`, required evidence `AZURE_OPENAI_API_KEY` — satisfied by
+  the expanded redacted `read_text_file` output `AZURE_OPENAI_API_KEY=
+  ***REDACTED***`, categories security+config, review-only); expanded
+  command label `read_text_file path=.env.sample max_bytes=262144`
+  (desktop conciseArgSummary form, verified against the live DOM); body
+  has no secret value and no `AZURE_OPENAI_API_KEY=<secret>`; no
+  "Approval required"; no `git_add`/`git_commit` evidence; repo HEAD
+  unchanged, `git diff --cached` empty, `git status --short` exactly
+  `?? .env.sample`.
+- Verdict: `2 passed (4.2m)`, exit code 0.
+- The evidence assertions run against the expanded three-level disclosure
+  tree (turn toggle → "Ran commands" group → command row), so they read the
+  daemon-rendered structured evidence, not the model's prose.
+
+**Secret-leak scan (all runs' artifacts, 2026-08-07):**
+- Daemon logs (all runs incl. 9): 0 occurrences of
+  `mp_live_secret_1234567890abcdef` / `supersecrettoken` /
+  `mergepilot:supersecrettoken`.
+- Passing-run Playwright logs (runs 7, 8, 9): 0 occurrences. Failing-run
+  logs match only Playwright's source-quoting of the test's own negative
+  assertions (`expect(body).not.toContainText("supersecrettoken")`).
+- `~/.mergepilot/chat-history.json`: 1 occurrence — a `git_diff` stdout
+  quoting removed test-source lines (fixture strings live in the repo's
+  own test code); the same persistence shows `git_remote` output stored
+  redacted (`https://***REDACTED***@example.visualstudio.com/...`).
+- In-test body scans (green runs): UI never contains the secret values or
+  `<key>=<secret>` pairs.
 
 See `goal-verification.json` for per-gate PASS/FAIL/NOT_RUN with exit
 codes, durations, and skip counts. Any required gate with a skip or

@@ -37,3 +37,40 @@ desktop and local daemon (not daemon-API only). Sequence:
 
 Every run appends to `goal-verification.json` gates (tier
 installed-desktop / source-live-e2e) with the full metadata envelope.
+
+## Secret-review slice (2026-08-07) — DONE
+
+Branch `claudecode/optimize-bugfix` (start HEAD `d959169`). Added a safe,
+read-only `read_text_file` tool (`packages/core/src/tools/gitReadTools.ts`):
+repo-relative paths only (rejects absolute paths, `..` escapes, and
+symlinks resolving outside the repo root), text files only (NUL-byte
+check), explicit 1024 B–1 MiB size cap, server-side secret redaction before
+the result leaves the daemon, classified low risk / read-only / no
+approval (`capabilities.ts`). A `git_show` recovery hint steers the planner
+to `read_text_file` when a file exists only in the working tree. The e2e
+runner rebuilds `@mergepilot/core` before starting the source daemon (the
+daemon imports the compiled `dist/` via package `main`).
+
+Recorded in `evidence-matrix.md` (secret-review slice section): toolchain
+exit codes/durations, live run 9 verdict (`2 passed (4.2m)`, exit 0, both
+scenarios green — test 2 on the first turn, no re-prompt), and the
+all-artifacts secret-leak scan (0 occurrences in daemon logs and passing
+Playwright logs; the only matches are the test's own source assertions and
+a git_diff of the test file, and `git_remote` persists redacted).
+
+**Not done**: the whole source-live tier stays 24/30 — the 4 remaining
+failures are the ClaimBot_API Pipeline #117 scenarios.
+
+## Next goal: fix the 4 Pipeline #117 scenarios → 30/30 source-live cold-start
+
+1. `discovers and saves ClaimBot_API pipeline #117 when the Project Link has
+   no pipeline ID`
+2. `inspects ClaimBot_API pipeline #117 failure evidence through normal Chat
+   input`
+3. `prepares ClaimBot_API pipeline #117 rerun approval from failure evidence
+   suggestions`
+4. `prepares ClaimBot_API pipeline #117 approval through the real Chat UI`
+
+Run with `-LiveAdo` so the 4 live-ADO tests execute instead of skipping,
+then verify a cold-start 30/30 source-live pass and record it in
+`evidence-matrix.md`.

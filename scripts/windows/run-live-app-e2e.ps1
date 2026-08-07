@@ -89,6 +89,16 @@ function Stop-DaemonPortOwner {
 }
 
 function Start-SourceDaemon {
+  # The daemon imports @mergepilot/core from its compiled dist/ (package main).
+  # Rebuild core from the current source first so a stale dist build can never
+  # make the live daemon miss newly registered tools (observed 2026-08-07:
+  # read_text_file was registered in source but absent from a 2-day-old dist,
+  # so the planner's tool set silently lacked it).
+  & $pnpmProject --filter "@mergepilot/core" build | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Rebuild of @mergepilot/core failed with exit code $LASTEXITCODE"
+  }
+
   $process = Start-Process -FilePath "powershell.exe" -ArgumentList @(
     "-NoProfile",
     "-ExecutionPolicy",
