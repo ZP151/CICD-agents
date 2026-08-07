@@ -4,12 +4,13 @@ import type { ChatEvent } from "./chatPlannerTypes.js";
 
 // GPT-5 counts reasoning and visible tokens against max_completion_tokens.
 // Tiny probes (1–40) can finish in hidden reasoning before producing public
-// text. Keep the narrator at 320 so a genuine, natural 1–2 sentence note is
-// not cut off by hidden reasoning. Responsiveness is measured separately;
-// lowering this ceiling proved not to improve time-to-first-token reliably.
-// `reasoning_effort: minimal` and low verbosity keep this distinct from the
-// main agent's deeper tool-selection and final-answer budget.
-const MAX_ACTION_NARRATIVE_TOKENS = 320;
+// text. 320 proved insufficient in source-live: the narrator routinely burned
+// the whole budget in hidden reasoning and completed with no visible text.
+// 1024 leaves room for the reasoning to finish AND a genuine 1–2 sentence
+// note; `reasoning_effort: minimal` + low verbosity still keep this distinct
+// from the main agent's deeper tool-selection and final-answer budget.
+// Responsiveness is bounded separately by the route's narrative deadline.
+const MAX_ACTION_NARRATIVE_TOKENS = 1024;
 const MIN_INITIAL_VISIBLE_NARRATIVE_CHARS = 12;
 const MAX_PUBLIC_ACTION_SENTENCES = 2;
 
@@ -54,6 +55,7 @@ export async function* streamActionNarrative(
         "Start directly with the evidence, uncertainty, check, or decision; make it read like an informed teammate's brief, not a status label. Use supplied evidence only; otherwise state facts to check, never pretend unobserved project facts are known. Treat every assertion in the user request as a task constraint, not evidence: do not turn 'the changed file' into 'there is one changed file' before an action has verified it. Never begin by paraphrasing the user with phrases such as 'you indicated', 'you asked', or 'the request says'. Keep all independent requested facts in one note so the next action can collect them together. Complete the thought: never end in an ellipsis, a dangling clause, or an unfinished sentence.",
         "Do not repeat the request, widen scope, use headings/lists, expose private reasoning, or name commands, tools, flags, terminal syntax, or a predeclared command list. Do not use generic framing such as 'Based on the request', 'The goal is', or 'I will perform'.",
         "Never propose unrelated build, test, commit, PR, deployment, cloning, fetching, setup, or repository-existence checks. Do not ask the user to run a command or for permission for a clearly read-only action. For a simple answer, answer directly. Finish the second sentence with punctuation; stop after two sentences.",
+        "Keep any internal deliberation to at most a few short sentences. Begin the visible note on the very first output token; the note itself is the deliverable, not a summary of a longer draft.",
       ].join(" "),
     },
     {

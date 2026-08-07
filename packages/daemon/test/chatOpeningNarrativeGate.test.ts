@@ -24,7 +24,10 @@ const narrativeBehavior = vi.hoisted(() => ({
   // over SSE without rejecting the first-tool gate into the void.
   // "empty-then-text" simulates the same failure followed by a corrective
   // re-prompt that produces visible text: the turn must proceed.
-  mode: "normal" as "normal" | "empty" | "empty-then-text",
+  // "blocked-then-text" simulates a first stream that never settles within
+  // the narrative deadline; the corrective re-prompt (a fresh generation)
+  // produces visible text and the turn must proceed.
+  mode: "normal" as "normal" | "empty" | "empty-then-text" | "blocked-then-text",
   callCount: 0,
 }));
 
@@ -47,6 +50,16 @@ vi.mock("@mergepilot/core", async (importOriginal) => {
         // First call completes inside hidden reasoning with no public text;
         // the corrective re-prompt produces a visible narrative.
         if (narrativeBehavior.callCount === 1) return;
+        yield { type: "delta", delta: "The corrective narrative is visible." };
+        return;
+      }
+      if (narrativeBehavior.mode === "blocked-then-text") {
+        // First call never settles (deadline exceeded); its superseded stream
+        // must not leak events after the corrective re-prompt starts. The
+        // second call produces a visible narrative.
+        if (narrativeBehavior.callCount === 1) {
+          await new Promise<void>(() => undefined);
+        }
         yield { type: "delta", delta: "The corrective narrative is visible." };
         return;
       }
@@ -251,7 +264,67 @@ describe("chat opening narrative gate", () => {
     // The corrective directive reached the second (and only visible) attempt.
     expect(narrativeBehavior.callCount).toBe(2);
     expect(JSON.stringify(narrativeCalls[0].messages[1])).toContain(
-      "Your previous opening contained no visible public text",
+      "Your previous opening produced no visible public text in time",
     );
+  });
+
+  it("re-prompts the narrator once when the opening exceeds the narrative deadline and proceeds when the corrective narrative produces visible text", async () => {
+    // The deadline constant is read from the environment at module load; a
+    // fresh module evaluation with a short deadline exercises the real route
+    // timing path instead of waiting 60s.
+    process.env["MERGEPILOT_OPENING_NARRATIVE_DEADLINE_MS"] = "80";
+    vi.resetModules();
+    const { registerChatRoutes: registerChatRoutesShortDeadline } =
+      await import("../src/routes/chat.routes.js");
+    narrativeBehavior.mode = "blocked-then-text";
+    narrativeBehavior.callCount = 0;
+    narrativeCalls[0].messages = [];
+    const session = {
+      createSession: () => "session-deadline-retry",
+      appendUserTurn: vi.fn(async () => undefined),
+      appendTurnTimelineEvent: async () => undefined,
+      cancel: () => undefined,
+      async *run() {
+        yield { type: "tool_group_start", groupId: "branch-check" };
+        yield { type: "tool_start", toolCallId: "branch", name: "git_current_branch", args: {} };
+        yield { type: "tool_end", toolCallId: "branch", name: "git_current_branch", ok: true, summary: "main", result: {} };
+        yield {
+          type: "done",
+          result: {
+            response: "proceeded after the deadline corrective narrative.",
+            riskLevel: "low",
+            actionsTaken: ["git_current_branch"],
+            suggestions: [],
+            toolCallsMade: [],
+            usedLlm: true,
+          },
+        };
+      },
+    };
+    const app = Fastify();
+    registerChatRoutesShortDeadline(app, {
+      settings: {} as never,
+      chatSessions: session as never,
+      buildInlineLlmSettings: () => ({} as never),
+      envSourceLabel: () => "test",
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat",
+      payload: {
+        message: "Inspect the selected project's branch.",
+        repoPath: "C:/fixture/project",
+        projectLink: { name: "Fixture", repoPath: "C:/fixture/project" },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("The corrective narrative is visible.");
+    expect(response.body).toContain("proceeded after the deadline corrective narrative.");
+    expect(response.body).not.toContain("turn.failed");
+    // The first stream never settled; exactly one corrective re-prompt ran.
+    expect(narrativeBehavior.callCount).toBe(2);
+    delete process.env["MERGEPILOT_OPENING_NARRATIVE_DEADLINE_MS"];
   });
 });

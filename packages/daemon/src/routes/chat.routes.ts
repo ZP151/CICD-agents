@@ -386,11 +386,18 @@ export function registerChatRoutes(
           void firstToolGate.catch(() => undefined);
           // GPT-5 can spend the narrator token budget in hidden reasoning and
           // complete the opening with no visible public text, or fail before a
-          // token. The narrative is the first public content of the turn, so
-          // the route re-prompts the narrator once with a corrective directive
-          // before failing the turn. The first-tool gate stays closed until a
-          // genuine narrative passes, so no tool ever executes behind an empty
-          // or reasoning-only opening.
+          // token, or exceed the narrative deadline on a loaded deployment.
+          // The narrative is the first public content of the turn, so the
+          // route re-prompts the narrator exactly once with a corrective
+          // directive — for an empty/errored completion AND for a deadline
+          // miss — before failing the turn. The first-tool gate stays closed
+          // until a genuine narrative passes, so no tool ever executes behind
+          // an empty or reasoning-only opening.
+          // A superseded attempt (deadline retry while the first stream is
+          // still in flight) must never leak its events into the SSE writer:
+          // every event and every error is checked against the current
+          // attempt generation before it reaches the client.
+          let currentNarrativeAttempt = 0;
           const runOpeningNarrative = (attempt: number): Promise<void> => {
             openingNarrativeError = undefined;
             openingNarrativeText = "";
@@ -402,7 +409,7 @@ export function registerChatRoutes(
                 selectedProject: Boolean(inlineProjectLink || projectLinkId),
                 corrective:
                   attempt > 0
-                    ? "Your previous opening contained no visible public text — it completed inside hidden reasoning. This reply must begin with visible narrative text now: write the public action note as ordinary prose before anything else."
+                    ? "Your previous opening produced no visible public text in time — it stayed inside hidden reasoning. This reply must begin with visible narrative text now: write the public action note as ordinary prose on the very first output token."
                     : undefined,
               })) {
                 // Do not buffer genuine model text until the model completes a
@@ -410,7 +417,7 @@ export function registerChatRoutes(
                 // user, so every useful delta must reach the desktop as soon as
                 // it arrives. Session/tool events remain buffered below until
                 // this narration completes, preserving narrative → action.
-                if (!active) return;
+                if (!active || attempt !== currentNarrativeAttempt) return;
                 if (event.type === "work_statement") {
                   openingNarrativeVisible = true;
                   openingNarrativeText = event.text;
@@ -418,7 +425,9 @@ export function registerChatRoutes(
                 }
                 sseWriter.sendChatEvent(event);
               }
-            })().catch((err) => { openingNarrativeError = err; });
+            })().catch((err) => {
+              if (attempt === currentNarrativeAttempt) openingNarrativeError = err;
+            });
           };
           let openingNarrative = runOpeningNarrative(0);
 
@@ -467,15 +476,28 @@ export function registerChatRoutes(
           // tool that is already ready to execute.
           let openingCompleted = await settlesWithin(openingNarrative, OPENING_NARRATIVE_DEADLINE_MS);
           // One corrective re-prompt when the narrator settled without visible
-          // text (or failed before a token). The abandoned stream has settled,
-          // so re-invoking is safe; the deadline case is not retried because
-          // that stream may still be in flight and cannot be aborted.
+          // text, failed before a token, or did not settle within the deadline.
+          // The deadline stream may still be in flight and cannot be aborted,
+          // but the generation guard above suppresses anything it produces
+          // after the re-prompt starts.
           if (
             active
             && narrativeLlm.configured
-            && openingCompleted
-            && (openingNarrativeError || !openingNarrativeText.trim())
+            && (!openingCompleted || openingNarrativeError || !openingNarrativeText.trim())
           ) {
+            logger().warn(
+              {
+                attempt: 0,
+                settledWithinDeadline: openingCompleted,
+                hadVisibleText: Boolean(openingNarrativeText.trim()),
+                error: openingNarrativeError instanceof Error
+                  ? openingNarrativeError.message.slice(0, 300)
+                  : String(openingNarrativeError ?? ""),
+                deadlineMs: OPENING_NARRATIVE_DEADLINE_MS,
+              },
+              "opening narrative attempt failed; issuing one corrective re-prompt",
+            );
+            currentNarrativeAttempt += 1;
             openingNarrative = runOpeningNarrative(1);
             openingCompleted = await settlesWithin(openingNarrative, OPENING_NARRATIVE_DEADLINE_MS);
           }
