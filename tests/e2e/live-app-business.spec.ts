@@ -1,9 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { evaluateAiInsightAnswer } from "../../packages/core/src/aiInsightQuality";
+import { latestClaimBotPipelineRunViaDaemon } from "./lib/adoVerifier";
 
 const DAEMON_URL = "http://127.0.0.1:8787";
 const liveAppEnabled = process.env.MERGEPILOT_E2E_LIVE_APP === "1";
@@ -18,15 +19,6 @@ interface ProjectLinkResponse {
   name: string;
 }
 
-interface AdoBuildSummary {
-  id: number;
-  buildNumber?: string;
-  status?: string;
-  result?: string;
-  queueTime?: string;
-  sourceBranch?: string;
-  sourceVersion?: string;
-}
 
 function git(cwd: string, args: string[]): string {
   // Explicit stdio keeps git stderr ("Switched to a new branch", CRLF
@@ -50,54 +42,6 @@ function gitOrEmpty(cwd: string, args: string[]): string {
   } catch {
     return "";
   }
-}
-
-function azureCliPath(): string {
-  const configured = process.env.MERGEPILOT_E2E_AZ_CLI_PATH;
-  if (configured) return configured;
-  const windowsDefault = "C:\\Program Files\\Microsoft SDKs\\Azure\\CLI2\\wbin\\az.cmd";
-  if (existsSync(windowsDefault)) return windowsDefault;
-  return "az";
-}
-
-function psQuote(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
-}
-
-function runAzureCli(args: string[]): string {
-  const command = ["&", psQuote(azureCliPath()), ...args.map(psQuote)].join(" ");
-  return execFileSync("powershell.exe", [
-    "-NoProfile",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-Command",
-    command,
-  ], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-}
-
-function latestClaimBotPipelineRun(): AdoBuildSummary {
-  const raw = runAzureCli([
-    "devops",
-    "invoke",
-    "--area",
-    "build",
-    "--resource",
-    "builds",
-    "--route-parameters",
-    "project=TeBS-ClaimBot",
-    "--query-parameters",
-    "definitions=117",
-    "top=1",
-    "queryOrder=queueTimeDescending",
-    "--org",
-    "https://tebssg.visualstudio.com/",
-    "-o",
-    "json",
-  ]);
-  const parsed = JSON.parse(raw) as { value?: AdoBuildSummary[] };
-  const latest = parsed.value?.[0];
-  if (!latest?.id) throw new Error("Could not read latest ClaimBot_API pipeline #117 run.");
-  return latest;
 }
 
 async function removePathWithRetry(targetPath: string): Promise<void> {
@@ -2191,11 +2135,11 @@ test.describe("Live app business workflows", () => {
     const health = await request.get(`${DAEMON_URL}/healthz`);
     expect(health.ok()).toBeTruthy();
 
-    const previousRun = latestClaimBotPipelineRun();
     const projectLink = await createClaimBotPipelineDiscoveryProjectLink(request);
     let projectLinkId: string | null = projectLink.id;
 
     try {
+      const previousRun = await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id);
       await selectProjectLinkInBrowser(page, projectLink.id, claimBotRepoPath);
       await openLiveChat(page);
       await openEnvironmentPanel(page);
@@ -2222,7 +2166,7 @@ test.describe("Live app business workflows", () => {
       await expect(page.getByText("Pipeline ID is required")).toHaveCount(0);
       await expect(page.getByText("Approval required")).toHaveCount(0);
       await expect(page.getByText("ado_trigger_pipeline")).toHaveCount(0);
-      expect(latestClaimBotPipelineRun().id).toBe(previousRun.id);
+      expect((await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id)).id).toBe(previousRun.id);
     } finally {
       if (projectLinkId) {
         await request.delete(`${DAEMON_URL}/project-links/${projectLinkId}`).catch(() => undefined);
@@ -2292,7 +2236,7 @@ test.describe("Live app business workflows", () => {
 
     const projectLink = await createClaimBotPipelineProjectLink(request);
     let projectLinkId: string | null = projectLink.id;
-    const previousRun = latestClaimBotPipelineRun();
+    const previousRun = await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id);
 
     try {
       await selectProjectLinkInBrowser(page, projectLink.id, claimBotRepoPath);
@@ -2320,14 +2264,14 @@ test.describe("Live app business workflows", () => {
 
       if (destructiveEnabled) {
         await approvalCard.getByRole("button", { name: "Approve and run" }).click();
-        await expect.poll(() => latestClaimBotPipelineRun().id, {
+        await expect.poll(async () => (await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id)).id, {
           timeout: 120_000,
           message: `Expected ClaimBot_API pipeline #117 to queue a rerun newer than ${previousRun.id}.`,
         }).toBeGreaterThan(previousRun.id);
       } else {
         await approvalCard.getByRole("button", { name: "Skip action" }).click();
         await expect
-          .poll(() => latestClaimBotPipelineRun().id, {
+          .poll(async () => (await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id)).id, {
             timeout: 30_000,
             message: "Read-only rerun approval test must not queue a pipeline run when destructive mode is disabled.",
           })
@@ -2376,9 +2320,9 @@ test.describe("Live app business workflows", () => {
       await expect(approvalCard.getByText("Pipeline #108")).toHaveCount(0);
 
       if (destructiveEnabled) {
-        const previousRun = latestClaimBotPipelineRun();
+        const previousRun = await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id);
         await approvalCard.getByRole("button", { name: "Approve and run" }).click();
-        await expect.poll(() => latestClaimBotPipelineRun().id, {
+        await expect.poll(async () => (await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id)).id, {
           timeout: 120_000,
           message: `Expected ClaimBot_API pipeline #117 to queue a run newer than ${previousRun.id}.`,
         }).toBeGreaterThan(previousRun.id);
