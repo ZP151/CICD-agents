@@ -177,4 +177,27 @@ describe("streamActionNarrative", () => {
       expect.objectContaining({ text: "I will inspect the branch." }),
     ]);
   });
+
+  it("appends the corrective directive when the Turn runtime re-prompts an empty opening", async () => {
+    const llm = {
+      configured: true,
+      async *chatStream(options: { messages: Array<{ role: string; content: unknown }> }) {
+        expect(JSON.stringify(options.messages)).toContain(
+          "Write the opening action narrative. Your previous opening contained no visible public text",
+        );
+        yield { type: "delta" as const, delta: "The corrective narrative is visible." };
+      },
+    } as Pick<LLMClient, "configured" | "chatStream">;
+
+    const events = [];
+    for await (const event of streamActionNarrative(llm, {
+      request: "Inspect the current branch",
+      corrective:
+        "Your previous opening contained no visible public text — it completed inside hidden reasoning. This reply must begin with visible narrative text now: write the public action note as ordinary prose before anything else.",
+    })) events.push(event);
+
+    expect(
+      events.some((e) => e.type === "work_statement" && e.text.includes("The corrective narrative is visible")),
+    ).toBe(true);
+  });
 });

@@ -25,6 +25,13 @@ export interface ActionNarrativeRequest {
   /** Lets the Turn runtime retain the same model-authored text for continuity. */
   onText?: (text: string) => void;
   blockId?: string;
+  /**
+   * Corrective instruction for a bounded retry. GPT-5 can spend its narrator
+   * token budget in hidden reasoning and complete the opening with no visible
+   * public text; the Turn runtime re-invokes the narrator once with this
+   * directive before failing the turn. Never a canned fallback narrative.
+   */
+  corrective?: string;
 }
 
 /**
@@ -63,7 +70,9 @@ export async function* streamActionNarrative(
             input.selectedProject
               ? "A selected local Project Link is already available. Start with the direct requested local check; do not verify that the repository exists."
               : "No repository evidence is available yet.",
-            "Write the opening action narrative.",
+            input.corrective
+              ? `Write the opening action narrative. ${input.corrective}`
+              : "Write the opening action narrative.",
           ].join("\n\n"),
     },
   ];

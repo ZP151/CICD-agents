@@ -22,8 +22,13 @@ const narrativeBehavior = vi.hoisted(() => ({
   // "empty" simulates a provider that completes the opening stream without
   // any public text (e.g. a reasoning-only completion). The turn must fail
   // over SSE without rejecting the first-tool gate into the void.
-  mode: "normal" as "normal" | "empty",
+  // "empty-then-text" simulates the same failure followed by a corrective
+  // re-prompt that produces visible text: the turn must proceed.
+  mode: "normal" as "normal" | "empty" | "empty-then-text",
+  callCount: 0,
 }));
+
+const narrativeCalls = vi.hoisted(() => [{ messages: [] as unknown[] }]);
 
 vi.mock("@mergepilot/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@mergepilot/core")>();
@@ -34,8 +39,17 @@ vi.mock("@mergepilot/core", async (importOriginal) => {
       return undefined;
     }
 
-    async *chatStream() {
+    async *chatStream(options: { messages?: unknown[] }) {
+      narrativeBehavior.callCount += 1;
+      narrativeCalls[0].messages.push(options?.messages ?? []);
       if (narrativeBehavior.mode === "empty") return;
+      if (narrativeBehavior.mode === "empty-then-text") {
+        // First call completes inside hidden reasoning with no public text;
+        // the corrective re-prompt produces a visible narrative.
+        if (narrativeBehavior.callCount === 1) return;
+        yield { type: "delta", delta: "The corrective narrative is visible." };
+        return;
+      }
       // This first useful model delta is immediately public. The second delta
       // holds the short opening stream open so the test can prove no tool
       // execution begins merely because the first delta has been painted.
@@ -184,5 +198,60 @@ describe("chat opening narrative gate", () => {
       narrativeBehavior.mode = "normal";
     }
     expect(unhandledRejections).toEqual([]);
+  });
+
+  it("re-prompts the narrator once when the opening completes without public text and proceeds when the corrective narrative produces visible text", async () => {
+    narrativeBehavior.mode = "empty-then-text";
+    narrativeBehavior.callCount = 0;
+    narrativeCalls[0].messages = [];
+    const session = {
+      createSession: () => "session-corrective-retry",
+      appendUserTurn: vi.fn(async () => undefined),
+      appendTurnTimelineEvent: async () => undefined,
+      cancel: () => undefined,
+      async *run() {
+        yield { type: "tool_group_start", groupId: "branch-check" };
+        yield { type: "tool_start", toolCallId: "branch", name: "git_current_branch", args: {} };
+        yield { type: "tool_end", toolCallId: "branch", name: "git_current_branch", ok: true, summary: "main", result: {} };
+        yield {
+          type: "done",
+          result: {
+            response: "proceeded after the corrective narrative.",
+            riskLevel: "low",
+            actionsTaken: ["git_current_branch"],
+            suggestions: [],
+            toolCallsMade: [],
+            usedLlm: true,
+          },
+        };
+      },
+    };
+    const app = Fastify();
+    registerChatRoutes(app, {
+      settings: {} as never,
+      chatSessions: session as never,
+      buildInlineLlmSettings: () => ({} as never),
+      envSourceLabel: () => "test",
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/chat",
+      payload: {
+        message: "Inspect the selected project's branch.",
+        repoPath: "C:/fixture/project",
+        projectLink: { name: "Fixture", repoPath: "C:/fixture/project" },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("The corrective narrative is visible.");
+    expect(response.body).toContain("proceeded after the corrective narrative.");
+    expect(response.body).not.toContain("turn.failed");
+    // The corrective directive reached the second (and only visible) attempt.
+    expect(narrativeBehavior.callCount).toBe(2);
+    expect(JSON.stringify(narrativeCalls[0].messages[1])).toContain(
+      "Your previous opening contained no visible public text",
+    );
   });
 });

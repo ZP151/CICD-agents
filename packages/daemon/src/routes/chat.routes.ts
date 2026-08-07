@@ -384,26 +384,43 @@ export function registerChatRoutes(
           // kills the whole daemon. Claim the rejection immediately; the
           // planner's own await still receives it through its own handler.
           void firstToolGate.catch(() => undefined);
-          const openingNarrative = (async () => {
-            for await (const event of streamActionNarrative(narrativeLlm, {
-              request: message,
-              blockId: "opening",
-              selectedProject: Boolean(inlineProjectLink || projectLinkId),
-            })) {
-              // Do not buffer genuine model text until the model completes a
-              // sentence. The opening is the first public response to the
-              // user, so every useful delta must reach the desktop as soon as
-              // it arrives. Session/tool events remain buffered below until
-              // this narration completes, preserving narrative → action.
-              if (!active) return;
-              if (event.type === "work_statement") {
-                openingNarrativeVisible = true;
-                openingNarrativeText = event.text;
-                clearTimeout(waitingForModelTimer);
+          // GPT-5 can spend the narrator token budget in hidden reasoning and
+          // complete the opening with no visible public text, or fail before a
+          // token. The narrative is the first public content of the turn, so
+          // the route re-prompts the narrator once with a corrective directive
+          // before failing the turn. The first-tool gate stays closed until a
+          // genuine narrative passes, so no tool ever executes behind an empty
+          // or reasoning-only opening.
+          const runOpeningNarrative = (attempt: number): Promise<void> => {
+            openingNarrativeError = undefined;
+            openingNarrativeText = "";
+            openingNarrativeVisible = false;
+            return (async () => {
+              for await (const event of streamActionNarrative(narrativeLlm, {
+                request: message,
+                blockId: "opening",
+                selectedProject: Boolean(inlineProjectLink || projectLinkId),
+                corrective:
+                  attempt > 0
+                    ? "Your previous opening contained no visible public text — it completed inside hidden reasoning. This reply must begin with visible narrative text now: write the public action note as ordinary prose before anything else."
+                    : undefined,
+              })) {
+                // Do not buffer genuine model text until the model completes a
+                // sentence. The opening is the first public response to the
+                // user, so every useful delta must reach the desktop as soon as
+                // it arrives. Session/tool events remain buffered below until
+                // this narration completes, preserving narrative → action.
+                if (!active) return;
+                if (event.type === "work_statement") {
+                  openingNarrativeVisible = true;
+                  openingNarrativeText = event.text;
+                  clearTimeout(waitingForModelTimer);
+                }
+                sseWriter.sendChatEvent(event);
               }
-              sseWriter.sendChatEvent(event);
-            }
-          })().catch((err) => { openingNarrativeError = err; });
+            })().catch((err) => { openingNarrativeError = err; });
+          };
+          let openingNarrative = runOpeningNarrative(0);
 
           // Start the main Turn immediately. Its context read, tool registry,
           // and first planning request are side-effect-free and no longer wait
@@ -448,7 +465,20 @@ export function registerChatRoutes(
           // The opening response remains a real model-authored message. It
           // establishes the public action boundary, then releases any planner
           // tool that is already ready to execute.
-          const openingCompleted = await settlesWithin(openingNarrative, OPENING_NARRATIVE_DEADLINE_MS);
+          let openingCompleted = await settlesWithin(openingNarrative, OPENING_NARRATIVE_DEADLINE_MS);
+          // One corrective re-prompt when the narrator settled without visible
+          // text (or failed before a token). The abandoned stream has settled,
+          // so re-invoking is safe; the deadline case is not retried because
+          // that stream may still be in flight and cannot be aborted.
+          if (
+            active
+            && narrativeLlm.configured
+            && openingCompleted
+            && (openingNarrativeError || !openingNarrativeText.trim())
+          ) {
+            openingNarrative = runOpeningNarrative(1);
+            openingCompleted = await settlesWithin(openingNarrative, OPENING_NARRATIVE_DEADLINE_MS);
+          }
           if (!openingCompleted) {
             const error = new Error(
               `The model did not begin an action narrative within ${OPENING_NARRATIVE_DEADLINE_MS / 1000} seconds.`,
