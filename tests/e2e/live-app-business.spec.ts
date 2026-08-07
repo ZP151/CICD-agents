@@ -518,23 +518,14 @@ async function createClaimBotPipelineProjectLink(
     data: {
       // Non-temporary name (no "mp-live-" prefix) so the desktop keeps this
       // link active instead of substituting the leftover "ClaimBot_API link".
+      // V2 canonical (GAP-01/02): stable identity only — no defaultBranch,
+      // targetBranch, pipeline, or MCP fields.
       name: `e2e-claimbot-pipeline-${runId}`,
       repoPath: claimBotRepoPath,
-      defaultBranch: "main",
-      targetBranch: "main",
       adoOrgUrl: "https://tebssg.visualstudio.com/",
       adoProject: "TeBS-ClaimBot",
       adoRepoName: "ClaimBot_API",
       adoPat: "",
-      adoPipelineId: "117",
-      adoPipelineName: "ClaimBot_API",
-      adoMcpEnabled: false,
-      adoMcpCommand: "",
-      adoMcpAuthentication: "",
-      adoMcpDomains: "repositories,pipelines,work-items",
-      projectTemplate: "",
-      buildCommand: "",
-      testCommand: "",
     },
   });
   expect(createResponse.ok()).toBeTruthy();
@@ -549,23 +540,13 @@ async function createClaimBotPipelineDiscoveryProjectLink(
     data: {
       // Non-temporary name (no "mp-live-" prefix) so the desktop keeps this
       // link active instead of substituting the leftover "ClaimBot_API link".
+      // V2 canonical (GAP-01/02): stable identity only.
       name: `e2e-claimbot-discover-pipeline-${runId}`,
       repoPath: claimBotRepoPath,
-      defaultBranch: "main",
-      targetBranch: "main",
       adoOrgUrl: "https://tebssg.visualstudio.com/",
       adoProject: "TeBS-ClaimBot",
       adoRepoName: "ClaimBot_API",
       adoPat: "",
-      adoPipelineId: "",
-      adoPipelineName: "",
-      adoMcpEnabled: false,
-      adoMcpCommand: "",
-      adoMcpAuthentication: "",
-      adoMcpDomains: "repositories,pipelines,work-items",
-      projectTemplate: "",
-      buildCommand: "",
-      testCommand: "",
     },
   });
   expect(createResponse.ok()).toBeTruthy();
@@ -583,7 +564,7 @@ async function selectProjectLinkInBrowser(page: Page, projectLinkId: string, rep
 function liveEnvironmentPanel(page: Page) {
   return page
     .locator(".pointer-events-auto")
-    .filter({ hasText: "Environment" })
+    .filter({ hasText: "Context" })
     .filter({ hasText: "Commit or push" })
     .first();
 }
@@ -677,11 +658,11 @@ async function pendingActionCardOrTurnEnded(
 }
 
 async function openEnvironmentPanel(page: Page): Promise<void> {
-  // Since v0.5.24 the Environment summary is only rendered while the pinned
+  // Since v0.5.24 the Context summary is only rendered while the pinned
   // summary is open (it starts closed). Pin it on demand, mirroring the
   // chat-layout spec, instead of relying on the pre-v0.5.24 default-open
   // behaviour.
-  const environment = page.getByText("Environment").first();
+  const environment = page.getByText("Context").first();
   if (!(await environment.isVisible().catch(() => false))) {
     await page.getByTitle("Show pinned summary").click();
   }

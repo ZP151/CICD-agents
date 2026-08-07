@@ -32,6 +32,7 @@ import { registerTaskRoutes } from "./routes/tasks.routes.js";
 import { registerWorkspaceRoutes } from "./routes/workspace.routes.js";
 import { workflowActionFailureResponse } from "./workflows/workflowActions.js";
 import { runWorkspaceWorkflowAction } from "./workflows/workspaceWorkflowRunner.js";
+import { migrateLegacyPipelineFieldsToConnections } from "@mergepilot/core";
 
 loadDaemonEnv();
 
@@ -53,6 +54,23 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   });
 
   const projectLinkStore = createProjectLinkStoreAdapter(settings);
+
+  // GAP-01 migration (best-effort): copy historical Project Link pipeline
+  // fields into PipelineConnection so canonical consumers keep the saved
+  // selection. Copy-only and idempotent; the legacy fields stay readable as
+  // a compatibility adapter. The cloud store needs AAD auth, so failures are
+  // logged and skipped — the migration re-runs on the next daemon start.
+  try {
+    const migrated = migrateLegacyPipelineFieldsToConnections(
+      settings.dataDir,
+      await projectLinkStore.listProjectLinks(),
+    );
+    if (migrated.length > 0) {
+      app.log.info(`migrated ${migrated.length} legacy pipeline selection(s) into PipelineConnection`);
+    }
+  } catch (err) {
+    app.log.warn(`legacy pipeline migration skipped: ${String(err)}`);
+  }
 
   // Allow cross-origin requests from the Tauri/Vite frontend
   app.addHook("onSend", async (req, reply) => {
@@ -130,7 +148,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   registerCheckpointRoutes(app, { settings, chatSessions });
 
   registerChatWorkflowRoutes(app, {
-    runWorkflowAction: (payload) => runWorkspaceWorkflowAction(chatSessions, payload),
+    runWorkflowAction: (payload) => runWorkspaceWorkflowAction(chatSessions, payload, settings.dataDir),
     failureResponse: workflowActionFailureResponse,
   });
 

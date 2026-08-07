@@ -5,6 +5,7 @@ import {
   getAzureDevOpsAuth,
   listAzureBuildDefinitions,
   listAzurePipelineRuns,
+  listPipelineConnections,
   PipelineTargetResolver,
   redact,
   type AdoAuth,
@@ -28,10 +29,25 @@ export { pipelineFailureArtifacts, summarizePipelineRuns } from "./pipelineWorkf
 export async function runAdoPipelineWorkflowAction(
   chatSessions: ChatSessionManager,
   payload: ChatWorkflowActionPayload,
+  dataDir: string,
 ) {
   const { action, repoPath } = payload;
   const projectLink = adoPipelineProjectLinkFromWorkflowPayload(payload);
-  let pipelineId = pipelineIdFromWorkflowPayload(payload, projectLink);
+  let pipelineId = pipelineIdFromWorkflowPayload(payload);
+
+  if (!pipelineId && payload.projectLinkId) {
+    // GAP-01: the persisted pipeline selection lives in PipelineConnection
+    // (default connection for the Project Link), never in Project Link
+    // legacy fields. If nothing is saved, repository-identity discovery
+    // below resolves the single target.
+    const connection = listPipelineConnections(dataDir, payload.projectLinkId).find(
+      (candidate) => candidate.isDefault,
+    );
+    const connectionPipelineId = Number(connection?.pipelineId ?? 0);
+    if (Number.isFinite(connectionPipelineId) && connectionPipelineId > 0) {
+      pipelineId = connectionPipelineId;
+    }
+  }
 
   if (!pipelineId) {
     // MP-010: resolve the single target through the typed resolver instead of
@@ -183,11 +199,10 @@ function adoPipelineProjectLinkFromWorkflowPayload(payload: ChatWorkflowActionPa
   return projectLink;
 }
 
-function pipelineIdFromWorkflowPayload(
-  payload: ChatWorkflowActionPayload,
-  projectLink: WorkflowProjectLink,
-): number | undefined {
-  const pipelineId = Number(payload.pipelineId ?? projectLink.adoPipelineId ?? 0);
+function pipelineIdFromWorkflowPayload(payload: ChatWorkflowActionPayload): number | undefined {
+  // Explicit payload IDs only (GAP-01): the Project Link never carries a
+  // pipeline ID, so the legacy fallback is gone.
+  const pipelineId = Number(payload.pipelineId ?? 0);
   if (!Number.isFinite(pipelineId) || pipelineId <= 0) {
     return undefined;
   }

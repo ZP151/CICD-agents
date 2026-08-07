@@ -1,10 +1,12 @@
 /**
  * PipelineTargetResolver (MP-010).
  *
- * Resolves the single pipeline a workflow should act on. ID and name paths
- * are typed: explicit ID, persisted Project Link ID, repository-filtered name
- * discovery, ambiguity must be resolved by the user, and authorization or
- * connector failures are never disguised as "pipeline not found".
+ * Resolves the single pipeline a workflow should act on. The canonical paths
+ * are typed: an explicit ID wins; otherwise the target is discovered from the
+ * mapped ADO repository identity (single match auto-selected, multiple
+ * candidates require an explicit user choice). The legacy Project Link
+ * pipeline fields are never consulted (GAP-01). Authorization or connector
+ * failures are never disguised as "pipeline not found".
  */
 import type { AdoAuth } from "./ado/auth.js";
 import { adoAuthDiagnosticFromError } from "./ado/diagnostics.js";
@@ -19,8 +21,7 @@ export type PipelineTargetStatus =
 
 export type PipelineTargetSource =
   | "explicit_id"
-  | "project_link_id"
-  | "name_discovery"
+  | "repository_discovery"
   | "user_selection"
   | "none";
 
@@ -94,17 +95,6 @@ export class PipelineTargetResolver {
       };
     }
 
-    const persistedId = pipelineIdValue(input.projectLink.adoPipelineId);
-    if (persistedId !== undefined) {
-      return {
-        status: "resolved",
-        pipelineId: persistedId,
-        pipelineName: input.projectLink.adoPipelineName,
-        source: "project_link_id",
-        message: `Pipeline #${persistedId} from the Project Link`,
-      };
-    }
-
     const capabilityMessage = this.deps.capabilityGate?.();
     if (capabilityMessage) {
       return {
@@ -114,72 +104,52 @@ export class PipelineTargetResolver {
       };
     }
 
-    const name = input.projectLink.adoPipelineName?.trim();
+    // V2 canonical (GAP-01): the target comes from the repository identity
+    // alone. A single definition for the mapped repo is auto-selected;
+    // multiple candidates require an explicit user choice; none means not
+    // found. The legacy Project Link pipeline fields are never consulted.
     try {
       const definitions = await this.discoverDefinitions(input);
-      if (!name) {
-        if (definitions.length === 0) {
-          return {
-            status: "not_found",
-            source: "none",
-            message:
-              "No pipeline ID or name is configured on this Project Link, and no pipeline candidates were returned for the current project/repository mapping. Refresh the pipeline list or check the Project Link.",
-          };
-        }
+      if (definitions.length === 0) {
         return {
           status: "not_found",
-          candidates: definitions.map((definition) => ({
-            id: definition.id,
-            name: definition.name,
-            description: definition.description,
-          })),
           source: "none",
           message:
-            "No pipeline ID or name is configured on this Project Link. Choose one of the discovered candidates below, or refresh the pipeline list.",
+            "No pipeline candidates were returned for the current project/repository mapping. Refresh the pipeline list or check the Project Link.",
         };
       }
-      const matches = definitions.filter((definition) => definition.name === name);
-      if (matches.length === 1) {
-        const match = matches[0]!;
+      if (definitions.length === 1) {
+        const match = definitions[0]!;
         return {
           status: "resolved",
           pipelineId: match.id,
           pipelineName: match.name,
-          source: "name_discovery",
-          message: `Resolved pipeline "${name}" as #${match.id} in ${input.projectLink.adoProject}.`,
-        };
-      }
-      if (matches.length > 1) {
-        return {
-          status: "ambiguous",
-          candidates: matches.map((match) => ({
-            id: match.id,
-            name: match.name,
-            description: match.description,
-          })),
-          source: "name_discovery",
-          message: `Multiple pipelines are named "${name}" in ${input.projectLink.adoProject}. Choose the intended one.`,
+          source: "repository_discovery",
+          message: `Discovered pipeline #${match.id} (${match.name}) for the mapped repository in ${input.projectLink.adoProject}.`,
         };
       }
       return {
-        status: "not_found",
-        source: "name_discovery",
-        message: `No pipeline named "${name}" was found in ${input.projectLink.adoProject}${
-          input.projectLink.adoRepoName ? ` / ${input.projectLink.adoRepoName}` : ""
-        }. Refresh the pipeline list or check the Project Link mapping.`,
+        status: "ambiguous",
+        candidates: definitions.map((definition) => ({
+          id: definition.id,
+          name: definition.name,
+          description: definition.description,
+        })),
+        source: "repository_discovery",
+        message: `Multiple pipelines are mapped to this repository in ${input.projectLink.adoProject}. Choose the intended one.`,
       };
     } catch (err) {
       const diagnostic = adoAuthDiagnosticFromError(err, input.projectLink.adoPat ? "pat" : "oauth");
       if (diagnostic.status === "oauth_unavailable" || diagnostic.status === "oauth_no_org_access" || diagnostic.status === "pat_invalid_or_missing_scope" || diagnostic.status === "user_declined") {
         return {
           status: "unauthorized",
-          source: "name_discovery",
+          source: "repository_discovery",
           message: diagnostic.message,
         };
       }
       return {
         status: "connector_unavailable",
-        source: "name_discovery",
+        source: "repository_discovery",
         message: diagnostic.message,
       };
     }

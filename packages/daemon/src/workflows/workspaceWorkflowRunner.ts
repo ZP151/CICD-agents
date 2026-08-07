@@ -38,13 +38,14 @@ import {
 export async function runWorkspaceWorkflowAction(
   chatSessions: ChatSessionManager,
   payload: ChatWorkflowActionPayload,
+  dataDir: string,
 ) {
   const { action, repoPath } = payload;
   if (isAdoPullRequestWorkflowAction(action)) {
     return runAdoPullRequestWorkflowAction(chatSessions, payload);
   }
   if (isAdoPipelineWorkflowAction(action)) {
-    return runAdoPipelineWorkflowAction(chatSessions, payload);
+    return runAdoPipelineWorkflowAction(chatSessions, payload, dataDir);
   }
   if (action === "inspect_validation_failure") {
     return await runValidationFailureInspection(chatSessions, payload);

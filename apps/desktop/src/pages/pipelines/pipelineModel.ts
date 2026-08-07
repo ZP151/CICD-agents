@@ -73,18 +73,14 @@ export function pipelineProjectLinksCacheKey(
   projectLinks: Array<{
     id: string;
     repoPath?: string;
-    defaultBranch?: string;
-    targetBranch?: string;
     adoOrgUrl?: string;
     adoProject?: string;
     adoRepoName?: string;
-    adoPipelineId?: string;
-    adoPipelineName?: string;
     updatedAt?: number;
   }>,
 ): string {
-  const normalizeBranch = (value: string | undefined) =>
-    (value ?? "").trim().replace(/^refs\/heads\//, "").toLowerCase();
+  // V2 canonical (GAP-01): the cache key tracks the stable identity only;
+  // legacy pipeline/branch fields never participate.
   return projectLinks
     .map((projectLink) => [
       projectLink.id,
@@ -92,10 +88,6 @@ export function pipelineProjectLinksCacheKey(
       projectLink.adoOrgUrl ?? "",
       projectLink.adoProject ?? "",
       projectLink.adoRepoName ?? "",
-      projectLink.adoPipelineId ?? "",
-      projectLink.adoPipelineName ?? "",
-      normalizeBranch(projectLink.defaultBranch),
-      normalizeBranch(projectLink.targetBranch),
       String(projectLink.updatedAt ?? ""),
     ].join("\u001f"))
     .sort((a, b) => a.localeCompare(b))

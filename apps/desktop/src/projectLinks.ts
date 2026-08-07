@@ -113,8 +113,9 @@ function projectLinkAdoMappingKey(link: ProjectLink): string {
 }
 
 function compareProjectLinkPreference(a: ProjectLink, b: ProjectLink): number {
+  // V2 canonical (GAP-01): preference never depends on the legacy pipeline
+  // fields — only on the stable identity and recency.
   const score = (link: ProjectLink) =>
-    Number(Boolean(link.adoPipelineId.trim())) * 10 +
     Number(Boolean(link.repoPath.trim())) * 5 +
     Number(link.updatedAt ?? 0) / 1_000_000_000_000;
   return score(b) - score(a) || a.name.localeCompare(b.name);

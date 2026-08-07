@@ -12,6 +12,7 @@
  */
 import { TableClient, TableServiceClient, odata } from "@azure/data-tables";
 import type { ProjectLink, ProjectLinkInput } from "../projectLinks.js";
+import { legacyFreeProjectLinkInput } from "../projectLinks.js";
 import { STORAGE_SCOPE } from "./azureAuthConfig.js";
 import { getAzureCachedScopeCredential } from "./azureAuthCredential.js";
 import { requireCurrentUser } from "./azureAuth.js";
@@ -166,11 +167,11 @@ export class AzureTableProjectLinkStore {
     const client = await getClient(this.accountName);
     const ts = nowSec();
     const projectLink: ProjectLink = {
-      ...data,
+      ...legacyFreeProjectLinkInput(data),
       id: crypto.randomBytes(8).toString("hex"),
       createdAt: ts,
       updatedAt: ts,
-    };
+    } as ProjectLink;
     await client.createEntity(projectLinkToEntity(user.oid, projectLink));
     return projectLink;
   }
@@ -181,7 +182,14 @@ export class AzureTableProjectLinkStore {
 
     const user = await requireCurrentUser();
     const client = await getClient(this.accountName);
-    const updated: ProjectLink = { ...existing, ...data, id, updatedAt: nowSec() };
+    // V2 canonical: update payloads never carry legacy fields; values already
+    // persisted on an old record survive until the migration clears them.
+    const updated: ProjectLink = {
+      ...existing,
+      ...legacyFreeProjectLinkInput(data),
+      id,
+      updatedAt: nowSec(),
+    };
     await client.upsertEntity(projectLinkToEntity(user.oid, updated), "Replace");
     return updated;
   }

@@ -38,43 +38,44 @@ describe("PipelineTargetResolver (MP-010)", () => {
     expect(result).toMatchObject({ status: "resolved", pipelineId: 42, source: "explicit_id" });
   });
 
-  it("resolves the persisted Project Link pipeline ID (RA-042)", async () => {
-    const resolver = resolverWith([]);
-
-    const result = await resolver.resolve({
-      projectLink: { ...baseLink, adoPipelineId: "117", adoPipelineName: "CI" },
-      auth,
-    });
-
-    expect(result).toMatchObject({ status: "resolved", pipelineId: 117, source: "project_link_id" });
-  });
-
-  it("resolves a unique pipeline name via repository-filtered discovery (RA-043)", async () => {
+  it("auto-selects the single definition for the mapped repository (repository_discovery)", async () => {
     const resolver = resolverWith([
-      { id: 7, name: "CI" },
       { id: 9, name: "Release" },
     ]);
 
+    const result = await resolver.resolve({ projectLink: baseLink, auth });
+
+    expect(result).toMatchObject({
+      status: "resolved",
+      pipelineId: 9,
+      pipelineName: "Release",
+      source: "repository_discovery",
+    });
+  });
+
+  it("never consults legacy Project Link pipeline fields (GAP-01)", async () => {
+    const resolver = resolverWith([{ id: 9, name: "Release" }]);
+
+    // Even when legacy fields claim pipeline #117, the target must come from
+    // repository identity alone.
     const result = await resolver.resolve({
-      projectLink: { ...baseLink, adoPipelineName: "Release" },
+      projectLink: { ...baseLink, adoPipelineId: "117", adoPipelineName: "ClaimBot_API" },
       auth,
     });
 
-    expect(result).toMatchObject({ status: "resolved", pipelineId: 9, pipelineName: "Release", source: "name_discovery" });
+    expect(result).toMatchObject({ status: "resolved", pipelineId: 9, source: "repository_discovery" });
   });
 
-  it("returns candidates for same-name pipelines and never auto-picks (RA-044)", async () => {
+  it("returns candidates for multiple definitions and never auto-picks (RA-044)", async () => {
     const resolver = resolverWith([
       { id: 7, name: "CI" },
       { id: 8, name: "CI" },
     ]);
 
-    const result = await resolver.resolve({
-      projectLink: { ...baseLink, adoPipelineName: "CI" },
-      auth,
-    });
+    const result = await resolver.resolve({ projectLink: baseLink, auth });
 
     expect(result.status).toBe("ambiguous");
+    expect(result.source).toBe("repository_discovery");
     expect(result.candidates).toEqual([
       { id: 7, name: "CI", description: undefined },
       { id: 8, name: "CI", description: undefined },
@@ -82,27 +83,23 @@ describe("PipelineTargetResolver (MP-010)", () => {
     expect(result.pipelineId).toBeUndefined();
   });
 
-  it("reports not_found instead of faking a connector failure (RA-045)", async () => {
-    const resolver = resolverWith([{ id: 7, name: "CI" }]);
+  it("reports not_found when discovery returns nothing (RA-045)", async () => {
+    const resolver = resolverWith([]);
 
-    const result = await resolver.resolve({
-      projectLink: { ...baseLink, adoPipelineName: "MissingPipeline" },
-      auth,
-    });
+    const result = await resolver.resolve({ projectLink: baseLink, auth });
 
     expect(result.status).toBe("not_found");
-    expect(result.message).toContain("MissingPipeline");
+    expect(result.source).toBe("none");
+    expect(result.message).toContain("No pipeline candidates");
   });
 
   it("classifies expired or missing tokens as unauthorized (RA-046)", async () => {
     const resolver = resolverWith([], { throwOnList: new AzureAuthenticationRequiredError() });
 
-    const result = await resolver.resolve({
-      projectLink: { ...baseLink, adoPipelineName: "CI" },
-      auth,
-    });
+    const result = await resolver.resolve({ projectLink: baseLink, auth });
 
     expect(result.status).toBe("unauthorized");
+    expect(result.source).toBe("repository_discovery");
   });
 
   it("reports capability_missing when the pipelines domain is gated off (RA-048)", async () => {
@@ -117,10 +114,7 @@ describe("PipelineTargetResolver (MP-010)", () => {
   it("reports connector_unavailable for non-auth connector failures", async () => {
     const resolver = resolverWith([], { throwOnList: new Error("server not reachable") });
 
-    const result = await resolver.resolve({
-      projectLink: { ...baseLink, adoPipelineName: "CI" },
-      auth,
-    });
+    const result = await resolver.resolve({ projectLink: baseLink, auth });
 
     expect(result.status).toBe("connector_unavailable");
   });
@@ -132,8 +126,8 @@ describe("PipelineTargetResolver (MP-010)", () => {
         { id: 7, name: "CI", description: undefined },
         { id: 8, name: "CI", description: undefined },
       ],
-      source: "name_discovery" as const,
-      message: "Multiple pipelines are named CI.",
+      source: "repository_discovery" as const,
+      message: "Multiple pipelines are mapped to this repository.",
     };
 
     expect(pipelineTargetFromSelection(ambiguous, 8)).toMatchObject({
@@ -142,14 +136,5 @@ describe("PipelineTargetResolver (MP-010)", () => {
       source: "user_selection",
     });
     expect(pipelineTargetFromSelection(ambiguous, 99).status).toBe("ambiguous");
-  });
-
-  it("reports when no pipeline is configured at all", async () => {
-    const resolver = resolverWith([]);
-
-    const result = await resolver.resolve({ projectLink: baseLink, auth });
-
-    expect(result.status).toBe("not_found");
-    expect(result.source).toBe("none");
   });
 });

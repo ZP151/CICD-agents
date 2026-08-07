@@ -87,7 +87,11 @@ async function mockRuntime(page: Page): Promise<void> {
         });
         return;
       }
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      // Keep the loading placeholder observable: the click -> panel commit ->
+      // assertion setup sequence already consumes 60-90ms of a 150ms delay,
+      // leaving the loading state on a sub-frame race (flaky). 700ms makes the
+      // transient state reliably assertable without slowing the suite.
+      await new Promise((resolve) => setTimeout(resolve, 700));
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -1078,7 +1082,10 @@ async function mockWorkspaceFilePreview(page: Page): Promise<Array<{ repoPath?: 
 }
 
 async function openPinnedSummary(page: Page): Promise<void> {
-  const environment = page.getByText("Environment").first();
+  const environment = page
+    .locator('aside[aria-label="Workspace summary"]')
+    .getByText("Context")
+    .first();
   if (!(await environment.isVisible().catch(() => false))) {
     await page.getByTitle("Show pinned summary").click();
   }
@@ -1465,7 +1472,7 @@ test.describe("Chat layout", () => {
     await expect(page.getByText("No Project Link yet — create one above")).toHaveCount(0);
     await expect(page.getByPlaceholder("Create or select a Project Link first...")).toHaveCount(0);
     await expect(page.getByLabel("Send message")).toHaveCount(0);
-    await expect(page.getByText("Environment")).toHaveCount(0);
+    await expect(page.locator('aside[aria-label="Workspace summary"]').getByText("Context")).toHaveCount(0);
     expect(chatPayloads).toHaveLength(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
@@ -2421,7 +2428,7 @@ test.describe("Chat layout", () => {
     await openPinnedSummary(page);
 
     const transcriptColumn = page.locator(".middle-panel-inner");
-    const environmentCard = page.locator(".pointer-events-auto.rounded-2xl").filter({ hasText: "Environment" }).first();
+    const environmentCard = page.locator(".pointer-events-auto.rounded-2xl").filter({ hasText: "Context" }).first();
     const approvalCard = page.locator('[data-testid="pending-action-card"]');
 
     await expect(page.getByText("Review my changes and stage the safe files")).toBeVisible();

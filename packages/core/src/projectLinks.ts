@@ -41,12 +41,56 @@ export type ProjectLinkInput = Omit<ProjectLink, "id" | "createdAt" | "updatedAt
 
 type ProjectLinkStore = Record<string, ProjectLink>;
 
+// Legacy workflow fields are read-only compatibility: V2 Project Links never
+// persist them (the daemon API strips them at the boundary, the stores strip
+// them on write, and the UI never sends them). Reads still surface them so
+// historical records and migration consumers keep working.
+const LEGACY_READ_DEFAULTS = {
+  defaultBranch: "",
+  targetBranch: "",
+  adoPipelineId: "",
+  adoPipelineName: "",
+  adoMcpEnabled: false,
+  adoMcpCommand: "",
+  adoMcpAuthentication: "",
+  adoMcpDomains: "",
+  projectTemplate: "",
+  buildCommand: "",
+  testCommand: "",
+} as const;
+
+function withLegacyReadDefaults(projectLink: ProjectLink): ProjectLink {
+  return { ...LEGACY_READ_DEFAULTS, ...projectLink };
+}
+
+/**
+ * V2 canonical write guard (GAP-01): drops every legacy workflow field from a
+ * create/update payload so no store write can persist them. The stable
+ * identity (name/repoPath/adoOrgUrl/adoProject/adoRepoName) and the local
+ * credential reference (adoPat) pass through unchanged.
+ */
+export function legacyFreeProjectLinkInput(
+  data: ProjectLinkInput | Partial<ProjectLinkInput>,
+): Partial<ProjectLinkInput> {
+  const {
+    defaultBranch: _defaultBranch,
+    targetBranch: _targetBranch,
+    adoPipelineId: _adoPipelineId,
+    adoPipelineName: _adoPipelineName,
+    adoMcpEnabled: _adoMcpEnabled,
+    adoMcpCommand: _adoMcpCommand,
+    adoMcpAuthentication: _adoMcpAuthentication,
+    adoMcpDomains: _adoMcpDomains,
+    projectTemplate: _projectTemplate,
+    buildCommand: _buildCommand,
+    testCommand: _testCommand,
+    ...stable
+  } = data;
+  return stable;
+}
+
 function normalizeProjectLink(projectLink: ProjectLink): ProjectLink {
-  return {
-    ...projectLink,
-    adoPipelineId: projectLink.adoPipelineId ?? "",
-    adoPipelineName: projectLink.adoPipelineName ?? "",
-  };
+  return withLegacyReadDefaults(projectLink);
 }
 
 function projectLinkStorePath(dataDir: string): string {
@@ -86,18 +130,27 @@ export function getProjectLink(dataDir: string, id: string): ProjectLink | null 
   return projectLink ? normalizeProjectLink(projectLink) : null;
 }
 
-/** Create a new Project Link and persist it. */
+/** Create a new Project Link and persist it (V2: legacy fields are never stored). */
 export function createProjectLink(dataDir: string, data: ProjectLinkInput): ProjectLink {
   const store = loadProjectLinkStore(dataDir);
   const id = crypto.randomBytes(8).toString("hex");
   const ts = nowSec();
-  const projectLink: ProjectLink = { ...data, id, createdAt: ts, updatedAt: ts };
-  store[id] = projectLink;
+  const stored = {
+    ...legacyFreeProjectLinkInput(data),
+    id,
+    createdAt: ts,
+    updatedAt: ts,
+  } as ProjectLink;
+  store[id] = stored;
   saveProjectLinkStore(dataDir, store);
-  return projectLink;
+  return withLegacyReadDefaults(stored);
 }
 
-/** Update an existing Project Link. Returns null if not found. */
+/**
+ * Update an existing Project Link. Returns null if not found. Legacy fields
+ * in the input are dropped (V2 canonical); values already persisted on an
+ * old record survive until the migration clears them.
+ */
 export function updateProjectLink(
   dataDir: string,
   id: string,
@@ -106,10 +159,15 @@ export function updateProjectLink(
   const store = loadProjectLinkStore(dataDir);
   const existing = store[id];
   if (!existing) return null;
-  const updated: ProjectLink = { ...existing, ...data, id, updatedAt: nowSec() };
+  const updated: ProjectLink = {
+    ...existing,
+    ...legacyFreeProjectLinkInput(data),
+    id,
+    updatedAt: nowSec(),
+  };
   store[id] = updated;
   saveProjectLinkStore(dataDir, store);
-  return updated;
+  return withLegacyReadDefaults(updated);
 }
 
 /** Delete a Project Link. Returns false if not found. */

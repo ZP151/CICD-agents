@@ -177,12 +177,17 @@ describe("pipeline model", () => {
     expect(formatDate("not-a-date")).toBe("");
   });
 
-  it("keys pipeline cache by Project Link mapping fields, not only id", () => {
+  it("keys pipeline cache by stable identity only (V2 canonical, GAP-01)", () => {
     const base = projectLinks[0]!;
 
-    expect(pipelineProjectLinksCacheKey([base])).not.toBe(
+    // Legacy fields never participate in the cache key.
+    expect(pipelineProjectLinksCacheKey([base])).toBe(
       pipelineProjectLinksCacheKey([{ ...base, defaultBranch: "feature/other" }]),
     );
+    expect(pipelineProjectLinksCacheKey([base])).toBe(
+      pipelineProjectLinksCacheKey([{ ...base, adoPipelineId: "999", adoPipelineName: "Other" }]),
+    );
+    // Mapping identity changes still invalidate the cache.
     expect(pipelineProjectLinksCacheKey([base])).not.toBe(
       pipelineProjectLinksCacheKey([{ ...base, adoRepoName: "ClaimBot_API" }]),
     );

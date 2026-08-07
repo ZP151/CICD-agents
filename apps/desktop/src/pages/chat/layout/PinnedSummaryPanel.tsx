@@ -86,7 +86,7 @@ export function PinnedSummaryPanel({
     >
       <div className="pointer-events-auto rounded-2xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4 text-[rgb(var(--app-text))] shadow-lg">
         <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-sm text-[rgb(var(--app-text-muted))]">Environment</p>
+          <p className="min-w-0 truncate text-sm text-[rgb(var(--app-text-muted))]">Context</p>
         </div>
 
         <div className="mt-1 flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1.5 text-sm text-[rgb(var(--app-text-muted))]">
