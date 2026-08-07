@@ -10,6 +10,45 @@ claiming a cycle or the product complete. Test failures are not automatically
 bugs in the desired product: obsolete tests must be corrected to the canonical
 product semantics before they are made green.
 
+## Continuation audit — 2026-08-08 (second pass, HEAD `f472c09`/`b07f370`)
+
+- F4 (`live-app-e2e-20260808-065920.log`, full run, 1 failed / 29 did not run)
+  was a **Vite cold-compile stall, not a product or test defect**: the shared
+  beforeAll warmup (spec `:714`) timed out waiting for the chat composer.
+  Trace forensics (`0-trace.network` + screencast frames) established the
+  chain: document request 130.9s; auth completed 07:01:47 (`/auth/me` success,
+  `auth-cache.json` written, user Zhou.Ping); chat route mounted ~23:01:45 UTC
+  and its modules were served 15–98s each (Vite dep-optimizer contention); a
+  final wave of 44 chat-runtime modules (`useChatRuntime.ts`,
+  `@assistant-ui_react.js`, bubble/stream modules) was requested
+  `23:04:23.461–26.846` and **never answered** (in-flight status -1 at
+  teardown 23:05:49); screencast frames stop at 23:04:34; the daemon never
+  received `/chat/history`. F3 (06:00 run, same code) warmed up successfully —
+  cold compile is probabilistic, not deterministic.
+- **Fix, verified** (`f472c09`, `b07f370` on `claudecode/optimize-bugfix`,
+  pushed to `origin`): `scripts/prewarm-vite.mjs` + runner integration in
+  `scripts/windows/run-live-app-e2e.ps1`. The runner starts Vite
+  (Playwright's webServer reuses it via `reuseExistingServer:true`), runs the
+  prewarm script — reload-retry against chat composer + Pipelines heading —
+  and aborts with structured JSON rather than starting the suite cold.
+  Measured: cold prewarm 60.3s (first experiment) and 177.4s (F5), warm app
+  interactive in **1.6s** after prewarm. Runner fixes found by the failed F5
+  launches: `Start-Process` refuses identical stdout/stderr redirect targets;
+  an HTTP port poll with a 3s budget times out against a cold Vite (first GET
+  ~3.8s); wrapper `Stop-Process` orphans the node child (cleanup now also
+  clears repo-owned 1420 listeners via `Stop-PortOwner -Port 1420`).
+- **actionsTaken trust gap** (from bff168 turn 2, recorded for S6e): the
+  `actionsTaken` field read by `packages/core/src/chatPlannerControl.ts:39`
+  is the model's self-report (`control["actions_taken"]`), not an execution
+  record. Observed: the model claimed `git_add` and "Staged notes.txt
+  successfully" while the daemon's `completedTools` recorded only
+  `git_status`/`git_diff` — the approval gate held (write never executed), so
+  no harm, but `actionsTaken` must never be cited as execution evidence; the
+  daemon `completedTools` log is the trusted record.
+- S6a state: F3 = 21/26 (5 failures + 4 ADO skips, all 5 fixed in `71ec73e`);
+  F4 = environment warmup failure; F5 (prewarm-enabled full run, `-LiveAdo`)
+  running at audit time. See GAP-06 for the remaining gates.
+
 ## Continuation audit — 2026-08-08
 
 - GAP-01, GAP-02, GAP-03 are closed: slices `0fb9b56`, `26fd4d7`, `ab33410`
