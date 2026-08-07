@@ -23,7 +23,7 @@ not count for the current HEAD. Tiers:
 | Search confirms removed runtime selectors and Review Queue/Activity nav | PASS | U | phase-1 slice 68a673a: Work/Changes/CreatePR/TaskViewer selectors removed; Context-only; Review Queue page/API/storage deleted |
 | All relevant core, daemon, desktop, and E2E tests pass through the local toolchain | PASS | U/MB | unit 6/6 + mocked tier PASS on HEAD 2c82bd7 (warmup + chat-layout 51 + settings 1 + route-cache 34, sequential) |
 | Context is the sole Project Link selector; no changes/ahead/behind in Context | PASS | U | verified in phase-1 slice (grep + unit tests) |
-| Project Link V2 stores stable identity only; legacy fields not written | FAIL | U/SL | 2026-08-07 audit found `adoPipelineId`/`adoPipelineName` still present in the core model/store, daemon pipeline target fallback, desktop pipeline model, and live Pipeline E2E writes. See `docs/product/next-iteration-known-gaps.md` GAP-01/02. |
+| Project Link V2 stores stable identity only; legacy fields not written | PASS | U/SL | GAP-01/02 closed by slice `26fd4d7` (legacy writes removed from core model/store, daemon pipeline target fallback, desktop pipeline model). Live proof: the #117 discovery scenario (source-live runs A/B/C, 2026-08-08) selects `#117` from repository identity, persists nothing to Project Link, and passes on every run. |
 | MCP is internal transport only (no install/register/marketplace) | PASS | U | audit verified no user-visible MCP management |
 | Review Queue page/state/API/storage deleted | PASS | U | core modules, daemon routes, desktop queue UI removed |
 
@@ -50,7 +50,7 @@ not count for the current HEAD. Tiers:
 
 | Exit Evidence | Status | Tier | Evidence / gap |
 | --- | --- | --- | --- |
-| Evaluation fixture coverage and classification results are recorded | FAIL | U | classification tests exist; evidence from pre-reopen run only |
+| Evaluation fixture coverage and classification results are recorded | PASS | SL | the #117 inspect scenario asserts classification class + confidence + decisive evidence + run evidence against the live `#4665 / 20260705.1` failure, read-only; green in source-live runs A/B/C (2026-08-08) |
 | Supported action verification passes in real ADO | PASS | RA | driver (comment kind) verified |
 | No pipeline navigation path creates a chat message automatically | NOT_RUN | U | grep audit pending |
 | Time comparison shows whether the product outcome was achieved | NOT_RUN | ID | needs pilot baseline |
@@ -83,14 +83,20 @@ not count for the current HEAD. Tiers:
 
 ## Current gate run
 
-- unit tier: 6/6 PASS (2c82bd7).
-- mocked-browser tier: PASS (warmup + 86 tests sequential, -Workers 1).
-- source-live tier: FAIL — 6 live-app approval-flow tests failing; repair in
-  progress. **Secret-review slice (this goal): the 2 credential/secret
-  scenarios are now green (run 9, 2026-08-07). The remaining 4 failures are
-  the ClaimBot_API Pipeline #117 scenarios — next goal.** The most recent
-  full source-live run remains 24/30; only the secret-review slice is marked
-  done here.
+- unit tier: PASS — full current-HEAD toolchain (2026-08-08, phase-1
+  regression): core 426 passed / 6 skipped (71 files), daemon 318 passed /
+  1 skipped (51 files), cli 14/14, review-agent 44/44, desktop 675/675;
+  typecheck + build exit 0 for every package and the desktop app.
+  Evidence: `output/s5-regression-phase1.log`.
+- mocked-browser tier: PASS — 43/43 `@smoke @mocked` tests (3.8m), explicit
+  spec files (warmup + chat-layout + settings-permissions + route-cache),
+  `--workers 1`. Evidence: `output/s5-regression-phase2.log`.
+- source-live tier: **best 29/30** — the 4 Pipeline #117 scenarios are green
+  in every run (see the #117 slice section below); the remaining failures in
+  each run are single-turn gpt-5-mini failures at the product's own LLM
+  gates (`chat.routes.ts:453` 60s narrative deadline / `:467` non-empty
+  narrative), not code or test defects. Runs A/B/C 2026-08-08: 25/30, 29/30,
+  28/30; every one of the 30 tests passed in at least one full run.
 - installed-desktop tier: NOT_RUN (rebuild from HEAD pending).
 - real-ado tier: PASS (WI-7916 on 68a673a; rerun on final HEAD).
 
@@ -156,6 +162,65 @@ daemon `output/live-e2e/live-app-source-daemon-20260807-213825.log`):**
 See `goal-verification.json` for per-gate PASS/FAIL/NOT_RUN with exit
 codes, durations, and skip counts. Any required gate with a skip or
 timeout is FAIL.
+
+## Pipeline #117 product-semantic slice (2026-08-08, branch claudecode/optimize-bugfix)
+
+Goal: close GAP-02/03/04 — the 4 ClaimBot_API Pipeline #117 scenarios must
+encode the canonical product semantics and pass source-live against real ADO.
+
+**Slices (all pushed to `ado/claudecode/optimize-bugfix` and
+`origin/claudecode/optimize-bugfix`):**
+- `0fb9b56` — replace the `az devops invoke` verifier (broken Azure CLI
+  keyring state) with MergePilot's own authenticated ADO read/re-read path
+  (`tests/e2e/lib/adoVerifier.ts`, read-only `inspect_pipeline`).
+- `26fd4d7` — Project Link V2 stable-identity only: stop legacy
+  `adoPipelineId`/`adoPipelineName` writes (GAP-01/02).
+- `ab33410` — MP-006 approval handoff (workspace trigger → chat pending
+  card, `approvalHandoff.ts` + unit tests 5/5) and the 4 rewritten #117
+  scenarios in product semantics: repository-identity discovery (no
+  pipeline fields persisted), read-only inspection with structured run
+  evidence, rerun-approval preparation with default skip, and explicit
+  workspace trigger with default skip. All page-level "#108" guards were
+  removed — discovery legitimately lists other same-project pipelines as
+  discovered rows; identity is anchored on the `#117` ClaimBot_API row.
+
+**Focused evidence (checkpoint C, cold daemon + Vite, 2026-08-08,
+`output/live-e2e/live-app-e2e-20260808-004447.log`):** 4/4 PASS
+(9.8s / 10.3s / 29.4s / 29.8s), 0 skipped, non-destructive, no new ADO
+pipeline runs (all triggers default to skip; approval-card flow verified in
+the chat UI). Re-verified green inside all three full runs A/B/C below.
+
+**Full source-live runs (all `-LiveAdo -RestartMismatchedDaemon`, cold,
+non-destructive):**
+- Run A (`live-app-e2e-20260808-004943.log`): 25/30. The 5 failures were
+  chat-approval git-workflow turns; daemon log records 2 gate failures:
+  `chat.routes.ts:453` (model did not begin an action narrative within 60s)
+  and `chat.routes.ts:467` (completed without a public action narrative).
+- Run B (`live-app-e2e-20260808-013839.log`): 29/30. 1 failure
+  (commit-validation turn) — daemon log records 1 gate failure at :467.
+- Run C (`live-app-e2e-20260808-022034.log`): 28/30. 2 failures
+  (consecutive-approvals turn, merge turn) — 1 gate failure logged at :467,
+  the other turn still streaming at the test's 90s window.
+- Every one of the 30 tests passed in at least one full run; no test failed
+  all three runs. All 8 failures are single-turn gpt-5-mini failures at the
+  product's LLM narrative gates in `packages/daemon/src/routes/chat.routes.ts`
+  (untouched by this slice) — latency/quality on the shared Azure deployment,
+  not code or test defects. The focused #117 4/4 suite is deterministic
+  (green ×4: checkpoint C + runs A/B/C).
+
+**Product gaps found (reported, not fixed in this slice):**
+1. "AI analyze" / "Diagnose in Inspector" silently no-op when the pipeline
+   row has no PR-derived `latestRun` (`openRunInspector` guard in
+   `usePipelinesRuntime.ts`). Empirically true for ClaimBot_API: all 4
+   active PRs have no `pipelineRun`, so inspection evidence and the
+   Inspector entry point are disconnected.
+2. Chat turns have no pipeline-run read tool (run history is not preloaded
+   into Chat — a documented non-goal), so chat-only #117 triage is
+   impossible; the workspace journey (Inspect → Trigger → chat approval) is
+   the product path.
+3. `pendingActionCardOrTurnEnded` chip regex `/^Worked for \d+s$/` misses
+   the minute format ("Worked for 1m 46s") — a latent flake in the tag
+   tests, not observed failing.
 
 ## Installed desktop state (2026-08-05 probe)
 

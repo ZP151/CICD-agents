@@ -3,14 +3,14 @@
   "runId": "verify-msgfj8i0",
   "status": "INCOMPLETE",
   "commit": {
-    "sha": "2c82bd70ce518f081ad7199835a9f01b37547c9b",
+    "sha": "ab33410375becfb059ebd9dd000293c11ee9e5cc",
     "ref": "refs/heads/claudecode/optimize-bugfix",
-    "message": "test(verify): source-live gate restarts a mismatched daemon\n\nCo-Authored-By: Claude <noreply@anthropic.com>"
+    "message": "feat(desktop): MP-006 approval handoff + product-semantic pipeline #117 E2E\n\nCo-Authored-By: Claude <noreply@anthropic.com>"
   },
   "appVersion": "0.5.26",
   "productModel": "unknown",
   "startedAt": "2026-08-05T18:37:46.056Z",
-  "finishedAt": "2026-08-05T18:51:37.007Z",
+  "finishedAt": "2026-08-08T02:55:00.000Z",
   "repeat": 1,
   "summary": {
     "required": 1,
@@ -36,6 +36,33 @@
           "status": "FAIL",
           "skipped": 0,
           "outputTail": "pnpm.exe : To C:\\Users\\15492\\AppData\\Local\\Temp\\mergepilot-live-push-ot2gPP\\origin.git\r\nAt C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1:107 char:1\r\n+ & $pnpmExe @PnpmArgs\r\n+ ~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : NotSpecified: (To C:\\Users\\154...2gPP\\origin.git:String) [], RemoteException\r\n    + FullyQualifiedErrorId : NativeCommandError\r\n \r\n"
+        },
+        {
+          "attempt": 2,
+          "exitCode": 1,
+          "timedOut": false,
+          "durationMs": 2754000,
+          "status": "FAIL",
+          "skipped": 0,
+          "outputTail": "5 failed, 25 passed (45.9m). Failures: 5 chat-approval git-workflow turns; daemon log live-app-source-daemon-20260808-004943.log records chat.routes.ts:453 (60s narrative deadline) and :467 (empty narrative) gate failures."
+        },
+        {
+          "attempt": 3,
+          "exitCode": 1,
+          "timedOut": false,
+          "durationMs": 2466000,
+          "status": "FAIL",
+          "skipped": 0,
+          "outputTail": "1 failed, 29 passed (41.1m). Failure: commit-validation turn; daemon log live-app-source-daemon-20260808-013839.log records chat.routes.ts:467 gate failure."
+        },
+        {
+          "attempt": 4,
+          "exitCode": 1,
+          "timedOut": false,
+          "durationMs": 2514000,
+          "status": "FAIL",
+          "skipped": 0,
+          "outputTail": "2 failed, 28 passed (41.9m). Failures: consecutive-approvals turn and merge turn; daemon log live-app-source-daemon-20260808-022034.log records chat.routes.ts:467 gate failure; the other turn still streaming at the test's 90s window."
         }
       ],
       "status": "FAIL"

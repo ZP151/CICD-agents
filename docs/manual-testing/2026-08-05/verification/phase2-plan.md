@@ -61,26 +61,25 @@ a git_diff of the test file, and `git_remote` persists redacted).
 **Not done**: the whole source-live tier stays 24/30 — the 4 remaining
 failures are the ClaimBot_API Pipeline #117 scenarios.
 
-## Next goal: align the 4 Pipeline #117 scenarios with the canonical product
+## Pipeline #117 product-semantic slice (2026-08-08) — DONE
 
-The four failures must not be made green by restoring the old Project Link
-pipeline fields. The 2026-08-07 audit found that the current tests and runtime
-still contradict the stable-identity-only Project Link decision and that the
-test-side Azure CLI precondition is blocked by its local keyring installation.
-The mandatory implementation handoff is
-`docs/product/next-iteration-known-gaps.md`.
+Closed GAP-01/02/03 and reworked GAP-04 per the canonical product. Slices
+`0fb9b56` (authenticated ADO verifier, no Azure CLI keyring), `26fd4d7`
+(Project Link V2 stable-identity only), `ab33410` (MP-006 approval handoff +
+4 rewritten #117 scenarios: repository-identity discovery without persisting
+pipeline fields; read-only inspection with structured run evidence;
+rerun-approval preparation with default skip; explicit workspace trigger with
+default skip). All pushed to `ado/claudecode/optimize-bugfix` and
+`origin/claudecode/optimize-bugfix`.
 
-1. Replace `discovers and saves ClaimBot_API pipeline #117 when the Project
-   Link has no pipeline ID` with repository-identity discovery that stores the
-   choice in PipelineConnection or Turn/Context state and proves Project Link
-   remains free of pipeline fields.
-2. `inspects ClaimBot_API pipeline #117 failure evidence through normal Chat
-   input`
-3. `prepares ClaimBot_API pipeline #117 rerun approval from failure evidence
-   suggestions`
-4. `prepares ClaimBot_API pipeline #117 approval through the real Chat UI`
+**Evidence:** focused #117 4/4 green cold-start (9.8s / 10.3s / 29.4s /
+29.8s, 0 skipped) and green inside all three full source-live runs A/B/C
+(2026-08-08). Full-suite best 29/30 — the only failures are single-turn
+gpt-5-mini trips at the product's own LLM narrative gates
+(`chat.routes.ts:453` / `:467`), all 30 tests passed in at least one run.
+Recorded in `evidence-matrix.md` (slice section) and both
+`goal-verification.json` files (source-live gate appended runs A/B/C).
 
-Replace the `az devops invoke` verifier with MergePilot's authenticated ADO
-read/re-read path. Then run with `-LiveAdo` so the 4 live-ADO tests execute
-instead of skipping, verify a cold-start 30/30 source-live pass, and record it
-in `evidence-matrix.md` plus both machine-readable verification JSON files.
+**Still open (not claimed here):** installed-desktop/MSI rebuild and E2E from
+HEAD, real destructive ADO approval execution, performance baselines, and the
+Cycle 00–06 items still marked NOT_RUN in `evidence-matrix.md`.

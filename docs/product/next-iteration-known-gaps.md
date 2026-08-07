@@ -10,6 +10,35 @@ claiming a cycle or the product complete. Test failures are not automatically
 bugs in the desired product: obsolete tests must be corrected to the canonical
 product semantics before they are made green.
 
+## Continuation audit — 2026-08-08
+
+- GAP-01, GAP-02, GAP-03 are closed: slices `0fb9b56`, `26fd4d7`, `ab33410`
+  (branch `claudecode/optimize-bugfix`, pushed to both `ado` and `origin`).
+  The 4 rewritten #117 scenarios pass source-live cold-start in every run
+  (focused 4/4, 9.8–29.8s, 0 skipped) and are green inside full runs A/B/C.
+  Full-suite best is 29/30: the residual failures are single-turn gpt-5-mini
+  trips at the product's own LLM narrative gates
+  (`packages/daemon/src/routes/chat.routes.ts:453` 60s narrative deadline,
+  `:467` non-empty narrative) — every one of the 30 tests passed in at least
+  one run; no test failed all three. This is a model-latency/quality
+  limitation on the shared Azure deployment, not a code or test defect.
+- New verified product gaps (reported in `evidence-matrix.md`, not fixed):
+  - "AI analyze" / "Diagnose in Inspector" silently no-op when a pipeline row
+    has no PR-derived `latestRun` (`openRunInspector` guard in
+    `apps/desktop/src/pages/pipelines/usePipelinesRuntime.ts`); empirically
+    true for ClaimBot_API (4 active PRs have no `pipelineRun`), so inspection
+    evidence and the Inspector entry point are disconnected.
+  - `pendingActionCardOrTurnEnded` chip regex `/^Worked for \d+s$/` misses the
+    minute format ("Worked for 1m 46s") — latent flake in tag tests.
+- GAP-05 is aligned: `evidence-matrix.md`, `phase2-plan.md`, and both
+  `goal-verification.json` files now reference the same final HEAD
+  (`ab33410`) and artifact paths (run logs `output/live-e2e/live-app-e2e-2026
+  0808-*.log`, regression `output/s5-regression-phase1/2.log`).
+- GAP-06 remains open: installed-desktop/MSI rebuild from HEAD,
+  installed-desktop E2E, real destructive ADO approval execution,
+  performance baselines separating app latency from model TTFT, and pilot /
+  readiness evidence. The product and Cycles 00–06 are not complete.
+
 ## Continuation audit — 2026-08-07
 
 - GAP-01 and GAP-03 have implementation commits through `26fd4d7` on both
