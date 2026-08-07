@@ -13,6 +13,7 @@ export * from "./indexer/types.js";
 export * from "./indexer/parsers.js";
 export * from "./indexer/chunks.js";
 export * from "./tools/executor.js";
+export * from "./tools/gitPath.js";
 export * from "./tools/capabilities.js";
 export * from "./tools/git.js";
 export * from "./tools/dotnet.js";

@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { logger } from "../logger.js";
+import { ensureGitOnPath } from "./gitPath.js";
 
 const SECRET_PATTERNS: Array<RegExp> = [
   /(?<lead>authorization\s*:\s*basic\s+)[A-Za-z0-9+/=]+/gi,
@@ -88,49 +89,91 @@ export function runCommand(cmd: string[], options: RunOptions): Promise<CommandR
       return;
     }
     const start = Date.now();
-    const child = spawn(head, cmd.slice(1), {
-      cwd: options.cwd,
-      env: { ...process.env, ...(options.env ?? {}) },
-      // Do NOT use shell:true on Windows — cmd.exe splits space-containing
-      // arguments (e.g. git commit messages) into separate tokens, turning
-      // "commit -m My message" into pathspec errors. The daemon's injectGitPath()
-      // already injects git into process.env.PATH, so shell:false finds git fine.
-      shell: false,
-      windowsHide: true,
-    });
     const timeoutMs = (options.timeoutSec ?? 600) * 1000;
+    let child: ReturnType<typeof spawn> | null = null;
+    let attempt = 0;
+    let settled = false;
+    const settleResolve = (result: CommandResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const settleReject = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    };
     const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-      reject(new ToolError(`command timed out after ${options.timeoutSec ?? 600}s: ${cmd.join(" ")}`));
+      child?.kill("SIGKILL");
+      settleReject(new ToolError(`command timed out after ${options.timeoutSec ?? 600}s: ${cmd.join(" ")}`));
     }, timeoutMs);
-    const stdoutChunks: Buffer[] = [];
-    const stderrChunks: Buffer[] = [];
-    child.stdout.on("data", (b: Buffer) => {
-      stdoutChunks.push(b);
-      options.onOutput?.({ stream: "stdout", text: redact(b.toString("utf8")) });
-    });
-    child.stderr.on("data", (b: Buffer) => {
-      stderrChunks.push(b);
-      options.onOutput?.({ stream: "stderr", text: redact(b.toString("utf8")) });
-    });
-    if (options.inputText !== undefined) {
-      child.stdin.write(options.inputText);
-      child.stdin.end();
-    } else {
-      child.stdin.end();
-    }
-    child.on("error", (err) => {
-      clearTimeout(timer);
-      reject(new ToolError(`failed to spawn ${head}: ${err.message}`));
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      const stdout = redact(Buffer.concat(stdoutChunks).toString("utf8"));
-      const stderr = redact(Buffer.concat(stderrChunks).toString("utf8"));
-      const durationMs = Date.now() - start;
-      logger().debug({ cmd, code, durationMs }, "exec finished");
-      resolve({ cmd, returncode: code ?? 0, stdout, stderr, durationMs });
-    });
+
+    const launch = () => {
+      attempt += 1;
+      const childAttempt = spawn(head, cmd.slice(1), {
+        cwd: options.cwd,
+        env: { ...process.env, ...(options.env ?? {}) },
+        // Do NOT use shell:true on Windows — cmd.exe splits space-containing
+        // arguments (e.g. git commit messages) into separate tokens, turning
+        // "commit -m My message" into pathspec errors. The daemon's injectGitPath()
+        // already injects git into process.env.PATH, so shell:false finds git fine.
+        shell: false,
+        windowsHide: true,
+      });
+      child = childAttempt;
+      const stdoutChunks: Buffer[] = [];
+      const stderrChunks: Buffer[] = [];
+      const onClose = (code: number | null) => {
+        settleResolve({
+          cmd,
+          returncode: code ?? 0,
+          stdout: redact(Buffer.concat(stdoutChunks).toString("utf8")),
+          stderr: redact(Buffer.concat(stderrChunks).toString("utf8")),
+          durationMs: Date.now() - start,
+        });
+      };
+      childAttempt.on("close", onClose);
+      childAttempt.on("error", (err: NodeJS.ErrnoException) => {
+        if (
+          attempt === 1 &&
+          head === "git" &&
+          process.platform === "win32" &&
+          err.code === "ENOENT"
+        ) {
+          // git became unresolvable on PATH (a slow or broken PATH entry made
+          // the Windows CreateProcess search fail). Inject the known Git for
+          // Windows directories and retry exactly once — a bounded recovery,
+          // not a retry loop. The failed attempt's own close event must not
+          // settle the command ahead of the retry.
+          childAttempt.off("close", onClose);
+          ensureGitOnPath();
+          launch();
+          return;
+        }
+        const hint =
+          attempt > 1 && head === "git" && process.platform === "win32"
+            ? " (git was still unresolvable after git-path recovery)"
+            : "";
+        settleReject(new ToolError(`failed to spawn ${head}: ${err.message}${hint}`));
+      });
+      childAttempt.stdout.on("data", (b: Buffer) => {
+        stdoutChunks.push(b);
+        options.onOutput?.({ stream: "stdout", text: redact(b.toString("utf8")) });
+      });
+      childAttempt.stderr.on("data", (b: Buffer) => {
+        stderrChunks.push(b);
+        options.onOutput?.({ stream: "stderr", text: redact(b.toString("utf8")) });
+      });
+      if (options.inputText !== undefined) {
+        childAttempt.stdin.write(options.inputText);
+        childAttempt.stdin.end();
+      } else {
+        childAttempt.stdin.end();
+      }
+    };
+    launch();
   });
 }
 
