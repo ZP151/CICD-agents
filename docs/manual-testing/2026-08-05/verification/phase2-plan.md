@@ -61,16 +61,26 @@ a git_diff of the test file, and `git_remote` persists redacted).
 **Not done**: the whole source-live tier stays 24/30 — the 4 remaining
 failures are the ClaimBot_API Pipeline #117 scenarios.
 
-## Next goal: fix the 4 Pipeline #117 scenarios → 30/30 source-live cold-start
+## Next goal: align the 4 Pipeline #117 scenarios with the canonical product
 
-1. `discovers and saves ClaimBot_API pipeline #117 when the Project Link has
-   no pipeline ID`
+The four failures must not be made green by restoring the old Project Link
+pipeline fields. The 2026-08-07 audit found that the current tests and runtime
+still contradict the stable-identity-only Project Link decision and that the
+test-side Azure CLI precondition is blocked by its local keyring installation.
+The mandatory implementation handoff is
+`docs/product/next-iteration-known-gaps.md`.
+
+1. Replace `discovers and saves ClaimBot_API pipeline #117 when the Project
+   Link has no pipeline ID` with repository-identity discovery that stores the
+   choice in PipelineConnection or Turn/Context state and proves Project Link
+   remains free of pipeline fields.
 2. `inspects ClaimBot_API pipeline #117 failure evidence through normal Chat
    input`
 3. `prepares ClaimBot_API pipeline #117 rerun approval from failure evidence
    suggestions`
 4. `prepares ClaimBot_API pipeline #117 approval through the real Chat UI`
 
-Run with `-LiveAdo` so the 4 live-ADO tests execute instead of skipping,
-then verify a cold-start 30/30 source-live pass and record it in
-`evidence-matrix.md`.
+Replace the `az devops invoke` verifier with MergePilot's authenticated ADO
+read/re-read path. Then run with `-LiveAdo` so the 4 live-ADO tests execute
+instead of skipping, verify a cold-start 30/30 source-live pass, and record it
+in `evidence-matrix.md` plus both machine-readable verification JSON files.

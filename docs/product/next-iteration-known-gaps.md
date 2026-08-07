@@ -1,0 +1,130 @@
+# Next Iteration Known Gaps
+
+Status: **Required input for the next product Goal**  
+Audit date: **2026-08-07**  
+Audited branch/HEAD: `claudecode/optimize-bugfix` / `69c9dff`
+
+This document records verified gaps between the canonical product direction and
+the current implementation. A future Goal must read this document before
+claiming a cycle or the product complete. Test failures are not automatically
+bugs in the desired product: obsolete tests must be corrected to the canonical
+product semantics before they are made green.
+
+## Current verified baseline
+
+- The credential and secret-review slice is complete at `69c9dff`: its two
+  focused source-live scenarios pass and the structured evidence is redacted.
+- The most recent complete source-live run is still `24/30`; the four remaining
+  failures are the ClaimBot_API Pipeline `#117` scenarios.
+- Installed-desktop/MSI evidence and final-HEAD real-ADO evidence are still
+  pending. The product and Cycles 00–06 are not complete.
+- `goal-verification.json` still describes the older `2c82bd7` failed run. It
+  must not be used as current-HEAD completion evidence.
+- `69c9dff` exists on `ado/claudecode/optimize-bugfix`. At audit time the local
+  branch still tracked `origin/claudecode/optimize-bugfix`, which was one commit
+  behind. Future reports must name the remote and prove both non-main refs when
+  they claim a push completed.
+
+## GAP-01 — Project Link V2 is not yet stable-identity-only
+
+**Canonical intent:** Project Link owns stable local workspace and ADO repository
+identity. Pipeline, branch, MCP, Git status, and workflow state do not belong in
+Project Link. Context is the sole Project Link selector.
+
+**Implemented reality:** legacy pipeline fields remain in the canonical model
+and persistence path:
+
+- `packages/core/src/projectLinks.ts` still declares, normalizes, and serializes
+  `adoPipelineId` and `adoPipelineName`.
+- `packages/core/src/store/tableProjectLinkStore.ts` still maps those fields.
+- `packages/daemon/src/workflows/pipelineWorkflow.ts` still falls back to
+  `projectLink.adoPipelineId` when resolving an action target.
+- `apps/desktop/src/pages/pipelines/pipelineModel.ts` still derives pipeline
+  connections from Project Link pipeline fields.
+
+**Why it matters:** this recreates the overloaded Project Link model that the
+canonical product plan explicitly removed. It also makes Pipeline behavior and
+tests depend on stale configuration rather than live ADO repository evidence.
+
+**Required direction:** stop all new writes of legacy workflow fields; migrate
+historical pipeline values into the existing PipelineConnection model or a
+Turn/Context runtime selection; retain a bounded read-only compatibility adapter
+until migration evidence permits deletion.
+
+## GAP-02 — The remaining Pipeline E2E encodes obsolete behavior
+
+`tests/e2e/live-app-business.spec.ts` currently expects pipeline discovery to
+write `adoPipelineId: 117` and `adoPipelineName: ClaimBot_API` back into Project
+Link. Its fixtures also seed those legacy fields, and its helper still searches
+for the old `Environment` label.
+
+Making this test pass unchanged would regress the target product. The intended
+scenario is:
+
+1. select the ClaimBot_API Project Link from Context;
+2. discover Pipeline `#117` from the ADO repository identity;
+3. keep the selected Pipeline in PipelineConnection or the active Turn/Context;
+4. re-read Project Link and prove no pipeline fields were persisted;
+5. inspect evidence read-only; only an explicit user action may create a trigger
+   proposal and approval card.
+
+Pipeline navigation must not preload a report into Chat or create a synthetic
+user message.
+
+## GAP-03 — Source-live Pipeline verification depends on broken Azure CLI state
+
+The E2E helper `latestClaimBotPipelineRun()` shells out to `az devops invoke`.
+On 2026-08-07 the exact read-only command failed before the app was exercised:
+
+```text
+PermissionError: [Errno 13] Permission denied:
+C:\Users\15492\.azure\cliextensions\azure-devops\keyring\__init__.py
+```
+
+Two of the four Pipeline failures therefore represent a harness/auth dependency,
+not demonstrated product failures. The verifier must use MergePilot's own
+Microsoft authentication and core ADO client, then perform an authoritative
+ADO re-read. It must not read token files, duplicate credentials, add an
+unauthenticated test route, or ask for credentials in chat.
+
+## GAP-04 — Pipeline evidence and approval behavior remain unproven end to end
+
+The current remaining source-live scenarios must prove, using real ClaimBot_API
+data:
+
+- repository-based discovery selects Pipeline `#117`, never `#108`;
+- read-only inspection shows the historical `#4665 / 20260705.1` failure and
+  useful VSBuild/MSBuild evidence without leaking secrets;
+- read-only inspection never creates an approval or queues a run;
+- an explicit rerun/trigger request creates a high-risk
+  `ado_trigger_pipeline` proposal for `#117`;
+- cancellation or approval remains in the same Turn;
+- default non-destructive verification re-reads ADO and proves no run was
+  created.
+
+Model prose is not the acceptance oracle. Structured events, approval payloads,
+logs, traces, and ADO re-read are the evidence.
+
+## GAP-05 — Verification state is split and stale
+
+The manual evidence matrix records the newer secret-review result, while both
+machine-readable `goal-verification.json` files still point to the old failed
+run. Before `source_live_ready` can be claimed, the two JSON files and the
+manual evidence must reference the same final SHA, command, exit code, test
+count, skip count, timing, model configuration, and artifact paths.
+
+## GAP-06 — Product completion gates remain open
+
+After source-live reaches the product-correct `30/30`, the next product Goal
+still needs final-HEAD unit repetition, deterministic real-ADO re-read, a fresh
+MSI, installed-desktop E2E, performance baselines that separate app latency
+from model TTFT, and pilot/readiness evidence. Passing source-live alone does
+not complete the product.
+
+## Required Goal behavior
+
+Every future macro Goal may stay concise, but its execution must treat this
+document as a required backlog and evidence ledger. Work in reversible slices,
+commit and push verified checkpoints to explicitly named non-main branches,
+and never delete, rename, force-push, rewrite, or directly push any remote
+`main` branch.

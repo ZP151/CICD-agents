@@ -23,7 +23,7 @@ not count for the current HEAD. Tiers:
 | Search confirms removed runtime selectors and Review Queue/Activity nav | PASS | U | phase-1 slice 68a673a: Work/Changes/CreatePR/TaskViewer selectors removed; Context-only; Review Queue page/API/storage deleted |
 | All relevant core, daemon, desktop, and E2E tests pass through the local toolchain | PASS | U/MB | unit 6/6 + mocked tier PASS on HEAD 2c82bd7 (warmup + chat-layout 51 + settings 1 + route-cache 34, sequential) |
 | Context is the sole Project Link selector; no changes/ahead/behind in Context | PASS | U | verified in phase-1 slice (grep + unit tests) |
-| Project Link V2 stores stable identity only; legacy fields not written | PASS | U | verified: daemon schemas + desktop forms stop writing legacy fields |
+| Project Link V2 stores stable identity only; legacy fields not written | FAIL | U/SL | 2026-08-07 audit found `adoPipelineId`/`adoPipelineName` still present in the core model/store, daemon pipeline target fallback, desktop pipeline model, and live Pipeline E2E writes. See `docs/product/next-iteration-known-gaps.md` GAP-01/02. |
 | MCP is internal transport only (no install/register/marketplace) | PASS | U | audit verified no user-visible MCP management |
 | Review Queue page/state/API/storage deleted | PASS | U | core modules, daemon routes, desktop queue UI removed |
 

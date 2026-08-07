@@ -38,6 +38,7 @@ reached.
 | [Measurement, research, and go-to-market](measurement-research-and-gtm.md) | Product evidence, discovery, telemetry, adoption, packaging, and launch criteria |
 | [Risk and governance](risk-and-governance.md) | AI quality, security, permissions, audit, privacy, and operational safeguards |
 | [Completion audit](completion-audit.md) | Requirement-to-document evidence and remaining product-research gaps |
+| [Next iteration known gaps](next-iteration-known-gaps.md) | Current verified implementation drift, open gates, and mandatory handoff for the next Goal |
 
 ## Management Communication
 
