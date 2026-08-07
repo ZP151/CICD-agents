@@ -10,6 +10,19 @@ claiming a cycle or the product complete. Test failures are not automatically
 bugs in the desired product: obsolete tests must be corrected to the canonical
 product semantics before they are made green.
 
+## Continuation audit — 2026-08-07
+
+- GAP-01 and GAP-03 have implementation commits through `26fd4d7` on both
+  non-main remotes, but final source-live and installed evidence is still open.
+- The worktree after `26fd4d7` contains an unfinished Pipelines → Chat approval
+  handoff and same-Turn decline slice. Preserve and seal it before starting the
+  broader v1 iteration.
+- The latest mocked chat-layout result is `50/51`; the saved PR insight artifact
+  source → result workspace test is failing. Do not reuse the older mocked PASS
+  as current-HEAD evidence.
+- The detailed execution plan for the next macro Goal is
+  `v1-productization-iteration.md`.
+
 ## Current verified baseline
 
 - The credential and secret-review slice is complete at `69c9dff`: its two

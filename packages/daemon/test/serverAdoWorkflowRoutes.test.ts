@@ -321,6 +321,13 @@ describe("daemon ADO workflow routes", () => {
                 process: { yamlFilename: "/azure-pipelines.yml" },
                 _links: { web: { href: "https://ado/pipelines/117" } },
               },
+              {
+                id: 118,
+                name: "MergePilot Release",
+                repository: { id: "repo-guid", name: "mergepilot", type: "TfsGit" },
+                process: { yamlFilename: "/azure-pipelines.yml" },
+                _links: { web: { href: "https://ado/pipelines/118" } },
+              },
             ],
           }),
           { status: 200, headers: { "content-type": "application/json" } },
@@ -350,21 +357,26 @@ describe("daemon ADO workflow routes", () => {
       },
     });
     expect(inspect.statusCode, inspect.body).toBe(200);
-    // MP-010: no ID/name resolves to a typed target_not_found with the
-    // discovered candidates, never a blob or a disguised connector failure.
+    // MP-010/GAP-01: with no ID, repository-identity discovery lists the
+    // candidates. A single candidate is auto-selected, so this fixture
+    // provides two to exercise the typed ambiguity guidance — never a blob
+    // message or a disguised connector failure.
     expect(inspect.json()).toMatchObject({
       ok: false,
       workflowState: {
         status: "blocked",
         workflowKind: "ci",
-        workflowPhase: "pipeline_target_not_found",
+        workflowPhase: "pipeline_target_ambiguous",
       },
       failure: {
-        kind: "target_not_found",
-        candidates: [{ id: 117, name: "ClaimBot_API" }],
+        kind: "ambiguous_target",
+        candidates: [
+          { id: 117, name: "ClaimBot_API" },
+          { id: 118, name: "MergePilot Release" },
+        ],
       },
     });
-    expect(inspect.json().summary).toContain("No pipeline ID or name is configured");
+    expect(inspect.json().summary).toContain("Choose the intended one");
     expect(inspect.json().workflowState.pendingApproval).toBeUndefined();
     // MP-006: page-originated action must not create a chat session.
     expect(inspect.json().sessionId).toBeUndefined();
@@ -385,11 +397,11 @@ describe("daemon ADO workflow routes", () => {
       workflowState: {
         status: "blocked",
         workflowKind: "ci",
-        workflowPhase: "pipeline_target_not_found",
+        workflowPhase: "pipeline_target_ambiguous",
       },
-      failure: { kind: "target_not_found" },
+      failure: { kind: "ambiguous_target" },
     });
-    expect(trigger.json().summary).toContain("No pipeline ID or name is configured");
+    expect(trigger.json().summary).toContain("Choose the intended one");
     expect(trigger.json().workflowState.pendingApproval).toBeUndefined();
     expect(seenUrls.some((url) => url.includes("/_apis/pipelines/"))).toBe(false);
   });

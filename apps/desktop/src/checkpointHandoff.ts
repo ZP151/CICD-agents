@@ -1,6 +1,33 @@
 export const CHAT_HANDOFF_KEY = "dev_agent_chat_handoff_v1";
 export const ACTIVITY_HANDOFF_KEY = "dev_agent_activity_handoff_v1";
 export const PULL_REQUESTS_HANDOFF_KEY = "dev_agent_pull_requests_handoff_v1";
+export const APPROVAL_HANDOFF_KEY = "dev_agent_approval_handoff_v1";
+
+/** V2 Pipelines page -> Chat handoff carrying a pending approval (MP-006). */
+export interface ApprovalHandoffDraft {
+  sessionId: string;
+  repoPath: string;
+  activeProjectLinkId?: string;
+  workflowState: {
+    status: string;
+    currentStep: string;
+    completedTools: string[];
+    workflowKind?: string;
+    workflowPhase?: string;
+    pendingApproval?: {
+      id: string;
+      riskLevel?: string;
+      explanation?: string;
+      action: {
+        tool: string;
+        args: Record<string, unknown>;
+        description: string;
+        nextHint?: string;
+        workflow?: { kind?: string; phase?: string; branch?: string; message?: string };
+      };
+    };
+  };
+}
 
 export interface ChatHandoffDraft {
   message?: string;

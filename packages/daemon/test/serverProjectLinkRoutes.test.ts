@@ -78,7 +78,8 @@ describe("daemon Project Link routes", () => {
 
     // The legacy payload fields (defaultBranch, targetBranch, adoPipelineId,
     // adoPipelineName, ...) are read-only in V2: create must persist only the
-    // stable identity mapping and must not store them.
+    // stable identity mapping and must not store them. The compat reads stay
+    // present but empty (never written, never resurrected from old payloads).
     const created = await app.inject({
       method: "POST",
       url: "/project-links",
@@ -96,8 +97,8 @@ describe("daemon Project Link routes", () => {
       name: "Official Project Link",
       adoRepoName: "mergepilot",
     });
-    expect(body.adoPipelineId).toBeUndefined();
-    expect(body.adoPipelineName).toBeUndefined();
+    expect(body.adoPipelineId).toBe("");
+    expect(body.adoPipelineName).toBe("");
 
     const listed = await app.inject({ method: "GET", url: "/project-links" });
     expect(listed.statusCode, listed.body).toBe(200);
@@ -121,8 +122,8 @@ describe("daemon Project Link routes", () => {
       id: body.id,
       adoRepoName: "mergepilot-renamed",
     });
-    expect((updated.json() as { adoPipelineId?: string }).adoPipelineId).toBeUndefined();
-    expect((updated.json() as { adoPipelineName?: string }).adoPipelineName).toBeUndefined();
+    expect((updated.json() as { adoPipelineId?: string }).adoPipelineId).toBe("");
+    expect((updated.json() as { adoPipelineName?: string }).adoPipelineName).toBe("");
 
     const deleted = await app.inject({ method: "DELETE", url: `/project-links/${body.id}` });
     expect(deleted.statusCode).toBe(200);

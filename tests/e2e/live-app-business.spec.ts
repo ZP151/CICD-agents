@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 import { evaluateAiInsightAnswer } from "../../packages/core/src/aiInsightQuality";
 import { latestClaimBotPipelineRunViaDaemon } from "./lib/adoVerifier";
 
@@ -686,37 +686,31 @@ async function refreshEnvironmentPanelBranch(
   await expect(environmentPanel.getByRole("button", { name: /not checked/i })).toHaveCount(0);
 }
 
-async function openPipelineWorkspaceAction(page: Page): Promise<void> {
-  const legacyWelcomeAction = page.getByRole("button", { name: "Open Pipelines workspace" });
-  if (await legacyWelcomeAction.isVisible().catch(() => false)) {
-    await legacyWelcomeAction.click();
-    return;
-  }
-
-  const environmentPanel = liveEnvironmentPanel(page);
-  const panelPipelineAction = environmentPanel.getByRole("button", { name: /^Pipeline$/ });
-  if (await panelPipelineAction.isVisible().catch(() => false)) {
-    await panelPipelineAction.click();
-    return;
-  }
-
-  const pinnedPipelineAction = page.getByRole("button", { name: /^Pipeline$/ }).first();
-  await expect(pinnedPipelineAction).toBeVisible({ timeout: 30_000 });
-  await pinnedPipelineAction.click();
+/**
+ * The ClaimBot_API pipeline #117 row in the Pipeline workspace. The winner
+ * row may come from a saved connection or live discovery (source is not
+ * asserted); the stable identity (#117 on the ClaimBot_API repository) is
+ * what every pipeline scenario targets.
+ */
+function claimBotPipelineRow(page: Page) {
+  return page
+    .getByTestId("pipeline-row-card")
+    .filter({ hasText: "#117" })
+    .filter({ hasText: "ClaimBot_API" })
+    .first();
 }
 
 test.describe("Live app business workflows", () => {
   test.skip(!liveAppEnabled, "Set MERGEPILOT_E2E_LIVE_APP=1 to run against the live frontend and daemon.");
 
-  // Vite dev compiles the chat route chunk graph on demand (dynamic imports;
+  // Vite dev compiles the route chunk graphs on demand (dynamic imports;
   // server.warmup in vite.config.ts covers only static graphs and yields to
   // live requests under load). A cold first navigation measured 24-88s for
   // the document plus 15-32s per module group, so the compile must not land
-  // inside any per-test budget. Compile it once here against the real
-  // readiness signal (the composer input, same gate openLiveChat uses), then
-  // close the page: every test's navigation then hits the warm transform
-  // cache (~1s) and per-test timeouts budget turn work, not first-load
-  // compilation.
+  // inside any per-test budget. Compile chat and the Pipeline workspace once
+  // here against the real readiness signals, then close the page: every
+  // test's navigation then hits the warm transform cache (~1s) and per-test
+  // timeouts budget turn/ADO work, not first-load compilation.
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(300_000);
     const warmupPage = await browser.newPage();
@@ -724,6 +718,10 @@ test.describe("Live app business workflows", () => {
       await warmupPage.setViewportSize({ width: 1280, height: 820 });
       await warmupPage.goto("/chat?new=1");
       await expect(warmupPage.getByPlaceholder(/Ask MergePilot/)).toBeVisible({ timeout: 240_000 });
+      // HashRouter routes from the fragment only: reach the workspace via
+      // its hash route.
+      await warmupPage.goto("/#/pipelines");
+      await expect(warmupPage.getByRole("heading", { name: "Pipelines" })).toBeVisible({ timeout: 240_000 });
     } finally {
       await warmupPage.close().catch(() => undefined);
     }
@@ -2106,7 +2104,7 @@ test.describe("Live app business workflows", () => {
     }
   });
 
-  test("discovers and saves ClaimBot_API pipeline #117 when the Project Link has no pipeline ID", async ({ page, request }) => {
+  test("discovers ClaimBot_API pipeline #117 without persisting pipeline fields", async ({ page, request }) => {
     test.skip(
       !liveAdoEnabled,
       "Set MERGEPILOT_E2E_LIVE_ADO=1 to discover the real ClaimBot_API pipeline through the live app.",
@@ -2118,23 +2116,18 @@ test.describe("Live app business workflows", () => {
 
     const projectLink = await createClaimBotPipelineDiscoveryProjectLink(request);
     let projectLinkId: string | null = projectLink.id;
+    const previousRun = await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id);
 
     try {
-      const previousRun = await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id);
       await selectProjectLinkInBrowser(page, projectLink.id, claimBotRepoPath);
-      await openLiveChat(page);
-      await openEnvironmentPanel(page);
-      await expect(page.getByText("ClaimBot_API")).toBeVisible();
+      await page.goto("/#/pipelines");
 
-      await openPipelineWorkspaceAction(page);
-      await expect(page.getByText("No Azure Pipeline is configured on this Project Link yet.")).toBeVisible({
-        timeout: 120_000,
-      });
-      await expect(page.getByText(/#117 ClaimBot_API/).first()).toBeVisible();
-      await expect(page.getByRole("button", { name: "Use #117 ClaimBot_API" })).toBeVisible();
+      const row = claimBotPipelineRow(page);
+      await expect(row).toBeVisible({ timeout: 120_000 });
 
-      await page.getByRole("button", { name: "Use #117 ClaimBot_API" }).click();
-
+      // V2 (GAP-01/02): discovery renders the candidate pipeline but never
+      // persists legacy pipeline fields on the Project Link. Re-read the
+      // link through the daemon and prove both fields stay empty.
       await expect
         .poll(async () => {
           const response = await request.get(`${DAEMON_URL}/project-links/${projectLink.id}`);
@@ -2142,11 +2135,15 @@ test.describe("Live app business workflows", () => {
           const saved = await response.json() as { adoPipelineId?: string; adoPipelineName?: string };
           return `${saved.adoPipelineId ?? ""}:${saved.adoPipelineName ?? ""}`;
         }, { timeout: 30_000 })
-        .toBe("117:ClaimBot_API");
-      await expect(page.getByRole("button", { name: "Use #117 ClaimBot_API" })).toHaveCount(0);
-      await expect(page.getByText("Pipeline ID is required")).toHaveCount(0);
-      await expect(page.getByText("Approval required")).toHaveCount(0);
-      await expect(page.getByText("ado_trigger_pipeline")).toHaveCount(0);
+        .toBe(":");
+
+      // Discovery is a read: no approval proposal, no trigger payload, and
+      // no new run on the real pipeline. (Other pipelines of the project —
+      // e.g. #108 via another Project Link — legitimately appear as
+      // discovered rows; identity is anchored on the #117 ClaimBot_API row.)
+      const main = page.locator("main");
+      await expect(main.getByText("Approval required")).toHaveCount(0);
+      await expect(main.getByText("ado_trigger_pipeline")).toHaveCount(0);
       expect((await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id)).id).toBe(previousRun.id);
     } finally {
       if (projectLinkId) {
@@ -2156,56 +2153,7 @@ test.describe("Live app business workflows", () => {
     }
   });
 
-  test("inspects ClaimBot_API pipeline #117 failure evidence through normal Chat input", async ({ page, request }) => {
-    test.skip(
-      !liveAdoEnabled,
-      "Set MERGEPILOT_E2E_LIVE_ADO=1 to inspect the real ClaimBot_API pipeline through the live app.",
-    );
-    test.setTimeout(180_000);
-
-    const health = await request.get(`${DAEMON_URL}/healthz`);
-    expect(health.ok()).toBeTruthy();
-
-    const projectLink = await createClaimBotPipelineProjectLink(request);
-    let projectLinkId: string | null = projectLink.id;
-
-    try {
-      await selectProjectLinkInBrowser(page, projectLink.id, claimBotRepoPath);
-      await openLiveChat(page);
-      await openEnvironmentPanel(page);
-      await expect(page.getByText("ClaimBot_API")).toBeVisible();
-
-      await page.getByPlaceholder(/Ask MergePilot/).fill(
-        "Inspect pipeline 117 and summarize recent failed run evidence. Read-only only. Do not queue, trigger, or rerun anything.",
-      );
-      await page.getByRole("button", { name: "Send" }).click();
-
-      await expect(page.getByText(/Pipeline #117/i).first()).toBeVisible({ timeout: 120_000 });
-      await expect(page.getByText(/Latest failed\/canceled run evidence/i).first()).toBeVisible({ timeout: 120_000 });
-      await expect(page.getByText(/#4665|20260705\.1/i).first()).toBeVisible();
-      await expect(page.getByText(/Copying file|MSBuild|Publishing\.targets|msbuild\.exe/i).first()).toBeVisible();
-      await expect(page.getByText("Approval required")).toHaveCount(0);
-      await expect(page.getByText("ado_trigger_pipeline")).toHaveCount(0);
-      await expect(page.getByText("Pipeline #108")).toHaveCount(0);
-      const visibleTranscript = await page.locator("main").innerText();
-      const quality = evaluateAiInsightAnswer(visibleTranscript, {
-        requiredFiles: [],
-        requiredEvidence: ["Pipeline #117", "#4665", "MSBuild"],
-        requiredCategories: ["deployment"],
-        reviewOnly: true,
-      });
-      expect(quality, JSON.stringify(quality.checks, null, 2)).toMatchObject({
-        passed: true,
-      });
-    } finally {
-      if (projectLinkId) {
-        await request.delete(`${DAEMON_URL}/project-links/${projectLinkId}`).catch(() => undefined);
-        projectLinkId = null;
-      }
-    }
-  });
-
-  test("prepares ClaimBot_API pipeline #117 rerun approval from failure evidence suggestions", async ({ page, request }) => {
+  test("inspects ClaimBot_API pipeline #117 read-only with structured run evidence", async ({ page, request }) => {
     test.skip(
       !liveAdoEnabled,
       "Set MERGEPILOT_E2E_LIVE_ADO=1 to inspect the real ClaimBot_API pipeline through the live app.",
@@ -2221,40 +2169,119 @@ test.describe("Live app business workflows", () => {
 
     try {
       await selectProjectLinkInBrowser(page, projectLink.id, claimBotRepoPath);
-      await openLiveChat(page);
-      await openEnvironmentPanel(page);
-      await expect(page.getByText("ClaimBot_API")).toBeVisible();
+      await page.goto("/#/pipelines");
 
-      await page.getByPlaceholder(/Ask MergePilot/).fill(
-        "Inspect pipeline 117 and summarize recent failed run evidence. Read-only only. Do not queue, trigger, or rerun anything.",
-      );
-      await page.getByRole("button", { name: "Send" }).click();
+      const row = claimBotPipelineRow(page);
+      await expect(row).toBeVisible({ timeout: 120_000 });
 
-      await expect(page.getByText(/Latest failed\/canceled run evidence/i).first()).toBeVisible({ timeout: 120_000 });
-      await expect(page.getByText(/Copying file|MSBuild|Publishing\.targets|msbuild\.exe/i).first()).toBeVisible();
-      await expect(page.getByText("Approval required")).toHaveCount(0);
+      // Read-only inspection is a workflow action, not a chat turn: no
+      // approval proposal, no LLM. The card renders the structured evidence
+      // summary from the daemon's ADO re-read.
+      await row.getByRole("button", { name: "Inspect runs" }).click();
+      await expect(row.getByText(/Inspection completed\. \d+ recent run/)).toBeVisible({ timeout: 60_000 });
 
-      await page.getByRole("button", { name: "Rerun pipeline" }).click();
+      await row.getByRole("button", { name: "Details" }).click();
+      // The detail panel is a native dialog (WorkbenchSidePanel), not an
+      // aside; scope it by its "Run evidence" section.
+      const panel = page.getByRole("dialog").filter({ hasText: "Run evidence" }).first();
+      await expect(panel).toBeVisible();
+
+      // Structured run evidence matches the verifier's latest run: name,
+      // tone label, and the deep link target.
+      const runName = previousRun.name || `Run ${previousRun.id}`;
+      await expect(panel.getByText(runName).first()).toBeVisible();
+      await expect(
+        panel.getByText(new RegExp(`${previousRun.result}|${previousRun.state}`, "i")).first(),
+      ).toBeVisible();
+      const openRun = panel.getByRole("link", { name: "Open run" }).first();
+      await expect(openRun).toBeVisible();
+      await expect(openRun).toHaveAttribute("href", previousRun.url);
+
+      // Read-only contract: no approval, no trigger payload, and no secrets
+      // in the evidence panel. (Other pipelines of the project legitimately
+      // appear as discovered rows; identity is anchored on this row's panel
+      // evidence matching the verifier's #117 run above.)
+      await expect(page.locator("main").getByText("Approval required")).toHaveCount(0);
+      await expect(page.locator("main").getByText("ado_trigger_pipeline")).toHaveCount(0);
+      const panelText = await panel.innerText();
+      expect(panelText).not.toMatch(/\b(pat|password|apikey|api[_ -]?key|secret|authorization)\b/i);
+
+      expect((await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id)).id).toBe(previousRun.id);
+    } finally {
+      if (projectLinkId) {
+        await request.delete(`${DAEMON_URL}/project-links/${projectLinkId}`).catch(() => undefined);
+        projectLinkId = null;
+      }
+    }
+  });
+
+  test("prepares a ClaimBot_API pipeline #117 rerun approval from inspected failure evidence with default skip", async ({ page, request }) => {
+    test.skip(
+      !liveAdoEnabled,
+      "Set MERGEPILOT_E2E_LIVE_ADO=1 to prepare the real ClaimBot_API pipeline rerun approval through the live app.",
+    );
+    test.setTimeout(240_000);
+
+    const health = await request.get(`${DAEMON_URL}/healthz`);
+    expect(health.ok()).toBeTruthy();
+
+    const projectLink = await createClaimBotPipelineProjectLink(request);
+    let projectLinkId: string | null = projectLink.id;
+    const previousRun = await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id);
+
+    try {
+      await selectProjectLinkInBrowser(page, projectLink.id, claimBotRepoPath);
+      await page.goto("/#/pipelines");
+
+      const row = claimBotPipelineRow(page);
+      await expect(row).toBeVisible({ timeout: 120_000 });
+
+      // Evidence first (Cycle 03): inspection lists the recent runs,
+      // including the failed one, entirely from the daemon's ADO re-read.
+      await row.getByRole("button", { name: "Inspect runs" }).click();
+      await expect(row.getByText(/Inspection completed\. \d+ recent run/)).toBeVisible({ timeout: 60_000 });
+      const runName = previousRun.name || `Run ${previousRun.id}`;
+      await expect(row.getByText(runName).first()).toBeVisible();
+      await expect(
+        row.getByText(new RegExp(`${previousRun.result}|${previousRun.state}`, "i")).first(),
+      ).toBeVisible();
+
+      // The rerun proposal is an explicit workspace action that never runs
+      // anything by itself: the row posts the trigger and hands the session
+      // over to Chat (MP-006), where the HIGH-risk approval card rehydrates
+      // from the handoff.
+      await row.getByRole("button", { name: "Trigger pipeline" }).click();
+      await expect(row.getByText("Approval required")).toBeVisible({ timeout: 60_000 });
+      const openChatApproval = row.getByRole("link", { name: "Open Chat approval" });
+      await expect(openChatApproval).toBeVisible();
+      await openChatApproval.click();
+
       const approvalCard = page
         .getByTestId("pending-action-card")
         .filter({ hasText: "ado_trigger_pipeline" })
         .first();
-      await expect(approvalCard).toBeVisible({ timeout: 120_000 });
-      await expect(approvalCard.getByText(/Pipeline #117|pipeline_id.+117/i).first()).toBeVisible();
-      await expect(approvalCard.getByText("Pipeline #108")).toHaveCount(0);
+      await expect(approvalCard).toBeVisible({ timeout: 60_000 });
+      await expect(approvalCard.getByText("HIGH risk")).toBeVisible();
+      await expect(approvalCard.locator("code").first()).toContainText("ado_trigger_pipeline");
+      await expect(approvalCard.locator("code").first()).toContainText("pipeline_id=117");
 
       if (destructiveEnabled) {
         await approvalCard.getByRole("button", { name: "Approve and run" }).click();
-        await expect.poll(async () => (await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id)).id, {
-          timeout: 120_000,
-          message: `Expected ClaimBot_API pipeline #117 to queue a rerun newer than ${previousRun.id}.`,
-        }).toBeGreaterThan(previousRun.id);
+        await expect
+          .poll(async () => (await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id)).id, {
+            timeout: 120_000,
+            message: `Expected ClaimBot_API pipeline #117 to queue a rerun newer than ${previousRun.id}.`,
+          })
+          .toBeGreaterThan(previousRun.id);
       } else {
         await approvalCard.getByRole("button", { name: "Skip action" }).click();
+        await expect(page.getByText(/Approval declined\. No action was run/)).toBeVisible({
+          timeout: 30_000,
+        });
         await expect
           .poll(async () => (await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id)).id, {
             timeout: 30_000,
-            message: "Read-only rerun approval test must not queue a pipeline run when destructive mode is disabled.",
+            message: "A skipped rerun approval must not queue a pipeline run.",
           })
           .toBe(previousRun.id);
       }
@@ -2266,10 +2293,10 @@ test.describe("Live app business workflows", () => {
     }
   });
 
-  test("prepares ClaimBot_API pipeline #117 approval through the real Chat UI", async ({ page, request }) => {
+  test("triggers ClaimBot_API pipeline #117 explicitly from the Pipeline workspace with default skip", async ({ page, request }) => {
     test.skip(
       !liveAdoEnabled,
-      "Set MERGEPILOT_E2E_LIVE_ADO=1 to inspect the real ClaimBot_API pipeline through the live app.",
+      "Set MERGEPILOT_E2E_LIVE_ADO=1 to trigger the real ClaimBot_API pipeline through the live app.",
     );
     test.setTimeout(180_000);
 
@@ -2278,30 +2305,38 @@ test.describe("Live app business workflows", () => {
 
     const projectLink = await createClaimBotPipelineProjectLink(request);
     let projectLinkId: string | null = projectLink.id;
+    const previousRun = await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id);
 
     try {
       await selectProjectLinkInBrowser(page, projectLink.id, claimBotRepoPath);
-      await openLiveChat(page);
-      await openEnvironmentPanel(page);
-      await expect(page.getByText("ClaimBot_API")).toBeVisible();
+      await page.goto("/#/pipelines");
 
-      await openPipelineWorkspaceAction(page);
-      await expect(page.getByText(/Pipeline #117/i).first()).toBeVisible({ timeout: 120_000 });
-      await expect(page.getByText("Pipeline #108")).toHaveCount(0);
+      const row = claimBotPipelineRow(page);
+      await expect(row).toBeVisible({ timeout: 120_000 });
 
-      await page.getByRole("button", { name: "Progress ›" }).click();
-      await page.getByRole("button", { name: "Trigger pipeline" }).click();
+      // Explicit trigger: the workspace posts the proposal, stores the
+      // approval handoff (MP-006), and asks the user to confirm in Chat.
+      // The row itself never runs anything.
+      await row.getByRole("button", { name: "Trigger pipeline" }).click();
+      await expect(row.getByText("Approval required")).toBeVisible({ timeout: 60_000 });
+      const openChatApproval = row.getByRole("link", { name: "Open Chat approval" });
+      await expect(openChatApproval).toBeVisible();
+      await expect(openChatApproval).toHaveAttribute("href", "#/chat");
+      await expect(page.locator("main").getByText("ado_trigger_pipeline")).toHaveCount(0);
 
+      // "Open Chat approval" lands on a live pending card rehydrated from
+      // the handoff — no LLM turn is needed for the card itself.
+      await openChatApproval.click();
       const approvalCard = page
         .getByTestId("pending-action-card")
         .filter({ hasText: "ado_trigger_pipeline" })
         .first();
-      await expect(approvalCard).toBeVisible({ timeout: 120_000 });
-      await expect(approvalCard.getByText(/Pipeline #117|pipeline_id.+117/i).first()).toBeVisible();
-      await expect(approvalCard.getByText("Pipeline #108")).toHaveCount(0);
+      await expect(approvalCard).toBeVisible({ timeout: 60_000 });
+      await expect(approvalCard.getByText("HIGH risk")).toBeVisible();
+      await expect(approvalCard.locator("code").first()).toContainText("ado_trigger_pipeline");
+      await expect(approvalCard.locator("code").first()).toContainText("pipeline_id=117");
 
       if (destructiveEnabled) {
-        const previousRun = await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id);
         await approvalCard.getByRole("button", { name: "Approve and run" }).click();
         await expect.poll(async () => (await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id)).id, {
           timeout: 120_000,
@@ -2309,9 +2344,15 @@ test.describe("Live app business workflows", () => {
         }).toBeGreaterThan(previousRun.id);
       } else {
         await approvalCard.getByRole("button", { name: "Skip action" }).click();
-        await expect(page.getByText(/cancelled|canceled|No, don't run it|no/i).first()).toBeVisible({
+        await expect(page.getByText(/Approval declined\. No action was run/)).toBeVisible({
           timeout: 30_000,
         });
+        await expect
+          .poll(async () => (await latestClaimBotPipelineRunViaDaemon(request, DAEMON_URL, projectLink.id)).id, {
+            timeout: 30_000,
+            message: "A skipped workspace trigger must not queue a pipeline run.",
+          })
+          .toBe(previousRun.id);
       }
     } finally {
       if (projectLinkId) {

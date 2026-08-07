@@ -620,17 +620,22 @@ export function registerChatRoutes(
     const parsed = SessionIdParam.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send({ error: "invalid sessionId" });
     const body = ConfirmActionBodySchema.safeParse(req.body ?? {});
-    if (!body.success || !body.data.turnId || !body.data.startedAt) {
-      return reply.code(400).send({ error: "a Turn continuation is required to decline an action" });
-    }
+    if (!body.success) return reply.code(400).send({ error: "invalid approval continuation" });
 
     const sessionId = parsed.data.sessionId;
     const sseWriter = createChatSseWriter(reply, sessionId, (event) => chatSessions.appendTurnTimelineEvent(sessionId, event));
-    sseWriter.resumeTurn(body.data.turnId, {
-      startedAt: body.data.startedAt,
-      lastSequence: body.data.lastSequence,
-      statement: "Approval declined; closing this turn without running the action.",
-    });
+    if (body.data.turnId) {
+      sseWriter.resumeTurn(body.data.turnId, {
+        startedAt: body.data.startedAt,
+        lastSequence: body.data.lastSequence,
+        statement: "Approval declined; closing this turn without running the action.",
+      });
+    } else {
+      // Workspace-originated approvals (e.g. a Pipelines page trigger) have no
+      // prior chat Turn. Give the decline its own canonical envelope so the
+      // card closes through the same timeline projection as a chat decline.
+      sseWriter.startTurn(`turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+    }
 
     let continuationActive = true;
     return new Promise<void>((resolve) => {

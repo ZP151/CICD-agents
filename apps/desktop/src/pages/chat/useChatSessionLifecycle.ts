@@ -16,6 +16,7 @@ import {
 import {
   saveChatDraft,
 } from "./chatDraftPersistence.js";
+import { APPROVAL_HANDOFF_STATUS_TEXT, consumeApprovalHandoff } from "./approvalHandoff.js";
 import { consumeChatHandoff } from "./chatHandoff.js";
 import type {
   ApprovalRequest,
@@ -85,6 +86,30 @@ export function useChatSessionLifecycle({
   showApprovalRequest,
 }: UseChatSessionLifecycleArgs): ChatSessionLifecycle {
   useEffect(() => {
+    // MP-006: a Pipelines page trigger hands off its live approval session.
+    // Consume it before the generic chat handoff so the pending card (and its
+    // daemon-side proposal) rehydrates instead of being discarded.
+    const approvalHandoff = consumeApprovalHandoff();
+    if (approvalHandoff) {
+      setSessionId(approvalHandoff.sessionId);
+      setBubbles([]);
+      setWorkflowState(approvalHandoff.workflowState);
+      // The pending-action card is a bubble, not a workflowState projection:
+      // rehydrate it from the handoff exactly like loadSession rehydrates a
+      // stored session, so "Open Chat approval" lands on a live card.
+      if (approvalHandoff.workflowState.pendingApproval) {
+        showApprovalRequest(approvalHandoff.workflowState.pendingApproval);
+      }
+      setCustomTitle(null);
+      setInput("");
+      if (approvalHandoff.repoPath) setRepoPath(approvalHandoff.repoPath);
+      if (approvalHandoff.activeProjectLinkId) {
+        setActiveProjectLinkId(approvalHandoff.activeProjectLinkId);
+      }
+      setStatusText(APPROVAL_HANDOFF_STATUS_TEXT);
+      setTimeout(() => textareaRef.current?.focus(), 0);
+      return;
+    }
     const handoff = consumeChatHandoff();
     if (!handoff) return;
     setSessionId(null);
@@ -105,6 +130,7 @@ export function useChatSessionLifecycle({
     setSessionId,
     setStatusText,
     setWorkflowState,
+    showApprovalRequest,
     textareaRef,
   ]);
 

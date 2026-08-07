@@ -128,11 +128,15 @@ export function confirmAction(
   };
 }
 
-/** Decline a structured action while keeping its original Turn alive. */
+/**
+ * Decline a structured action while keeping its original Turn alive.
+ * Workspace-originated approvals (no chat Turn) pass no continuation; the
+ * daemon gives the decline its own envelope.
+ */
 export function declineAction(
   sessionId: string,
   onEvent: (payload: ChatEventPayload) => void,
-  continuation: { turnId: string; startedAt: number; lastSequence?: number },
+  continuation?: { turnId: string; startedAt: number; lastSequence?: number },
 ): { cancel: () => void } {
   const controller = new AbortController();
   let cancelled = false;
@@ -140,7 +144,7 @@ export function declineAction(
   fetch(`${RUNTIME_URL}/chat/${sessionId}/decline-action`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(continuation),
+    body: JSON.stringify(continuation ?? {}),
     signal: controller.signal,
   })
     .then(async (r) => {

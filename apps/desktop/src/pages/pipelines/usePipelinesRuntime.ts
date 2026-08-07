@@ -23,6 +23,7 @@ import {
 } from "../../api.js";
 import { CHAT_HANDOFF_KEY } from "../../checkpointHandoff.js";
 import { buildPipelineChatHandoffDraft } from "../../checkpointHandoff.js";
+import { saveApprovalHandoff } from "../chat/approvalHandoff.js";
 import { paginateItems } from "../../components/PaginationControls.js";
 import { extractPipelineRuns } from "./pipelineActions.js";
 import {
@@ -243,6 +244,17 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
         return;
       }
       setInspectState((current) => ({ ...current, [rowKey(row)]: { phase: "approval", result } }));
+      // MP-006: a workspace trigger creates its own chat session with a stored
+      // approval proposal. Hand the session over so "Open Chat approval"
+      // rehydrates the pending card instead of opening a blank chat.
+      if (result.ok && result.sessionId && result.workflowState?.pendingApproval) {
+        saveApprovalHandoff({
+          sessionId: result.sessionId,
+          repoPath: result.repoPath,
+          activeProjectLinkId: row.projectLinkId,
+          workflowState: result.workflowState,
+        });
+      }
     } catch (err) {
       setInspectState((current) => ({
         ...current,

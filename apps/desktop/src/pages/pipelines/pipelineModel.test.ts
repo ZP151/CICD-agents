@@ -180,12 +180,17 @@ describe("pipeline model", () => {
   it("keys pipeline cache by stable identity only (V2 canonical, GAP-01)", () => {
     const base = projectLinks[0]!;
 
-    // Legacy fields never participate in the cache key.
+    // Legacy fields never participate in the cache key. The key parameter is
+    // deliberately narrowed to the stable identity, so the stale fields are
+    // added through a cast — historical links read from storage still carry
+    // them at runtime.
+    const withLegacy = (extra: Partial<ProjectLink>) =>
+      ({ ...base, ...extra }) as unknown as Parameters<typeof pipelineProjectLinksCacheKey>[0][number];
     expect(pipelineProjectLinksCacheKey([base])).toBe(
-      pipelineProjectLinksCacheKey([{ ...base, defaultBranch: "feature/other" }]),
+      pipelineProjectLinksCacheKey([withLegacy({ defaultBranch: "feature/other" })]),
     );
     expect(pipelineProjectLinksCacheKey([base])).toBe(
-      pipelineProjectLinksCacheKey([{ ...base, adoPipelineId: "999", adoPipelineName: "Other" }]),
+      pipelineProjectLinksCacheKey([withLegacy({ adoPipelineId: "999", adoPipelineName: "Other" })]),
     );
     // Mapping identity changes still invalidate the cache.
     expect(pipelineProjectLinksCacheKey([base])).not.toBe(

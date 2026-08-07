@@ -39,6 +39,7 @@ reached.
 | [Risk and governance](risk-and-governance.md) | AI quality, security, permissions, audit, privacy, and operational safeguards |
 | [Completion audit](completion-audit.md) | Requirement-to-document evidence and remaining product-research gaps |
 | [Next iteration known gaps](next-iteration-known-gaps.md) | Current verified implementation drift, open gates, and mandatory handoff for the next Goal |
+| [v1 productization iteration](v1-productization-iteration.md) | Execution details, checkpoints, verification contract, and final Definition of Done for the next macro Goal |
 
 ## Management Communication
 

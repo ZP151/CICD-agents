@@ -265,12 +265,15 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
     const activeTranscript = pending?.turnId
       ? args.bubbles.find((bubble) => bubble.turnId === pending.turnId && bubble.turnTranscript)
       : undefined;
-    if (!pending?.turnId || !activeTranscript?.turnTranscript) return;
-    const continuation = {
-      turnId: pending.turnId,
-      startedAt: activeTranscript.turnTranscript.startedAt,
-      lastSequence: activeTranscript.turnTranscript.lastSequence,
-    };
+    // Workspace-originated approvals have no chat Turn (no turnId); declining
+    // them still reaches the daemon, which gives the decline its own envelope.
+    const continuation = pending?.turnId && activeTranscript?.turnTranscript
+      ? {
+          turnId: pending.turnId,
+          startedAt: activeTranscript.turnTranscript.startedAt,
+          lastSequence: activeTranscript.turnTranscript.lastSequence,
+        }
+      : undefined;
     args.setBubbles((prev) => reduceChatBubbles(prev, {
       type: "mark_pending_status",
       id: bubbleId,
