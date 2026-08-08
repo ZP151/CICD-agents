@@ -14,6 +14,36 @@ this reopen does not count for the current HEAD. Tiers:
 - ID = installed Tauri desktop E2E
 - RA = ClaimBot_API + real Azure DevOps
 
+## Continuation audit — 2026-08-08 (Phase 4 readiness, HEAD `971ee1d`)
+
+- Repository and both non-main remotes are aligned at `971ee1d`; worktree was
+  clean at audit time. This does not re-anchor the existing machine run, which
+  remains tied to `8d2f703`.
+- Phase 3 evidence: daemon **333 passed / 1 skipped**, core **458 passed / 6
+  skipped**, daemon + desktop typecheck clean, and HTTP coverage for both
+  workflow-state derivation branches. These are implementation-slice evidence,
+  not full Phase 4 acceptance.
+- F7 source-live result: **FAIL — 27 passed / 3 failed (38.8m)**. Canonical
+  merged state records the FAIL and artifact hashes, but the two projected
+  `goal-verification.json` files and `current-gates.md` can remain stale because
+  projection is a separate command. No current-HEAD source-live PASS exists.
+- P0 security gate: **FAIL / not eligible to run destructive RA or ID gates**
+  until `adoPat` is removed from Project Link and inline/session persistence,
+  existing local/Table/Cosmos data is audited, and persistence redaction tests
+  pass.
+- Verification oracle gate: **FAIL** until fresh-run anchoring, latest/repeated
+  attempt aggregation, `requireNoSkips`, attempt-scoped artifacts, and atomic
+  state projection are proven.
+- Real ADO: **NOT_RUN on current HEAD**; carried evidence remains at `68a673a`.
+- Installed desktop: **NOT_RUN on current HEAD**. Existing Program Files
+  binaries and MSI predate Phase 2/3; the current installed smoke command does
+  not establish HEAD-to-MSI-to-installed-binary provenance.
+- Performance: **NOT_RUN / harness invalid** until successful `turn.finished`
+  is recognized and app overhead is separated from Azure provider TTFT.
+- Release gate: **BLOCKED**. Do not merge or push this implementation to remote
+  `main`, tag it, or publish a release until the Phase 4 readiness sequence in
+  `docs/product/next-iteration-known-gaps.md` is complete on one final SHA.
+
 ## Continuation audit — 2026-08-08 (Phase 3b, HEAD `8f2b759`)
 
 - Phase 3b (Canonical Turn Ledger): `StoredSession.workflowState` removed;
