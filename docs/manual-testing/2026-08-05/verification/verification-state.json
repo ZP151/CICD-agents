@@ -1,13 +1,12 @@
 {
- "schemaVersion": 1,
+ "schemaVersion": 2,
  "runId": "verify-mskbls4d",
- "status": "INCOMPLETE",
- "commit": {
+ "head": {
   "sha": "8d2f70378f31f793b985c7fb122d4aa6e9d08cc1",
   "ref": "refs/heads/claudecode/optimize-bugfix",
-  "message": "docs: record F4 Vite cold-compile stall, prewarm fix, actionsTaken trust gap"
+  "message": "docs: record F4 Vite cold-compile stall, prewarm fix, actionsTaken trust gap",
+  "docSha": "ea68e69ae533828e2d14c9d01a66614f11252fcf"
  },
- "docSha": "ea68e69ae533828e2d14c9d01a66614f11252fcf",
  "remotes": {
   "ado": "8d2f70378f31f793b985c7fb122d4aa6e9d08cc1",
   "origin": "8d2f70378f31f793b985c7fb122d4aa6e9d08cc1",
@@ -19,17 +18,7 @@
  "productModel": "unknown",
  "startedAt": "2026-08-08T11:58:51.037Z",
  "finishedAt": "2026-08-08T12:02:21.598Z",
- "updatedAt": "2026-08-08T12:12:07.637Z",
  "repeat": 1,
- "summary": {
-  "required": 16,
-  "passed": 6,
-  "failed": 0,
-  "notRun": 7,
-  "interrupted": 2,
-  "running": 1,
-  "status": "INCOMPLETE"
- },
  "statusMeaning": "INCOMPLETE = calibrated snapshot at HEAD 8d2f703: unit gates freshly run on this HEAD; source-live F5/F6 INTERRUPTED by session harness (not PASS/FAIL); F7 RUNNING detached; real-ado/installed NOT_RUN on this HEAD. Not a completion claim.",
  "calibrationNote": "Phase 0 evidence calibration 2026-08-08. F5/F6 are marked INTERRUPTED per instruction: both logs end at an ok line with no summary and no runner JSON. Runs A/B/C (25/30, 29/30, 28/30) and F3 (21/26) are recorded in docs/product/next-iteration-known-gaps.md and evidence-matrix.md; A/B/C ran before 71ec73e (test-side fix) and are therefore not current-test evidence.",
  "gates": [
@@ -313,5 +302,15 @@
    "runs": [],
    "status": "NOT_RUN"
   }
- ]
+ ],
+ "summary": {
+  "required": 16,
+  "passed": 6,
+  "failed": 0,
+  "notRun": 7,
+  "interrupted": 2,
+  "running": 1,
+  "status": "INCOMPLETE"
+ },
+ "updatedAt": "2026-08-08T12:12:07.637Z"
 }

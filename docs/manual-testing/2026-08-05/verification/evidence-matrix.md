@@ -125,11 +125,23 @@ Calibration baseline for the Phase 0-4 productization plan
 
 ## Current gate run
 
+> The authoritative current-gate status is machine-projected from
+> `verification-state.json` by `scripts/verification/verify-run.mjs
+> --project` into `current-gates.md` (same directory) and both
+> `goal-verification.json` copies. Do not hand-maintain a second fact
+> source here; edit the manifest (`scripts/verification/verify-manifest.json`)
+> or re-run the module instead.
+
+Historical gate runs (recorded before the projection module landed, kept
+for reference — they do not supersede `current-gates.md`):
+
 - unit tier: PASS — full current-HEAD toolchain (2026-08-08, phase-1
   regression): core 426 passed / 6 skipped (71 files), daemon 318 passed /
   1 skipped (51 files), cli 14/14, review-agent 44/44, desktop 675/675;
   typecheck + build exit 0 for every package and the desktop app.
-  Evidence: `output/s5-regression-phase1.log`.
+  Evidence: `output/s5-regression-phase1.log`. The 6-gate unit suite was
+  re-run on HEAD `8d2f703` via `verify-goal.mjs --tier unit` on 2026-08-08
+  (6/6 PASS — see `goal-verification.json`).
 - mocked-browser tier: PASS — 43/43 `@smoke @mocked` tests (3.8m), explicit
   spec files (warmup + chat-layout + settings-permissions + route-cache),
   `--workers 1`. Evidence: `output/s5-regression-phase2.log`.
@@ -138,7 +150,9 @@ Calibration baseline for the Phase 0-4 productization plan
   each run are single-turn gpt-5-mini failures at the product's own LLM
   gates (`chat.routes.ts:453` 60s narrative deadline / `:467` non-empty
   narrative), not code or test defects. Runs A/B/C 2026-08-08: 25/30, 29/30,
-  28/30; every one of the 30 tests passed in at least one full run.
+  28/30; every one of the 30 tests passed in at least one full run. Runs
+  F5/F6 (22/22 and 16/16 at interruption) are INTERRUPTED — see the
+  continuation-audit section at the top.
 - installed-desktop tier: NOT_RUN (rebuild from HEAD pending).
 - real-ado tier: PASS (WI-7916 on 68a673a; rerun on final HEAD).
 
