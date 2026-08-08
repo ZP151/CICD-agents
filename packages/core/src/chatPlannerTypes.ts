@@ -166,10 +166,26 @@ export interface ChatApprovalRequest {
   explanation: string;
 }
 
+/**
+ * One canonical ActionRecord projected into the workflow state. Populated
+ * from the action store (turnId = sessionId); model prose never enters these
+ * fields — the record, its audit trail and its verification evidence are the
+ * only execution facts.
+ */
+export interface ChatVerifiedAction {
+  id: string;
+  kind: string;
+  status: string;
+  evidence: string[];
+  executedAt?: number;
+  verifiedAt?: number;
+}
+
 export interface ChatWorkflowState {
   status: "planning" | "running" | "waiting_for_approval" | "blocked" | "done" | "failed";
   currentStep: string;
   completedTools: string[];
+  verifiedActions?: ChatVerifiedAction[];
   workflowKind?: "commit" | "git" | "ado" | "ci" | "pr";
   workflowPhase?: string;
   authStatus?:

@@ -27,6 +27,8 @@ export type VerificationCondition =
   | "exists"
   | "not_exists"
   | "field_eq"
+  | "field_ne"
+  | "field_contains"
   | "relation_present"
   | "revision_gt"
   | "run_visible"

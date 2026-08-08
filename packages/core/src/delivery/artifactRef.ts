@@ -14,7 +14,16 @@ export type ArtifactRef =
   | { kind: "build"; projectLinkId: string; definitionId: number; buildId: number }
   | { kind: "test_result"; projectLinkId: string; runId: number; resultId: number }
   | { kind: "environment"; projectLinkId: string; environmentId: number }
-  | { kind: "deployment"; projectLinkId: string; environmentId: number; deploymentId: number };
+  | { kind: "deployment"; projectLinkId: string; environmentId: number; deploymentId: number }
+  // Local git workspace artifacts (chat confirmed-action runtime). The
+  // authoritative source is the local repository itself: readArtifact
+  // re-reads git state after a write, exactly as ADO artifacts are re-read
+  // from Azure DevOps.
+  | { kind: "git_workspace"; projectLinkId: string; repoPath: string; revision: string }
+  | { kind: "git_commit"; projectLinkId: string; repoPath: string; sha: string }
+  | { kind: "git_branch"; projectLinkId: string; repoPath: string; name: string; sha: string }
+  | { kind: "git_remote"; projectLinkId: string; repoPath: string; remote: string; branch: string; sha: string }
+  | { kind: "git_remote_refs"; projectLinkId: string; repoPath: string; remote: string; revision: string };
 
 /** Stable identity of an artifact, independent of its revision. */
 export function artifactStableKey(ref: ArtifactRef): string {
@@ -35,6 +44,19 @@ export function artifactStableKey(ref: ArtifactRef): string {
       return `environment:${ref.projectLinkId}:${ref.environmentId}`;
     case "deployment":
       return `deployment:${ref.projectLinkId}:${ref.environmentId}:${ref.deploymentId}`;
+    case "git_workspace":
+      return `git_workspace:${ref.projectLinkId}:${ref.repoPath}`;
+    case "git_commit":
+      // The repo's HEAD position is identity here; sha is the revision.
+      return `git_commit:${ref.projectLinkId}:${ref.repoPath}`;
+    case "git_branch":
+      return `git_branch:${ref.projectLinkId}:${ref.repoPath}:${ref.name}`;
+    case "git_remote":
+      return `git_remote:${ref.projectLinkId}:${ref.repoPath}:${ref.remote}:${ref.branch}`;
+    case "git_remote_refs":
+      // The set of remote-tracking refs is the identity; the hash of the
+      // refs is the revision (moves on fetch/prune).
+      return `git_remote_refs:${ref.projectLinkId}:${ref.repoPath}:${ref.remote}`;
   }
 }
 
@@ -57,6 +79,16 @@ export function artifactRevision(ref: ArtifactRef): number | string | undefined 
       return ref.environmentId;
     case "deployment":
       return ref.deploymentId;
+    case "git_workspace":
+      return ref.revision;
+    case "git_commit":
+      return ref.sha;
+    case "git_branch":
+      return ref.sha;
+    case "git_remote":
+      return ref.sha;
+    case "git_remote_refs":
+      return ref.revision;
   }
 }
 
@@ -72,6 +104,7 @@ export function isArtifactRef(value: unknown): value is ArtifactRef {
   const kinds: ArtifactRef["kind"][] = [
     "work_item", "branch", "commit", "pull_request", "build",
     "test_result", "environment", "deployment",
+    "git_workspace", "git_commit", "git_branch", "git_remote", "git_remote_refs",
   ];
   return kinds.includes(candidate["kind"] as ArtifactRef["kind"])
     && typeof candidate["projectLinkId"] === "string";

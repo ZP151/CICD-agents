@@ -50,5 +50,15 @@ export function snapshotKey(ref: ArtifactRef): string {
       return `env:${ref.projectLinkId}:${ref.environmentId}`;
     case "deployment":
       return `deploy:${ref.projectLinkId}:${ref.environmentId}:${ref.deploymentId}`;
+    case "git_workspace":
+      return `ws:${ref.projectLinkId}:${ref.repoPath}`;
+    case "git_commit":
+      return `commit:${ref.projectLinkId}:${ref.repoPath}`;
+    case "git_branch":
+      return `branch:${ref.projectLinkId}:${ref.repoPath}:${ref.name}`;
+    case "git_remote":
+      return `remote:${ref.projectLinkId}:${ref.repoPath}:${ref.remote}:${ref.branch}`;
+    case "git_remote_refs":
+      return `remote-refs:${ref.projectLinkId}:${ref.repoPath}:${ref.remote}`;
   }
 }

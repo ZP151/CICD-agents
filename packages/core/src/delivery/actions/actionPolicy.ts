@@ -107,5 +107,15 @@ function revisionOf(ref: ArtifactRef): string | number {
       return ref.environmentId;
     case "deployment":
       return ref.deploymentId;
+    case "git_workspace":
+      return ref.revision;
+    case "git_commit":
+      return ref.sha;
+    case "git_branch":
+      return ref.sha;
+    case "git_remote":
+      return ref.sha;
+    case "git_remote_refs":
+      return ref.revision;
   }
 }

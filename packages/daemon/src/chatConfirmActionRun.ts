@@ -1,4 +1,4 @@
-import { type ChatEvent } from "@mergepilot/core";
+import { type ChatEvent, SqliteDeliveryActionStore, type ChatVerifiedAction } from "@mergepilot/core";
 import type { ActiveChatSessions } from "./chatActiveSessions.js";
 import {
   markStoredApprovalProposalRunning,
@@ -9,6 +9,10 @@ import {
   type ConfirmedActionPersistenceAdapters,
 } from "./chatConfirmedActions.js";
 import { streamConfirmedActionOutcome } from "./chatConfirmedOutcome.js";
+import {
+  runVerifiedChatAction,
+  verifiedActionsForSession,
+} from "./chatVerifiedActionRuntime.js";
 import {
   storedSessionProjectLinkId,
 } from "./chatHistoryStore.js";
@@ -54,14 +58,51 @@ export async function* runConfirmedChatAction(args: RunConfirmedChatActionArgs):
     const { llm, planner, actionExecutor } = runtime;
 
     const toolCallId = approvalIdFor(pending);
-    const { ok, toolResult, summary } = yield* streamAndPersistConfirmedAction({
-      sessionId,
-      actionExecutor,
-      pending,
-      toolCallId,
-      historyLabel: "confirmed & executed",
-      adapters: persistenceAdapters,
-    });
+    const projectLinkId = storedSessionProjectLinkId(storedSession) ?? sessionId;
+    const verifiedActions: ChatVerifiedAction[] = [];
+
+    let ok: boolean;
+    let toolResult: unknown;
+    let summary: string;
+
+    if (pending.tool.startsWith("git_")) {
+      // Chat git writes run the canonical ActionRecord lifecycle (Proposal →
+      // Approval → Execution → Re-read → Verification). The action store is
+      // the shared per-machine ledger; the verified records are projected into
+      // the workflow state below.
+      const store = new SqliteDeliveryActionStore();
+      const result = yield* runVerifiedChatAction({
+        sessionId,
+        repoPath: session.repoPath,
+        projectLinkId,
+        pending,
+        actionExecutor,
+        toolCallId,
+        inlineProjectLink: storedSession.inlineProjectLink,
+        adapters: persistenceAdapters,
+        store,
+      });
+      ok = result.ok;
+      toolResult = result.toolResult;
+      summary = result.summary;
+      verifiedActions.push(...(await verifiedActionsForSession(store, sessionId)));
+    } else {
+      // Non-git confirmed tools (ADO / MCP writes) keep the direct execution
+      // path in this slice; the canonical verified path for ADO writes is
+      // delivery_propose_action, which the planner is instructed to prefer.
+      // Tracked in next-iteration-known-gaps.md.
+      const legacy = yield* streamAndPersistConfirmedAction({
+        sessionId,
+        actionExecutor,
+        pending,
+        toolCallId,
+        historyLabel: "confirmed & executed",
+        adapters: persistenceAdapters,
+      });
+      ok = legacy.ok;
+      toolResult = legacy.toolResult;
+      summary = legacy.summary;
+    }
 
     yield* streamConfirmedActionOutcome({
       sessionId,
@@ -73,7 +114,8 @@ export async function* runConfirmedChatAction(args: RunConfirmedChatActionArgs):
       llm,
       planner,
       inlineProjectLink: storedSession.inlineProjectLink,
-      projectLinkId: storedSessionProjectLinkId(storedSession),
+      projectLinkId,
+      verifiedActions,
       adapters: plannerAdapters,
     });
   } finally {

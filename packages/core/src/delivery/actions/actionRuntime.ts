@@ -227,6 +227,117 @@ export class DeliveryActionRuntime {
   }
 
   /**
+   * Streaming variant of approve(): identical lifecycle (policy, expiry,
+   * execute, re-read, verify) but the execution is a caller-provided
+   * generator so the chat confirmed-action path can stream tool events to
+   * the UI while the write runs. Events yielded by the callback pass through
+   * unchanged; the generator returns the same ApproveResult as approve().
+   * The callback receives the record with status "approved" (the boundary
+   * between "not yet executed" and "executed"), mirroring the executor
+   * contract, and must return an ExecutionResult.
+   */
+  async *approveStreaming<TEvent>(
+    id: string,
+    execute: (record: ActionRecord) => AsyncGenerator<TEvent, ExecutionResult, void>,
+  ): AsyncGenerator<TEvent, ApproveResult, void> {
+    const record = await this.store.get(id);
+    if (!record) {
+      return { record: undefined as unknown as ActionRecord, error: { kind: "not_found", message: `no action ${id}` } };
+    }
+    if (record.status !== "awaiting_approval") {
+      return {
+        record,
+        error: { kind: "policy", message: `action is ${record.status}; approval applies to awaiting_approval only` },
+      };
+    }
+    const now = this.options.now?.() ?? Date.now();
+    if (record.expiresAt <= now) {
+      const stale: ActionRecord = {
+        ...record,
+        status: "failed",
+        failure: { kind: "expired", message: "action expired before approval" },
+        audit: this.audit(record, "failed", "expired before approval"),
+      };
+      await this.store.updateStatus(stale);
+      return { record: stale, error: { kind: "policy", message: "action expired before approval" } };
+    }
+    const verdict = this.policy.evaluate(record, await this.policyContext(record));
+    if (verdict.decision === "deny") {
+      const denied: ActionRecord = {
+        ...record,
+        status: "stale",
+        failure: { kind: "policy", message: verdict.reasons.join("; ") },
+        audit: this.audit(record, "stale", verdict.reasons.join("; ")),
+      };
+      await this.store.updateStatus(denied);
+      return { record: denied, error: { kind: "policy", message: verdict.reasons.join("; ") } };
+    }
+
+    const executing: ActionRecord = {
+      ...record,
+      status: "executing",
+      approvedAt: now,
+      audit: this.audit(record, "approved", "user approved the stored action"),
+    };
+    await this.store.updateStatus(executing);
+
+    // The callback streams the write and returns its outcome; the runtime
+    // keeps the same "approved" status boundary the non-streaming executor
+    // sees, so recovery never re-executes.
+    const execution = yield* execute({ ...executing, status: "approved" });
+    if (!execution.ok || !execution.outcome.ok) {
+      const failed: ActionRecord = {
+        ...executing,
+        status: "failed",
+        failure: execution.failure ?? { kind: "transport", message: execution.outcome.summary },
+        audit: this.audit(executing, "failed", execution.outcome.summary),
+      };
+      await this.store.updateStatus(failed);
+      return { record: failed, execution, error: { kind: "execution", message: execution.outcome.summary } };
+    }
+
+    const resolved = resolveCreatedTarget(executing, execution.outcome.result);
+    const verifying: ActionRecord = {
+      ...resolved,
+      status: "verifying",
+      executedAt: now,
+      audit: this.audit(executing, "executed", execution.outcome.summary),
+    };
+    await this.store.updateStatus(verifying);
+
+    const verification = await this.verifier.verify(verifying, {
+      now: this.options.now,
+      ...this.options.verifierOptions,
+    });
+    if (verification.status === "verified") {
+      const verified: ActionRecord = {
+        ...verifying,
+        status: "verified",
+        verifiedAt: now,
+        audit: this.audit(verifying, "verified", verification.evidence.join("; ")),
+      };
+      await this.store.updateStatus(verified);
+      return { record: verified, execution, verification };
+    }
+    const failed: ActionRecord = {
+      ...verifying,
+      status: "failed",
+      failure: {
+        kind: "verification",
+        message: `${verification.status}: ${verification.evidence.join("; ")}`,
+      },
+      audit: this.audit(verifying, "failed", verification.evidence.join("; ")),
+    };
+    await this.store.updateStatus(failed);
+    return {
+      record: failed,
+      execution,
+      verification,
+      error: { kind: "verification", message: failed.failure?.message ?? "verification failed" },
+    };
+  }
+
+  /**
    * Retry a proposal that failed BEFORE any remote write (failed without
    * executedAt, or stale/rejected). The same idempotency key stays in place:
    * no remote mutation happened, so re-proposing cannot duplicate a write.

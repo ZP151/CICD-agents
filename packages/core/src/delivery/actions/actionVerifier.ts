@@ -127,6 +127,43 @@ export class ActionVerifier {
         }
         return { kind: "pending", detail: `${predicate.field}=${String(value)} still differs from expected` };
       }
+      case "field_ne": {
+        // The write moved the artifact away from the proposed baseline
+        // (e.g. HEAD sha changed after a commit, workspace hash after a
+        // stage). Expected carries the pre-execution baseline value.
+        if (!predicate.field) return { kind: "contradicted", detail: "field_ne without field" };
+        const value = observation.fields[predicate.field];
+        const baseline = predicate.expected;
+        if (value === undefined) return { kind: "pending", detail: `${predicate.field} not yet readable` };
+        if (baseline === undefined || value === baseline || String(value) === String(baseline)) {
+          return { kind: "pending", detail: `${predicate.field}=${String(value)} still at the proposed baseline` };
+        }
+        return { kind: "satisfied", detail: `${predicate.field} moved from baseline to ${String(value)}` };
+      }
+      case "field_contains": {
+        // Field value is an array: every expected element must be present.
+        // With no expected elements the field must be non-empty (a write
+        // produced content, e.g. something is staged). A string value is
+        // matched by substring.
+        if (!predicate.field) return { kind: "contradicted", detail: "field_contains without field" };
+        const value = observation.fields[predicate.field];
+        if (Array.isArray(value)) {
+          const expected = Array.isArray(predicate.expected) ? predicate.expected.map(String) : [];
+          const missing = expected.filter((entry) => !value.some((item) => String(item) === entry));
+          if (missing.length === 0 && (expected.length > 0 || value.length > 0)) {
+            return { kind: "satisfied", detail: `${predicate.field} contains ${expected.length ? expected.join(", ") : `${value.length} entries`}` };
+          }
+          return { kind: "pending", detail: `${predicate.field} missing ${missing.join(", ")} (${value.length} present)` };
+        }
+        if (typeof value === "string") {
+          const expected = String(predicate.expected ?? "");
+          if (expected && value.includes(expected)) {
+            return { kind: "satisfied", detail: `${predicate.field} contains expected text` };
+          }
+          return { kind: "pending", detail: `${predicate.field} does not yet contain expected text` };
+        }
+        return { kind: "contradicted", detail: `${predicate.field} is not an array or string` };
+      }
       case "relation_present": {
         // ADO relation urls are opaque (vstfs://...); a substring match on
         // the target id is the robust equivalent of "relation exists".
@@ -165,6 +202,10 @@ export function describePredicate(predicate: VerificationPredicate): string {
       return `${target} no longer exists`;
     case "field_eq":
       return `${target} ${predicate.field ?? "?"}=${String(predicate.expected ?? "")}`;
+    case "field_ne":
+      return `${target} ${predicate.field ?? "?"} moved from ${String(predicate.expected ?? "")}`;
+    case "field_contains":
+      return `${target} ${predicate.field ?? "?"} contains ${String(predicate.expected ?? "")}`;
     case "relation_present":
       return `${target} has relation ${String(predicate.expected ?? "")}`;
     case "revision_gt":

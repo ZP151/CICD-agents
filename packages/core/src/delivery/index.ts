@@ -16,3 +16,4 @@ export * from "./actions/actionTransport.js";
 export * from "./actions/actionVerifier.js";
 export * from "./actions/actionExecutor.js";
 export * from "./actions/actionRuntime.js";
+export * from "./actions/gitActionTransport.js";

@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import {
   type ChatPlannerResult,
+  type ChatVerifiedAction,
   type ChatWorkflowState,
   type PendingToolAction,
 } from "@mergepilot/core";
@@ -41,6 +42,7 @@ export function buildWorkflowState(
   riskLevel = "medium",
   explanation = "",
   metadata: Pick<ChatWorkflowState, "workflowKind" | "workflowPhase"> = {},
+  verifiedActions: ChatVerifiedAction[] = [],
 ): ChatWorkflowState {
   const completedTools = bubbles
     .filter((b) => b.role === "tool" && b.toolName && b.toolOk !== false)
@@ -49,6 +51,7 @@ export function buildWorkflowState(
     status,
     currentStep,
     completedTools,
+    ...(verifiedActions.length > 0 ? { verifiedActions } : {}),
     ...workflowStateMetadata(approvalProposal, status),
     ...metadata,
     pendingApproval: approvalProposal

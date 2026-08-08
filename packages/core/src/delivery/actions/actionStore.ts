@@ -15,6 +15,8 @@ export interface DeliveryActionStore {
   propose(record: ActionRecord): Promise<void>;
   get(id: string): Promise<ActionRecord | undefined>;
   listByProjectLink(projectLinkId: string, options?: { includeTerminal?: boolean }): Promise<ActionRecord[]>;
+  /** Actions bound to a chat turn (turnId = sessionId): the canonical per-turn ledger. */
+  listByTurnId(turnId: string, options?: { includeTerminal?: boolean }): Promise<ActionRecord[]>;
   updateStatus(record: ActionRecord): Promise<void>;
   /** Marks pending actions targeting the artifact stale when its revision moved. */
   markStaleForTarget(projectLinkId: string, ref: ArtifactRef): Promise<number>;
@@ -128,6 +130,20 @@ export class SqliteDeliveryActionStore implements DeliveryActionStore {
     return (rows as DeliveryActionRow[]).map(fromRow);
   }
 
+  async listByTurnId(
+    turnId: string,
+    options: { includeTerminal?: boolean } = {},
+  ): Promise<ActionRecord[]> {
+    const rows = options.includeTerminal
+      ? this.db.prepare(
+        "SELECT * FROM delivery_actions WHERE turn_id = ? ORDER BY created_at DESC",
+      ).all(turnId)
+      : this.db.prepare(
+        "SELECT * FROM delivery_actions WHERE turn_id = ? AND status NOT IN ('verified','rejected','stale','failed','cancelled') ORDER BY created_at DESC",
+      ).all(turnId);
+    return (rows as DeliveryActionRow[]).map(fromRow);
+  }
+
   async updateStatus(record: ActionRecord): Promise<void> {
     // Payload-bearing columns are rewritten too: retry() may replace the
     // proposal payload/expectedResult before re-approval.
@@ -199,6 +215,16 @@ function stableKey(ref: ArtifactRef): string {
       return `environment:${ref.projectLinkId}:${ref.environmentId}`;
     case "deployment":
       return `deployment:${ref.projectLinkId}:${ref.environmentId}:${ref.deploymentId}`;
+    case "git_workspace":
+      return `git_workspace:${ref.projectLinkId}:${ref.repoPath}`;
+    case "git_commit":
+      return `git_commit:${ref.projectLinkId}:${ref.repoPath}`;
+    case "git_branch":
+      return `git_branch:${ref.projectLinkId}:${ref.repoPath}:${ref.name}`;
+    case "git_remote":
+      return `git_remote:${ref.projectLinkId}:${ref.repoPath}:${ref.remote}:${ref.branch}`;
+    case "git_remote_refs":
+      return `git_remote_refs:${ref.projectLinkId}:${ref.repoPath}:${ref.remote}`;
   }
 }
 

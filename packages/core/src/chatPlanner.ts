@@ -49,6 +49,7 @@ export type {
   ChatPlannerArtifact,
   ChatPlannerResult,
   ChatPlannerSource,
+  ChatVerifiedAction,
   ChatWorkflowState,
   PendingToolAction,
 } from "./chatPlannerTypes.js";
