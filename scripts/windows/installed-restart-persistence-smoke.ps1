@@ -262,12 +262,23 @@ try {
     $chatResponse = Invoke-WebRequest -UseBasicParsing -Method POST -Uri "$baseUrl/chat" -Body $chatPayload -ContentType "application/json" -TimeoutSec $ChatTimeoutSec
     $chatHttpStatus = [int]$chatResponse.StatusCode
     $sessionId = Get-SessionIdFromChatResponse $chatResponse
-    $chatTerminalDone = ([string]$chatResponse.Content).Contains("event: done")
+    # Canonical SSE terminals (Phase 4 4a-2): turn.finished (status "completed")
+    # is the success terminal; turn.failed / turn.cancelled are failure
+    # terminals. "event: done" is obsolete and never emitted by chatSse.ts.
+    $chatContent = [string]$chatResponse.Content
+    $chatSuccessTerminal = $chatContent.Contains("event: turn.finished")
+    $chatFailureTerminal = $chatContent.Contains("event: turn.failed") -or $chatContent.Contains("event: turn.cancelled")
+    if ($chatFailureTerminal) {
+      throw "Chat response for $sessionId ended in a failure terminal (turn.failed/turn.cancelled) instead of turn.finished."
+    }
+    $chatTerminalDone = $chatSuccessTerminal
     if (-not $chatTerminalDone) {
-      throw "Chat response for $sessionId did not include a terminal done event."
+      throw "Chat response for $sessionId did not include a terminal done event (turn.finished)."
     }
 
-    $messagesBefore = @(Invoke-Json GET "/chat/$sessionId/messages")
+    # /chat/:id/messages returns { bubbles, timelineEvents } (chat.routes.ts);
+    # the persistence assertions operate on the message bubbles.
+    $messagesBefore = @((Invoke-Json GET "/chat/$sessionId/messages").bubbles)
     $assistantBeforeRestart = Get-AssistantCompletion $messagesBefore $expectedCompletion
     if (-not $assistantBeforeRestart) {
       throw "Assistant completion containing '$expectedCompletion' was not persisted before restart."
@@ -297,7 +308,7 @@ try {
     if (-not $chatAfterRestartHasSession) {
       throw "Chat session $sessionId was not visible in history after restart."
     }
-    $messagesAfter = @(Invoke-Json GET "/chat/$sessionId/messages")
+    $messagesAfter = @((Invoke-Json GET "/chat/$sessionId/messages").bubbles)
     $assistantAfterRestart = Get-AssistantCompletion $messagesAfter $expectedCompletion
     if (-not $assistantAfterRestart) {
       throw "Assistant completion containing '$expectedCompletion' was not persisted after restart."
