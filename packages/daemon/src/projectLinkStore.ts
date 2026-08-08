@@ -109,6 +109,14 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
         name: inlineProjectLink.name ?? "",
         createdAt: Date.now(),
         updatedAt: Date.now(),
+        // The session snapshot no longer carries pipeline/MCP/template fields
+        // (removed in Phase 3); the store type keeps them as legacy read
+        // defaults and every consumer resolves "" through withLegacyReadDefaults.
+        adoPipelineId: "",
+        adoPipelineName: "",
+        adoMcpCommand: "",
+        adoMcpAuthentication: "",
+        projectTemplate: "",
         ...inlineProjectLink,
       };
     }

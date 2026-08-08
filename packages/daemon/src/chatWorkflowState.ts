@@ -22,12 +22,11 @@ export function approvalProposalFromResult(result: ChatPlannerResult): PendingTo
 }
 
 export function storedApprovalProposal(session: StoredSession): PendingToolAction | undefined {
-  return session.approvalProposal ?? session.pendingAction;
+  return session.approvalProposal;
 }
 
 export function setStoredApprovalProposal(session: StoredSession, proposal: PendingToolAction | undefined): void {
   session.approvalProposal = proposal;
-  session.pendingAction = undefined;
 }
 
 export function clearStoredApprovalProposal(session: StoredSession): void {
