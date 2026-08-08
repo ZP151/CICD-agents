@@ -1,6 +1,6 @@
 {
   "name": "@mergepilot/desktop",
-  "version": "0.5.26",
+  "version": "0.5.27",
   "description": "MergePilot Tauri desktop client.",
   "private": true,
   "author": "ZP151 <zhouping151140@gmail.com>",

@@ -1,6 +1,6 @@
 {
   "name": "@mergepilot/daemon",
-  "version": "0.5.26",
+  "version": "0.5.27",
   "description": "MergePilot local daemon HTTP and SSE API.",
   "private": true,
   "author": "ZP151 <zhouping151140@gmail.com>",

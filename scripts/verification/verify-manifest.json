@@ -5,7 +5,10 @@
   "headPolicy": "pin-and-require-match",
   "repoRoot": "C:/Users/15492/Develop/Agents/CICD-agents",
   "runtimeLease": {
-    "ports": [8787, 1420],
+    "ports": [
+      8787,
+      1420
+    ],
     "policy": "8787 = any mergepilot-daemon.exe owner; 1420 = repo-owned owners only (never kill user processes outside the repo). Released via verify-run.mjs --release."
   },
   "gates": [
@@ -121,8 +124,8 @@
       "required": true,
       "requireNoSkips": true,
       "timeoutMs": 900000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-installed-app-smoke.ps1\"",
-      "description": "installed Tauri desktop E2E"
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\verify-installed-provenance.ps1\"",
+      "description": "installed provenance: source HEAD -> MSI/sidecar hashes -> install -> Program Files payload match -> installed E2E smoke + vision (exit 2 = elevation handoff printed)"
     },
     {
       "id": "real-ado-e2e",

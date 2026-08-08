@@ -59,10 +59,26 @@ product semantics before they are made green.
   hash. The Program Files binaries and existing 0.5.26 MSI predate Phase 2/3,
   so version equality cannot prove current-HEAD installation. Bind
   source HEAD → build/sidecar/MSI hashes → installation → Program Files hashes
-  → installed E2E in one evidence record.
+  → installed E2E in one evidence record. **4a-3 implementation (in the
+  version-bump + provenance slice, HEAD after `e2da956`):**
+  `scripts/windows/verify-installed-provenance.ps1` records source HEAD +
+  tree state, builds the MSI/sidecar from that HEAD, hashes the artifacts,
+  compares the installed package, emits an elevation handoff for the install,
+  and on completion verifies Program Files hashes against the MSI payload
+  (`-RequireMsiPayloadMatch`) and runs the installed E2E smoke + vision —
+  one merged evidence record at `output/live-e2e/installed-provenance-*.json`.
+  The manifest's `installed-desktop-e2e` gate now runs this script. Version
+  bumped to 0.5.27 so the fresh HEAD build upgrades over the stale 0.5.26
+  install (MSI same-version installs are rejected).
 - Turn latency evidence is not usable yet: `measure-turn-latency.mjs` waits for
   obsolete `turn.done` rather than successful `turn.finished`, and the current
   narrative metric does not separate app/daemon overhead from provider TTFT.
+  **4a-3 fix (same slice):** the harness now recognizes the canonical
+  terminals `turn.finished` / `turn.failed` / `turn.cancelled` /
+  `turn.final.completed`, records the terminal event + status per turn,
+  reports successful vs no-terminal turn counts, and the metric table
+  separates daemon/transport overhead (`ttft-first-event`) from provider
+  TTFT (`ttft-narrative`) with the delta between them.
 - **Release decision:** `971ee1d` is not eligible for `main` or release. The
   minimum sequence is credential containment → verification/provenance repair
   → focused F7 fixes → current-HEAD source-live → real ADO re-read → fresh MSI
