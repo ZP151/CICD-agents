@@ -23,8 +23,9 @@ product semantics before they are made green.
   bubbles. Phase 3c therefore remains required, using versioned public events
   plus stable Action/Artifact/Checkpoint references rather than copying raw
   tool results into the Timeline.
-- **P0 credential containment gap — CLOSED in the 4a-1 slice (uncommitted at
-  this doc edit; commit `7d3c8ca` + 4a-1 follow-up):** canonical `ProjectLink`
+- **P0 credential containment gap — CLOSED in the 4a-1 slice (committed at
+  `af0bb18` on `claudecode/optimize-bugfix`, pushed to both `ado` and
+  `origin`):** canonical `ProjectLink`
   and persisted `InlineProjectLink` never hold an `adoPat` value.
   `legacyFreeProjectLinkInput` writes the empty placeholder, Table entity
   mappers write `""` and never resurrect legacy stored values, and

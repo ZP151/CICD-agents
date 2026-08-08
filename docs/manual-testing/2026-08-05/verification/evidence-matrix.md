@@ -32,9 +32,11 @@ this reopen does not count for the current HEAD. Tiers:
   existing local/Table/Cosmos data is audited, and persistence redaction tests
   pass.
 
-## Continuation audit — 2026-08-08 (4a-1 credential containment, working tree on `7d3c8ca`)
+## Continuation audit — 2026-08-08 (4a-1 credential containment, HEAD `af0bb18`)
 
-- The P0 credential containment slice is implemented and unit-green:
+- The P0 credential containment slice is implemented, committed at `af0bb18`
+  (on `7d3c8ca`), and pushed to both `ado` and `origin` — SHA verified via
+  `git ls-remote`; remote `main` untouched on both remotes.
   `legacyFreeProjectLinkInput` writes the empty placeholder (raw
   `project-links.json` asserted credential-free in tests with a real PAT
   fixture), Table entity mappers write `""` and never resurrect legacy stored
@@ -48,15 +50,17 @@ this reopen does not count for the current HEAD. Tiers:
   `inlineProjectLink` with a redacted clone on save, so injection must follow
   it. Confirmed-action flows now execute in <1s instead of falling through to
   the machine's OAuth token cache with multi-second network timeouts.
-- Unit tiers re-run green after the slice: daemon **333 passed / 0 skipped**,
-  core **463 passed / 0 skipped** (live-tier exclusion in both vitest
-  configs; `requireNoSkips` holds). Real-data audit script ran clean earlier
-  (counts only, no values read).
+- Unit tier re-run on the fresh anchored state `verify-mskjwcfc` (HEAD
+  `af0bb18`): **9/9 gates PASS, 0 skips** — core 463, daemon 336, desktop 675,
+  cli 14, review-agent 44, all typechecks and `build-all`. The 4a-2 repair
+  contracts (latest-attempt-wins, `requireNoSkips`, attempt-scoped artifacts,
+  atomic projections) all hold on this run. Two mid-run infra flakes
+  (tinypool worker crash / a 30s test timeout) were reproduced as
+  environment-load failures: both suites pass repeatedly via the exact gate
+  command standalone, and the gates passed on a clean machine in the same
+  session — no product or test defect.
 - RA / ID / release gates remain **NOT_RUN / BLOCKED** on current HEAD as
   before; the P0 prerequisite they awaited is now closed.
-- Verification oracle gate: **FAIL** until fresh-run anchoring, latest/repeated
-  attempt aggregation, `requireNoSkips`, attempt-scoped artifacts, and atomic
-  state projection are proven.
 - Real ADO: **NOT_RUN on current HEAD**; carried evidence remains at `68a673a`.
 - Installed desktop: **NOT_RUN on current HEAD**. Existing Program Files
   binaries and MSI predate Phase 2/3; the current installed smoke command does
