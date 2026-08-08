@@ -80,6 +80,8 @@ export interface ChatEventPayload {
   turnId?: string;
   /** Matches the locally-created optimistic Turn when the server starts it. */
   clientTurnId?: string;
+  /** Server-reported request receipt time on turn.started (latency telemetry). */
+  requestReceivedAt?: number;
   sequence?: number;
   emittedAt?: number;
   elapsedMs?: number;
@@ -88,6 +90,20 @@ export interface ChatEventPayload {
   stepId?: string;
   stepStatus?: "started" | "completed" | "blocked";
   planItems?: string[];
+  /** MP-003: bounded evidence references on turn.final.completed. */
+  evidence?: Array<{ tool: string; ok: boolean; summary: string; callId?: string }>;
+  /** MP-011: typed termination reason on turn.failed / turn.cancelled. */
+  failureKind?:
+    | "cancelled_by_user"
+    | "client_cancelled"
+    | "deadline_exceeded"
+    | "tool_failed"
+    | "model_failed"
+    | "daemon_restarted"
+    | "internal";
+  recoveryAction?: "resume" | "retry" | "reauthorize" | "enable_connector" | "choose_target" | "start_new_turn" | "view_diagnostics";
+  retryable?: boolean;
+  diagnosticId?: string;
   /** Canonical transcript identity. These are intentionally separate from legacy tool ids. */
   blockId?: string;
   groupId?: string;
@@ -108,6 +124,8 @@ export interface ChatEventPayload {
   args?: Record<string, unknown>;
   stream?: "stdout" | "stderr";
   ok?: boolean;
+  /** MP-004: real process exit code on tool completion. */
+  exitCode?: number;
   summary?: string;
   output?: string;
   toolResult?: unknown;

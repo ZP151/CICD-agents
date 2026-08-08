@@ -9,7 +9,7 @@ describe("streamActionNarrative", () => {
       actionNarrativeModel: () => "fast-narrative-model",
     async *chatStream(options: { messages: Array<{ role: string; content: unknown }>; tools?: unknown; maxTokens?: number; reasoningEffort?: "minimal" | "low" | "medium" | "high"; verbosity?: "low" | "medium" | "high" }) {
       expect(options.tools).toBeUndefined();
-      expect(options.maxTokens).toBe(320);
+      expect(options.maxTokens).toBe(1024);
       expect(options.reasoningEffort).toBe("minimal");
       expect(options.verbosity).toBe("low");
       expect((options as { model?: string }).model).toBe("fast-narrative-model");
@@ -176,5 +176,28 @@ describe("streamActionNarrative", () => {
       expect.objectContaining({ text: "I will inspect" }),
       expect.objectContaining({ text: "I will inspect the branch." }),
     ]);
+  });
+
+  it("appends the corrective directive when the Turn runtime re-prompts an empty opening", async () => {
+    const llm = {
+      configured: true,
+      async *chatStream(options: { messages: Array<{ role: string; content: unknown }> }) {
+        expect(JSON.stringify(options.messages)).toContain(
+          "Write the opening action narrative. Your previous opening contained no visible public text",
+        );
+        yield { type: "delta" as const, delta: "The corrective narrative is visible." };
+      },
+    } as Pick<LLMClient, "configured" | "chatStream">;
+
+    const events = [];
+    for await (const event of streamActionNarrative(llm, {
+      request: "Inspect the current branch",
+      corrective:
+        "Your previous opening contained no visible public text — it completed inside hidden reasoning. This reply must begin with visible narrative text now: write the public action note as ordinary prose before anything else.",
+    })) events.push(event);
+
+    expect(
+      events.some((e) => e.type === "work_statement" && e.text.includes("The corrective narrative is visible")),
+    ).toBe(true);
   });
 });

@@ -38,13 +38,14 @@ import {
 export async function runWorkspaceWorkflowAction(
   chatSessions: ChatSessionManager,
   payload: ChatWorkflowActionPayload,
+  dataDir: string,
 ) {
   const { action, repoPath } = payload;
   if (isAdoPullRequestWorkflowAction(action)) {
     return runAdoPullRequestWorkflowAction(chatSessions, payload);
   }
   if (isAdoPipelineWorkflowAction(action)) {
-    return runAdoPipelineWorkflowAction(chatSessions, payload);
+    return runAdoPipelineWorkflowAction(chatSessions, payload, dataDir);
   }
   if (action === "inspect_validation_failure") {
     return await runValidationFailureInspection(chatSessions, payload);
@@ -162,8 +163,10 @@ async function runValidationFailureInspection(
   chatSessions: ChatSessionManager,
   payload: ChatWorkflowActionPayload,
 ) {
-  const sessionId = payload.sessionId ?? chatSessions.createSession(payload.repoPath, payload.projectLinkId);
-  const bubbles = await chatSessions.getBubbles(sessionId).catch(() => []);
+  // MP-006: page-originated actions never create chat sessions; only an
+  // explicit Chat handoff carries a sessionId.
+  const sessionId = payload.sessionId;
+  const bubbles = sessionId ? await chatSessions.getBubbles(sessionId).catch(() => []) : [];
   const artifact = latestValidationFailureArtifact(bubbles);
   const inspection = validationFailureInspectionFromArtifact(artifact);
   const tool = {
@@ -262,8 +265,10 @@ async function runCiRecoveryContextInspection(
   chatSessions: ChatSessionManager,
   payload: ChatWorkflowActionPayload,
 ) {
-  const sessionId = payload.sessionId ?? chatSessions.createSession(payload.repoPath, payload.projectLinkId);
-  const bubbles = await chatSessions.getBubbles(sessionId).catch(() => []);
+  // MP-006: page-originated actions never create chat sessions; only an
+  // explicit Chat handoff carries a sessionId.
+  const sessionId = payload.sessionId;
+  const bubbles = sessionId ? await chatSessions.getBubbles(sessionId).catch(() => []) : [];
   const validationArtifact = latestValidationFailureArtifact(bubbles);
   const pipelineArtifact = latestPipelineFailureArtifact(bubbles);
   const inspection: CiRecoveryContextInspection = {
@@ -338,8 +343,10 @@ async function runSourceContextInspection(
   chatSessions: ChatSessionManager,
   payload: ChatWorkflowActionPayload,
 ) {
-  const sessionId = payload.sessionId ?? chatSessions.createSession(payload.repoPath, payload.projectLinkId);
-  const bubbles = await chatSessions.getBubbles(sessionId).catch(() => []);
+  // MP-006: page-originated actions never create chat sessions; only an
+  // explicit Chat handoff carries a sessionId.
+  const sessionId = payload.sessionId;
+  const bubbles = sessionId ? await chatSessions.getBubbles(sessionId).catch(() => []) : [];
   const inspection = sourceContextInspectionFromBubbles(bubbles);
   const summary = sourceContextSummary(inspection);
   const tool = {
@@ -371,7 +378,9 @@ async function runArchitectureContextInspection(
   chatSessions: ChatSessionManager,
   payload: ChatWorkflowActionPayload,
 ) {
-  const sessionId = payload.sessionId ?? chatSessions.createSession(payload.repoPath, payload.projectLinkId);
+  // MP-006: page-originated actions never create chat sessions; only an
+  // explicit Chat handoff carries a sessionId.
+  const sessionId = payload.sessionId;
   const message = [
     "Explain architecture",
     "Trace request flow",
@@ -417,7 +426,9 @@ async function runAdoAuthContextInspection(
   chatSessions: ChatSessionManager,
   payload: ChatWorkflowActionPayload,
 ) {
-  const sessionId = payload.sessionId ?? chatSessions.createSession(payload.repoPath, payload.projectLinkId);
+  // MP-006: page-originated actions never create chat sessions; only an
+  // explicit Chat handoff carries a sessionId.
+  const sessionId = payload.sessionId;
   const projectLink = payload.projectLink;
   const authMode = projectLink?.adoPat ? "pat" as const : "oauth" as const;
   const missingMapping = adoMappingMissing(projectLink);

@@ -2,27 +2,23 @@ import { useEffect, useRef, useState } from "react";
 import { WorkbenchDisclosure } from "../../../components/workbench/WorkbenchPrimitives.js";
 import type { ProjectLink } from "../../../api.js";
 import type { WorkflowEventState } from "../chat.types.js";
-import type { GitStatusData } from "../toolOutputRenderers.js";
 import type { TaskState, WorkspaceAction } from "../workflowTaskState.js";
+import { gitRecoveryPanelState } from "../workflowTaskState.js";
 import { WorkspaceBranchMenu } from "./WorkspaceBranchMenu.js";
 import { WorkspaceCommitMenu } from "./WorkspaceCommitMenu.js";
-import { WorkspaceProjectLinkPanel } from "./WorkspaceProjectLinkPanel.js";
+import { WorkspaceGitRecoveryPanel } from "./WorkspaceGitRecoveryPanel.js";
 import { WorkflowProgressList } from "./WorkflowProgressList.js";
-import type { DiffStats } from "./workspacePanel.types.js";
 
 interface PinnedSummaryPanelProps {
   repoPath: string;
   setRepoPath: (value: string) => void;
   currentBranch: string | null;
   branchList: string[];
-  gitStatus: GitStatusData | null;
-  diffStats: DiffStats | null;
   taskState: TaskState | null;
   workflowState: WorkflowEventState | null;
   busy: boolean;
   projectLinks: ProjectLink[];
   activeProjectLinkId: string | null;
-  setActiveProjectLinkId: (id: string | null) => void;
   codePanelOpen: boolean;
   codePanelWidth: number;
   onAction: (action: WorkspaceAction) => void;
@@ -38,14 +34,11 @@ export function PinnedSummaryPanel({
   setRepoPath,
   currentBranch,
   branchList,
-  gitStatus,
-  diffStats,
   taskState,
   workflowState,
   busy,
   projectLinks,
   activeProjectLinkId,
-  setActiveProjectLinkId,
   codePanelOpen,
   codePanelWidth,
   onAction,
@@ -56,25 +49,13 @@ export function PinnedSummaryPanel({
   const activeProjectLink = projectLinks.find((projectLink) => projectLink.id === activeProjectLinkId) ?? null;
   const branchName = currentBranch ?? activeProjectLink?.defaultBranch ?? "";
   const branchLabel = branchName || "not checked";
-  const changedFiles = gitStatus
-    ? gitStatus.staged.length + gitStatus.modified.length + gitStatus.untracked.length + gitStatus.deleted.length
-    : 0;
   const hasRepoPath = Boolean(repoPath.trim());
-  const hasChanges = Boolean(diffStats ? diffStats.files > 0 : changedFiles > 0);
-  const added = diffStats?.added ?? 0;
-  const removed = diffStats?.removed ?? 0;
-  const adoReady = Boolean(activeProjectLink?.adoOrgUrl && activeProjectLink.adoProject && activeProjectLink.adoRepoName);
+  const gitRecovery = gitRecoveryPanelState(workflowState);
 
   const runAction = (action: WorkspaceAction) => {
     if (busy) return;
     setActiveMenu(null);
     onAction(withDefaultBranch(action, branchName));
-  };
-
-  const handleProjectLinkSelect = (id: string) => {
-    setActiveProjectLinkId(id || null);
-    const projectLink = projectLinks.find((item) => item.id === id);
-    if (projectLink?.repoPath) setRepoPath(projectLink.repoPath);
   };
 
   useEffect(() => {
@@ -105,7 +86,7 @@ export function PinnedSummaryPanel({
     >
       <div className="pointer-events-auto rounded-2xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4 text-[rgb(var(--app-text))] shadow-lg">
         <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-sm text-[rgb(var(--app-text-muted))]">Environment</p>
+          <p className="min-w-0 truncate text-sm text-[rgb(var(--app-text-muted))]">Context</p>
         </div>
 
         <div className="mt-1 flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1.5 text-sm text-[rgb(var(--app-text-muted))]">
@@ -132,10 +113,6 @@ export function PinnedSummaryPanel({
             busy={busy}
             branchName={branchName}
             branchLabel={branchLabel}
-            hasChanges={hasChanges}
-            added={added}
-            removed={removed}
-            gitStatus={gitStatus}
             activeProjectLink={activeProjectLink}
             open={activeMenu === "commit"}
             onOpenChange={(open) => setActiveMenu(open ? "commit" : null)}
@@ -144,25 +121,8 @@ export function PinnedSummaryPanel({
           />
         </div>
 
-        <div
-          onClickCapture={() => setActiveMenu(null)}
-          onFocusCapture={() => setActiveMenu(null)}
-          onPointerDownCapture={() => setActiveMenu(null)}
-        >
-          <WorkspaceProjectLinkPanel
-            repoName={repoName}
-            repoPath={repoPath}
-            projectLinks={projectLinks}
-            activeProjectLink={activeProjectLink}
-            activeProjectLinkId={activeProjectLinkId}
-            adoReady={adoReady}
-            branchName={branchName}
-            busy={busy}
-            onProjectLinkSelect={handleProjectLinkSelect}
-            runAction={runAction}
-            showRepositoryContext={false}
-            actionDensity="compact"
-          />
+        <div className="mt-2">
+          <WorkspaceGitRecoveryPanel gitRecovery={gitRecovery} busy={busy} runAction={runAction} />
         </div>
 
         <WorkbenchDisclosure label="Progress" className="mt-3 border-t border-[rgb(var(--app-border))] pt-2">

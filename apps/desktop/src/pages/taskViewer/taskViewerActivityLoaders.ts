@@ -1,6 +1,5 @@
 import {
   fetchProjectLinkPrInsightArtifactsWithHistory,
-  fetchProjectLinkReviewOperations,
   type PrInsightArtifactHistoryMeta,
   type PrInsightArtifactRecord,
   type ProjectLink,
@@ -8,7 +7,6 @@ import {
 import {
   listPrInsightArtifacts,
 } from "../../prInsightArtifacts.js";
-import type { ReviewActivityItem } from "./activityTypes.js";
 import { parseIsoTimestamp } from "./activityPresentation.js";
 import type { PrInsightActivityItem } from "./prInsightActivity.js";
 
@@ -41,27 +39,6 @@ export function taskViewerProjectLinksCacheKey(
     ].join("\u001f"))
     .sort((a, b) => a.localeCompare(b))
     .join("\u001e");
-}
-
-export async function loadReviewActivity(
-  projectLinks: ProjectLink[],
-): Promise<ReviewActivityItem[]> {
-  const nested = await Promise.all(
-    projectLinks.map(async (projectLink) => {
-      const items = await fetchProjectLinkReviewOperations(projectLink.id, {
-        includeLegacyFallback: false,
-      });
-      return items.map((item) => ({
-        ...item,
-        projectLinkId: projectLink.id,
-        projectLinkName: projectLink.name,
-      }));
-    }),
-  );
-  return nested
-    .flat()
-    .sort((a, b) => parseIsoTimestamp(b.at) - parseIsoTimestamp(a.at))
-    .slice(0, 50);
 }
 
 export async function loadPrInsightActivity(projectLinks: ProjectLink[]): Promise<{

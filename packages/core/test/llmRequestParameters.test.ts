@@ -55,11 +55,19 @@ describe("LLMClient GPT-5 parameter compatibility", () => {
     const llm = new LLMClient(azureSettings("gpt-5-mini"));
     setChatClient(llm, create);
 
-    await llm.chat({ messages: [{ role: "user", content: "Hello" }], maxTokens: 321, retries: 1 });
+    await llm.chat({
+      messages: [{ role: "user", content: "Hello" }],
+      maxTokens: 321,
+      reasoningEffort: "minimal",
+      verbosity: "low",
+      retries: 1,
+    });
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
       model: "gpt-5-mini",
       max_completion_tokens: 321,
+      reasoning_effort: "minimal",
+      verbosity: "low",
     }));
     expect(create.mock.calls[0]?.[0]).not.toHaveProperty("max_tokens");
     expect(create.mock.calls[0]?.[0]).not.toHaveProperty("temperature");

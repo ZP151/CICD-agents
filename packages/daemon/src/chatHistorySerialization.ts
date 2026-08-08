@@ -1,6 +1,5 @@
 import {
   type ChatMessage,
-  type ChatWorkflowState,
   type CosmosStoredSession,
   type PendingToolAction,
   type TurnTimelineEvent,
@@ -27,6 +26,7 @@ export function chatHistoryEntryFromSession(session: StoredSession): ChatHistory
     createdAt: session.createdAt,
     updatedAt: session.updatedAt ?? session.createdAt,
     title,
+    titleSource: session.titleSource,
     pinned: Boolean(session.pinned),
   };
 }
@@ -35,7 +35,7 @@ function lastDisplayableHistoryMessage(messages: ChatMessage[]): ChatMessage | u
   return [...messages].reverse().find((message) => !isInternalHistoryText(message.content));
 }
 
-function isInternalHistoryText(content: string): boolean {
+export function isInternalHistoryText(content: string): boolean {
   const text = content.trim();
   return /^\[(?:confirmed & executed|executed)\]\s+\w+\(/.test(text) ||
     /^WORKFLOW STEP (?:COMPLETED|FAILED):/i.test(text);
@@ -59,8 +59,6 @@ export function cosmosToStored(doc: CosmosStoredSession): StoredSession {
     bubbles: doc.bubbles as StoredBubble[],
     timelineEvents: doc.timelineEvents as TurnTimelineEvent[] | undefined,
     approvalProposal: doc.approvalProposal as PendingToolAction | undefined,
-    pendingAction: doc.pendingAction as PendingToolAction | undefined,
-    workflowState: doc.workflowState as ChatWorkflowState | undefined,
     llmConfig: doc.llmConfig as InlineLlmConfig | undefined,
     inlineProjectLink: doc.inlineProjectLink as InlineProjectLink | undefined,
   };
@@ -79,8 +77,6 @@ export function storedToCosmos(session: StoredSession): Omit<CosmosStoredSession
     bubbles: normalized.bubbles,
     timelineEvents: normalized.timelineEvents,
     approvalProposal: normalized.approvalProposal,
-    pendingAction: normalized.pendingAction,
-    workflowState: normalized.workflowState,
     llmConfig: normalized.llmConfig,
     inlineProjectLink: normalized.inlineProjectLink,
   };
@@ -101,6 +97,14 @@ export function normalizeSession(session: StoredSession): StoredSession {
   const projectLinkId = storedSessionProjectLinkId(session);
   if (projectLinkId) {
     session.projectLinkId = projectLinkId;
+  }
+  // Credential containment (ADR-0005, Phase 4 4a-1): the inline snapshot may
+  // arrive from a request payload, but the PAT value is runtime-only and must
+  // never reach local JSON or Cosmos. saveSession, storedToCosmos and
+  // saveStoreSync all flow through here, so a single redaction covers every
+  // session persistence path.
+  if (session.inlineProjectLink?.adoPat) {
+    session.inlineProjectLink = { ...session.inlineProjectLink, adoPat: "" };
   }
   return session;
 }

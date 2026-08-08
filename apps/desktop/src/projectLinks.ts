@@ -113,8 +113,9 @@ function projectLinkAdoMappingKey(link: ProjectLink): string {
 }
 
 function compareProjectLinkPreference(a: ProjectLink, b: ProjectLink): number {
+  // V2 canonical (GAP-01): preference never depends on the legacy pipeline
+  // fields — only on the stable identity and recency.
   const score = (link: ProjectLink) =>
-    Number(Boolean(link.adoPipelineId.trim())) * 10 +
     Number(Boolean(link.repoPath.trim())) * 5 +
     Number(link.updatedAt ?? 0) / 1_000_000_000_000;
   return score(b) - score(a) || a.name.localeCompare(b.name);
@@ -243,13 +244,8 @@ export function applyAdoDiscoveryToProjectLinkInput(
       adoRepoName: option.name,
     };
   }
-  if (kind === "pipelines") {
-    return {
-      ...form,
-      adoPipelineId: option.id,
-      adoPipelineName: option.name,
-    };
-  }
+  // V2 Project Links never persist pipeline fields; pipeline discovery
+  // results are no longer applied to the form.
   return form;
 }
 
@@ -259,37 +255,27 @@ export function withProjectLinkInputDefaults<T extends Partial<ProjectLinkInput>
   return {
     name: "",
     repoPath: "",
-    defaultBranch: "main",
-    targetBranch: "main",
     adoOrgUrl: DEFAULT_ADO_ORG_URL,
     adoProject: "",
     adoRepoName: "",
     adoPat: "",
-    adoPipelineId: "",
-    adoPipelineName: "",
-    adoMcpEnabled: false,
-    adoMcpCommand: "",
-    adoMcpAuthentication: "",
-    adoMcpDomains: "repositories,pipelines,work-items",
-    projectTemplate: "",
-    buildCommand: "",
-    testCommand: "",
     ...link,
-  };
+  } as T & ProjectLinkInput;
 }
 
+// V2 Project Links persist only the stable identity mapping. The legacy
+// fields (defaultBranch, targetBranch, adoPipelineId, adoPipelineName, MCP
+// settings, projectTemplate, buildCommand, testCommand) are read-only and are
+// never written from the UI. The daemon strips them at the API boundary too.
 export function withoutProjectLinkFallbacks<T extends ProjectLinkInput>(link: T): T {
   return {
-    ...link,
+    name: link.name,
+    repoPath: link.repoPath,
+    adoOrgUrl: link.adoOrgUrl,
+    adoProject: link.adoProject,
+    adoRepoName: link.adoRepoName,
     adoPat: "",
-    // A Project Link may select the locally managed MCP connector and choose
-    // its domain allow-list. It must never persist an executable command or
-    // authentication setting: those live only in local config.toml/.env.
-    adoMcpEnabled: link.adoMcpEnabled,
-    adoMcpCommand: "",
-    adoMcpAuthentication: "",
-    adoMcpDomains: link.adoMcpDomains,
-  };
+  } as T;
 }
 
 export function withProjectLinkDefaults<T extends Partial<ProjectLink>>(link: T): T & ProjectLink {

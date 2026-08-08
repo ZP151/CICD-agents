@@ -132,9 +132,18 @@ body,
   overflow: hidden;
 }
 
+/* MP-014: semantic font stacks. UI text follows the Windows-first stack with
+ * explicit Chinese fallbacks; mono is reserved for code, commands, paths,
+ * branches and hashes. No web font is loaded. */
+:root {
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI",
+    "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, "Microsoft YaHei UI",
+    monospace;
+}
+
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-ui);
   background: rgb(var(--app-bg));
   color: rgb(var(--app-text));
   transition: background-color var(--app-motion-base) var(--app-ease-standard), color var(--app-motion-fast) var(--app-ease-standard);

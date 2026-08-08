@@ -1,8 +1,8 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { resetSettingsForTests } from "@mergepilot/core";
+import { resetSettingsForTests, setPatProvider } from "@mergepilot/core";
 import { buildApp } from "../src/server.js";
 
 let app: Awaited<ReturnType<typeof buildApp>> | null = null;
@@ -20,7 +20,19 @@ beforeAll(() => {
   resetSettingsForTests();
 });
 
+// ADR-0005: stores never hold the PAT (4a-1 strips on write); the runtime
+// sources it from Key Vault/keyring. Tests simulate the keyring with the
+// provider seam so stored-link and confirmed-action flows authenticate as PAT.
+// Per-test (not beforeAll): afterEach restores the throwing provider so a
+// test can never silently depend on a real keyring.
+beforeEach(() => {
+  setPatProvider(async () => "test-pat");
+});
+
 afterEach(async () => {
+  setPatProvider(async () => {
+    throw new Error("no keyring in tests");
+  });
   vi.restoreAllMocks();
   if (app) {
     await app.close();
@@ -105,22 +117,21 @@ describe("daemon ADO workflow routes", () => {
     });
     const projectLink = {
       repoPath: process.cwd(),
-      defaultBranch: "main",
-      targetBranch: "main",
       adoOrgUrl: "https://tebssg.visualstudio.com/",
       adoProject: "TeBS-ClaimBot",
       adoRepoName: "ClaimBot_API",
-      adoPipelineId: "117",
-      adoPipelineName: "ClaimBot_API",
       adoPat: "test-pat",
     };
 
+    // V2 Project Links no longer persist pipeline fields; the action carries
+    // the explicit pipelineId instead.
     const inspect = await app.inject({
       method: "POST",
       url: "/chat/workflow-action",
       payload: {
         action: "inspect_pipeline",
         repoPath: process.cwd(),
+        pipelineId: 117,
         projectLink: projectLink,
       },
     });
@@ -166,6 +177,7 @@ describe("daemon ADO workflow routes", () => {
         action: "trigger_pipeline",
         repoPath: process.cwd(),
         branch: "main",
+        pipelineId: 117,
         projectLink: projectLink,
       },
     });
@@ -321,6 +333,13 @@ describe("daemon ADO workflow routes", () => {
                 process: { yamlFilename: "/azure-pipelines.yml" },
                 _links: { web: { href: "https://ado/pipelines/117" } },
               },
+              {
+                id: 118,
+                name: "MergePilot Release",
+                repository: { id: "repo-guid", name: "mergepilot", type: "TfsGit" },
+                process: { yamlFilename: "/azure-pipelines.yml" },
+                _links: { web: { href: "https://ado/pipelines/118" } },
+              },
             ],
           }),
           { status: 200, headers: { "content-type": "application/json" } },
@@ -350,18 +369,29 @@ describe("daemon ADO workflow routes", () => {
       },
     });
     expect(inspect.statusCode, inspect.body).toBe(200);
+    // MP-010/GAP-01: with no ID, repository-identity discovery lists the
+    // candidates. A single candidate is auto-selected, so this fixture
+    // provides two to exercise the typed ambiguity guidance — never a blob
+    // message or a disguised connector failure.
     expect(inspect.json()).toMatchObject({
-      ok: true,
+      ok: false,
       workflowState: {
-        status: "done",
+        status: "blocked",
         workflowKind: "ci",
-        workflowPhase: "pipeline_setup_required",
-        completedTools: ["ado_discover_pipelines"],
+        workflowPhase: "pipeline_target_ambiguous",
+      },
+      failure: {
+        kind: "ambiguous_target",
+        candidates: [
+          { id: 117, name: "ClaimBot_API" },
+          { id: 118, name: "MergePilot Release" },
+        ],
       },
     });
-    expect(inspect.json().summary).toContain("No Azure Pipeline is configured");
-    expect(inspect.json().summary).toContain("#117 ClaimBot_API");
+    expect(inspect.json().summary).toContain("Choose the intended one");
     expect(inspect.json().workflowState.pendingApproval).toBeUndefined();
+    // MP-006: page-originated action must not create a chat session.
+    expect(inspect.json().sessionId).toBeUndefined();
 
     const trigger = await app.inject({
       method: "POST",
@@ -375,14 +405,15 @@ describe("daemon ADO workflow routes", () => {
     });
     expect(trigger.statusCode, trigger.body).toBe(200);
     expect(trigger.json()).toMatchObject({
+      ok: false,
       workflowState: {
-        status: "done",
+        status: "blocked",
         workflowKind: "ci",
-        workflowPhase: "pipeline_setup_required",
-        completedTools: ["ado_discover_pipelines"],
+        workflowPhase: "pipeline_target_ambiguous",
       },
+      failure: { kind: "ambiguous_target" },
     });
-    expect(trigger.json().summary).toContain("I did not trigger a pipeline");
+    expect(trigger.json().summary).toContain("Choose the intended one");
     expect(trigger.json().workflowState.pendingApproval).toBeUndefined();
     expect(seenUrls.some((url) => url.includes("/_apis/pipelines/"))).toBe(false);
   });
@@ -492,3 +523,42 @@ function parseSse(body: string): Array<{ event: string; data: unknown }> {
       return { event, data: JSON.parse(dataText) as unknown };
     });
 }
+
+describe("daemon pipeline workflow session isolation (MP-006)", () => {
+  it("keeps page-originated pipeline actions out of chat sessions", async () => {
+    app = await buildApp();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ value: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const historyPath = path.join(process.env.RUNTIME_DATA_DIR!, "chat-history.json");
+    fs.rmSync(historyPath, { force: true });
+
+    const inspect = await app.inject({
+      method: "POST",
+      url: "/chat/workflow-action",
+      payload: {
+        action: "inspect_pipeline",
+        repoPath: process.cwd(),
+        projectLink: {
+          repoPath: process.cwd(),
+          defaultBranch: "main",
+          targetBranch: "main",
+          adoOrgUrl: "https://example-org.visualstudio.com/",
+          adoProject: "example-project",
+          adoRepoName: "example-repo",
+          adoPipelineId: "117",
+          adoPipelineName: "example-pipeline",
+          adoPat: "example-pat",
+        },
+      },
+    });
+    expect(inspect.statusCode, inspect.body).toBe(200);
+    const body = inspect.json() as { sessionId?: string };
+    // MP-006: no implicit session creation, no bubble write for page actions.
+    expect(body.sessionId).toBeUndefined();
+    expect(fs.existsSync(historyPath)).toBe(false);
+  });
+});

@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "name": "mergepilot-v1-verification",
+  "description": "Authoritative gate configuration for MergePilot v1 verification. The run module (verify-run.mjs) executes these gates, checkpoints into verification-state.json, and projects machine evidence (goal-verification.json) plus a markdown gate report. Docs are projected, never hand-maintained.",
+  "headPolicy": "pin-and-require-match",
+  "repoRoot": "C:/Users/15492/Develop/Agents/CICD-agents",
+  "runtimeLease": {
+    "ports": [
+      8787,
+      1420
+    ],
+    "policy": "8787 = any mergepilot-daemon.exe owner; 1420 = repo-owned owners only (never kill user processes outside the repo). Released via verify-run.mjs --release."
+  },
+  "gates": [
+    {
+      "id": "core-typecheck",
+      "tier": "unit",
+      "required": true,
+      "requireNoSkips": false,
+      "timeoutMs": 300000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/core typecheck",
+      "description": "core typecheck"
+    },
+    {
+      "id": "core-test",
+      "tier": "unit",
+      "required": true,
+      "requireNoSkips": true,
+      "timeoutMs": 900000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/core test",
+      "description": "core vitest suite"
+    },
+    {
+      "id": "daemon-typecheck",
+      "tier": "unit",
+      "required": true,
+      "requireNoSkips": false,
+      "timeoutMs": 300000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/daemon typecheck",
+      "description": "daemon typecheck"
+    },
+    {
+      "id": "daemon-test",
+      "tier": "unit",
+      "required": true,
+      "requireNoSkips": true,
+      "timeoutMs": 900000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/daemon test",
+      "description": "daemon vitest suite"
+    },
+    {
+      "id": "desktop-typecheck",
+      "tier": "unit",
+      "required": true,
+      "requireNoSkips": false,
+      "timeoutMs": 300000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/desktop typecheck",
+      "description": "desktop typecheck"
+    },
+    {
+      "id": "desktop-test",
+      "tier": "unit",
+      "required": true,
+      "requireNoSkips": true,
+      "timeoutMs": 900000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/desktop test",
+      "description": "desktop vitest suite"
+    },
+    {
+      "id": "cli-test",
+      "tier": "unit",
+      "required": true,
+      "requireNoSkips": false,
+      "timeoutMs": 300000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/cli test",
+      "description": "cli vitest suite"
+    },
+    {
+      "id": "review-agent-test",
+      "tier": "unit",
+      "required": true,
+      "requireNoSkips": false,
+      "timeoutMs": 300000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/review-agent test",
+      "description": "review-agent vitest suite"
+    },
+    {
+      "id": "build-all",
+      "tier": "unit",
+      "required": true,
+      "requireNoSkips": false,
+      "timeoutMs": 900000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --dir . run build",
+      "description": "all packages + desktop build (tsc emit, dist/, tauri pre-checks where defined)"
+    },
+    {
+      "id": "browser-e2e-mocked",
+      "tier": "mocked-browser-e2e",
+      "required": true,
+      "requireNoSkips": true,
+      "timeoutMs": 2700000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/warmup.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/chat-layout.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/settings-permissions.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/route-cache.spec.ts -Workers 1",
+      "description": "mocked browser E2E (warmup, chat-layout, settings-permissions, route-cache)"
+    },
+    {
+      "id": "browser-e2e-source-live",
+      "tier": "source-live-e2e",
+      "required": true,
+      "requireNoSkips": true,
+      "timeoutMs": 10800000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-live-app-e2e.ps1\" -LiveAdo -RestartMismatchedDaemon",
+      "description": "source Vite + daemon live E2E (real ADO reads), prewarm enabled",
+      "artifacts": [
+        "output/live-e2e/live-app-e2e-*.log",
+        "output/live-e2e/live-app-source-daemon-*.log",
+        "output/live-e2e/live-app-source-daemon-*.err.log",
+        "output/live-e2e/runner-*.json"
+      ],
+      "resultAdapter": "live-app-runner"
+    },
+    {
+      "id": "installed-desktop-e2e",
+      "tier": "installed-desktop",
+      "required": true,
+      "requireNoSkips": true,
+      "timeoutMs": 900000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\verify-installed-provenance.ps1\"",
+      "description": "installed provenance: source HEAD -> MSI/sidecar hashes -> install -> Program Files payload match -> installed E2E smoke + vision (exit 2 = elevation handoff printed)"
+    },
+    {
+      "id": "real-ado-e2e",
+      "tier": "real-ado",
+      "required": true,
+      "requireNoSkips": true,
+      "timeoutMs": 1800000,
+      "cmd": "\"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\.tools\\node-v22.11.0-win-x64\\node.exe\" \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\verify-real-ado.mjs\"",
+      "description": "ClaimBot_API real ADO E2E (deterministic driver)"
+    }
+  ]
+}

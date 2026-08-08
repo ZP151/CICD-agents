@@ -1,33 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import {
-  appendLocalReviewOperation,
   getLocalPrInsightArtifact,
   getProjectLink,
-  isAzureAuthenticationRequiredError,
   listLocalPrInsightArtifacts,
-  listLocalReviewHistory,
-  listLocalReviewOperations,
-  listReviewQueueItems,
-  compareReviewQueueItems,
-  parseSortableDate,
   summarizePrInsightArtifactHistory,
   upsertLocalPrInsightArtifact,
-  upsertLocalReviewHistory,
-  type ReviewOperationKind,
-  type ReviewQueueItem,
 } from "@mergepilot/core";
+import { PrInsightArtifactSchema } from "./review.schemas.js";
 import {
-  PrInsightArtifactSchema,
-  ReviewHistoryUpsertSchema,
-  ReviewOperationSchema,
-} from "./review.schemas.js";
-import { registerReviewDispositionRoutes } from "./review-disposition.routes.js";
-import {
-  cloudPreferredProjectLink,
   localProjectLinkRepository,
   PROJECT_LINK_NOT_FOUND,
   PROJECT_LINK_REPOSITORY_MISSING,
-  reviewHistoryRecord,
   type ReviewRouteDependencies,
 } from "./reviewRouteSupport.js";
 import { z } from "zod";
@@ -44,106 +27,8 @@ const PrInsightArtifactQuerySchema = z.object({
 function registerReviewRouteSet(
   app: FastifyInstance,
   prefix: "/project-links",
-  { settings, projectLinkStore }: ReviewRouteDependencies,
+  { settings }: ReviewRouteDependencies,
 ): void {
-  app.get(`${prefix}/:id/review-queue`, async (req, reply) => {
-    const parsed = ProjectLinkIdParam.safeParse(req.params);
-    if (!parsed.success) return reply.code(400).send({ error: "invalid id" });
-
-    const projectLink = await cloudPreferredProjectLink(settings, projectLinkStore, parsed.data.id, {
-      throwOnAzureAuthFailure: true,
-    });
-    if (!projectLink) return reply.code(404).send({ error: PROJECT_LINK_NOT_FOUND });
-    if (!settings.azureStorageAccount) {
-      const items = listLocalReviewHistory({
-        dataDir: settings.dataDir,
-        repository: projectLink.adoRepoName,
-        limit: 100,
-      });
-      return { items, configured: false, storage: "local" as const };
-    }
-    const localItems = listLocalReviewHistory({
-      dataDir: settings.dataDir,
-      repository: projectLink.adoRepoName,
-      limit: 100,
-    });
-    try {
-      const cloudItems = await listReviewQueueItems({
-        storageAccount: settings.azureStorageAccount,
-        repository: projectLink.adoRepoName,
-        limit: 100,
-      });
-      const items = mergeReviewQueueItems(cloudItems, localItems);
-      return { items, configured: true };
-    } catch (err) {
-      if (isAzureAuthenticationRequiredError(err)) throw err;
-      return {
-        items: localItems,
-        configured: true,
-        error: "Azure storage unavailable. Showing local review history from this device.",
-      };
-    }
-  });
-
-  app.post(`${prefix}/:id/review-history`, async (req, reply) => {
-    const parsedId = ProjectLinkIdParam.safeParse(req.params);
-    if (!parsedId.success) return reply.code(400).send({ error: "invalid id" });
-    const parsedBody = ReviewHistoryUpsertSchema.safeParse(req.body ?? {});
-    if (!parsedBody.success) return reply.code(400).send({ error: parsedBody.error.flatten() });
-
-    const resolved = localProjectLinkRepository(settings, parsedId.data.id);
-    if ("error" in resolved) return reply.code(resolved.error === PROJECT_LINK_NOT_FOUND ? 404 : 400).send({ error: resolved.error });
-    if (settings.azureStorageAccount) {
-      return reply.code(400).send({
-        error: "cloud_configured",
-        message: "Use the cloud Review Agent to persist history when Azure Table Storage is configured.",
-      });
-    }
-
-    const saved = upsertLocalReviewHistory(
-      settings.dataDir,
-      reviewHistoryRecord(resolved.repository, parsedBody.data),
-    );
-    return { ok: true, record: saved, storage: "local" as const };
-  });
-
-  app.get(`${prefix}/:id/review-operations`, async (req, reply) => {
-    const parsedId = ProjectLinkIdParam.safeParse(req.params);
-    if (!parsedId.success) return reply.code(400).send({ error: "invalid id" });
-
-    const resolved = localProjectLinkRepository(settings, parsedId.data.id);
-    if ("error" in resolved) return reply.code(resolved.error === PROJECT_LINK_NOT_FOUND ? 404 : 400).send({ error: resolved.error });
-    return {
-      items: listLocalReviewOperations({
-        dataDir: settings.dataDir,
-        repository: resolved.repository,
-        limit: 50,
-      }),
-      storage: "local" as const,
-    };
-  });
-
-  app.post(`${prefix}/:id/review-operations`, async (req, reply) => {
-    const parsedId = ProjectLinkIdParam.safeParse(req.params);
-    if (!parsedId.success) return reply.code(400).send({ error: "invalid id" });
-    const parsedBody = ReviewOperationSchema.safeParse(req.body ?? {});
-    if (!parsedBody.success) return reply.code(400).send({ error: parsedBody.error.flatten() });
-
-    const resolved = localProjectLinkRepository(settings, parsedId.data.id);
-    if ("error" in resolved) return reply.code(resolved.error === PROJECT_LINK_NOT_FOUND ? 404 : 400).send({ error: resolved.error });
-    const saved = appendLocalReviewOperation(settings.dataDir, {
-      kind: parsedBody.data.kind as ReviewOperationKind,
-      at: parsedBody.data.at,
-      repository: resolved.repository,
-      pullRequestId: parsedBody.data.pullRequestId,
-      actor: parsedBody.data.actor,
-      label: parsedBody.data.label,
-      ok: parsedBody.data.ok,
-      details: parsedBody.data.details,
-    });
-    return { ok: true, record: saved, storage: "local" as const };
-  });
-
   app.get(`${prefix}/:id/pr-insights`, async (req, reply) => {
     const parsedId = ProjectLinkIdParam.safeParse(req.params);
     if (!parsedId.success) return reply.code(400).send({ error: "invalid id" });
@@ -218,25 +103,6 @@ function registerReviewRouteSet(
     });
     return { ok: true, record: saved, storage: "local" as const };
   });
-
-  registerReviewDispositionRoutes(app, prefix, { settings, projectLinkStore });
-}
-
-function mergeReviewQueueItems(cloudItems: ReviewQueueItem[], localItems: ReviewQueueItem[]): ReviewQueueItem[] {
-  const merged = new Map<string, ReviewQueueItem>();
-  for (const item of cloudItems) merged.set(reviewQueueKey(item), item);
-  for (const item of localItems) {
-    const key = reviewQueueKey(item);
-    const current = merged.get(key);
-    if (!current || parseSortableDate(item.lastRunAt) >= parseSortableDate(current.lastRunAt)) {
-      merged.set(key, item);
-    }
-  }
-  return [...merged.values()].sort(compareReviewQueueItems);
-}
-
-function reviewQueueKey(item: Pick<ReviewQueueItem, "repository" | "pullRequestId">): string {
-  return `${item.repository}/${item.pullRequestId}`;
 }
 
 export function registerReviewRoutes(

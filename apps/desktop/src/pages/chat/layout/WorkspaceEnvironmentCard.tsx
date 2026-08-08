@@ -12,6 +12,8 @@ import { WorkspaceCommitMenu } from "./WorkspaceCommitMenu.js";
 import { WorkspaceEnvironmentHeader } from "./WorkspaceEnvironmentHeader.js";
 import { WorkspaceGitRecoveryPanel } from "./WorkspaceGitRecoveryPanel.js";
 import { WorkspaceProjectLinkPanel } from "./WorkspaceProjectLinkPanel.js";
+import { environmentHealth } from "./environmentHealth.js";
+import { EnvironmentHealthSummary } from "./EnvironmentHealthSummary.js";
 import type { DiffStats } from "./workspacePanel.types.js";
 
 interface WorkspaceEnvironmentCardProps {
@@ -26,7 +28,6 @@ interface WorkspaceEnvironmentCardProps {
   projectLinks: ProjectLink[];
   activeProjectLinkId: string | null;
   setActiveProjectLinkId: (id: string | null) => void;
-  statusText: string | null;
   onAction: (action: WorkspaceAction) => void;
 }
 
@@ -42,7 +43,6 @@ export function WorkspaceEnvironmentCard({
   projectLinks,
   activeProjectLinkId,
   setActiveProjectLinkId,
-  statusText,
   onAction,
 }: WorkspaceEnvironmentCardProps) {
   const menuRootRef = useRef<HTMLDivElement | null>(null);
@@ -53,14 +53,18 @@ export function WorkspaceEnvironmentCard({
   const gitKnown = Boolean(gitStatus || diffStats);
   const branchName = currentBranch ?? activeProjectLink?.defaultBranch ?? "";
   const branchLabel = branchName || "not checked";
-  const changedFiles = gitStatus
-    ? gitStatus.staged.length + gitStatus.modified.length + gitStatus.untracked.length + gitStatus.deleted.length
-    : 0;
   const hasRepoPath = Boolean(repoPath.trim());
-  const hasChanges = Boolean(diffStats ? diffStats.files > 0 : changedFiles > 0);
-  const added = diffStats?.added ?? 0;
-  const removed = diffStats?.removed ?? 0;
   const gitRecovery = gitRecoveryPanelState(workflowState);
+  // MP-007: one typed health snapshot drives the summary line, reason and the
+  // single primary action; the panels below stay secondary entry points.
+  const health = environmentHealth({
+    repoPath,
+    busy,
+    gitKnown,
+    adoReady,
+    projectLinkCount: projectLinks.length,
+    blockedReason: workflowState?.status === "blocked" ? workflowState.currentStep : undefined,
+  });
 
   const handleProjectLinkSelect = (id: string) => {
     setActiveProjectLinkId(id || null);
@@ -102,15 +106,17 @@ export function WorkspaceEnvironmentCard({
         if (event.key === "Escape") setActiveMenu(null);
       }}
     >
+      <EnvironmentHealthSummary
+        health={health}
+        onRecheck={() => {
+          if (busy) return;
+          runAction({ type: "inspect_environment" });
+        }}
+      />
       <WorkspaceEnvironmentHeader hasRepoPath={hasRepoPath} busy={busy} runAction={runAction} />
       <WorkspaceChangesButton
         hasRepoPath={hasRepoPath}
         busy={busy}
-        statusText={statusText}
-        gitKnown={gitKnown}
-        hasChanges={hasChanges}
-        added={added}
-        removed={removed}
         runAction={runAction}
       />
       <div ref={menuRootRef}>
@@ -129,10 +135,6 @@ export function WorkspaceEnvironmentCard({
           busy={busy}
           branchName={branchName}
           branchLabel={branchLabel}
-          hasChanges={hasChanges}
-          added={added}
-          removed={removed}
-          gitStatus={gitStatus}
           activeProjectLink={activeProjectLink}
           open={activeMenu === "commit"}
           onOpenChange={(open) => setActiveMenu(open ? "commit" : null)}

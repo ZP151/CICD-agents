@@ -31,9 +31,6 @@ export interface CosmosStoredSession {
   bubbles: unknown[];
   timelineEvents?: unknown[];
   approvalProposal?: unknown;
-  /** @deprecated Use approvalProposal. */
-  pendingAction?: unknown;
-  workflowState?: unknown;
   llmConfig?: unknown;
   inlineProjectLink?: unknown;
   ttl?: number;         // auto-expire via Cosmos TTL

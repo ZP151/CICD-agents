@@ -1,5 +1,12 @@
 # MergePilot Progress Tracker
 
+> **Legacy implementation inventory.** As of 2026-08-05, current product scope,
+> outcome order, and cycle exit gates are owned by
+> [`docs/product/README.md`](product/README.md). Percentages and old phases below
+> describe accumulated implementation evidence only. They must not be used to
+> continue Review Queue, auto-approval, duplicate insight, or page-expansion
+> work that conflicts with the canonical product plan.
+
 ## Purpose
 
 This tracker is the durable project progress board for the MergePilot product
@@ -29,10 +36,10 @@ Status values:
 
 | Area | Status | Completion | Notes |
 | --- | --- | ---: | --- |
-| Product roadmap | Complete | 100% | Roadmap and source-first reuse plan documented in `docs/mergepilot-product-roadmap-and-reuse-plan.md`. |
+| Product roadmap | Re-baselined | 100% | Canonical strategy, outcome roadmap, implementation backlog, and cycle plans are indexed in `docs/product/README.md`. |
 | Current-state audit | Complete | 100% | Main shortfalls identified: prompt-driven approval, shallow workflow state, incomplete semantic retrieval, weak rollback, custom ADO tooling. |
 | Source-first reuse strategy | Complete | 100% | Reuse modes, license gate, priority table, risk register, and third-party source registry documented. OpenHarness and Azure DevOps MCP source have been vendored for direct reuse. |
-| Implementation phases | In progress | 82% | Progress is tracked against product readiness rather than accumulated implementation activity. PR insight, Review Queue, Activity, checkpointing, internal ADO tools, and Chat use-case coverage are usable foundations. The largest remaining gaps are durable workflow execution for broader write workflows, richer repository understanding UX, complete ADO OAuth recovery, live ADO validation, and production hardening. Recent work added explicit workflow kind/phase metadata, right-panel phase rendering for structured commit workflows, push readiness checks before push approval, structured commit-message generation after staging, branch checkout/create preflight, right-panel metadata details, a first-class create-PR workflow action, deterministic PR-created completion state, retired fixed Git-to-PR continuation from the production chat path, structured PR insight/policy/work-item follow-up actions, conflict-aware Git workflow blocking, first-class structured rebase/merge/cherry-pick/revert recovery approvals, and guarded selected-conflict-file staging. |
+| Implementation phases | Re-baselining | — | Current code is inventoried as reusable evidence. New work follows the cycles in `docs/product/cycles/`, beginning with one canonical Turn/action/verification path and a Work Item → PR → CI vertical slice. |
 | Verification | Partial | 98% | Focused typechecks/builds and a broad historical test suite have passed during recent sessions. Chat use-case catalog, offline Git intent routing, structured commit workflows, generated commit-message continuation, push readiness, branch preflight, create-PR workflow, PR-created completion, structured PR insight/policy/work-item follow-ups, legacy workflow retirement, conflict-aware Git workflow blocking, structured rebase and merge abort recovery, selected conflict-file staging, Git recovery tool options, conversation part rendering, and Chat layout browser smoke coverage now have focused tests, but broader durable write workflows, ADO OAuth recovery, live ADO PR/pipeline validation, and live-agent desktop verification still need coverage. |
 
 ## Phase Progress Summary

@@ -13,6 +13,8 @@ import { createMsalClient, withMsalCacheAccess } from "./azureAuthMsal.js";
 import { getCachedUser, hydrateCachedUser, setCachedUser } from "./azureAuthSessionCache.js";
 import {
   AzureAuthenticationRequiredError,
+  AzureDevOpsConsentDeclinedError,
+  isAzureDevOpsConsentDeclinedError,
   type AzureCachedAccount,
   type AzureUser,
   type BrowserLoginChoice,
@@ -177,6 +179,7 @@ export async function getAzureDevOpsToken(
         client.getTokenCache().getAllAccounts(),
       );
       const account = selectMsalAccount(accounts, opts.homeAccountId, getCachedUser());
+      let firstInteractiveError: unknown;
       for (const scope of AZURE_DEVOPS_SCOPES) {
         try {
           const result = await client.acquireTokenInteractive({
@@ -195,9 +198,15 @@ export async function getAzureDevOpsToken(
             }),
           });
           if (result?.accessToken) return result.accessToken;
-        } catch {
-          // Try the alternate ADO delegated scope before falling back.
+        } catch (err) {
+          firstInteractiveError ??= err;
         }
+      }
+      // A declined or closed consent is a deliberate user choice, not a
+      // missing token: surface it typed instead of falling through to other
+      // credential sources that would report `oauth_unavailable`.
+      if (isAzureDevOpsConsentDeclinedError(firstInteractiveError)) {
+        throw new AzureDevOpsConsentDeclinedError();
       }
     }
   }

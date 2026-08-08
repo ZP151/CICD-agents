@@ -1,5 +1,11 @@
 # Production architecture (v2)
 
+> This document describes the existing/historical v2 deployment architecture.
+> The target product domain and action architecture is now defined in
+> [`docs/product/delivery-graph-and-action-runtime.md`](product/delivery-graph-and-action-runtime.md).
+> Changes must preserve the distinction between current-state evidence and
+> target-state design.
+
 This document is the consolidated output of ADRs 0001-0007. The diagrams
 here are the ones embedded in [README.md](../README.md) "Production
 architecture" section.

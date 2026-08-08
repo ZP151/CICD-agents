@@ -20,17 +20,19 @@ import { registerChatWorkflowRoutes } from "./routes/chat-workflow.routes.js";
 import { registerChatRoutes } from "./routes/chat.routes.js";
 import { registerCheckpointRoutes } from "./routes/checkpoints.routes.js";
 import { registerDaemonConfigRoutes } from "./routes/daemon-config.routes.js";
+import { registerDeliveryRoutes } from "./routes/delivery.routes.js";
+import { deliveryWritesState } from "./deliveryWritesState.js";
 import { registerGitRoutes } from "./routes/git.routes.js";
 import { registerHealthRoutes } from "./routes/health.routes.js";
 import { registerPipelineRoutes } from "./routes/pipelines.routes.js";
 import { registerProjectLinkRoutes } from "./routes/project-links.routes.js";
 import { registerPullRequestRoutes } from "./routes/pull-requests.routes.js";
-import { registerReviewRunRoutes } from "./routes/review-run.routes.js";
 import { registerReviewRoutes } from "./routes/review.routes.js";
 import { registerTaskRoutes } from "./routes/tasks.routes.js";
 import { registerWorkspaceRoutes } from "./routes/workspace.routes.js";
 import { workflowActionFailureResponse } from "./workflows/workflowActions.js";
 import { runWorkspaceWorkflowAction } from "./workflows/workspaceWorkflowRunner.js";
+import { migrateLegacyPipelineFieldsToConnections } from "@mergepilot/core";
 
 loadDaemonEnv();
 
@@ -52,6 +54,23 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   });
 
   const projectLinkStore = createProjectLinkStoreAdapter(settings);
+
+  // GAP-01 migration (best-effort): copy historical Project Link pipeline
+  // fields into PipelineConnection so canonical consumers keep the saved
+  // selection. Copy-only and idempotent; the legacy fields stay readable as
+  // a compatibility adapter. The cloud store needs AAD auth, so failures are
+  // logged and skipped — the migration re-runs on the next daemon start.
+  try {
+    const migrated = migrateLegacyPipelineFieldsToConnections(
+      settings.dataDir,
+      await projectLinkStore.listProjectLinks(),
+    );
+    if (migrated.length > 0) {
+      app.log.info(`migrated ${migrated.length} legacy pipeline selection(s) into PipelineConnection`);
+    }
+  } catch (err) {
+    app.log.warn(`legacy pipeline migration skipped: ${String(err)}`);
+  }
 
   // Allow cross-origin requests from the Tauri/Vite frontend
   app.addHook("onSend", async (req, reply) => {
@@ -81,7 +100,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   const queue = new TaskQueue(opts.runner ?? runPipelineTask);
   queue.start();
-  const chatSessions = new ChatSessionManager();
+  // ADR-0005: approval execution re-injects the runtime PAT (Key Vault →
+  // keyring) because persisted snapshots never carry the value (4a-1).
+  const chatSessions = new ChatSessionManager({
+    patInjector: async (id) => (await projectLinkStore.injectAdoPat({ id, adoPat: "" })).adoPat,
+  });
   const startedAt = Date.now();
 
   app.addHook("onClose", async () => {
@@ -104,15 +127,19 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   registerProjectLinkRoutes(app, { projectLinkStore });
 
+  registerDeliveryRoutes(app, {
+    projectLinkStore,
+    writes: {
+      isEnabled: () => deliveryWritesState.enabled,
+      setEnabled: (enabled) => {
+        deliveryWritesState.enabled = enabled;
+      },
+    },
+  });
+
   registerPullRequestRoutes(app, { projectLinkStore, buildReviewLlmSettings: buildEffectiveLlmSettings });
 
   registerReviewRoutes(app, { settings, projectLinkStore });
-
-  registerReviewRunRoutes(app, {
-    settings,
-    projectLinkStore,
-    buildReviewLlmSettings: buildEffectiveLlmSettings,
-  });
 
   registerChatRoutes(app, {
     settings,
@@ -125,7 +152,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   registerCheckpointRoutes(app, { settings, chatSessions });
 
   registerChatWorkflowRoutes(app, {
-    runWorkflowAction: (payload) => runWorkspaceWorkflowAction(chatSessions, payload),
+    runWorkflowAction: (payload) => runWorkspaceWorkflowAction(chatSessions, payload, settings.dataDir),
     failureResponse: workflowActionFailureResponse,
   });
 

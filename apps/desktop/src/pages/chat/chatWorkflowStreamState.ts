@@ -5,13 +5,6 @@ export type WorkflowStateUpdate =
   | null
   | ((prev: WorkflowEventState | null) => WorkflowEventState | null);
 
-export function statusTextForWorkflowState(state: WorkflowEventState | null | undefined): string | null | undefined {
-  if (state?.status === "waiting_for_approval") return "Waiting for approval";
-  if (state?.status === "running") return "Executing";
-  if (state?.status === "planning") return "Planning";
-  return undefined;
-}
-
 export function workflowStateFromApprovalRequired(
   approval: ApprovalRequest,
 ): (prev: WorkflowEventState | null) => WorkflowEventState {
@@ -35,8 +28,4 @@ export function workflowStateAfterApprovalResolved(
           pendingApproval: undefined,
         }
       : prev;
-}
-
-export function statusTextForApprovalResolved(approved: boolean | undefined): string {
-  return approved ? "Approval accepted" : "Approval cancelled";
 }

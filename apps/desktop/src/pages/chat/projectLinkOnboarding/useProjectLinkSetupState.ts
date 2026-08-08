@@ -13,31 +13,22 @@ import {
   applyAdoDiscoveryToProjectLinkInput,
   fetchAzureDevOpsRemoteSuggestion,
   fetchGitBranches,
-  pickRecommendedPipeline,
   projectLinkNameFromRepo,
   shouldRefreshGeneratedProjectLinkName,
   withoutProjectLinkFallbacks,
 } from "../../../projectLinks.js";
 
-export const EMPTY_PROJECT_LINK: ProjectLinkInput = {
+// V2 Project Links persist only the stable identity mapping; the legacy
+// fields (branches, pipeline, MCP settings, template, commands) are read-only
+// and are not part of the create form.
+export const EMPTY_PROJECT_LINK = {
   name: "",
   repoPath: "",
-  defaultBranch: "main",
-  targetBranch: "main",
   adoOrgUrl: DEFAULT_ADO_ORG_URL,
   adoProject: "",
   adoRepoName: "",
-  adoPipelineId: "",
-  adoPipelineName: "",
   adoPat: "",
-  adoMcpEnabled: false,
-  adoMcpCommand: "",
-  adoMcpAuthentication: "",
-  adoMcpDomains: "repositories,pipelines,work-items",
-  projectTemplate: "",
-  buildCommand: "",
-  testCommand: "",
-};
+} as ProjectLinkInput;
 
 export interface UseProjectLinkSetupStateArgs {
   repoPath: string;
@@ -111,13 +102,6 @@ export function useProjectLinkSetupState({
     setBranches(detected);
     setBranchLoading(false);
     setBranchError(detected.length === 0);
-    if (detected.length > 0) {
-      setForm((current) => {
-        const preferred = preferredBranch(detected, current.defaultBranch);
-        const target = detected.includes(current.targetBranch) ? current.targetBranch : preferred;
-        return { ...current, defaultBranch: preferred, targetBranch: target };
-      });
-    }
     if (remote) {
       setForm((current) => applyAzureDevOpsRemoteSuggestion(current, remote));
     }
@@ -144,12 +128,9 @@ export function useProjectLinkSetupState({
   const applyDiscovery = useCallback((kind: AdoDiscoveryKind, option: AdoDiscoveryOption) => {
     setDiscoveryError(null);
     if (kind === "projects") {
-      setDiscovered((current) => ({ ...current, repositories: [], pipelines: [] }));
+      setDiscovered((current) => ({ ...current, repositories: [] }));
       setForm((current) => applyAdoDiscoveryToProjectLinkInput(current, kind, option));
     } else if (kind === "repositories") {
-      setDiscovered((current) => ({ ...current, pipelines: [] }));
-      setForm((current) => applyAdoDiscoveryToProjectLinkInput(current, kind, option));
-    } else if (kind === "pipelines") {
       setForm((current) => applyAdoDiscoveryToProjectLinkInput(current, kind, option));
     }
   }, []);
@@ -166,14 +147,6 @@ export function useProjectLinkSetupState({
       });
       setDiscovered((current) => ({ ...current, [kind]: result.items }));
       if (result.items.length === 1) applyDiscovery(kind, result.items[0]!);
-      if (kind === "pipelines" && result.items.length > 1) {
-        const recommended = pickRecommendedPipeline(result.items, {
-          repoPath: form.repoPath,
-          adoRepoName: form.adoRepoName,
-          adoProject: form.adoProject,
-        });
-        if (recommended) applyDiscovery(kind, recommended);
-      }
     } catch (err) {
       setDiscoveryError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -197,14 +170,6 @@ export function useProjectLinkSetupState({
     return () => clearTimeout(timer);
   }, [advanced, form.adoOrgUrl, form.adoProject, runDiscovery]);
 
-  useEffect(() => {
-    if (!advanced || !form.adoOrgUrl.trim() || !form.adoProject.trim() || !form.adoRepoName.trim()) return;
-    const timer = setTimeout(() => {
-      void runDiscovery("pipelines", "auto");
-    }, 650);
-    return () => clearTimeout(timer);
-  }, [advanced, form.adoOrgUrl, form.adoProject, form.adoRepoName, runDiscovery]);
-
   const canSave = form.name.trim().length > 0 && form.repoPath.trim().length > 0;
 
   async function save() {
@@ -216,8 +181,6 @@ export function useProjectLinkSetupState({
         ...form,
         name: form.name.trim(),
         repoPath: form.repoPath.trim(),
-        defaultBranch: form.defaultBranch.trim() || "main",
-        targetBranch: form.targetBranch.trim() || form.defaultBranch.trim() || "main",
       }));
       onCreated(created);
     } catch (err) {
@@ -249,11 +212,4 @@ export function useProjectLinkSetupState({
     setForm,
     runDiscovery,
   };
-}
-
-function preferredBranch(branches: string[], currentBranch: string): string {
-  if (branches.includes(currentBranch)) return currentBranch;
-  if (branches.includes("main")) return "main";
-  if (branches.includes("master")) return "master";
-  return branches[0] ?? currentBranch;
 }

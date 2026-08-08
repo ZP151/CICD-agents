@@ -1,4 +1,4 @@
-import type { ReviewHistoryRecord } from "../reviewHistoryLocal.js";
+import type { ReviewHistoryRecord } from "./localHistory.js";
 
 export function parseReasonCodes(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");

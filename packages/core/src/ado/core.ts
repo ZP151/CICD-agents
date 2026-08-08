@@ -30,3 +30,29 @@ export async function listAzureProjects(args: {
     url: project.url ?? "",
   })).filter((project) => project.id || project.name);
 }
+
+export interface AzureCurrentUser {
+  id: string;
+  displayName: string;
+}
+
+/** Resolve the authenticated user's ADO member id (for self-votes). */
+export async function getAzureDevOpsCurrentUser(args: {
+  organization: string;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzureCurrentUser | undefined> {
+  const org = args.organization.trim();
+  if (!org) throw new ToolError("ADO organization is required.");
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const url = `${adoBase(org)}/_apis/connectionData?api-version=7.1-preview.1`;
+  const resp = await adoFetch(url, auth);
+  if (!resp.ok) return undefined;
+  const body = await parseAdoJson(resp, "get connection data") as {
+    authenticatedUser?: { id?: string; displayName?: string };
+  };
+  const id = body.authenticatedUser?.id?.trim();
+  const displayName = body.authenticatedUser?.displayName?.trim() ?? "";
+  if (!id) return undefined;
+  return { id, displayName };
+}

@@ -14,11 +14,9 @@ export function StoredInsightPanel({
   storedInsightFreshness,
   storedInsightHistory,
   previousStoredInsights,
-  isRunning,
   previewLoading,
   onOpenSavedInsightInChat,
   onPreviewInsight,
-  onQueueForReview,
 }: {
   pr: DisplayPullRequest;
   storedInsight: PrInsightArtifact;
@@ -26,11 +24,9 @@ export function StoredInsightPanel({
   storedInsightFreshness: ReturnType<typeof prInsightArtifactFreshness> | null;
   storedInsightHistory: PrInsightArtifact[];
   previousStoredInsights: PrInsightArtifact[];
-  isRunning: boolean;
   previewLoading: boolean;
   onOpenSavedInsightInChat: (pr: DisplayPullRequest, artifact: PrInsightArtifact) => void;
   onPreviewInsight: (pr: DisplayPullRequest) => void;
-  onQueueForReview: (pr: DisplayPullRequest) => void;
 }): JSX.Element {
   return (
     <div className="mt-4 space-y-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] p-3">
@@ -67,10 +63,9 @@ export function StoredInsightPanel({
       {storedInsightFreshness?.state === "stale" && (
         <ActionButton
           type="button"
-          onClick={() => storedInsight.kind === "review_run"
-            ? onQueueForReview(pr)
-            : onPreviewInsight(pr)}
-          loading={isRunning || previewLoading}
+          title="Refreshes the cached insight preview (read-only)"
+          onClick={() => onPreviewInsight(pr)}
+          loading={previewLoading}
           className="min-h-7 px-2.5 py-1 text-[rgb(var(--app-warning))]"
         >
           Refresh insight

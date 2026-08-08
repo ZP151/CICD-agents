@@ -26,5 +26,9 @@ export {
   resetUserCache,
   trySilentMsalLogin,
 } from "./azureAuthSession.js";
-export { AzureAuthenticationRequiredError } from "./azureAuthTypes.js";
+export {
+  AzureAuthenticationRequiredError,
+  AzureDevOpsConsentDeclinedError,
+  isAzureDevOpsConsentDeclinedError,
+} from "./azureAuthTypes.js";
 export type { AzureCachedAccount, AzureUser, BrowserLoginChoice } from "./azureAuthTypes.js";

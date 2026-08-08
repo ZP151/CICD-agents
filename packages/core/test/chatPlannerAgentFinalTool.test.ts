@@ -83,7 +83,9 @@ describe("ChatPlanner agent_final tool finalization", () => {
     expect(done?.type).toBe("done");
     if (control?.type === "assistant_control") {
       expect(control.control.approvalProposal?.tool).toBe("git_add");
-      expect(control.control.actionsTaken).toEqual(["git_status"]);
+      // Canonical rule: the model's actions_taken self-report is not execution
+      // fact; actionsTaken only reflects verified tool-execution records.
+      expect(control.control.actionsTaken).toEqual([]);
       expect(control.control.sources).toEqual([
         {
           type: "source_document",
@@ -111,6 +113,59 @@ describe("ChatPlanner agent_final tool finalization", () => {
         "source_document",
         "source_url",
       ]);
+    }
+  });
+
+  it("does not finish a turn when agent_final omits its user-facing response", async () => {
+    const planner = new ChatPlanner(
+      fakeSequenceLlm([
+        [
+          {
+            type: "tool_call",
+            toolCalls: [{
+              id: "empty_final",
+              name: CHAT_FINAL_TOOL_NAME,
+              arguments: JSON.stringify({
+                response: "   ",
+                risk_level: "low",
+                actions_taken: ["git_status"],
+                suggestions: [],
+              }),
+            }],
+          },
+          { type: "done", finishReason: "tool_calls" },
+        ],
+        [
+          {
+            type: "tool_call",
+            toolCalls: [{
+              id: "complete_final",
+              name: CHAT_FINAL_TOOL_NAME,
+              arguments: JSON.stringify({
+                response: "The working tree is clean; no follow-up action is needed.",
+                risk_level: "low",
+                actions_taken: ["git_status"],
+                suggestions: [],
+              }),
+            }],
+          },
+          { type: "done", finishReason: "tool_calls" },
+        ],
+      ]),
+      createToolExecutor(),
+      { maxSteps: 2 },
+    );
+
+    const events = [];
+    for await (const event of planner.run("inspect the repository", [], ".", async () => true)) {
+      events.push(event);
+    }
+
+    const done = events.find((event) => event.type === "done");
+    expect(done?.type).toBe("done");
+    if (done?.type === "done") {
+      expect(done.result.response).toBe("The working tree is clean; no follow-up action is needed.");
+      expect(done.result.response.trim()).not.toBe("");
     }
   });
 

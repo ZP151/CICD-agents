@@ -78,6 +78,7 @@ The release workflow builds Windows and macOS installers and publishes them to G
 
 ## Documentation
 
+- Canonical product and delivery plan: `docs/product/README.md`
 - `PRODUCT.md`
 - `docs/architecture.md`
 - `docs/dev-agent-product-roadmap-and-reuse-plan.md`

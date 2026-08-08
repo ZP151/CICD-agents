@@ -38,3 +38,4 @@ apps/*/src-tauri/binaries/*
 # Editor
 .vscode/
 .idea/
+.tmp/

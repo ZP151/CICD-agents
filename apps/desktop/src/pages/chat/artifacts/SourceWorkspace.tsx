@@ -164,7 +164,10 @@ export function CodeSidePanel({
             />
           </div>
         ) : (
-          <SourcePreviewEmpty label="No file selected" />
+          <SourcePreviewEmpty
+            label="No file selected"
+            detail="Open a file from the changed-files list, a source chip in a Chat message, or a saved artifact to preview it here."
+          />
         )}
       </div>
     </div>

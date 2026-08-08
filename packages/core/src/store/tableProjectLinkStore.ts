@@ -6,12 +6,14 @@
  * RowKey:       projectLinkId (hex UUID)
  *
  * Replaces the local project-links.json when AZURE_STORAGE_ACCOUNT is set.
- * The adoPat field is stored encrypted via Key Vault (if configured) or as-is
- * in the table entity (still better than localStorage plaintext on disk since
- * Table Storage is secured via AAD RBAC).
+ * Credential containment (ADR-0005, Phase 4 4a-1): adoPat is NEVER stored in
+ * the entity. Writes persist the empty placeholder; reads never surface a
+ * stored value. The daemon injects the runtime value from Key Vault
+ * (ado-pat-{projectLinkId}) or the OS keyring at call time.
  */
 import { TableClient, TableServiceClient, odata } from "@azure/data-tables";
 import type { ProjectLink, ProjectLinkInput } from "../projectLinks.js";
+import { legacyFreeProjectLinkInput } from "../projectLinks.js";
 import { STORAGE_SCOPE } from "./azureAuthConfig.js";
 import { getAzureCachedScopeCredential } from "./azureAuthCredential.js";
 import { requireCurrentUser } from "./azureAuth.js";
@@ -63,7 +65,7 @@ type ProjectLinkEntity = {
   testCommand: string;
 };
 
-function entityToProjectLink(e: ProjectLinkEntity): ProjectLink {
+export function entityToProjectLink(e: ProjectLinkEntity): ProjectLink {
   return {
     id: e.rowKey,
     name: e.name,
@@ -75,7 +77,9 @@ function entityToProjectLink(e: ProjectLinkEntity): ProjectLink {
     adoOrgUrl: e.adoOrgUrl,
     adoProject: e.adoProject,
     adoRepoName: e.adoRepoName,
-    adoPat: e.adoPat,
+    // Never resurrect a stored value (legacy entities may predate 4a-1); the
+    // runtime injection layer overlays the real credential.
+    adoPat: "",
     adoPipelineId: e.adoPipelineId ?? "",
     adoPipelineName: e.adoPipelineName ?? "",
     adoMcpEnabled: e.adoMcpEnabled ?? false,
@@ -88,7 +92,7 @@ function entityToProjectLink(e: ProjectLinkEntity): ProjectLink {
   };
 }
 
-function projectLinkToEntity(userId: string, p: ProjectLink): ProjectLinkEntity {
+export function projectLinkToEntity(userId: string, p: ProjectLink): ProjectLinkEntity {
   return {
     partitionKey: userId,
     rowKey: p.id,
@@ -101,7 +105,8 @@ function projectLinkToEntity(userId: string, p: ProjectLink): ProjectLinkEntity 
     adoOrgUrl: p.adoOrgUrl,
     adoProject: p.adoProject,
     adoRepoName: p.adoRepoName,
-    adoPat: p.adoPat,
+    // Credential placeholder only (ADR-0005): the value is injected at runtime.
+    adoPat: "",
     adoPipelineId: p.adoPipelineId,
     adoPipelineName: p.adoPipelineName,
     adoMcpEnabled: p.adoMcpEnabled,
@@ -166,11 +171,11 @@ export class AzureTableProjectLinkStore {
     const client = await getClient(this.accountName);
     const ts = nowSec();
     const projectLink: ProjectLink = {
-      ...data,
+      ...legacyFreeProjectLinkInput(data),
       id: crypto.randomBytes(8).toString("hex"),
       createdAt: ts,
       updatedAt: ts,
-    };
+    } as ProjectLink;
     await client.createEntity(projectLinkToEntity(user.oid, projectLink));
     return projectLink;
   }
@@ -181,7 +186,14 @@ export class AzureTableProjectLinkStore {
 
     const user = await requireCurrentUser();
     const client = await getClient(this.accountName);
-    const updated: ProjectLink = { ...existing, ...data, id, updatedAt: nowSec() };
+    // V2 canonical: update payloads never carry legacy fields; values already
+    // persisted on an old record survive until the migration clears them.
+    const updated: ProjectLink = {
+      ...existing,
+      ...legacyFreeProjectLinkInput(data),
+      id,
+      updatedAt: nowSec(),
+    };
     await client.upsertEntity(projectLinkToEntity(user.oid, updated), "Replace");
     return updated;
   }

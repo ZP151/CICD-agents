@@ -13,7 +13,7 @@ export function WorkspaceEnvironmentHeader({
 }: WorkspaceEnvironmentHeaderProps) {
   return (
     <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
-      <p className="min-w-0 truncate text-sm text-[rgb(var(--app-text-muted))]">Environment</p>
+      <p className="min-w-0 truncate text-sm text-[rgb(var(--app-text-muted))]">Context</p>
       <button
         type="button"
         onClick={() => runAction({ type: "inspect_environment" })}

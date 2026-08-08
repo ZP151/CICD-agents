@@ -83,6 +83,8 @@ describe("daemon config routes", () => {
     expect(response.statusCode, response.body).toBe(200);
     expect(response.json()).toMatchObject({ ok: true, llmConfigured: true });
     expect(setAoaiKey).not.toHaveBeenCalled();
+    expect(fs.readFileSync(process.env.MERGEPILOT_LOCAL_ENV_FILE!, "utf8")).toContain("AZURE_OPENAI_API_KEY=local-model-key");
+    expect(fs.readFileSync(process.env.MERGEPILOT_USER_CONFIG_FILE!, "utf8")).not.toContain("local-model-key");
     const config = await app.inject({ method: "GET", url: "/daemon/config" });
     expect(config.json()).toMatchObject({ azureNarrativeDeployment: "gpt-4o-mini-fast" });
   });

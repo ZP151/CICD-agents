@@ -54,6 +54,8 @@ describe("PipelineRowCard", () => {
         onAnalyze={() => undefined}
         onSave={() => undefined}
         onOpenDetails={() => undefined}
+        onSelectCandidate={() => undefined}
+        onRefreshPipelines={() => undefined}
       />,
     );
 
@@ -92,6 +94,8 @@ describe("PipelineRowCard", () => {
         onAnalyze={() => undefined}
         onSave={() => undefined}
         onOpenDetails={() => undefined}
+        onSelectCandidate={() => undefined}
+        onRefreshPipelines={() => undefined}
       />,
     );
 
@@ -135,6 +139,8 @@ describe("PipelineRowCard", () => {
         onAnalyze={() => undefined}
         onSave={() => undefined}
         onOpenDetails={() => undefined}
+        onSelectCandidate={() => undefined}
+        onRefreshPipelines={() => undefined}
       />,
     );
 
@@ -164,6 +170,8 @@ describe("PipelineRowCard", () => {
         onAnalyze={() => undefined}
         onSave={() => undefined}
         onOpenDetails={() => undefined}
+        onSelectCandidate={() => undefined}
+        onRefreshPipelines={() => undefined}
       />,
     );
 
@@ -201,5 +209,81 @@ describe("PipelineRowCard", () => {
     expect(className).not.toContain("auto-fit");
     expect(className).not.toContain("sm:grid-cols-2");
     expect(className).not.toContain("2xl:grid-cols-4");
+  });
+});
+
+describe("PipelineRowCard typed target failures (MP-010)", () => {
+  function renderFailure(failure: NonNullable<import("../../api.js").ChatWorkflowActionResult["failure"]>): string {
+    return renderToStaticMarkup(
+      <PipelineRowCard
+        row={baseRow}
+        state={{
+          phase: "target_failure",
+          result: {
+            ok: false,
+            action: "inspect_pipeline",
+            repoPath: baseRow.repoPath,
+            summary: failure.message,
+            workflowState: { status: "blocked", currentStep: failure.message, completedTools: [] },
+            tools: [],
+            failure,
+          },
+          failure,
+        }}
+        onInspect={() => undefined}
+        onTrigger={() => undefined}
+        onAnalyze={() => undefined}
+        onSave={() => undefined}
+        onOpenDetails={() => undefined}
+        onSelectCandidate={() => undefined}
+        onRefreshPipelines={() => undefined}
+      />,
+    );
+  }
+
+  it("offers explicit candidate buttons for ambiguous targets and never auto-picks", () => {
+    const html = renderFailure({
+      kind: "ambiguous_target",
+      message: "Multiple pipelines are named CI.",
+      candidates: [
+        { id: 7, name: "CI" },
+        { id: 8, name: "CI" },
+      ],
+    });
+
+    expect(html).toContain("Multiple pipelines match");
+    expect(html).toContain("#7 CI");
+    expect(html).toContain("#8 CI");
+    expect(html).not.toContain("Pipeline not found");
+  });
+
+  it("points authorization failures at the reauthorize path", () => {
+    const html = renderFailure({
+      kind: "unauthorized",
+      message: "Azure DevOps OAuth token is unavailable.",
+    });
+
+    expect(html).toContain("Azure DevOps access required");
+    expect(html).toContain("Re-authorize in Project Link");
+  });
+
+  it("shows connector capability problems separately from missing pipelines", () => {
+    const html = renderFailure({
+      kind: "capability_missing",
+      message: "pipelines domain is not enabled for this connector.",
+    });
+
+    expect(html).toContain("Pipeline connector unavailable");
+    expect(html).toContain("Open connector settings");
+  });
+
+  it("offers a refresh action for a missing pipeline", () => {
+    const html = renderFailure({
+      kind: "target_not_found",
+      message: "No pipeline named MissingPipeline was found.",
+    });
+
+    expect(html).toContain("Pipeline not found");
+    expect(html).toContain("Refresh pipeline list");
   });
 });

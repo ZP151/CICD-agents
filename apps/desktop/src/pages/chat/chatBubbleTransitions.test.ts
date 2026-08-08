@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  appendToolOutputDeltaTransition,
   appendVisibleAssistantDeltaTransition,
   showApprovalRequestTransition,
   stopStreamingTransition,
-  upsertToolBubbleTransition,
 } from "./chatBubbleTransitions.js";
 import type { ApprovalRequest, Bubble } from "./chat.types.js";
 
@@ -88,67 +86,5 @@ describe("chat bubble transitions", () => {
       pendingArgs: { paths: ["notes.txt"] },
       pendingStatus: "waiting",
     });
-  });
-
-  it("creates and updates tool bubbles from tool snapshots and output deltas", () => {
-    const toolStarted = upsertToolBubbleTransition(
-      [],
-      {
-        toolCallId: "tool-1",
-        toolName: "git_status",
-        state: "input-available",
-        input: { short: true },
-      },
-      {},
-      makeId,
-    );
-    const withOutput = appendToolOutputDeltaTransition(
-      toolStarted,
-      "git_status",
-      "stdout",
-      " M src/app.ts",
-      "tool-1",
-      makeId,
-    );
-    const fallbackCreated = appendToolOutputDeltaTransition(
-      [] as Bubble[],
-      "git_diff",
-      "stderr",
-      "fatal",
-      "tool-2",
-      makeId,
-    );
-
-    expect(withOutput[0]).toMatchObject({
-      kind: "tool",
-      toolName: "git_status",
-      toolLiveOutput: " M src/app.ts",
-      toolOpen: true,
-    });
-    expect(fallbackCreated[0]).toMatchObject({
-      kind: "tool",
-      toolCallId: "tool-2",
-      toolName: "git_diff",
-      toolLiveOutput: "[stderr] fatal",
-    });
-  });
-
-  it("does not regress a tool when an older event for the same turn arrives late", () => {
-    const first = upsertToolBubbleTransition([], {
-      toolCallId: "tool-1",
-      toolName: "git_status",
-      state: "result",
-      output: { stdout: "clean" },
-    }, { ok: true, turnId: "turn-1", sequence: 9 }, () => "tool-row");
-
-    const stale = upsertToolBubbleTransition(first, {
-      toolCallId: "tool-1",
-      toolName: "git_status",
-      state: "input-available",
-      input: { command: "git status" },
-    }, { turnId: "turn-1", sequence: 8 }, () => "ignored");
-
-    expect(stale).toBe(first);
-    expect(stale[0]).toMatchObject({ toolOk: true, turnSequence: 9 });
   });
 });

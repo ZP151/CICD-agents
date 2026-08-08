@@ -268,7 +268,9 @@ describe("ChatPlanner finalization and visible streaming", () => {
     expect(done?.type).toBe("done");
     if (done?.type === "done") {
       expect(done.result.response).toBe("I checked the project.");
-      expect(done.result.actionsTaken).toEqual(["repo_refresh_index"]);
+      // Canonical rule: control-JSON actions_taken is model self-report, not
+      // execution fact — it must never surface as actionsTaken.
+      expect(done.result.actionsTaken).toEqual([]);
       expect(done.result.finalizationMode).toBe("control_marker");
     }
   });

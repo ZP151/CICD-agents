@@ -118,12 +118,12 @@ export function isExplicitReadOnlyRequest(message: string): boolean {
   // still preventing the later push. Remove the negated operations first,
   // then see whether a positive mutable action remains in scope.
   const requestedChanges = stripNegatedWriteIntents(lower).replace(/\bpull\s+request\b/g, "");
-  return !/\b(?:stage|git add|commit|push|publish|create pr|open pull request|pull\b(?!\s+request)|rebase|merge|checkout|switch|stash|restore|delete)\b/.test(requestedChanges);
+  return !/\b(?:stage|git add|commit|push|publish|create pr|open pull request|pull\b(?!\s+request)|rebase|merge|checkout|switch|stash|restore|delete|tag|discard|revert|reset|clean|remove|cherry[ -]?pick)\b/.test(requestedChanges);
 }
 
 function stripNegatedWriteIntents(text: string): string {
   const writePhrase =
-    "(?:stage|staging|stage all|stage selected|git add|commit|committing|commit these|commit all|commit my|make a commit|prepare commit|push|pushing|publish|publishing|create pr|create a pr|open pull request|pull request|pull|rebase|merge|checkout|switch|stash|restore|delete|run tests?|build)";
+    "(?:stage|staging|stage all|stage selected|git add|commit|committing|commit these|commit all|commit my|make a commit|prepare commit|push|pushing|publish|publishing|create pr|create a pr|open pull request|pull request|pull|rebase|merge|checkout|switch|stash|restore|delete|tag|discard|revert|reset|clean|remove|cherry[ -]?pick|run tests?|build)";
   const negatedWriteList = new RegExp(
     `\\b(?:do not|don't|dont|without|no)\\s+${writePhrase}(?:\\s*,\\s*${writePhrase})*(?:\\s*,?\\s*(?:or|and)\\s*${writePhrase})?`,
     "gi",

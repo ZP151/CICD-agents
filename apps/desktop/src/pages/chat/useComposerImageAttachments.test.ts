@@ -62,3 +62,49 @@ describe("selectComposerImageFiles", () => {
     expect(result.error).toBe("Max 3 images");
   });
 });
+
+describe("typed attachment errors (MP-013/RA-065..RA-066)", () => {
+  it("reports too_many and too_large with typed kinds", () => {
+    const oversized = selectComposerImageFiles(
+      [{ size: 5 * 1024 * 1024, type: "image/png" }],
+      0,
+      0,
+    );
+    expect(oversized.errorKind).toBe("too_large");
+    expect(oversized.error).toContain("4 MB");
+
+    const full = selectComposerImageFiles(
+      [
+        { size: 1, type: "image/png" },
+        { size: 1, type: "image/png" },
+        { size: 1, type: "image/png" },
+        { size: 1, type: "image/png" },
+      ],
+      0,
+      0,
+    );
+    expect(full.errorKind).toBe("too_many");
+    expect(full.error).toContain("Max 3 images");
+  });
+
+  it("keeps valid attachments when a later file is rejected", () => {
+    const selection = selectComposerImageFiles(
+      [
+        { size: 1, type: "image/png" },
+        { size: 9 * 1024 * 1024, type: "image/jpeg" },
+      ],
+      0,
+      0,
+    );
+
+    expect(selection.acceptedFiles).toHaveLength(1);
+    expect(selection.errorKind).toBe("too_large");
+  });
+
+  it("reports no error for a clean selection", () => {
+    const selection = selectComposerImageFiles([{ size: 10, type: "image/png" }], 0, 0);
+
+    expect(selection.error).toBeNull();
+    expect(selection.errorKind).toBeNull();
+  });
+});

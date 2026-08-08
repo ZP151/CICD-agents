@@ -17,6 +17,7 @@ export interface AzurePullRequestSummary {
   repository: string;
   url: string;
   reviewerCount: number;
+  reviewers: string[];
   voteSummary: {
     approved: number;
     waiting: number;
@@ -31,6 +32,7 @@ export interface AzurePullRequestDetail extends AzurePullRequestSummary {
   description: string;
   closedDate: string;
   workItemRefs: Array<{ id: string; url: string }>;
+  reviewerDetails: Array<{ id: string; displayName: string; vote: number }>;
 }
 
 export async function listAzurePullRequests(args: {
@@ -112,7 +114,7 @@ interface PullRequestPayload {
   closedDate?: string;
   createdBy?: { displayName?: string };
   repository?: { name?: string; project?: { id?: string; name?: string } };
-  reviewers?: Array<{ vote?: number }>;
+  reviewers?: Array<{ vote?: number; displayName?: string; id?: string }>;
   workItemRefs?: Array<{ id?: string; url?: string }>;
 }
 
@@ -136,6 +138,9 @@ function toPullRequestSummary(
     repository: pr.repository?.name ?? repository,
     url: id ? `${adoBase(org)}/${project}/_git/${repository}/pullrequest/${id}` : "",
     reviewerCount: reviewers.length,
+    reviewers: reviewers
+      .map((reviewer) => reviewer.displayName?.trim() ?? "")
+      .filter(Boolean),
     voteSummary: summarizeVotes(reviewers),
   };
 }
@@ -164,6 +169,11 @@ function toPullRequestDetail(
       id: ref.id ?? "",
       url: ref.url ?? "",
     })).filter((ref) => ref.id || ref.url),
+    reviewerDetails: (pr.reviewers ?? []).map((reviewer) => ({
+      id: reviewer.id ?? "",
+      displayName: reviewer.displayName ?? "",
+      vote: reviewer.vote ?? 0,
+    })),
   };
 }
 

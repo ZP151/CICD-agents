@@ -11,5 +11,4 @@ export * from "./api/auth.js";
 export * from "./api/settings.js";
 export * from "./api/pullRequestTypes.js";
 export * from "./api/pullRequests.js";
-export * from "./api/review.js";
 export * from "./api/workspace.js";

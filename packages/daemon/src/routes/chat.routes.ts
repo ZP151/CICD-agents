@@ -1,9 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { logger } from "@mergepilot/core";
 import {
   LLMClient,
   streamActionNarrative,
+  turnFailureFromError,
   type ChatEvent,
+  type ChatEventFailure,
   type Settings,
 } from "@mergepilot/core";
 import { getChatIndexStatus, refreshChatIndex } from "@mergepilot/core/chatContext";
@@ -15,7 +18,19 @@ import { createChatSseWriter, isTerminalChatEvent } from "./chatSse.js";
 
 const MAX_CHAT_IMAGE_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 const CHAT_IMAGE_DATA_URL_PATTERN = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([a-zA-Z0-9+/=\s]+)$/;
-const OPENING_NARRATIVE_DEADLINE_MS = 15_000;
+
+/**
+ * Time-to-first-visible-token budget for the opening narrative. The narrative
+ * is the first public content of a turn, so a slow narrator must not abort the
+ * whole turn: source-live E2E on a loaded dev machine measured first-token
+ * latencies beyond 15s several times per run, each killing the turn ("chat
+ * turn failed" in the daemon log). 60s is the default headroom; constrained
+ * environments can tighten it via MERGEPILOT_OPENING_NARRATIVE_DEADLINE_MS.
+ */
+const OPENING_NARRATIVE_DEADLINE_MS = (() => {
+  const configured = Number(process.env["MERGEPILOT_OPENING_NARRATIVE_DEADLINE_MS"] ?? "");
+  return Number.isFinite(configured) && configured > 0 ? configured : 60_000;
+})();
 
 /**
  * A single-producer / single-consumer bridge for planner events. It lets the
@@ -75,31 +90,25 @@ const LlmConfigSchema = z
   })
   .optional();
 
+// V2 inline Project Links carry only the stable identity mapping; the legacy
+// fields are read-only (migration reads) and are never persisted from API
+// payloads. They remain readable on stored links and on session history.
 const InlineProjectLinkObjectSchema = z.object({
   id: z.string().optional(),
   name: z.string().optional(),
   repoPath: z.string().default(""),
-  defaultBranch: z.string().default("main"),
-  targetBranch: z.string().default("main"),
   adoOrgUrl: z.string().default(""),
   adoProject: z.string().default(""),
   adoRepoName: z.string().default(""),
   adoPat: z.string().default(""),
-  adoPipelineId: z.string().default(""),
-  adoPipelineName: z.string().default(""),
-  adoMcpEnabled: z.coerce.boolean().default(false),
-  adoMcpCommand: z.string().default(""),
-  adoMcpAuthentication: z.string().default(""),
-  adoMcpDomains: z.string().default("repositories,pipelines,work-items"),
-  projectTemplate: z.string().default(""),
-  buildCommand: z.string().default(""),
-  testCommand: z.string().default(""),
   ignoredGlobs: z.array(z.string()).default([]),
 });
 
 const InlineProjectLinkSchema = InlineProjectLinkObjectSchema.nullable()
   .optional()
   .transform((value) => value ?? undefined);
+
+type ParsedInlineProjectLink = z.infer<typeof InlineProjectLinkObjectSchema>;
 
 const OptionalSessionIdSchema = z
   .string()
@@ -199,10 +208,15 @@ function inlineProjectLinkToIndexProjectLink(projectLink?: InlineProjectLink) {
   };
 }
 
+// V2 API payloads carry only the stable identity mapping; the legacy fields
+// are read-only (migration reads). The parsed payload is widened structurally
+// for downstream readers that still type them — no values are fabricated, so
+// legacy reads resolve through their existing fallbacks and the narrow value
+// (without legacy fields) is what gets snapshotted into session history.
 function inlineProjectLinkFromPayload(payload: {
-  projectLink?: InlineProjectLink;
+  projectLink?: ParsedInlineProjectLink;
 }): InlineProjectLink | undefined {
-  return payload.projectLink;
+  return payload.projectLink as unknown as InlineProjectLink | undefined;
 }
 
 async function resolveProjectLinkForChat(
@@ -239,6 +253,20 @@ export function explainChatSseError(
     ].join(" ");
   }
   return message;
+}
+
+/**
+ * MP-011: attach a typed termination reason to the terminal SSE event instead
+ * of a bare message. The kind drives the UI recovery action; the raw detail is
+ * logged (redacted) rather than shown for internal failures.
+ */
+export function chatTurnFailure(err: unknown, phase: string): ChatEventFailure {
+  const failure = turnFailureFromError(err, { phase });
+  return {
+    kind: failure.kind,
+    retryable: failure.retryable,
+    diagnosticId: failure.diagnosticId,
+  };
 }
 
 export function registerChatRoutes(
@@ -280,6 +308,7 @@ export function registerChatRoutes(
   });
 
   app.post("/chat", async (req, reply) => {
+    const requestReceivedAt = Date.now();
     const parsed = ChatStartSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
 
@@ -302,7 +331,7 @@ export function registerChatRoutes(
     // planning or executing any action. This is a real behavioural boundary:
     // buffering a command event until after a narrative only changes what the
     // user sees; it does not stop the command from already having run.
-    sseWriter.startTurn(turnId, undefined, clientTurnId);
+    sseWriter.startTurn(turnId, undefined, clientTurnId, requestReceivedAt);
     let active = true;
     let openingNarrativeVisible = false;
     // A slow provider is surfaced only as a transport diagnostic after a
@@ -347,26 +376,60 @@ export function registerChatRoutes(
             releaseFirstTool = resolve;
             rejectFirstTool = reject;
           });
-          const openingNarrative = (async () => {
-            for await (const event of streamActionNarrative(narrativeLlm, {
-              request: message,
-              blockId: "opening",
-              selectedProject: Boolean(inlineProjectLink || projectLinkId),
-            })) {
-              // Do not buffer genuine model text until the model completes a
-              // sentence. The opening is the first public response to the
-              // user, so every useful delta must reach the desktop as soon as
-              // it arrives. Session/tool events remain buffered below until
-              // this narration completes, preserving narrative → action.
-              if (!active) return;
-              if (event.type === "work_statement") {
-                openingNarrativeVisible = true;
-                openingNarrativeText = event.text;
-                clearTimeout(waitingForModelTimer);
+          // The narrative failure paths reject the gate and then throw their
+          // own error (reported over SSE). If that rejection happens before
+          // the planner reaches its first-tool gate — e.g. the planner is
+          // still awaiting session persistence or project context — no handler
+          // is attached yet and Node reports an unhandled rejection, which
+          // kills the whole daemon. Claim the rejection immediately; the
+          // planner's own await still receives it through its own handler.
+          void firstToolGate.catch(() => undefined);
+          // GPT-5 can spend the narrator token budget in hidden reasoning and
+          // complete the opening with no visible public text, or fail before a
+          // token, or exceed the narrative deadline on a loaded deployment.
+          // The narrative is the first public content of the turn, so the
+          // route re-prompts the narrator exactly once with a corrective
+          // directive — for an empty/errored completion AND for a deadline
+          // miss — before failing the turn. The first-tool gate stays closed
+          // until a genuine narrative passes, so no tool ever executes behind
+          // an empty or reasoning-only opening.
+          // A superseded attempt (deadline retry while the first stream is
+          // still in flight) must never leak its events into the SSE writer:
+          // every event and every error is checked against the current
+          // attempt generation before it reaches the client.
+          let currentNarrativeAttempt = 0;
+          const runOpeningNarrative = (attempt: number): Promise<void> => {
+            openingNarrativeError = undefined;
+            openingNarrativeText = "";
+            openingNarrativeVisible = false;
+            return (async () => {
+              for await (const event of streamActionNarrative(narrativeLlm, {
+                request: message,
+                blockId: "opening",
+                selectedProject: Boolean(inlineProjectLink || projectLinkId),
+                corrective:
+                  attempt > 0
+                    ? "Your previous opening produced no visible public text in time — it stayed inside hidden reasoning. This reply must begin with visible narrative text now: write the public action note as ordinary prose on the very first output token."
+                    : undefined,
+              })) {
+                // Do not buffer genuine model text until the model completes a
+                // sentence. The opening is the first public response to the
+                // user, so every useful delta must reach the desktop as soon as
+                // it arrives. Session/tool events remain buffered below until
+                // this narration completes, preserving narrative → action.
+                if (!active || attempt !== currentNarrativeAttempt) return;
+                if (event.type === "work_statement") {
+                  openingNarrativeVisible = true;
+                  openingNarrativeText = event.text;
+                  clearTimeout(waitingForModelTimer);
+                }
+                sseWriter.sendChatEvent(event);
               }
-              sseWriter.sendChatEvent(event);
-            }
-          })().catch((err) => { openingNarrativeError = err; });
+            })().catch((err) => {
+              if (attempt === currentNarrativeAttempt) openingNarrativeError = err;
+            });
+          };
+          let openingNarrative = runOpeningNarrative(0);
 
           // Start the main Turn immediately. Its context read, tool registry,
           // and first planning request are side-effect-free and no longer wait
@@ -411,9 +474,37 @@ export function registerChatRoutes(
           // The opening response remains a real model-authored message. It
           // establishes the public action boundary, then releases any planner
           // tool that is already ready to execute.
-          const openingCompleted = await settlesWithin(openingNarrative, OPENING_NARRATIVE_DEADLINE_MS);
+          let openingCompleted = await settlesWithin(openingNarrative, OPENING_NARRATIVE_DEADLINE_MS);
+          // One corrective re-prompt when the narrator settled without visible
+          // text, failed before a token, or did not settle within the deadline.
+          // The deadline stream may still be in flight and cannot be aborted,
+          // but the generation guard above suppresses anything it produces
+          // after the re-prompt starts.
+          if (
+            active
+            && narrativeLlm.configured
+            && (!openingCompleted || openingNarrativeError || !openingNarrativeText.trim())
+          ) {
+            logger().warn(
+              {
+                attempt: 0,
+                settledWithinDeadline: openingCompleted,
+                hadVisibleText: Boolean(openingNarrativeText.trim()),
+                error: openingNarrativeError instanceof Error
+                  ? openingNarrativeError.message.slice(0, 300)
+                  : String(openingNarrativeError ?? ""),
+                deadlineMs: OPENING_NARRATIVE_DEADLINE_MS,
+              },
+              "opening narrative attempt failed; issuing one corrective re-prompt",
+            );
+            currentNarrativeAttempt += 1;
+            openingNarrative = runOpeningNarrative(1);
+            openingCompleted = await settlesWithin(openingNarrative, OPENING_NARRATIVE_DEADLINE_MS);
+          }
           if (!openingCompleted) {
-            const error = new Error("The model did not begin an action narrative within 15 seconds.");
+            const error = new Error(
+              `The model did not begin an action narrative within ${OPENING_NARRATIVE_DEADLINE_MS / 1000} seconds.`,
+            );
             rejectFirstTool?.(error);
             throw error;
           }
@@ -450,9 +541,21 @@ export function registerChatRoutes(
           clearTimeout(waitingForModelTimer);
           active = false;
           chatSessions.cancel(sessionId);
+          const failure = chatTurnFailure(err, "planning");
+          logger().warn(
+            {
+              failureKind: failure.kind,
+              retryable: failure.retryable,
+              diagnosticId: failure.diagnosticId,
+              error: err instanceof Error ? `${err.name}: ${err.message.slice(0, 400)}` : String(err),
+              stack: err instanceof Error ? err.stack?.slice(0, 800) : undefined,
+            },
+            "chat turn failed",
+          );
           sseWriter.sendChatEvent({
             type: "error",
             message: explainChatSseError(err, settings, envSourceLabel),
+            failure,
           });
         }
         disposeUnusedPrewarmedRuntime();
@@ -472,6 +575,20 @@ export function registerChatRoutes(
         clearTimeout(waitingForModelTimer);
         chatSessions.cancel(sessionId);
         disposeUnusedPrewarmedRuntime();
+        // Best-effort typed terminal (MP-011): the browser may already be
+        // gone, but the persisted turn timeline still records a real
+        // cancellation reason instead of leaving the turn orphaned.
+        if (sseWriter.hasActiveTurn()) {
+          try {
+            sseWriter.sendChatEvent({
+              type: "cancelled",
+              failure: { kind: "cancelled_by_user", retryable: false },
+            });
+          } catch {
+            // Socket already destroyed; the desktop's local cancellation
+            // keeps this client's transcript consistent.
+          }
+        }
         resolve();
       };
       req.raw.once("aborted", cancelDisconnectedTurn);
@@ -523,9 +640,15 @@ export function registerChatRoutes(
             }
           }
         } catch (err) {
+          const failure = chatTurnFailure(err, "continuation");
+          logger().warn(
+            { failureKind: failure.kind, retryable: failure.retryable, diagnosticId: failure.diagnosticId },
+            "chat continuation failed",
+          );
           sseWriter.sendChatEvent({
             type: "error",
             message: explainChatSseError(err, settings, envSourceLabel),
+            failure,
           });
         }
         sseWriter.end();
@@ -549,17 +672,22 @@ export function registerChatRoutes(
     const parsed = SessionIdParam.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send({ error: "invalid sessionId" });
     const body = ConfirmActionBodySchema.safeParse(req.body ?? {});
-    if (!body.success || !body.data.turnId || !body.data.startedAt) {
-      return reply.code(400).send({ error: "a Turn continuation is required to decline an action" });
-    }
+    if (!body.success) return reply.code(400).send({ error: "invalid approval continuation" });
 
     const sessionId = parsed.data.sessionId;
     const sseWriter = createChatSseWriter(reply, sessionId, (event) => chatSessions.appendTurnTimelineEvent(sessionId, event));
-    sseWriter.resumeTurn(body.data.turnId, {
-      startedAt: body.data.startedAt,
-      lastSequence: body.data.lastSequence,
-      statement: "Approval declined; closing this turn without running the action.",
-    });
+    if (body.data.turnId) {
+      sseWriter.resumeTurn(body.data.turnId, {
+        startedAt: body.data.startedAt,
+        lastSequence: body.data.lastSequence,
+        statement: "Approval declined; closing this turn without running the action.",
+      });
+    } else {
+      // Workspace-originated approvals (e.g. a Pipelines page trigger) have no
+      // prior chat Turn. Give the decline its own canonical envelope so the
+      // card closes through the same timeline projection as a chat decline.
+      sseWriter.startTurn(`turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+    }
 
     let continuationActive = true;
     return new Promise<void>((resolve) => {
@@ -575,9 +703,15 @@ export function registerChatRoutes(
             }
           }
         } catch (err) {
+          const failure = chatTurnFailure(err, "approval-execution");
+          logger().warn(
+            { failureKind: failure.kind, retryable: failure.retryable, diagnosticId: failure.diagnosticId },
+            "chat approval execution failed",
+          );
           sseWriter.sendChatEvent({
             type: "error",
             message: explainChatSseError(err, settings, envSourceLabel),
+            failure,
           });
         }
         continuationActive = false;

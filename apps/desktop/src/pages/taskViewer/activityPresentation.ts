@@ -1,5 +1,4 @@
 import type { TaskView } from "../../api.js";
-import type { ReviewOperationEvent } from "../../reviewOperations.js";
 import { parseSortableDate } from "../../safeDate.js";
 
 export function statusClass(status: string): string {
@@ -54,19 +53,6 @@ export function latestDetail(task: TaskView): string {
   if (last?.detail) return last.detail;
   if (task.error) return task.error;
   return `${task.steps.length} step${task.steps.length === 1 ? "" : "s"}`;
-}
-
-export function reviewOperationKindLabel(kind: ReviewOperationEvent["kind"]): string {
-  const map: Record<ReviewOperationEvent["kind"], string> = {
-    rerun: "Rerun",
-    batch_rerun: "Batch rerun",
-    stale_rerun: "Stale rerun",
-    disposition: "Disposition",
-    ado_retry: "ADO retry",
-    insight_preview: "Insight preview",
-    review_run: "Review run",
-  };
-  return map[kind] ?? kind;
 }
 
 export function reviewOperationStatusClass(ok: boolean): string {

@@ -454,6 +454,20 @@ describe("daemon push workflow routes", () => {
     expect(body.workflowState.pendingApproval?.action.description).toContain("Fetch latest remote refs from origin");
     expect(body.tools.map((tool) => tool.name)).not.toContain("git_fetch");
 
+    // The workflow-action endpoint never emits SSE, so the persisted state
+    // read derives the waiting card from the approval proposal alone.
+    const stateBefore = await app.inject({
+      method: "GET",
+      url: `/chat/${body.sessionId}/state`,
+    });
+    expect(stateBefore.statusCode).toBe(200);
+    expect((stateBefore.json() as { workflowState: { status?: string; workflowKind?: string; workflowPhase?: string; pendingApproval?: { action: { tool: string } } } }).workflowState).toMatchObject({
+      status: "waiting_for_approval",
+      workflowKind: "git",
+      workflowPhase: "waiting_for_fetch_remotes_approval",
+      pendingApproval: { action: { tool: "git_fetch" } },
+    });
+
     const confirmed = await app.inject({
       method: "POST",
       url: `/chat/${body.sessionId}/confirm-action`,
@@ -476,6 +490,20 @@ describe("daemon push workflow routes", () => {
 
     const afterFetch = spawnSync("git", ["branch", "-r"], { cwd: repo, encoding: "utf8" });
     expect(afterFetch.stdout).toContain("origin/feature/remote-only");
+
+    // After the confirm turn, the proposal is cleared and the state read is
+    // derived from the last transition on the Turn Timeline ledger.
+    const stateAfter = await app.inject({
+      method: "GET",
+      url: `/chat/${body.sessionId}/state`,
+    });
+    expect(stateAfter.statusCode).toBe(200);
+    expect((stateAfter.json() as { workflowState: { status?: string; workflowKind?: string; workflowPhase?: string; pendingApproval?: unknown } }).workflowState).toMatchObject({
+      status: "done",
+      workflowKind: "git",
+      workflowPhase: "fetched",
+    });
+    expect((stateAfter.json() as { workflowState: { pendingApproval?: unknown } }).workflowState.pendingApproval).toBeUndefined();
   });
 });
 

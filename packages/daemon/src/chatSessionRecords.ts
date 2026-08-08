@@ -3,6 +3,7 @@ import {
   type ChatWorkflowState,
 } from "@mergepilot/core";
 import { checkpointApplyMetadataFromToolResult } from "./chatToolExecution.js";
+import { workflowStateForSession } from "./chatWorkflowState.js";
 import {
   chatHistoryEntryFromSession,
   listStoredSessionsForActivity,
@@ -54,7 +55,7 @@ export async function getBubbles(sessionId: string): Promise<StoredBubble[]> {
 
 export async function getWorkflowState(sessionId: string): Promise<ChatWorkflowState | undefined> {
   const session = await loadSession(sessionId);
-  return session?.workflowState;
+  return session ? workflowStateForSession(session) : undefined;
 }
 
 export async function appendMessage(
@@ -86,6 +87,9 @@ export async function updateMetadata(
   if ("title" in patch) {
     const title = patch.title?.trim() ?? "";
     session.title = title || undefined;
+    // MP-005/RA-019: a manual rename is locked and never overwritten by the
+    // auto title; clearing the title releases the lock for a fresh auto run.
+    session.titleSource = title ? "user" : undefined;
   }
   if (typeof patch.pinned === "boolean") {
     session.pinned = patch.pinned;

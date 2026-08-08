@@ -1,6 +1,33 @@
 export const CHAT_HANDOFF_KEY = "dev_agent_chat_handoff_v1";
 export const ACTIVITY_HANDOFF_KEY = "dev_agent_activity_handoff_v1";
 export const PULL_REQUESTS_HANDOFF_KEY = "dev_agent_pull_requests_handoff_v1";
+export const APPROVAL_HANDOFF_KEY = "dev_agent_approval_handoff_v1";
+
+/** V2 Pipelines page -> Chat handoff carrying a pending approval (MP-006). */
+export interface ApprovalHandoffDraft {
+  sessionId: string;
+  repoPath: string;
+  activeProjectLinkId?: string;
+  workflowState: {
+    status: string;
+    currentStep: string;
+    completedTools: string[];
+    workflowKind?: string;
+    workflowPhase?: string;
+    pendingApproval?: {
+      id: string;
+      riskLevel?: string;
+      explanation?: string;
+      action: {
+        tool: string;
+        args: Record<string, unknown>;
+        description: string;
+        nextHint?: string;
+        workflow?: { kind?: string; phase?: string; branch?: string; message?: string };
+      };
+    };
+  };
+}
 
 export interface ChatHandoffDraft {
   message?: string;
@@ -92,6 +119,36 @@ export function buildCheckpointRollbackHandoffDraft(input: {
     repoPath: input.repoPath,
     projectLinkId: input.projectLinkId,
     source: "activity-checkpoint-rollback",
+  };
+}
+
+/** MP-006: explicit Pipeline page -> Chat handoff with a source reference. */
+export function buildPipelineChatHandoffDraft(input: {
+  pipelineId: string;
+  pipelineName: string;
+  project: string;
+  repository: string;
+  repoPath: string;
+  projectLinkId?: string;
+  summary?: string;
+}): ChatHandoffDraft {
+  const message = [
+    `Continue from the pipeline inspection for #${input.pipelineId} (${input.pipelineName}).`,
+    "",
+    "Summarize the current pipeline state from the page result below, then recommend the next practical action.",
+    "Do not rerun Azure DevOps analysis unless I explicitly ask for a fresh result.",
+    "",
+    `Project: ${input.project}`,
+    `Repository: ${input.repository}`,
+    `Pipeline: #${input.pipelineId} ${input.pipelineName}`,
+    input.summary ? `Page summary: ${input.summary}` : "",
+  ].filter(Boolean).join("\n");
+
+  return {
+    message,
+    repoPath: input.repoPath,
+    projectLinkId: input.projectLinkId,
+    source: "pipelines-inspection",
   };
 }
 

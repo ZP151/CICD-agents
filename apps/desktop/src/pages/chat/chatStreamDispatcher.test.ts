@@ -12,7 +12,6 @@ type StreamDispatcherAdapterTestDouble = ChatStreamDispatcherAdapter & {
   calls: string[];
   finalised?: { text: string; meta: Bubble["meta"] | undefined; streamedText?: string };
   sessionId: string | null;
-  uiAvailable: boolean;
   workflowState: WorkflowEventState | null;
 };
 
@@ -22,16 +21,7 @@ function makeAdapter(): StreamDispatcherAdapterTestDouble {
     calls: [],
     finalised: undefined,
     sessionId: null,
-    uiAvailable: false,
     workflowState: null,
-    uiChunkStreamAvailable: vi.fn(() => adapter.uiAvailable),
-    setUiChunkStreamAvailable: vi.fn((available: boolean) => {
-      adapter.uiAvailable = available;
-      adapter.calls.push(`ui:${available}`);
-    }),
-    handleUiChunk: vi.fn((chunk) => {
-      adapter.calls.push(`ui-chunk:${chunk?.type ?? "missing"}`);
-    }),
     setSessionId: vi.fn((sessionId: string) => {
       adapter.sessionId = sessionId;
       adapter.calls.push(`session:${sessionId}`);
@@ -44,12 +34,6 @@ function makeAdapter(): StreamDispatcherAdapterTestDouble {
     }),
     stopStreaming: vi.fn(() => {
       adapter.calls.push("stop");
-    }),
-    upsertToolBubble: vi.fn((snapshot) => {
-      adapter.calls.push(`tool:${snapshot.toolName}`);
-    }),
-    appendToolOutputDelta: vi.fn((toolName, stream, delta) => {
-      adapter.calls.push(`tool-delta:${toolName ?? ""}:${stream ?? ""}:${delta ?? ""}`);
     }),
     updateBubbles: vi.fn((updater: (prev: Bubble[]) => Bubble[]) => {
       adapter.bubbles = updater(adapter.bubbles);
@@ -80,9 +64,6 @@ function makeAdapter(): StreamDispatcherAdapterTestDouble {
     refreshHistory: vi.fn(() => {
       adapter.calls.push("refreshHistory");
     }),
-    addErrorBubbleOnce: vi.fn((text: string) => {
-      adapter.calls.push(`error:${text}`);
-    }),
   };
   return adapter;
 }
@@ -108,12 +89,13 @@ describe("dispatchChatStreamEvent", () => {
     expect(adapter.calls).toContain("busy:false");
   });
 
-  it("prevents legacy render events from duplicating visible output after ui.chunk starts", () => {
+  it("drops legacy live-render events instead of creating a second transcript", () => {
     const adapter = makeAdapter();
 
+    dispatchChatStreamEvent({ type: "turn.started", turnId: "turn-1", sequence: 0, emittedAt: 1_000 }, adapter);
     dispatchChatStreamEvent({
       type: "ui.chunk",
-      uiChunk: { type: "text-delta", id: "text-1", delta: "canonical" },
+      uiChunk: { type: "text-delta", id: "text-1", delta: "legacy" },
     } as ChatEventPayload, adapter);
     dispatchChatStreamEvent({
       type: "assistant_delta",
@@ -134,71 +116,26 @@ describe("dispatchChatStreamEvent", () => {
       stream: "stdout",
       delta: " M file.ts",
     } as ChatEventPayload, adapter);
-
-    expect(adapter.handleUiChunk).toHaveBeenCalledTimes(1);
-    expect(adapter.appendAssistantDelta).not.toHaveBeenCalled();
-    expect(adapter.addBubble).not.toHaveBeenCalled();
-    expect(adapter.upsertToolBubble).not.toHaveBeenCalled();
-    expect(adapter.appendToolOutputDelta).not.toHaveBeenCalled();
-    expect(adapter.uiAvailable).toBe(true);
-    expect(adapter.calls).toEqual([
-      "ui-chunk:text-delta",
-      "ui:true",
-      "ui:true",
-      "ui:true",
-      "ui:true",
-      "ui:true",
-    ]);
-  });
-
-  it("still accepts control events during canonical streaming and closes on done", () => {
-    const adapter = makeAdapter();
-
-    dispatchChatStreamEvent({
-      type: "ui.chunk",
-      uiChunk: { type: "text-delta", id: "text-1", delta: "canonical" },
-    } as ChatEventPayload, adapter);
-    dispatchChatStreamEvent({
-      type: "workflow_state",
-      state: {
-        status: "running",
-        currentStep: "Running git status",
-        completedTools: ["git_status"],
-      },
-    } as ChatEventPayload, adapter);
-    dispatchChatStreamEvent({
-      type: "done",
-      result: {
-        response: "Done",
-        streamedResponse: "canonical",
-        riskLevel: "low",
-        actionsTaken: ["Read changes"],
-        suggestions: [],
-      },
-    } as ChatEventPayload, adapter, { refreshHistoryOnDone: true });
-
-    expect(adapter.setWorkflowState).toHaveBeenCalledTimes(1);
-    expect(adapter.workflowState).toMatchObject({
-      status: "running",
-      currentStep: "Running git status",
-    });
-    expect(adapter.finalised).toMatchObject({
-      text: "Done",
-      streamedText: "canonical",
-    });
-    expect(adapter.uiAvailable).toBe(false);
-    expect(adapter.refreshHistory).toHaveBeenCalledTimes(1);
-  });
-
-  it("hides redundant project-context progress status text", () => {
-    const adapter = makeAdapter();
-
     dispatchChatStreamEvent({
       type: "progress",
       message: "Reading project context",
     } as ChatEventPayload, adapter);
 
-    expect(adapter.calls).toContain("status:null");
+    expect(adapter.appendAssistantDelta).not.toHaveBeenCalled();
+    expect(adapter.addBubble).not.toHaveBeenCalled();
+    expect(adapter.updateBubbles).toHaveBeenCalledTimes(1);
+    expect(adapter.calls).not.toContain("status:Reading project context");
+  });
+
+  it("still accepts session control events during canonical streaming", () => {
+    const adapter = makeAdapter();
+
+    dispatchChatStreamEvent({
+      type: "session",
+      sessionId: "session-42",
+    } as ChatEventPayload, adapter, { onSession: vi.fn() });
+
+    expect(adapter.sessionId).toBe("session-42");
   });
 
   it("seals the active transcript with its completed work duration", () => {
@@ -223,7 +160,6 @@ describe("dispatchChatStreamEvent", () => {
         turnTranscript: expect.objectContaining({ status: "completed", elapsedMs: 65_400, executionSealed: true }),
       }),
     ]);
-    expect(adapter.uiAvailable).toBe(false);
   });
 
   it("does not append a second activity marker when completion is delivered twice", () => {
@@ -371,37 +307,30 @@ describe("dispatchChatStreamEvent", () => {
     expect(adapter.finalised).toMatchObject({ text: "One conclusion." });
   });
 
-  it("releases busy state when a follow-up approval is required", () => {
+  it("releases busy state when a canonical approval is required", () => {
     const adapter = makeAdapter();
-    const approval = {
-      id: "approval-git-commit",
-      action: {
-        tool: "git_commit",
-        args: { message: "chore: add feature" },
-        description: "Commit staged changes",
-      },
-      riskLevel: "medium",
-      explanation: "Commit staged changes",
-    };
 
+    dispatchChatStreamEvent({ type: "turn.started", turnId: "turn-1", sequence: 0, emittedAt: 1_000 }, adapter);
     dispatchChatStreamEvent({
-      type: "workflow_state",
-      state: {
-        status: "waiting_for_approval",
-        currentStep: "Commit staged changes",
-        completedTools: ["git_add"],
-        pendingApproval: approval,
+      type: "turn.approval.requested", turnId: "turn-1", sequence: 1,
+      approval: {
+        id: "approval-git-commit",
+        action: {
+          tool: "git_commit",
+          args: { message: "chore: add feature" },
+          description: "Commit staged changes",
+        },
+        riskLevel: "medium",
+        explanation: "Commit staged changes",
       },
-    } as ChatEventPayload, adapter);
+    }, adapter);
     dispatchChatStreamEvent({
-      type: "approval_required",
-      approval,
-    } as ChatEventPayload, adapter);
+      type: "turn.approval.resolved", turnId: "turn-1", sequence: 2, approvalId: "approval-git-commit", approved: true,
+    }, adapter);
 
-    expect(adapter.showApprovalRequest).toHaveBeenCalledTimes(2);
+    expect(adapter.showApprovalRequest).toHaveBeenCalledTimes(1);
     expect(adapter.calls).toContain("busy:false");
     expect(adapter.calls).toContain("clearCancel");
-    expect(adapter.calls.filter((call) => call === "busy:false")).toHaveLength(2);
-    expect(adapter.calls.filter((call) => call === "clearCancel")).toHaveLength(2);
+    expect(adapter.workflowState).toMatchObject({ status: "running" });
   });
 });

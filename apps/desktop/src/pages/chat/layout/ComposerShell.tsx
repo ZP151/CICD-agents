@@ -11,6 +11,8 @@ import type {
   SuggestionReply,
 } from "../../../components/conversation/SuggestionReplyBar.js";
 import { SuggestionReplyBar } from "../../../components/conversation/SuggestionReplyBar.js";
+
+import { ImageEditModal } from "../ImageEditModal.js";
 import type { ProjectLink } from "../../../api.js";
 import type {
   ConversationModelChoice,
@@ -55,7 +57,6 @@ interface ComposerShellProps {
   onStop: () => void;
   onCancelQueuedSuggestion: () => void;
   onSuggestionPick: (suggestion: SuggestionReply) => void;
-  onProjectLinkSelect: (id: string) => void;
   onModelMenuOpenChange: (open: boolean | ((value: boolean) => boolean)) => void;
   onActiveModelChange: (model: ConversationModelChoice) => void;
 }
@@ -123,7 +124,6 @@ export function ComposerShell({
   onStop,
   onCancelQueuedSuggestion,
   onSuggestionPick,
-  onProjectLinkSelect,
   onModelMenuOpenChange,
   onActiveModelChange,
 }: ComposerShellProps) {
@@ -143,6 +143,10 @@ export function ComposerShell({
     pendingImageAttachmentCount,
     removeImageAttachment,
     setImageDragActive,
+    editingImage,
+    editImageAttachment,
+    applyImageEdit,
+    cancelImageEdit,
   } = useComposerImageAttachments();
   const activeWorkflow = busy || workflowState?.status === "planning" || workflowState?.status === "running";
   const visibleComposerNotice = composerStateNotice?.tone === "queued" ? composerStateNotice : null;
@@ -232,26 +236,16 @@ export function ComposerShell({
               <span className="text-[11px] text-[rgb(var(--app-text-subtle))]">
                 Loading Project Link...
               </span>
-            ) : availableProjectLinks.length > 0 ? (
-              <>
-                <svg className="h-3 w-3 shrink-0 text-[rgb(var(--app-text-subtle))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                <select
-                  aria-label="Composer Project Link"
-                  className="min-w-0 flex-1 cursor-pointer bg-transparent text-[11px] text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))] focus:outline-none"
-                  value={activeProjectLinkId ?? ""}
-                  onChange={(event) => onProjectLinkSelect(event.target.value)}
-                >
-                  <option value="">No Project Link selected</option>
-                  {availableProjectLinks.map((projectLink) => (
-                    <option key={projectLink.id} value={projectLink.id}>{projectLink.name}</option>
-                  ))}
-                </select>
-              </>
+            ) : activeProjectLinkId ? (
+              <span
+                className="text-[11px] text-[rgb(var(--app-text-subtle))]"
+                title="Context manages the Project Link"
+              >
+                {availableProjectLinks.find((link) => link.id === activeProjectLinkId)?.name ?? "Project Link"}
+              </span>
             ) : (
               <span className="text-[11px] text-[rgb(var(--app-text-subtle))]">
-                No Project Link yet — create one above
+                No Project Link — select one in Context
               </span>
             )}
           </div>
@@ -355,6 +349,14 @@ export function ComposerShell({
                   className="h-5 w-5 shrink-0 rounded-sm object-cover"
                 />
                 <span className="min-w-0 truncate">{attachment.name}</span>
+                <button
+                  type="button"
+                  aria-label={`Edit ${attachment.name}`}
+                  onClick={() => editImageAttachment(attachment.id)}
+                  className="shrink-0 rounded px-0.5 text-[rgb(var(--app-text-subtle))] transition hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))]"
+                >
+                  ✎
+                </button>
                 <button
                   type="button"
                   aria-label={`Remove ${attachment.name}`}
@@ -504,6 +506,13 @@ export function ComposerShell({
           )}
         </div>
       </div>
+      {editingImage && (
+        <ImageEditModal
+          editing={editingImage}
+          onConfirm={(dataUrl, size) => applyImageEdit(dataUrl, size)}
+          onCancel={cancelImageEdit}
+        />
+      )}
     </div>
   );
 }

@@ -27,7 +27,7 @@ describe("chat bubble reducer", () => {
     ]);
   });
 
-  it("drives approval, confirm, and pending status updates through reducer actions", () => {
+  it("drives approval and pending status updates through reducer actions", () => {
     const approval: ApprovalRequest = {
       id: "approval-1",
       riskLevel: "medium",
@@ -45,7 +45,11 @@ describe("chat bubble reducer", () => {
       id: waiting[0]?.id ?? "",
       status: "executing",
     }, makeId);
-    const done = reduceChatBubbles(executing, { type: "mark_executing_pending_done" }, makeId);
+    const cancelled = reduceChatBubbles(executing, {
+      type: "mark_pending_status",
+      id: waiting[0]?.id ?? "",
+      status: "cancelled",
+    }, makeId);
 
     expect(waiting[0]).toMatchObject({
       kind: "pending_confirm",
@@ -53,53 +57,21 @@ describe("chat bubble reducer", () => {
       pendingStatus: "waiting",
     });
     expect(executing[0]).toMatchObject({ pendingStatus: "executing" });
-    expect(done).toEqual([]);
+    expect(cancelled).toEqual([]);
   });
 
-  it("drives tool execution and local UI controls through reducer actions", () => {
-    const toolStarted = reduceChatBubbles([], {
-      type: "upsert_tool",
-      snapshot: {
-        toolCallId: "tool-1",
-        toolName: "git_status",
-        state: "input-available",
-        input: { short: true },
-      },
+  it("toggles tool cards through reducer actions", () => {
+    const started = reduceChatBubbles([], {
+      type: "add",
+      bubble: { id: "tool-1", kind: "tool", toolName: "git_status", toolOpen: false },
     }, makeId);
-    const withOutput = reduceChatBubbles(toolStarted, {
-      type: "append_tool_output_delta",
-      toolName: "git_status",
-      stream: "stdout",
-      delta: " M src/app.ts",
-      toolCallId: "tool-1",
-    }, makeId);
-    const ended = reduceChatBubbles(withOutput, {
-      type: "tool_end",
-      event: {
-        type: "tool_end",
-        name: "git_status",
-        ok: true,
-        summary: "1 modified",
-        toolCallId: "tool-1",
-        toolResult: { stdout: " M src/app.ts", stderr: "", returncode: 0 },
-      },
-    }, makeId);
-    const toggled = reduceChatBubbles(ended, { type: "toggle_tool", id: ended[0]?.id ?? "" }, makeId);
+    const toggled = reduceChatBubbles(started, { type: "toggle_tool", id: "tool-1" }, makeId);
 
-    expect(withOutput[0]).toMatchObject({
-      kind: "tool",
-      toolName: "git_status",
-      toolOpen: true,
-      toolLiveOutput: " M src/app.ts",
-    });
-    expect(ended[0]).toMatchObject({ toolOk: true, toolOpen: false, toolSummary: "1 modified" });
     expect(toggled[0]).toMatchObject({ toolOpen: true });
   });
 
-  it("deduplicates error bubbles and updates legacy confirm cards", () => {
-    const withError = reduceChatBubbles([], { type: "add_error_once", message: "Failed" }, makeId);
-    const duplicate = reduceChatBubbles(withError, { type: "add_error_once", message: "Failed" }, makeId);
-    const withConfirm = reduceChatBubbles(duplicate, {
+  it("updates legacy confirm cards through reducer actions", () => {
+    const withConfirm = reduceChatBubbles([], {
       type: "add",
       bubble: { id: "confirm-1", kind: "confirm", confirmed: null },
     }, makeId);
@@ -109,7 +81,6 @@ describe("chat bubble reducer", () => {
       confirmed: true,
     }, makeId);
 
-    expect(duplicate).toHaveLength(1);
     expect(confirmed.at(-1)).toMatchObject({ id: "confirm-1", confirmed: true });
   });
 

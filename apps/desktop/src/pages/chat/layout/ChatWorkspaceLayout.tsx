@@ -204,7 +204,6 @@ export function ChatWorkspaceLayout({
               onStop={stopCurrentTurn}
               onCancelQueuedSuggestion={cancelQueuedSuggestion}
               onSuggestionPick={handleSuggestionReply}
-              onProjectLinkSelect={selectProjectLink}
               onModelMenuOpenChange={setModelMenuOpen}
               onActiveModelChange={setActiveModel}
             />
@@ -218,14 +217,11 @@ export function ChatWorkspaceLayout({
           setRepoPath={setRepoPath}
           currentBranch={currentBranch}
           branchList={branchList}
-          gitStatus={gitStatus}
-          diffStats={diffStats}
           taskState={taskState}
           workflowState={workflowState}
           busy={busy}
           projectLinks={availableProjectLinks}
           activeProjectLinkId={activeProjectLinkId}
-          setActiveProjectLinkId={setActiveProjectLinkId}
           codePanelOpen={rightPanelOpen}
           codePanelWidth={codePanelWidth}
           onAction={runWorkspaceAction}

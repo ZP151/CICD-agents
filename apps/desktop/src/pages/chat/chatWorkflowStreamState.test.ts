@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApprovalRequest, WorkflowEventState } from "./chat.types.js";
 import {
-  statusTextForApprovalResolved,
-  statusTextForWorkflowState,
   workflowStateAfterApprovalResolved,
   workflowStateFromApprovalRequired,
 } from "./chatWorkflowStreamState.js";
@@ -19,13 +17,6 @@ const approval: ApprovalRequest = {
 };
 
 describe("chat workflow stream state", () => {
-  it("maps workflow states to status text without forcing terminal text", () => {
-    expect(statusTextForWorkflowState({ status: "planning" } as WorkflowEventState)).toBe("Planning");
-    expect(statusTextForWorkflowState({ status: "running" } as WorkflowEventState)).toBe("Executing");
-    expect(statusTextForWorkflowState({ status: "waiting_for_approval" } as WorkflowEventState)).toBe("Waiting for approval");
-    expect(statusTextForWorkflowState({ status: "done" } as WorkflowEventState)).toBeUndefined();
-  });
-
   it("builds an approval-required workflow state while preserving completed tools", () => {
     const update = workflowStateFromApprovalRequired(approval);
     const next = update({
@@ -60,7 +51,5 @@ describe("chat workflow stream state", () => {
       currentStep: "Approval cancelled",
       pendingApproval: undefined,
     });
-    expect(statusTextForApprovalResolved(true)).toBe("Approval accepted");
-    expect(statusTextForApprovalResolved(false)).toBe("Approval cancelled");
   });
 });

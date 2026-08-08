@@ -46,9 +46,10 @@ describe("AppShell route preloading", () => {
 
 describe("AppShell route fallbacks", () => {
   it("keeps stale workspace URLs from rendering a blank page", () => {
-    expect(workspaceRouteFallbackTarget("/review")).toBe("/findings");
-    expect(workspaceRouteFallbackTarget("/review/")).toBe("/findings");
-    expect(workspaceRouteFallbackTarget("/review-queue")).toBe("/findings");
+    expect(workspaceRouteFallbackTarget("/review")).toBe("/pulls");
+    expect(workspaceRouteFallbackTarget("/review/")).toBe("/pulls");
+    expect(workspaceRouteFallbackTarget("/review-queue")).toBe("/pulls");
+    expect(workspaceRouteFallbackTarget("/findings")).toBe("/pulls");
     expect(workspaceRouteFallbackTarget("/pull-requests")).toBe("/pulls");
     expect(workspaceRouteFallbackTarget("/tasks")).toBe("/activity");
   });
@@ -163,9 +164,31 @@ describe("AppShell workspace routes", () => {
       expect(html).toContain("overflow-auto");
       expect(html).toContain("app-shell-nav-icon");
       expect(html).toContain("app-shell-nav-link");
-      expect(html).toContain('aria-label="New chat"');
-      expect(html).not.toContain('title="New chat"');
+      expect(html).toContain('aria-label="Agent"');
+      expect(html).not.toContain('title="Agent"');
       expect(html).not.toContain("({ isActive })");
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("uses the target outcome navigation with Work enabled", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const html = renderToStaticMarkup(
+        createElement(MemoryRouter, { initialEntries: ["/chat"] }, createElement(FullLayout)),
+      );
+
+      for (const label of ["Agent", "Changes", "Delivery", "Settings"]) {
+        expect(html).toContain(`aria-label="${label}"`);
+      }
+      // Work is live from Cycle 04.
+      expect(html).toContain('aria-label="Work"');
+      // Review Queue and Activity are no longer primary navigation entries.
+      expect(html).not.toContain("Review Queue");
+      expect(html).not.toContain('aria-label="Activity"');
+      expect(html).not.toContain('aria-label="Pull Requests"');
+      expect(html).not.toContain('aria-label="Pipelines"');
     } finally {
       consoleError.mockRestore();
     }

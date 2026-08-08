@@ -48,7 +48,6 @@ interface UseChatTurnRuntimeArgs {
   sessionId: string | null;
   statusText: string | null;
   textareaRef: RefObject<HTMLTextAreaElement>;
-  uiStreamAvailableRef: MutableRefObject<boolean>;
   workflowState: WorkflowEventState | null;
   setActiveProjectLinkId: (id: string | null) => void;
   setBubbles: Dispatch<SetStateAction<Bubble[]>>;
@@ -98,7 +97,6 @@ export function useChatTurnRuntime({
   sessionId,
   statusText,
   textareaRef,
-  uiStreamAvailableRef,
   workflowState,
   setActiveProjectLinkId,
   setBubbles,
@@ -124,16 +122,11 @@ export function useChatTurnRuntime({
 
   const {
     addBubble,
-    addErrorBubbleOnce,
-    appendToolOutputDelta,
     finaliseWithResponse,
-    handleUiChunk,
     resolveConfirm,
     showApprovalRequest,
     toggleTool,
-    upsertToolBubble,
   } = useChatBubbleRuntime({
-    appendAssistantDelta,
     cancelRef,
     forceNextScrollToBottom,
     markIncomingContentScrollIntent,
@@ -142,9 +135,6 @@ export function useChatTurnRuntime({
     setBusy,
     setStatusText,
     setWorkflowState,
-    startAssistantTextPart,
-    stopStreaming,
-    uiStreamAvailableRef,
   });
 
   const { loadSession } = useChatSessionLifecycle({
@@ -177,15 +167,11 @@ export function useChatTurnRuntime({
   });
 
   const chatStreamDispatcherAdapter = useChatRuntimeAdapter({
-    uiStreamAvailableRef,
     cancelRef,
-    handleUiChunk,
     setSessionId,
     setStatusText,
     appendAssistantDelta,
     stopStreaming,
-    upsertToolBubble,
-    appendToolOutputDelta,
     setBubbles,
     addBubble,
     sessionId,
@@ -194,7 +180,6 @@ export function useChatTurnRuntime({
     finaliseWithResponse,
     setBusy,
     setHistory,
-    addErrorBubbleOnce,
   });
 
   const {
@@ -213,7 +198,6 @@ export function useChatTurnRuntime({
     activeCustomModel,
     mini,
     chatStreamDispatcherAdapter,
-    uiStreamAvailableRef,
     cancelRef,
     setBubbles,
     setBusy,

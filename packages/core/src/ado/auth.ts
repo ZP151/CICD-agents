@@ -40,6 +40,15 @@ export function setPatProvider(provider: PatProvider): void {
   patProvider = provider;
 }
 
+/** ADR-0005 keyring read for runtime injection; "" when not configured. */
+export async function getKeyringPat(): Promise<string> {
+  try {
+    return await patProvider();
+  } catch {
+    return "";
+  }
+}
+
 export function patAuth(pat: string): AdoAuth {
   return { mode: "pat", header: `Basic ${Buffer.from(`:${pat}`).toString("base64")}` };
 }

@@ -87,6 +87,35 @@ export function deletePipelineConnection(dataDir: string, id: string): boolean {
   return true;
 }
 
+/**
+ * GAP-01 migration: copy historical Project Link pipeline fields into
+ * PipelineConnection so canonical consumers (which never read the legacy
+ * fields) keep working after the fields stop being written. Copy-only: the
+ * legacy fields stay readable as a bounded compatibility adapter. Idempotent:
+ * a connection with the same (projectLinkId, pipelineId) is never duplicated.
+ */
+export function migrateLegacyPipelineFieldsToConnections(
+  dataDir: string,
+  projectLinks: Array<{ id: string; adoPipelineId?: string; adoPipelineName?: string }>,
+): PipelineConnection[] {
+  const created: PipelineConnection[] = [];
+  for (const link of projectLinks) {
+    const pipelineId = String(link.adoPipelineId ?? "").trim();
+    if (!pipelineId) continue;
+    const existing = listPipelineConnections(dataDir, link.id);
+    if (existing.some((connection) => connection.pipelineId === pipelineId)) continue;
+    const connection = createPipelineConnection(dataDir, {
+      projectLinkId: link.id,
+      pipelineId,
+      pipelineName: String(link.adoPipelineName ?? "").trim() || `Pipeline #${pipelineId}`,
+      purpose: "ci",
+      isDefault: existing.length === 0,
+    });
+    created.push(connection);
+  }
+  return created;
+}
+
 function clearDefaultForProjectLink(
   store: PipelineConnectionStore,
   projectLinkId: string,

@@ -1,12 +1,19 @@
 import {
   type ChatMessage,
   type ChatPlannerResult,
-  type ChatWorkflowState,
   type PendingToolAction,
   type TurnTimelineEvent,
 } from "@mergepilot/core";
 import type { InlineLlmConfig } from "./llmSettings.js";
 
+/**
+ * Session-scoped project context. Only fields with live consumers survive
+ * here: ADO identity + PAT for the tool transport, pipeline identity for PR
+ * pipeline-run attachment and pipeline target resolution, the MCP gate and
+ * domain allow-list, and build/test/ignored-glob context for the indexer.
+ * MCP command/auth and template fields were legacy snapshot duplicates
+ * (read-only migration reads) and are gone.
+ */
 export interface InlineProjectLink {
   id?: string;
   name?: string;
@@ -20,10 +27,7 @@ export interface InlineProjectLink {
   adoPipelineId: string;
   adoPipelineName: string;
   adoMcpEnabled: boolean;
-  adoMcpCommand: string;
-  adoMcpAuthentication: string;
   adoMcpDomains: string;
-  projectTemplate: string;
   buildCommand: string;
   testCommand: string;
   ignoredGlobs?: string[];
@@ -54,6 +58,8 @@ export interface StoredSession {
   createdAt: number;
   updatedAt?: number;
   title?: string;
+  /** MP-005: user-renamed titles are locked and never overwritten by auto. */
+  titleSource?: "user" | "auto";
   pinned?: boolean;
   repoPath: string;
   projectLinkId?: string;
@@ -62,9 +68,6 @@ export interface StoredSession {
   /** Public-only Timeline records; used to restore the exact Turn hierarchy. */
   timelineEvents?: TurnTimelineEvent[];
   approvalProposal?: PendingToolAction;
-  /** @deprecated Use approvalProposal. Kept so old local/Cosmos sessions can be resumed. */
-  pendingAction?: PendingToolAction;
-  workflowState?: ChatWorkflowState;
   llmConfig?: InlineLlmConfig;
   inlineProjectLink?: InlineProjectLink;
 }
@@ -77,5 +80,6 @@ export interface ChatHistoryEntry {
   createdAt: number;
   updatedAt: number;
   title?: string;
+  titleSource?: "user" | "auto";
   pinned?: boolean;
 }

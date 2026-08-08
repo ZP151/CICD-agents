@@ -298,6 +298,7 @@ function completeCommand(transcript: TurnTranscript, event: ChatEventPayload): T
                 ...command,
                 status: event.ok === false ? "failed" : "succeeded",
                 durationMs: event.durationMs,
+                exitCode: event.exitCode,
                 summary: event.summary,
                 output: event.output,
               }

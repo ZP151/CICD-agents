@@ -12,6 +12,7 @@ import {
   buildWorkflowState,
   mergePlannerSources,
   setStoredApprovalProposal,
+  workflowStateForSession,
 } from "./chatWorkflowState.js";
 import { deriveWorkflowPendingAction } from "./chatPendingActions.js";
 import { checkpointMetadataFromToolResult } from "./chatToolExecution.js";
@@ -105,10 +106,11 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
       const enrichedResult = deriveWorkflowPendingAction(sessionId, event.result, bubbles);
       const approvalProposal = approvalProposalFromResult(enrichedResult);
       const storedBeforeDone = await adapters.loadSession(sessionId);
-      const inheritedWorkflowMetadata = !approvalProposal && storedBeforeDone?.workflowState?.status === "running"
+      const derivedBeforeDone = storedBeforeDone ? workflowStateForSession(storedBeforeDone) : undefined;
+      const inheritedWorkflowMetadata = !approvalProposal && derivedBeforeDone?.status === "running"
         ? {
-            workflowKind: storedBeforeDone.workflowState.workflowKind,
-            workflowPhase: doneWorkflowPhaseFromRunning(storedBeforeDone.workflowState.workflowPhase),
+            workflowKind: derivedBeforeDone.workflowKind,
+            workflowPhase: doneWorkflowPhaseFromRunning(derivedBeforeDone.workflowPhase),
           }
         : {};
       const enrichedWithContext: ChatPlannerResult = {
@@ -145,7 +147,6 @@ export async function* streamPlannerAndPersist(args: StreamPlannerAndPersistArgs
       const storedForPending = await adapters.loadSession(sessionId);
       if (storedForPending) {
         setStoredApprovalProposal(storedForPending, approvalProposalFromResult(enrichedWithContext));
-        storedForPending.workflowState = workflowState;
         await adapters.saveSession(storedForPending);
       }
       yield { type: "workflow_state", state: workflowState };

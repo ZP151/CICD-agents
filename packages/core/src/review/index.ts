@@ -28,3 +28,18 @@ export {
   TableStateStore,
 } from "./stateStore.js";
 export type { ConventionRow, ReviewHistoryRow, StateStore } from "./stateStore.js";
+export {
+  listLocalReviewHistory,
+  reviewHistoryStorePath,
+  upsertLocalReviewHistory,
+} from "./localHistory.js";
+export type {
+  ReviewContextConfidence,
+  ReviewDispositionEvent,
+  ReviewHistoryItem,
+  ReviewHistoryRecord,
+  ReviewManualDisposition,
+  ReviewQueueDecision,
+  ReviewQueueRiskLevel,
+  ReviewWriteBackEvent,
+} from "./localHistory.js";

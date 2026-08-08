@@ -24,6 +24,7 @@ const READ_ONLY_TOOLS = new Set([
   "git_show",
   "git_merge_base",
   "repo_refresh_index",
+  "read_text_file",
 ]);
 
 const HIGH_RISK_TOOLS = new Set([

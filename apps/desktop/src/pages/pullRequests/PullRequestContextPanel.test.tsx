@@ -24,6 +24,7 @@ function loadedContextState(description: string): ContextState {
         repository: "ClaimBot_API",
         url: "https://dev.azure.com/example",
         reviewerCount: 1,
+      reviewers: [],
         voteSummary: {
           approved: 0,
           waiting: 1,

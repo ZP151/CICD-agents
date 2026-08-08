@@ -28,7 +28,6 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
     projectLinks: availableProjectLinks,
     projectLinksLoading,
     createProjectLink,
-    updateProjectLink,
   } = useAppData();
   const scrollRuntime = useChatScrollFollow(pageState.bubbles);
 
@@ -107,7 +106,6 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
     sessionId: pageState.sessionId,
     statusText: pageState.statusText,
     textareaRef: pageState.textareaRef,
-    uiStreamAvailableRef: pageState.uiStreamAvailableRef,
     workflowState: pageState.workflowState,
     setActiveProjectLinkId: activeProjectLinkRuntime.setActiveProjectLinkId,
     setBubbles: pageState.setBubbles,
@@ -142,14 +140,12 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
   });
 
   const suggestionRuntime = useChatSuggestionRuntime({
-    activeProjectLinkId: activeProjectLinkRuntime.activeProjectLinkId,
     busy: pageState.busy,
     focusComposer,
     queuedSuggestion: pageState.queuedSuggestion,
     setInput: pageState.setInput,
     setQueuedSuggestion: pageState.setQueuedSuggestion,
     setStatusText: pageState.setStatusText,
-    updateProjectLink,
     workflowStatus: pageState.workflowState?.status,
   });
 

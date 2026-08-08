@@ -9,9 +9,8 @@ import {
   projectLinkPullRequestCacheKey,
   prMatchesCategory,
   readiness,
-  reviewRunOperationDetails,
 } from "./pullRequestViewModel.js";
-import type { PullRequestInsightPreview, ReviewRunResult } from "../../api.js";
+import type { PullRequestInsightPreview } from "../../api.js";
 import type { DisplayPullRequest } from "./pullRequestTypes.js";
 
 function pr(overrides: Partial<DisplayPullRequest> = {}): DisplayPullRequest {
@@ -26,6 +25,7 @@ function pr(overrides: Partial<DisplayPullRequest> = {}): DisplayPullRequest {
     creationDate: "2026-01-01T00:00:00.000Z",
     createdBy: "user",
     reviewerCount: 1,
+    reviewers: ["Reviewer Name"],
     voteSummary: {
       approved: 0,
       rejected: 0,
@@ -61,26 +61,6 @@ describe("pullRequestViewModel", () => {
     expect(details).not.toContain("unknown");
   });
 
-  it("uses explicit unavailable wording for missing review-run confidence", () => {
-    const details = reviewRunOperationDetails({
-      ok: true,
-      pullRequestId: 2670,
-      repository: "ClaimBot_API",
-      iterationId: 4,
-      findingCount: 0,
-      decisionQueue: "watching",
-      decisionRiskLevel: "low",
-      decisionReason: "No action required.",
-      lastRunAt: "2026-07-16T00:00:00.000Z",
-      autoApprovalActor: "Review Agent",
-      tokensIn: 24,
-      tokensOut: 10,
-      summary: "Ready.",
-    } satisfies ReviewRunResult);
-
-    expect(details).toContain("confidence=not available");
-    expect(details).not.toContain("unknown");
-  });
 
   it("deduplicates pull requests by Project Link, repository, and id", () => {
     expect(dedupePullRequests([
@@ -92,9 +72,13 @@ describe("pullRequestViewModel", () => {
   });
 
   it("filters pull requests by product categories", () => {
-    expect(prMatchesCategory(pr({ isDraft: true }), "draft")).toBe(true);
-    expect(prMatchesCategory(pr({ voteSummary: { approved: 1, rejected: 0, waiting: 0 } }), "reviewed")).toBe(true);
-    expect(prMatchesCategory(pr({ voteSummary: { approved: 0, rejected: 0, waiting: 1 } }), "attention")).toBe(true);
+    expect(prMatchesCategory(pr({ isDraft: true }), "waiting")).toBe(true);
+    expect(prMatchesCategory(pr({ voteSummary: { approved: 0, rejected: 0, waiting: 1 } }), "waiting")).toBe(true);
+    expect(prMatchesCategory(pr({ createdBy: "Author Name", reviewers: [] }), "mine", "Author Name")).toBe(true);
+    expect(prMatchesCategory(pr({ createdBy: "Author Name", reviewers: [] }), "mine", "Someone Else")).toBe(false);
+    expect(prMatchesCategory(pr({ reviewers: ["Reviewer Name"] }), "needs_review", "Reviewer Name")).toBe(true);
+    expect(prMatchesCategory(pr({ reviewers: ["Other Reviewer"] }), "needs_review", "Reviewer Name")).toBe(false);
+    expect(prMatchesCategory(pr({ voteSummary: { approved: 1, rejected: 0, waiting: 0 } }), "all")).toBe(true);
   });
 
   it("matches the Project Link branch scope unless the scope is main or empty", () => {

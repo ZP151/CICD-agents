@@ -44,6 +44,7 @@ const pullRequest = {
   creationDate: "2026-07-07T02:16:32.000Z",
   url: "https://tebssg.visualstudio.com/project/_git/repo/pullrequest/2670",
   reviewerCount: 1,
+  reviewers: ["Zhou Ping"],
   voteSummary: { approved: 1, rejected: 0, waiting: 0, noVote: 0 },
   isDraft: false,
   labels: [],
@@ -90,13 +91,6 @@ const reviewQueueItem = {
   manualDispositionWriteBackThreadId: "",
   manualDispositionWriteBackUrl: "",
   manualDispositionWriteBackEvents: [],
-};
-
-const secondaryReviewQueueItem = {
-  ...reviewQueueItem,
-  repository: "OtherRepo",
-  pullRequestId: 3001,
-  decisionReason: "Second project requires review.",
 };
 
 const activityTask = {
@@ -158,19 +152,6 @@ const prInsightActivity = {
   },
   tokensIn: 900,
   tokensOut: 260,
-};
-
-const reviewOperation = {
-  id: "review-op-cache-1",
-  projectLinkId: projectLink.id,
-  kind: "review_run",
-  at: "2026-07-07T02:19:00.000Z",
-  repository: "ClaimBot_API",
-  pullRequestId: 2670,
-  actor: "Zhou Ping",
-  label: "Review run completed",
-  ok: true,
-  details: "Review operation recorded for PR #2670.",
 };
 
 const avatarDataUrl =
@@ -295,6 +276,17 @@ async function mockBaseRuntime(
       });
     },
   );
+  // Opening an insight card also requests a fresh preview; keep it hermetic.
+  await page.route(
+    /http:\/\/127\.0\.0\.1:8787\/project-links\/[^/]+\/pull-requests\/\d+\/insight-preview/,
+    async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "mocked insight preview unavailable" }),
+      });
+    },
+  );
 }
 
 test.describe("workspace route caching", () => {
@@ -359,8 +351,8 @@ test.describe("workspace route caching", () => {
     await expect(page.getByLabel("Preparing pull requests")).toBeHidden();
     await expect(page.getByText("Update CommonFunctions.cs and ClaimController.cs")).toBeVisible();
 
-    await page.getByRole("link", { name: "Pipelines" }).click();
-    await expect(page.getByLabel("Pipeline loading placeholders")).toBeHidden();
+    await page.getByRole("link", { name: "Delivery" }).click();
+    await expect(page.getByLabel("Loading pipelines")).toBeHidden();
     await expect(page.getByRole("heading", { name: "ClaimBot_API" })).toBeVisible();
     releaseProjectLinks?.();
   });
@@ -419,7 +411,10 @@ test.describe("workspace route caching", () => {
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
 
-    await page.setViewportSize({ width: 900, height: 760 });
+    // At 900px the shell sidebar collapses to its compact rail, which keeps
+    // the card grid wide enough for two columns; 760px forces the cards to
+    // stack into a single column.
+    await page.setViewportSize({ width: 760, height: 760 });
     await expect.poll(async () => {
       const [primaryBox, secondaryBox] = await Promise.all([
         primaryCard.boundingBox(),
@@ -461,7 +456,7 @@ test.describe("workspace route caching", () => {
     });
 
     await page.goto("/#/chat", { waitUntil: "domcontentloaded" });
-    await expect(page.getByText("Ask MergePilot anything")).toBeVisible();
+    await expect(page.getByText("Start with a focused prompt")).toBeVisible();
     await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
     const welcomePanel = page.locator('[aria-label="New conversation welcome"]');
     await expect(welcomePanel).toBeVisible();
@@ -476,10 +471,10 @@ test.describe("workspace route caching", () => {
     await page.waitForTimeout(120);
     expect(indexStatusRequests).toBe(0);
     await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
-    await expect(page.getByText("Ask MergePilot anything")).toBeVisible();
+    await expect(page.getByText("Start with a focused prompt")).toBeVisible();
     await page.setViewportSize({ width: 760, height: 760 });
     await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
-    await expect(page.getByText("Ask MergePilot anything")).toBeVisible();
+    await expect(page.getByText("Start with a focused prompt")).toBeVisible();
     await expect.poll(async () =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
@@ -540,8 +535,8 @@ test.describe("workspace route caching", () => {
 
     await page.goto("/#/chat");
     await expect(page.getByRole("button", { name: "Understand this project" })).toBeVisible();
-    await page.getByLabel("Composer Project Link").selectOption(secondaryProjectLink.id);
-    await expect(page.getByLabel("Composer Project Link")).toHaveValue(secondaryProjectLink.id);
+    await expect(page.getByTitle("Context manages the Project Link")).toHaveText(projectLink.name);
+    await expect(page.locator('select[aria-label="Composer Project Link"]')).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Understand this project" })).toBeVisible();
     await expect(page.locator(".animate-pulse")).toHaveCount(0);
     await page.waitForTimeout(120);
@@ -575,10 +570,10 @@ test.describe("workspace route caching", () => {
     await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
     await expect(page.locator(".animate-pulse")).toHaveCount(0);
 
-    await page.getByRole("link", { name: "Activity" }).click();
-    await expect(page.getByText("Operational history")).toBeVisible();
+    await page.goto("/#/activity");
+    await expect(page.getByRole("heading", { name: "Activity" })).toBeVisible();
 
-    await page.getByRole("link", { name: "New chat" }).click();
+    await page.getByRole("link", { name: "Agent" }).click();
     await page.waitForTimeout(80);
     await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
     await expect(page.locator(".animate-pulse")).toHaveCount(0);
@@ -600,9 +595,11 @@ test.describe("workspace route caching", () => {
     await page.goto("/#/settings", { waitUntil: "domcontentloaded" });
 
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-    await expect(page.getByText("Built-in model")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Built-in capabilities" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Additional Models" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "System" })).toBeVisible();
+    // Runtime details live in a collapsed disclosure; open it before reading rows.
+    await page.getByText("Runtime details").click();
     await expect(page.getByText("Daemon runtime")).toBeVisible();
     await expect(page.getByText("Sidecar owner")).toBeVisible();
     await expect(page.getByText("No runtime mode")).toBeVisible();
@@ -619,11 +616,13 @@ test.describe("workspace route caching", () => {
     ).toBeGreaterThan(1030);
     await expect.poll(async () =>
       page.evaluate(() => {
-        const sections = Array.from(document.querySelectorAll(".settings-section")).map((section) => {
-          const title = section.querySelector(".settings-section-title")?.textContent?.trim();
-          const rect = section.getBoundingClientRect();
-          return { title, x: rect.x, y: rect.y, width: rect.width };
-        });
+        const sections = Array.from(document.querySelectorAll(".settings-grid > section")).map(
+          (section) => {
+            const title = section.querySelector("h3")?.textContent?.trim();
+            const rect = section.getBoundingClientRect();
+            return { title, x: rect.x, y: rect.y, width: rect.width };
+          },
+        );
         const appearance = sections.find((section) => section.title === "Appearance");
         const system = sections.find((section) => section.title === "System");
         return Boolean(
@@ -636,12 +635,13 @@ test.describe("workspace route caching", () => {
     ).toBe(true);
     await expect.poll(async () =>
       page.evaluate(() => {
-        const desktopRow = Array.from(document.querySelectorAll(".settings-row")).find((row) =>
-          row.textContent?.includes("Desktop build"),
-        );
+        const desktopRow = Array.from(document.querySelectorAll("div.grid")).find((row) => {
+          const title = row.querySelector("p")?.textContent?.trim();
+          return title === "Desktop build";
+        });
         const rowRect = desktopRow?.getBoundingClientRect();
         const controlRect = desktopRow
-          ?.querySelector(".settings-row-control")
+          ?.querySelector(":scope > div.flex")
           ?.getBoundingClientRect();
         if (!rowRect || !controlRect) return false;
         return controlRect.x > rowRect.x + rowRect.width * 0.45;
@@ -735,7 +735,7 @@ test.describe("workspace route caching", () => {
     let delayRefresh = false;
     let releaseRefresh: (() => void) | undefined;
     await page.route(
-      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests.*/,
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests\?status=.*/,
       async (route) => {
         if (delayRefresh) {
           await new Promise<void>((resolve) => {
@@ -822,18 +822,18 @@ test.describe("workspace route caching", () => {
 
     await page.goto("/#/pulls");
     await expect(page.getByText("Update CommonFunctions.cs and ClaimController.cs")).toBeVisible();
-    await expect(page.getByLabel("Pull Requests Project Link")).toBeVisible();
+    await expect(page.getByLabel("Pull Requests Project Link")).toHaveCount(0);
     await expect(page.getByLabel("Pull Requests status")).toBeVisible();
-    await expect(page.getByText("Author")).toBeVisible();
-    await expect(page.getByText("Reviewers")).toBeVisible();
+    await expect(page.getByText("Author:", { exact: true })).toBeVisible();
+    await expect(page.getByText("Reviewers:", { exact: true })).toBeVisible();
     await expect.poll(async () =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
     await page.setViewportSize({ width: 760, height: 760 });
-    await expect(page.getByLabel("Pull Requests Project Link")).toBeVisible();
+    await expect(page.getByLabel("Pull Requests Project Link")).toHaveCount(0);
     await expect(page.getByLabel("Pull Requests status")).toBeVisible();
-    await expect(page.getByText("Author")).toBeVisible();
-    await expect(page.getByText("Reviewers")).toBeVisible();
+    await expect(page.getByText("Author:", { exact: true })).toBeVisible();
+    await expect(page.getByText("Reviewers:", { exact: true })).toBeVisible();
     await expect.poll(async () =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
@@ -857,7 +857,7 @@ test.describe("workspace route caching", () => {
     await mockBaseRuntime(page);
     let releaseCompletedPulls: (() => void) | undefined;
     await page.route(
-      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests.*/,
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests\?status=.*/,
       async (route) => {
         const requestUrl = route.request().url();
         if (requestUrl.includes("status=completed")) {
@@ -908,10 +908,10 @@ test.describe("workspace route caching", () => {
     await expect(page.getByText("Completed cache status pull request")).toBeVisible();
   });
 
-  test("@smoke @mocked lays out Pull Request cards as a responsive grid", async ({ page }) => {
+  test("@smoke @mocked lays out Pull Request cards as a stacked list", async ({ page }) => {
     await mockBaseRuntime(page);
     await page.route(
-      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests.*/,
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests\?status=.*/,
       async (route) => {
         await route.fulfill({
           status: 200,
@@ -944,11 +944,12 @@ test.describe("workspace route caching", () => {
     await page.setViewportSize({ width: 1366, height: 760 });
     await page.goto("/#/pulls");
     await expect(page.locator("article")).toHaveCount(2);
+    // The Changes workspace lists PR cards in a single vertical column.
     await expect.poll(async () =>
       page.locator("article").evaluateAll((cards) => {
         if (cards.length < 2) return false;
         const [first, second] = cards.map((card) => card.getBoundingClientRect().top);
-        return Math.abs((first ?? 0) - (second ?? 0)) < 4;
+        return Math.abs((first ?? 0) - (second ?? 0)) >= 4;
       }),
     ).toBe(true);
     await expect.poll(async () =>
@@ -972,7 +973,7 @@ test.describe("workspace route caching", () => {
     await mockBaseRuntime(page);
     await page.setViewportSize({ width: 760, height: 760 });
     await page.route(
-      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests.*/,
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests\?status=.*/,
       async (route) => {
         await route.fulfill({
           status: 200,
@@ -995,9 +996,9 @@ test.describe("workspace route caching", () => {
     await page.goto("/#/pulls");
 
     await expect(page.getByText("No pull requests found")).toBeVisible();
-    await expect(page.getByText("Microsoft sign-in")).toBeVisible();
-    await expect(page.getByText("Repository permissions")).toBeVisible();
-    await expect(page.getByText("Project Link branch scope")).toBeVisible();
+    await expect(
+      page.getByText("Try another Project Link or status filter, or refresh after creating a pull request."),
+    ).toBeVisible();
     await expect.poll(async () =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
@@ -1042,12 +1043,12 @@ test.describe("workspace route caching", () => {
     page,
   }) => {
     await mockBaseRuntime(page, { projectLinks: [projectLink, secondaryProjectLink] });
-    await page.addInitScript(() => {
-      localStorage.setItem("mergepilot_active_project_link_id", "cache-project-link");
-    });
+    // No addInitScript here: the active link is resolved from the stored
+    // value, and an init script would re-seed the primary id on reload and
+    // clobber the switch below.
     let releaseSecondaryPulls: (() => void) | undefined;
     await page.route(
-      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests.*/,
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests\?status=.*/,
       async (route) => {
         const requestUrl = route.request().url();
         if (requestUrl.includes(secondaryProjectLink.id)) {
@@ -1090,7 +1091,13 @@ test.describe("workspace route caching", () => {
 
     await page.goto("/#/pulls");
     await expect(page.getByText("Update CommonFunctions.cs and ClaimController.cs")).toBeVisible();
-    await page.getByLabel("Pull Requests Project Link").selectOption(secondaryProjectLink.id);
+    // The Pull Requests header no longer switches Project Links; the page
+    // follows the active Project Link selected in Context, so the switch is
+    // driven through shared storage.
+    await page.evaluate((id) => {
+      localStorage.setItem("mergepilot_active_project_link_id", id);
+    }, secondaryProjectLink.id);
+    await page.reload();
     await expect(page.getByText("Update CommonFunctions.cs and ClaimController.cs")).toBeHidden();
     await expect(page.getByLabel("Preparing pull requests")).toBeVisible();
     releaseSecondaryPulls?.();
@@ -1105,7 +1112,7 @@ test.describe("workspace route caching", () => {
       localStorage.setItem("mergepilot_active_project_link_id", "cache-project-link");
     });
     await page.route(
-      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests.*/,
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests\?status=.*/,
       async (route) => {
         await route.fulfill({
           status: 401,
@@ -1129,13 +1136,13 @@ test.describe("workspace route caching", () => {
     );
 
     await page.goto("/#/pulls");
-    await expect(page.getByText("Azure credential expired or missing")).toBeVisible();
+    await expect(page.getByText("Azure DevOps sign-in needs attention")).toBeVisible();
     await expect(page.getByText("/project-links/")).toBeHidden();
     await expect(page.getByText("HTTP 401")).toBeHidden();
-    await page.getByRole("link", { name: "New chat" }).click();
-    await page.getByRole("link", { name: "Pull Requests" }).click();
+    await page.getByRole("link", { name: "Agent" }).click();
+    await page.getByRole("link", { name: "Changes" }).click();
     await expect(page.getByText("Loading pull requests...")).toBeHidden();
-    await expect(page.getByText("Azure credential expired or missing")).toBeVisible();
+    await expect(page.getByText("Azure DevOps sign-in needs attention")).toBeVisible();
     await expect(page.getByText("/project-links/")).toBeHidden();
     await expect(page.getByText("HTTP 401")).toBeHidden();
   });
@@ -1146,7 +1153,7 @@ test.describe("workspace route caching", () => {
     await mockBaseRuntime(page);
     await page.setViewportSize({ width: 900, height: 760 });
     await page.route(
-      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests.*/,
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests\?status=.*/,
       async (route) => {
         await route.fulfill({
           status: 200,
@@ -1200,7 +1207,7 @@ test.describe("workspace route caching", () => {
       prCard.evaluate((element) => Math.round(element.getBoundingClientRect().height)),
     ).toBeLessThanOrEqual(280);
     await page.getByRole("button", { name: "Open insight" }).click();
-    const sidePanel = page.locator("aside").filter({ hasText: "PR insight" });
+    const sidePanel = page.getByRole("dialog");
     await expect(sidePanel).toBeVisible();
     await expect.poll(async () =>
       sidePanel.evaluate((element) => getComputedStyle(element).position),
@@ -1226,11 +1233,11 @@ test.describe("workspace route caching", () => {
     await expect.poll(async () => {
       const box = await sidePanel.boundingBox();
       return box ? Math.round(box.width) : 999;
-    }).toBeLessThanOrEqual(490);
+    }).toBeLessThanOrEqual(600);
     await expect.poll(async () =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
-    await expect(sidePanel.getByText("AI insight")).toBeVisible();
+    await expect(sidePanel.getByText("Last AI Insight")).toBeVisible();
     await expect(sidePanel.getByRole("button", { name: "Refresh insight" })).toBeVisible();
     await expect(sidePanel.getByRole("button", { name: "Generate insight" })).toBeHidden();
     await expect(sidePanel.getByText("Scope: ClaimBot_API link")).toBeVisible();
@@ -1299,7 +1306,7 @@ test.describe("workspace route caching", () => {
       });
     });
     await page.route(
-      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests.*/,
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests\?status=.*/,
       async (route) => {
         const isEdited = projectLinksResponse[0]?.adoRepoName === "EditedRepo";
         await route.fulfill({
@@ -1383,7 +1390,7 @@ test.describe("workspace route caching", () => {
     await page.getByRole("button", { name: "Save Project Link" }).click();
     await expect(page.getByRole("heading", { name: "Project Links" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Pull Requests" }).click();
+    await page.getByRole("link", { name: "Changes" }).click();
     await expect(page.getByText("Edited repository pull request")).toBeVisible();
     await expect(page.getByText("Original repository pull request")).toBeHidden();
     await expect(page.getByText("Original repository insight.")).toBeHidden();
@@ -1429,7 +1436,7 @@ test.describe("workspace route caching", () => {
       );
     });
     await page.route(
-      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests.*/,
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests\?status=.*/,
       async (route) => {
         const requestUrl = route.request().url();
         const body = requestUrl.includes(secondaryProjectLink.id)
@@ -1472,52 +1479,48 @@ test.describe("workspace route caching", () => {
     );
 
     await page.goto("/#/pulls");
-    await page.getByLabel("Pull Requests Project Link").selectOption("");
     await expect(page.getByText("Primary duplicate PR")).toBeVisible();
+    await expect(page.getByText("Secondary duplicate PR")).toHaveCount(0);
+    // The Pull Requests header no longer offers an "all links" aggregate; the
+    // page follows the active Project Link, so switch through shared storage
+    // and verify each link keeps its own distinct PR #2670.
+    await page.evaluate((id) => {
+      localStorage.setItem("mergepilot_active_project_link_id", id);
+    }, secondaryProjectLink.id);
+    await page.reload();
     await expect(page.getByText("Secondary duplicate PR")).toBeVisible();
     const secondaryCard = page.locator("article").filter({ hasText: "Secondary duplicate PR" });
     await secondaryCard.getByRole("button", { name: "Open insight" }).click();
-    const sidePanel = page.locator("aside").filter({ hasText: "PR insight" });
+    const sidePanel = page.getByRole("dialog");
     await expect(sidePanel.getByText("#2670 Secondary duplicate PR")).toBeVisible();
     await expect(sidePanel.getByText("Scope: Secondary link")).toBeVisible();
     await expect(sidePanel.getByText("Secondary insight.")).toBeVisible();
     await expect(sidePanel.getByText("Primary insight.")).toBeHidden();
   });
 
-  test("@smoke @mocked keeps cached Review Queue decisions visible while refresh is pending", async ({
+  test("@smoke @mocked redirects /findings to Changes after Review Queue removal", async ({
     page,
   }) => {
     await mockBaseRuntime(page);
-    let delayRefresh = false;
-    let releaseRefresh: (() => void) | undefined;
     await page.route(
-      `http://127.0.0.1:8787/project-links/${projectLink.id}/review-queue`,
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests\?status=.*/,
       async (route) => {
-        if (delayRefresh) {
-          await new Promise<void>((resolve) => {
-            releaseRefresh = resolve;
-          });
-          delayRefresh = false;
-        }
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ configured: false, storage: "local", items: [reviewQueueItem] }),
+          body: JSON.stringify({ pullRequests: [pullRequest] }),
         });
       },
     );
 
     await page.goto("/#/findings");
-    await expect(page.getByText("Warnings need human review.")).toBeVisible();
-    delayRefresh = true;
-    await page.getByRole("button", { name: "Refresh" }).click();
-    await expect(page.getByText("Refreshing review decisions...")).toBeVisible();
-    await expect(page.getByText("Warnings need human review.")).toBeVisible();
-    releaseRefresh?.();
-    await expect(page.getByText("Refreshing review decisions...")).toBeHidden();
+    await expect(page).toHaveURL(/#\/pulls/);
+    await expect(page.getByText("Update CommonFunctions.cs and ClaimController.cs")).toBeVisible();
+    await expect(page.getByText("Warnings need human review.")).toHaveCount(0);
+    await expect(page.getByText("Refreshing review decisions...")).toHaveCount(0);
   });
 
-  test("@smoke @mocked does not show empty Review Queue before Project Links resolve", async ({
+  test("@smoke @mocked does not show an empty Changes page before Project Links resolve", async ({
     page,
   }) => {
     await mockBaseRuntime(page);
@@ -1533,12 +1536,12 @@ test.describe("workspace route caching", () => {
       });
     });
     await page.route(
-      `http://127.0.0.1:8787/project-links/${projectLink.id}/review-queue`,
+      `http://127.0.0.1:8787/project-links/${projectLink.id}/pull-requests?status=active`,
       async (route) => {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ configured: false, storage: "local", items: [reviewQueueItem] }),
+          body: JSON.stringify({ pullRequests: [pullRequest] }),
         });
       },
     );
@@ -1546,21 +1549,54 @@ test.describe("workspace route caching", () => {
     await page.goto("/#/findings");
     await expect(page.getByLabel("Loading Project Links")).toBeVisible();
     await expect(page.getByText("Checking repository mappings")).toBeVisible();
-    await expect(page.getByText("Auto-approved")).toBeHidden();
-    await expect(page.getByText("Recent activity")).toBeHidden();
-    await expect(page.getByText("No review decisions found")).toBeHidden();
+    await expect(page.getByText("Auto-approved")).toHaveCount(0);
+    await expect(page.getByText("No review decisions found")).toHaveCount(0);
     releaseProjectLinks?.();
-    await expect(page.getByText("Warnings need human review.")).toBeVisible();
+    await expect(page.getByText("Update CommonFunctions.cs and ClaimController.cs")).toBeVisible();
   });
 
-  test("@smoke @mocked keeps Review Queue failure visible on warm route return", async ({
-    page,
-  }) => {
+  test("@smoke @mocked Review Queue is no longer navigable after removal", async ({ page }) => {
     await mockBaseRuntime(page);
     await page.addInitScript(() => {
       localStorage.setItem("mergepilot_active_project_link_id", "cache-project-link");
     });
     await page.route(
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests\?status=.*/,
+      async (route) => {
+        await route.fulfill({
+          status: 401,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: "azure_auth_required",
+            message: "Azure credential expired or missing. Please sign in again.",
+          }),
+        });
+      },
+    );
+
+    await expect(page.getByRole("link", { name: "Review Queue" })).toHaveCount(0);
+    await page.goto("/#/findings");
+    await expect(page).toHaveURL(/#\/pulls/);
+    await expect(page.getByText("Azure DevOps sign-in needs attention")).toBeVisible();
+    await page.getByRole("link", { name: "Agent" }).click();
+    await page.getByRole("link", { name: "Changes" }).click();
+    await expect(page.getByText("Loading pull requests...")).toBeHidden();
+    await expect(page.getByText("Azure DevOps sign-in needs attention")).toBeVisible();
+  });
+
+  test("@smoke @mocked Review Queue storage errors never surface on Changes", async ({ page }) => {
+    await mockBaseRuntime(page);
+    await page.route(
+      /http:\/\/127\.0\.0\.1:8787\/project-links\/[^/]+\/pull-requests\?status=.*/,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ pullRequests: [pullRequest] }),
+        });
+      },
+    );
+    await page.route(
       /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/review-queue/,
       async (route) => {
         await route.fulfill({
@@ -1575,113 +1611,29 @@ test.describe("workspace route caching", () => {
     );
 
     await page.goto("/#/findings");
-    await expect(page.getByText("Azure Table Storage access is not available")).toBeVisible();
-    await page.getByRole("link", { name: "New chat" }).click();
-    await page.getByRole("link", { name: "Review Queue" }).click();
-    await expect(page.getByText("Loading review decisions...")).toBeHidden();
-    await expect(page.getByText("Azure Table Storage access is not available")).toBeVisible();
+    await expect(page).toHaveURL(/#\/pulls/);
+    await expect(page.getByText("Update CommonFunctions.cs and ClaimController.cs")).toBeVisible();
+    await expect(page.getByLabel("Review Queue Project Link")).toHaveCount(0);
+    await expect(page.getByText("Azure Table Storage access is not available")).toHaveCount(0);
   });
 
-  test("@smoke @mocked clears Review Queue storage warning immediately after Project Link switch", async ({
+  test("@smoke @mocked Review Queue decisions never render on the Changes target", async ({
     page,
   }) => {
     await mockBaseRuntime(page);
-    await page.route("http://127.0.0.1:8787/project-links", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([projectLink, secondaryProjectLink]),
-      });
-    });
     await page.route(
-      /http:\/\/127\.0\.0\.1:8787\/project-links\/[^/]+\/review-operations/,
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests\?status=.*/,
       async (route) => {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ items: [] }),
+          body: JSON.stringify({ pullRequests: [pullRequest] }),
         });
       },
     );
-    let releaseSecondaryQueue: (() => void) | undefined;
-    await page.route(
-      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/review-queue/,
-      async (route) => {
-        if (route.request().url().includes(secondaryProjectLink.id)) {
-          await new Promise<void>((resolve) => {
-            releaseSecondaryQueue = resolve;
-          });
-          await route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify({
-              configured: false,
-              storage: "local",
-              items: [secondaryReviewQueueItem],
-            }),
-          });
-          return;
-        }
-        await route.fulfill({
-          status: 403,
-          contentType: "application/json",
-          body: JSON.stringify({
-            error: "storage_forbidden",
-            message: "Azure Table Storage access is not available for this user.",
-          }),
-        });
-      },
-    );
-
-    await page.goto("/#/findings");
-    await expect(page.getByText("Azure Table Storage access is not available")).toBeVisible();
-    await page.getByLabel("Review Queue Project Link").selectOption(secondaryProjectLink.id);
-    await expect(page.getByText("Azure Table Storage access is not available")).toBeHidden();
-    releaseSecondaryQueue?.();
-    await expect(page.getByText("Second project requires review.")).toBeVisible();
-  });
-
-  test("@smoke @mocked does not show stale Review Queue decisions after Project Link switch", async ({
-    page,
-  }) => {
-    await mockBaseRuntime(page);
-    await page.route("http://127.0.0.1:8787/project-links", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([projectLink, secondaryProjectLink]),
-      });
-    });
-    await page.route(
-      /http:\/\/127\.0\.0\.1:8787\/project-links\/[^/]+\/review-operations/,
-      async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ items: [] }),
-        });
-      },
-    );
-    let releaseSecondaryQueue: (() => void) | undefined;
     await page.route(
       /http:\/\/127\.0\.0\.1:8787\/project-links\/[^/]+\/review-queue/,
       async (route) => {
-        const requestUrl = route.request().url();
-        if (requestUrl.includes(secondaryProjectLink.id)) {
-          await new Promise<void>((resolve) => {
-            releaseSecondaryQueue = resolve;
-          });
-          await route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify({
-              configured: false,
-              storage: "local",
-              items: [secondaryReviewQueueItem],
-            }),
-          });
-          return;
-        }
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -1691,15 +1643,14 @@ test.describe("workspace route caching", () => {
     );
 
     await page.goto("/#/findings");
-    await expect(page.getByText("Warnings need human review.")).toBeVisible();
-    await page.getByLabel("Review Queue Project Link").selectOption(secondaryProjectLink.id);
-    await expect(page.getByText("Warnings need human review.")).toBeHidden();
-    await expect(page.getByLabel("Preparing review queue")).toBeVisible();
-    releaseSecondaryQueue?.();
-    await expect(page.getByText("Second project requires review.")).toBeVisible();
+    await expect(page).toHaveURL(/#\/pulls/);
+    await expect(page.getByText("Update CommonFunctions.cs and ClaimController.cs")).toBeVisible();
+    await expect(page.getByText("Warnings need human review.")).toHaveCount(0);
+    await expect(page.getByLabel("Review Queue Project Link")).toHaveCount(0);
+    await expect(page.getByLabel("Preparing review queue")).toHaveCount(0);
   });
 
-  test("@smoke @mocked closes Review Queue findings panel after Project Link switch", async ({
+  test("@smoke @mocked Review Findings surfaces are gone from the redirect target", async ({
     page,
   }) => {
     await mockBaseRuntime(page);
@@ -1721,47 +1672,23 @@ test.describe("workspace route caching", () => {
         }),
       );
     });
-    await page.route("http://127.0.0.1:8787/project-links", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([projectLink, secondaryProjectLink]),
-      });
-    });
     await page.route(
-      /http:\/\/127\.0\.0\.1:8787\/project-links\/[^/]+\/review-operations/,
+      /http:\/\/(127\.0\.0\.1|localhost):8787\/project-links\/[^/]+\/pull-requests\?status=.*/,
       async (route) => {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ items: [] }),
-        });
-      },
-    );
-    await page.route(
-      /http:\/\/127\.0\.0\.1:8787\/project-links\/[^/]+\/review-queue/,
-      async (route) => {
-        const requestUrl = route.request().url();
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: requestUrl.includes(secondaryProjectLink.id)
-            ? JSON.stringify({
-                configured: false,
-                storage: "local",
-                items: [secondaryReviewQueueItem],
-              })
-            : JSON.stringify({ configured: false, storage: "local", items: [reviewQueueItem] }),
+          body: JSON.stringify({ pullRequests: [pullRequest] }),
         });
       },
     );
 
     await page.goto("/#/findings");
-    await page.getByRole("button", { name: /View findings/ }).click();
-    await expect(page.getByRole("heading", { name: /Review Findings/ })).toBeVisible();
-    await page.getByLabel("Review Queue Project Link").selectOption(secondaryProjectLink.id);
-    await expect(page.getByRole("heading", { name: /Review Findings/ })).toBeHidden();
-    await expect(page.getByText("Second project requires review.")).toBeVisible();
+    await expect(page).toHaveURL(/#\/pulls/);
+    await expect(page.getByText("Update CommonFunctions.cs and ClaimController.cs")).toBeVisible();
+    await expect(page.getByRole("button", { name: /View findings/ })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: /Review Findings/ })).toHaveCount(0);
+    await expect(page.getByLabel("Review Queue Project Link")).toHaveCount(0);
   });
 
   test("@smoke @mocked keeps cached pipeline rows visible while discovery refreshes", async ({
@@ -1937,14 +1864,15 @@ test.describe("workspace route caching", () => {
     await page.getByRole("button", { name: "Inspect runs" }).click();
     await expect(page.getByText("Pipeline inspection failed: ADO permission denied")).toBeVisible();
     await page.getByRole("button", { name: "Details" }).click();
-    const detailPanel = page.locator("aside").filter({ hasText: "Pipeline action failed" });
+    const detailPanel = page.getByRole("dialog");
     await expect(detailPanel).toBeVisible();
+    await expect(detailPanel.getByText("Pipeline action failed")).toBeVisible();
     await expect(detailPanel.getByText("Pipeline inspection failed: ADO permission denied")).toBeVisible();
     await expect(detailPanel.getByText("/chat/workflow-action")).toBeHidden();
     await expect(detailPanel.getByText("HTTP 500")).toBeHidden();
   });
 
-  test("@smoke @mocked shows pipeline AI analysis errors without hiding local evidence", async ({
+  test("@smoke @mocked AI analyze opens the run Inspector instead of inline analysis", async ({
     page,
   }) => {
     await mockBaseRuntime(page);
@@ -1952,7 +1880,16 @@ test.describe("workspace route caching", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([]),
+        body: JSON.stringify([
+          {
+            id: "saved-connection-117",
+            projectLinkId: projectLink.id,
+            pipelineId: "117",
+            pipelineName: "ClaimBot_API",
+            purpose: "ci",
+            isDefault: true,
+          },
+        ]),
       });
     });
     await page.route(
@@ -1972,54 +1909,59 @@ test.describe("workspace route caching", () => {
         body: JSON.stringify({ items: [{ id: "117", name: "ClaimBot_API" }] }),
       });
     });
-    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          ok: true,
-          action: { type: "inspect_pipeline" },
-          repoPath: projectLink.repoPath,
-          summary: "Pipeline #117 inspected.",
-          workflowState: { status: "done" },
-          tools: [
-            {
-              name: "ado_list_pipeline_runs",
-              command: "ado list pipeline runs",
-              ok: true,
-              stdout: JSON.stringify({ runs: [pullRequest.pipelineRun] }),
-              stderr: "",
-              returncode: 0,
+    await page.route(
+      /http:\/\/127\.0\.0\.1:8787\/delivery\/evidence\/\d+.*/,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            build: {
+              id: 4680,
+              buildNumber: "20260706.1",
+              status: "completed",
+              result: "failed",
+              branch: "refs/heads/main",
+              sourceVersion: "0649066f311f",
+              definitionName: "ClaimBot_API",
             },
-          ],
-          artifacts: [],
-        }),
-      });
-    });
-    await page.route("http://127.0.0.1:8787/pipelines/analyze", async (route) => {
-      await route.fulfill({
-        status: 500,
-        contentType: "application/json",
-        body: JSON.stringify({ message: "Azure OpenAI analysis failed" }),
-      });
-    });
+            timelineIssues: [{ taskName: "VSTest", result: "failed" }],
+            errorIssues: [{ type: "VSTest", message: "2 tests failed" }],
+            logExcerpts: [],
+            signature: {
+              definitionId: 117,
+              taskName: "VSTest",
+              errorClass: "test_failure",
+              normalizedText: "2 tests failed",
+            },
+            classification: {
+              class: "flaky_test",
+              confidence: 0.75,
+              decisiveEvidence: ["VSTest failed on run 20260706.1"],
+              missingEvidence: [],
+            },
+            coverage: "complete",
+          }),
+        });
+      },
+    );
 
     await page.goto("/#/pipelines");
     await expect(page.getByRole("heading", { name: "ClaimBot_API" })).toBeVisible();
     await page.getByRole("button", { name: "AI analyze" }).click();
+    const inspector = page.getByRole("dialog");
+    await expect(inspector).toBeVisible();
+    await expect(inspector.getByText("Run 4680")).toBeVisible();
+    await expect(inspector.getByText("20260706.1", { exact: true })).toBeVisible();
+    await expect(inspector.getByText("VSTest failed on run 20260706.1")).toBeVisible();
+    await expect(inspector.getByText(/Flaky test/)).toBeVisible();
+    // The row card never renders an inline AI analysis section for this action.
     const card = page.locator("article").filter({ hasText: "ClaimBot_API" });
-    await expect(card.getByText("AI analysis")).toBeVisible();
-    await expect(card.getByText("Error")).toBeVisible();
-    await expect(card.getByText("Runs inspected: 1")).toBeVisible();
-    await page.getByRole("button", { name: "Open analysis" }).click();
-    const detailPanel = page.locator("aside").filter({ hasText: "Pipeline detail" });
-    await expect(detailPanel.getByText("AI analysis failed.")).toBeVisible();
-    await expect(detailPanel.getByText("Azure OpenAI analysis failed")).toBeVisible();
-    await expect(detailPanel.getByText("Runs inspected: 1")).toBeVisible();
-    await expect(detailPanel.getByText("Ready")).toBeHidden();
+    await expect(card.getByText("AI analysis")).toHaveCount(0);
+    await expect(page.getByText("Runs inspected:")).toHaveCount(0);
   });
 
-  test("@smoke @mocked renders successful pipeline AI analysis as Markdown with run evidence", async ({
+  test("@smoke @mocked renders run Inspector evidence with classification and recovery actions", async ({
     page,
   }) => {
     await mockBaseRuntime(page);
@@ -2028,7 +1970,16 @@ test.describe("workspace route caching", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([]),
+        body: JSON.stringify([
+          {
+            id: "saved-connection-117",
+            projectLinkId: projectLink.id,
+            pipelineId: "117",
+            pipelineName: "ClaimBot_API",
+            purpose: "ci",
+            isDefault: true,
+          },
+        ]),
       });
     });
     await page.route(
@@ -2048,93 +1999,90 @@ test.describe("workspace route caching", () => {
         body: JSON.stringify({ items: [{ id: "117", name: "ClaimBot_API" }] }),
       });
     });
-    await page.route("http://127.0.0.1:8787/chat/workflow-action", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          ok: true,
-          action: { type: "inspect_pipeline" },
-          repoPath: projectLink.repoPath,
-          summary: "Pipeline #117 inspected.",
-          workflowState: { status: "done" },
-          tools: [
-            {
-              name: "ado_list_pipeline_runs",
-              command: "ado list pipeline runs",
-              ok: true,
-              stdout: JSON.stringify({ runs: [pullRequest.pipelineRun] }),
-              stderr: "",
-              returncode: 0,
+    await page.route(
+      /http:\/\/127\.0\.0\.1:8787\/delivery\/evidence\/\d+.*/,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            build: {
+              id: 4680,
+              buildNumber: "20260706.1",
+              status: "completed",
+              result: "succeeded",
+              branch: "refs/heads/main",
+              sourceVersion: "0649066f311f",
+              definitionName: "ClaimBot_API",
             },
-          ],
-          artifacts: [],
-        }),
-      });
-    });
-    await page.route("http://127.0.0.1:8787/pipelines/analyze", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          source: "llm",
-          analysis: [
-            "**Status:** Pipeline #117 latest run succeeded.",
-            "",
-            "- **Risk:** low",
-            "- Evidence preserved from Azure run `20260706.1`.",
-            "- Next action: keep this as the CI connection.",
-          ].join("\n"),
-        }),
-      });
-    });
+            timelineIssues: [],
+            errorIssues: [],
+            logExcerpts: [
+              {
+                taskName: "CSC",
+                excerpt: "error CS0103: The name 'token' does not exist",
+                contentHash: "abc123",
+              },
+            ],
+            signature: {
+              definitionId: 117,
+              taskName: "CSC",
+              errorClass: "compile_error",
+              normalizedText: "error CS0103",
+            },
+            classification: {
+              class: "code_regression",
+              confidence: 0.9,
+              decisiveEvidence: ["Compile error in CommonFunctions.cs"],
+              missingEvidence: [],
+            },
+            coverage: "complete",
+          }),
+        });
+      },
+    );
 
     await page.goto("/#/pipelines");
     await expect(page.getByRole("heading", { name: "ClaimBot_API" })).toBeVisible();
     await page.getByRole("button", { name: "AI analyze" }).click();
-    const card = page.locator("article").filter({ hasText: "ClaimBot_API" });
-    await expect(card.getByText("AI analysis")).toBeVisible();
-    await expect(card.getByText("Ready")).toBeVisible();
-    await expect(card.getByText("AI analysis streaming")).toBeHidden();
-    await expect(card.getByText("Status: Pipeline #117 latest run succeeded.")).toBeVisible();
-    await expect(card.getByRole("button", { name: "Open analysis" })).toBeVisible();
-    await page.getByRole("button", { name: "Open analysis" }).click();
-    const detailPanel = page.locator("aside").filter({ hasText: "Pipeline detail" });
+    const inspector = page.getByRole("dialog");
     await expect.poll(async () =>
-      detailPanel.evaluate((element) => getComputedStyle(element).position),
+      inspector.evaluate((element) => getComputedStyle(element).position),
     ).toBe("fixed");
     await expect.poll(async () =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
     await page.setViewportSize({ width: 1100, height: 760 });
     await expect.poll(async () =>
-      detailPanel.evaluate((element) => getComputedStyle(element).position),
+      inspector.evaluate((element) => getComputedStyle(element).position),
     ).toBe("fixed");
     await expect.poll(async () =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
     await page.setViewportSize({ width: 1366, height: 760 });
     await expect.poll(async () =>
-      detailPanel.evaluate((element) => getComputedStyle(element).position),
+      inspector.evaluate((element) => getComputedStyle(element).position),
     ).toBe("fixed");
     await expect.poll(async () => {
-      const box = await detailPanel.boundingBox();
+      const box = await inspector.boundingBox();
       return box ? Math.round(box.width) : 0;
     }).toBeGreaterThanOrEqual(350);
     await expect.poll(async () => {
-      const box = await detailPanel.boundingBox();
+      const box = await inspector.boundingBox();
       return box ? Math.round(box.width) : 999;
-    }).toBeLessThanOrEqual(490);
+    }).toBeLessThanOrEqual(600);
     await expect.poll(async () =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
-    await expect(detailPanel.getByText("AI analysis")).toBeVisible();
-    await expect(detailPanel.getByText("Status: Pipeline #117 latest run succeeded.")).toBeVisible();
-    await expect(detailPanel.locator("li").filter({ hasText: "Evidence preserved" })).toBeVisible();
-    await expect(detailPanel.locator("code").filter({ hasText: "20260706.1" })).toBeVisible();
-    await expect(detailPanel.getByText("Run evidence")).toBeVisible();
-    await expect(detailPanel.locator("li").filter({ hasText: "Open run" }).filter({ hasText: "20260706.1" })).toBeVisible();
-    await expect(detailPanel.getByText("Unknown")).toBeHidden();
+    await expect(inspector.getByText("Run 4680")).toBeVisible();
+    await expect(inspector.getByText("20260706.1", { exact: true })).toBeVisible();
+    await expect(inspector.getByText("Succeeded")).toBeVisible();
+    await expect(inspector.getByText(/Code regression/)).toBeVisible();
+    await expect(inspector.getByText("Decisive evidence")).toBeVisible();
+    await expect(inspector.locator("li").filter({ hasText: "Compile error in CommonFunctions.cs" })).toBeVisible();
+    await expect(inspector.getByRole("button", { name: "Rerun pipeline" })).toBeVisible();
+    await expect(inspector.getByRole("button", { name: "Create Bug" })).toBeVisible();
+    await expect(inspector.getByText("Unknown")).toBeHidden();
   });
 
   test("@smoke @mocked closes pipeline detail panel when the selected row is filtered out", async ({
@@ -2176,9 +2124,14 @@ test.describe("workspace route caching", () => {
     await page.goto("/#/pipelines");
     await page.getByRole("button", { name: "Inspect runs" }).click();
     await page.getByRole("button", { name: "Details" }).click();
-    await expect(page.locator("aside").filter({ hasText: "Pipeline action failed" })).toBeVisible();
+    const detailPanel = page.getByRole("dialog");
+    await expect(detailPanel).toBeVisible();
+    await expect(detailPanel.getByText("Pipeline action failed")).toBeVisible();
+    // The detail drawer is modal and blocks the filter toolbar; close it
+    // first, then filter the failed row out.
+    await detailPanel.getByRole("button", { name: /^Close/ }).click();
+    await expect(detailPanel).toBeHidden();
     await page.getByRole("button", { name: /Failed\s+0/ }).click();
-    await expect(page.locator("aside").filter({ hasText: "Pipeline action failed" })).toBeHidden();
     await expect(page.getByText("No pipelines match this filter.")).toBeVisible();
   });
 
@@ -2212,11 +2165,20 @@ test.describe("workspace route caching", () => {
     await page.goto("/#/activity");
     const taskButton = page.locator("button").filter({ hasText: "Pipeline submission:" });
     await expect(taskButton).toBeVisible();
+    // The auto-selected detail drawer is modal (it aria-hides the sidebar),
+    // so the Refresh control is asserted with DOM-based locators. Activity
+    // re-polls /tasks every 10 seconds: arm the route gate so the next poll
+    // acts as the pending refresh; clicking Refresh directly would race the
+    // disabled "Refreshing..." button state.
     delayRefresh = true;
-    await page.getByRole("button", { name: "Refresh" }).click();
+    await expect(page.locator("button").filter({ hasText: "Refreshing..." })).toBeVisible({
+      timeout: 12000,
+    });
     await expect(taskButton).toBeVisible();
     await expect(page.getByText("Loading activity...")).toBeHidden();
     releaseRefresh?.();
+    await expect(page.locator("button").filter({ hasText: /^Refresh$/ })).toBeVisible();
+    await expect(taskButton).toBeVisible();
   });
 
   test("@smoke @mocked presents Activity as scoped operational history sections", async ({ page }) => {
@@ -2236,24 +2198,13 @@ test.describe("workspace route caching", () => {
         body: JSON.stringify(activityTask),
       });
     });
-    let checkpointItems = [checkpointActivity];
     await page.route("http://127.0.0.1:8787/chat/checkpoints", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(checkpointItems),
+        body: JSON.stringify([checkpointActivity]),
       });
     });
-    await page.route(
-      `http://127.0.0.1:8787/project-links/${projectLink.id}/review-operations`,
-      async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ items: [reviewOperation] }),
-        });
-      },
-    );
     await page.route(
       `http://127.0.0.1:8787/project-links/${projectLink.id}/pr-insights`,
       async (route) => {
@@ -2267,78 +2218,46 @@ test.describe("workspace route caching", () => {
 
     await page.goto("/#/activity");
 
-    const sidebar = page.getByLabel("Activity sections").locator("xpath=ancestor::section[1]");
-    const detailPanel = page.locator("section").filter({ hasText: "Git checkpoint before confirmed action" }).first();
-    await expect.poll(async () => {
-      const box = await sidebar.boundingBox();
-      return box ? Math.round(box.width) : 0;
-    }).toBeLessThanOrEqual(390);
+    // The newest activity is auto-selected into a modal detail drawer that
+    // aria-hides the page, so the sidebar assertions below use DOM-based
+    // locators that ignore the accessibility tree.
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByRole("dialog").getByRole("button", { name: /^Close/ })).toBeVisible();
     await expect.poll(() =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
-    await expect(sidebar.getByRole("heading", { name: "Runs" })).toBeVisible();
-    await expect(sidebar.getByRole("heading", { name: "Checkpoints" })).toBeVisible();
-    await expect(sidebar.getByRole("heading", { name: "PR Insights" })).toBeVisible();
-    await expect(sidebar.getByRole("heading", { name: "Review Operations" })).toBeVisible();
-    await expect(sidebar.getByText("No agent runs recorded yet.")).toBeHidden();
-    await expect(sidebar.getByText("No Git checkpoints yet.")).toBeHidden();
-    await expect(sidebar.getByText("No saved PR insights yet.")).toBeHidden();
-    await expect(sidebar.getByText("No review operations yet.")).toBeHidden();
-    await expect(sidebar.getByRole("button", { name: /Pipeline submission:/ })).toBeVisible();
-    await expect(sidebar.getByRole("button", { name: /git_add/ })).toBeVisible();
-    await expect(sidebar.getByRole("button", { name: /#2670 · Review ClaimBot_API error handling/ })).toBeVisible();
-    await expect(sidebar.getByRole("button", { name: /#2670 · Review run completed/ })).toBeVisible();
-
-    await sidebar.getByRole("button", { name: /^Git\s+1$/ }).click();
-    await expect(sidebar.getByRole("heading", { name: "Checkpoints" })).toBeVisible();
-    await expect(sidebar.getByRole("button", { name: /git_add/ })).toBeVisible();
-    await expect(sidebar.getByRole("button", { name: /Pipeline submission:/ })).toBeHidden();
-    await expect(sidebar.getByRole("button", { name: /#2670 · Review ClaimBot_API error handling/ })).toBeHidden();
-    await expect(sidebar.getByRole("button", { name: /#2670 · Review run completed/ })).toBeHidden();
-    await expect(page.getByText("Git checkpoint before confirmed action")).toBeVisible();
-    await expect(page.getByText("Repository")).toBeVisible();
-    await expect(page.getByText("Session")).toBeVisible();
+    await expect(page.locator("h3").filter({ hasText: "Runs" })).toBeVisible();
+    await expect(page.locator("h3").filter({ hasText: "Checkpoints" })).toBeVisible();
+    await expect(page.locator("h3").filter({ hasText: "PR Insights" })).toBeVisible();
+    // Review Operations was removed with the Review Queue; the heading and
+    // its empty state must never render.
+    await expect(page.locator("h3").filter({ hasText: "Review Operations" })).toHaveCount(0);
+    await expect(page.getByText("No review operations yet.")).toHaveCount(0);
+    await expect(page.getByText("No agent runs recorded yet.")).toBeHidden();
+    await expect(page.getByText("No Git checkpoints yet.")).toBeHidden();
+    await expect(page.getByText("No saved PR insights yet.")).toBeHidden();
+    await expect(page.locator("button").filter({ hasText: "Pipeline submission:" })).toBeVisible();
+    await expect(page.locator("button").filter({ hasText: "git_add" })).toBeVisible();
+    await expect(
+      page.locator("button").filter({ hasText: "#2670 · Review ClaimBot_API error handling" }),
+    ).toBeVisible();
+    // Section filter chips: All / Runs / Git / PR.
+    await expect(page.getByLabel("Activity sections").locator("button")).toHaveCount(4);
 
     await page.setViewportSize({ width: 1100, height: 760 });
-    await expect.poll(async () => {
-      const [sidebarBox, detailBox] = await Promise.all([
-        sidebar.boundingBox(),
-        detailPanel.boundingBox(),
-      ]);
-      if (!sidebarBox || !detailBox) return false;
-      return detailBox.y >= sidebarBox.y + sidebarBox.height - 1 && Math.abs(sidebarBox.x - detailBox.x) <= 4;
-    }).toBe(true);
     await expect.poll(() =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
 
-    checkpointItems = [];
-    await page.getByRole("button", { name: "Refresh" }).click();
-    await expect(sidebar.getByText("No Git checkpoints yet.")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Select an operation" })).toBeVisible();
-    await expect(page.getByText("No operation selected")).toBeHidden();
-
-    await sidebar.getByRole("button", { name: /^All\s+3$/ }).click();
-    await expect(sidebar.getByRole("button", { name: /Pipeline submission:/ })).toBeVisible();
-    await expect(sidebar.getByRole("button", { name: /#2670 · Review ClaimBot_API error handling/ })).toBeVisible();
-    await expect(sidebar.getByRole("button", { name: /#2670 · Review run completed/ })).toBeVisible();
-    await expect(sidebar.getByText("No Git checkpoints yet.")).toBeHidden();
-
-    await sidebar.getByRole("button", { name: /^PR\s+1$/ }).click();
-    await sidebar.getByRole("button", { name: /#2670 · Review ClaimBot_API error handling/ }).click();
-    await expect(page.getByText("Files")).toBeVisible();
-    await expect(page.getByText("Threads")).toBeVisible();
-    await expect(page.getByText("Failed builds")).toBeVisible();
     await page.setViewportSize({ width: 760, height: 760 });
-    await expect(page.getByText("Findings")).toBeVisible();
-    await expect.poll(async () =>
+    await expect.poll(() =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
 
     await expect(page.getByText('{"returncode":0')).toBeHidden();
 
     await page.setViewportSize({ width: 900, height: 760 });
-    await expect.poll(async () =>
+    await expect.poll(() =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
   });
@@ -2403,14 +2322,12 @@ test.describe("workspace route caching", () => {
     );
 
     await page.goto("/#/activity");
-    await page.getByRole("button", { name: /git_add/ }).click();
-    await expect(page.getByText("Git checkpoint before confirmed action")).toBeVisible();
+    // The only checkpoint is auto-selected on load, opening the detail drawer.
+    await expect(page.getByRole("heading", { name: "Git checkpoint" })).toBeVisible();
     const toolResultSection = page
       .locator("section")
       .filter({ has: page.locator("h3", { hasText: "Tool Result" }) });
-    await expect(
-      toolResultSection.locator("h3 + p").filter({ hasText: "M README.md" }),
-    ).toBeVisible();
+    await expect(toolResultSection.getByText("M README.md", { exact: true })).toBeVisible();
     await expect(page.getByText("Branch", { exact: true })).toBeVisible();
     await expect(page.getByText("Files", { exact: true })).toBeVisible();
     await expect(page.getByText("Diff", { exact: true })).toBeVisible();
@@ -2425,47 +2342,5 @@ test.describe("workspace route caching", () => {
     await expect(page.getByText('{"returncode":0')).toBeVisible();
   });
 
-  test("@smoke @mocked summarizes structured review-operation details before raw JSON", async ({
-    page,
-  }) => {
-    await mockBaseRuntime(page);
-    const validationOperation = {
-      ...reviewOperation,
-      id: "review-op-validation-error",
-      label: "Review validation failed",
-      ok: false,
-      details: JSON.stringify({
-        error: {
-          fieldErrors: {
-            sessionId: ["Expected string, received null"],
-          },
-          formErrors: [],
-        },
-      }),
-    };
-    await page.route(
-      `http://127.0.0.1:8787/project-links/${projectLink.id}/review-operations`,
-      async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ items: [validationOperation] }),
-        });
-      },
-    );
-
-    await page.goto("/#/activity");
-    const sidebar = page.getByLabel("Activity sections").locator("xpath=ancestor::section[1]");
-    await sidebar.getByRole("button", { name: /^Reviews\s+1$/ }).click();
-    await sidebar.getByRole("button", { name: /#2670 · Review validation failed/ }).click();
-
-    const reviewDetail = page
-      .getByRole("heading", { name: "Review validation failed" })
-      .locator("xpath=ancestor::div[contains(@class, 'space-y-5')][1]");
-    await expect(reviewDetail).toBeVisible();
-    await expect(reviewDetail.getByText("sessionId: Expected string, received null", { exact: true })).toBeVisible();
-    await expect(page.getByText('"fieldErrors"')).toBeHidden();
-    await page.getByText("Raw detail").click();
-    await expect(page.getByText('"fieldErrors"')).toBeVisible();
-  });
 });
+

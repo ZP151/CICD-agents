@@ -95,8 +95,13 @@ export class VectorIndex {
     let count = 0;
     for (let i = 0; i < rows.length; i += settings.indexEmbedBatch) {
       const batch = rows.slice(i, i + settings.indexEmbedBatch);
-      const texts = batch.map((r) => r.text.slice(0, 8000));
-      const vectors = await llm.embed(texts);
+      // Empty chunk text is invalid input for the embeddings API. Keep the
+      // row alignment: embed only the non-empty texts and mark the rest
+      // embedded without a vector.
+      const entries = batch
+        .map((row) => ({ row, text: row.text.trim().slice(0, 8000) }))
+        .filter((entry) => entry.text.length > 0);
+      const vectors = entries.length > 0 ? await llm.embed(entries.map((entry) => entry.text)) : [];
       const stmtUpd = this.db.prepare("UPDATE chunks SET embedded = 1 WHERE id = ?");
       const stmtVec = this.hasVec
         ? this.db.prepare("INSERT OR REPLACE INTO chunk_vec(chunk_id, embedding) VALUES (?, ?)")
@@ -104,13 +109,16 @@ export class VectorIndex {
             "INSERT OR REPLACE INTO chunk_embeddings(chunk_id, embedding) VALUES (?, ?)",
           );
       const tx = this.db.transaction(() => {
-        for (let k = 0; k < batch.length; k++) {
-          const row = batch[k]!;
+        for (let k = 0; k < entries.length; k++) {
+          const entry = entries[k]!;
           const vec = vectors[k];
+          stmtUpd.run(entry.row.id);
           if (!vec) continue;
-          stmtVec.run(row.id, vecToBlob(vec));
-          stmtUpd.run(row.id);
+          stmtVec.run(entry.row.id, vecToBlob(vec));
           count++;
+        }
+        for (const row of batch) {
+          if (!entries.some((entry) => entry.row.id === row.id)) stmtUpd.run(row.id);
         }
       });
       tx();

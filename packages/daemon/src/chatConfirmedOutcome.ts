@@ -2,6 +2,7 @@ import {
   type ChatEvent,
   type ChatPlanner,
   type ChatPlannerResult,
+  type ChatVerifiedAction,
   type LLMClient,
   type PendingToolAction,
 } from "@mergepilot/core";
@@ -33,6 +34,8 @@ export interface ConfirmedActionOutcomeArgs {
   planner: ChatPlanner;
   inlineProjectLink?: InlineProjectLink;
   projectLinkId?: string;
+  /** Canonical ActionRecords for this turn; projected into every workflow_state emitted. */
+  verifiedActions?: ChatVerifiedAction[];
   adapters: PlannerContinuationAdapters;
 }
 
@@ -50,6 +53,7 @@ export async function* streamConfirmedActionOutcome(
     sessionId,
     summary,
     toolResult,
+    verifiedActions,
   } = args;
 
   const structuredNext = ok
@@ -66,8 +70,9 @@ export async function* streamConfirmedActionOutcome(
         structuredNext.currentStep,
         structuredNext.riskLevel,
         structuredNext.explanation,
+        {},
+        verifiedActions ?? [],
       );
-      sessionForNext.workflowState = workflowState;
       await adapters.saveSession(sessionForNext);
       yield { type: "workflow_state", state: workflowState };
       if (workflowState.pendingApproval) {
@@ -93,8 +98,8 @@ export async function* streamConfirmedActionOutcome(
           workflowKind: structuredDone.workflowKind,
           workflowPhase: structuredDone.workflowPhase,
         },
+        verifiedActions ?? [],
       );
-      sessionForDone.workflowState = workflowState;
       await adapters.saveSession(sessionForDone);
       await adapters.appendBubble(sessionId, {
         role: "assistant",
@@ -130,8 +135,8 @@ export async function* streamConfirmedActionOutcome(
           workflowKind: "git",
           workflowPhase: gitRecovery.workflowPhase,
         },
+        verifiedActions ?? [],
       );
-      sessionForRecovery.workflowState = workflowState;
       await adapters.saveSession(sessionForRecovery);
       await adapters.appendBubble(sessionId, {
         role: "assistant",

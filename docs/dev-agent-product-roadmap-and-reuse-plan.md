@@ -1,5 +1,12 @@
 # MergePilot Product Roadmap And Reuse Plan
 
+> **Historical implementation record — superseded for product scope.** As of
+> 2026-08-05, use [`docs/product/README.md`](product/README.md), the canonical
+> outcome roadmap, and cycle documents for product decisions and development
+> order. Reuse research and implementation evidence in this file remain useful;
+> its Review Queue, auto-approval, page expansion, and old phase-order
+> assumptions no longer authorize new work.
+
 ## Purpose
 
 This document describes how the current MergePilot should evolve into the
@@ -9,7 +16,7 @@ developer workflows, reviews pull requests, analyzes pipeline failures, and
 keeps an auditable activity trail.
 
 Progress is tracked separately in
-[`mergepilot-progress-tracker.md`](mergepilot-progress-tracker.md). Update that
+[`dev-agent-progress-tracker.md`](dev-agent-progress-tracker.md). Update that
 tracker after every meaningful development session.
 
 Third-party source reuse is tracked in

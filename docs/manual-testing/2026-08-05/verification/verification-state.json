@@ -1,0 +1,328 @@
+{
+ "schemaVersion": 3,
+ "runId": "verify-msklc78t",
+ "head": {
+  "sha": "dccb567393a78437f3297de4db4a94d2edbc59e2",
+  "ref": "claudecode/optimize-bugfix",
+  "message": "feat(verify): 4a-3 installed provenance + latency harness (Phase 4)",
+  "docSha": "dccb567393a78437f3297de4db4a94d2edbc59e2"
+ },
+ "remotes": {},
+ "gates": [
+  {
+   "id": "core-typecheck",
+   "tier": "unit",
+   "required": true,
+   "requireNoSkips": false,
+   "timeoutMs": 300000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/core typecheck",
+   "description": "core typecheck",
+   "runs": [
+    {
+     "attempt": 1,
+     "status": "PASS",
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 60696,
+     "startedAt": "2026-08-08T16:31:25.938Z",
+     "finishedAt": "2026-08-08T16:32:26.635Z",
+     "runId": "verify-msklc78t",
+     "artifacts": []
+    }
+   ],
+   "status": "PASS"
+  },
+  {
+   "id": "core-test",
+   "tier": "unit",
+   "required": true,
+   "requireNoSkips": true,
+   "timeoutMs": 900000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/core test",
+   "description": "core vitest suite",
+   "runs": [
+    {
+     "attempt": 1,
+     "status": "PASS",
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 47264,
+     "startedAt": "2026-08-08T16:32:26.636Z",
+     "finishedAt": "2026-08-08T16:33:13.900Z",
+     "runId": "verify-msklc78t",
+     "passed": 463,
+     "skipped": 0,
+     "total": 463,
+     "stderrTail": "e instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:44784) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:56344) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:22568) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:17348) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\n",
+     "artifacts": []
+    }
+   ],
+   "status": "PASS"
+  },
+  {
+   "id": "daemon-typecheck",
+   "tier": "unit",
+   "required": true,
+   "requireNoSkips": false,
+   "timeoutMs": 300000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/daemon typecheck",
+   "description": "daemon typecheck",
+   "runs": [
+    {
+     "attempt": 1,
+     "status": "PASS",
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 13554,
+     "startedAt": "2026-08-08T16:33:13.901Z",
+     "finishedAt": "2026-08-08T16:33:27.455Z",
+     "runId": "verify-msklc78t",
+     "artifacts": []
+    }
+   ],
+   "status": "PASS"
+  },
+  {
+   "id": "daemon-test",
+   "tier": "unit",
+   "required": true,
+   "requireNoSkips": true,
+   "timeoutMs": 900000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/daemon test",
+   "description": "daemon vitest suite",
+   "runs": [
+    {
+     "attempt": 1,
+     "status": "PASS",
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 68761,
+     "startedAt": "2026-08-08T16:33:27.456Z",
+     "finishedAt": "2026-08-08T16:34:36.217Z",
+     "runId": "verify-msklc78t",
+     "passed": 336,
+     "skipped": 0,
+     "total": 336,
+     "stderrTail": "warning was created)\n(node:10448) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:20844) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:51024) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:43192) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:7804) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:27516) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:52044) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:48212) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:49420) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:41912) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n",
+     "artifacts": []
+    }
+   ],
+   "status": "PASS"
+  },
+  {
+   "id": "desktop-typecheck",
+   "tier": "unit",
+   "required": true,
+   "requireNoSkips": false,
+   "timeoutMs": 300000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/desktop typecheck",
+   "description": "desktop typecheck",
+   "runs": [
+    {
+     "attempt": 1,
+     "status": "PASS",
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 60310,
+     "startedAt": "2026-08-08T16:34:36.218Z",
+     "finishedAt": "2026-08-08T16:35:36.528Z",
+     "runId": "verify-msklc78t",
+     "artifacts": []
+    }
+   ],
+   "status": "PASS"
+  },
+  {
+   "id": "desktop-test",
+   "tier": "unit",
+   "required": true,
+   "requireNoSkips": true,
+   "timeoutMs": 900000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/desktop test",
+   "description": "desktop vitest suite",
+   "runs": [
+    {
+     "attempt": 1,
+     "status": "PASS",
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 57312,
+     "startedAt": "2026-08-08T16:35:36.529Z",
+     "finishedAt": "2026-08-08T16:36:33.841Z",
+     "runId": "verify-msklc78t",
+     "passed": 675,
+     "skipped": 0,
+     "total": 675,
+     "stderrTail": "\u001b[90mstderr\u001b[2m | src/pages/chat/imageEditCanvas.test.ts\u001b[2m > \u001b[22m\u001b[2mcropImageFromDataUrl (MP-013/RA-063)\u001b[2m > \u001b[22m\u001b[2mfails typed when canvas is unavailable instead of crashing the composer\n\u001b[22m\u001b[39mPromise returned by `expect(actual).rejects.toBeInstanceOf(expected)` was not awaited. Vitest currently auto-awaits hanging assertions at the end of the test, but this will cause the test to fail in Vitest 3. Please remember to await the assertion.\n    at C:/Users/15492/Develop/Agents/CICD-agents/apps/desktop/src/pages/chat/imageEditCanvas.test.ts:10:5\n\n",
+     "artifacts": []
+    }
+   ],
+   "status": "PASS"
+  },
+  {
+   "id": "cli-test",
+   "tier": "unit",
+   "required": true,
+   "requireNoSkips": false,
+   "timeoutMs": 300000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/cli test",
+   "description": "cli vitest suite",
+   "runs": [
+    {
+     "attempt": 1,
+     "status": "PASS",
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 12010,
+     "startedAt": "2026-08-08T16:36:33.842Z",
+     "finishedAt": "2026-08-08T16:36:45.852Z",
+     "runId": "verify-msklc78t",
+     "passed": 14,
+     "skipped": 0,
+     "total": 14,
+     "stderrTail": "(node:49708) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n",
+     "artifacts": []
+    }
+   ],
+   "status": "PASS"
+  },
+  {
+   "id": "review-agent-test",
+   "tier": "unit",
+   "required": true,
+   "requireNoSkips": false,
+   "timeoutMs": 300000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/review-agent test",
+   "description": "review-agent vitest suite",
+   "runs": [
+    {
+     "attempt": 1,
+     "status": "PASS",
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 15235,
+     "startedAt": "2026-08-08T16:36:45.853Z",
+     "finishedAt": "2026-08-08T16:37:01.088Z",
+     "runId": "verify-msklc78t",
+     "passed": 44,
+     "skipped": 0,
+     "total": 44,
+     "stderrTail": "(node:41220) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:54544) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:52316) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:29056) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:50764) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:52800) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n",
+     "artifacts": []
+    }
+   ],
+   "status": "PASS"
+  },
+  {
+   "id": "build-all",
+   "tier": "unit",
+   "required": true,
+   "requireNoSkips": false,
+   "timeoutMs": 900000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --dir . run build",
+   "description": "all packages + desktop build (tsc emit, dist/, tauri pre-checks where defined)",
+   "runs": [
+    {
+     "attempt": 1,
+     "status": "PASS",
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 9915,
+     "startedAt": "2026-08-08T16:37:01.089Z",
+     "finishedAt": "2026-08-08T16:37:11.004Z",
+     "runId": "verify-msklc78t",
+     "artifacts": []
+    }
+   ],
+   "status": "PASS"
+  },
+  {
+   "id": "browser-e2e-mocked",
+   "tier": "mocked-browser-e2e",
+   "required": true,
+   "requireNoSkips": true,
+   "timeoutMs": 2700000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/warmup.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/chat-layout.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/settings-permissions.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/route-cache.spec.ts -Workers 1",
+   "description": "mocked browser E2E (warmup, chat-layout, settings-permissions, route-cache)",
+   "runs": [],
+   "status": "NOT_RUN"
+  },
+  {
+   "id": "browser-e2e-source-live",
+   "tier": "source-live-e2e",
+   "required": true,
+   "requireNoSkips": true,
+   "timeoutMs": 10800000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-live-app-e2e.ps1\" -LiveAdo -RestartMismatchedDaemon",
+   "description": "source Vite + daemon live E2E (real ADO reads), prewarm enabled",
+   "artifacts": [
+    "output/live-e2e/live-app-e2e-*.log",
+    "output/live-e2e/live-app-source-daemon-*.log",
+    "output/live-e2e/live-app-source-daemon-*.err.log",
+    "output/live-e2e/runner-*.json"
+   ],
+   "resultAdapter": "live-app-runner",
+   "runs": [],
+   "status": "NOT_RUN"
+  },
+  {
+   "id": "installed-desktop-e2e",
+   "tier": "installed-desktop",
+   "required": true,
+   "requireNoSkips": true,
+   "timeoutMs": 900000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\verify-installed-provenance.ps1\"",
+   "description": "installed provenance: source HEAD -> MSI/sidecar hashes -> install -> Program Files payload match -> installed E2E smoke + vision (exit 2 = elevation handoff printed)",
+   "runs": [
+    {
+     "attempt": 1,
+     "status": "FAIL",
+     "exitCode": 1,
+     "timedOut": false,
+     "durationMs": 621097,
+     "startedAt": "2026-08-08T16:37:17.013Z",
+     "finishedAt": "2026-08-08T16:47:38.111Z",
+     "runId": "verify-msklc78t",
+     "stderrTail": "powershell.exe : \r\nAt C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\verify-installed-provenance.ps1:143 char:3\r\n+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath ...\r\n+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : NotSpecified: (:String) [], RemoteException\r\n    + FullyQualifiedErrorId : NativeCommandError\r\n \r\n",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "status": "FAIL",
+     "exitCode": 1,
+     "timedOut": false,
+     "durationMs": 552510,
+     "startedAt": "2026-08-08T16:48:06.276Z",
+     "finishedAt": "2026-08-08T16:57:18.787Z",
+     "runId": "verify-msklc78t",
+     "stderrTail": "Get-FileHash : The term 'Get-FileHash' is not recognized as the name of a cmdlet, function, script file, or operable \r\nprogram. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.\r\nAt C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\verify-installed-provenance.ps1:91 char:15\r\n+     sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $item.FullN ...\r\n+               ~~~~~~~~~~~~\r\n    + CategoryInfo          : ObjectNotFound: (Get-FileHash:String) [], ParentContainsErrorRecordException\r\n    + FullyQualifiedErrorId : CommandNotFoundException\r\n \r\n",
+     "artifacts": []
+    }
+   ],
+   "status": "FAIL"
+  },
+  {
+   "id": "real-ado-e2e",
+   "tier": "real-ado",
+   "required": true,
+   "requireNoSkips": true,
+   "timeoutMs": 1800000,
+   "cmd": "\"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\.tools\\node-v22.11.0-win-x64\\node.exe\" \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\verify-real-ado.mjs\"",
+   "description": "ClaimBot_API real ADO E2E (deterministic driver)",
+   "runs": [],
+   "status": "NOT_RUN"
+  }
+ ],
+ "summary": {
+  "required": 13,
+  "passed": 9,
+  "failed": 1,
+  "notRun": 3,
+  "interrupted": 0,
+  "running": 0,
+  "status": "INCOMPLETE"
+ },
+ "startedAt": "2026-08-08T16:31:20.237Z",
+ "repeat": 1,
+ "updatedAt": "2026-08-08T16:57:18.789Z"
+}

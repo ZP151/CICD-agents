@@ -6,6 +6,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   analyzePipelineEvidence,
@@ -15,10 +16,14 @@ import {
   listPipelineConnections,
   runChatWorkflowAction,
   type AdoDiscoveryOption,
+  type ChatWorkflowActionResult,
   type PipelineConnection,
   type ProjectLink,
   type PullRequestSummary,
 } from "../../api.js";
+import { CHAT_HANDOFF_KEY } from "../../checkpointHandoff.js";
+import { buildPipelineChatHandoffDraft } from "../../checkpointHandoff.js";
+import { saveApprovalHandoff } from "../chat/approvalHandoff.js";
 import { paginateItems } from "../../components/PaginationControls.js";
 import { extractPipelineRuns } from "./pipelineActions.js";
 import {
@@ -32,8 +37,16 @@ import type { PipelineInspectState, PipelineRow, PipelineStatusFilter } from "./
 const ALL_PROJECTS = "";
 
 export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
+  const navigate = useNavigate();
   const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS);
   const [filter, setFilter] = useState<PipelineStatusFilter>("all");
+  const [inspectorRun, setInspectorRun] = useState<{
+    buildId: number;
+    definitionId: number;
+    projectLinkId: string;
+    branch: string;
+    repositoryId: string;
+  } | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -218,11 +231,30 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
         row.repoPath,
         row.projectLinkId,
         {
-          pipelineId: Number(row.pipelineId),
+          pipelineId: Number(row.pipelineId) || undefined,
           branch: row.defaultBranch,
         },
       );
+      if (!result.ok && result.failure) {
+        const failure = result.failure;
+        setInspectState((current) => ({
+          ...current,
+          [rowKey(row)]: { phase: "target_failure", result, failure },
+        }));
+        return;
+      }
       setInspectState((current) => ({ ...current, [rowKey(row)]: { phase: "approval", result } }));
+      // MP-006: a workspace trigger creates its own chat session with a stored
+      // approval proposal. Hand the session over so "Open Chat approval"
+      // rehydrates the pending card instead of opening a blank chat.
+      if (result.ok && result.sessionId && result.workflowState?.pendingApproval) {
+        saveApprovalHandoff({
+          sessionId: result.sessionId,
+          repoPath: result.repoPath,
+          activeProjectLinkId: row.projectLinkId,
+          workflowState: result.workflowState,
+        });
+      }
     } catch (err) {
       setInspectState((current) => ({
         ...current,
@@ -232,6 +264,53 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
         },
       }));
     }
+  }, []);
+
+  /**
+   * RA-044/RA-047: the user picks one candidate from an ambiguous result;
+   * the workflow retries with the explicit ID. RA-023: explicit Open in Chat
+   * handoff carries a source reference and never copies the page payload.
+   */
+  const selectPipelineCandidate = useCallback(async (row: PipelineRow, candidateId: number) => {
+    setInspectState((current) => ({ ...current, [rowKey(row)]: { phase: "loading" } }));
+    try {
+      const result = await runChatWorkflowAction(
+        "inspect_pipeline",
+        row.repoPath,
+        row.projectLinkId,
+        { pipelineId: candidateId },
+      );
+      if (!result.ok && result.failure) {
+        const failure = result.failure;
+        setInspectState((current) => ({
+          ...current,
+          [rowKey(row)]: { phase: "target_failure", result, failure },
+        }));
+        return;
+      }
+      const runs = extractPipelineRuns(result);
+      setInspectState((current) => ({
+        ...current,
+        [rowKey(row)]: { phase: "done", result, runs },
+      }));
+    } catch (err) {
+      setInspectState((current) => ({
+        ...current,
+        [rowKey(row)]: { phase: "error", message: err instanceof Error ? err.message : String(err) },
+      }));
+    }
+  }, []);
+
+  const openRunInspector = useCallback((row: PipelineRow) => {
+    const run = row.latestRun;
+    if (!run) return;
+    setInspectorRun({
+      buildId: run.id,
+      definitionId: Number(row.pipelineId ?? 0),
+      projectLinkId: row.projectLinkId,
+      branch: run.sourceBranch,
+      repositoryId: row.repository,
+    });
   }, []);
 
   const analyzePipeline = useCallback(async (row: PipelineRow) => {
@@ -303,6 +382,10 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
     triggerPipeline,
     analyzePipeline,
     savePipeline,
+    selectPipelineCandidate,
+    inspectorRun,
+    openRunInspector,
+    setInspectorRun,
   };
 }
 
@@ -327,9 +410,19 @@ async function inspectPipelineRow(
       row.repoPath,
       row.projectLinkId,
       {
-        pipelineId: Number(row.pipelineId),
+        pipelineId: Number(row.pipelineId) || undefined,
       },
     );
+    // MP-010: typed target-resolution failures stay on the page with their
+    // own recovery surface instead of a generic error line.
+    if (!result.ok && result.failure) {
+      const failure = result.failure;
+      setInspectState((current) => ({
+        ...current,
+        [rowKey(row)]: { phase: "target_failure", result, failure },
+      }));
+      return result;
+    }
     const runs = extractPipelineRuns(result);
     setInspectState((current) => ({
       ...current,

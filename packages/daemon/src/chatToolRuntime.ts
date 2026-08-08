@@ -1,6 +1,9 @@
 import {
   LLMClient,
   ToolExecutor,
+  ActionPolicy,
+  actionVerdictForTool,
+  capabilityRegistryFromTools,
   toolRequiresApproval,
   createGitCheckpoint,
   azureDevOpsTools,
@@ -22,6 +25,7 @@ import {
 import { inlineProjectLinkToChatContextProjectLink } from "./chatContextPrompt.js";
 import type { InlineProjectLink } from "./chatHistoryStore.js";
 import { createAzureDevOpsMcpConnector, createWebResearchMcpConnector } from "./chatMcpConnectors.js";
+import { deliveryTools } from "./deliveryTools.js";
 
 type ChatExecutorMode = "planner" | "confirmed-action";
 
@@ -59,6 +63,7 @@ function chatTools(): Tool[] {
     ...pytestTools(),
     ...validationTools(),
     ...azureDevOpsTools(),
+    ...deliveryTools(),
   ];
 }
 
@@ -130,10 +135,18 @@ function chatContextTools(llm: LLMClient): Tool[] {
 }
 
 function createChatToolExecutor(ctx: ToolContext, mode: ChatExecutorMode, tools: Tool[]): ToolExecutor {
+  // MP-015: the planner gate is the local ActionPolicy over the
+  // CapabilityRegistry, not a bare risk check. Verdicts are typed and
+  // auditable; server annotations never enter the decision.
+  const policy = new ActionPolicy();
+  const registry = capabilityRegistryFromTools(tools);
   const executor = new ToolExecutor(
     ctx,
     mode === "planner"
-      ? ({ tool }) => !toolRequiresApproval(tool)
+      ? ({ tool }) => {
+          const verdict = actionVerdictForTool(policy, registry.get(tool.name), "implicit");
+          return verdict.decision === "allow";
+        }
       : undefined,
     mode === "confirmed-action"
       ? async ({ toolName, tool }) => {

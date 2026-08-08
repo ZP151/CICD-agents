@@ -51,7 +51,13 @@ describe("ChatPlanner public narrative barrier", () => {
     })();
 
     await toolDecisionReady;
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    // The planner must not execute before the public narrative barrier is
+    // released. Yield several macro-tasks so any pending continuation that
+    // ignored the barrier would have run the tool by now; a single tick is
+    // order-sensitive under a loaded event loop.
+    for (let tick = 0; tick < 5; tick += 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
     expect(executed).toBe(false);
 
     releaseNarrative?.();

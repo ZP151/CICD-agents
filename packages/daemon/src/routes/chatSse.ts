@@ -1,14 +1,22 @@
 import type { FastifyReply } from "fastify";
+import {
+  createDiagnosticId,
+  explainTurnFailure,
+  turnFailureRecovery,
+  type TurnFailureKind,
+} from "@mergepilot/core";
 import { redact, type ChatEvent, type TurnTimelineEvent } from "@mergepilot/core";
 import { sessionStartedEvent } from "../chatEvents.js";
 
 export interface ChatSseWriter {
   send(event: string, payload: unknown): void;
-  startTurn(turnId: string, openingStatement?: string, clientTurnId?: string): void;
+  startTurn(turnId: string, openingStatement?: string, clientTurnId?: string, requestReceivedAt?: number): void;
   resumeTurn(turnId: string, options: { startedAt?: number; lastSequence?: number; statement?: string }): void;
   /** A network/model diagnostic, intentionally not a persisted narrative part. */
   sendWaitingForModel(): void;
   sendChatEvent(event: ChatEvent): void;
+  /** True once startTurn/resumeTurn set an active turn envelope. */
+  hasActiveTurn(): boolean;
   end(): void;
 }
 
@@ -53,7 +61,8 @@ export function createChatSseWriter(
 
   return {
     send,
-    startTurn(turnId, openingStatement, clientTurnId) {
+    hasActiveTurn: () => activeTurn !== undefined,
+    startTurn(turnId, openingStatement, clientTurnId, requestReceivedAt) {
       activeTurn = {
         id: turnId,
         nextSequence: 1,
@@ -64,6 +73,8 @@ export function createChatSseWriter(
         hasNarrative: false,
         activeToolGroupId: undefined,
       };
+      // requestReceivedAt rides on turn.started so the desktop can compute
+      // daemon-side queueing (request_received → sse_flushed) from one clock.
       sendTimeline("turn.started", {
         type: "turn.started",
         turnId,
@@ -71,6 +82,7 @@ export function createChatSseWriter(
         emittedAt: activeTurn.startedAt,
         sessionId,
         clientTurnId,
+        ...(typeof requestReceivedAt === "number" ? { requestReceivedAt } : {}),
       });
       if (openingStatement) {
         const base = nextTimelineBase(activeTurn);
@@ -235,6 +247,11 @@ function timelineProjection(
       type: "turn.tool.completed", ...base, groupId: turn?.activeToolGroupId ?? event.toolCallId ?? event.name,
       commandId, toolCallId: event.toolCallId, name: event.name, ok: event.ok, summary: event.summary,
       output: event.output,
+      // MP-004: the failed card shows the real exit code instead of a generic
+      // error line. The result is stripped from the public payload afterwards.
+      exitCode: event.result && typeof event.result === "object"
+        ? (event.result as Record<string, unknown>)["returncode"] ?? (event.result as Record<string, unknown>)["returnCode"]
+        : undefined,
       durationMs: startedAt === undefined ? undefined : Math.max(0, (correlated.emittedAt ?? Date.now()) - startedAt),
     } }];
   }
@@ -251,6 +268,9 @@ function timelineProjection(
     const final = nextTimelineBase(turn, base);
     events.push({ event: "turn.final.completed", payload: {
       type: "turn.final.completed", ...final, finalText: event.result.response,
+      // MP-003: bounded evidence references travel with the final outcome;
+      // the transcript shows them expandable instead of replaying output.
+      evidence: event.result.evidence,
     } });
     const finished = nextTimelineBase(turn, base);
     events.push({ event: "turn.finished", payload: { type: "turn.finished", ...finished, status: "completed" } });
@@ -258,9 +278,15 @@ function timelineProjection(
   }
   if (event.type === "cancelled" || event.type === "error") {
     const cancelled = event.type === "cancelled";
+    const typed = event.failure;
+    const failureKind: TurnFailureKind = cancelled
+      ? "cancelled_by_user"
+      : typed?.kind ?? "internal";
     const summary = cancelled
-      ? "This turn was cancelled before the work completed. You can send the next instruction when ready."
-      : `I could not complete this turn: ${event.message || "an unexpected error occurred"}. Please adjust the request or try again.`;
+      ? explainTurnFailure("cancelled_by_user")
+      : typed
+        ? explainTurnFailure(typed.kind, typed.diagnosticId)
+        : `I could not complete this turn: ${event.message || "an unexpected error occurred"}. Please adjust the request or try again.`;
     const finalDelta = nextTimelineBase(turn, base);
     const finalCompleted = nextTimelineBase(turn, base);
     const terminal = nextTimelineBase(turn, base);
@@ -275,12 +301,21 @@ function timelineProjection(
           ...terminal,
           status: cancelled ? "cancelled" : "failed",
           message: cancelled ? undefined : event.message,
+          // MP-011: the terminal event carries a typed kind and recovery
+          // action so Chat, the step panel and persistence never guess from
+          // text. Untyped legacy errors classify as internal; the message
+          // stays available for the caller that produced it.
+          failureKind,
+          recoveryAction: turnFailureRecovery(failureKind).action,
+          retryable: typed?.retryable ?? false,
+          diagnosticId: typed?.diagnosticId ?? (failureKind === "internal" ? createDiagnosticId() : undefined),
         },
       },
     ];
   }
   return [];
 }
+
 
 /**
  * Timeline SSE is a public transcript protocol, not a transport for planner

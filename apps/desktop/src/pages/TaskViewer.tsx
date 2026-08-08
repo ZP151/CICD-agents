@@ -18,17 +18,14 @@ import { prInsightArtifactProjectLinkId } from "../prInsightArtifacts.js";
 import { ActivitySidebar } from "./taskViewer/ActivitySidebar.js";
 import { CheckpointDetailPanel } from "./taskViewer/CheckpointDetailPanel.js";
 import { PrInsightDetailPanel } from "./taskViewer/PrInsightDetailPanel.js";
-import { ReviewOperationDetailPanel } from "./taskViewer/ReviewOperationDetailPanel.js";
 import { TaskRunDetailPanel } from "./taskViewer/TaskRunDetailPanel.js";
 import {
   duration,
   formatIsoTime,
   formatTime,
-  reviewOperationKindLabel,
   taskTitle,
 } from "./taskViewer/activityPresentation.js";
 import { checkpointActivityKindLabel } from "./taskViewer/checkpointActivity.js";
-import type { ReviewActivityItem } from "./taskViewer/activityTypes.js";
 import type { PrInsightActivityItem } from "./taskViewer/prInsightActivity.js";
 import type { ChatCheckpointActivity, TaskView } from "../api.js";
 import { useTaskViewerRuntime } from "./taskViewer/useTaskViewerRuntime.js";
@@ -44,7 +41,6 @@ export default function TaskViewer(): JSX.Element {
     tasks,
     selected,
     selectedId,
-    selectedReview,
     selectedPrInsight,
     selectedCheckpoint,
     loading,
@@ -65,29 +61,20 @@ export default function TaskViewer(): JSX.Element {
     selectedPrInsightComparison,
     selectedPrInsightRefreshComparison,
     selectedPrInsightId,
-    filteredReviewActivity,
-    reviewLoading,
-    reviewProjectLinkFilter,
-    reviewKindFilter,
-    selectedReviewId,
     selectedCheckpointId,
     activityHandoffSource,
     refreshAll,
     selectTask,
     selectCheckpointActivity,
     selectPrInsightActivity,
-    selectReviewActivity,
     clearSelection,
     setPrInsightProjectLinkFilter,
     setPrInsightKindFilter,
-    setReviewProjectLinkFilter,
-    setReviewKindFilter,
   } = runtime;
   const drawerPresentation = activityDrawerPresentation({
     task: selected,
     checkpoint: selectedCheckpoint,
     prInsight: selectedPrInsight,
-    review: selectedReview,
   });
 
   function openRollbackPlanInChat(): void {
@@ -196,21 +183,13 @@ export default function TaskViewer(): JSX.Element {
         prInsightKindFilter={prInsightKindFilter}
         prInsightHistoryMeta={prInsightHistoryMeta}
         selectedPrInsightId={selectedPrInsightId}
-        reviewActivity={filteredReviewActivity}
-        reviewLoading={reviewLoading}
-        reviewProjectLinkFilter={reviewProjectLinkFilter}
-        reviewKindFilter={reviewKindFilter}
-        selectedReviewId={selectedReviewId}
         onRefreshAll={() => void refreshAll()}
         onSelectTask={selectTask}
         onSelectCheckpoint={selectCheckpointActivity}
         onSelectPrInsight={selectPrInsightActivity}
-        onSelectReview={selectReviewActivity}
         onClearSelection={clearSelection}
         onPrInsightProjectLinkFilterChange={setPrInsightProjectLinkFilter}
         onPrInsightKindFilterChange={setPrInsightKindFilter}
-        onReviewProjectLinkFilterChange={setReviewProjectLinkFilter}
-        onReviewKindFilterChange={setReviewKindFilter}
       />
 
       <WorkbenchSidePanel
@@ -248,8 +227,6 @@ export default function TaskViewer(): JSX.Element {
             showHeader={false}
           />
         )}
-
-        {selectedReview && <ReviewOperationDetailPanel operation={selectedReview} showHeader={false} />}
       </WorkbenchSidePanel>
     </WorkbenchPage>
   );
@@ -267,12 +244,10 @@ export function activityDrawerPresentation({
   task,
   checkpoint,
   prInsight,
-  review,
 }: {
   task: TaskView | null;
   checkpoint: ChatCheckpointActivity | null;
   prInsight: PrInsightActivityItem | null;
-  review: ReviewActivityItem | null;
 }): { title: string; description: string } | null {
   if (task) {
     return {
@@ -296,14 +271,6 @@ export function activityDrawerPresentation({
         prInsight.kind === "review_run" ? "Full review" : "Preview",
         formatIsoTime(prInsight.at),
       ]
-        .filter(Boolean)
-        .join(" · "),
-    };
-  }
-  if (review) {
-    return {
-      title: review.label,
-      description: [reviewOperationKindLabel(review.kind), review.repository, formatIsoTime(review.at)]
         .filter(Boolean)
         .join(" · "),
     };

@@ -1,14 +1,45 @@
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { projectLinkOnboardingBranchGridClass } from "./ProjectLinkBasicFields.js";
+import type { ProjectLinkInput } from "../../../api.js";
+import { ProjectLinkBasicFields } from "./ProjectLinkBasicFields.js";
+
+const baseForm: ProjectLinkInput = {
+  name: "example link",
+  repoPath: "C:\\repo\\example",
+  defaultBranch: "main",
+  targetBranch: "main",
+  adoOrgUrl: "https://example-org.visualstudio.com/",
+  adoProject: "example-project",
+  adoRepoName: "example-repo",
+  adoPipelineId: "",
+  adoPipelineName: "",
+  adoPat: "",
+  adoMcpEnabled: false,
+  adoMcpCommand: "",
+  adoMcpAuthentication: "",
+  adoMcpDomains: "repositories,pipelines,work-items",
+  projectTemplate: "",
+  buildCommand: "",
+  testCommand: "",
+};
 
 describe("ProjectLinkBasicFields layout", () => {
-  it("lets branch selectors auto-fit without overlapping or wasting wide space", () => {
-    const className = projectLinkOnboardingBranchGridClass();
+  it("renders identity fields without branch selectors (V2: branches are read-only)", () => {
+    const html = renderToStaticMarkup(
+      <ProjectLinkBasicFields
+        branches={["main", "develop"]}
+        branchError={false}
+        branchLoading={false}
+        form={baseForm}
+        loadBranches={() => Promise.resolve()}
+        setField={() => () => undefined}
+      />,
+    );
 
-    expect(className).toContain("auto-fit");
-    expect(className).toContain("minmax(min(100%,13rem),1fr)");
-    expect(className).toContain("min-w-0");
-    expect(className).not.toContain("grid-cols-1");
-    expect(className).not.toContain("sm:grid-cols-2");
+    expect(html).toContain("Link name");
+    expect(html).toContain("Local repository path");
+    expect(html).toContain("2 branches found");
+    expect(html).not.toContain("Default branch");
+    expect(html).not.toContain("PR target branch");
   });
 });

@@ -98,4 +98,10 @@ export interface ChatWorkflowActionResult {
   workflowState: ChatWorkflowState;
   tools: ChatWorkflowToolResult[];
   artifacts?: ChatArtifact[];
+  /** MP-010: typed target-resolution failure with optional candidates. */
+  failure?: {
+    kind: "ambiguous_target" | "target_not_found" | "unauthorized" | "connector_unavailable" | "capability_missing" | string;
+    message: string;
+    candidates?: Array<{ id: number; name: string; description?: string }>;
+  };
 }

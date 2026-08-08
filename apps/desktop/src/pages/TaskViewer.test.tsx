@@ -146,7 +146,6 @@ describe("ActivityEmptyDetail", () => {
         tokensIn: 0,
         tokensOut: 0,
       },
-      review: null,
     })).toEqual({
       title: "PR #42",
       description: expect.stringContaining("demo-repo · Full review"),
@@ -156,7 +155,6 @@ describe("ActivityEmptyDetail", () => {
       task: null,
       checkpoint: null,
       prInsight: null,
-      review: null,
     })).toBeNull();
   });
 
@@ -199,7 +197,6 @@ describe("defaultActivitySelection", () => {
       tasks: [{ id: "task-old", createdAt: Date.parse("2026-07-17T08:00:00.000Z") }],
       checkpoints: [{ id: "checkpoint-new", at: Date.parse("2026-07-17T10:00:00.000Z") }],
       prInsights: [{ id: "insight-mid", at: "2026-07-17T09:00:00.000Z" }],
-      reviews: [{ id: "review-mid", at: "2026-07-17T09:30:00.000Z" }],
     })).toEqual({ kind: "checkpoint", id: "checkpoint-new" });
   });
 
@@ -208,7 +205,6 @@ describe("defaultActivitySelection", () => {
       tasks: [{ id: "task-new", createdAt: 1_786_005_000 }],
       checkpoints: [{ id: "checkpoint-old", at: 1_786_004_000 }],
       prInsights: [],
-      reviews: [],
     })).toEqual({ kind: "task", id: "task-new" });
   });
 
@@ -217,7 +213,6 @@ describe("defaultActivitySelection", () => {
       tasks: [],
       checkpoints: [{ id: "checkpoint-invalid", at: 0 }],
       prInsights: [{ id: "insight-invalid", at: "not a date" }],
-      reviews: [],
     })).toBeNull();
   });
 });

@@ -60,7 +60,6 @@ export async function* handleChatMessageApproval(
   if (isDenialMessage(message)) {
     if (storedSession) {
       clearStoredApprovalProposal(storedSession);
-      storedSession.workflowState = buildWorkflowState([], undefined, "done", "cancelled");
       await adapters.saveSession(storedSession);
     }
 
@@ -90,7 +89,6 @@ export async function* handleChatMessageApproval(
   if (!isConfirmationMessage(message)) {
     if (storedSession) {
       clearStoredApprovalProposal(storedSession);
-      storedSession.workflowState = buildWorkflowState([], undefined, "running", "revising approval");
       await adapters.saveSession(storedSession);
     }
     yield { type: "approval_resolved", approvalId: approvalIdFor(pending), approved: false };
@@ -100,7 +98,6 @@ export async function* handleChatMessageApproval(
 
   if (storedSession) {
     clearStoredApprovalProposal(storedSession);
-    storedSession.workflowState = buildWorkflowState([], undefined, "running", pending.tool);
     await adapters.saveSession(storedSession);
   }
 

@@ -4,6 +4,7 @@ export {
   AdoAuthDiagnosticError,
   adoAuthDiagnosticFromError,
   getAzureDevOpsAuth,
+  getKeyringPat,
   setPatProvider,
   type AdoAuth,
   type AdoAuthDiagnostic,

@@ -2,9 +2,12 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  timeout: 30_000,
+  // Vite compiles app chunks on demand in dev; a fresh change set can take
+  // longer than 30s to become interactive on a loaded machine. The timeouts
+  // are budget for first-load compilation, not assertion relaxation.
+  timeout: 60_000,
   expect: {
-    timeout: 5_000,
+    timeout: 10_000,
   },
   outputDir: "output/playwright/test-results",
   reporter: [["list"]],

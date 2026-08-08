@@ -1,11 +1,6 @@
 import { useState } from "react";
 import type { ProjectLink } from "../../../api.js";
-import type { GitStatusData } from "../toolOutputRenderers.js";
 import type { WorkspaceAction } from "../workflowTaskState.js";
-import {
-  gitDivergenceNotice,
-  gitDivergenceNoticeClass,
-} from "./gitDivergenceNotice.js";
 import {
   ActionButton,
   WorkbenchTextArea,
@@ -16,10 +11,6 @@ interface WorkspaceCommitMenuProps {
   busy: boolean;
   branchName: string;
   branchLabel: string;
-  hasChanges: boolean;
-  added: number;
-  removed: number;
-  gitStatus: GitStatusData | null;
   activeProjectLink: ProjectLink | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -33,10 +24,6 @@ export function WorkspaceCommitMenu({
   busy,
   branchName,
   branchLabel,
-  hasChanges,
-  added,
-  removed,
-  gitStatus,
   activeProjectLink,
   open,
   onOpenChange,
@@ -45,8 +32,6 @@ export function WorkspaceCommitMenu({
 }: WorkspaceCommitMenuProps) {
   const [commitMessage, setCommitMessage] = useState("");
   const [includeUnstaged, setIncludeUnstaged] = useState(true);
-  const divergenceNotice = gitDivergenceNotice(gitStatus);
-  const pushBlocked = Boolean(divergenceNotice?.blocksPush);
 
   const runCommitAction = (action: WorkspaceAction) => {
     onOpenChange(false);
@@ -81,13 +66,6 @@ export function WorkspaceCommitMenu({
     });
   };
 
-  const syncBranchBeforePush = () => {
-    runCommitAction({
-      type: "sync_branch_rebase",
-      branch: branchName || undefined,
-    });
-  };
-
   return (
     <div className="relative mt-1">
       <ActionButton
@@ -112,18 +90,7 @@ export function WorkspaceCommitMenu({
               </svg>
               <span className="min-w-0 truncate">{branchLabel}</span>
             </span>
-            {hasChanges && (
-              <span className="shrink-0 whitespace-nowrap font-mono">
-                <span className="text-[rgb(var(--app-success))]">+{added}</span>
-                <span className="ml-1 text-[rgb(var(--app-danger))]">-{removed}</span>
-              </span>
-            )}
           </div>
-          {divergenceNotice && (
-            <div className={`mb-2 rounded-md border px-2 py-1.5 text-xs ${gitDivergenceNoticeClass(divergenceNotice.tone)}`}>
-              {divergenceNotice.label}
-            </div>
-          )}
           <WorkbenchTextArea
             value={commitMessage}
             onChange={(event) => setCommitMessage(event.target.value)}
@@ -142,21 +109,6 @@ export function WorkspaceCommitMenu({
             Include unstaged changes
           </label>
           <div className="space-y-1 border-t border-[rgb(var(--app-border))] pt-2">
-            {pushBlocked && (
-              <ActionButton
-                type="button"
-                tone="secondary"
-                aria-label="Pull with rebase before pushing"
-                onClick={syncBranchBeforePush}
-                disabled={busy}
-                className="w-full justify-start gap-2 px-2 py-1.5 text-left text-sm disabled:cursor-wait"
-              >
-                <svg className="h-4 w-4 shrink-0 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 4v12m0 0 4-4m-4 4-4-4M5 20h14" />
-                </svg>
-                <span className="min-w-0 truncate">Pull/rebase first</span>
-              </ActionButton>
-            )}
             <ActionButton type="button" tone="secondary" aria-label="Prepare commit" onClick={() => commitPrompt("commit")} disabled={busy} className="w-full justify-start gap-2 px-2 py-1.5 text-left text-sm disabled:cursor-wait">
               <svg className="h-4 w-4 shrink-0 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 12h16M8 8l-4 4 4 4" />
@@ -169,7 +121,7 @@ export function WorkspaceCommitMenu({
               tone="quiet"
               aria-label="Prepare commit and push"
               onClick={() => commitPrompt("commit-push")}
-              disabled={busy || pushBlocked}
+              disabled={busy}
               className="w-full justify-start gap-2 px-2 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-45"
             >
               <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -182,7 +134,7 @@ export function WorkspaceCommitMenu({
               tone="quiet"
               aria-label="Push branch"
               onClick={() => commitPrompt("push")}
-              disabled={busy || pushBlocked}
+              disabled={busy}
               className="w-full justify-start gap-2 px-2 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-45"
             >
               <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

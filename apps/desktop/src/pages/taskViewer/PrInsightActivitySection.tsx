@@ -50,7 +50,6 @@ export function PrInsightActivitySection({
         <ProjectLinkFilter
           projectLinks={projectLinks}
           value={prInsightProjectLinkFilter}
-          onChange={onPrInsightProjectLinkFilterChange}
           label="Filter saved PR insights by Project Link"
         />
         <WorkbenchSelect

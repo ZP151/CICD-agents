@@ -79,6 +79,20 @@ describe("llmSettings", () => {
     expect(effective.azureOpenAiApiKey).toBe("env-azure-key");
     expect(effective.llmConfigured).toBe(true);
   });
+
+  it("keeps the daemon-owned secret when restored desktop model settings omit it", () => {
+    const effective = buildEffectiveLlmSettings({
+      llmProvider: "azure",
+      azureEndpoint: "https://inline.openai.azure.com",
+      azureApiKey: "",
+      azureDeployment: "gpt-5-mini",
+      azureNarrativeDeployment: "gpt-5-mini-2",
+      azureApiVersion: "2025-04-01-preview",
+    });
+
+    expect(effective.azureOpenAiApiKey).toBe("env-azure-key");
+    expect(effective.llmConfigured).toBe(true);
+  });
 });
 
 function restoreEnv(): void {

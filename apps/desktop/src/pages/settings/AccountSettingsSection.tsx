@@ -1,4 +1,6 @@
+import { useCallback, useEffect, useState } from "react";
 import type { AuthUser, HealthStatus } from "../../api";
+import { fetchDeliveryDiagnostics, fetchDeliveryWritesState, setDeliveryWritesEnabled } from "../../api/delivery.js";
 import {
   StatusBadge,
   WorkbenchSegmentedControl,
@@ -94,6 +96,125 @@ export function AccountSettingsSection({
           </WorkbenchSettingsRow>
         </div>
       </details>
+      <BuiltInCapabilitiesSection authUser={authUser} />
+      <DiagnosticsSection />
+    </WorkbenchSettingsSection>
+  );
+}
+
+/**
+ * Diagnostics (Cycle 06): a user-visible correlation id and the redacted
+ * verified-loop telemetry from the action store.
+ */
+function DiagnosticsSection(): JSX.Element {
+  const [diagnostics, setDiagnostics] = useState<Awaited<ReturnType<typeof fetchDeliveryDiagnostics>> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchDeliveryDiagnostics()
+      .then((data) => {
+        if (!cancelled) setDiagnostics(data);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Diagnostics unavailable.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The daemon may be an older build without the diagnostics endpoint, or a
+  // mock/fallback response without the telemetry shape; never assume the
+  // nested structure exists.
+  const totals = diagnostics?.telemetry?.totals ?? {};
+  return (
+    <WorkbenchSettingsSection title="Diagnostics">
+      <WorkbenchSettingsRow
+        title="Correlation ID"
+        description="Include this id when reporting an issue; it is regenerated per request and contains no personal data."
+      >
+        <span className="font-mono text-xs text-[rgb(var(--app-text-muted))]">
+          {diagnostics?.correlationId ?? (error ?? "loading…")}
+        </span>
+      </WorkbenchSettingsRow>
+      <WorkbenchSettingsRow
+        title="Verified delivery loops"
+        description="Actions recorded by the verified action runtime (audit only, redacted)."
+      >
+        <span className="text-xs text-[rgb(var(--app-text-muted))]">
+          verified {totals["verified"] ?? 0} · failed {totals["failed"] ?? 0} · awaiting approval {totals["awaiting_approval"] ?? 0}
+        </span>
+      </WorkbenchSettingsRow>
+    </WorkbenchSettingsSection>
+  );
+}
+
+/**
+ * Built-in capabilities (Cycle 00 product simplification): Azure DevOps is a
+ * product capability, not a connector you install. The global read-only kill
+ * switch turns off every remote delivery write from one place.
+ */
+function BuiltInCapabilitiesSection({ authUser }: { authUser: AuthUser }): JSX.Element {
+  const [writesEnabled, setWritesEnabled] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchDeliveryWritesState()
+      .then((state) => {
+        if (!cancelled) setWritesEnabled(state.enabled);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not read the remote-write kill switch.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggleWrites = useCallback(() => {
+    const next = !(writesEnabled ?? true);
+    setError(null);
+    setDeliveryWritesEnabled(next)
+      .then((state) => setWritesEnabled(state.enabled))
+      .catch(() => setError("Could not update the remote-write kill switch."));
+  }, [writesEnabled]);
+
+  return (
+    <WorkbenchSettingsSection title="Built-in capabilities">
+      <WorkbenchSettingsRow
+        title="Azure DevOps"
+        description={
+          authUser.authenticated
+            ? `${accountLabel(authUser)} — reauthenticate from the Account section above.`
+            : "Sign in with Microsoft to read and verify Azure DevOps."
+        }
+      >
+        <StatusBadge tone={authUser.authenticated ? "success" : "neutral"}>
+          {authUser.authenticated ? "Connected" : "Not connected"}
+        </StatusBadge>
+      </WorkbenchSettingsRow>
+      <WorkbenchSettingsRow
+        title="Remote writes"
+        description={
+          writesEnabled === false
+            ? "All remote Azure DevOps writes are blocked. Reads and verification still work."
+            : "Approved actions can write to Azure DevOps after explicit approval."
+        }
+      >
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-[rgb(var(--app-text))]">
+          <input
+            type="checkbox"
+            checked={writesEnabled ?? true}
+            onChange={toggleWrites}
+            aria-label="Allow approved remote writes"
+            className="h-3.5 w-3.5 rounded border-[rgb(var(--app-border-strong))] text-[rgb(var(--app-accent))] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--app-accent))]"
+          />
+          Allow approved remote writes
+        </label>
+      </WorkbenchSettingsRow>
+      {error && <p className="text-xs text-[rgb(var(--app-warning))]">{error}</p>}
     </WorkbenchSettingsSection>
   );
 }

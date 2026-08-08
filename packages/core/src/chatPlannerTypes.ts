@@ -1,3 +1,5 @@
+import type { TurnFailureKind } from "./failures.js";
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -104,6 +106,17 @@ export interface PendingToolAction {
   };
 }
 
+/**
+ * MP-003: bounded evidence reference for the final outcome. Points at the
+ * transcript call (callId) instead of replaying its output.
+ */
+export interface FinalEvidenceReference {
+  tool: string;
+  ok: boolean;
+  summary: string;
+  callId?: string;
+}
+
 export interface ChatPlannerResult {
   response: string;
   streamedResponse?: string;
@@ -113,7 +126,8 @@ export interface ChatPlannerResult {
   suggestions: string[];
   sources?: ChatPlannerSource[];
   artifacts?: ChatPlannerArtifact[];
-  toolCallsMade: Array<{ name: string; args: Record<string, unknown>; ok: boolean }>;
+  toolCallsMade: Array<{ name: string; args: Record<string, unknown>; ok: boolean; suppressed?: boolean }>;
+  evidence?: FinalEvidenceReference[];
   usedLlm: boolean;
   approvalProposal?: PendingToolAction;
 }
@@ -152,10 +166,26 @@ export interface ChatApprovalRequest {
   explanation: string;
 }
 
+/**
+ * One canonical ActionRecord projected into the workflow state. Populated
+ * from the action store (turnId = sessionId); model prose never enters these
+ * fields — the record, its audit trail and its verification evidence are the
+ * only execution facts.
+ */
+export interface ChatVerifiedAction {
+  id: string;
+  kind: string;
+  status: string;
+  evidence: string[];
+  executedAt?: number;
+  verifiedAt?: number;
+}
+
 export interface ChatWorkflowState {
   status: "planning" | "running" | "waiting_for_approval" | "blocked" | "done" | "failed";
   currentStep: string;
   completedTools: string[];
+  verifiedActions?: ChatVerifiedAction[];
   workflowKind?: "commit" | "git" | "ado" | "ci" | "pr";
   workflowPhase?: string;
   authStatus?:
@@ -168,6 +198,13 @@ export interface ChatWorkflowState {
   authMessage?: string;
   retryable?: boolean;
   pendingApproval?: ChatApprovalRequest;
+}
+
+/** Typed turn-termination detail attached to error/cancelled events (MP-011). */
+export interface ChatEventFailure {
+  kind: TurnFailureKind;
+  retryable: boolean;
+  diagnosticId?: string;
 }
 
 export type ChatEvent =
@@ -195,5 +232,5 @@ export type ChatEvent =
   | { type: "executing" }
   | { type: "message"; text: string }
   | { type: "done"; result: ChatPlannerResult }
-  | { type: "error"; message: string }
-  | { type: "cancelled" };
+  | { type: "error"; message: string; failure?: ChatEventFailure }
+  | { type: "cancelled"; failure?: ChatEventFailure };

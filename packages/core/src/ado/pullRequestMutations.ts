@@ -2,6 +2,7 @@ import { ToolError } from "../tools/executor.js";
 import { getAzureDevOpsAuth, type AdoAuth } from "./auth.js";
 import { adoBase, adoFetch } from "./client.js";
 import { API_VERSION_GIT } from "./constants.js";
+import { parseAdoJson } from "./response.js";
 import {
   patchAdoJson,
   postAdoJson,
@@ -260,5 +261,54 @@ export async function removeAzurePullRequestLabel(args: {
     name: label,
     active: false,
     action: "removed",
+  };
+}
+
+export interface AzurePullRequestCommentResult {
+  ok: boolean;
+  threadId?: number;
+  commentId?: number;
+  status_code?: number;
+  error?: string;
+}
+
+/** Add a general (non-inline) comment to a pull request via a new thread. */
+export async function addAzurePullRequestComment(args: {
+  organization: string;
+  project: string;
+  repository: string;
+  pullRequestId: string | number;
+  content: string;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzurePullRequestCommentResult> {
+  const org = args.organization.trim();
+  const project = args.project.trim();
+  const repository = args.repository.trim();
+  const pullRequestId = Number(args.pullRequestId ?? 0);
+  const content = args.content.trim();
+  if (!org || !project || !repository || !pullRequestId || !content) {
+    throw new ToolError("add_pull_request_comment requires repository, pull_request_id, and content.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const url =
+    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories/` +
+    `${encodeURIComponent(repository)}/pullRequests/${pullRequestId}/threads?api-version=${API_VERSION_GIT}`;
+  const resp = await adoFetch(url, auth, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ comments: [{ content }] }),
+  });
+  if (!resp.ok) {
+    return { ok: false, status_code: resp.status, error: (await resp.text()).slice(0, 400) };
+  }
+  const body = await parseAdoJson(resp, "add pull request comment") as {
+    id?: number;
+    comments?: Array<{ id?: number }>;
+  };
+  return {
+    ok: true,
+    threadId: Number(body.id ?? 0) || undefined,
+    commentId: Number(body.comments?.[0]?.id ?? 0) || undefined,
   };
 }

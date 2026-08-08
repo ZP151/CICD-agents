@@ -4,22 +4,17 @@ import { ActionButton } from "../../../components/workbench/WorkbenchPrimitives.
 interface WorkspaceChangesButtonProps {
   hasRepoPath: boolean;
   busy: boolean;
-  statusText: string | null;
-  gitKnown: boolean;
-  hasChanges: boolean;
-  added: number;
-  removed: number;
   runAction: (action: WorkspaceAction) => void;
 }
 
+/**
+ * Entry point for inspecting repository changes. Context deliberately shows
+ * no +added/-removed counts or clean/not-checked status; the git tool output
+ * stays the source of truth inside the workspace transcript.
+ */
 export function WorkspaceChangesButton({
   hasRepoPath,
   busy,
-  statusText,
-  gitKnown,
-  hasChanges,
-  added,
-  removed,
   runAction,
 }: WorkspaceChangesButtonProps) {
   return (
@@ -35,20 +30,6 @@ export function WorkspaceChangesButton({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M7 7h10M7 12h10M7 17h7M5 4h14v16H5z" />
         </svg>
         <span className="min-w-0 truncate">Changes</span>
-      </span>
-      <span className="shrink-0 whitespace-nowrap text-right font-mono text-xs">
-        {busy && statusText ? (
-          <span className="text-[rgb(var(--app-accent-readable))]">running</span>
-        ) : !gitKnown ? (
-          <span className="text-[rgb(var(--app-text-subtle))]">not checked</span>
-        ) : hasChanges ? (
-          <>
-            <span className="text-[rgb(var(--app-success))]">+{added}</span>
-            <span className="ml-1 text-[rgb(var(--app-danger))]">-{removed}</span>
-          </>
-        ) : (
-          <span className="text-[rgb(var(--app-text-subtle))]">clean</span>
-        )}
       </span>
     </ActionButton>
   );

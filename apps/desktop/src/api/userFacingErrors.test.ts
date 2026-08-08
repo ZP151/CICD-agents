@@ -8,7 +8,6 @@ import {
   discoverAdoProjectLinkOptions,
   migrateProjectLinksToCloud,
 } from "./projectLinks.js";
-import { fetchProjectLinkReviewQueue } from "./review.js";
 import { configureDaemon, testLlmConfig } from "./settings.js";
 import { fetchTask, fetchTasks, taskViewsFromResponse } from "./tasks.js";
 
@@ -305,16 +304,6 @@ describe("user-facing API errors", () => {
 
     await expect(fetchTasks()).rejects.toThrow("Activity runs could not be loaded");
     await expect(fetchTasks()).rejects.not.toThrow("tasks.filter");
-  });
-
-  it("formats Review Queue cloud fallback warnings without Project Link route noise", async () => {
-    mockEmptyFailure(503);
-
-    const result = await fetchProjectLinkReviewQueue("project-link-1");
-
-    expect(result.warning).toBe("Review history cloud storage is unavailable.");
-    expect(result.warning).not.toContain("/project-links");
-    expect(result.warning).not.toContain("HTTP 503");
   });
 
   it("formats daemon health errors without health route noise", async () => {

@@ -10,6 +10,13 @@ requires the daemon version to match packages/daemon/package.json by default,
 writes Playwright and daemon logs under output/live-e2e, and cleans up the
 daemon port if it started the daemon.
 
+Vite dev compiles route chunks on demand and a cold compile is probabilistic
+(see scripts/prewarm-vite.mjs). Unless -SkipPrewarm is given, the wrapper
+starts Vite on 127.0.0.1:1420 (Playwright's webServer reuses it via
+reuseExistingServer:true), runs scripts/prewarm-vite.mjs to compile the full
+module graph, and aborts the run if the app is not interactive, so the suite's
+beforeAll never pays first-load compilation.
+
 .EXAMPLE
 .\scripts\windows\run-live-app-e2e.ps1 -LiveAdo -Grep "ClaimBot_API pipeline #117"
 
@@ -29,7 +36,8 @@ param(
   [switch]$LiveAdo,
   [switch]$Destructive,
   [switch]$AllowExistingMismatchedDaemon,
-  [switch]$RestartMismatchedDaemon
+  [switch]$RestartMismatchedDaemon,
+  [switch]$SkipPrewarm
 )
 
 $ErrorActionPreference = "Stop"
@@ -58,14 +66,15 @@ function Get-DaemonHealth {
   }
 }
 
-function Stop-DaemonPortOwner {
+function Stop-PortOwner {
   param(
+    [int]$Port,
     [switch]$OnlyRepoOwned
   )
 
   $owners = @(
     Get-NetTCPConnection -ErrorAction SilentlyContinue |
-    Where-Object { $_.LocalAddress -in @("127.0.0.1", "0.0.0.0", "::", "::1") -and $_.LocalPort -eq 8787 } |
+    Where-Object { $_.LocalAddress -in @("127.0.0.1", "0.0.0.0", "::", "::1") -and $_.LocalPort -eq $Port } |
     Select-Object -ExpandProperty OwningProcess -Unique
   )
   foreach ($owner in $owners) {
@@ -81,7 +90,7 @@ function Stop-DaemonPortOwner {
         continue
       }
       if (-not $OnlyRepoOwned -and -not $isRepoOwned -and -not $isMergePilotDaemon) {
-        throw "Refusing to stop unexpected process on $daemonUrl. PID $owner, path '$executablePath', command '$commandLine'."
+        throw "Refusing to stop unexpected process on port $Port. PID $owner, path '$executablePath', command '$commandLine'."
       }
       Stop-Process -Id $owner -Force -ErrorAction SilentlyContinue
     }
@@ -89,6 +98,16 @@ function Stop-DaemonPortOwner {
 }
 
 function Start-SourceDaemon {
+  # The daemon imports @mergepilot/core from its compiled dist/ (package main).
+  # Rebuild core from the current source first so a stale dist build can never
+  # make the live daemon miss newly registered tools (observed 2026-08-07:
+  # read_text_file was registered in source but absent from a 2-day-old dist,
+  # so the planner's tool set silently lacked it).
+  & $pnpmProject --filter "@mergepilot/core" build | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Rebuild of @mergepilot/core failed with exit code $LASTEXITCODE"
+  }
+
   $process = Start-Process -FilePath "powershell.exe" -ArgumentList @(
     "-NoProfile",
     "-ExecutionPolicy",
@@ -121,6 +140,7 @@ function Start-SourceDaemon {
 
 $startedDaemon = $null
 $existingHealth = $null
+$startedVite = $null
 
 try {
   $existingHealth = Get-DaemonHealth
@@ -128,7 +148,7 @@ try {
   if ($existingHealth) {
     if ($existingHealth.version -ne $expectedVersion) {
       if ($RestartMismatchedDaemon) {
-        Stop-DaemonPortOwner
+        Stop-PortOwner -Port 8787
         Start-Sleep -Milliseconds 500
         $startedDaemon = Start-SourceDaemon
         $existingHealth = $startedDaemon.health
@@ -154,7 +174,7 @@ try {
     Stop-Process -Id $startedDaemon.process.Id -Force -ErrorAction SilentlyContinue
   }
   if ($startedDaemon) {
-    Stop-DaemonPortOwner -OnlyRepoOwned
+    Stop-PortOwner -Port 8787 -OnlyRepoOwned
   }
   [pscustomobject]@{
     ok = $false
@@ -172,6 +192,111 @@ try {
     playwrightLog = $playwrightLog
     daemonLog = $daemonOut
     daemonErrorLog = $daemonErr
+  } | ConvertTo-Json -Depth 6
+  exit 1
+}
+
+# ---- Vite start + pre-warm ----
+# Vite dev compiles route chunks on demand; on this machine a cold compile is
+# probabilistic (observed 24-88s document, 15-98s per module group, and one
+# run where the final chat-runtime module wave hung server-side until
+# teardown). Playwright's webServer (reuseExistingServer:true) reuses the Vite
+# started here; scripts/prewarm-vite.mjs compiles the full module graph once so
+# every test navigation hits the warm transform cache and the suite's beforeAll
+# budget is not spent on first-load compilation.
+$viteUrl = "http://127.0.0.1:1420"
+$viteLog = Join-Path $LogDir "live-app-vite-$stamp.log"
+$viteErrLog = Join-Path $LogDir "live-app-vite-$stamp.err.log"
+$prewarmLog = Join-Path $LogDir "live-app-prewarm-$stamp.log"
+
+try {
+  if (-not $SkipPrewarm) {
+    $viteListening = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+      Where-Object { $_.LocalAddress -in @("127.0.0.1", "0.0.0.0", "::", "::1") -and $_.LocalPort -eq 1420 }
+    if ($viteListening) {
+      # Reuse an existing listener (a developer's own Vite) — never kill it.
+      $startedVite = $null
+    } else {
+      $viteProcess = Start-Process -FilePath "powershell.exe" -ArgumentList @(
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        $pnpmProject,
+        "--dir",
+        "apps/desktop",
+        "exec",
+        "vite",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "1420"
+      ) -WorkingDirectory $repoRoot -RedirectStandardOutput $viteLog -RedirectStandardError $viteErrLog -WindowStyle Hidden -PassThru
+      $startedVite = $viteProcess
+
+      $viteReady = $false
+      # Port-open is the signal here; an HTTP GET against a cold Vite can take
+      # >3s per request (observed 3.8s), so a TCP connect avoids false timeout
+      # failures. scripts/prewarm-vite.mjs performs the real HTTP readiness.
+      for ($i = 0; $i -lt 90; $i++) {
+        try {
+          $tcp = New-Object System.Net.Sockets.TcpClient
+          $tcp.Connect("127.0.0.1", 1420)
+          $viteReady = $true
+          $tcp.Dispose()
+          break
+        } catch {
+          if ($viteProcess.HasExited) { break }
+          Start-Sleep -Milliseconds 1000
+        }
+      }
+      if (-not $viteReady) {
+        throw "Vite did not become reachable on $viteUrl. Log: $viteLog"
+      }
+    }
+
+    $prewarmOut = & $pnpmProject --dir $repoRoot exec node scripts/prewarm-vite.mjs 2>&1 | Out-String
+    $prewarmExit = $LASTEXITCODE
+    $prewarmOut | Set-Content -LiteralPath $prewarmLog -Encoding utf8
+    if ($prewarmExit -ne 0) {
+      throw "Vite pre-warm failed (exit $prewarmExit); not starting the suite against a cold server.`n$prewarmOut"
+    }
+  }
+} catch {
+  $prewarmError = $_.Exception.Message
+  if ($startedVite -and -not $startedVite.HasExited) {
+    Stop-Process -Id $startedVite.Id -Force -ErrorAction SilentlyContinue
+  }
+  if ($startedVite) {
+    Stop-PortOwner -Port 1420 -OnlyRepoOwned
+  }
+  $startedVite = $null
+  if ($startedDaemon -and $startedDaemon.process -and -not $startedDaemon.process.HasExited) {
+    Stop-Process -Id $startedDaemon.process.Id -Force -ErrorAction SilentlyContinue
+  }
+  if ($startedDaemon) {
+    Stop-PortOwner -Port 8787 -OnlyRepoOwned
+  }
+  $startedDaemon = $null
+  [pscustomobject]@{
+    ok = $false
+    prewarmFailed = $true
+    error = $prewarmError
+    daemonUrl = $daemonUrl
+    daemonVersion = if ($existingHealth) { $existingHealth.version } else { $null }
+    expectedVersion = $expectedVersion
+    startedDaemon = ($null -ne $startedDaemon)
+    liveAdo = [bool]$LiveAdo
+    destructive = [bool]$Destructive
+    testPath = $TestPath
+    project = $Project
+    grep = $Grep
+    playwrightLog = $playwrightLog
+    daemonLog = $daemonOut
+    daemonErrorLog = $daemonErr
+    viteLog = $viteLog
+    viteErrorLog = $viteErrLog
+    prewarmLog = $prewarmLog
   } | ConvertTo-Json -Depth 6
   exit 1
 }
@@ -223,6 +348,9 @@ try {
     playwrightLog = $playwrightLog
     daemonLog = $daemonOut
     daemonErrorLog = $daemonErr
+    viteLog = $viteLog
+    viteErrorLog = $viteErrLog
+    prewarmLog = $prewarmLog
   } | ConvertTo-Json -Depth 6
   Write-Output $resultJson
 
@@ -248,6 +376,16 @@ try {
     Stop-Process -Id $startedDaemon.process.Id -Force -ErrorAction SilentlyContinue
   }
   if ($startedDaemon) {
-    Stop-DaemonPortOwner -OnlyRepoOwned
+    Stop-PortOwner -Port 8787 -OnlyRepoOwned
   }
+
+  if ($startedVite -and -not $startedVite.HasExited) {
+    Stop-Process -Id $startedVite.Id -Force -ErrorAction SilentlyContinue
+  }
+  if ($startedVite) {
+    # The wrapper may orphan its node child; clear any repo-owned listener left
+    # on 1420. Never touch the port when we reused an existing server.
+    Stop-PortOwner -Port 1420 -OnlyRepoOwned
+  }
+  $startedVite = $null
 }

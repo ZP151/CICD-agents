@@ -6,13 +6,10 @@ import {
   fetchChatHistory,
   type ChatEventPayload,
   type ChatHistoryEntry,
-  type ChatUiChunk,
   type ProjectLink,
 } from "../../api.js";
 import type { ComposerImageAttachment } from "./chatAttachments.js";
-import type { ToolCallPartSnapshot } from "../../chatBubbles.js";
 import type { ApprovalRequest, Bubble, WorkflowEventState } from "./chat.types.js";
-import type { ChatUiChunkCorrelation } from "./chatUiChunkDispatcher.js";
 import { reduceChatBubbles } from "./chatBubbleReducer.js";
 import {
   dispatchChatStreamEvent,
@@ -28,20 +25,11 @@ import { createOptimisticTurnTranscriptBubble } from "./chatTurnTranscript.js";
 import { beginTurnMetrics } from "./chatTurnMetrics.js";
 
 export interface UseChatRuntimeAdapterArgs {
-  uiStreamAvailableRef: MutableRefObject<boolean>;
   cancelRef: MutableRefObject<(() => void) | null>;
-  handleUiChunk: (chunk?: ChatUiChunk, correlation?: ChatUiChunkCorrelation) => void;
   setSessionId: Dispatch<SetStateAction<string | null>>;
   setStatusText: Dispatch<SetStateAction<string | null>>;
   appendAssistantDelta: (delta: string) => void;
   stopStreaming: () => void;
-  upsertToolBubble: (snapshot: ToolCallPartSnapshot) => void;
-  appendToolOutputDelta: (
-    toolName: string | undefined,
-    stream: "stdout" | "stderr" | undefined,
-    delta: string | undefined,
-    toolCallId?: string,
-  ) => void;
   setBubbles: Dispatch<SetStateAction<Bubble[]>>;
   addBubble: (bubble: Bubble, options?: { forceScroll?: boolean }) => void;
   sessionId: string | null;
@@ -50,22 +38,14 @@ export interface UseChatRuntimeAdapterArgs {
   finaliseWithResponse: (text: string, meta: Bubble["meta"] | undefined, streamedText?: string) => void;
   setBusy: Dispatch<SetStateAction<boolean>>;
   setHistory: Dispatch<SetStateAction<ChatHistoryEntry[]>>;
-  addErrorBubbleOnce: (text: string) => void;
 }
 
 export function useChatRuntimeAdapter(args: UseChatRuntimeAdapterArgs): ChatStreamDispatcherAdapter {
   return useMemo<ChatStreamDispatcherAdapter>(() => ({
-    uiChunkStreamAvailable: () => args.uiStreamAvailableRef.current,
-    setUiChunkStreamAvailable: (available) => {
-      args.uiStreamAvailableRef.current = available;
-    },
-    handleUiChunk: args.handleUiChunk,
     setSessionId: args.setSessionId,
     setStatusText: args.setStatusText,
     appendAssistantDelta: args.appendAssistantDelta,
     stopStreaming: args.stopStreaming,
-    upsertToolBubble: args.upsertToolBubble,
-    appendToolOutputDelta: args.appendToolOutputDelta,
     updateBubbles: args.setBubbles,
     addBubble: args.addBubble,
     currentSessionId: () => args.sessionId,
@@ -79,15 +59,11 @@ export function useChatRuntimeAdapter(args: UseChatRuntimeAdapterArgs): ChatStre
     refreshHistory: () => {
       fetchChatHistory().then(args.setHistory).catch(() => undefined);
     },
-    addErrorBubbleOnce: args.addErrorBubbleOnce,
   }), [
     args.addBubble,
-    args.addErrorBubbleOnce,
     args.appendAssistantDelta,
-    args.appendToolOutputDelta,
     args.cancelRef,
     args.finaliseWithResponse,
-    args.handleUiChunk,
     args.sessionId,
     args.setBubbles,
     args.setBusy,
@@ -97,8 +73,6 @@ export function useChatRuntimeAdapter(args: UseChatRuntimeAdapterArgs): ChatStre
     args.setWorkflowState,
     args.showApprovalRequest,
     args.stopStreaming,
-    args.uiStreamAvailableRef,
-    args.upsertToolBubble,
   ]);
 }
 
@@ -113,7 +87,6 @@ export interface UseChatRuntimeActionsArgs {
   activeCustomModel: CustomConversationModel | null;
   mini: boolean;
   chatStreamDispatcherAdapter: ChatStreamDispatcherAdapter;
-  uiStreamAvailableRef: MutableRefObject<boolean>;
   cancelRef: MutableRefObject<(() => void) | null>;
   setBubbles: Dispatch<SetStateAction<Bubble[]>>;
   setBusy: Dispatch<SetStateAction<boolean>>;
@@ -133,12 +106,14 @@ export function approvalDenialMessage(feedback?: string): string {
   return feedback?.trim() || "no";
 }
 
-const LOCAL_CANCELLED_FINAL = "This turn was cancelled before the work completed. You can send the next instruction when you're ready.";
+const LOCAL_CANCELLED_FINAL =
+  "Cancelled by you. The evidence already gathered stays visible; continue the unfinished steps when ready.";
 
 /**
  * A browser abort prevents the daemon from sending its terminal event back to
  * this client. Keep cancellation in the same public Timeline as every other
- * terminal path so a Working transcript cannot be left orphaned.
+ * terminal path so a Working transcript cannot be left orphaned. The local
+ * terminal carries the same typed kind as the daemon's (MP-011).
  */
 export function localTurnCancellationEvents(
   turnId: string,
@@ -152,7 +127,17 @@ export function localTurnCancellationEvents(
     { type: "turn.execution.completed", turnId, sequence, emittedAt: now, elapsedMs },
     { type: "turn.final.delta", turnId, sequence: sequence + 1, emittedAt: now, delta: LOCAL_CANCELLED_FINAL },
     { type: "turn.final.completed", turnId, sequence: sequence + 2, emittedAt: now, finalText: LOCAL_CANCELLED_FINAL },
-    { type: "turn.cancelled", turnId, sequence: sequence + 3, emittedAt: now, elapsedMs, status: "cancelled" },
+    {
+      type: "turn.cancelled",
+      turnId,
+      sequence: sequence + 3,
+      emittedAt: now,
+      elapsedMs,
+      status: "cancelled",
+      failureKind: "cancelled_by_user",
+      recoveryAction: "resume",
+      retryable: false,
+    },
   ];
 }
 
@@ -188,7 +173,6 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
     }
 
     let resolvedSessionId = args.sessionId;
-    args.uiStreamAvailableRef.current = false;
 
     let acceptsEvents = true;
     const { cancel } = chatStream(
@@ -233,7 +217,6 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
     args.sessionId,
     args.setBusy,
     args.setStatusText,
-    args.uiStreamAvailableRef,
   ]);
 
   const confirmPendingAction = useCallback((bubbleId: string) => {
@@ -256,7 +239,6 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
     }, uid));
     args.setBusy(true);
     args.setStatusText("Executing");
-    args.uiStreamAvailableRef.current = false;
 
     const { cancel } = apiConfirmAction(args.sessionId, (event: ChatEventPayload) => {
       dispatchChatStreamEvent(event, args.chatStreamDispatcherAdapter, {
@@ -275,7 +257,6 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
     args.setBubbles,
     args.setBusy,
     args.setStatusText,
-    args.uiStreamAvailableRef,
   ]);
 
   const cancelPendingAction = useCallback((bubbleId: string, feedback?: string) => {
@@ -284,12 +265,15 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
     const activeTranscript = pending?.turnId
       ? args.bubbles.find((bubble) => bubble.turnId === pending.turnId && bubble.turnTranscript)
       : undefined;
-    if (!pending?.turnId || !activeTranscript?.turnTranscript) return;
-    const continuation = {
-      turnId: pending.turnId,
-      startedAt: activeTranscript.turnTranscript.startedAt,
-      lastSequence: activeTranscript.turnTranscript.lastSequence,
-    };
+    // Workspace-originated approvals have no chat Turn (no turnId); declining
+    // them still reaches the daemon, which gives the decline its own envelope.
+    const continuation = pending?.turnId && activeTranscript?.turnTranscript
+      ? {
+          turnId: pending.turnId,
+          startedAt: activeTranscript.turnTranscript.startedAt,
+          lastSequence: activeTranscript.turnTranscript.lastSequence,
+        }
+      : undefined;
     args.setBubbles((prev) => reduceChatBubbles(prev, {
       type: "mark_pending_status",
       id: bubbleId,
@@ -297,7 +281,6 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
     }, uid));
     args.setBusy(true);
     args.setStatusText("Finalizing");
-    args.uiStreamAvailableRef.current = false;
 
     const { cancel } = apiDeclineAction(args.sessionId, (event: ChatEventPayload) => {
       dispatchChatStreamEvent(event, args.chatStreamDispatcherAdapter, {
@@ -316,7 +299,6 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
     args.setBubbles,
     args.setBusy,
     args.setStatusText,
-    args.uiStreamAvailableRef,
   ]);
 
   const stopCurrentTurn = useCallback(() => {
@@ -338,13 +320,11 @@ export function useChatRuntimeActions(args: UseChatRuntimeActionsArgs): ChatRunt
     }
     args.cancelRef.current?.();
     args.cancelRef.current = null;
-    args.uiStreamAvailableRef.current = false;
   }, [
     args.bubbles,
     args.cancelRef,
     args.chatStreamDispatcherAdapter,
     args.mini,
-    args.uiStreamAvailableRef,
   ]);
 
   return useMemo(() => ({

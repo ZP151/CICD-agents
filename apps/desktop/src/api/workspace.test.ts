@@ -69,3 +69,28 @@ describe("fetchWorkspaceFile", () => {
     await expect(fetchWorkspaceFile("C:\\repo", "src/app.ts")).rejects.not.toThrow("HTTP 500");
   });
 });
+
+describe("fetchWorkspaceFile typed errors (MP-008/RA-031..RA-033)", () => {
+  it("maps 403 permission failures distinctly from missing files", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "permission denied reading file" }), {
+      status: 403,
+      headers: { "content-type": "application/json" },
+    })));
+
+    await expect(fetchWorkspaceFile("C:\repo", "secret\file.ts")).rejects.toThrow(
+      "Permission denied while reading this file.",
+    );
+    await expect(fetchWorkspaceFile("C:\repo", "secret\file.ts")).rejects.not.toThrow("File not found");
+  });
+
+  it("maps 404 to a missing-or-deleted message", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "file not found" }), {
+      status: 404,
+      headers: { "content-type": "application/json" },
+    })));
+
+    await expect(fetchWorkspaceFile("C:\repo", "gone.ts")).rejects.toThrow(
+      "File not found or has been deleted.",
+    );
+  });
+});

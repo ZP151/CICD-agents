@@ -125,62 +125,56 @@ describe("chat session Azure DevOps MCP bridge fallback", () => {
   });
 });
 
-function writeFakeAdoMcpServer(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mergepilot-ado-mcp-"));
+/**
+ * Fixture servers speak the official newline-delimited stdio framing with a
+ * complete initialize result, matching the SDK-backed client baseline.
+ */
+function newlineFixtureServer(scriptBody: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mergepilot-mcp-"));
   const scriptPath = path.join(dir, "server.mjs");
   fs.writeFileSync(scriptPath, `
-let buffer = Buffer.alloc(0);
-process.stdin.on("data", (chunk) => {
-  buffer = Buffer.concat([buffer, chunk]);
-  while (true) {
-    const parsed = read(buffer);
-    if (!parsed) return;
-    buffer = parsed.rest;
-    if (!parsed.message.id) continue;
-    if (parsed.message.method === "initialize") send(parsed.message.id, { capabilities: {} });
-    else if (parsed.message.method === "tools/list") send(parsed.message.id, { tools: [
-      { name: "repos_list", description: "List repositories", inputSchema: { type: "object", properties: {} } },
-      { name: "pipelines_run", description: "Run pipeline", inputSchema: { type: "object", properties: {} } }
-    ] });
-    else send(parsed.message.id, { content: [] });
-  }
+import { createInterface } from "node:readline";
+const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
+rl.on("line", (line) => {
+  if (!line.trim()) return;
+  handle(JSON.parse(line));
 });
-function send(id, result) {
-  const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id, result }));
-  process.stdout.write(Buffer.concat([Buffer.from("Content-Length: " + body.length + "\\r\\n\\r\\n"), body]));
+function handle(message) {
+  if (message.id === undefined || message.id === null) return;
+  if (message.method === "initialize") {
+    send(message.id, {
+      protocolVersion: "2025-11-25",
+      capabilities: { tools: {} },
+      serverInfo: { name: "fake", version: "1.0.0" }
+    });
+    return;
+  }
+  ${scriptBody}
 }
-
-function read(input) {
-  const end = input.indexOf("\\r\\n\\r\\n"); if (end < 0) return null;
-  const length = Number(/content-length:\\s*(\\d+)/i.exec(input.subarray(0, end).toString("ascii"))?.[1]);
-  const start = end + 4; if (input.length < start + length) return null;
-  return { message: JSON.parse(input.subarray(start, start + length)), rest: input.subarray(start + length) };
+function send(id, result) {
+  process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\\n");
 }
 `, "utf8");
   return scriptPath;
+}
+
+function writeFakeAdoMcpServer(): string {
+  return newlineFixtureServer(`
+  if (message.method === "tools/list") send(message.id, { tools: [
+    { name: "repos_list", description: "List repositories", inputSchema: { type: "object", properties: {} } },
+    { name: "pipelines_run", description: "Run pipeline", inputSchema: { type: "object", properties: {} } }
+  ] });
+  else send(message.id, { content: [] });
+`);
 }
 
 function writeFakeWebMcpServer(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mergepilot-web-mcp-"));
-  const scriptPath = path.join(dir, "server.mjs");
-  fs.writeFileSync(scriptPath, `
-let buffer = Buffer.alloc(0);
-process.stdin.on("data", (chunk) => {
-  buffer = Buffer.concat([buffer, chunk]);
-  while (true) {
-    const parsed = read(buffer); if (!parsed) return; buffer = parsed.rest;
-    if (!parsed.message.id) continue;
-    if (parsed.message.method === "initialize") send(parsed.message.id, { capabilities: {} });
-    else if (parsed.message.method === "tools/list") send(parsed.message.id, { tools: [
-      { name: "search_current_docs", inputSchema: { type: "object", properties: {} } },
-      { name: "read_url", inputSchema: { type: "object", properties: {} } },
-      { name: "publish_report", inputSchema: { type: "object", properties: {} } }
-    ] });
-    else send(parsed.message.id, { content: [] });
-  }
-});
-function send(id, result) { const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id, result })); process.stdout.write(Buffer.concat([Buffer.from("Content-Length: " + body.length + "\\r\\n\\r\\n"), body])); }
-function read(input) { const end = input.indexOf("\\r\\n\\r\\n"); if (end < 0) return null; const length = Number(/content-length:\\s*(\\d+)/i.exec(input.subarray(0, end).toString("ascii"))?.[1]); const start = end + 4; if (input.length < start + length) return null; return { message: JSON.parse(input.subarray(start, start + length)), rest: input.subarray(start + length) }; }
-`, "utf8");
-  return scriptPath;
+  return newlineFixtureServer(`
+  if (message.method === "tools/list") send(message.id, { tools: [
+    { name: "search_current_docs", inputSchema: { type: "object", properties: {} } },
+    { name: "read_url", inputSchema: { type: "object", properties: {} } },
+    { name: "publish_report", inputSchema: { type: "object", properties: {} } }
+  ] });
+  else send(message.id, { content: [] });
+`);
 }

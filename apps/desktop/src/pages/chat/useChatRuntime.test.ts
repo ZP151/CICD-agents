@@ -21,9 +21,16 @@ describe("localTurnCancellationEvents", () => {
         type: "turn.final.completed",
         turnId: "turn-7",
         sequence: 15,
-        finalText: "This turn was cancelled before the work completed. You can send the next instruction when you're ready.",
+        finalText: "Cancelled by you. The evidence already gathered stays visible; continue the unfinished steps when ready.",
       }),
-      expect.objectContaining({ type: "turn.cancelled", turnId: "turn-7", sequence: 16, elapsedMs: 350 }),
+      expect.objectContaining({
+        type: "turn.cancelled",
+        turnId: "turn-7",
+        sequence: 16,
+        elapsedMs: 350,
+        failureKind: "cancelled_by_user",
+        recoveryAction: "resume",
+      }),
     ]);
   });
 });

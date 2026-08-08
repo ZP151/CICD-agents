@@ -88,8 +88,12 @@ export interface AzureDevOpsMcpUserConfig {
   enabled: boolean;
   command: string;
   args: string[];
-  /** One of the supported local credential variable names, never its value. */
-  credentialEnv: "" | "AZURE_DEVOPS_EXT_PAT" | "AZURE_DEVOPS_PAT";
+  /**
+   * One approved local credential variable name, never its value. The first
+   * two are MergePilot compatibility names; the latter two are the names
+   * accepted by Microsoft's current @azure-devops/mcp stdio server.
+   */
+  credentialEnv: "" | "AZURE_DEVOPS_EXT_PAT" | "AZURE_DEVOPS_PAT" | "ADO_MCP_AUTH_TOKEN" | "PERSONAL_ACCESS_TOKEN";
 }
 
 export interface WebResearchMcpUserConfig {
@@ -135,6 +139,35 @@ export function ensureMergePilotLocalEnvFile(envFile = mergePilotLocalEnvFile())
       "utf8",
     );
   }
+}
+
+/**
+ * Store a model secret in the user's local secret file, never in config.toml.
+ * The desktop passes a newly entered key only for the save/test request; on
+ * the next daemon start `loadLocalEnvSecrets` rehydrates it from this file.
+ */
+export function upsertMergePilotLocalSecret(
+  key: "AZURE_OPENAI_API_KEY" | "OPENAI_API_KEY",
+  secret: string,
+  envFile = mergePilotLocalEnvFile(),
+): void {
+  const value = secret.trim();
+  if (!value) return;
+  ensureMergePilotLocalEnvFile(envFile);
+  const existing = nodeFs.readFileSync(envFile, "utf8");
+  const lines = existing.split(/\r?\n/);
+  const entry = `${key}=${envFileValue(value)}`;
+  let replaced = false;
+  const updated = lines.map((line) => {
+    if (!new RegExp(`^\\s*${key}\\s*=`).test(line)) return line;
+    replaced = true;
+    return entry;
+  });
+  if (!replaced) {
+    if (updated.length && updated[updated.length - 1] !== "") updated.push("");
+    updated.push(entry, "");
+  }
+  nodeFs.writeFileSync(envFile, updated.join("\n"), "utf8");
 }
 
 export function ensureMergePilotUserConfigFile(configFile = mergePilotUserConfigFile()): void {
@@ -422,6 +455,14 @@ function parseEnvValue(value: string): string {
   return trimmed;
 }
 
+function envFileValue(value: string): string {
+  // Azure/OpenAI keys are normally shell-safe. Quote only the exceptional
+  // forms so comments and whitespace cannot alter the persisted value.
+  return /[\s#'"\\]/.test(value)
+    ? `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
+    : value;
+}
+
 function tomlString(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
@@ -448,7 +489,10 @@ function azureDevOpsMcpConfig(values: Record<string, string> | undefined): Azure
     enabled: booleanValue(values["enabled"]) ?? false,
     command: values["command"] ?? "",
     args,
-    credentialEnv: credentialEnv === "AZURE_DEVOPS_EXT_PAT" || credentialEnv === "AZURE_DEVOPS_PAT"
+    credentialEnv: credentialEnv === "AZURE_DEVOPS_EXT_PAT"
+      || credentialEnv === "AZURE_DEVOPS_PAT"
+      || credentialEnv === "ADO_MCP_AUTH_TOKEN"
+      || credentialEnv === "PERSONAL_ACCESS_TOKEN"
       ? credentialEnv
       : "",
   };

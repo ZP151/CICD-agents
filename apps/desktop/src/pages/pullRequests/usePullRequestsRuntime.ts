@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppData } from "../../App.js";
+import { fetchAuthMe } from "../../api/auth.js";
 import { paginateItems } from "../../components/PaginationControls.js";
 import {
   fetchProjectLinkPrInsightArtifacts,
@@ -32,7 +33,6 @@ import {
   type DisplayPullRequest,
   type PreviewState,
   type PullRequestCategory,
-  type QueueState,
 } from "./pullRequestTypes.js";
 import { usePullRequestActions } from "./usePullRequestActions.js";
 import { usePullRequestHandoff } from "./usePullRequestHandoff.js";
@@ -51,12 +51,24 @@ export function usePullRequestsRuntime() {
   const [projectLinkId, setProjectLinkId] = useState(() => loadStoredActiveProjectLinkId());
   const [status, setStatus] = useState("active");
   const [category, setCategory] = useState<PullRequestCategory>("all");
+  const [currentUserName, setCurrentUserName] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAuthMe()
+      .then((user) => {
+        if (!cancelled) setCurrentUserName(user.name?.trim() || user.username?.trim() || undefined);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [expandedPrKey, setExpandedPrKey] = useState<string | null>(null);
   const [highlightedPrKey, setHighlightedPrKey] = useState<string | null>(null);
   const [contexts, setContexts] = useState<Record<string, ContextState>>({});
-  const [queueing, setQueueing] = useState<Record<string, QueueState>>({});
   const [previews, setPreviews] = useState<Record<string, PreviewState>>({});
   const queryClient = useQueryClient();
 
@@ -187,19 +199,19 @@ export function usePullRequestsRuntime() {
 
   const categoryCounts = useMemo(() => {
     return prCategories.reduce<Record<PullRequestCategory, number>>((acc, item) => {
-      acc[item.key] = prs.filter((pr) => prMatchesCategory(pr, item.key)).length;
+      acc[item.key] = prs.filter((pr) => prMatchesCategory(pr, item.key, currentUserName)).length;
       return acc;
     }, {
       all: 0,
-      attention: 0,
-      draft: 0,
-      reviewed: 0,
+      mine: 0,
+      needs_review: 0,
+      waiting: 0,
     });
-  }, [prs]);
+  }, [currentUserName, prs]);
 
   const filteredPrs = useMemo(
-    () => prs.filter((pr) => prMatchesCategory(pr, category)),
-    [category, prs],
+    () => prs.filter((pr) => prMatchesCategory(pr, category, currentUserName)),
+    [category, currentUserName, prs],
   );
 
   const paginatedPrs = useMemo(
@@ -216,7 +228,6 @@ export function usePullRequestsRuntime() {
   }, [page, paginatedPrs.pageCount]);
 
   const {
-    handleQueueForReview,
     handlePreviewInsight,
     openSavedInsightInChat,
   } = usePullRequestActions({
@@ -224,7 +235,6 @@ export function usePullRequestsRuntime() {
     projectLinks,
     selectedProjectLink,
     projectLinkForPullRequest,
-    setQueueing,
     setPreviews,
     onInsightArtifactSaved,
   });
@@ -289,7 +299,6 @@ export function usePullRequestsRuntime() {
     setExpandedPrKey(null);
     setHighlightedPrKey(null);
     setContexts({});
-    setQueueing({});
     setPreviews({});
   }, [projectLinkId, status]);
 
@@ -317,7 +326,6 @@ export function usePullRequestsRuntime() {
     expandedPrKey,
     highlightedPrKey,
     contexts,
-    queueing,
     previews,
     insightArtifacts,
     selectedProjectLink,
@@ -333,7 +341,6 @@ export function usePullRequestsRuntime() {
     load,
     toggleContext,
     handlePreviewInsight,
-    handleQueueForReview,
     openSavedInsightInChat,
   };
 }

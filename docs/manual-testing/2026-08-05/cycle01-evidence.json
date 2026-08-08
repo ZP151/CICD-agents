@@ -1,0 +1,21 @@
+{
+  "runId": "msf5uihy",
+  "branch": "mergepilot-e2e/cycle01-fixture-1785878322",
+  "commit": "f1ddd0787e591f78e50ee362eb0becfad10af1de",
+  "workItemId": 7913,
+  "fixtureB": {
+    "branch": "mergepilot-e2e/cycle01-fail-1785878302",
+    "runId": 4832
+  },
+  "pr": {
+    "id": 2801,
+    "url": "https://tebssg.visualstudio.com/TeBS-ClaimBot/_git/ClaimBot_API/pullrequest/2801"
+  },
+  "pipelineRun": {
+    "id": 4833
+  },
+  "writeBack": {
+    "id": "act-10b2mgz",
+    "status": "verified"
+  }
+}

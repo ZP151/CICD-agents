@@ -1,13 +1,18 @@
 type TurnMetricName =
   | "client_send"
   | "local_visible"
+  | "request_received"
   | "sse_flushed"
   | "turn_started"
   | "context_started"
   | "context_ready"
   | "planner_started"
+  | "model_request_started"
   | "first_text_delta"
   | "first_public_work_statement"
+  | "first_model_token"
+  | "first_tool_started"
+  | "first_tool_completed"
   | "first_final_delta"
   | "finished";
 
@@ -47,6 +52,14 @@ export function adoptTurnMetrics(clientTurnId: string | undefined, turnId: strin
     records.set(turnId, record);
   }
   pendingLocalIds.delete(localId);
+}
+
+/** Server-reported request receipt time rides on turn.started (same clock family). */
+export function adoptRequestReceivedMetric(turnId: string | undefined, requestReceivedAt: number | undefined): void {
+  if (!turnId || typeof requestReceivedAt !== "number") return;
+  const record = records.get(turnId) ?? { marks: {} };
+  record.marks.request_received ??= requestReceivedAt;
+  records.set(turnId, record);
 }
 
 export function markTurnMetric(turnId: string | undefined, name: TurnMetricName): void {
@@ -89,10 +102,34 @@ function publishTurnMetrics(turnId: string, record: TurnMetricRecord): void {
     console.debug("[turn-metrics]", JSON.stringify({
       turnId,
       ttfvMs: elapsed("client_send", "local_visible"),
+      clientToDaemonMs: elapsed("client_send", "request_received"),
       firstServerEventMs: elapsed("client_send", "turn_started"),
+      requestToFlushedMs: elapsed("request_received", "sse_flushed"),
       firstPublicWorkMs: elapsed("client_send", "first_public_work_statement"),
+      firstModelTokenMs: elapsed("client_send", "first_model_token"),
+      firstToolStartedMs: elapsed("client_send", "first_tool_started"),
+      firstToolCompletedMs: elapsed("client_send", "first_tool_completed"),
       firstFinalTextMs: elapsed("client_send", "first_final_delta"),
       totalMs: elapsed("client_send", "finished"),
     }));
   }
+}
+
+/** P50/P95 reporting over elapsed durations (dev/diagnostics). */
+export function turnLatencyPercentiles(
+  samples: Array<Partial<Record<TurnMetricName, number>>>,
+  from: TurnMetricName,
+  to: TurnMetricName,
+): { p50: number | undefined; p95: number | undefined } {
+  const values = samples
+    .map((sample) => {
+      const start = sample[from];
+      const end = sample[to];
+      return start === undefined || end === undefined ? undefined : end - start;
+    })
+    .filter((value): value is number => typeof value === "number" && value >= 0)
+    .sort((left, right) => left - right);
+  if (values.length === 0) return { p50: undefined, p95: undefined };
+  const at = (fraction: number) => values[Math.min(values.length - 1, Math.floor(values.length * fraction))];
+  return { p50: at(0.5), p95: at(0.95) };
 }
