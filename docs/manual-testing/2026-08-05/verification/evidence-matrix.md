@@ -32,6 +32,10 @@ this reopen does not count for the current HEAD. Tiers:
   `chatWorkflowState.test.ts`); core full suite **458 passed / 6 skipped**;
   daemon + desktop typecheck clean. Committed `9e9aea7` + `8f2b759`, pushed
   to both `ado` and `origin` (SHA verified via `git ls-remote`).
+- HTTP-level derivation coverage added at `4d7cd21`: `GET
+  /chat/:sessionId/state` asserts the proposal-rebuild branch
+  (waiting_for_approval) before a confirm and the ledger branch
+  (done/git/fetched) after it.
 
 ## Continuation audit — 2026-08-08 (Phase 2 slice 2b, HEAD `b3e57f4`)
 
