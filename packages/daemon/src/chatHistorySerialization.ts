@@ -1,6 +1,5 @@
 import {
   type ChatMessage,
-  type ChatWorkflowState,
   type CosmosStoredSession,
   type PendingToolAction,
   type TurnTimelineEvent,
@@ -60,7 +59,6 @@ export function cosmosToStored(doc: CosmosStoredSession): StoredSession {
     bubbles: doc.bubbles as StoredBubble[],
     timelineEvents: doc.timelineEvents as TurnTimelineEvent[] | undefined,
     approvalProposal: doc.approvalProposal as PendingToolAction | undefined,
-    workflowState: doc.workflowState as ChatWorkflowState | undefined,
     llmConfig: doc.llmConfig as InlineLlmConfig | undefined,
     inlineProjectLink: doc.inlineProjectLink as InlineProjectLink | undefined,
   };
@@ -79,7 +77,6 @@ export function storedToCosmos(session: StoredSession): Omit<CosmosStoredSession
     bubbles: normalized.bubbles,
     timelineEvents: normalized.timelineEvents,
     approvalProposal: normalized.approvalProposal,
-    workflowState: normalized.workflowState,
     llmConfig: normalized.llmConfig,
     inlineProjectLink: normalized.inlineProjectLink,
   };

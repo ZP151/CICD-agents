@@ -46,6 +46,9 @@ export async function createStoredApprovalProposal(
   if (args.llmConfig) session.llmConfig = args.llmConfig;
 
   setStoredApprovalProposal(session, args.proposal);
+  // No session.workflowState is persisted: this endpoint never emits an SSE
+  // event, so the ledger cannot record the transition — read-time derivation
+  // rebuilds the waiting card from the persisted proposal instead.
   const workflowState = buildWorkflowState(
     session.bubbles,
     args.proposal,
@@ -59,7 +62,6 @@ export async function createStoredApprovalProposal(
       new Set([...workflowState.completedTools, ...args.completedTools]),
     );
   }
-  session.workflowState = workflowState;
   await saveSession(session);
   return { sessionId: args.sessionId, workflowState };
 }
@@ -94,7 +96,8 @@ export async function markStoredApprovalProposalRunning(
     "",
     workflowStateMetadata(pending, "running"),
   );
-  storedSession.workflowState = workflowState;
+  // The running transition is recorded on the Turn Timeline ledger by the
+  // caller's workflow_state yield; the persisted session carries no copy.
   await saveSession(storedSession);
   return workflowState;
 }

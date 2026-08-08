@@ -276,7 +276,6 @@ export class ChatSessionManager {
 
     clearStoredApprovalProposal(storedSession);
     const workflowState = buildWorkflowState([], undefined, "done", "cancelled");
-    storedSession.workflowState = workflowState;
     await saveSession(storedSession);
 
     const response = "Approval declined. No action was run; you can send the next instruction when ready.";

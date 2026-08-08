@@ -33,6 +33,42 @@ export function clearStoredApprovalProposal(session: StoredSession): void {
   setStoredApprovalProposal(session, undefined);
 }
 
+/**
+ * Canonical workflow state is derived at read time — nothing persists a
+ * `workflowState` field anymore. The source is the last workflow transition
+ * on the public Turn Timeline ledger (`turn.workflow.updated` carries the
+ * full public-redacted state). The one exception is a proposal created by a
+ * workflow-action endpoint, which never emits an SSE event: while it exists
+ * (and the ledger does not already show a waiting state), the card is rebuilt
+ * from the persisted approval proposal so the desktop still sees it.
+ */
+export function workflowStateForSession(session: StoredSession): ChatWorkflowState | undefined {
+  const lastLedgerState = lastLedgerWorkflowState(session);
+  const proposal = storedApprovalProposal(session);
+  if (proposal && lastLedgerState?.status !== "waiting_for_approval") {
+    return buildWorkflowState(
+      session.bubbles,
+      proposal,
+      "waiting_for_approval",
+      proposal.description ?? proposal.tool,
+      "medium",
+      proposal.description,
+    );
+  }
+  return lastLedgerState;
+}
+
+function lastLedgerWorkflowState(session: StoredSession): ChatWorkflowState | undefined {
+  const events = session.timelineEvents ?? [];
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i]!;
+    if (event.type === "turn.workflow.updated" && event.workflow) {
+      return event.workflow as ChatWorkflowState;
+    }
+  }
+  return undefined;
+}
+
 export function buildWorkflowState(
   bubbles: StoredBubble[],
   approvalProposal: PendingToolAction | undefined,

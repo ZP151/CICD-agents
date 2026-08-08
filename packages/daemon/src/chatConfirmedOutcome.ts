@@ -73,7 +73,6 @@ export async function* streamConfirmedActionOutcome(
         {},
         verifiedActions ?? [],
       );
-      sessionForNext.workflowState = workflowState;
       await adapters.saveSession(sessionForNext);
       yield { type: "workflow_state", state: workflowState };
       if (workflowState.pendingApproval) {
@@ -101,7 +100,6 @@ export async function* streamConfirmedActionOutcome(
         },
         verifiedActions ?? [],
       );
-      sessionForDone.workflowState = workflowState;
       await adapters.saveSession(sessionForDone);
       await adapters.appendBubble(sessionId, {
         role: "assistant",
@@ -139,7 +137,6 @@ export async function* streamConfirmedActionOutcome(
         },
         verifiedActions ?? [],
       );
-      sessionForRecovery.workflowState = workflowState;
       await adapters.saveSession(sessionForRecovery);
       await adapters.appendBubble(sessionId, {
         role: "assistant",

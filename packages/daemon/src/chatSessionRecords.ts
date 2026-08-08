@@ -3,6 +3,7 @@ import {
   type ChatWorkflowState,
 } from "@mergepilot/core";
 import { checkpointApplyMetadataFromToolResult } from "./chatToolExecution.js";
+import { workflowStateForSession } from "./chatWorkflowState.js";
 import {
   chatHistoryEntryFromSession,
   listStoredSessionsForActivity,
@@ -54,7 +55,7 @@ export async function getBubbles(sessionId: string): Promise<StoredBubble[]> {
 
 export async function getWorkflowState(sessionId: string): Promise<ChatWorkflowState | undefined> {
   const session = await loadSession(sessionId);
-  return session?.workflowState;
+  return session ? workflowStateForSession(session) : undefined;
 }
 
 export async function appendMessage(
