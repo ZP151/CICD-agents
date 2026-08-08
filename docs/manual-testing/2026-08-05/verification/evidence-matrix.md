@@ -14,6 +14,25 @@ this reopen does not count for the current HEAD. Tiers:
 - ID = installed Tauri desktop E2E
 - RA = ClaimBot_API + real Azure DevOps
 
+## Continuation audit — 2026-08-08 (Phase 3b, HEAD `8f2b759`)
+
+- Phase 3b (Canonical Turn Ledger): `StoredSession.workflowState` removed;
+  workflow state is derived at read time from the last
+  `turn.workflow.updated` on the timelineEvents ledger, with a
+  rebuild-from-proposal fallback for workflow-action proposals that never
+  emit SSE. All 9 `session.workflowState` writes removed (planner
+  persistence, approval proposals, message approvals, confirmed outcomes,
+  session decline); resume inheritance reads the derived state.
+- Regression caught by the full-suite run: Phase 3a over-removed
+  `adoPipelineId`/`adoPipelineName` (live: PR pipeline-run attachment via
+  pull-requests routes, pipeline target resolution); restored at `9e9aea7`,
+  verified by `serverPullRequestRoutes.test.ts`.
+- Evidence: daemon full suite **333 passed / 1 skipped** (334; includes 6
+  new `workflowStateForSession` unit tests in
+  `chatWorkflowState.test.ts`); core full suite **458 passed / 6 skipped**;
+  daemon + desktop typecheck clean. Committed `9e9aea7` + `8f2b759`, pushed
+  to both `ado` and `origin` (SHA verified via `git ls-remote`).
+
 ## Continuation audit — 2026-08-08 (Phase 2 slice 2b, HEAD `b3e57f4`)
 
 Phase 2 (Canonical Verified Action Runtime, chat confirmed-action path) —

@@ -10,6 +10,29 @@ claiming a cycle or the product complete. Test failures are not automatically
 bugs in the desired product: obsolete tests must be corrected to the canonical
 product semantics before they are made green.
 
+## Continuation audit — 2026-08-08 (Phase 3b, HEAD `8f2b759`)
+
+- Phase 3 (Canonical Turn Ledger + Project Context identity) is
+  implemented. `StoredSession.workflowState` is removed: the Turn Timeline
+  ledger (`timelineEvents`, `turn.workflow.updated` events) is the canonical
+  workflow record and `workflowStateForSession` derives the state at read
+  time — ledger-first, with a rebuild-from-proposal fallback for
+  workflow-action endpoints that never emit an SSE event. All 9
+  `session.workflowState` writers are gone; every transition is still
+  recorded on the ledger through the SSE channel, so resume inheritance
+  (running → done phase) now reads the derived state.
+- The 3a inline-link field trim over-removed `adoPipelineId`/`adoPipelineName`
+  — both are live consumers (PR list/insight pipeline-run attachment;
+  PipelineTargetResolver for pipeline workflows). Restored at `9e9aea7`
+  after the full-suite run caught the PR regression; MCP command/auth and
+  template fields remain genuinely dead and removed.
+- **Remaining Phase 3 gap (3c, deferred):** `timelineEvents` is not yet
+  enriched (checkpointId/path, artifacts, riskLevel, public tool results),
+  so it cannot replace `bubbles` as the source for the 8 bubble consumers
+  (completedTools, pending-action derivers, checkpoint activity, artifact
+  prompts, desktop restore). Workflow *status* is ledger-derived; per-action
+  evidence stays in bubbles.
+
 ## Continuation audit — 2026-08-08 (Phase 2 slice 2b, HEAD `b3e57f4`)
 
 - Phase 2 slice 2b (Canonical Verified Action Runtime, chat path) is
