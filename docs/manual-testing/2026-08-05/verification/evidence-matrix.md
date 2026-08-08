@@ -14,6 +14,44 @@ this reopen does not count for the current HEAD. Tiers:
 - ID = installed Tauri desktop E2E
 - RA = ClaimBot_API + real Azure DevOps
 
+## Continuation audit — 2026-08-08 (Phase 2 slice 2b, HEAD `b3e57f4`)
+
+Phase 2 (Canonical Verified Action Runtime, chat confirmed-action path) —
+slice 2b implemented at HEAD `b3e57f4` on `claudecode/optimize-bugfix`,
+pushed to `ado` + `origin`, remote SHAs verified identical via
+`git ls-remote` 2026-08-08.
+
+- Chat confirmed git tools run Proposal → Approval → Execution → Re-read →
+  Verification through the shared ActionRecord ledger
+  (`daemon/chatVerifiedActionRuntime.ts`): idempotency key = approval id;
+  the user's tool approval force-approves the stored record; duplicates
+  replay the verified record (executed: false); failed-without-executedAt
+  retries; terminal states refuse; in-flight records resume verification.
+- Specs build from pre-write reads of the local repository (git is the
+  authoritative source, never model prose): `git_add` → staged contains;
+  rm/restore/checkpoint_apply/stash → workspace statusHash moves;
+  `git_commit` → HEAD sha moves + subject equality (unborn HEAD verifies on
+  subject alone); `git_push` → remote-tracking tip equals the local sha;
+  pull/rebase/merge/cherry_pick/revert/checkout/switch → HEAD sha moves;
+  merge/rebase abort (`args.action === "abort"`) → workspace statusHash
+  moves; `git_fetch` → new `git_remote_refs` artifact whose refsHash moves
+  when refs arrive (sha1 of sorted `refs/remotes/<remote>` list as revision).
+- Machine evidence (this HEAD, all green): 7 unit tests
+  (`daemon/test/chatVerifiedActionRuntime.test.ts`) covering verified round
+  trip with audit events [awaiting_approval, approved, executed, verified],
+  duplicate replay (no re-execution), lying executor → verification failed,
+  commit sha+subject evidence, push remoteTip evidence, refusal of
+  failed-with-executedAt, retry of failed-without-executedAt; 3 server
+  workflow tests restored to green (unborn-HEAD first commit, fetch-remotes
+  with new tracking refs, merge abort) — these were the F7-era failures
+  caused by the incomplete spec mapping; daemon suite 327 passed / 1
+  skipped; core suite 458 passed / 6 skipped; daemon typecheck clean.
+- Remaining: non-git confirmed tools still execute via the legacy direct
+  path in confirm-action (canonical ADO path is `delivery_propose_action`;
+  see `next-iteration-known-gaps.md`). F7's 3 Chat UI approval failures are
+  the Phase 4 stabilization item (typed ActionRecord proposals replace
+  model-prose cards).
+
 ## Continuation audit — 2026-08-08 (third pass, HEAD `8d2f703`)
 
 Calibration baseline for the Phase 0-4 productization plan

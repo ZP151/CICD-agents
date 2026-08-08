@@ -10,6 +10,30 @@ claiming a cycle or the product complete. Test failures are not automatically
 bugs in the desired product: obsolete tests must be corrected to the canonical
 product semantics before they are made green.
 
+## Continuation audit — 2026-08-08 (Phase 2 slice 2b, HEAD `b3e57f4`)
+
+- Phase 2 slice 2b (Canonical Verified Action Runtime, chat path) is
+  implemented at `b3e57f4` on `claudecode/optimize-bugfix`, pushed to both
+  `ado` and `origin` (SHA verified via `git ls-remote`). Chat confirmed git
+  tools (add/commit/push/pull/rebase/merge/cherry_pick/revert/checkout/
+  switch/stash/fetch/rm/restore/checkpoint_apply) now run the canonical
+  Proposal → Approval → Execution → Re-read → Verification lifecycle through
+  the shared ActionRecord ledger (`chatVerifiedActionRuntime.ts`); duplicates
+  replay the verified record without re-executing; lying tool results fail
+  verification; `verifiedActions` are projected into the workflow state from
+  the ledger (never model prose).
+- **Remaining Phase 2 gap:** non-git confirmed tools (ADO / MCP writes) in
+  `/chat/:id/confirm-action` still execute through the legacy
+  `streamAndPersistConfirmedAction` path in this slice. The canonical path
+  for ADO writes is `delivery_propose_action`, which the planner is
+  instructed to prefer; routing every confirmed tool through a verified
+  ActionRecord is the remaining Phase 2/4 work.
+- F7's 3 live-app Chat UI approval failures (model-prose proposal variance
+  and stream-abort latency, recorded in `evidence-matrix.md`) stand as the
+  Phase 4 stabilization item: typed `ActionRecord` proposals (deterministic
+  kind + record-rendered description) are the product-level fix so tests
+  locate cards by stable kind, not model-emitted text.
+
 ## Continuation audit — 2026-08-08 (second pass, HEAD `f472c09`/`b07f370`)
 
 - F4 (`live-app-e2e-20260808-065920.log`, full run, 1 failed / 29 did not run)
