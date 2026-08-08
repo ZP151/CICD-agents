@@ -83,7 +83,9 @@ describe("ChatPlanner agent_final tool finalization", () => {
     expect(done?.type).toBe("done");
     if (control?.type === "assistant_control") {
       expect(control.control.approvalProposal?.tool).toBe("git_add");
-      expect(control.control.actionsTaken).toEqual(["git_status"]);
+      // Canonical rule: the model's actions_taken self-report is not execution
+      // fact; actionsTaken only reflects verified tool-execution records.
+      expect(control.control.actionsTaken).toEqual([]);
       expect(control.control.sources).toEqual([
         {
           type: "source_document",

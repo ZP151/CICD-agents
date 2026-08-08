@@ -36,7 +36,13 @@ export function plannerResultFromControl(
     streamedResponse: opts.streamedResponse,
     finalizationMode: opts.finalizationMode,
     riskLevel: String(control["risk_level"] ?? control["riskLevel"] ?? "low"),
-    actionsTaken: arrayOfStrings(control["actions_taken"] ?? control["actionsTaken"]),
+    // Canonical rule: the model's self-reported actions are NOT execution
+    // fact. actionsTaken is populated only from verified tool-execution
+    // records (daemon completedTools / structured-done labels); the control
+    // JSON's actions_taken is dropped here so model prose can never claim
+    // writes that did not execute (see next-iteration-known-gaps, actionsTaken
+    // trust gap from turn bff168).
+    actionsTaken: [],
     suggestions: arrayOfStrings(control["suggestions"]),
     sources: normalizeSources(control["sources"]),
     artifacts: normalizeArtifacts(control["artifacts"]),
