@@ -105,8 +105,12 @@ function parseVitestSummary(output) {
 }
 
 function parsePlaywrightSummary(output) {
-  const m = output.match(/(\d+)\s+passed\s*\((\d+)\s*\)/);
-  const skipped = output.match(/(\d+)\s+skipped/);
+  // Playwright's final summary line: "30 passed (4m)" or
+  // "29 passed (4m), 1 skipped (5s)" — capture passed + any skipped.
+  const lines = output.split(/\r?\n/).filter((l) => /\d+\s+passed/.test(l));
+  const line = lines.at(-1) ?? "";
+  const m = line.match(/(\d+)\s+passed/);
+  const skipped = line.match(/(\d+)\s+skipped/);
   return { passed: m ? Number(m[1]) : undefined, skipped: skipped ? Number(skipped[1]) : 0 };
 }
 

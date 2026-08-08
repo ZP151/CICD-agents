@@ -12,8 +12,21 @@
 //   node verify-run.mjs --resume [--tier ..]         re-run only gates not PASS
 //   node verify-run.mjs --merge <runner.json> [--gate <id>]  merge an external runner result
 //   node verify-run.mjs --project                    project state -> goal-verification.json x2 + current-gates.md
+//   node verify-run.mjs --fresh                      archive prior state; start a clean run anchored to current HEAD
 //   node verify-run.mjs --verify-artifacts           check recorded sha256 against disk
 //   node verify-run.mjs --release                    stop repo-owned 1420 / daemon 8787 owners
+//
+// Contracts (schemaVersion 3, Phase 4 repair):
+//   - latest attempt wins: a later FAIL/INTERRUPTED always beats a historical
+//     PASS in gate aggregation (no "any PASS" shortcut);
+//   - requireNoSkips is enforced generically: a PASS-classified run with
+//     skipped/did-not-run tests is FAIL, recorded on the run itself;
+//   - artifacts are attempt-scoped by mtime window, so old runs' files never
+//     bind to a new attempt;
+//   - every run/merge/fresh ends by re-projecting goal-verification.json x2
+//     + current-gates.md, so docs can never lag the canonical state;
+//   - --fresh is the explicit re-anchor operation for a changed HEAD; the
+//     superseded state is archived verbatim, never rewritten.
 //
 // Exit codes: 0 = all required gates PASS; 1 = run failed (or evidence incomplete);
 // 2 = usage/state error (e.g. HEAD mismatch on resume).
@@ -76,11 +89,14 @@ function saveState(state) {
 
 function gateStatusOf(gate) {
   const runs = gate.runs ?? [];
-  if (runs.some((r) => r.status === "RUNNING")) return "RUNNING";
-  if (runs.some((r) => r.status === "PASS")) return "PASS";
-  if (runs.some((r) => r.status === "FAIL")) return "FAIL";
-  if (runs.some((r) => r.status !== "NOT_RUN")) return "INTERRUPTED";
-  return "NOT_RUN";
+  const last = runs.at(-1);
+  if (!last) return "NOT_RUN";
+  if (last.status === "RUNNING") return "RUNNING";
+  // Latest attempt wins: a later FAIL/INTERRUPTED must beat any historical PASS.
+  // requireNoSkips is enforced at record time (runGates/mergeRunner); this
+  // defensive check downgrades legacy PASS-with-skips records on read.
+  if (gate.requireNoSkips && last.status === "PASS" && (last.skipped ?? 0) > 0) return "FAIL";
+  return last.status;
 }
 
 function computeSummary(gates) {
@@ -108,8 +124,12 @@ function sha256File(p) {
   return crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex");
 }
 
-// Resolve artifact globs relative to repoRoot, newest first.
-function resolveArtifacts(globs, repoRoot) {
+// Resolve artifact globs relative to repoRoot, newest first, bound to the
+// attempt's mtime window ([startedAt, finishedAt + 5s]) so stale files from
+// older runs never bind to a new attempt.
+function resolveArtifacts(globs, repoRoot, startedAt, finishedAt) {
+  const startMs = new Date(startedAt).getTime();
+  const endMs = new Date(finishedAt).getTime() + 5000;
   const out = [];
   for (const g of globs ?? []) {
     const abs = path.resolve(repoRoot, g);
@@ -119,7 +139,12 @@ function resolveArtifacts(globs, repoRoot) {
     let entries = [];
     try { entries = fs.readdirSync(dir); } catch { continue; }
     for (const e of entries) {
-      if (simpleGlobMatch(base, e)) out.push(path.join(dir, e));
+      if (!simpleGlobMatch(base, e)) continue;
+      const full = path.join(dir, e);
+      let stat;
+      try { stat = fs.statSync(full); } catch { continue; }
+      if (stat.mtimeMs < startMs || stat.mtimeMs > endMs) continue;
+      out.push(full);
     }
   }
   // dedupe, keep existing files only
@@ -129,6 +154,26 @@ function resolveArtifacts(globs, repoRoot) {
 function simpleGlobMatch(pattern, name) {
   const re = new RegExp("^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$");
   return re.test(name);
+}
+
+// Parse the test runner summary from combined command output. Vitest prints
+// "Tests  N passed | M skipped (T)"; Playwright prints a final line like
+// "29 passed (4m), 1 skipped (5s)". Returns undefined when no runner summary
+// is present (typecheck/build gates).
+function parseTestSummary(output) {
+  const vitest = output.match(/Tests\s+(\d+)\s+passed(?:\s*\|\s*(\d+)\s+skipped)?\s*\((\d+)\)/);
+  if (vitest) {
+    return { passed: Number(vitest[1]), skipped: Number(vitest[2] ?? 0), total: Number(vitest[3]) };
+  }
+  const lines = output.split(/\r?\n/).filter((l) => /\d+\s+passed/.test(l));
+  const line = lines.at(-1) ?? "";
+  const passed = line.match(/(\d+)\s+passed/);
+  if (!passed) return undefined;
+  const skipped = line.match(/(\d+)\s+skipped/);
+  const didNotRun = line.match(/(\d+)\s+did not run/);
+  const s = Number(skipped?.[1] ?? 0);
+  const d = Number(didNotRun?.[1] ?? 0);
+  return { passed: Number(passed[1]), skipped: s, total: Number(passed[1]) + s + d, didNotRun: d };
 }
 
 function runCommand(cmd, timeoutMs) {
@@ -167,7 +212,8 @@ async function runGates(state, manifest, opts) {
   if (state.head && state.head.sha !== head.sha) {
     throw Object.assign(new Error(
       `state pinned to ${state.head.sha}; current HEAD is ${head.sha}. ` +
-      "Re-anchor with --migrate only when product code is unchanged, else start a fresh state."), { code: 2 });
+      "Use --fresh (archives this state, starts a clean run on the new HEAD) when the HEAD " +
+      "intentionally changed, or --migrate only when product code is unchanged."), { code: 2 });
   }
   state.head = { ...head, docSha: head.sha };
   state.runId ??= `verify-${Date.now().toString(36)}`;
@@ -187,18 +233,30 @@ async function runGates(state, manifest, opts) {
     }
     process.stdout.write(`[${gate.id}] attempt ${attempt}/${opts.repeat ?? 1}: ${gate.cmd}\n`);
     const r = await runCommand(m.cmd, m.timeoutMs);
-    const status = r.timedOut ? "INTERRUPTED" : r.code === 0 ? "PASS" : "FAIL";
+    const summary = parseTestSummary(r.stdout + r.stderr);
+    const startedAt = new Date(Date.now() - r.durationMs).toISOString();
+    const finishedAt = new Date().toISOString();
+    let status = r.timedOut ? "INTERRUPTED" : r.code === 0 ? "PASS" : "FAIL";
+    const skipped = summary?.skipped ?? 0;
+    let note = "";
+    if (m.requireNoSkips && status === "PASS" && (skipped > 0 || (summary?.didNotRun ?? 0) > 0)) {
+      status = "FAIL";
+      note = `requireNoSkips violated: ${skipped} skipped${summary?.didNotRun ? `, ${summary.didNotRun} did not run` : ""}`;
+    }
     const run = {
       attempt,
       status,
       exitCode: r.code,
       timedOut: r.timedOut,
       durationMs: r.durationMs,
-      startedAt: new Date(Date.now() - r.durationMs).toISOString(),
-      finishedAt: new Date().toISOString(),
+      startedAt,
+      finishedAt,
+      runId: state.runId,
+      ...(summary ? { passed: summary.passed, skipped, total: summary.total } : {}),
     };
+    if (note) run.note = note;
     if (r.stderr) run.stderrTail = r.stderr.slice(-2000);
-    run.artifacts = resolveArtifacts(m.artifacts, repoRoot).map((p) => {
+    run.artifacts = resolveArtifacts(m.artifacts, repoRoot, startedAt, finishedAt).map((p) => {
       try { return { path: path.relative(repoRoot, p), sha256: sha256File(p) }; }
       catch { return { path: path.relative(repoRoot, p), sha256: null }; }
     });
@@ -208,8 +266,7 @@ async function runGates(state, manifest, opts) {
     saveState(state); // checkpoint after every gate
     process.stdout.write(`[${gate.id}] ${status} (${r.durationMs}ms, exit ${r.code})\n`);
   }
-  refreshGateStatuses(state);
-  saveState(state);
+  projectAll(state, manifest);
   return state;
 }
 
@@ -224,7 +281,13 @@ function decodeLog(p) {
 function parsePlaywrightSummary(logText) {
   const m = logText.match(/(\d+)\s+passed(?:\s*,\s*(\d+)\s+failed)?(?:\s*,\s*(\d+)\s+did not run)?/);
   if (!m) return null;
-  return { passed: Number(m[1]), failed: Number(m[2] ?? 0), didNotRun: Number(m[3] ?? 0) };
+  const skipped = logText.match(/(\d+)\s+skipped/);
+  return {
+    passed: Number(m[1]),
+    failed: Number(m[2] ?? 0),
+    didNotRun: Number(m[3] ?? 0),
+    skipped: skipped ? Number(skipped[1]) : 0,
+  };
 }
 
 function classifyRunnerResult(runner) {
@@ -235,7 +298,7 @@ function classifyRunnerResult(runner) {
   return { status: "FAIL", setupFailure: false };
 }
 
-function mergeRunner(state, runnerPath, gateId) {
+function mergeRunner(state, runnerPath, gateId, manifest) {
   const runner = JSON.parse(fs.readFileSync(runnerPath, "utf8"));
   const gate = state.gates.find((g) => g.id === gateId);
   if (!gate) throw Object.assign(new Error(`gate ${gateId} not in state`), { code: 2 });
@@ -248,12 +311,22 @@ function mergeRunner(state, runnerPath, gateId) {
     timedOut: runner.exitCode == null && !runner.prewarmFailed,
     durationMs: null,
     note: cls.note ?? "",
+    runId: state.runId,
   };
   const pwLog = runner.playwrightLog && fs.existsSync(path.join(repoRoot, runner.playwrightLog))
     ? path.join(repoRoot, runner.playwrightLog) : null;
   if (pwLog) {
     const summary = parsePlaywrightSummary(decodeLog(pwLog));
-    if (summary) run.note += ` playwright ${JSON.stringify(summary)}`;
+    if (summary) {
+      run.note += ` playwright ${JSON.stringify(summary)}`;
+      run.passed = summary.passed;
+      run.skipped = summary.skipped;
+      run.total = summary.passed + summary.skipped + summary.didNotRun;
+      if (gate.requireNoSkips && run.status === "PASS" && (summary.skipped > 0 || summary.didNotRun > 0)) {
+        run.status = "FAIL";
+        run.note += ` requireNoSkips violated (${summary.skipped} skipped, ${summary.didNotRun} did not run)`;
+      }
+    }
   }
   const candidates = [
     runner.playwrightLog, runner.daemonLog, runner.daemonErrorLog,
@@ -266,9 +339,17 @@ function mergeRunner(state, runnerPath, gateId) {
   gate.runs ??= [];
   gate.runs.push(run);
   gate.status = gateStatusOf(gate);
+  projectAll(state, manifest);
+  return state;
+}
+
+// Refresh derived statuses, persist, and re-project all three doc outputs so
+// projections can never lag the canonical state.
+function projectAll(state, manifest) {
   refreshGateStatuses(state);
   saveState(state);
-  return state;
+  projectGoalJson(state, manifest);
+  projectMarkdown(state);
 }
 
 // ---- projection ----
@@ -290,6 +371,10 @@ function projectGoalJson(state, manifest) {
       status: r.status,
       setupFailure: r.setupFailure ?? false,
       note: r.note ?? undefined,
+      passed: r.passed ?? undefined,
+      skipped: r.skipped ?? undefined,
+      total: r.total ?? undefined,
+      runId: r.runId ?? undefined,
       artifacts: r.artifacts ?? undefined,
     })),
     status: g.status,
@@ -329,7 +414,8 @@ function projectMarkdown(state) {
     const last = (g.runs ?? []).at(-1);
     const counts = last?.note?.match(/\{"passed":\d+,"failed":\d+,"didNotRun":\d+\}/);
     let detail = last ? `exit ${last.exitCode ?? "-"} / ${last.durationMs ?? "-"}ms` : "-";
-    if (counts) { try { const c = JSON.parse(counts[0]); detail += ` / ${c.passed} passed, ${c.failed} failed`; } catch {} }
+    if (last?.passed != null) detail += ` / ${last.passed} passed${last.skipped ? `, ${last.skipped} skipped` : ""}`;
+    else if (counts) { try { const c = JSON.parse(counts[0]); detail += ` / ${c.passed} passed, ${c.failed} failed`; } catch {} }
     const arts = (g.runs ?? []).flatMap((r) => r.artifacts ?? []).map((a) => path.basename(a.path)).join(", ");
     return `| ${g.id} | ${g.tier} | ${g.status} | ${detail} | ${arts || "-"} |`;
   });
@@ -466,22 +552,42 @@ async function main() {
     saveState(state);
   }
 
+  if (flag("--fresh")) {
+    const head = currentHead();
+    if (state) {
+      const archive = STATE_PATH.replace(/\.json$/i, "") + "." + state.runId + ".json";
+      fs.writeFileSync(archive, JSON.stringify(state, null, 1) + "\n");
+      process.stdout.write(`archived prior state ${state.runId} -> ${path.basename(archive)}\n`);
+    }
+    state = {
+      schemaVersion: 3,
+      runId: `verify-${Date.now().toString(36)}`,
+      head: { ...head, docSha: head.sha },
+      remotes: {},
+      gates: [],
+      summary: { required: 0, passed: 0, failed: 0, notRun: 0, interrupted: 0, running: 0, status: "INCOMPLETE" },
+      startedAt: new Date().toISOString(),
+      repeat: 1,
+    };
+    ensureStateForManifest(state, manifest);
+    projectAll(state, manifest);
+    console.log(`fresh state ${state.runId} anchored to ${head.sha} (${head.ref}): ${state.gates.length} gates, all NOT_RUN`);
+    return 0;
+  }
+
   if (flag("--merge")) {
     const runnerPath = value("--merge");
     const gateId = value("--gate") ?? "browser-e2e-source-live";
     if (!runnerPath) { console.error("--merge requires a runner JSON path"); return 2; }
     ensureStateForManifest(state, manifest);
-    mergeRunner(state, path.resolve(repoRoot, runnerPath), gateId);
+    mergeRunner(state, path.resolve(repoRoot, runnerPath), gateId, manifest);
     console.log(`merged ${runnerPath} -> ${gateId}: ${state.gates.find((g) => g.id === gateId).status}`);
     return state.summary.status === "PASS" ? 0 : 1;
   }
 
   if (flag("--project")) {
     if (!state) { console.error("no state to project"); return 2; }
-    refreshGateStatuses(state);
-    saveState(state);
-    projectGoalJson(state, manifest);
-    projectMarkdown(state);
+    projectAll(state, manifest);
     console.log(`projected: goal-verification.json x2 + current-gates.md (${state.gates.length} gates, ${state.summary.status})`);
     return 0;
   }
