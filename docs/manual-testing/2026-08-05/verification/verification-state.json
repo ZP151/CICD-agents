@@ -195,15 +195,45 @@
    "runs": [
     {
      "attempt": 1,
-     "exitCode": null,
+     "status": "FAIL",
+     "setupFailure": false,
+     "exitCode": 1,
      "timedOut": false,
      "durationMs": null,
-     "status": "RUNNING",
-     "setupFailure": false,
-     "note": "Detached from session harness (Start-Process), prewarm + 30 tests. Artifacts: output/live-e2e/live-app-e2e-20260808-193311.log, output/live-e2e/live-app-source-daemon-20260808-193311.{log,err.log}, runner JSON output/live-e2e/runner-20260808-193310.json (written on completion)."
+     "note": "F7 detached launch 2026-08-08 19:33:10 (prewarm + 30 tests, LiveAdo). Merged from runner-20260808-193310.json: 27 passed / 3 failed in 38.8m. 3 failures are live-app Chat UI approval tests (element not found).",
+     "artifacts": [
+      {
+       "path": "output\\live-e2e\\live-app-e2e-20260808-193311.log",
+       "sha256": "b102954a0c5f158ac87080fd289587f94815dfd8172cd3a26c09e903d51b0152"
+      },
+      {
+       "path": "output\\live-e2e\\live-app-source-daemon-20260808-193311.log",
+       "sha256": "b5272207239b93fa87389da303dc41439762164b59ea67dc139a5c708db2f725"
+      },
+      {
+       "path": "output\\live-e2e\\live-app-source-daemon-20260808-193311.err.log",
+       "sha256": "a384e70f2825c135f9392c3fafe0f45819ad6d3b9fdec68971273b8ad2f6bffe"
+      },
+      {
+       "path": "output\\live-e2e\\live-app-vite-20260808-193311.log",
+       "sha256": "2e257d0a8974919ed56012ae5a429226dd498eebd7d876f343d55c77521d0b89"
+      },
+      {
+       "path": "output\\live-e2e\\live-app-vite-20260808-193311.err.log",
+       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+       "path": "output\\live-e2e\\live-app-prewarm-20260808-193311.log",
+       "sha256": "713d6e1a0344d364a6e015b7d7b2a3a26cccdfccdf7aca19565785e1c27e3d66"
+      },
+      {
+       "path": "output\\live-e2e\\runner-20260808-193310.json",
+       "sha256": "65964a58b6e4bd3082c814c3292c7b4e7b8a5c0b495207651bec78ed79c8c4b6"
+      }
+     ]
     }
    ],
-   "status": "RUNNING"
+   "status": "FAIL"
   },
   {
    "id": "real-ado-e2e",
@@ -306,11 +336,11 @@
  "summary": {
   "required": 16,
   "passed": 6,
-  "failed": 0,
+  "failed": 1,
   "notRun": 7,
   "interrupted": 2,
-  "running": 1,
+  "running": 0,
   "status": "INCOMPLETE"
  },
- "updatedAt": "2026-08-08T12:12:07.637Z"
+ "updatedAt": "2026-08-08T12:18:45.748Z"
 }

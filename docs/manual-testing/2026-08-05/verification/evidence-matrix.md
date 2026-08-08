@@ -297,3 +297,32 @@ non-destructive):**
 - mocked-browser tier: currently FAILS because
   `tests/e2e/review-queue.spec.ts` still exists and chat-layout /
   route-cache reference removed selectors; fixed by slice agents.
+
+## F7 source-live run — result (2026-08-08, merged from runner-20260808-193310.json)
+
+F7 completed with `ok: false, exitCode: 1` — **27 passed / 3 failed** (38.8m,
+chromium, LiveAdo, daemon 0.5.26 started at 19:33 with prewarm). Evidence
+merged into `verification-state.json` via `verify-run.mjs --merge` (the
+module's live-merge path: runner JSON classified FAIL, 7 artifacts hashed).
+The calibration-time RUNNING placeholder was collapsed into the single real
+attempt. Gate aggregate: **FAIL** (honest — source-live must pass at final
+HEAD for the goal).
+
+The 3 failures are all live-app Chat UI approval tests; none is a core
+runtime regression:
+
+| test | root cause | evidence |
+|---|---|---|
+| pulls a behind branch with rebase through real Chat UI approval (7ab8a, line 1682) | LLM infra latency: corrective re-prompt stream aborted at 60s `STREAM_REQUEST_TIMEOUT_MS` with no first chunk (`Error: Request was aborted`, `failureKind internal, retryable false`); product surfaced the failure correctly, approval card never appeared | daemon log:1786190452268 `dia_mskbodn0_7c9nng` |
+| stages and commits through consecutive real Chat UI approvals (c457b, line 1008) | model proposal variance: planner emitted a single combined `git commit --all` approval ("Stage tracked changes (git commit --all) and commit with the provided message") instead of a separate `git add` card; test locator `/git add/i` never matched; approval flow itself worked (MEDIUM risk card rendered) | error-context.md live-app-business-c457b |
+| does not create an empty commit when no staged changes exist (b43c1, line 1114) | model instruction-following variance: planner proposed "Stage all changes" (LOW risk approval card) although the prompt said "Do not stage anything. If nothing is staged, explain and stop."; test expected zero approval cards | error-context.md live-app-business-b43c1 |
+
+Implications for Phase 2 (Canonical Verified Action Runtime): all three fail
+in the Chat approval path where proposals are model prose (untyped
+`PendingToolAction`). Typed `ActionRecord` proposals (deterministic kind +
+description rendered from the record, user-constraint guards evaluated in
+code) are the product-level stabilization: tests would locate cards by
+stable kind instead of model-emitted text, and "do not stage" style
+constraints become enforced guards rather than model luck. The 7ab8a infra
+failure additionally motivates a bounded retry on stream abort (currently
+`retryable: false` by design; revisit in Phase 4 with the latency budget).
