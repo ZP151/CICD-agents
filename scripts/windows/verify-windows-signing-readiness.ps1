@@ -58,6 +58,22 @@ function Get-SignToolPath {
   return $signtool.FullName
 }
 
+function Get-Sha256 {
+  param([string]$Path)
+
+  # .NET directly, not Get-FileHash: on this machine the PSModulePath carries
+  # a pwsh-7 Modules entry that breaks Windows PowerShell 5.1 module
+  # autoloading for Microsoft.PowerShell.Utility (Get-FileHash fails with
+  # CommandNotFoundException). .NET hashing is version-proof.
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    return (($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") }) -join "")
+  } finally {
+    $sha.Dispose()
+  }
+}
+
 function Get-ArtifactSummary {
   param([string]$Path)
 
@@ -75,7 +91,7 @@ function Get-ArtifactSummary {
     length = $item.Length
     productVersion = $item.VersionInfo.ProductVersion
     fileVersion = $item.VersionInfo.FileVersion
-    sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $item.FullName).Hash
+    sha256 = Get-Sha256 -Path $item.FullName
   }
 }
 

@@ -56,7 +56,16 @@ function Get-Sha256OrNull([string]$Path) {
   if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path)) {
     return $null
   }
-  return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash
+  # .NET directly, not Get-FileHash: on this machine the PSModulePath carries
+  # a pwsh-7 Modules entry that breaks Windows PowerShell 5.1 module
+  # autoloading for Microsoft.PowerShell.Utility (Get-FileHash fails with
+  # CommandNotFoundException). .NET hashing is version-proof.
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    return (($sha.ComputeHash([System.IO.File]::ReadAllBytes($Path)) | ForEach-Object { $_.ToString("x2") }) -join "")
+  } finally {
+    $sha.Dispose()
+  }
 }
 
 function Test-AsciiContains {
