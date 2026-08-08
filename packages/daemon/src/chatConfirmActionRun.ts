@@ -27,6 +27,8 @@ export interface RunConfirmedChatActionArgs {
   sessionId: string;
   plannerAdapters: PlannerContinuationAdapters;
   persistenceAdapters: ConfirmedActionPersistenceAdapters;
+  /** ADR-0005 runtime PAT source; re-injects the credential for this execution only. */
+  patInjector?: (id: string) => Promise<string>;
 }
 
 export async function* runConfirmedChatAction(args: RunConfirmedChatActionArgs): AsyncGenerator<ChatEvent> {
@@ -44,6 +46,18 @@ export async function* runConfirmedChatAction(args: RunConfirmedChatActionArgs):
   let runtime: ChatRuntimeSetup | null = null;
   try {
     const workflowState = await markStoredApprovalProposalRunning(storedSession, pending);
+
+    // Credential containment (ADR-0005, 4a-1): the stored snapshot's
+    // inlineProjectLink is redacted at save time, so the executing turn must
+    // re-inject the runtime value. This runs AFTER the running-transition
+    // save above — normalizeSession replaces the in-memory inlineProjectLink
+    // with a redacted clone on save, which would otherwise strip the injected
+    // PAT before the runtime is built. It mutates only the in-memory snapshot;
+    // nothing is written back to the persisted session.
+    if (storedSession.inlineProjectLink && args.patInjector) {
+      const pat = await args.patInjector(storedSession.inlineProjectLink.id ?? "");
+      if (pat) storedSession.inlineProjectLink.adoPat = pat;
+    }
 
     const session = active.get(sessionId)!;
     yield { type: "approval_resolved", approvalId: approvalIdFor(pending), approved: true };
@@ -103,7 +117,6 @@ export async function* runConfirmedChatAction(args: RunConfirmedChatActionArgs):
       toolResult = legacy.toolResult;
       summary = legacy.summary;
     }
-
     yield* streamConfirmedActionOutcome({
       sessionId,
       repoPath: session.repoPath,

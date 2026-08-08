@@ -32,10 +32,13 @@ function lsProjectLinks(): ProjectLink[] {
 }
 
 function syncProjectLinksToLocalStorage(projectLinks: ProjectLink[]) {
-  localStorage.setItem(
-    PROJECT_LINKS_LS_KEY,
-    JSON.stringify(projectLinks.map(withProjectLinkDefaults)),
+  // Credential containment (ADR-0005): the daemon response may carry a
+  // runtime-injected PAT; localStorage is a persistent store, so strip the
+  // value before writing. Requests re-send "" and the daemon re-injects.
+  const redacted = projectLinks.map((link) =>
+    withProjectLinkDefaults({ ...link, adoPat: "" }),
   );
+  localStorage.setItem(PROJECT_LINKS_LS_KEY, JSON.stringify(redacted));
 }
 
 interface AppData {

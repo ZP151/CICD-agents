@@ -19,6 +19,9 @@ export interface ProjectLink {
   adoOrgUrl: string;
   adoProject: string;
   adoRepoName: string;
+  // Runtime-only credential reference (ADR-0005): persisted stores always
+  // hold the empty placeholder; the value is injected per request from Key
+  // Vault, the OS keyring, or the request payload — never read from disk.
   adoPat: string;
   adoPipelineId: string;
   adoPipelineName: string;
@@ -48,6 +51,7 @@ type ProjectLinkStore = Record<string, ProjectLink>;
 const LEGACY_READ_DEFAULTS = {
   defaultBranch: "",
   targetBranch: "",
+  adoPat: "",
   adoPipelineId: "",
   adoPipelineName: "",
   adoMcpEnabled: false,
@@ -64,10 +68,11 @@ function withLegacyReadDefaults(projectLink: ProjectLink): ProjectLink {
 }
 
 /**
- * V2 canonical write guard (GAP-01): drops every legacy workflow field from a
- * create/update payload so no store write can persist them. The stable
- * identity (name/repoPath/adoOrgUrl/adoProject/adoRepoName) and the local
- * credential reference (adoPat) pass through unchanged.
+ * V2 canonical write guard (GAP-01 + ADR-0005): drops every legacy workflow
+ * field AND the credential value from a create/update payload, so no store
+ * write can persist them. The stable identity
+ * (name/repoPath/adoOrgUrl/adoProject/adoRepoName) passes through; adoPat is
+ * persisted as the empty placeholder and injected at runtime only.
  */
 export function legacyFreeProjectLinkInput(
   data: ProjectLinkInput | Partial<ProjectLinkInput>,
@@ -77,6 +82,7 @@ export function legacyFreeProjectLinkInput(
     targetBranch: _targetBranch,
     adoPipelineId: _adoPipelineId,
     adoPipelineName: _adoPipelineName,
+    adoPat: _adoPat,
     adoMcpEnabled: _adoMcpEnabled,
     adoMcpCommand: _adoMcpCommand,
     adoMcpAuthentication: _adoMcpAuthentication,
@@ -86,7 +92,8 @@ export function legacyFreeProjectLinkInput(
     testCommand: _testCommand,
     ...stable
   } = data;
-  return stable;
+  // Credential placeholder only — the value never reaches a store.
+  return { ...stable, adoPat: "" };
 }
 
 function normalizeProjectLink(projectLink: ProjectLink): ProjectLink {

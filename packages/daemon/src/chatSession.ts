@@ -69,6 +69,14 @@ export { createChatToolExecutors } from "./chatToolRuntime.js";
 export class ChatSessionManager {
   private readonly active = new ActiveChatSessions();
 
+  /**
+   * @param patInjector ADR-0005 runtime PAT source (Key Vault → keyring) used
+   *   to re-inject the credential when executing a stored approval proposal.
+   *   Persisted snapshots never carry the value (4a-1 redacts at save), so the
+   *   executing turn must source it at call time.
+   */
+  constructor(private readonly options: { patInjector?: (id: string) => Promise<string> } = {}) {}
+
   createSession(repoPath: string, projectLinkId?: string): string {
     const id = `chat_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
     const createdAt = now();
@@ -259,6 +267,7 @@ export class ChatSessionManager {
       sessionId,
       plannerAdapters: this.plannerContinuationAdapters(),
       persistenceAdapters: this.confirmedActionPersistenceAdapters(),
+      patInjector: this.options.patInjector,
     });
   }
 

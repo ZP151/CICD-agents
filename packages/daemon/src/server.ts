@@ -100,7 +100,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   const queue = new TaskQueue(opts.runner ?? runPipelineTask);
   queue.start();
-  const chatSessions = new ChatSessionManager();
+  // ADR-0005: approval execution re-injects the runtime PAT (Key Vault →
+  // keyring) because persisted snapshots never carry the value (4a-1).
+  const chatSessions = new ChatSessionManager({
+    patInjector: async (id) => (await projectLinkStore.injectAdoPat({ id, adoPat: "" })).adoPat,
+  });
   const startedAt = Date.now();
 
   app.addHook("onClose", async () => {

@@ -98,5 +98,13 @@ export function normalizeSession(session: StoredSession): StoredSession {
   if (projectLinkId) {
     session.projectLinkId = projectLinkId;
   }
+  // Credential containment (ADR-0005, Phase 4 4a-1): the inline snapshot may
+  // arrive from a request payload, but the PAT value is runtime-only and must
+  // never reach local JSON or Cosmos. saveSession, storedToCosmos and
+  // saveStoreSync all flow through here, so a single redaction covers every
+  // session persistence path.
+  if (session.inlineProjectLink?.adoPat) {
+    session.inlineProjectLink = { ...session.inlineProjectLink, adoPat: "" };
+  }
   return session;
 }

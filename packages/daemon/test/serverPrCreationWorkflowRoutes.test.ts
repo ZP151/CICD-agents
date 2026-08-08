@@ -1,9 +1,9 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { resetSettingsForTests } from "@mergepilot/core";
+import { resetSettingsForTests, setPatProvider } from "@mergepilot/core";
 import { buildApp } from "../src/server.js";
 
 let app: Awaited<ReturnType<typeof buildApp>> | null = null;
@@ -21,7 +21,19 @@ beforeAll(() => {
   resetSettingsForTests();
 });
 
+// ADR-0005: stores never hold the PAT (4a-1 strips on write); the runtime
+// sources it from Key Vault/keyring. Tests simulate the keyring with the
+// provider seam so stored-link and confirmed-action flows authenticate as PAT.
+// Per-test (not beforeAll): afterEach restores the throwing provider so a
+// test can never silently depend on a real keyring.
+beforeEach(() => {
+  setPatProvider(async () => "test-pat");
+});
+
 afterEach(async () => {
+  setPatProvider(async () => {
+    throw new Error("no keyring in tests");
+  });
   vi.restoreAllMocks();
   if (app) {
     await app.close();

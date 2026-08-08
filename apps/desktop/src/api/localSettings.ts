@@ -52,7 +52,11 @@ export function readProjectLinkData(
     const raw = localStorage.getItem("mergepilot_project_links_v1");
     if (!raw) return undefined;
     const all = JSON.parse(raw) as Array<Record<string, unknown>>;
-    return all.find((projectLink) => projectLink["id"] === projectLinkId);
+    const projectLink = all.find((item) => item["id"] === projectLinkId);
+    if (!projectLink) return undefined;
+    // Credential containment (ADR-0005): never echo a persisted PAT into a
+    // request body, including legacy localStorage written before 4a-1.
+    return { ...projectLink, adoPat: "" };
   } catch {
     return undefined;
   }

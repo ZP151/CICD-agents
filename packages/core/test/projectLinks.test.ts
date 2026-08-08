@@ -22,7 +22,9 @@ const legacyInput = {
   adoOrgUrl: "https://tebssg.visualstudio.com/",
   adoProject: "TeBS-ClaimBot",
   adoRepoName: "ClaimBot_API",
-  adoPat: "",
+  // Real credential value (ADR-0005, 4a-1): the write guard must strip it
+  // everywhere — a "" placeholder in the fixture could never prove that.
+  adoPat: "secret-pat-123",
   adoPipelineId: "117",
   adoPipelineName: "ClaimBot_API",
   adoMcpEnabled: true,
@@ -35,7 +37,7 @@ const legacyInput = {
 } satisfies ProjectLinkInput;
 
 describe("Project Link V2 stable identity (GAP-01/02)", () => {
-  it("legacyFreeProjectLinkInput drops every legacy field from an input", () => {
+  it("legacyFreeProjectLinkInput drops every legacy field and the PAT value from an input", () => {
     const stripped = legacyFreeProjectLinkInput(legacyInput);
 
     expect(stripped).toMatchObject({
@@ -44,8 +46,10 @@ describe("Project Link V2 stable identity (GAP-01/02)", () => {
       adoOrgUrl: "https://tebssg.visualstudio.com/",
       adoProject: "TeBS-ClaimBot",
       adoRepoName: "ClaimBot_API",
+      // Credential placeholder only (ADR-0005): the value never enters a store.
       adoPat: "",
     });
+    expect(JSON.stringify(stripped)).not.toContain("secret-pat-123");
     for (const legacy of [
       "defaultBranch",
       "targetBranch",
@@ -73,11 +77,12 @@ describe("Project Link V2 stable identity (GAP-01/02)", () => {
     expect(created.adoMcpEnabled).toBe(false);
     expect(created.adoMcpDomains).toBe("");
 
-    // The raw store file must not contain the legacy values at all.
+    // The raw store file must not contain the legacy values or the PAT value.
     const raw = fs.readFileSync(path.join(dataDir, "project-links.json"), "utf8");
     expect(raw).not.toContain("adoPipelineId");
     expect(raw).not.toContain("117");
     expect(raw).not.toContain("adoMcpEnabled");
+    expect(raw).not.toContain("secret-pat-123");
 
     const reread = getProjectLink(dataDir, created.id);
     expect(reread?.adoPipelineId).toBe("");

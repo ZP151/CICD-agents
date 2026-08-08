@@ -2,6 +2,7 @@ import {
   AzureTableProjectLinkStore,
   createProjectLink,
   deleteProjectLink,
+  getKeyringPat,
   getProjectLink,
   isAzureAuthenticationRequiredError,
   KeyVaultSecrets,
@@ -90,13 +91,29 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
     return kvCache.kv;
   };
 
+  // Runtime injection only (ADR-0005): per-link Key Vault secret first, then
+  // the OS keyring (mergepilot configure-pat). Stores never hold the value;
+  // with no vault/keyring configured the resolved link carries "".
   async function injectAdoPat<T extends { id: string; adoPat: string }>(projectLink: T): Promise<T> {
     const kv = getKvSecrets();
-    if (kv) {
+    if (kv && projectLink.id) {
       const pat = await kv.getAdoPat(projectLink.id);
       return { ...projectLink, adoPat: pat ?? "" };
     }
-    return projectLink;
+    return { ...projectLink, adoPat: await getKeyringPat() };
+  }
+
+  // Inline snapshots arrive from request payloads (runtime-transient values);
+  // a non-empty payload PAT wins, otherwise the runtime sources fill in.
+  async function injectInlineAdoPat<T extends { id: string; adoPat: string }>(projectLink: T): Promise<T> {
+    return projectLink.adoPat ? projectLink : injectAdoPat(projectLink);
+  }
+
+  async function localProjectLinkWithRuntimePat(
+    projectLinkId: string,
+  ): Promise<Awaited<ReturnType<typeof getProjectLink>> | null> {
+    const projectLink = getProjectLink(settings.dataDir, projectLinkId);
+    return projectLink ? injectAdoPat(projectLink) : null;
   }
 
   async function getProjectLinkForRequest(
@@ -104,7 +121,7 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
     inlineProjectLink?: InlineProjectLink,
   ): Promise<Awaited<ReturnType<typeof getProjectLink>> | null> {
     if (inlineProjectLink?.adoOrgUrl && inlineProjectLink.adoProject && inlineProjectLink.adoRepoName) {
-      return {
+      return await injectInlineAdoPat({
         id: projectLinkId,
         name: inlineProjectLink.name ?? "",
         createdAt: Date.now(),
@@ -119,7 +136,7 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
         adoMcpAuthentication: "",
         projectTemplate: "",
         ...inlineProjectLink,
-      };
+      });
     }
 
     const tableStore = getTableStore();
@@ -129,10 +146,12 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
         const cloudProjectLink = await tableStore.get(projectLinkId);
         return cloudProjectLink ? await injectAdoPat(cloudProjectLink) : null;
         },
-        () => getProjectLink(settings.dataDir, projectLinkId),
+        // Local reads carry no stored value (4a-1 strips at write); the
+        // runtime sources fill it in exactly like the cloud path.
+        () => localProjectLinkWithRuntimePat(projectLinkId),
       );
     }
-    return getProjectLink(settings.dataDir, projectLinkId);
+    return localProjectLinkWithRuntimePat(projectLinkId);
   }
 
   async function listProjectLinksForStore(): Promise<Awaited<ReturnType<typeof listProjectLinks>>> {
@@ -143,10 +162,10 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
           const projectLinks = await tableStore.list();
           return Promise.all(projectLinks.map(injectAdoPat));
         },
-        () => listProjectLinks(settings.dataDir),
+        async () => Promise.all(listProjectLinks(settings.dataDir).map(injectAdoPat)),
       );
     }
-    return listProjectLinks(settings.dataDir);
+    return Promise.all(listProjectLinks(settings.dataDir).map(injectAdoPat));
   }
 
   async function getProjectLinkForStore(
@@ -159,10 +178,10 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
           const projectLink = await tableStore.get(projectLinkId);
           return projectLink ? injectAdoPat(projectLink) : null;
         },
-        () => getProjectLink(settings.dataDir, projectLinkId),
+        () => localProjectLinkWithRuntimePat(projectLinkId),
       );
     }
-    return getProjectLink(settings.dataDir, projectLinkId);
+    return localProjectLinkWithRuntimePat(projectLinkId);
   }
 
   async function createProjectLinkForStore(

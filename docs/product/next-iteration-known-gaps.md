@@ -23,13 +23,22 @@ product semantics before they are made green.
   bubbles. Phase 3c therefore remains required, using versioned public events
   plus stable Action/Artifact/Checkpoint references rather than copying raw
   tool results into the Timeline.
-- **P0 credential containment gap:** canonical `ProjectLink` and persisted
-  `InlineProjectLink` still contain `adoPat`. `storedToCosmos` copies the inline
-  snapshot as-is, and the Azure Table adapter permits storing `adoPat` in the
-  entity when Key Vault is not configured. This contradicts ADR-0005 and must
-  be closed before any Phase 4 real-ADO or installed write gate. Credentials
-  must be runtime-injected only; Project Link, Turn, bubbles, Timeline, local
-  JSON, Table Storage, and Cosmos must contain no credential value.
+- **P0 credential containment gap — CLOSED in the 4a-1 slice (uncommitted at
+  this doc edit; commit `7d3c8ca` + 4a-1 follow-up):** canonical `ProjectLink`
+  and persisted `InlineProjectLink` never hold an `adoPat` value.
+  `legacyFreeProjectLinkInput` writes the empty placeholder, Table entity
+  mappers write `""` and never resurrect legacy stored values, and
+  `normalizeSession` is the single redaction choke point for
+  saveSession/storedToCosmos/saveStoreSync. The desktop localStorage layer
+  strips the value too. Runtime injection is the only source: routes
+  re-inject via `injectAdoPat` (Key Vault → keyring seam `getKeyringPat`), and
+  confirmed-action execution re-injects via the `patInjector` AFTER the
+  running-transition save (the save normalizes/redacts in place; injecting
+  before it would be stripped). Unit tests cover the raw JSON file, the
+  entity mappers, session/Cosmos serialization, and the keyring seam; the
+  real-data audit script (`scripts/audit-credential-persistence.mjs`) reports
+  counts only and was clean against the live store. Remaining follow-up: the
+  live-tier gates (real ADO, installed MSI) must run against this slice.
 - F7 completed on the calibrated `8d2f703` product/test code with **27 passed /
   3 failed** in 38.8 minutes. The failures are product signals, not three
   equivalent locator flakes: stage+commit was collapsed to `git commit --all`;

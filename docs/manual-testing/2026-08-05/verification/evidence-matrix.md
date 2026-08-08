@@ -31,6 +31,29 @@ this reopen does not count for the current HEAD. Tiers:
   until `adoPat` is removed from Project Link and inline/session persistence,
   existing local/Table/Cosmos data is audited, and persistence redaction tests
   pass.
+
+## Continuation audit — 2026-08-08 (4a-1 credential containment, working tree on `7d3c8ca`)
+
+- The P0 credential containment slice is implemented and unit-green:
+  `legacyFreeProjectLinkInput` writes the empty placeholder (raw
+  `project-links.json` asserted credential-free in tests with a real PAT
+  fixture), Table entity mappers write `""` and never resurrect legacy stored
+  values (`adoPatContainment.test.ts`), and `normalizeSession` redacts
+  `inlineProjectLink.adoPat` across saveSession/storedToCosmos/saveStoreSync
+  (`chatHistoryStore.test.ts`). Desktop localStorage strips the value.
+- Runtime injection restored: route-level re-injection via
+  `injectAdoPat`/`localProjectLinkWithRuntimePat` (Key Vault → `getKeyringPat`
+  seam) and confirmed-action execution re-injects via `patInjector` AFTER the
+  running-transition save — `normalizeSession` replaces the in-memory
+  `inlineProjectLink` with a redacted clone on save, so injection must follow
+  it. Confirmed-action flows now execute in <1s instead of falling through to
+  the machine's OAuth token cache with multi-second network timeouts.
+- Unit tiers re-run green after the slice: daemon **333 passed / 0 skipped**,
+  core **463 passed / 0 skipped** (live-tier exclusion in both vitest
+  configs; `requireNoSkips` holds). Real-data audit script ran clean earlier
+  (counts only, no values read).
+- RA / ID / release gates remain **NOT_RUN / BLOCKED** on current HEAD as
+  before; the P0 prerequisite they awaited is now closed.
 - Verification oracle gate: **FAIL** until fresh-run anchoring, latest/repeated
   attempt aggregation, `requireNoSkips`, attempt-scoped artifacts, and atomic
   state projection are proven.
