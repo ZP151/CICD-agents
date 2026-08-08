@@ -4,13 +4,55 @@ HEAD baseline: `68a673adb83aeab925fc1217ee3bf3526b72fcff` (phase-1 slice; earlie
 Machine-readable result: `goal-verification.json` (repo root) and
 `verification/goal-verification.json`.
 
-Statuses: PASS / FAIL / NOT_RUN. Evidence recorded before this reopen does
-not count for the current HEAD. Tiers:
+Statuses: PASS / FAIL / NOT_RUN / INTERRUPTED / RUNNING. INTERRUPTED means
+the run was terminated by the environment (session harness), not by product
+or test failure — it is neither a pass nor a fail. Evidence recorded before
+this reopen does not count for the current HEAD. Tiers:
 - U = unit/component (vitest)
 - MB = mocked browser E2E (Playwright + Vite, mocked daemon)
 - SL = source Vite + daemon live E2E (Playwright, real daemon)
 - ID = installed Tauri desktop E2E
 - RA = ClaimBot_API + real Azure DevOps
+
+## Continuation audit — 2026-08-08 (third pass, HEAD `8d2f703`)
+
+Calibration baseline for the Phase 0-4 productization plan
+(`v1-productization-iteration.md`, next Goal):
+
+- HEAD `8d2f703` (`claudecode/optimize-bugfix`), worktree clean at audit
+  time. Remotes verified identical via `git ls-remote` 2026-08-08:
+  `origin` = `8d2f703` ✓, `ado` = `8d2f703` ✓ (pushed from stale `58e0653`
+  during calibration).
+- **Code equivalence:** `packages/` + `apps/` unchanged since `58e0653`
+  (fix(core): bounded git ENOENT recovery); `tests/e2e` unchanged since
+  `71ec73e`. `f472c09`/`b07f370`/`016b0f8` touch scripts only; `8d2f703`
+  touches docs only. All source-live runs from F3 onward executed the same
+  product and test code as the calibrated HEAD.
+- **Unit tier re-run on `8d2f703`:** `verify-goal.mjs --tier unit`
+  (6 gates: core/daemon/desktop typecheck+test) executed on 2026-08-08 on
+  this exact HEAD — see `goal-verification.json` for exit codes, durations,
+  and skips. This supersedes the earlier `s5-regression-phase1.log` / 6-gate
+  run at `33ae3de` (which predates the `58e0653` core fix).
+- **Source-live runs F5/F6 are INTERRUPTED, not PASS/FAIL:** F5
+  (`live-app-e2e-20260808-073723.log`) ended at `ok #22` — 22/22 passed at
+  interruption; F6 (`live-app-e2e-20260808-081318.log`) ended at `ok #16` —
+  16/16 passed at interruption. Neither log has a summary line, neither has
+  a runner JSON; both were killed by the session harness. They are recorded
+  in `goal-verification.json` as `INTERRUPTED` and count as partial evidence
+  only. Runs A/B/C (25/30, 29/30, 28/30) predate `71ec73e` (test-side fix)
+  and are historical, not current-test evidence.
+- **F7 is RUNNING** (detached from the session harness, launched 19:33,
+  committed runner `f472c09`/`b07f370`, prewarm enabled): artifacts
+  `output/live-e2e/live-app-e2e-20260808-193311.log` and runner JSON
+  `output/live-e2e/runner-20260808-193310.json` (written on completion).
+  Its result will be merged into `goal-verification.json` as a new run row
+  when it lands; if 30/30 it becomes the source-live gate evidence, if
+  interrupted it is recorded as INTERRUPTED again.
+- real-ado tier: carried PASS at `68a673a` (WI-7916,
+  `verification/real-ado-evidence.json`); re-run on the final HEAD is a
+  Phase 4 gate and is NOT_RUN on this HEAD.
+- installed-desktop tier: NOT_RUN on this HEAD (rebuild + reinstall from
+  HEAD pending, Phase 4).
 
 ## Cycle 00 — Reset and foundation
 

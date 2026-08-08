@@ -1,137 +1,248 @@
 {
-  "schemaVersion": 1,
-  "runId": "verify-msjfn3tj",
-  "status": "PASS",
-  "commit": {
-    "sha": "33ae3deec3e01d4e111d8eff6d0b1d320f627776",
-    "ref": "refs/heads/claudecode/optimize-bugfix",
-    "message": "feat(daemon): widen opening-narrative budget and retry past the deadline\n\nRoot cause (source-live attempts D/E): GPT-5 counts hidden reasoning against\nmax_completion_tokens, so the 320-token narrator budget routinely burned out\nbefore any visible text, and the 60s deadline class was never retried.\n\n- MAX_ACTION_NARRATIVE_TOKENS 320 -> 1024: leaves room for reasoning to\n  finish AND a genuine 1-2 sentence public note (responsiveness stays bounded\n  by the route narrative deadline).\n- Corrective re-prompt now also fires when the opening exceeds\n  OPENING_NARRATIVE_DEADLINE_MS, not only on empty/error completions. A\n  generation guard (currentNarrativeAttempt) ensures a superseded stream's\n  late events never leak to the SSE writer; per-attempt instrumentation logs\n  the reason at \"opening narrative attempt failed\".\n- Narrator system prompt: begin the visible note on the very first output\n  token; the note is the deliverable, not a summary of a longer draft.\n\nTests: core chatPublicOpening 10/10 (maxTokens 1024); daemon gate suite 4/4\nincl. new deadline-retry case (injected 80ms deadline, blocked-then-text\nstream, exactly one corrective re-prompt, no turn.failed).\n\nCo-Authored-By: Claude <noreply@anthropic.com>"
-  },
-  "appVersion": "0.5.26",
-  "productModel": "unknown",
-  "startedAt": "2026-08-07T21:04:05.142Z",
-  "finishedAt": "2026-08-07T21:06:39.336Z",
-  "repeat": 1,
-  "summary": {
-    "required": 6,
-    "passed": 6,
-    "failed": 0,
-    "notRun": 0
-  },
-  "gates": [
+ "schemaVersion": 1,
+ "runId": "verify-mskbls4d",
+ "status": "INCOMPLETE",
+ "commit": {
+  "sha": "8d2f70378f31f793b985c7fb122d4aa6e9d08cc1",
+  "ref": "refs/heads/claudecode/optimize-bugfix",
+  "message": "docs: record F4 Vite cold-compile stall, prewarm fix, actionsTaken trust gap"
+ },
+ "appVersion": "0.5.26",
+ "productModel": "unknown",
+ "startedAt": "2026-08-08T11:58:51.037Z",
+ "finishedAt": "2026-08-08T12:02:21.598Z",
+ "repeat": 1,
+ "summary": {
+  "required": 11,
+  "passed": 6,
+  "failed": 0,
+  "notRun": 2,
+  "interrupted": 2,
+  "running": 1
+ },
+ "gates": [
+  {
+   "id": "core-typecheck",
+   "tier": "unit",
+   "required": true,
+   "requireNoSkips": false,
+   "timeoutMs": 300000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/core typecheck",
+   "description": "core typecheck",
+   "runs": [
     {
-      "id": "core-typecheck",
-      "tier": "unit",
-      "required": true,
-      "requireNoSkips": false,
-      "timeoutMs": 300000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/core typecheck",
-      "description": "core typecheck",
-      "runs": [
-        {
-          "attempt": 1,
-          "exitCode": 0,
-          "timedOut": false,
-          "durationMs": 3648,
-          "status": "PASS"
-        }
-      ],
-      "status": "PASS"
-    },
-    {
-      "id": "core-test",
-      "tier": "unit",
-      "required": true,
-      "requireNoSkips": true,
-      "timeoutMs": 900000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/core test",
-      "description": "core vitest suite",
-      "runs": [
-        {
-          "attempt": 1,
-          "exitCode": 0,
-          "timedOut": false,
-          "durationMs": 29092,
-          "status": "PASS"
-        }
-      ],
-      "status": "PASS"
-    },
-    {
-      "id": "daemon-typecheck",
-      "tier": "unit",
-      "required": true,
-      "requireNoSkips": false,
-      "timeoutMs": 300000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/daemon typecheck",
-      "description": "daemon typecheck",
-      "runs": [
-        {
-          "attempt": 1,
-          "exitCode": 0,
-          "timedOut": false,
-          "durationMs": 4984,
-          "status": "PASS"
-        }
-      ],
-      "status": "PASS"
-    },
-    {
-      "id": "daemon-test",
-      "tier": "unit",
-      "required": true,
-      "requireNoSkips": true,
-      "timeoutMs": 900000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/daemon test",
-      "description": "daemon vitest suite",
-      "runs": [
-        {
-          "attempt": 1,
-          "exitCode": 0,
-          "timedOut": false,
-          "durationMs": 75252,
-          "status": "PASS"
-        }
-      ],
-      "status": "PASS"
-    },
-    {
-      "id": "desktop-typecheck",
-      "tier": "unit",
-      "required": true,
-      "requireNoSkips": false,
-      "timeoutMs": 300000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/desktop typecheck",
-      "description": "desktop typecheck",
-      "runs": [
-        {
-          "attempt": 1,
-          "exitCode": 0,
-          "timedOut": false,
-          "durationMs": 4316,
-          "status": "PASS"
-        }
-      ],
-      "status": "PASS"
-    },
-    {
-      "id": "desktop-test",
-      "tier": "unit",
-      "required": true,
-      "requireNoSkips": true,
-      "timeoutMs": 900000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/desktop test",
-      "description": "desktop vitest suite",
-      "runs": [
-        {
-          "attempt": 1,
-          "exitCode": 0,
-          "timedOut": false,
-          "durationMs": 36896,
-          "status": "PASS"
-        }
-      ],
-      "status": "PASS"
+     "attempt": 1,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 3936,
+     "status": "PASS"
     }
-  ]
+   ],
+   "status": "PASS"
+  },
+  {
+   "id": "core-test",
+   "tier": "unit",
+   "required": true,
+   "requireNoSkips": true,
+   "timeoutMs": 900000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/core test",
+   "description": "core vitest suite",
+   "runs": [
+    {
+     "attempt": 1,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 28343,
+     "status": "PASS"
+    }
+   ],
+   "status": "PASS"
+  },
+  {
+   "id": "daemon-typecheck",
+   "tier": "unit",
+   "required": true,
+   "requireNoSkips": false,
+   "timeoutMs": 300000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/daemon typecheck",
+   "description": "daemon typecheck",
+   "runs": [
+    {
+     "attempt": 1,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 25845,
+     "status": "PASS"
+    }
+   ],
+   "status": "PASS"
+  },
+  {
+   "id": "daemon-test",
+   "tier": "unit",
+   "required": true,
+   "requireNoSkips": true,
+   "timeoutMs": 900000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/daemon test",
+   "description": "daemon vitest suite",
+   "runs": [
+    {
+     "attempt": 1,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 59878,
+     "status": "PASS"
+    }
+   ],
+   "status": "PASS"
+  },
+  {
+   "id": "desktop-typecheck",
+   "tier": "unit",
+   "required": true,
+   "requireNoSkips": false,
+   "timeoutMs": 300000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/desktop typecheck",
+   "description": "desktop typecheck",
+   "runs": [
+    {
+     "attempt": 1,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 54123,
+     "status": "PASS"
+    }
+   ],
+   "status": "PASS"
+  },
+  {
+   "id": "desktop-test",
+   "tier": "unit",
+   "required": true,
+   "requireNoSkips": true,
+   "timeoutMs": 900000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\pnpm-project.ps1\" --filter @mergepilot/desktop test",
+   "description": "desktop vitest suite",
+   "runs": [
+    {
+     "attempt": 1,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 38433,
+     "status": "PASS"
+    }
+   ],
+   "status": "PASS"
+  },
+  {
+   "id": "source-live-f5",
+   "tier": "source-live-e2e",
+   "required": true,
+   "requireNoSkips": true,
+   "timeoutMs": 10800000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:/Users/15492/Develop/Agents/CICD-agents\\scripts\\windows\\run-live-app-e2e.ps1\" -RestartMismatchedDaemon -LiveAdo (detached launch 2026-08-08 07:37:23, committed runner f472c09/b07f370 working tree)",
+   "description": "source-live full run F5 — interrupted by harness, not a product failure",
+   "runs": [
+    {
+     "attempt": 1,
+     "exitCode": null,
+     "timedOut": true,
+     "durationMs": null,
+     "status": "INTERRUPTED",
+     "note": "22/22 passed at interruption (last line ok#22); no summary line, no runner JSON — killed by session harness ~08:12 after 25 min. Product+test code identical to HEAD (delta: scripts only). Artifacts: output/live-e2e/live-app-e2e-20260808-073723.log, output/live-e2e/live-app-source-daemon-20260808-073723.{log,err.log}."
+    }
+   ],
+   "status": "INTERRUPTED"
+  },
+  {
+   "id": "source-live-f6",
+   "tier": "source-live-e2e",
+   "required": true,
+   "requireNoSkips": true,
+   "timeoutMs": 10800000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:/Users/15492/Develop/Agents/CICD-agents\\scripts\\windows\\run-live-app-e2e.ps1\" -RestartMismatchedDaemon -LiveAdo (detached launch 2026-08-08 08:13:18)",
+   "description": "source-live full run F6 — interrupted by harness, not a product failure",
+   "runs": [
+    {
+     "attempt": 1,
+     "exitCode": null,
+     "timedOut": true,
+     "durationMs": null,
+     "status": "INTERRUPTED",
+     "note": "16/16 passed at interruption (last line ok#16); no summary line, no runner JSON — killed by session harness ~08:37. Product+test code identical to HEAD (delta: scripts only). Artifacts: output/live-e2e/live-app-e2e-20260808-081318.log, output/live-e2e/live-app-source-daemon-20260808-081318.{log,err.log}."
+    }
+   ],
+   "status": "INTERRUPTED"
+  },
+  {
+   "id": "source-live-f7",
+   "tier": "source-live-e2e",
+   "required": true,
+   "requireNoSkips": true,
+   "timeoutMs": 10800000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:/Users/15492/Develop/Agents/CICD-agents\\scripts\\windows\\run-live-app-e2e.ps1\" -RestartMismatchedDaemon -LiveAdo (detached launch 2026-08-08 19:33:10, committed runner f472c09/b07f370)",
+   "description": "source-live full run F7 — running at calibration time, evidence pending",
+   "runs": [
+    {
+     "attempt": 1,
+     "exitCode": null,
+     "timedOut": false,
+     "durationMs": null,
+     "status": "RUNNING",
+     "note": "Detached from session harness (Start-Process), prewarm + 30 tests. Artifacts: output/live-e2e/live-app-e2e-20260808-193311.log, output/live-e2e/live-app-source-daemon-20260808-193311.{log,err.log}, runner JSON output/live-e2e/runner-20260808-193310.json (written on completion)."
+    }
+   ],
+   "status": "RUNNING"
+  },
+  {
+   "id": "real-ado-e2e",
+   "tier": "real-ado",
+   "required": true,
+   "requireNoSkips": true,
+   "timeoutMs": 1800000,
+   "cmd": "\"C:/Users/15492/Develop/Agents/CICD-agents\\scripts\\verify-real-ado.mjs\"",
+   "description": "ClaimBot_API real ADO E2E — re-run on final HEAD pending (Phase 4); carried evidence at 68a673a",
+   "runs": [
+    {
+     "attempt": 1,
+     "exitCode": null,
+     "timedOut": false,
+     "durationMs": null,
+     "status": "NOT_RUN",
+     "note": "PASS at 68a673a (WI-7916 create/comment/delete each exactly once, re-read proven) — docs/manual-testing/2026-08-05/verification/real-ado-evidence.json. Not re-run on 8d2f703 yet; does not count for this HEAD."
+    }
+   ],
+   "status": "NOT_RUN"
+  },
+  {
+   "id": "installed-desktop-e2e",
+   "tier": "installed-desktop",
+   "required": true,
+   "requireNoSkips": true,
+   "timeoutMs": 900000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:/Users/15492/Develop/Agents/CICD-agents\\scripts\\windows\\run-installed-app-smoke.ps1\"",
+   "description": "installed Tauri desktop E2E — rebuild + reinstall from HEAD pending (Phase 4)",
+   "runs": [
+    {
+     "attempt": 1,
+     "exitCode": null,
+     "timedOut": false,
+     "durationMs": null,
+     "status": "NOT_RUN",
+     "note": "C:\\Program Files\\MergePilot binary predates reopened-HEAD changes (0.5.26, 2026-08-05 probe); installed tier must rebuild + reinstall from current HEAD before runs count as evidence."
+    }
+   ],
+   "status": "NOT_RUN"
+  }
+ ],
+ "remotes": {
+  "ado": "8d2f70378f31f793b985c7fb122d4aa6e9d08cc1",
+  "origin": "8d2f70378f31f793b985c7fb122d4aa6e9d08cc1",
+  "verifiedAt": "2026-08-08T12:00:00+08:00",
+  "verifiedVia": "git ls-remote ado/origin claudecode/optimize-bugfix"
+ },
+ "codeEquivalence": "packages/ + apps/ product code unchanged since 58e0653 (fix(core): bounded git ENOENT recovery); tests/e2e unchanged since 71ec73e. Commits f472c09/b07f370/016b0f8 touch scripts only; 8d2f703 touches docs only. Unit gate runs below were executed on HEAD 8d2f703 by verify-goal.mjs (--tier unit, 2026-08-08).",
+ "statusMeaning": "INCOMPLETE = calibrated snapshot at HEAD 8d2f703: unit gates freshly run on this HEAD; source-live F5/F6 INTERRUPTED by session harness (not PASS/FAIL); F7 RUNNING detached; real-ado/installed NOT_RUN on this HEAD. Not a completion claim.",
+ "calibrationNote": "Phase 0 evidence calibration 2026-08-08. F5/F6 are marked INTERRUPTED per instruction: both logs end at an ok line with no summary and no runner JSON. Runs A/B/C (25/30, 29/30, 28/30) and F3 (21/26) are recorded in docs/product/next-iteration-known-gaps.md and evidence-matrix.md; A/B/C ran before 71ec73e (test-side fix) and are therefore not current-test evidence."
 }
