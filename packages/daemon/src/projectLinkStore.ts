@@ -109,11 +109,12 @@ export function createProjectLinkStoreAdapter(settings: Settings): ProjectLinkSt
         name: inlineProjectLink.name ?? "",
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        // The session snapshot no longer carries pipeline/MCP/template fields
-        // (removed in Phase 3); the store type keeps them as legacy read
-        // defaults and every consumer resolves "" through withLegacyReadDefaults.
-        adoPipelineId: "",
-        adoPipelineName: "",
+        // Pipeline identity is required on the inline snapshot (pull-requests
+        // routes attach pipeline-run status and pipeline workflows resolve
+        // the trigger target from it). MCP command/auth and template were
+        // removed in Phase 3 as dead; the store type keeps them as legacy
+        // read defaults and every consumer resolves "" through
+        // withLegacyReadDefaults.
         adoMcpCommand: "",
         adoMcpAuthentication: "",
         projectTemplate: "",

@@ -28,6 +28,11 @@ export const InlineProjectLinkSchema = z
     adoProject: z.string().default(""),
     adoRepoName: z.string().default(""),
     adoPat: z.string().default(""),
+    // Pipeline identity is live for PR pipeline-run attachment and pipeline
+    // target resolution; only MCP command/auth and template snapshot fields
+    // were removed as dead in Phase 3.
+    adoPipelineId: z.string().default(""),
+    adoPipelineName: z.string().default(""),
     adoMcpEnabled: z.coerce.boolean().default(false),
     adoMcpDomains: z.string().default("repositories,pipelines,work-items"),
     buildCommand: z.string().default(""),

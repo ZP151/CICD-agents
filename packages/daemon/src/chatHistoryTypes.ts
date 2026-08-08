@@ -1,19 +1,18 @@
 import {
   type ChatMessage,
   type ChatPlannerResult,
-  type ChatWorkflowState,
   type PendingToolAction,
   type TurnTimelineEvent,
 } from "@mergepilot/core";
 import type { InlineLlmConfig } from "./llmSettings.js";
 
 /**
- * Session-scoped project context. Only fields with live daemon consumers
- * survive here: ADO identity + PAT for the tool transport, the MCP gate and
+ * Session-scoped project context. Only fields with live consumers survive
+ * here: ADO identity + PAT for the tool transport, pipeline identity for PR
+ * pipeline-run attachment and pipeline target resolution, the MCP gate and
  * domain allow-list, and build/test/ignored-glob context for the indexer.
- * Pipeline identity, MCP command/auth and template fields were legacy
- * snapshot duplicates (read-only migration reads) and are gone; pipeline
- * choices live in PipelineConnection / active Turn state.
+ * MCP command/auth and template fields were legacy snapshot duplicates
+ * (read-only migration reads) and are gone.
  */
 export interface InlineProjectLink {
   id?: string;
@@ -25,6 +24,8 @@ export interface InlineProjectLink {
   adoProject: string;
   adoRepoName: string;
   adoPat: string;
+  adoPipelineId: string;
+  adoPipelineName: string;
   adoMcpEnabled: boolean;
   adoMcpDomains: string;
   buildCommand: string;
@@ -67,7 +68,6 @@ export interface StoredSession {
   /** Public-only Timeline records; used to restore the exact Turn hierarchy. */
   timelineEvents?: TurnTimelineEvent[];
   approvalProposal?: PendingToolAction;
-  workflowState?: ChatWorkflowState;
   llmConfig?: InlineLlmConfig;
   inlineProjectLink?: InlineProjectLink;
 }
