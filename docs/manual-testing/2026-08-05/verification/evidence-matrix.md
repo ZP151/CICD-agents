@@ -449,3 +449,37 @@ stable kind instead of model-emitted text, and "do not stage" style
 constraints become enforced guards rather than model luck. The 7ab8a infra
 failure additionally motivates a bounded retry on stream abort (currently
 `retryable: false` by design; revisit in Phase 4 with the latency budget).
+
+### Desktop launch robustness (2026-08-09) — single-instance reveal fix
+
+**Reported symptom**: launching the desktop during test development appeared to
+"flash-exit". Parallel-worktree investigation concluded it was not a crash: the
+Tauri single-instance plugin (`tauri-plugin-single-instance` 2.4.3, windows.rs
+setup hook) exits a second instance with `std::process::exit(0)` during
+`Builder::build()` — before window creation and before our setup closure runs,
+so a second launch can neither create a window nor touch the first instance's
+daemon (port-takeover cannot fire from a second instance).
+
+**Real defect found in this repo**: our single-instance callback handled only
+auth-return URIs. Because the window hides to the tray on close
+(`on_window_event` CloseRequested → `hide()` + `prevent_close`), re-launching
+an already-running (tray-hidden) app did nothing visible — a silent no-op that
+reads as a crash.
+
+**Fix** (committed `ab040c4`): non-auth-return launches now call
+`reveal_main_window` (show + unminimize + focus), matching
+`complete_browser_auth_return`.
+
+**Machine evidence** (`verification/desktop-single-instance-reveal-evidence.json`):
+debug binary, 3 launches, window state asserted via Win32:
+pre-fix `windowVisibleAfterReveal=false` (hidden window stayed hidden);
+post-fix `windowVisibleAfterReveal=true`, `foregroundAfterRevealIsMain=true`;
+both runs: second/third instances exit 0, first instance stays alive.
+Regression harness: `scripts/windows/verify-desktop-single-instance-reveal.ps1`.
+
+**Usage guidance** (unchanged): dev worktrees must launch via
+`scripts/windows/start-desktop-worktree.ps1` (identifier `com.mergepilot.desktop.ux`,
+ports 1421/8788). Plain `pnpm tauri:dev` uses the production identifier
+`com.mergepilot.desktop` and port 8787 — colliding with an installed app via
+single-instance and the daemon port; the worktree script exists precisely to
+avoid this.
