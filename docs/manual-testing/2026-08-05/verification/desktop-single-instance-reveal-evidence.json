@@ -1,0 +1,18 @@
+{
+    "firstInstanceRunning":  true,
+    "firstWindowVisible":  true,
+    "firstWindowHwnd":  "0x2105A2",
+    "secondInstanceExited":  true,
+    "secondInstanceExitCode":  0,
+    "firstStillRunningAfterSecond":  true,
+    "firstWindowVisibleAfterSecond":  true,
+    "windowHiddenBeforeReveal":  true,
+    "thirdInstanceExited":  true,
+    "thirdInstanceExitCode":  0,
+    "firstStillRunningAfterThird":  true,
+    "windowVisibleAfterReveal":  true,
+    "foregroundAfterRevealIsMain":  true,
+    "_skip":  true,
+    "ok":  true,
+    "cleanupDaemonsStopped":  true
+}

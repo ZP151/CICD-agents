@@ -345,8 +345,17 @@ struct DaemonProcess(Mutex<Option<CommandChild>>);
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // A second launch (Start-menu/taskbar re-open, another dev
+            // instance) never reaches our setup closure — the plugin exits the
+            // new process during build. The first instance must surface its
+            // main window: the window hides to the tray on close, so without
+            // this a re-launch of a running app is a silent no-op that reads
+            // as a crash. Auth-return launches reveal the window as a side
+            // effect of complete_browser_auth_return.
             if argv.iter().any(|arg| is_auth_return_uri(arg)) {
                 complete_browser_auth_return(app);
+            } else {
+                reveal_main_window(app);
             }
         }))
         .plugin(tauri_plugin_deep_link::init())
