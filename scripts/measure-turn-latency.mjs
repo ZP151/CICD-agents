@@ -41,14 +41,17 @@ const REPO_PATH = process.env.MERGEPILOT_PERF_REPO ?? repoRoot;
 const PROMPT = process.env.MERGEPILOT_PERF_PROMPT ?? "What is the current git branch?";
 // Canonical terminal events (post-Phase 2/3 SSE contract): turn.finished is
 // the success terminal (status "completed"), turn.failed / turn.cancelled are
-// the non-success terminals, and turn.final.completed is the persisted-turn
-// terminal emitted on replay/ledger paths. "turn.done" is obsolete and never
-// emitted by the current daemon.
-const TERMINAL_EVENTS = new Set(["turn.finished", "turn.failed", "turn.cancelled", "turn.final.completed"]);
+// the non-success terminals. "turn.done" is obsolete and never emitted by
+// the current daemon. turn.final.completed is deliberately NOT a terminal:
+// chatSse.ts emits it immediately before the terminal on BOTH the success
+// path (turn.finished, status "completed") and the failure path
+// (turn.failed / turn.cancelled), and it carries no status field, so
+// treating it as the turn terminal misclassified every successful turn as
+// unsuccessful (and locked turn-e2e ~1 event early).
+const TERMINAL_EVENTS = new Set(["turn.finished", "turn.failed", "turn.cancelled"]);
 
 function isSuccessfulTerminal(event, payload) {
   if (event === "turn.finished") return true;
-  if (event === "turn.final.completed") return payload?.status === "completed";
   return false;
 }
 

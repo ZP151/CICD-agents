@@ -70,15 +70,39 @@ product semantics before they are made green.
   The manifest's `installed-desktop-e2e` gate now runs this script. Version
   bumped to 0.5.27 so the fresh HEAD build upgrades over the stale 0.5.26
   install (MSI same-version installs are rejected).
-- Turn latency evidence is not usable yet: `measure-turn-latency.mjs` waits for
-  obsolete `turn.done` rather than successful `turn.finished`, and the current
-  narrative metric does not separate app/daemon overhead from provider TTFT.
-  **4a-3 fix (same slice):** the harness now recognizes the canonical
-  terminals `turn.finished` / `turn.failed` / `turn.cancelled` /
-  `turn.final.completed`, records the terminal event + status per turn,
-  reports successful vs no-terminal turn counts, and the metric table
-  separates daemon/transport overhead (`ttft-first-event`) from provider
-  TTFT (`ttft-narrative`) with the delta between them.
+  **4a-3 evidence (2026-08-09, HEAD `1653c09`):** the provenance gate PASSED
+  end to end against the GitHub Actions release artifacts
+  (`output/live-e2e/installed-provenance-20260809-140641.json`): release MSI
+  `7ef1668e…` → MSI install (`windowsInstaller: 1`) → installed daemon
+  payload `453e0609…` matches the MSI payload (`-RequireMsiPayloadMatch`),
+  installed E2E smoke ok (package state, restart persistence, safety,
+  fresh-user, desktop runtime takeover), and packaged vision smoke ok.
+  Provenance chain: main `4e332ac` → GitHub Actions `release.yml` → Release
+  asset MSI → install → Program Files hash match → installed E2E PASS.
+  Two harness bugs found and fixed along the way: `packaged-live-vision-smoke.ps1`
+  and `measure-turn-latency.mjs` still parsed obsolete SSE events
+  (`assistant_delta`/`done`/`result.response` and `turn.final.completed` as a
+  terminal). The vision smoke now reads `turn.final.completed.finalText` and
+  the latency harness treats only `turn.finished` / `turn.failed` /
+  `turn.cancelled` as terminals (fixed at `1653c09` / `f54f68c`).
+- Turn latency evidence is now usable. `measure-turn-latency.mjs` waits for
+  the canonical terminal `turn.finished` (status "completed") and reports
+  successful vs no-terminal turn counts; the metric table separates
+  daemon/transport overhead (`ttft-first-event`) from provider TTFT
+  (`ttft-narrative`) with the delta between them. **4a-3 baseline
+  (2026-08-09, installed daemon 0.5.27, Azure `gpt-5-mini`, 15 turns,
+  `output/performance-baseline-2026-08-09T06-32-25-507Z.json`):**
+  `turn-e2e` p50 44.6s / p95 71.5s, `ttft-narrative` p50 21.3s / p95 36.8s,
+  `ttft-first-event` p50 9.1s / p95 18.2s, app healthz p50 1ms, all 15/15
+  turns successful. Provider TTFT dominates (p50 ~21s); app/daemon overhead
+  beyond the transport baseline is small.
+- **Build non-determinism (confirmed, 2026-08-09):** the same source HEAD
+  produces different binaries across build environments. GitHub Actions
+  `release.yml` built daemon payload `453e0609…` (78,815,351 B) while the
+  local build of the same 0.5.27 source produced `1cceb385…` (78,344,291 B);
+  the local MSI cannot be used as an install-provenance anchor. The release
+  chain must anchor to the GitHub Actions artifact: CI build → Release asset
+  MSI → install → payload match (as the 4a-3 evidence above does).
 - **Release decision:** `971ee1d` is not eligible for `main` or release. The
   minimum sequence is credential containment → verification/provenance repair
   → focused F7 fixes → current-HEAD source-live → real ADO re-read → fresh MSI

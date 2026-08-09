@@ -139,6 +139,8 @@ try {
   $assistantDeltas = New-Object System.Collections.Generic.List[string]
   $sseErrors = New-Object System.Collections.Generic.List[string]
   $finalResponse = ""
+  $turnFinished = $false
+  $turnFailed = $false
 
   foreach ($line in ($response.Content -split "`r?`n")) {
     if ($line.StartsWith("event:")) {
@@ -155,8 +157,22 @@ try {
     if ($currentEvent -eq "session" -and $payload.sessionId) {
       $sessionId = [string]$payload.sessionId
     }
-    if ($currentEvent -eq "assistant_delta" -and $payload.delta) {
+    # Canonical SSE terminals (Phase 4 4a-2): the final answer arrives as
+    # turn.final.delta (delta) then turn.final.completed (finalText); the
+    # success terminal is turn.finished (status "completed"), and
+    # turn.failed / turn.cancelled are failure terminals. "assistant_delta"
+    # and "done" are obsolete and never emitted by chatSse.ts.
+    if ($currentEvent -eq "turn.final.delta" -and $payload.delta) {
       $assistantDeltas.Add([string]$payload.delta)
+    }
+    if ($currentEvent -eq "turn.final.completed" -and $payload.finalText) {
+      $finalResponse = [string]$payload.finalText
+    }
+    if ($currentEvent -eq "turn.finished") {
+      $turnFinished = $true
+    }
+    if ($currentEvent -eq "turn.failed" -or $currentEvent -eq "turn.cancelled") {
+      $turnFailed = $true
     }
     if ($currentEvent -eq "error" -or $payload.type -eq "error") {
       $errorMessage = if ($payload.message) {
@@ -170,14 +186,17 @@ try {
         $sseErrors.Add($errorMessage)
       }
     }
-    if (($currentEvent -eq "done" -or $currentEvent -eq "final") -and $payload.result.response) {
-      $finalResponse = [string]$payload.result.response
-    }
   }
 
   $assistantText = ($assistantDeltas -join "")
   if ([string]::IsNullOrWhiteSpace($finalResponse)) {
     $finalResponse = $assistantText
+  }
+
+  if ($turnFailed) {
+    $sseErrors.Add("Chat turn ended in a failure terminal (turn.failed/turn.cancelled).")
+  } elseif (-not $turnFinished) {
+    $sseErrors.Add("Chat turn did not emit the canonical success terminal turn.finished.")
   }
 
   $matchesText = $finalResponse -match [regex]::Escape($ExpectedText)

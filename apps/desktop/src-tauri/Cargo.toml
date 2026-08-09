@@ -1,6 +1,6 @@
 [package]
 name = "mergepilot-desktop"
-version = "0.5.27"
+version = "0.5.28"
 edition = "2021"
 description = "Tauri shell for MergePilot"
 

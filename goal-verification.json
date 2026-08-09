@@ -1,27 +1,27 @@
 {
  "schemaVersion": 1,
- "runId": "verify-msklc78t",
- "status": "INCOMPLETE",
+ "runId": "verify-msli4a3k",
+ "status": "PASS",
  "commit": {
-  "sha": "dccb567393a78437f3297de4db4a94d2edbc59e2",
+  "sha": "642ddaa5249bc292382febf4b6c8bc3ba06bc7ec",
   "ref": "claudecode/optimize-bugfix",
-  "message": "feat(verify): 4a-3 installed provenance + latency harness (Phase 4)"
+  "message": "docs(verification): record desktop single-instance reveal fix + evidence"
  },
- "docSha": "dccb567393a78437f3297de4db4a94d2edbc59e2",
+ "docSha": "642ddaa5249bc292382febf4b6c8bc3ba06bc7ec",
  "remotes": {},
  "appVersion": "0.5.26",
  "productModel": "unknown",
- "startedAt": "2026-08-08T16:31:20.237Z",
- "updatedAt": "2026-08-08T16:57:18.789Z",
+ "startedAt": "2026-08-09T07:48:58.016Z",
+ "updatedAt": "2026-08-09T10:19:42.334Z",
  "repeat": 1,
  "summary": {
   "required": 13,
-  "passed": 9,
-  "failed": 1,
-  "notRun": 3,
+  "passed": 13,
+  "failed": 0,
+  "notRun": 0,
   "interrupted": 0,
   "running": 0,
-  "status": "INCOMPLETE"
+  "status": "PASS"
  },
  "gates": [
   {
@@ -37,10 +37,20 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 60696,
+     "durationMs": 3771,
      "status": "PASS",
      "setupFailure": false,
-     "runId": "verify-msklc78t",
+     "runId": "verify-msli4a3k",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 3825,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msli4a3k",
      "artifacts": []
     }
    ],
@@ -59,13 +69,26 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 47264,
+     "durationMs": 20216,
      "status": "PASS",
      "setupFailure": false,
      "passed": 463,
      "skipped": 0,
      "total": 463,
-     "runId": "verify-msklc78t",
+     "runId": "verify-msli4a3k",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 22604,
+     "status": "PASS",
+     "setupFailure": false,
+     "passed": 473,
+     "skipped": 0,
+     "total": 473,
+     "runId": "verify-msli4a3k",
      "artifacts": []
     }
    ],
@@ -84,10 +107,20 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 13554,
+     "durationMs": 2489,
      "status": "PASS",
      "setupFailure": false,
-     "runId": "verify-msklc78t",
+     "runId": "verify-msli4a3k",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 9819,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msli4a3k",
      "artifacts": []
     }
    ],
@@ -106,13 +139,26 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 68761,
+     "durationMs": 38955,
      "status": "PASS",
      "setupFailure": false,
      "passed": 336,
      "skipped": 0,
      "total": 336,
-     "runId": "verify-msklc78t",
+     "runId": "verify-msli4a3k",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 46728,
+     "status": "PASS",
+     "setupFailure": false,
+     "passed": 336,
+     "skipped": 0,
+     "total": 336,
+     "runId": "verify-msli4a3k",
      "artifacts": []
     }
    ],
@@ -131,10 +177,20 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 60310,
+     "durationMs": 4211,
      "status": "PASS",
      "setupFailure": false,
-     "runId": "verify-msklc78t",
+     "runId": "verify-msli4a3k",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 34256,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msli4a3k",
      "artifacts": []
     }
    ],
@@ -153,13 +209,26 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 57312,
+     "durationMs": 15734,
      "status": "PASS",
      "setupFailure": false,
      "passed": 675,
      "skipped": 0,
      "total": 675,
-     "runId": "verify-msklc78t",
+     "runId": "verify-msli4a3k",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 20410,
+     "status": "PASS",
+     "setupFailure": false,
+     "passed": 675,
+     "skipped": 0,
+     "total": 675,
+     "runId": "verify-msli4a3k",
      "artifacts": []
     }
    ],
@@ -178,13 +247,26 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 12010,
+     "durationMs": 8891,
      "status": "PASS",
      "setupFailure": false,
      "passed": 14,
      "skipped": 0,
      "total": 14,
-     "runId": "verify-msklc78t",
+     "runId": "verify-msli4a3k",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 9385,
+     "status": "PASS",
+     "setupFailure": false,
+     "passed": 14,
+     "skipped": 0,
+     "total": 14,
+     "runId": "verify-msli4a3k",
      "artifacts": []
     }
    ],
@@ -203,13 +285,26 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 15235,
+     "durationMs": 9559,
      "status": "PASS",
      "setupFailure": false,
      "passed": 44,
      "skipped": 0,
      "total": 44,
-     "runId": "verify-msklc78t",
+     "runId": "verify-msli4a3k",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 10333,
+     "status": "PASS",
+     "setupFailure": false,
+     "passed": 44,
+     "skipped": 0,
+     "total": 44,
+     "runId": "verify-msli4a3k",
      "artifacts": []
     }
    ],
@@ -228,10 +323,20 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 9915,
+     "durationMs": 6259,
      "status": "PASS",
      "setupFailure": false,
-     "runId": "verify-msklc78t",
+     "runId": "verify-msli4a3k",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 8814,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msli4a3k",
      "artifacts": []
     }
    ],
@@ -245,8 +350,35 @@
    "timeoutMs": 2700000,
    "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/warmup.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/chat-layout.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/settings-permissions.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/route-cache.spec.ts -Workers 1",
    "description": "mocked browser E2E (warmup, chat-layout, settings-permissions, route-cache)",
-   "runs": [],
-   "status": "NOT_RUN"
+   "runs": [
+    {
+     "attempt": 1,
+     "exitCode": 1,
+     "timedOut": false,
+     "durationMs": 174820,
+     "status": "FAIL",
+     "setupFailure": false,
+     "passed": 50,
+     "skipped": 0,
+     "total": 50,
+     "runId": "verify-msli4a3k",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 241322,
+     "status": "PASS",
+     "setupFailure": false,
+     "passed": 33,
+     "skipped": 0,
+     "total": 33,
+     "runId": "verify-msli4a3k",
+     "artifacts": []
+    }
+   ],
+   "status": "PASS"
   },
   {
    "id": "browser-e2e-source-live",
@@ -256,40 +388,107 @@
    "timeoutMs": 10800000,
    "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-live-app-e2e.ps1\" -LiveAdo -RestartMismatchedDaemon",
    "description": "source Vite + daemon live E2E (real ADO reads), prewarm enabled",
-   "runs": [],
-   "status": "NOT_RUN"
+   "runs": [
+    {
+     "attempt": 1,
+     "exitCode": 1,
+     "timedOut": false,
+     "durationMs": 1181066,
+     "status": "FAIL",
+     "setupFailure": false,
+     "runId": "verify-msli4a3k",
+     "artifacts": [
+      {
+       "path": "output\\live-e2e\\live-app-e2e-20260809-160022.log",
+       "sha256": "9e6a99ef75e4e23b065dd50549b0e81f722eba19d0849ac8e21cc487c37d2f00"
+      },
+      {
+       "path": "output\\live-e2e\\live-app-source-daemon-20260809-160022.err.log",
+       "sha256": "46b51f9e83b0c663ec84af15dd648abacfde31222723e45dd82d25f723960fb2"
+      },
+      {
+       "path": "output\\live-e2e\\live-app-source-daemon-20260809-160022.log",
+       "sha256": "f3aa4fbbb69d247b7c2064bd4e873861bdbbc143b5fe99391a552875a60a1990"
+      }
+     ]
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 1149243,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msli4a3k",
+     "artifacts": [
+      {
+       "path": "output\\live-e2e\\live-app-e2e-20260809-170330.log",
+       "sha256": "5590989125a84172712d1b47bf78abba481779efe7c01dead888e5e015f5bd1a"
+      },
+      {
+       "path": "output\\live-e2e\\live-app-source-daemon-20260809-170330.err.log",
+       "sha256": "e755b3919b9b511fa971380c50e39365f3847da5a2547b0059d55df1cb6cf2c3"
+      },
+      {
+       "path": "output\\live-e2e\\live-app-source-daemon-20260809-170330.log",
+       "sha256": "4283c3a958de7f1b9ad6269f8fe36b9535b7ac72eb1bd1fde31dbdd7acdb5ee5"
+      }
+     ]
+    }
+   ],
+   "status": "PASS"
   },
   {
    "id": "installed-desktop-e2e",
    "tier": "installed-desktop",
    "required": true,
    "requireNoSkips": true,
-   "timeoutMs": 900000,
-   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\verify-installed-provenance.ps1\"",
-   "description": "installed provenance: source HEAD -> MSI/sidecar hashes -> install -> Program Files payload match -> installed E2E smoke + vision (exit 2 = elevation handoff printed)",
+   "timeoutMs": 1800000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\verify-installed-provenance.ps1\" -ExpectedVersion 0.5.27 -SkipBuild -MsiPath \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\output\\live-e2e\\release-assets\\MergePilot_0.5.27_x64_en-US.msi\"",
+   "description": "installed provenance: source HEAD -> MSI/sidecar hashes -> install -> Program Files payload match -> installed E2E smoke + vision (exit 2 = elevation handoff printed) (4a-3: -SkipBuild against the GitHub Actions release MSI; timeout 30m for full smoke+vision)",
    "runs": [
     {
      "attempt": 1,
-     "exitCode": 1,
+     "exitCode": 0,
      "timedOut": false,
-     "durationMs": 621097,
-     "status": "FAIL",
+     "durationMs": null,
+     "status": "PASS",
      "setupFailure": false,
-     "runId": "verify-msklc78t",
-     "artifacts": []
-    },
-    {
-     "attempt": 2,
-     "exitCode": 1,
-     "timedOut": false,
-     "durationMs": 552510,
-     "status": "FAIL",
-     "setupFailure": false,
-     "runId": "verify-msklc78t",
-     "artifacts": []
+     "note": "",
+     "runId": "verify-msli4a3k",
+     "artifacts": [
+      {
+       "path": "output\\live-e2e\\installed-provenance-20260809-181427.json",
+       "sha256": "d20291d64b168935c9cd176a1b7931355839eb0360082565b0ddc2a1d12ad669"
+      },
+      {
+       "path": "output\\live-e2e\\installed-app-package-state-20260809-181433.log",
+       "sha256": "2f62ebf2d4e90e03333315a16754358fa15d1f83a1ff7d0b73e7b5b0a8f6cf14"
+      },
+      {
+       "path": "output\\live-e2e\\installed-app-persistence-20260809-181433.log",
+       "sha256": "e5daa24fd5e02677d3638aa896767312d07cb29e5962661939311066d915b100"
+      },
+      {
+       "path": "output\\live-e2e\\installed-app-safety-20260809-181433.log",
+       "sha256": "c3b687994cbe009a783e30211ca2274f29427c6e2665deaf3522ff7a67456914"
+      },
+      {
+       "path": "output\\live-e2e\\installed-app-verifier-safety-20260809-181433.log",
+       "sha256": "4cb3439948726d7ccc382216aeb1c14bb9aa9823717073020f03d79126a4b6fb"
+      },
+      {
+       "path": "output\\live-e2e\\installed-app-fresh-user-20260809-181433.log",
+       "sha256": "d2b8fe66e20e0fe1d8fbddaea8af13d920fe61112f85591f9f98bee1e2b2f772"
+      },
+      {
+       "path": "output\\live-e2e\\installed-provenance-runner-20260809-181427.json",
+       "sha256": "45459c281197b27d24ed5f83cd8b671b5ac9a1bab9007a46537cbcd969769525"
+      }
+     ]
     }
    ],
-   "status": "FAIL"
+   "status": "PASS"
   },
   {
    "id": "real-ado-e2e",
@@ -299,8 +498,19 @@
    "timeoutMs": 1800000,
    "cmd": "\"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\.tools\\node-v22.11.0-win-x64\\node.exe\" \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\verify-real-ado.mjs\"",
    "description": "ClaimBot_API real ADO E2E (deterministic driver)",
-   "runs": [],
-   "status": "NOT_RUN"
+   "runs": [
+    {
+     "attempt": 1,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 7418,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msli4a3k",
+     "artifacts": []
+    }
+   ],
+   "status": "PASS"
   }
  ]
 }

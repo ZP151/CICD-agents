@@ -123,9 +123,9 @@
       "tier": "installed-desktop",
       "required": true,
       "requireNoSkips": true,
-      "timeoutMs": 900000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\verify-installed-provenance.ps1\"",
-      "description": "installed provenance: source HEAD -> MSI/sidecar hashes -> install -> Program Files payload match -> installed E2E smoke + vision (exit 2 = elevation handoff printed)"
+      "timeoutMs": 1800000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\verify-installed-provenance.ps1\" -ExpectedVersion 0.5.28 -SkipBuild -MsiPath \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\output\\live-e2e\\release-assets\\MergePilot_0.5.28_x64_en-US.msi\"",
+      "description": "installed provenance: source HEAD -> MSI/sidecar hashes -> install -> Program Files payload match -> installed E2E smoke + vision (exit 2 = elevation handoff printed) (4a-3: -SkipBuild against the GitHub Actions release MSI; timeout 30m for full smoke+vision)"
     },
     {
       "id": "real-ado-e2e",

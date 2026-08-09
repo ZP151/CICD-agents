@@ -169,17 +169,22 @@ Calibration baseline for the Phase 0-4 productization plan
 - real-ado tier: carried PASS at `68a673a` (WI-7916,
   `verification/real-ado-evidence.json`); re-run on the final HEAD is a
   Phase 4 gate and is NOT_RUN on this HEAD.
-- installed-desktop tier: NOT_RUN on this HEAD (rebuild + reinstall from
-  HEAD pending, Phase 4).
+- installed-desktop tier: PASS on the release chain at `1653c09`
+  (2026-08-09). Provenance: main `4e332ac` → GitHub Actions `release.yml` →
+  Release asset MSI (`7ef1668e…`) → MSI install (`windowsInstaller: 1`) →
+  installed daemon payload `453e0609…` matches MSI payload
+  (`-RequireMsiPayloadMatch`) → installed E2E smoke ok (package state,
+  restart persistence, safety, fresh-user, desktop runtime takeover) →
+  packaged vision ok. Evidence: `output/live-e2e/installed-provenance-20260809-140641.json`.
 
 ## Cycle 00 — Reset and foundation
 
 | Exit Evidence | Status | Tier | Evidence / gap |
 | --- | --- | --- | --- |
-| Recorded desktop E2E video/log of the demo scenario | NOT_RUN | ID | installed-desktop tier pending (rebuild from HEAD required) |
-| Event replay proves the same Turn after restart | NOT_RUN | ID | unit-level restart recovery exists; desktop replay pending |
+| Recorded desktop E2E video/log of the demo scenario | PASS | ID | installed provenance gate 2026-08-09 (`installed-provenance-20260809-140641.json`): installed daemon smoke logs for package state / restart persistence / safety / fresh-user / desktop runtime takeover + vision smoke, all ok against the installed 0.5.27 MSI |
+| Event replay proves the same Turn after restart | PASS | ID | installed restart-persistence smoke (installed daemon 0.5.27): chat session + assistant completion visible in history and messages before AND after a daemon restart (`installed-app-persistence-20260809-140223.log`, exit 0) |
 | ADO re-read proves the mutation exactly once | PASS | RA | `verification/real-ado-evidence.json` (create/comment/delete each once, re-read proven) |
-| P50/P95 latency breakdown | NOT_RUN | SL | to re-measure on current HEAD during source-live tier |
+| P50/P95 latency breakdown | PASS | SL/ID | installed daemon 0.5.27 baseline, 15/15 turns successful, `output/performance-baseline-2026-08-09T06-32-25-507Z.json`: turn-e2e p50 44.6s / p95 71.5s; ttft-narrative p50 21.3s / p95 36.8s (provider TTFT dominates); ttft-first-event p50 9.1s / p95 18.2s; app healthz p50 1ms |
 | Search confirms removed runtime selectors and Review Queue/Activity nav | PASS | U | phase-1 slice 68a673a: Work/Changes/CreatePR/TaskViewer selectors removed; Context-only; Review Queue page/API/storage deleted |
 | All relevant core, daemon, desktop, and E2E tests pass through the local toolchain | PASS | U/MB | unit 6/6 + mocked tier PASS on HEAD 2c82bd7 (warmup + chat-layout 51 + settings 1 + route-cache 34, sequential) |
 | Context is the sole Project Link selector; no changes/ahead/behind in Context | PASS | U | verified in phase-1 slice (grep + unit tests) |
@@ -444,3 +449,37 @@ stable kind instead of model-emitted text, and "do not stage" style
 constraints become enforced guards rather than model luck. The 7ab8a infra
 failure additionally motivates a bounded retry on stream abort (currently
 `retryable: false` by design; revisit in Phase 4 with the latency budget).
+
+### Desktop launch robustness (2026-08-09) — single-instance reveal fix
+
+**Reported symptom**: launching the desktop during test development appeared to
+"flash-exit". Parallel-worktree investigation concluded it was not a crash: the
+Tauri single-instance plugin (`tauri-plugin-single-instance` 2.4.3, windows.rs
+setup hook) exits a second instance with `std::process::exit(0)` during
+`Builder::build()` — before window creation and before our setup closure runs,
+so a second launch can neither create a window nor touch the first instance's
+daemon (port-takeover cannot fire from a second instance).
+
+**Real defect found in this repo**: our single-instance callback handled only
+auth-return URIs. Because the window hides to the tray on close
+(`on_window_event` CloseRequested → `hide()` + `prevent_close`), re-launching
+an already-running (tray-hidden) app did nothing visible — a silent no-op that
+reads as a crash.
+
+**Fix** (committed `ab040c4`): non-auth-return launches now call
+`reveal_main_window` (show + unminimize + focus), matching
+`complete_browser_auth_return`.
+
+**Machine evidence** (`verification/desktop-single-instance-reveal-evidence.json`):
+debug binary, 3 launches, window state asserted via Win32:
+pre-fix `windowVisibleAfterReveal=false` (hidden window stayed hidden);
+post-fix `windowVisibleAfterReveal=true`, `foregroundAfterRevealIsMain=true`;
+both runs: second/third instances exit 0, first instance stays alive.
+Regression harness: `scripts/windows/verify-desktop-single-instance-reveal.ps1`.
+
+**Usage guidance** (unchanged): dev worktrees must launch via
+`scripts/windows/start-desktop-worktree.ps1` (identifier `com.mergepilot.desktop.ux`,
+ports 1421/8788). Plain `pnpm tauri:dev` uses the production identifier
+`com.mergepilot.desktop` and port 8787 — colliding with an installed app via
+single-instance and the daemon port; the worktree script exists precisely to
+avoid this.
