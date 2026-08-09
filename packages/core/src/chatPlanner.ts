@@ -13,8 +13,12 @@ import {
 } from "./chatPlannerControl.js";
 import {
   guardReviewOnlyFinalResult,
+  guardApprovalProposal,
   isExplicitReadOnlyRequest,
+  noStagedChangesEvidence,
   outOfScopeWriteMessage,
+  prohibitedWriteGuidance,
+  prohibitsStaging,
   requiredChangeInspectionGuidance,
   requiredRepositoryStateEvidenceGuidance,
 } from "./chatPlannerGuards.js";
@@ -193,7 +197,7 @@ export class ChatPlanner {
             });
             continue;
           }
-          const result = withGroundedToolEvidence(guardReviewOnlyFinalResult(
+          const result = withGroundedToolEvidence(guardApprovalProposal(guardReviewOnlyFinalResult(
             plannerResultFromControl(args, {
               visibleText: accumulated,
               fallbackText: accumulated,
@@ -203,7 +207,7 @@ export class ChatPlanner {
               usedLlm: true,
             }),
             message,
-          ), publicToolEvidence);
+          ), message, history), publicToolEvidence);
           yield { type: "assistant_control", control: result };
           yield { type: "done", result };
           return;
@@ -291,6 +295,16 @@ export class ChatPlanner {
             });
             continue;
           }
+          const prohibitedGuidance = prohibitedWriteGuidance(tc.name, message, history);
+          if (prohibitedGuidance) {
+            yield { type: "progress", message: prohibitedGuidance };
+            messages.push({
+              role: "tool",
+              tool_call_id: tc.id,
+              content: JSON.stringify({ ok: false, guidance: prohibitedGuidance }),
+            });
+            continue;
+          }
           const outOfScope = outOfScopeWriteMessage(tc.name, message, history);
           if (outOfScope) {
             const result: ChatPlannerResult = {
@@ -340,6 +354,19 @@ export class ChatPlanner {
           }
 
           if (capability?.requiresApproval) {
+            if (tc.name === "git_commit" && prohibitsStaging(message, history) && noStagedChangesEvidence(publicToolEvidence)) {
+              const result: ChatPlannerResult = {
+                response: "No staged changes are present, so I will not create an empty commit. Nothing was staged or committed.",
+                finalizationMode: "none",
+                riskLevel: "low",
+                actionsTaken: toolCallsMade.map((t) => t.name),
+                suggestions: [],
+                toolCallsMade,
+                usedLlm: true,
+              };
+              yield { type: "done", result };
+              return;
+            }
             if (isExplicitReadOnlyRequest(message)) {
               const result: ChatPlannerResult = {
                 response: "This turn is explicitly read-only, so I will not propose or run a repository-changing action. I will stop after the evidence collected so far.",
@@ -429,7 +456,7 @@ export class ChatPlanner {
             label: ok ? actionLabel : `Could not complete: ${actionLabel}`,
           };
           toolCallsMade.push({ name: tc.name, args, ok });
-          publicToolEvidence.push({ name: tc.name, ok, output, callId: tc.id });
+          publicToolEvidence.push({ name: tc.name, ok, output, args, callId: tc.id });
           if (ok) {
             if (capability?.readOnly === true) {
               dedupGate.recordCompleted(tc.name, args, tc.id);
@@ -476,7 +503,7 @@ export class ChatPlanner {
       const control = parseControlResponse(lastText);
       const parsed = control.control;
       if (parsed) {
-        const result = withGroundedToolEvidence(guardReviewOnlyFinalResult(
+        const result = withGroundedToolEvidence(guardApprovalProposal(guardReviewOnlyFinalResult(
           plannerResultFromControl(parsed, {
             visibleText: control.visibleText,
             fallbackText: lastText,
@@ -486,7 +513,7 @@ export class ChatPlanner {
             usedLlm: true,
           }),
           message,
-        ), publicToolEvidence);
+        ), message, history), publicToolEvidence);
         const riskLevel = result.riskLevel;
         const response = result.response;
         const approvalProposal = result.approvalProposal;

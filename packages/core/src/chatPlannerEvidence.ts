@@ -4,6 +4,7 @@ export interface PublicToolEvidence {
   name: string;
   ok: boolean;
   output?: string;
+  args?: Record<string, unknown>;
   /** Stable tool-call id linking this evidence to the transcript call. */
   callId?: string;
 }

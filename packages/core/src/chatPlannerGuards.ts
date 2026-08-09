@@ -1,4 +1,74 @@
 import type { ChatMessage, ChatPlannerResult } from "./chatPlannerTypes.js";
+import type { PublicToolEvidence } from "./chatPlannerEvidence.js";
+import { isConfirmationMessage } from "./chatPlannerAffirmation.js";
+
+export function prohibitsStaging(message: string, history: ChatMessage[]): boolean {
+  const scope = userScopeText(message, history);
+  return /\b(?:do not|don't|dont)\s+(?:stage|staging|git add)(?:\s+(?:anything|all|everything))?(?=\s*(?:[,.;]|$|or\s+(?:commit|push|merge|checkout|switch)))/i.test(scope) ||
+    /\bwithout\s+(?:staging|stage|git add)\b/i.test(scope) ||
+    /\bno\s+(?:staging|stage|git add)\b/i.test(scope);
+}
+
+export function prohibitedWriteGuidance(
+  toolName: string,
+  message: string,
+  history: ChatMessage[],
+): string {
+  if (toolName !== "git_add" || !prohibitsStaging(message, history)) return "";
+  return "The user explicitly prohibited staging. Do not call git_add or propose it. Inspect git_status and git_diff with staged=true; if no staged changes are present, explain that and stop without requesting approval.";
+}
+
+export function noStagedChangesEvidence(evidence: PublicToolEvidence[]): boolean {
+  const status = evidence.find((entry) => entry.ok && entry.name === "git_status");
+  const stagedDiff = evidence.find(
+    (entry) => entry.ok && entry.name === "git_diff" &&
+      (entry.args?.staged === true || entry.args?.cached === true),
+  );
+  if (!status || !stagedDiff) return false;
+
+  const hasStagedStatus = (status.output ?? "")
+    .split(/\r?\n/)
+    .some((line) => !line.startsWith("##") && line.length >= 2 && line[0] !== " " && line[0] !== "?");
+  return !hasStagedStatus && !(stagedDiff.output ?? "").trim();
+}
+
+export function guardApprovalProposal(
+  result: ChatPlannerResult,
+  message: string,
+  history: ChatMessage[],
+): ChatPlannerResult {
+  const proposal = result.approvalProposal;
+  if (!proposal) return result;
+
+  const proposalStages = proposal.tool === "git_add" ||
+    (proposal.tool === "git_commit" && proposal.args.all === true);
+  if (prohibitsStaging(message, history) && proposalStages) {
+    return {
+      ...result,
+      response: "No staged changes were verified, and you explicitly asked me not to stage anything. I will not request staging or create a commit.",
+      riskLevel: "low",
+      suggestions: [],
+      approvalProposal: undefined,
+    };
+  }
+
+  const asksToStageAndCommit = /\b(?:stage|staging|git add)\b[\s\S]*\bcommit\b|\bcommit\b[\s\S]*\b(?:stage|staging|git add)\b/i.test(message);
+  if (proposal.tool === "git_commit" && proposal.args.all === true && asksToStageAndCommit) {
+    const messageArg = String(proposal.args.message ?? "").trim();
+    return {
+      ...result,
+      approvalProposal: {
+        ...proposal,
+        tool: "git_add",
+        args: { all: true },
+        description: "Stage all current changes for commit.",
+        nextHint: messageArg ? `commit staged changes with message: ${messageArg}` : proposal.nextHint,
+      },
+    };
+  }
+
+  return result;
+}
 
 export function requiredChangeInspectionGuidance(
   toolName: string,
@@ -22,11 +92,21 @@ export function requiredChangeInspectionGuidance(
       : "Inspect current changes with git_status and git_diff, then propose git_add with exact paths or explain why all changed paths should be staged.";
   }
 
-  if (toolName === "git_commit" && !executed.has("git_add") && !historyMentionsExecuted(history, "git_add")) {
+  const hasStagedDiff = toolCallsMade.some((call) =>
+    call.ok && call.name === "git_diff" && (call.args.staged === true || call.args.cached === true),
+  );
+  if (toolName === "git_commit" && prohibitsStaging(message, history) && (!hasStatus || !hasStagedDiff)) {
     return "Verify staged content with git_status and git_diff staged=true before requesting approval to commit.";
   }
 
-  if (toolName === "git_push" && !executed.has("git_commit") && !historyMentionsExecuted(history, "git_commit")) {
+  const confirmedContinuation = isConfirmationMessage(message);
+  if (toolName === "git_commit" && !prohibitsStaging(message, history) && !executed.has("git_add") &&
+      !(confirmedContinuation && historyMentionsExecuted(history, "git_add"))) {
+    return "Verify staged content with git_status and git_diff staged=true before requesting approval to commit.";
+  }
+
+  if (toolName === "git_push" && !executed.has("git_commit") &&
+      !(confirmedContinuation && historyMentionsExecuted(history, "git_commit"))) {
     return "Do not push until the requested commit has been created; inspect current branch/status and propose the commit step first.";
   }
 
