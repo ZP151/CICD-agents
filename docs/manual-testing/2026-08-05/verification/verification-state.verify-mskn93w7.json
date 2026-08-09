@@ -1,11 +1,11 @@
 {
  "schemaVersion": 3,
- "runId": "verify-mslg3wrz",
+ "runId": "verify-mskn93w7",
  "head": {
-  "sha": "5d33a38eccfda714cc718683c592600cd11ec08f",
+  "sha": "a264e192bc629bc506ccbe149c91e5bdf39fd7f3",
   "ref": "claudecode/optimize-bugfix",
-  "message": "verification(4a-3): anchor installed-desktop gate to release MSI; record PASS evidence",
-  "docSha": "5d33a38eccfda714cc718683c592600cd11ec08f"
+  "message": "fix(smoke): align installed persistence smoke with canonical SSE terminals and messages shape",
+  "docSha": "a264e192bc629bc506ccbe149c91e5bdf39fd7f3"
  },
  "remotes": {},
  "gates": [
@@ -142,23 +142,23 @@
    "tier": "installed-desktop",
    "required": true,
    "requireNoSkips": true,
-   "timeoutMs": 1800000,
-   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\verify-installed-provenance.ps1\" -ExpectedVersion 0.5.27 -SkipBuild -MsiPath \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\output\\live-e2e\\release-assets\\MergePilot_0.5.27_x64_en-US.msi\"",
-   "description": "installed provenance: source HEAD -> MSI/sidecar hashes -> install -> Program Files payload match -> installed E2E smoke + vision (exit 2 = elevation handoff printed) (4a-3: -SkipBuild against the GitHub Actions release MSI; timeout 30m for full smoke+vision)",
+   "timeoutMs": 900000,
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\verify-installed-provenance.ps1\"",
+   "description": "installed provenance: source HEAD -> MSI/sidecar hashes -> install -> Program Files payload match -> installed E2E smoke + vision (exit 2 = elevation handoff printed)",
    "runs": [
     {
      "attempt": 1,
-     "status": "PASS",
-     "exitCode": 0,
+     "status": "FAIL",
+     "exitCode": 1,
      "timedOut": false,
-     "durationMs": 135204,
-     "startedAt": "2026-08-09T06:52:48.596Z",
-     "finishedAt": "2026-08-09T06:55:03.801Z",
-     "runId": "verify-mslg3wrz",
+     "durationMs": 774421,
+     "startedAt": "2026-08-08T17:25:01.176Z",
+     "finishedAt": "2026-08-08T17:37:55.598Z",
+     "runId": "verify-mskn93w7",
      "artifacts": []
     }
    ],
-   "status": "PASS"
+   "status": "FAIL"
   },
   {
    "id": "real-ado-e2e",
@@ -174,14 +174,14 @@
  ],
  "summary": {
   "required": 13,
-  "passed": 1,
-  "failed": 0,
+  "passed": 0,
+  "failed": 1,
   "notRun": 12,
   "interrupted": 0,
   "running": 0,
   "status": "INCOMPLETE"
  },
- "startedAt": "2026-08-09T06:52:41.519Z",
+ "startedAt": "2026-08-08T17:24:55.159Z",
  "repeat": 1,
- "updatedAt": "2026-08-09T06:55:03.802Z"
+ "updatedAt": "2026-08-08T17:37:55.599Z"
 }
