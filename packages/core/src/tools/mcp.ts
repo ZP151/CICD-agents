@@ -107,7 +107,7 @@ export class McpConnectionManager {
           stderr: "pipe",
         });
     const client = new Client(
-      { name: "mergepilot", version: "0.5.27" },
+      { name: "mergepilot", version: "0.5.28" },
       { capabilities: {} },
     );
     client.setNotificationHandler(ToolListChangedNotificationSchema, () => {
