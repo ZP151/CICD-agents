@@ -32,6 +32,12 @@ const OPENING_NARRATIVE_DEADLINE_MS = (() => {
   return Number.isFinite(configured) && configured > 0 ? configured : 60_000;
 })();
 
+// Once a read-only evidence batch finishes, the next planner call can need a
+// full reasoning pass before it chooses a final answer or approval. Surface
+// that real wait quickly instead of leaving the completed command group as
+// the only evidence that the Turn is still alive.
+const CONTINUATION_MODEL_NOTICE_DELAY_MS = 5_000;
+
 /**
  * A single-producer / single-consumer bridge for planner events. It lets the
  * main agent perform pure preparation while the low-latency narrator streams,
@@ -90,9 +96,9 @@ const LlmConfigSchema = z
   })
   .optional();
 
-// V2 inline Project Links carry only the stable identity mapping; the legacy
-// fields are read-only (migration reads) and are never persisted from API
-// payloads. They remain readable on stored links and on session history.
+// Inline Project Links carry their stable identity mapping plus the configured
+// PR target. Branch policy is non-secret safety context, while deprecated
+// workflow fields remain read-only migration data.
 const InlineProjectLinkObjectSchema = z.object({
   id: z.string().optional(),
   name: z.string().optional(),
@@ -101,6 +107,7 @@ const InlineProjectLinkObjectSchema = z.object({
   adoProject: z.string().default(""),
   adoRepoName: z.string().default(""),
   adoPat: z.string().default(""),
+  targetBranch: z.string().default(""),
   ignoredGlobs: z.array(z.string()).default([]),
 });
 
@@ -203,16 +210,14 @@ function inlineProjectLinkToIndexProjectLink(projectLink?: InlineProjectLink) {
   return {
     buildCommand: projectLink.buildCommand,
     testCommand: projectLink.testCommand,
-    targetBranch: projectLink.targetBranch || projectLink.defaultBranch,
+    targetBranch: projectLink.targetBranch,
     ignoredGlobs: projectLink.ignoredGlobs,
   };
 }
 
-// V2 API payloads carry only the stable identity mapping; the legacy fields
-// are read-only (migration reads). The parsed payload is widened structurally
-// for downstream readers that still type them — no values are fabricated, so
-// legacy reads resolve through their existing fallbacks and the narrow value
-// (without legacy fields) is what gets snapshotted into session history.
+// The parsed payload is widened structurally for downstream readers that still
+// type deprecated fields. No values are fabricated; the explicit PR target is
+// the only branch policy sent into the conversation snapshot.
 function inlineProjectLinkFromPayload(payload: {
   projectLink?: ParsedInlineProjectLink;
 }): InlineProjectLink | undefined {
@@ -334,6 +339,21 @@ export function registerChatRoutes(
     sseWriter.startTurn(turnId, undefined, clientTurnId, requestReceivedAt);
     let active = true;
     let openingNarrativeVisible = false;
+    let continuationModelNoticeTimer: ReturnType<typeof setTimeout> | undefined;
+    const clearContinuationModelNotice = (): void => {
+      if (!continuationModelNoticeTimer) return;
+      clearTimeout(continuationModelNoticeTimer);
+      continuationModelNoticeTimer = undefined;
+    };
+    const scheduleContinuationModelNotice = (): void => {
+      clearContinuationModelNotice();
+      continuationModelNoticeTimer = setTimeout(() => {
+        continuationModelNoticeTimer = undefined;
+        if (active) {
+          sseWriter.sendWaitingForModel("Synthesizing the completed checks into the next decision…");
+        }
+      }, CONTINUATION_MODEL_NOTICE_DELAY_MS);
+    };
     // A slow provider is surfaced only as a transport diagnostic after a
     // meaningful delay. It is never substituted with canned agent prose.
     const waitingForModelTimer = setTimeout(() => {
@@ -528,9 +548,16 @@ export function registerChatRoutes(
             if (event.type === "work_statement") {
               openingNarrativeVisible = true;
               clearTimeout(waitingForModelTimer);
+              clearContinuationModelNotice();
+            } else if (event.type === "assistant_delta" || event.type === "tool_group_start") {
+              // The planner has produced a next response or action, so a
+              // pending continuation notice would no longer be truthful.
+              clearContinuationModelNotice();
             }
             sseWriter.sendChatEvent(event);
+            if (event.type === "tool_group_end") scheduleContinuationModelNotice();
             if (isTerminalChatEvent(event)) {
+              clearContinuationModelNotice();
               active = false;
               sseWriter.end();
               resolve();
@@ -539,6 +566,7 @@ export function registerChatRoutes(
           }
         } catch (err) {
           clearTimeout(waitingForModelTimer);
+          clearContinuationModelNotice();
           active = false;
           chatSessions.cancel(sessionId);
           const failure = chatTurnFailure(err, "planning");
@@ -561,6 +589,7 @@ export function registerChatRoutes(
         disposeUnusedPrewarmedRuntime();
         active = false;
         clearTimeout(waitingForModelTimer);
+        clearContinuationModelNotice();
         sseWriter.end();
         resolve();
       })();
@@ -573,6 +602,7 @@ export function registerChatRoutes(
         if (!active) return;
         active = false;
         clearTimeout(waitingForModelTimer);
+        clearContinuationModelNotice();
         chatSessions.cancel(sessionId);
         disposeUnusedPrewarmedRuntime();
         // Best-effort typed terminal (MP-011): the browser may already be

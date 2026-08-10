@@ -82,6 +82,8 @@ describe("PullRequestCard", () => {
     expect(html).not.toContain("<strong>Ready:");
     expect(html).not.toContain("<li>");
     expect(html).toContain("only documentation changed.");
+    expect(html).toContain("break-words text-sm font-semibold leading-5");
+    expect(html).toContain('title="Source branch: feature/cicd-agent; target branch: main"');
   });
 });
 

@@ -24,6 +24,7 @@ describe("chat handoff", () => {
       repoPath: "C:\\repo",
       activeProjectLinkId: "project-link-1",
       statusText: CHAT_HANDOFF_STATUS_TEXT,
+      autoSubmit: false,
     });
 
     expect(chatHandoffDraftToState({ message: "   " })).toBeNull();
@@ -34,6 +35,19 @@ describe("chat handoff", () => {
       message: "Review saved insight",
     })).toMatchObject({
       activeProjectLinkId: undefined,
+    });
+  });
+
+  it("preserves the origin-specific status and auto-submit intent", () => {
+    expect(chatHandoffDraftToState({
+      message: "Inspect the current branch before creating a pull request",
+      projectLinkId: "project-link-1",
+      source: "pull-request-planning",
+      statusText: "Starting pull request readiness review",
+      autoSubmit: true,
+    })).toMatchObject({
+      statusText: "Starting pull request readiness review",
+      autoSubmit: true,
     });
   });
 

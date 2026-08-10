@@ -90,8 +90,11 @@ export function PullRequestCard({
               </StatusBadge>
             )}
           </div>
-          <h3 className="truncate text-sm font-semibold text-[rgb(var(--app-text))]">{pr.title || "(untitled)"}</h3>
-          <p className="mt-1 truncate font-mono text-xs text-[rgb(var(--app-text-subtle))]">
+          <h3 className="break-words text-sm font-semibold leading-5 text-[rgb(var(--app-text))]">{pr.title || "(untitled)"}</h3>
+          <p
+            className="mt-1 break-words font-mono text-xs leading-5 text-[rgb(var(--app-text-subtle))]"
+            title={`Source branch: ${pr.sourceBranch}; target branch: ${pr.targetBranch}`}
+          >
             {pr.sourceBranch} {"->"} {pr.targetBranch}
           </p>
         </div>

@@ -112,3 +112,10 @@ export function workspaceActionToDirectWorkflow(action: WorkspaceAction): Direct
       };
   }
 }
+
+export function pullRequestPlanningPrompt(action: Extract<WorkspaceAction, { type: "create_pr" }>): string {
+  const source = action.branch?.trim() || "the current branch";
+  const target = action.targetBranch?.trim() || "the configured target branch";
+  const titleHint = action.title?.trim() ? ` The tentative title is “${action.title.trim()}”.` : "";
+  return `Prepare a pull request from ${source} to ${target}.${titleHint} First inspect the local working tree, branch tracking, remote target, latest commit, and any existing pull request. Summarize blockers and the proposed title/body, then wait for my confirmation before creating anything.`;
+}

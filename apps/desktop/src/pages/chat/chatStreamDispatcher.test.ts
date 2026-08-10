@@ -89,6 +89,30 @@ describe("dispatchChatStreamEvent", () => {
     expect(adapter.calls).toContain("busy:false");
   });
 
+  it("recovers the approval card from workflow state when the dedicated approval event is unavailable", () => {
+    const adapter = makeAdapter();
+    const approval = {
+      id: "approval-recovered",
+      riskLevel: "high" as const,
+      explanation: "Review the planned pull request before creating it.",
+      action: {
+        tool: "ado_create_pr",
+        args: { source_branch: "feature/review", target_branch: "main" },
+        description: "Create the pull request",
+      },
+    };
+    dispatchChatStreamEvent({ type: "turn.started", turnId: "turn-1", sequence: 0 }, adapter);
+    dispatchChatStreamEvent({
+      type: "turn.workflow.updated",
+      turnId: "turn-1",
+      sequence: 1,
+      workflow: { status: "waiting_for_approval", currentStep: "ado_create_pr", completedTools: [], pendingApproval: approval },
+    }, adapter);
+
+    expect(adapter.showApprovalRequest).toHaveBeenCalledWith(approval, "turn-1");
+    expect(adapter.calls).toContain("busy:false");
+  });
+
   it("drops legacy live-render events instead of creating a second transcript", () => {
     const adapter = makeAdapter();
 

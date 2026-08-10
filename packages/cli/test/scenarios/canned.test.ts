@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 import { translateIntent } from "@mergepilot/core";
 
 describe("AI git intent - canned scenarios", () => {
-  it("scenario 1: create a branch and PR for work item 1234", () => {
+  it("scenario 1: requires a target branch before proposing a PR for work item 1234", () => {
     const plan = translateIntent("create a branch and PR for work item 1234");
     expect(plan.intent).toBe("create-pr");
     const tools = plan.steps.map((s) => s.tool);
-    expect(tools).toContain("git_create_branch");
-    expect(tools).toContain("ado_create_pr");
-    expect(tools).toContain("ado_link_work_item");
-    const branchStep = plan.steps.find((s) => s.tool === "git_create_branch");
-    expect(String(branchStep?.args["name"])).toContain("1234");
+    expect(tools).toEqual(["git_status"]);
+    expect(plan.notes).toContain("target branch");
+    expect(tools).not.toContain("git_create_branch");
+    expect(tools).not.toContain("ado_create_pr");
+    expect(tools).not.toContain("ado_link_work_item");
   });
 
   it("scenario 2: summarize my staged changes", () => {

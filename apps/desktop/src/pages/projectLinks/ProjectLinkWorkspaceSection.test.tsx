@@ -24,7 +24,7 @@ const baseForm: ProjectLinkInput = {
 };
 
 describe("ProjectLinkWorkspaceSection layout", () => {
-  it("renders the identity fields without branch selectors (V2: branches are read-only)", () => {
+  it("renders editable branch policy fields with the detected branches as suggestions", () => {
     const html = renderToStaticMarkup(
       <ProjectLinkWorkspaceSection
         form={baseForm}
@@ -40,7 +40,8 @@ describe("ProjectLinkWorkspaceSection layout", () => {
     expect(html).toContain("Project Link name");
     expect(html).toContain("Repo path");
     expect(html).toContain("2 branches");
-    expect(html).not.toContain("Default branch");
-    expect(html).not.toContain("Target branch (PRs)");
+    expect(html).toContain("Default branch");
+    expect(html).toContain("PR target branch");
+    expect(html).toContain("list=");
   });
 });

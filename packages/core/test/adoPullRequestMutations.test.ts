@@ -55,6 +55,21 @@ describe("Azure DevOps pull request mutation module", () => {
     });
   });
 
+  it("requires an explicit target branch instead of defaulting to main", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    await expect(createAzurePullRequest({
+      organization: "demo-org",
+      project: "Agents",
+      repository: "mergepilot",
+      sourceBranch: "feature/no-target",
+      title: "Do not guess a target",
+      pat: "pat",
+    })).rejects.toThrow("target_branch");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("patches pull request metadata through the ADO Git API", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({

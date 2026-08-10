@@ -27,7 +27,6 @@ export function AccountSettingsSection({
     : "Not signed in";
   const authMode = signedIn ? (authUser.fromCache ? "Cached" : "Active") : "No account";
   const cloudEnabled = Boolean(health?.cloudProjectLinkStore || health?.cloudSessions);
-  const azureAuthConfigured = Boolean(settings.azureTenantId.trim() && settings.azureClientId.trim());
 
   return (
     <WorkbenchSettingsSection title="Account">
@@ -62,9 +61,6 @@ export function AccountSettingsSection({
       <details className="settings-advanced">
         <summary>
           <span>Advanced Azure auth</span>
-          <StatusBadge tone={azureAuthConfigured ? "success" : "warning"}>
-            {azureAuthConfigured ? "Configured" : "Incomplete"}
-          </StatusBadge>
         </summary>
         <div className="settings-advanced-list">
           <WorkbenchSettingsRow
@@ -96,8 +92,6 @@ export function AccountSettingsSection({
           </WorkbenchSettingsRow>
         </div>
       </details>
-      <BuiltInCapabilitiesSection authUser={authUser} />
-      <DiagnosticsSection />
     </WorkbenchSettingsSection>
   );
 }
@@ -106,7 +100,7 @@ export function AccountSettingsSection({
  * Diagnostics (Cycle 06): a user-visible correlation id and the redacted
  * verified-loop telemetry from the action store.
  */
-function DiagnosticsSection(): JSX.Element {
+export function DiagnosticsSettingsSection(): JSX.Element {
   const [diagnostics, setDiagnostics] = useState<Awaited<ReturnType<typeof fetchDeliveryDiagnostics>> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -155,7 +149,7 @@ function DiagnosticsSection(): JSX.Element {
  * product capability, not a connector you install. The global read-only kill
  * switch turns off every remote delivery write from one place.
  */
-function BuiltInCapabilitiesSection({ authUser }: { authUser: AuthUser }): JSX.Element {
+export function BuiltInCapabilitiesSettingsSection({ authUser }: { authUser: AuthUser }): JSX.Element {
   const [writesEnabled, setWritesEnabled] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -182,12 +176,12 @@ function BuiltInCapabilitiesSection({ authUser }: { authUser: AuthUser }): JSX.E
   }, [writesEnabled]);
 
   return (
-    <WorkbenchSettingsSection title="Built-in capabilities">
+    <WorkbenchSettingsSection title="Capabilities">
       <WorkbenchSettingsRow
         title="Azure DevOps"
         description={
           authUser.authenticated
-            ? `${accountLabel(authUser)} — reauthenticate from the Account section above.`
+            ? `Connected as ${accountLabel(authUser)}. Azure DevOps reads and verified delivery actions use this account.`
             : "Sign in with Microsoft to read and verify Azure DevOps."
         }
       >

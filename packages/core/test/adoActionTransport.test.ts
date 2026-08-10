@@ -182,6 +182,41 @@ describe("ado action transport", () => {
     expect(approved.verification?.evidence.join()).toContain("relation 101 present");
   });
 
+  it("refuses a PR action with no target branch before contacting Azure DevOps", async () => {
+    const transport = makeTransport();
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const record = {
+      id: "missing-target",
+      turnId: "t1",
+      projectLinkId: "pl-1",
+      kind: "pull_request.create",
+      target: {
+        kind: "pull_request",
+        projectLinkId: "pl-1",
+        repositoryId: "repo-1",
+        id: 0,
+        sourceCommit: "",
+        iterationId: 1,
+      },
+      basedOn: [],
+      payload: { sourceBranch: "feature/x", repositoryId: "repo-1", title: "Missing target" },
+      risk: "high",
+      reason: "test",
+      expectedResult: [],
+      idempotencyKey: "missing-target",
+      expiresAt: now() + 60_000,
+      status: "executing",
+      createdAt: now(),
+      audit: [],
+    } satisfies ActionRecord;
+
+    const result = await transport.execute(record);
+
+    expect(result).toMatchObject({ ok: false });
+    expect(result.summary).toContain("targetBranch");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("records canonical snapshots for every read when a graph store is attached", async () => {
     const graphStore = new SqliteDeliveryGraphStore(path.join(fs.mkdtempSync(path.join(os.tmpdir(), "adt-g-")), "g.db"));
     const transport = makeTransport({ graphStore });

@@ -148,9 +148,10 @@ function ConversationPartView({
 
     case "tool_approval":
       return (
-        <div className={conversationPartCardClass}>
+        <div data-approval-style="compact" className={conversationPartCardClass}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-semibold text-[rgb(var(--app-text))]">Approval required</span>
+            <span className="font-semibold text-[rgb(var(--app-text))]">Review before running</span>
+            <span className="sr-only">Approval required</span>
             <span className={approvalRiskPillClass(part.riskLevel)}>{part.riskLevel ?? "approval"}</span>
           </div>
           <p className="mt-1.5 text-sm font-medium leading-relaxed text-[rgb(var(--app-text))]">{part.description}</p>

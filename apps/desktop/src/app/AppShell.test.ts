@@ -12,6 +12,7 @@ import {
   PageLoadingFallback,
   pageShellContentClass,
   pageShellFadeClass,
+  primaryNavigationGroupLabel,
   preloadWorkspaceRouteModules,
   routeErrorBoundaryResetKey,
   RouteErrorFallback,
@@ -103,6 +104,10 @@ describe("AppShell route loading", () => {
 });
 
 describe("AppShell themed layout classes", () => {
+  it("labels the primary navigation group as Workspace", () => {
+    expect(primaryNavigationGroupLabel()).toBe("Workspace");
+  });
+
   it("uses responsive page padding and preserves scroll mode", () => {
     expect(pageShellContentClass(true)).toContain("px-4");
     expect(pageShellContentClass(true)).toContain("sm:px-6");
@@ -164,8 +169,9 @@ describe("AppShell workspace routes", () => {
       expect(html).toContain("overflow-auto");
       expect(html).toContain("app-shell-nav-icon");
       expect(html).toContain("app-shell-nav-link");
-      expect(html).toContain('aria-label="Agent"');
-      expect(html).not.toContain('title="Agent"');
+      expect(html).toContain('aria-label="New chat"');
+      expect(html).toContain('href="/chat?new=1"');
+      expect(html).not.toContain('title="New chat"');
       expect(html).not.toContain("({ isActive })");
     } finally {
       consoleError.mockRestore();
@@ -179,7 +185,7 @@ describe("AppShell workspace routes", () => {
         createElement(MemoryRouter, { initialEntries: ["/chat"] }, createElement(FullLayout)),
       );
 
-      for (const label of ["Agent", "Changes", "Delivery", "Settings"]) {
+      for (const label of ["New chat", "Changes", "Delivery", "Project Links", "Settings"]) {
         expect(html).toContain(`aria-label="${label}"`);
       }
       // Work is live from Cycle 04.

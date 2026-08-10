@@ -55,6 +55,20 @@ export async function approveDeliveryAction(id: string): Promise<DeliveryActionR
   return body as DeliveryActionRecord;
 }
 
+/** Reject a prepared delivery write. This is terminal and never executes the action. */
+export async function rejectDeliveryAction(id: string, feedback?: string): Promise<DeliveryActionRecord> {
+  const r = await fetch(`${RUNTIME_URL}/delivery/actions/${encodeURIComponent(id)}/reject`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(feedback?.trim() ? { feedback: feedback.trim() } : {}),
+  });
+  const body = (await r.json().catch(() => null)) as DeliveryActionRecord | { error?: string } | null;
+  if (!r.ok) {
+    throw new Error((body as { error?: string } | null)?.error ?? `Reject action HTTP ${r.status}`);
+  }
+  return body as DeliveryActionRecord;
+}
+
 export interface DeliveryEvidenceBundle {
   build: {
     id: number;

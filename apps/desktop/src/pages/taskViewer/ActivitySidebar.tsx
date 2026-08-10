@@ -598,6 +598,8 @@ function TaskRunList({
       )}
       {tasks.map((task) => {
         const selectedTask = task.id === selectedTaskId;
+        const title = taskTitle(task);
+        const detail = latestDetail(task);
         return (
           <WorkbenchListItemButton
             key={task.id}
@@ -614,11 +616,11 @@ function TaskRunList({
                 {formatTime(task.createdAt)}
               </span>
             </div>
-            <p className="truncate text-sm font-medium text-[rgb(var(--app-text))]">
-              {taskTitle(task)}
+            <p className="truncate text-sm font-medium text-[rgb(var(--app-text))]" title={title}>
+              {title}
             </p>
-            <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-muted))]">
-              {latestDetail(task)}
+            <p className="mt-1 truncate text-xs text-[rgb(var(--app-text-muted))]" title={detail}>
+              {detail}
             </p>
           </WorkbenchListItemButton>
         );
@@ -653,6 +655,7 @@ function CheckpointActivityList({
         )}
         {checkpointActivity.slice(0, 8).map((event) => {
           const selectedEvent = event.id === selectedCheckpointId;
+          const detail = checkpointActivityDetail(event);
           return (
             <WorkbenchListItemButton
               key={event.id}
@@ -669,14 +672,14 @@ function CheckpointActivityList({
                   {formatTime(event.at)}
                 </span>
               </div>
-              <p className="truncate text-sm font-medium text-[rgb(var(--app-text))]">
+              <p className="truncate text-sm font-medium text-[rgb(var(--app-text))]" title={event.toolName}>
                 {event.toolName}
               </p>
               <p
                 className="mt-1 truncate font-mono text-xs text-[rgb(var(--app-text-muted))]"
-                title={event.repoPath}
+                title={detail}
               >
-                {checkpointActivityDetail(event)}
+                {detail}
               </p>
             </WorkbenchListItemButton>
           );

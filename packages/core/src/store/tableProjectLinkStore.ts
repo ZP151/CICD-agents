@@ -186,8 +186,8 @@ export class AzureTableProjectLinkStore {
 
     const user = await requireCurrentUser();
     const client = await getClient(this.accountName);
-    // V2 canonical: update payloads never carry legacy fields; values already
-    // persisted on an old record survive until the migration clears them.
+    // Branch policy is persisted; deprecated workflow values remain filtered
+    // by the canonical write guard.
     const updated: ProjectLink = {
       ...existing,
       ...legacyFreeProjectLinkInput(data),

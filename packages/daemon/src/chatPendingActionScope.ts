@@ -9,6 +9,9 @@ export function isProposalWithinUserScope(
   args: Record<string, unknown> = {},
 ): boolean {
   if (isGitWriteBlockedByConflict(tool, args, bubbles)) return false;
+  if (tool === "git_merge" && !hasStringArg(args, "ref")) return false;
+  if (tool === "git_rebase" && !hasStringArg(args, "onto") && !hasStringArg(args, "action")) return false;
+  if (tool === "ado_create_pr" && !hasStringArg(args, "target_branch")) return false;
   if (tool === "git_push" || tool === "git_push_tag") return userScopeAllowsGitStep(bubbles, "push");
   if (tool === "git_pull") return userScopeAllowsGitStep(bubbles, "pull") || hasInScopeFailedPush(bubbles);
   if (tool === "git_rebase") return userScopeAllowsGitStep(bubbles, "rebase") || hasInScopeFailedPush(bubbles);
@@ -16,6 +19,10 @@ export function isProposalWithinUserScope(
   if (/work_item|workitem/.test(tool)) return userScopeAllowsAdoStep(bubbles, "work_item");
   if (tool === "ado_trigger_pipeline") return userScopeAllowsAdoStep(bubbles, "pipeline");
   return true;
+}
+
+function hasStringArg(args: Record<string, unknown>, key: string): boolean {
+  return typeof args[key] === "string" && args[key].trim().length > 0;
 }
 
 export function isToolWithinChatMessageScope(tool: string, messages: ChatMessage[]): boolean {

@@ -8,16 +8,18 @@ export function shouldInspectGit(message: string): boolean {
   return GIT_INTENT_RE.test(message);
 }
 
-export async function getChangedFiles(repoPath: string, targetBranch = "main"): Promise<ChangedFile[]> {
-  try {
-    const diff = await runCommand(["git", "diff", `${targetBranch}...HEAD`], {
-      cwd: repoPath,
-      allowed: ["git"],
-      timeoutSec: 30,
-    });
-    if (diff.returncode === 0 && diff.stdout.trim()) return parseDiff(diff.stdout);
-  } catch {
-    // fall back to working tree diff
+export async function getChangedFiles(repoPath: string, targetBranch?: string): Promise<ChangedFile[]> {
+  if (targetBranch?.trim()) {
+    try {
+      const diff = await runCommand(["git", "diff", `${targetBranch}...HEAD`], {
+        cwd: repoPath,
+        allowed: ["git"],
+        timeoutSec: 30,
+      });
+      if (diff.returncode === 0 && diff.stdout.trim()) return parseDiff(diff.stdout);
+    } catch {
+      // fall back to working tree diff
+    }
   }
   try {
     const diff = await runCommand(["git", "diff", "HEAD"], {
@@ -33,11 +35,11 @@ export async function getChangedFiles(repoPath: string, targetBranch = "main"): 
 
 export async function getChangeDiffExcerpt(
   repoPath: string,
-  targetBranch = "main",
+  targetBranch?: string,
   maxChars = 9000,
 ): Promise<string> {
   const attempts = [
-    ["diff", "--unified=40", `${targetBranch}...HEAD`],
+    ...(targetBranch?.trim() ? [["diff", "--unified=40", `${targetBranch}...HEAD`]] : []),
     ["diff", "--unified=40", "HEAD"],
   ];
   for (const args of attempts) {

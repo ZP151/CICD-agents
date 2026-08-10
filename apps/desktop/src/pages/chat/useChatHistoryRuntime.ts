@@ -151,7 +151,6 @@ export function useChatHistoryRuntime({
   const deleteHistoryEntry = useCallback(
     async (entry: ChatHistoryEntry) => {
       setHistoryMenu(null);
-      if (!window.confirm("Delete this chat?")) return;
       setHistoryError(null);
       try {
         await deleteChatSession(entry.sessionId);

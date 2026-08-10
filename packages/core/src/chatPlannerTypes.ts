@@ -51,6 +51,7 @@ export interface PendingToolAction {
           | "ready"
           | "missing_ado_mapping"
           | "missing_source_branch"
+          | "missing_target_branch"
           | "dirty_worktree"
           | "unknown";
         sourceBranch?: string;

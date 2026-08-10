@@ -244,6 +244,30 @@ describe("chat SSE timeline projection", () => {
     expect(persisted.some((event) => event.type === "turn.waiting")).toBe(false);
   });
 
+  it("keeps a continuation model-wait notice available after evidence is visible", () => {
+    const sent: Array<{ event: string; payload: Record<string, unknown> }> = [];
+    const reply = {
+      raw: {
+        setHeader: () => undefined,
+        flushHeaders: () => undefined,
+        write: (wire: string) => {
+          const event = wire.match(/^event: ([^\n]+)/m)?.[1] ?? "";
+          const payload = JSON.parse(wire.match(/^data: (.+)$/m)?.[1] ?? "{}");
+          sent.push({ event, payload });
+        },
+        end: () => undefined,
+      },
+    } as never;
+    const writer = createChatSseWriter(reply);
+    writer.startTurn("turn-1");
+    writer.sendChatEvent({ type: "work_statement", blockId: "opening", text: "I will inspect the branch before deciding what comes next.", replace: true });
+
+    writer.sendWaitingForModel("Synthesizing the completed checks into the next decision…");
+
+    expect(sent.find((entry) => entry.event === "turn.waiting")?.payload.message)
+      .toBe("Synthesizing the completed checks into the next decision…");
+  });
+
   it("closes the live stream without waiting for a slow transcript store", async () => {
     let endCalls = 0;
     let releasePersistence: (() => void) | undefined;

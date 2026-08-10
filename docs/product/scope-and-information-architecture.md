@@ -20,11 +20,14 @@ summary is not sufficient.
 
 ```text
 MergePilot
-├─ Agent
-├─ Work
-├─ Changes
-├─ Delivery
-└─ Settings
+├─ Workspace
+│  ├─ New chat
+│  ├─ Work
+│  ├─ Changes
+│  └─ Delivery
+└─ System
+   ├─ Project Links
+   └─ Settings
 ```
 
 ### Global Context
@@ -53,7 +56,7 @@ Project Link create/edit is opened from Context as a focused sheet. Project
 Link stores stable identity only; branch, pipeline, PR, work item, and tool
 selection are resolved at use time.
 
-## Agent
+## New chat
 
 Purpose: issue a cross-domain goal and observe a governed execution.
 
@@ -67,7 +70,7 @@ Required behavior:
 - Final results link to first-class Work, Changes, or Delivery artifacts rather
   than embedding duplicate reports.
 
-Agent is not:
+New chat is not:
 
 - A dumping ground for page navigation.
 - A substitute for structured artifact inspectors.
@@ -137,7 +140,7 @@ Views:
 - `Environments`: current deployment, pending change, checks, and readiness.
 
 Selecting a run opens an Inspector. It never inserts a report into chat. A
-user explicitly chooses Analyze, Retry, Open in Agent, Create Bug, or another
+user explicitly chooses Analyze, Retry, Open in New chat, Create Bug, or another
 controlled action.
 
 ## Settings

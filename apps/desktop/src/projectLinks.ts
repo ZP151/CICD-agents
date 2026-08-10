@@ -59,6 +59,15 @@ export function resolveActiveProjectLinkId(
   return preferredProjectLinkId(projectLinks, preferredDefaultProjectLink(projectLinks));
 }
 
+/** Resolves the Project Link chosen in Context for non-chat workspaces too. */
+export function resolveActiveProjectLink(
+  projectLinks: ProjectLink[],
+  currentId?: string | null,
+): ProjectLink | null {
+  const id = resolveActiveProjectLinkId(projectLinks, currentId);
+  return projectLinks.find((projectLink) => projectLink.id === id) ?? null;
+}
+
 export function isTemporaryProjectLink(
   link: Partial<Pick<ProjectLink, "name" | "repoPath">>,
 ): boolean {
@@ -67,6 +76,10 @@ export function isTemporaryProjectLink(
   return (
     name.startsWith("mp-live-") ||
     name.startsWith("test-") ||
+    // End-to-end acceptance runs create timestamped ClaimBot links. They are
+    // execution evidence, not user-managed Project Link configuration.
+    name.startsWith("e2e-claimbot-") ||
+    repoPath.includes("\\appdata\\local\\temp\\mp-probe") ||
     repoPath.includes("\\appdata\\local\\temp\\mergepilot-") ||
     repoPath.includes("/appdata/local/temp/mergepilot-")
   );
@@ -263,14 +276,15 @@ export function withProjectLinkInputDefaults<T extends Partial<ProjectLinkInput>
   } as T & ProjectLinkInput;
 }
 
-// V2 Project Links persist only the stable identity mapping. The legacy
-// fields (defaultBranch, targetBranch, adoPipelineId, adoPipelineName, MCP
-// settings, projectTemplate, buildCommand, testCommand) are read-only and are
-// never written from the UI. The daemon strips them at the API boundary too.
+// Project Links persist their identity mapping and branch policy. Pipeline,
+// MCP, template, and command values remain compatibility-only and are never
+// written from the UI.
 export function withoutProjectLinkFallbacks<T extends ProjectLinkInput>(link: T): T {
   return {
     name: link.name,
     repoPath: link.repoPath,
+    defaultBranch: link.defaultBranch,
+    targetBranch: link.targetBranch,
     adoOrgUrl: link.adoOrgUrl,
     adoProject: link.adoProject,
     adoRepoName: link.adoRepoName,

@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAppData } from "../App.js";
-import { RUNTIME_URL } from "../api/runtime.js";
+import { RUNTIME_URL, messageFromErrorResponse } from "../api/runtime.js";
+import { resolveActiveProjectLink } from "../projectLinks.js";
 import {
   approveDeliveryAction,
   proposeDeliveryAction,
+  rejectDeliveryAction,
   type DeliveryActionRecord,
 } from "../api/delivery.js";
 import {
   ActionButton,
+  ActionLink,
   InlineNotice,
   WorkbenchFilterTabs,
   WorkbenchPage,
+  WorkbenchSkeleton,
 } from "../components/workbench/WorkbenchPrimitives.js";
 
 interface WorkItemView {
@@ -20,6 +24,8 @@ interface WorkItemView {
   state: string;
   revision: number;
   iterationPath?: string;
+  description?: string;
+  acceptanceCriteria?: string;
   comments: string[];
   drift: Array<{ kind: string; evidence: string[]; followUp: string; question: boolean }>;
 }
@@ -34,10 +40,63 @@ const DRIFT_LABELS: Record<string, string> = {
 };
 
 const VIEWS = [
-  { key: "all", label: "My work" },
+  { key: "all", label: "Assigned to me" },
   { key: "ready", label: "Ready" },
   { key: "blocked", label: "Blocked" },
 ];
+
+export function azureWorkItemUrl(
+  projectLink: { adoOrgUrl?: string; adoProject?: string } | null | undefined,
+  workItemId: number,
+): string | null {
+  const organization = projectLink?.adoOrgUrl?.trim().replace(/\/+$/, "") ?? "";
+  const project = projectLink?.adoProject?.trim() ?? "";
+  if (!organization || !project || !workItemId) return null;
+  return `${organization}/${encodeURIComponent(project)}/_workitems/edit/${workItemId}`;
+}
+
+export function deliveryActionSummary(action: DeliveryActionRecord): string {
+  const payload = action.payload as Record<string, unknown>;
+  if (action.kind === "work_item.comment") {
+    const text = deliveryActionCommentText(action);
+    return text ? `Add this update: ${text}` : "Add a work item update";
+  }
+  if (action.kind === "work_item.update") {
+    const fields = payload.fields;
+    if (fields && typeof fields === "object") {
+      const nextState = (fields as Record<string, unknown>)["System.State"];
+      if (typeof nextState === "string" && nextState.trim()) return `Set the work item state to ${nextState.trim()}`;
+    }
+    return "Update the work item";
+  }
+  return action.kind;
+}
+
+export function deliveryActionCommentText(action: Pick<DeliveryActionRecord, "payload">): string {
+  const text = (action.payload as Record<string, unknown>).text;
+  return typeof text === "string" ? text.trim() : "";
+}
+
+export function deliveryActionBelongsToProjectLink(
+  action: Pick<DeliveryActionRecord, "target">,
+  projectLinkId: string,
+): boolean {
+  return Boolean(projectLinkId) && action.target.projectLinkId === projectLinkId;
+}
+
+export function deliveryActionTargetWorkItemId(action: Pick<DeliveryActionRecord, "target">): number | null {
+  const id = Number(action.target.id);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+export function WorkItemLoadingState(): JSX.Element {
+  return (
+    <div className="space-y-2" role="status">
+      <p className="text-xs text-[rgb(var(--app-text-subtle))]">Loading work items…</p>
+      <WorkbenchSkeleton rows={3} />
+    </div>
+  );
+}
 
 /**
  * Work workspace (Cycle 04). Projection of ADO work items plus delivery
@@ -46,23 +105,43 @@ const VIEWS = [
  */
 export default function Work(): JSX.Element {
   const { projectLinks, projectLinksLoading } = useAppData();
-  const activeProjectLink = projectLinks[0] ?? null;
+  const activeProjectLink = resolveActiveProjectLink(projectLinks);
   const projectLinkId = activeProjectLink?.id ?? "";
   const [items, setItems] = useState<WorkItemView[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; configurationRequired: boolean } | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [view, setView] = useState("all");
   const [action, setAction] = useState<DeliveryActionRecord | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [commentDraft, setCommentDraft] = useState("");
+  const [pendingIntent, setPendingIntent] = useState<"comment" | "state" | null>(null);
+
+  // A work-item approval is scoped to the Project Link used to prepare it.
+  // Context may change without unmounting this route, so discard projected
+  // work and unapproved state before the newly selected link is fetched.
+  useEffect(() => {
+    setItems([]);
+    setError(null);
+    setAction(null);
+    setActionError(null);
+    setSelectedItemId(null);
+    setCommentDraft("");
+    setPendingIntent(null);
+  }, [projectLinkId]);
 
   useEffect(() => {
     if (!projectLinkId) return;
     let cancelled = false;
     setLoading(true);
     fetch(`${RUNTIME_URL}/delivery/work-items?projectLinkId=${encodeURIComponent(projectLinkId)}`)
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      .then(async (response) => {
+        if (!response.ok) {
+          const message = await messageFromErrorResponse("Work items could not be loaded.", response);
+          throw Object.assign(new Error(message), { status: response.status });
+        }
         return response.json() as Promise<{ workItems: WorkItemView[] }>;
       })
       .then((data) => {
@@ -72,7 +151,15 @@ export default function Work(): JSX.Element {
         }
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+        if (!cancelled) {
+          const status = err && typeof err === "object" && "status" in err
+            ? Number((err as { status?: unknown }).status)
+            : 0;
+          setError({
+            message: err instanceof Error ? err.message : String(err),
+            configurationRequired: status === 422,
+          });
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -80,19 +167,25 @@ export default function Work(): JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [projectLinkId]);
+  }, [projectLinkId, reloadKey]);
 
   const visibleItems = items.filter((item) => {
     if (view === "blocked") return item.drift.some((finding) => !finding.question);
     if (view === "ready") return item.drift.length === 0 || item.drift.every((finding) => finding.question);
     return true;
   });
+  const visibleAction = action && deliveryActionBelongsToProjectLink(action, projectLinkId) ? action : null;
 
-  const writeBack = useCallback(async (item: WorkItemView, kind: "comment" | "state") => {
+  const writeBack = useCallback(async (item: WorkItemView, kind: "comment" | "state", commentText?: string) => {
     setActionBusy(true);
     setActionError(null);
     setAction(null);
     try {
+      const text = commentText?.trim() ?? "";
+      if (kind === "comment" && !text) {
+        setActionError("Write a concise progress update before requesting approval.");
+        return;
+      }
       const RUN_ID = Date.now().toString(36);
       const proposal =
         kind === "comment"
@@ -102,14 +195,14 @@ export default function Work(): JSX.Element {
               kind: "work_item.comment",
               target: { kind: "work_item", projectLinkId, id: item.id, revision: item.revision },
               basedOn: [{ kind: "work_item", projectLinkId, id: item.id, revision: item.revision }],
-              payload: { text: `[MergePilot Fixture] Cycle 04 verified progress update (${RUN_ID}).` },
+              payload: { text },
               risk: "low",
               reason: "Record the verified progress update on the work item",
               expectedResult: [
                 { artifact: { kind: "work_item", projectLinkId, id: item.id, revision: item.revision + 1 }, condition: "revision_gt", expectedRevision: item.revision },
-                { artifact: { kind: "work_item", projectLinkId, id: item.id, revision: item.revision + 1 }, condition: "comment_contains", expected: "Cycle 04 verified progress update" },
+                { artifact: { kind: "work_item", projectLinkId, id: item.id, revision: item.revision + 1 }, condition: "comment_contains", expected: text },
               ],
-              idempotencyKey: `cycle04-comment-${item.id}-${RUN_ID}`,
+              idempotencyKey: `work-comment-${item.id}-${RUN_ID}`,
               expiresAt: Date.now() + 3_600_000,
             }
           : {
@@ -125,11 +218,12 @@ export default function Work(): JSX.Element {
                 { artifact: { kind: "work_item", projectLinkId, id: item.id, revision: item.revision + 1 }, condition: "revision_gt", expectedRevision: item.revision },
                 { artifact: { kind: "work_item", projectLinkId, id: item.id, revision: item.revision + 1 }, condition: "field_eq", field: "System.State", expected: "In Progress" },
               ],
-              idempotencyKey: `cycle04-state-${item.id}-${RUN_ID}`,
+              idempotencyKey: `work-state-${item.id}-${RUN_ID}`,
               expiresAt: Date.now() + 3_600_000,
             };
       const record = await proposeDeliveryAction(proposal);
       setAction(record);
+      setPendingIntent(null);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -146,8 +240,16 @@ export default function Work(): JSX.Element {
       setAction(record);
       if (record.status === "verified") {
         setItems((prev) => prev.map((item) => item.id === Number((record.target as { id?: number }).id ?? 0)
-          ? { ...item, revision: item.revision + 1, state: "In Progress" }
+          ? {
+              ...item,
+              revision: item.revision + 1,
+              state: record.kind === "work_item.update" ? "In Progress" : item.state,
+              comments: record.kind === "work_item.comment"
+                ? [...item.comments, deliveryActionCommentText(record)].filter(Boolean).slice(-3)
+                : item.comments,
+            }
           : item));
+        setCommentDraft("");
       }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
@@ -156,13 +258,32 @@ export default function Work(): JSX.Element {
     }
   }, [action]);
 
+  const reject = useCallback(async () => {
+    if (!action) return;
+    setActionBusy(true);
+    setActionError(null);
+    try {
+      setAction(await rejectDeliveryAction(action.id));
+      setPendingIntent(null);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setActionBusy(false);
+    }
+  }, [action]);
+
+  const approvalTargetId = visibleAction ? deliveryActionTargetWorkItemId(visibleAction) : null;
+  const approvalTarget = approvalTargetId === null
+    ? null
+    : items.find((item) => item.id === approvalTargetId) ?? null;
+
   return (
     <WorkbenchPage className="mx-auto w-full max-w-4xl px-4 pb-16 pt-4 sm:px-6 sm:pt-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold text-[rgb(var(--app-text))]">Work</h1>
           <p className="mt-1 text-xs text-[rgb(var(--app-text-muted))]">
-            Azure Boards work items with delivery evidence; every update is approved and verified.
+            Review Azure Boards tasks, their delivery signals, and recent updates before proposing a write-back.
           </p>
         </div>
         {projectLinksLoading ? (
@@ -178,20 +299,42 @@ export default function Work(): JSX.Element {
         )}
       </div>
 
-      {error && <div className="mt-3"><InlineNotice tone="danger" title="Work load failed">{error}</InlineNotice></div>}
-      {actionError && <div className="mt-3"><InlineNotice tone="danger" title="Action failed">{actionError}</InlineNotice></div>}
-      {action && action.status !== "verified" && action.status !== "failed" && (
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] px-3 py-2">
-          <p className="text-xs font-medium text-[rgb(var(--app-warning))]">
-            Approval needed: {String((action.payload as Record<string, unknown>)["text"] ?? (action.payload as Record<string, unknown>)["fields"] ?? action.kind)}
-          </p>
-          <ActionButton type="button" tone="primary" onClick={() => void approve()} disabled={actionBusy}>
-            Approve
-          </ActionButton>
+      {error && (
+        <div className="mt-3">
+          <InlineNotice tone="danger" title={error.configurationRequired ? "Finish this Project Link setup" : "Work load failed"}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>{error.message}</span>
+              <span className="flex shrink-0 items-center gap-2">
+                {error.configurationRequired && <ActionLink href="#/project-links" tone="secondary">Manage Project Links</ActionLink>}
+                <ActionButton type="button" tone="quiet" onClick={() => setReloadKey((value) => value + 1)}>
+                  Retry
+                </ActionButton>
+              </span>
+            </div>
+          </InlineNotice>
         </div>
       )}
-      {action && action.status === "verified" && (
-        <div className="mt-3"><InlineNotice tone="success" title="Verified">{action.kind} verified against Azure DevOps.</InlineNotice></div>
+      {actionError && <div className="mt-3"><InlineNotice tone="danger" title="Action failed">{actionError}</InlineNotice></div>}
+      {visibleAction && !["verified", "rejected", "failed", "stale", "cancelled"].includes(visibleAction.status) && (
+        <div data-approval-style="compact" className="mt-3 rounded-lg border border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] px-3 py-3">
+          <p className="text-xs font-semibold text-[rgb(var(--app-text))]">Review before running</p>
+          <p className="mt-1 text-xs leading-5 text-[rgb(var(--app-warning))]">
+            {approvalTarget
+              ? `#${approvalTarget.id} ${approvalTarget.title} — ${deliveryActionSummary(visibleAction)}`
+              : deliveryActionSummary(visibleAction)}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <ActionButton type="button" tone="primary" onClick={() => void approve()} disabled={actionBusy}>
+              Approve and run
+            </ActionButton>
+            <ActionButton type="button" tone="secondary" onClick={() => void reject()} disabled={actionBusy}>
+              Skip action
+            </ActionButton>
+          </div>
+        </div>
+      )}
+      {visibleAction && visibleAction.status === "verified" && (
+        <div className="mt-3"><InlineNotice tone="success" title="Verified">{visibleAction.kind} verified against Azure DevOps.</InlineNotice></div>
       )}
 
       {projectLinkId && (
@@ -203,28 +346,33 @@ export default function Work(): JSX.Element {
             onValueChange={setView}
           />
           <div className="mt-3 space-y-2">
-            {loading && <p className="text-xs text-[rgb(var(--app-text-subtle))]">Loading work items...</p>}
-            {!loading && visibleItems.length === 0 && (
+            {loading && <WorkItemLoadingState />}
+            {!loading && !error && visibleItems.length === 0 && (
               <p className="text-xs text-[rgb(var(--app-text-subtle))]">No work items in this view.</p>
             )}
             {visibleItems.map((item) => (
               <div key={item.id} className="rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-[rgb(var(--app-text))]">{item.title}</p>
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left"
+                    onClick={() => {
+                      setSelectedItemId((current) => current === item.id ? null : item.id);
+                      setPendingIntent(null);
+                      setCommentDraft("");
+                    }}
+                    aria-expanded={selectedItemId === item.id}
+                    aria-label={`Open work item #${item.id}: ${item.title}`}
+                  >
+                    <p className="truncate text-sm font-medium text-[rgb(var(--app-text))]" title={item.title}>{item.title}</p>
                     <p className="mt-0.5 text-xs text-[rgb(var(--app-text-muted))]">
                       #{item.id} · {item.type} · {item.state} · rev {item.revision}
                       {item.iterationPath ? ` · ${item.iterationPath}` : ""}
                     </p>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <ActionButton type="button" tone="quiet" onClick={() => void writeBack(item, "comment")} disabled={actionBusy}>
-                      Comment
-                    </ActionButton>
-                    <ActionButton type="button" tone="quiet" onClick={() => void writeBack(item, "state")} disabled={actionBusy || item.state === "In Progress"}>
-                      Start
-                    </ActionButton>
-                  </div>
+                  </button>
+                  <ActionButton type="button" tone="quiet" onClick={() => setSelectedItemId((current) => current === item.id ? null : item.id)}>
+                    {selectedItemId === item.id ? "Close" : "Open"}
+                  </ActionButton>
                 </div>
                 {item.drift.length > 0 && (
                   <ul className="mt-2 space-y-1 border-t border-[rgb(var(--app-border))] pt-2">
@@ -235,6 +383,62 @@ export default function Work(): JSX.Element {
                       </li>
                     ))}
                   </ul>
+                )}
+                {selectedItemId === item.id && (
+                  <div className="mt-3 border-t border-[rgb(var(--app-border))] pt-3">
+                    {azureWorkItemUrl(activeProjectLink, item.id) && (
+                      <a
+                        href={azureWorkItemUrl(activeProjectLink, item.id) ?? undefined}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mb-3 inline-flex text-xs font-medium text-[rgb(var(--app-accent-readable))] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45"
+                      >
+                        Open source task in Azure DevOps
+                      </a>
+                    )}
+                    <div className="grid gap-3 text-xs text-[rgb(var(--app-text-muted))] sm:grid-cols-2">
+                      <div>
+                        <p className="font-medium text-[rgb(var(--app-text))]">Task detail</p>
+                        <p className="mt-1 leading-relaxed">{item.description?.trim() || "No description is available from Azure Boards for this work item."}</p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-[rgb(var(--app-text))]">Acceptance criteria</p>
+                        <p className="mt-1 leading-relaxed">{item.acceptanceCriteria?.trim() || "No acceptance criteria are available."}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-3 text-xs text-[rgb(var(--app-text-muted))] sm:grid-cols-2">
+                      <div>
+                        <p className="font-medium text-[rgb(var(--app-text))]">Recent updates</p>
+                        {item.comments.length > 0 ? (
+                          <ul className="mt-1 space-y-1 leading-relaxed">
+                            {item.comments.map((comment, index) => <li key={`${item.id}-comment-${index}`}>• {comment}</li>)}
+                          </ul>
+                        ) : <p className="mt-1">No recent comments.</p>}
+                      </div>
+                      <div>
+                        <p className="font-medium text-[rgb(var(--app-text))]">Propose a change</p>
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          <ActionButton type="button" tone="secondary" onClick={() => setPendingIntent("comment")} disabled={actionBusy}>Add update</ActionButton>
+                          <ActionButton type="button" tone="secondary" onClick={() => setPendingIntent("state")} disabled={actionBusy || item.state === "In Progress"}>Move to In Progress</ActionButton>
+                        </div>
+                      </div>
+                    </div>
+                    {pendingIntent === "comment" && (
+                      <div className="mt-3 flex flex-wrap items-end gap-2">
+                        <label className="min-w-[min(16rem,100%)] flex-1 text-xs text-[rgb(var(--app-text-muted))]">
+                          Verified update
+                          <textarea value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} rows={2} className="mt-1 w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-sm text-[rgb(var(--app-text))]" placeholder="What changed, and what evidence supports it?" />
+                        </label>
+                        <ActionButton type="button" tone="primary" onClick={() => void writeBack(item, "comment", commentDraft)} disabled={actionBusy || !commentDraft.trim()}>Request approval</ActionButton>
+                      </div>
+                    )}
+                    {pendingIntent === "state" && (
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text-muted))]">
+                        <span>This will propose changing the state to In Progress. Nothing changes until approval.</span>
+                        <ActionButton type="button" tone="primary" onClick={() => void writeBack(item, "state")} disabled={actionBusy}>Request approval</ActionButton>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             ))}

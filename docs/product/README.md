@@ -78,7 +78,7 @@ cycle's primary objective.
 3. One user intent produces one workspace outcome, not multiple insight types.
 4. Every mutating action is previewed, approved, executed, re-read, and verified.
 5. Deterministic facts and model inferences are visibly different.
-6. Navigation is organized by user outcomes: Agent, Work, Changes, Delivery,
+6. Navigation is organized by user outcomes: New chat, Work, Changes, Delivery,
    Settings.
 7. Project Link selection appears only in Context.
 8. Context never becomes a Git status dashboard; it does not show changes,

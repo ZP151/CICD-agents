@@ -33,12 +33,12 @@ export function PendingActionCard({ bubble, onConfirm, onCancel }: PendingAction
       aria-labelledby={`${bubble.id}-approval-title`}
       data-risk-level={riskLevel}
       data-testid="pending-action-card"
-      className="my-3 overflow-hidden rounded-lg border border-[rgb(var(--app-border-strong))] bg-[rgb(var(--app-surface))] text-xs shadow-[0_3px_8px_rgb(0_0_0_/_0.16)]"
+      data-approval-style="compact"
+      className="my-3 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-xs"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2 px-3 pt-3">
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--app-warning))]/15 text-[11px] font-bold text-[rgb(var(--app-warning))]" aria-hidden="true">!</span>
-          <span className="font-semibold text-[rgb(var(--app-text))]">Approval required</span>
+          <span className="font-semibold text-[rgb(var(--app-text))]">Review before running</span>
         </div>
         <StatusBadge className={`mr-3 mt-3 uppercase tracking-wide ${approvalRiskClass(riskLevel)}`} tone={approvalRiskTone(riskLevel)}>
           {riskLevel.toUpperCase()} risk
@@ -61,25 +61,31 @@ export function PendingActionCard({ bubble, onConfirm, onCancel }: PendingAction
       </div>
 
       {commandPreview && (
-        <div className="border-y border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2.5">
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--app-text-subtle))]">Command to execute</p>
-          <code className="block whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-[rgb(var(--app-text))]">
-            {commandPreview}
-          </code>
-        </div>
+        <details className="border-t border-[rgb(var(--app-border))] px-3 py-2 text-[rgb(var(--app-text-muted))]">
+          <summary className="cursor-pointer text-[11px] font-medium">Review command</summary>
+          <div className="mt-2 rounded-md bg-[rgb(var(--app-surface-raised))] px-2.5 py-2">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--app-text-subtle))]">Command to execute</p>
+            <code className="block whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-[rgb(var(--app-text))]">
+              {commandPreview}
+            </code>
+          </div>
+        </details>
       )}
 
       <div className="space-y-2 px-3 py-3">
-      <label className="block">
-        <span className="mb-1 block text-[11px] font-medium text-[rgb(var(--app-text-muted))]">Change request <span className="font-normal text-[rgb(var(--app-text-subtle))]">(optional)</span></span>
-        <WorkbenchTextArea
-          value={feedback}
-          onChange={(event) => setFeedback(event.target.value)}
-          rows={2}
-          placeholder="Tell MergePilot what to do differently..."
-          className="resize-none"
-        />
-      </label>
+      <details>
+        <summary className="cursor-pointer text-[11px] font-medium text-[rgb(var(--app-text-muted))]">Request changes</summary>
+        <label className="mt-2 block">
+          <span className="sr-only">Change request</span>
+          <WorkbenchTextArea
+            value={feedback}
+            onChange={(event) => setFeedback(event.target.value)}
+            rows={2}
+            placeholder="Tell MergePilot what to do differently..."
+            className="resize-none"
+          />
+        </label>
+      </details>
 
       <div className="flex flex-wrap items-center gap-2">
         <ActionButton

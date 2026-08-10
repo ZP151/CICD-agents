@@ -10,6 +10,7 @@ export interface ConsumedChatHandoff {
   repoPath?: string;
   activeProjectLinkId?: string;
   statusText: string;
+  autoSubmit: boolean;
 }
 
 type ChatHandoffStorage = Pick<Storage, "getItem" | "removeItem">;
@@ -19,11 +20,13 @@ export function chatHandoffDraftToState(draft: ChatHandoffDraft): ConsumedChatHa
   if (!input) return null;
   const repoPath = typeof draft.repoPath === "string" ? draft.repoPath.trim() : "";
   const projectLinkId = typeof draft.projectLinkId === "string" ? draft.projectLinkId.trim() : "";
+  const statusText = typeof draft.statusText === "string" ? draft.statusText.trim() : "";
   return {
     input,
     repoPath: repoPath || undefined,
     activeProjectLinkId: projectLinkId || undefined,
-    statusText: CHAT_HANDOFF_STATUS_TEXT,
+    statusText: statusText || CHAT_HANDOFF_STATUS_TEXT,
+    autoSubmit: draft.autoSubmit === true,
   };
 }
 

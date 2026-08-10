@@ -6,6 +6,7 @@ import {
   pipelineAnalysisPreviewClass,
   pipelineActionRowClass,
   pipelineFieldGridClass,
+  canTriggerPipeline,
 } from "./PipelineRowCard.js";
 import type { PipelineRow } from "./pipelineTypes.js";
 import { rowKey } from "./usePipelinesRuntime.js";
@@ -66,10 +67,32 @@ describe("PipelineRowCard", () => {
     expect(html).toContain("min-w-0 flex-1");
     expect(html).toContain("Pipeline summary");
     expect(html).toContain("ClaimBot_API link · discovered");
+    expect(html).toContain("break-words text-sm font-medium leading-5");
+    expect(html).toContain('title="TeBS-ClaimBot / ClaimBot_API · ClaimBot_API link · discovered"');
     expect(html).toContain("main → main");
     expect(html).toContain("focus-visible:ring-2");
     expect(html).toContain("title=\"Default branch: main; Target branch: main\"");
     expect(html).not.toContain("Latest run");
+  });
+
+  it("does not present main as a configured target when the target branch is unknown", () => {
+    const html = renderToStaticMarkup(
+      <PipelineRowCard
+        row={{ ...baseRow, defaultBranch: "develop", targetBranch: "" }}
+        state={{ phase: "idle" }}
+        onInspect={() => undefined}
+        onTrigger={() => undefined}
+        onAnalyze={() => undefined}
+        onSave={() => undefined}
+        onOpenDetails={() => undefined}
+        onSelectCandidate={() => undefined}
+        onRefreshPipelines={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("develop → not set");
+    expect(html).toContain('title="Default branch: develop; Target branch: not set"');
+    expect(html).not.toContain("develop → main");
   });
 
   it("renders pipeline AI analysis as Markdown with a stable ready state", () => {
@@ -179,6 +202,20 @@ describe("PipelineRowCard", () => {
     expect(html).toContain('href="#/chat"');
     expect(html).toContain("Open Chat approval");
     expect(html).not.toContain("Open Chat to review");
+  });
+
+  it("does not let a pending approval create a duplicate pipeline trigger proposal", () => {
+    expect(canTriggerPipeline({
+      phase: "approval",
+      result: {
+        ok: true,
+        action: "trigger_pipeline",
+        repoPath: baseRow.repoPath,
+        summary: "Pipeline trigger is ready for approval.",
+        workflowState: { status: "waiting_for_approval", currentStep: "approve pipeline", completedTools: [] },
+        tools: [],
+      },
+    })).toBe(false);
   });
 
   it("lets pipeline action buttons wrap naturally on narrow cards", () => {

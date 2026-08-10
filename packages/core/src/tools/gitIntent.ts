@@ -82,23 +82,29 @@ export function translateIntent(text: string): IntentPlan {
   }
 
   if (lower.match(/rebase/)) {
+    if (!explicitBranch) {
+      return targetBranchRequiredPlan("rebase-branch", "rebase");
+    }
     return {
       intent: "rebase-branch",
       notes: "rebase the current branch onto a requested target",
       steps: [
         { tool: "git_status", args: { short: true, branch: true }, note: "inspect dirty state before rebase" },
-        { tool: "git_rebase", args: { onto: explicitBranch ?? "origin/main", autostash: lower.includes("autostash") || lower.includes("auto stash") }, note: "rebase current branch" },
+        { tool: "git_rebase", args: { onto: explicitBranch, autostash: lower.includes("autostash") || lower.includes("auto stash") }, note: "rebase current branch" },
       ],
     };
   }
 
   if (lower.match(/merge/)) {
+    if (!explicitBranch) {
+      return targetBranchRequiredPlan("merge-branch", "merge");
+    }
     return {
       intent: "merge-branch",
       notes: "merge the requested ref after checking working-tree state",
       steps: [
         { tool: "git_status", args: { short: true, branch: true }, note: "inspect dirty state before merge" },
-        { tool: "git_merge", args: { ref: explicitBranch ?? "origin/main", ffOnly: lower.includes("ff-only") || lower.includes("fast-forward") }, note: "merge requested ref" },
+        { tool: "git_merge", args: { ref: explicitBranch, ffOnly: lower.includes("ff-only") || lower.includes("fast-forward") }, note: "merge requested ref" },
       ],
     };
   }
@@ -151,7 +157,11 @@ export function translateIntent(text: string): IntentPlan {
   }
 
   if (lower.match(/branch|pr|pull request|raise|open/)) {
-    const branchName = explicitBranch ?? (workItem ? `feature/wi-${workItem}` : `feature/${slugify(text)}`);
+    const targetBranch = extractPullRequestTarget(text);
+    if (!targetBranch) {
+      return targetBranchRequiredPlan("create-pr", "create a pull request");
+    }
+    const branchName = extractPullRequestSource(text) ?? explicitBranch ?? (workItem ? `feature/wi-${workItem}` : `feature/${slugify(text)}`);
     const steps: PlannedStep[] = [
       { tool: "git_current_branch", args: {}, note: "check current branch" },
       { tool: "git_create_branch", args: { name: branchName }, note: "create feature branch" },
@@ -160,7 +170,7 @@ export function translateIntent(text: string): IntentPlan {
         tool: "ado_create_pr",
         args: {
           source_branch: branchName,
-          target_branch: "main",
+          target_branch: targetBranch,
           title: workItem ? `Work item ${workItem}` : (text.trim() || "Automated PR").slice(0, 80),
           description: workItem
             ? `Work Item: AB#${workItem}\n\n${text.trim()}`
@@ -191,9 +201,7 @@ export function translateIntent(text: string): IntentPlan {
 
 function extractBranchName(text: string): string | null {
   const match = text.match(/\b(?:checkout|switch to|onto|merge|rebase(?: onto)?|push)\s+([A-Za-z0-9._/@-]+)/i);
-  if (!match?.[1]) return null;
-  const value = match[1].replace(/[.,;:!?]+$/, "");
-  return value.length > 0 ? value : null;
+  return cleanBranchMatch(match?.[1]);
 }
 
 function extractCompareTarget(text: string): string | null {
@@ -201,6 +209,33 @@ function extractCompareTarget(text: string): string | null {
   if (!match?.[1]) return null;
   const value = match[1].replace(/[.,;:!?]+$/, "");
   return value.length > 0 ? value : null;
+}
+
+function extractPullRequestSource(text: string): string | null {
+  const match = text.match(/\b(?:from|for\s+branch)\s+([A-Za-z0-9._/@-]+)/i);
+  return cleanBranchMatch(match?.[1]);
+}
+
+function extractPullRequestTarget(text: string): string | null {
+  const match = text.match(/\b(?:into|to|target(?:\s+branch)?|base(?:\s+branch)?)\s+([A-Za-z0-9._/@-]+)/i);
+  return cleanBranchMatch(match?.[1]);
+}
+
+function cleanBranchMatch(value: string | undefined): string | null {
+  if (!value) return null;
+  const cleaned = value.replace(/[.,;:!?]+$/, "");
+  if (new Set(["the", "current", "latest", "changes", "change", "branch"]).has(cleaned.toLowerCase())) return null;
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function targetBranchRequiredPlan(intent: string, operation: string): IntentPlan {
+  return {
+    intent,
+    notes: `A target branch is required before I can ${operation}; ask the user to specify it.`,
+    steps: [
+      { tool: "git_status", args: { short: true, branch: true }, note: "inspect current branch while waiting for a target" },
+    ],
+  };
 }
 
 function extractPath(text: string): string | null {

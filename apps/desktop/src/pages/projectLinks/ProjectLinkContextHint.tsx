@@ -10,7 +10,7 @@ export function projectLinkContextText(
 ): string {
   const adoScope = compactProjectLinkAdoScope(projectLink) || "Connection needs setup";
   const branchScope = compactProjectLinkBranchScope(projectLink)
-    || `target: ${projectLink.targetBranch || branchFallback || "main"}`;
+    || `target: ${projectLink.targetBranch || branchFallback || "not set"}`;
   return `${adoScope} · ${branchScope}`;
 }
 
@@ -24,7 +24,7 @@ export function projectLinkContextTitle(
     projectLink.adoRepoName,
   ].filter(Boolean).join(" / ") || "Azure DevOps connection needs setup";
   const defaultBranch = projectLink.defaultBranch || branchFallback || "not set";
-  const targetBranch = projectLink.targetBranch || "main";
+  const targetBranch = projectLink.targetBranch || "not set";
   return `${connectionDetail} · Default branch: ${defaultBranch}; PR target: ${targetBranch}`;
 }
 

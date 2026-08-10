@@ -136,10 +136,12 @@ export function buildWorkspaceWorkflowProposal(
       throw new Error(prPreflight.summary);
     }
     const sourceBranch = prPreflight.sourceBranch;
-    const targetBranch = prPreflight.targetBranch ?? "main";
+    const targetBranch = prPreflight.targetBranch;
     const title = prPreflight.title || `Update from ${sourceBranch}`;
     if (!sourceBranch)
       throw new Error("Current branch is required before creating a pull request.");
+    if (!targetBranch)
+      throw new Error("A PR target branch is required before creating a pull request.");
     const dirtyPrSuffix = prPreflight.status === "dirty_worktree" ? ` ${prPreflight.summary}` : "";
     return {
       tool: "ado_create_pr",

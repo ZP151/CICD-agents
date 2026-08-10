@@ -76,7 +76,7 @@ describe("PullRequestEmptyState", () => {
     expect(html).not.toContain("sm:grid-cols-3");
   });
 
-  it("renders no-data guidance without using a large blank panel", () => {
+  it("renders no-data guidance without a placeholder card or duplicate refresh action", () => {
     const html = renderToStaticMarkup(
       <PullRequestEmptyState
         mode="empty"
@@ -86,8 +86,10 @@ describe("PullRequestEmptyState", () => {
     );
 
     expect(html).toContain("No pull requests found");
-    expect(html).toContain("Try another Project Link or status filter");
-    expect(html).toContain("Refresh");
+    expect(html).toContain("Change the Project Link or status filter");
+    expect(html).toContain("Refresh above");
+    expect(html).not.toContain("rounded-lg");
+    expect(html).not.toContain("border-");
     expect(html).not.toContain("flex-1 items-center justify-center");
   });
 

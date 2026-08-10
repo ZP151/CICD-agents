@@ -2,9 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { InlineProjectLink } from "../chatHistoryTypes.js";
 
-// V2 inline Project Links carry only the stable identity mapping; the legacy
-// fields are read-only (migration reads) and are never accepted from API
-// payloads.
+// V2 inline Project Links carry the stable identity mapping plus the configured
+// PR target. The target is non-secret safety policy: workflow preflight must
+// receive it rather than guessing a branch server-side.
 const InlineProjectLinkObjectSchema = z.object({
   id: z.string().optional(),
   name: z.string().optional(),
@@ -13,6 +13,7 @@ const InlineProjectLinkObjectSchema = z.object({
   adoProject: z.string().default(""),
   adoRepoName: z.string().default(""),
   adoPat: z.string().default(""),
+  targetBranch: z.string().default(""),
   ignoredGlobs: z.array(z.string()).default([]),
 });
 
@@ -95,11 +96,9 @@ export const ChatWorkflowActionSchema = z.object({
   projectLink: InlineProjectLinkSchema,
 });
 
-// V2 API payloads carry only the stable identity mapping on projectLink; the
-// legacy fields are read-only (migration reads). The declared payload type
-// keeps the full InlineProjectLink shape so downstream readers compile, while
-// the parsed value stays narrow at runtime (legacy reads resolve through their
-// existing fallbacks, and the narrow value is what gets persisted).
+// V2 API payloads preserve only the stable identity mapping and PR target on
+// projectLink. Other legacy fields are migration reads only; the declared type
+// retains them for downstream compatibility.
 export type ChatWorkflowActionPayload = Omit<
   z.infer<typeof ChatWorkflowActionSchema>,
   "projectLink"

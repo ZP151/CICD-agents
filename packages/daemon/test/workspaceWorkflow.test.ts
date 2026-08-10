@@ -144,6 +144,26 @@ describe("workspaceWorkflow", () => {
     expect(proposal?.nextHint).toContain("then push the branch");
   });
 
+  it("blocks PR creation when no target branch is explicitly configured", () => {
+    expect(() => buildWorkspaceWorkflowProposal(
+      "create_pr",
+      payload({
+        action: "create_pr",
+        branch: "feature/no-target",
+        projectLink: {
+          repoPath: process.cwd(),
+          defaultBranch: "main",
+          targetBranch: "",
+          adoOrgUrl: "https://dev.azure.com/demo-org",
+          adoProject: "Agents",
+          adoRepoName: "mergepilot",
+        },
+      }),
+      "feature/no-target",
+      "",
+    )).toThrow("Project Link is missing a PR target branch");
+  });
+
   it("builds recovery proposals only for matching in-progress Git operations", () => {
     const operationState: GitOperationState = {
       phase: "merge",

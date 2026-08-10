@@ -412,6 +412,28 @@ body {
   white-space: nowrap;
 }
 
+/* The settings reading column becomes narrow before the viewport itself looks
+   small because the app shell still reserves room for navigation. Keep the
+   theme labels whole rather than presenting three ambiguous ellipses. */
+@media (max-width: 900px) {
+  .theme-choice-grid {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .theme-choice-option {
+    min-height: 44px;
+    padding: 7px 8px;
+  }
+
+  .theme-choice-label,
+  .theme-choice-description {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+}
+
 .workbench-loading-indicator {
   width: 0.75rem;
   height: 0.75rem;

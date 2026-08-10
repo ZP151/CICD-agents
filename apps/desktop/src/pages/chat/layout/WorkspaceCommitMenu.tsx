@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ProjectLink } from "../../../api.js";
 import type { WorkspaceAction } from "../workflowTaskState.js";
 import {
@@ -30,6 +30,7 @@ export function WorkspaceCommitMenu({
   runAction,
   menuPositionClassName = "right-0 top-full mt-1 w-full",
 }: WorkspaceCommitMenuProps) {
+  const commitMenuId = useId();
   const [commitMessage, setCommitMessage] = useState("");
   const [includeUnstaged, setIncludeUnstaged] = useState(true);
 
@@ -60,7 +61,7 @@ export function WorkspaceCommitMenu({
     runCommitAction({
       type: "create_pr",
       branch: branchName || undefined,
-      targetBranch: activeProjectLink?.targetBranch || activeProjectLink?.defaultBranch || "main",
+      targetBranch: activeProjectLink?.targetBranch || undefined,
       title: message || undefined,
       draft: false,
     });
@@ -74,7 +75,9 @@ export function WorkspaceCommitMenu({
         onClick={() => onOpenChange(!open)}
         disabled={!hasRepoPath || busy}
         aria-expanded={open}
-        className="w-full justify-start gap-2 px-1.5 py-1.5 text-sm"
+        aria-haspopup="dialog"
+        aria-controls={open ? commitMenuId : undefined}
+        className="w-full !justify-start !gap-3 !px-0 py-1.5 text-sm"
       >
         <svg className="h-4 w-4 shrink-0 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 12h7m2 0h7M8 8l-4 4 4 4m8-8l4 4-4 4" />
@@ -82,9 +85,9 @@ export function WorkspaceCommitMenu({
         <span className="min-w-0 truncate">Commit or push</span>
       </ActionButton>
       {open && (
-        <div className={`absolute z-30 ${menuPositionClassName} rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-2xl`}>
+        <div id={commitMenuId} role="dialog" aria-label="Commit and push actions" className={`absolute z-30 ${menuPositionClassName} rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-3 shadow-sm`}>
           <div className="mb-2 flex min-w-0 items-center justify-between gap-2 text-xs">
-            <span className="flex min-w-0 flex-1 items-center gap-1.5 font-mono text-[rgb(var(--app-text-muted))]">
+            <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[rgb(var(--app-text-muted))]">
               <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M6 3v6a3 3 0 003 3h6M6 21v-7" />
               </svg>
@@ -109,7 +112,7 @@ export function WorkspaceCommitMenu({
             Include unstaged changes
           </label>
           <div className="space-y-1 border-t border-[rgb(var(--app-border))] pt-2">
-            <ActionButton type="button" tone="secondary" aria-label="Prepare commit" onClick={() => commitPrompt("commit")} disabled={busy} className="w-full justify-start gap-2 px-2 py-1.5 text-left text-sm disabled:cursor-wait">
+            <ActionButton type="button" tone="secondary" aria-label="Prepare commit" onClick={() => commitPrompt("commit")} disabled={busy} className="w-full !justify-start !gap-2 !px-2 py-1.5 text-left text-sm disabled:cursor-wait">
               <svg className="h-4 w-4 shrink-0 text-[rgb(var(--app-text-muted))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 12h16M8 8l-4 4 4 4" />
               </svg>
@@ -122,7 +125,7 @@ export function WorkspaceCommitMenu({
               aria-label="Prepare commit and push"
               onClick={() => commitPrompt("commit-push")}
               disabled={busy}
-              className="w-full justify-start gap-2 px-2 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-45"
+              className="w-full !justify-start !gap-2 !px-2 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-45"
             >
               <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 16V4m0 0L8 8m4-4l4 4M5 20h14" />
@@ -135,14 +138,14 @@ export function WorkspaceCommitMenu({
               aria-label="Push branch"
               onClick={() => commitPrompt("push")}
               disabled={busy}
-              className="w-full justify-start gap-2 px-2 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-45"
+              className="w-full !justify-start !gap-2 !px-2 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-45"
             >
               <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 16V4m0 0L8 8m4-4l4 4M5 20h14" />
               </svg>
               <span className="min-w-0 truncate">Push</span>
             </ActionButton>
-            <ActionButton type="button" tone="quiet" onClick={createPullRequest} disabled={busy || !hasRepoPath} className="w-full justify-start gap-2 px-2 py-1.5 text-left text-sm disabled:cursor-wait">
+            <ActionButton type="button" tone="quiet" onClick={createPullRequest} disabled={busy || !hasRepoPath} className="w-full !justify-start !gap-2 !px-2 py-1.5 text-left text-sm disabled:cursor-wait">
               <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M8 7h8m-8 5h5m-8 8h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>

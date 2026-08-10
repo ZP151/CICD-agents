@@ -18,28 +18,31 @@ export function ConfirmCard({ bubble, onConfirm, onCancel }: ConfirmCardProps) {
   }
 
   return (
-    <div className="my-2 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-2.5 text-xs">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--app-warning))]" />
-        <span className="font-semibold text-[rgb(var(--app-text))]">Approval required</span>
+    <div data-approval-style="compact" className="my-3 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] px-3 py-3 text-xs">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--app-warning))]" />
+          <span className="font-semibold text-[rgb(var(--app-text))]">Review before running</span>
+          <span className="sr-only">Approval required</span>
+        </div>
         <StatusBadge tone={legacyRiskTone(bubble.riskLevel)} className="uppercase tracking-wide">
           {(bubble.riskLevel ?? "medium").toUpperCase()} risk
         </StatusBadge>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <ActionButton
           type="button"
           onClick={onConfirm}
           tone="primary"
         >
-          Yes, run this action
+          Approve and run
         </ActionButton>
         <ActionButton
           type="button"
           onClick={onCancel}
           tone="secondary"
         >
-          No, don't run it
+          Skip action
         </ActionButton>
       </div>
     </div>

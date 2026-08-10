@@ -31,6 +31,24 @@ const ArtifactRefSchema = z.custom<ArtifactRef>(isArtifactRef, {
   message: "invalid ArtifactRef: must include a known kind and projectLinkId",
 });
 
+function plainWorkItemText(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const text = value
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<\/p\s*>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .trim();
+  return text || undefined;
+}
+
+/** The Work workspace is an assigned-work view, never a production fixture feed. */
+export const WORK_ITEMS_QUERY =
+  "SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType], [System.IterationPath], [System.Description], [Microsoft.VSTS.Common.AcceptanceCriteria] " +
+  "FROM WorkItems WHERE [System.AssignedTo] = @me " +
+  "AND [System.State] <> 'Closed' AND [System.State] <> 'Done' ORDER BY [System.ChangedDate] DESC";
+
 const VerificationPredicateSchema = z.object({
   artifact: ArtifactRefSchema,
   condition: z.enum(["exists", "not_exists", "field_eq", "relation_present", "revision_gt", "run_visible", "comment_contains"]),
@@ -282,14 +300,17 @@ export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRo
     try {
       const projectLink = await projectLinkStore.getProjectLink(projectLinkId);
       if (!projectLink) return reply.code(404).send({ error: "project_link_not_found" });
+      if (!projectLink.adoOrgUrl.trim() || !projectLink.adoProject.trim()) {
+        return reply.code(422).send({
+          error: "project_link_ado_mapping_incomplete",
+          message: "This Project Link needs an Azure DevOps organization and project before Work can load.",
+        });
+      }
       const auth = await getAzureDevOpsAuth(projectLink.adoPat);
       const items = await queryAzureWorkItems({
         organization: projectLink.adoOrgUrl,
         project: projectLink.adoProject,
-        query:
-          "SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType], [System.IterationPath] " +
-          "FROM WorkItems WHERE ([System.AssignedTo] = @me OR [System.Title] CONTAINS '[MergePilot Fixture]') " +
-          "AND [System.State] <> 'Closed' AND [System.State] <> 'Done' ORDER BY [System.ChangedDate] DESC",
+        query: WORK_ITEMS_QUERY,
         top: 50,
         auth,
       });
@@ -315,6 +336,8 @@ export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRo
           state: item.state,
           revision: item.revision,
           iterationPath: item.iterationPath,
+          description: plainWorkItemText(item.fields["System.Description"]),
+          acceptanceCriteria: plainWorkItemText(item.fields["Microsoft.VSTS.Common.AcceptanceCriteria"]),
           comments: item.comments.slice(-3),
           drift: findings.map((finding) => ({
             kind: finding.kind,

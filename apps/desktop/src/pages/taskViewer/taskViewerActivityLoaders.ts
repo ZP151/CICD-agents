@@ -7,6 +7,7 @@ import {
 import {
   listPrInsightArtifacts,
 } from "../../prInsightArtifacts.js";
+import { isTemporaryProjectLink } from "../../projectLinks.js";
 import { parseIsoTimestamp } from "./activityPresentation.js";
 import type { PrInsightActivityItem } from "./prInsightActivity.js";
 
@@ -48,10 +49,15 @@ export async function loadPrInsightActivity(projectLinks: ProjectLink[]): Promis
   const nested = await Promise.all(
     projectLinks.map(async (projectLink) => {
       const localItems = listPrInsightArtifacts(projectLink.id);
-      const result = await fetchProjectLinkPrInsightArtifactsWithHistory(projectLink.id).catch(() => ({
-        items: localItems as PrInsightArtifactRecord[],
-        history: [],
-      }));
+      // Temporary links are test/run artifacts. Activity keeps their locally saved
+      // evidence in the collapsed history section, but must not fan out remote
+      // requests for every stale temporary mapping when this page opens.
+      const result = shouldFetchRemotePrInsightActivity(projectLink)
+        ? await fetchProjectLinkPrInsightArtifactsWithHistory(projectLink.id).catch(() => ({
+          items: localItems as PrInsightArtifactRecord[],
+          history: [],
+        }))
+        : { items: [], history: [] };
       return {
         items: [...result.items, ...localItems]
           .sort((a, b) => parseIsoTimestamp(b.at) - parseIsoTimestamp(a.at))
@@ -75,4 +81,10 @@ export async function loadPrInsightActivity(projectLinks: ProjectLink[]): Promis
       .slice(0, 50),
     history: nested.flatMap((entry) => entry.history),
   };
+}
+
+export function shouldFetchRemotePrInsightActivity(
+  projectLink: Pick<ProjectLink, "name" | "repoPath" | "adoRepoName">,
+): boolean {
+  return !isTemporaryProjectLink(projectLink) && Boolean(projectLink.adoRepoName.trim());
 }

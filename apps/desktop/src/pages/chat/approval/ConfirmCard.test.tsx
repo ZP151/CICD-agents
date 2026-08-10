@@ -18,9 +18,10 @@ describe("ConfirmCard", () => {
 
     expect(html).toContain("Approval required");
     expect(html).toContain("HIGH risk");
-    expect(html).toContain("Yes, run this action");
-    expect(html).toContain("No, don&#x27;t run it");
+    expect(html).toContain("Approve and run");
+    expect(html).toContain("Skip action");
     expect(html).toContain("focus-visible:ring-[rgb(var(--app-focus))]/45");
+    expect(html).toContain("rounded-lg");
     expect(html).toContain("bg-[rgb(var(--app-danger-soft))]");
   });
 

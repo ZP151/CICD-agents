@@ -37,6 +37,7 @@ describe("RuntimeSettingsSection", () => {
     expect(html).toContain("Installed");
     expect(html).toContain("Runtime details");
     expect(html).toContain("mergepilot-daemon.exe");
+    expect(html).not.toContain("settings-advanced-meta");
     expect(html).not.toContain("settings-runtime-summary");
   });
 

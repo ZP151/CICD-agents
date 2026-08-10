@@ -23,11 +23,9 @@ interface AdoDiscoveryOption {
 
 const ProjectLinkIdParam = z.object({ id: z.string().min(1) });
 
-// V2 Project Links persist only the stable identity mapping. The legacy
-// fields (defaultBranch, targetBranch, adoPipelineId, adoPipelineName,
-// adoMcp*, projectTemplate, buildCommand, testCommand) are read-only:
-// they are never accepted for create/update, but remain readable from
-// stored links for migration and existing workflows.
+// Project Links persist their stable identity mapping plus branch policy.
+// Pipeline, MCP, template, and command fields remain compatibility reads and
+// are not accepted for create/update.
 const ProjectLinkBodySchema = z.object({
   name: z.string().min(1),
   repoPath: z.string().default(""),
@@ -35,6 +33,8 @@ const ProjectLinkBodySchema = z.object({
   adoProject: z.string().default(""),
   adoRepoName: z.string().default(""),
   adoPat: z.string().default(""),
+  defaultBranch: z.string().default(""),
+  targetBranch: z.string().default(""),
 });
 
 const AdoDiscoverySchema = z.object({

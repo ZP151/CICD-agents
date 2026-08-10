@@ -17,6 +17,12 @@ function browserLabel(browser: AuthBrowserChoice): string {
   return "your default browser";
 }
 
+function dialogFocusableElements(panel: HTMLElement): HTMLElement[] {
+  return Array.from(panel.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href]',
+  ));
+}
+
 function AccountAvatar({ account }: { account: AuthCachedAccount }) {
   return (
     <SafeAvatar
@@ -30,9 +36,9 @@ function AccountAvatar({ account }: { account: AuthCachedAccount }) {
 
 export function loginModalPanelClass(): string {
   return [
-    "w-[min(460px,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-y-auto",
-    "space-y-4 rounded-xl border border-[rgb(var(--app-border))]",
-    "bg-[rgb(var(--app-surface))] p-5 shadow-2xl",
+    "w-[min(440px,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-y-auto",
+    "space-y-3 rounded-lg border border-[rgb(var(--app-border))]",
+    "bg-[rgb(var(--app-surface))] p-5 shadow-lg",
   ].join(" ");
 }
 
@@ -54,6 +60,7 @@ export function LoginModal({
   const [started, setStarted] = useState(false);
   const cancelRef = useRef<(() => void) | null>(null);
   const completionHandledRef = useRef(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const complete = useCallback((user: AuthUser) => {
     if (completionHandledRef.current) return;
@@ -63,6 +70,12 @@ export function LoginModal({
     setMessage("Sign-in complete.");
     onDone(user);
   }, [onDone]);
+
+  const cancelLogin = useCallback(() => {
+    completionHandledRef.current = true;
+    cancelRef.current?.();
+    onCancel();
+  }, [onCancel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -172,17 +185,55 @@ export function LoginModal({
     [],
   );
 
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusFirstDialogControl = () => dialogFocusableElements(panel)[0]?.focus();
+    const focusTimer = window.setTimeout(focusFirstDialogControl, 0);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancelLogin();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = dialogFocusableElements(panel);
+      if (controls.length === 0) return;
+      const first = controls[0]!;
+      const last = controls[controls.length - 1]!;
+      const active = document.activeElement;
+      if (event.shiftKey ? active === first || !panel.contains(active) : active === last || !panel.contains(active)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("keydown", onKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [cancelLogin]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-4 backdrop-blur-sm">
-      <div className={loginModalPanelClass()} data-testid="login-modal-panel">
+      <div
+        ref={panelRef}
+        className={loginModalPanelClass()}
+        data-testid="login-modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="login-modal-title"
+      >
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[rgb(var(--app-text))]">
+          <h2 id="login-modal-title" className="text-sm font-semibold text-[rgb(var(--app-text))]">
             Sign in with Microsoft
           </h2>
           {(done || !started) && (
             <button
-              onClick={onCancel}
-              className="text-xs text-[rgb(var(--app-text-muted))] hover:text-[rgb(var(--app-text))]"
+              onClick={cancelLogin}
+              className="rounded px-1 text-xs text-[rgb(var(--app-text-muted))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/60"
             >
               Close
             </button>
@@ -216,30 +267,26 @@ export function LoginModal({
               </div>
             )}
 
-            <div className="flex rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))]">
-              <button
-                type="button"
-                onClick={() => startLogin()}
-                className="min-w-0 flex-1 rounded-l-md px-3 py-2 text-sm font-semibold text-[rgb(var(--app-text))] transition hover:bg-[rgb(var(--app-bg-muted))]"
+            <button
+              type="button"
+              onClick={() => startLogin()}
+              className="flex w-full items-center justify-center rounded-md bg-[rgb(var(--app-accent))] px-3 py-2 text-sm font-semibold text-white transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/70"
+            >
+              {accounts.length > 0 ? "Use another account" : "Sign in with Microsoft"}
+            </button>
+            <label className="grid gap-1.5 text-xs font-medium text-[rgb(var(--app-text-muted))]">
+              Open sign-in in
+              <select
+                aria-label="Browser"
+                value={browser}
+                onChange={(event) => setBrowser(event.target.value as AuthBrowserChoice)}
+                className="min-h-9 w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-bg-muted))] px-2 text-sm font-medium text-[rgb(var(--app-text))] outline-none transition hover:border-[rgb(var(--app-border-strong))] focus:border-[rgb(var(--app-accent))] focus:ring-2 focus:ring-[rgb(var(--app-focus))]/30"
               >
-                {accounts.length > 0 ? "Use another account" : "Sign in with Microsoft"}
-              </button>
-              <div className="relative border-l border-[rgb(var(--app-border))]">
-                <select
-                  aria-label="Browser"
-                  value={browser}
-                  onChange={(event) => setBrowser(event.target.value as AuthBrowserChoice)}
-                  className="h-full appearance-none rounded-r-md bg-[rgb(var(--app-bg-muted))] py-2 pl-3 pr-7 text-xs font-medium text-[rgb(var(--app-text))] outline-none transition hover:bg-[rgb(var(--app-accent-soft))]"
-                >
-                  <option value="default">Default</option>
-                  <option value="edge">Edge</option>
-                  <option value="chrome">Chrome</option>
-                </select>
-                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[rgb(var(--app-text-muted))]">
-                  v
-                </span>
-              </div>
-            </div>
+                <option value="default">Default browser</option>
+                <option value="edge">Microsoft Edge</option>
+                <option value="chrome">Google Chrome</option>
+              </select>
+            </label>
           </div>
         )}
 
@@ -251,9 +298,9 @@ export function LoginModal({
                 onClick={() => {
                   completionHandledRef.current = true;
                   cancelRef.current?.();
-                  onCancel();
+                  cancelLogin();
                 }}
-                className="text-xs text-[rgb(var(--app-text-muted))] hover:text-[rgb(var(--app-text))]"
+                className="rounded px-1 text-xs text-[rgb(var(--app-text-muted))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/60"
               >
                 Cancel
               </button>

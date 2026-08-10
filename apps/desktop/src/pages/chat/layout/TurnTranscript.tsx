@@ -1,9 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { turnTranscriptElapsedMs } from "../chatTurnTranscript.js";
 import type { Bubble, TurnTranscriptBlock } from "../chat.types.js";
 import { PendingActionCard } from "../approval/PendingActionCard.js";
 import { commandLanguage, commandOutputLanguage } from "./commandLanguage.js";
-import { CommandCodeViewer } from "./CommandCodeViewer.js";
+
+// CodeMirror is only useful after a user expands a command record. Loading it
+// with an empty chat made every new conversation pay for the editor runtime.
+const CommandCodeViewer = lazy(() =>
+  import("./CommandCodeViewer.js").then((module) => ({ default: module.CommandCodeViewer })),
+);
 
 // The transcript is also rendered in Node-side tests/history previews where a
 // layout effect is neither useful nor safe. In the desktop browser it makes
@@ -31,11 +36,13 @@ export function TurnTranscriptView({
   const followLatestRef = useRef(true);
   const previousWorking = useRef(transcript?.status === "working");
 
+  const waitingForApproval = approval?.pendingStatus === "waiting";
+
   useEffect(() => {
-    if (transcript?.status !== "working") return;
+    if (transcript?.status !== "working" || waitingForApproval) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [transcript?.status]);
+  }, [transcript?.status, waitingForApproval]);
 
   useTranscriptLayoutEffect(() => {
     const working = transcript?.status === "working";
@@ -61,14 +68,22 @@ export function TurnTranscriptView({
 
   if (!transcript) return null;
   const working = transcript.status === "working";
-  const label = working ? "Working" : transcript.status === "cancelled" ? "Cancelled" : transcript.status === "failed" ? "Stopped" : "Worked";
+  const label = waitingForApproval
+    ? "Waiting for approval"
+    : working
+      ? "Working"
+      : transcript.status === "cancelled"
+        ? "Cancelled"
+        : transcript.status === "failed"
+          ? "Stopped"
+          : "Worked";
   const elapsed = formatElapsed(turnTranscriptElapsedMs(transcript, now));
   // A real model-wait state is transcript content too: it gives a delayed
   // runtime a truthful, expandable status without fabricating a plan.
   const hasContent = transcript.blocks.length > 0 || Boolean(approval) || Boolean(transcript.waitingForModel);
 
   return (
-    <section className="mb-3 max-w-[760px] text-[13px] text-[rgb(var(--app-text-muted))]" aria-live={working ? "polite" : "off"}>
+    <section className="mb-3 max-w-[760px] text-[13px] text-[rgb(var(--app-text-muted))]" aria-live={working || waitingForApproval ? "polite" : "off"}>
       <div className="min-h-8 py-1.5">
         {hasContent ? (
           <button
@@ -77,11 +92,11 @@ export function TurnTranscriptView({
             onClick={() => setOpen((value) => !value)}
             className="inline-flex min-h-7 items-center gap-1 rounded px-1 text-left text-[rgb(var(--app-text-subtle))] transition-[background,color] duration-150 hover:bg-[rgb(var(--app-surface-raised))] hover:text-[rgb(var(--app-text))] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-[rgb(var(--app-text))]"
           >
-            <span>{label} for {elapsed}</span>
+            <span>{waitingForApproval ? label : `${label} for ${elapsed}`}</span>
             <Chevron open={open} />
           </button>
         ) : (
-          <span className="inline-flex min-h-7 items-center px-1 text-[rgb(var(--app-text-subtle))]">{label} for {elapsed}</span>
+          <span className="inline-flex min-h-7 items-center px-1 text-[rgb(var(--app-text-subtle))]">{waitingForApproval ? label : `${label} for ${elapsed}`}</span>
         )}
       </div>
       <div className="h-px w-full bg-[rgb(var(--app-border))]" />
@@ -208,21 +223,25 @@ function TranscriptBlockView({
                 {commandOpen && (
                   <div className="ml-1 mt-1 overflow-hidden rounded-[11px] border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface)_/_0.46)] animate-[turn-command-open_220ms_cubic-bezier(.22,.8,.24,1)]">
                     <div className="px-4 pb-1 pt-2 text-xs text-[rgb(var(--app-text-muted))]">Shell</div>
-                    <CommandCodeViewer
-                      value={`$ ${command.command}`}
-                      language={commandLanguage(command.command)}
-                      ariaLabel="Executed command"
-                      copyValue={command.command}
-                    />
+                    <Suspense fallback={<CommandCodeViewerFallback value={`$ ${command.command}`} ariaLabel="Executed command" />}>
+                      <CommandCodeViewer
+                        value={`$ ${command.command}`}
+                        language={commandLanguage(command.command)}
+                        ariaLabel="Executed command"
+                        copyValue={command.command}
+                      />
+                    </Suspense>
                     {command.output && (
                       <>
                         <div className="mx-4 h-px bg-[rgb(var(--app-border))]" />
-                        <CommandCodeViewer
-                          value={command.output}
-                          language={commandOutputLanguage(command.command)}
-                          ariaLabel="Command output"
-                          output
-                        />
+                        <Suspense fallback={<CommandCodeViewerFallback value={command.output} ariaLabel="Command output" output />}>
+                          <CommandCodeViewer
+                            value={command.output}
+                            language={commandOutputLanguage(command.command)}
+                            ariaLabel="Command output"
+                            output
+                          />
+                        </Suspense>
                       </>
                     )}
                     <div className="flex justify-end px-3 pb-2 pt-1 text-[11px] text-[rgb(var(--app-text-subtle))]">
@@ -239,6 +258,27 @@ function TranscriptBlockView({
         </div>
       )}
     </section>
+  );
+}
+
+function CommandCodeViewerFallback({
+  value,
+  ariaLabel,
+  output = false,
+}: {
+  value: string;
+  ariaLabel: string;
+  output?: boolean;
+}) {
+  return (
+    <pre
+      aria-label={ariaLabel}
+      className={`m-0 overflow-auto px-4 py-2 font-mono text-[12px] leading-5 text-[rgb(var(--app-text-muted))] ${
+        output ? "max-h-[260px]" : "max-h-[150px]"
+      }`}
+    >
+      {value}
+    </pre>
   );
 }
 

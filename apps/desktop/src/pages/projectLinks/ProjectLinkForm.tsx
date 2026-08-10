@@ -5,12 +5,11 @@ import { ProjectLinkAdoSection } from "./ProjectLinkAdoSection.js";
 import { ProjectLinkWorkspaceSection } from "./ProjectLinkWorkspaceSection.js";
 import { useProjectLinkFormRuntime } from "./useProjectLinkFormRuntime.js";
 
-// V2 Project Links persist only the stable identity mapping. The legacy
-// fields (branches, pipeline, MCP settings, template, commands) are read-only
-// and are not part of the create/edit form.
 export const BLANK_PROJECT_LINK = {
   name: "",
   repoPath: "",
+  defaultBranch: "",
+  targetBranch: "",
   adoOrgUrl: DEFAULT_ADO_ORG_URL,
   adoProject: "",
   adoRepoName: "",

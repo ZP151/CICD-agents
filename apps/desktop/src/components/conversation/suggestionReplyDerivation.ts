@@ -76,11 +76,16 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
   const addMetadataSuggestions = (): void => {
     for (const suggestion of context.metadataSuggestions ?? []) {
       const clean = suggestion.trim();
-      if (!clean || clean.startsWith("Repository context:") || clean.length > 90) continue;
-      add(`meta-${suggestions.length}`, clean, clean);
+      if (!isActionableNextStep(clean)) continue;
+      add(`predicted-${suggestions.length}`, clean, clean);
       if (suggestions.length >= 3) break;
     }
   };
+
+  // The agent's structured suggestions are predictions from the actual turn
+  // context. Prefer them over static phrase matching; the rules below remain
+  // a useful offline/recovery fallback when the model did not provide enough.
+  addMetadataSuggestions();
 
   const rawText = [
     context.lastUserText,
@@ -92,23 +97,6 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
   const actions = new Set((context.metadataActions ?? []).map((action) => action.toLowerCase()));
   const sourceTypes = new Set(context.sourceTypes ?? []);
   const phase = (context.workflowPhase ?? "").toLowerCase();
-  const architectureContext = /\b(architecture|entry point|request flow|project structure|controller|daemon|api|data model|integration)\b/.test(text);
-
-  if (architectureContext) {
-    add("arch-flow", "Trace request flow", "Trace the main request flow through this project.", {
-      kind: "workspace_action",
-      action: "inspect_architecture_context",
-    });
-    add("arch-entry", "List entry points", "List the main entry points and startup path.", {
-      kind: "workspace_action",
-      action: "inspect_architecture_context",
-    });
-    add("arch-data-model", "Explain data model", "Explain the key data models and how they connect.", {
-      kind: "workspace_action",
-      action: "inspect_architecture_context",
-    });
-  }
-
   if (context.hasAuthError || /\b(auth|oauth|pat|token|credential|sign in|permission)\b/.test(text)) {
     add("auth-check", "Check auth", "Check the current Azure DevOps authentication state.", {
       kind: "workspace_action",
@@ -196,7 +184,10 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
     });
   }
 
-  addMetadataSuggestions();
-
   return suggestions.slice(0, 3);
+}
+
+function isActionableNextStep(value: string): boolean {
+  if (!value || value.startsWith("Repository context:") || value.length > 90) return false;
+  return /^(analyze|check|compare|continue|create|draft|explain|fetch|find|fix|inspect|list|open|prepare|refresh|rerun|resolve|review|run|show|stage|summarize|trace|validate)\b/i.test(value);
 }

@@ -34,6 +34,10 @@ export interface ChatHandoffDraft {
   repoPath?: string;
   projectLinkId?: string;
   source?: string;
+  /** A source-specific progress label, shown until a streamed turn takes over. */
+  statusText?: string;
+  /** The initiating control already expresses consent to begin this read-only turn. */
+  autoSubmit?: boolean;
 }
 
 export interface ActivityHandoffDraft {

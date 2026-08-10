@@ -19,7 +19,7 @@ export function chatHistoryEntryFromSession(session: StoredSession): ChatHistory
   const storedTitle = session.title && !isInternalHistoryText(session.title)
     ? session.title
     : undefined;
-  const title = storedTitle ?? (preview || undefined);
+  const title = storedTitle ?? (preview || pendingApprovalHistoryTitle(session.approvalProposal));
   return {
     sessionId: session.id,
     preview,
@@ -29,6 +29,19 @@ export function chatHistoryEntryFromSession(session: StoredSession): ChatHistory
     titleSource: session.titleSource,
     pinned: Boolean(session.pinned),
   };
+}
+
+/**
+ * Workspace actions create a session so their approval can be resumed in
+ * Chat, even though they do not add a conversational message. Give that
+ * session a useful, read-only history label instead of presenting it as an
+ * unexplained empty conversation.
+ */
+export function pendingApprovalHistoryTitle(proposal: PendingToolAction | undefined): string | undefined {
+  const description = proposal?.description?.trim();
+  if (!description) return undefined;
+  const withoutTerminalPunctuation = description.replace(/[.。]+$/, "").trim();
+  return withoutTerminalPunctuation ? withoutTerminalPunctuation.slice(0, 100) : undefined;
 }
 
 function lastDisplayableHistoryMessage(messages: ChatMessage[]): ChatMessage | undefined {

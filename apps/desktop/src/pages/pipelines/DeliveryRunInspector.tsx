@@ -3,6 +3,7 @@ import {
   approveDeliveryAction,
   fetchDeliveryEvidence,
   proposeDeliveryAction,
+  rejectDeliveryAction,
   type DeliveryActionRecord,
   type DeliveryEvidenceBundle,
 } from "../../api/delivery.js";
@@ -23,6 +24,32 @@ const CLASS_LABELS: Record<string, string> = {
   cancelled: "Cancelled / user action",
   unknown: "Unknown / insufficient evidence",
 };
+
+export function buildRecoveryBugTitle(buildNumber: string, classification: string): string {
+  return `CI failure ${buildNumber} (${classification})`;
+}
+
+export function deliveryRecoveryActionSummary(action: Pick<DeliveryActionRecord, "kind" | "payload">): string {
+  const payload = action.payload as Record<string, unknown>;
+  if (action.kind === "pipeline.trigger") {
+    const pipelineId = typeof payload.pipelineId === "number" || typeof payload.pipelineId === "string"
+      ? String(payload.pipelineId).trim()
+      : "";
+    const branch = typeof payload.branch === "string" ? payload.branch.trim() : "";
+    if (pipelineId && branch) return `Rerun pipeline #${pipelineId} on ${branch}`;
+    if (pipelineId) return `Rerun pipeline #${pipelineId}`;
+    return "Rerun this pipeline";
+  }
+  if (action.kind === "work_item.create") {
+    const title = typeof payload.title === "string" ? payload.title.trim() : "";
+    return title ? `Create bug: ${title}` : "Create a bug from this pipeline failure";
+  }
+  return action.kind;
+}
+
+function awaitingApproval(action: DeliveryActionRecord | null): action is DeliveryActionRecord {
+  return Boolean(action && !["verified", "rejected", "failed", "stale", "cancelled"].includes(action.status));
+}
 
 interface DeliveryRunInspectorProps {
   buildId: number;
@@ -107,13 +134,13 @@ export function DeliveryRunInspector({
               basedOn: [],
               payload: {
                 type: "Bug",
-                title: `[MergePilot Fixture] CI failure ${evidence.build.buildNumber} (${classification})`,
+                title: buildRecoveryBugTitle(evidence.build.buildNumber, classification),
                 description: `Pipeline #${definitionId} run ${evidence.build.buildNumber} failed with classification ${classification}.\n\nDecisive evidence:\n${evidence.classification.decisiveEvidence.join("\n")}`,
               },
               risk: "medium",
               reason: "Track the CI failure as a work item",
               expectedResult: [
-                { artifact: { kind: "work_item", projectLinkId, id: 0, revision: 0 }, condition: "field_eq", field: "System.Title", expected: `[MergePilot Fixture] CI failure ${evidence.build.buildNumber} (${classification})` },
+                { artifact: { kind: "work_item", projectLinkId, id: 0, revision: 0 }, condition: "field_eq", field: "System.Title", expected: buildRecoveryBugTitle(evidence.build.buildNumber, classification) },
               ],
               idempotencyKey,
               expiresAt: Date.now() + 3_600_000,
@@ -134,6 +161,19 @@ export function DeliveryRunInspector({
     try {
       const record = await approveDeliveryAction(action.id);
       setAction(record);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setActionBusy(false);
+    }
+  }, [action]);
+
+  const reject = useCallback(async () => {
+    if (!action) return;
+    setActionBusy(true);
+    setActionError(null);
+    try {
+      setAction(await rejectDeliveryAction(action.id));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -199,11 +239,20 @@ export function DeliveryRunInspector({
             )}
 
             {actionError && <InlineNotice tone="danger" title="Action failed">{actionError}</InlineNotice>}
-            {action && action.status !== "verified" && action.status !== "failed" && (
-              <div className="rounded-md border border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] px-3 py-2">
-                <p className="text-xs font-medium text-[rgb(var(--app-warning))]">
-                  Approval needed: {String((action.payload as Record<string, unknown>)["title"] ?? action.kind)}
+            {awaitingApproval(action) && (
+              <div data-approval-style="compact" className="rounded-lg border border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] px-3 py-3">
+                <p className="text-xs font-semibold text-[rgb(var(--app-text))]">Review before running</p>
+                <p className="mt-1 text-xs leading-5 text-[rgb(var(--app-warning))]">
+                  {deliveryRecoveryActionSummary(action)}
                 </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <ActionButton type="button" tone="primary" onClick={() => void approve()} disabled={actionBusy}>
+                    Approve and run
+                  </ActionButton>
+                  <ActionButton type="button" tone="secondary" onClick={() => void reject()} disabled={actionBusy}>
+                    Skip action
+                  </ActionButton>
+                </div>
               </div>
             )}
             {action && action.status === "verified" && (
@@ -224,11 +273,6 @@ export function DeliveryRunInspector({
                   Create Bug
                 </ActionButton>
               </div>
-            )}
-            {action && action.status === "awaiting_approval" && (
-              <ActionButton type="button" tone="primary" onClick={() => void approve()} disabled={actionBusy}>
-                Approve and execute
-              </ActionButton>
             )}
           </>
         )}

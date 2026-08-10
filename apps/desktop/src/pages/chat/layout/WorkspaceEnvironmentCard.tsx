@@ -114,6 +114,25 @@ export function WorkspaceEnvironmentCard({
         }}
       />
       <WorkspaceEnvironmentHeader hasRepoPath={hasRepoPath} busy={busy} runAction={runAction} />
+      <div
+        onClickCapture={() => setActiveMenu(null)}
+        onFocusCapture={() => setActiveMenu(null)}
+        onPointerDownCapture={() => setActiveMenu(null)}
+      >
+        <WorkspaceProjectLinkPanel
+          repoName={repoName}
+          repoPath={repoPath}
+          projectLinks={projectLinks}
+          activeProjectLink={activeProjectLink}
+          activeProjectLinkId={activeProjectLinkId}
+          adoReady={adoReady}
+          branchName={branchName}
+          busy={busy}
+          projectLinkSelectionLocked={Boolean(workflowState?.pendingApproval)}
+          onProjectLinkSelect={handleProjectLinkSelect}
+          runAction={runAction}
+        />
+      </div>
       <WorkspaceChangesButton
         hasRepoPath={hasRepoPath}
         busy={busy}
@@ -142,24 +161,6 @@ export function WorkspaceEnvironmentCard({
         />
       </div>
       <WorkspaceGitRecoveryPanel gitRecovery={gitRecovery} busy={busy} runAction={runAction} />
-      <div
-        onClickCapture={() => setActiveMenu(null)}
-        onFocusCapture={() => setActiveMenu(null)}
-        onPointerDownCapture={() => setActiveMenu(null)}
-      >
-        <WorkspaceProjectLinkPanel
-          repoName={repoName}
-          repoPath={repoPath}
-          projectLinks={projectLinks}
-          activeProjectLink={activeProjectLink}
-          activeProjectLinkId={activeProjectLinkId}
-          adoReady={adoReady}
-          branchName={branchName}
-          busy={busy}
-          onProjectLinkSelect={handleProjectLinkSelect}
-          runAction={runAction}
-        />
-      </div>
     </div>
   );
 }

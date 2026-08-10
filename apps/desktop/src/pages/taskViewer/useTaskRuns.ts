@@ -7,6 +7,23 @@ import {
   type TaskView,
 } from "../../api.js";
 
+/**
+ * Task streams currently emit a string status. Accept the documented object
+ * form as well, but never coerce arbitrary event payloads into UI text.
+ */
+export function taskStatusFromStream(data: unknown): string | null {
+  if (typeof data === "string") return data;
+  if (
+    data &&
+    typeof data === "object" &&
+    "status" in data &&
+    typeof (data as { status?: unknown }).status === "string"
+  ) {
+    return (data as { status: string }).status;
+  }
+  return null;
+}
+
 export function useTaskRuns() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [autoSelectRuns, setAutoSelectRuns] = useState(true);
@@ -71,8 +88,10 @@ export function useTaskRuns() {
           current ? { ...current, steps: [...current.steps, data as TaskView["steps"][number]] } : current,
         );
       } else if (type === "status") {
+        const status = taskStatusFromStream(data);
+        if (!status) return;
         queryClient.setQueryData<TaskView>(["activityRun", selectedId], (current) =>
-          current ? { ...current, status: String(data) } : current,
+          current ? { ...current, status } : current,
         );
       } else if (type === "done") {
         const done = data as { status?: string; result?: unknown; error?: string };

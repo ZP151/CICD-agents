@@ -327,12 +327,42 @@ describe("ChatMessageList", () => {
     ]);
 
     expect(html).toContain("Approval required");
-    expect(html).toContain("Yes, run this action");
-    expect(html).toContain("No, don&#x27;t run it");
+    expect(html).toContain("Approve and run");
+    expect(html).toContain("Skip action");
     expect(html).not.toContain("This detailed explanation is already rendered");
   });
 
-  it("renders stable welcome actions for an active Project Link empty chat", () => {
+  it("labels an open approval as waiting instead of leaving the turn working", () => {
+    const html = renderMessages([
+      {
+        id: "activity",
+        kind: "system",
+        text: "Working",
+        turnId: "turn-approval",
+        turnTranscript: {
+          startedAt: Date.now() - 60_000,
+          status: "working",
+          executionSealed: false,
+          blocks: [],
+          pendingGroups: {},
+        },
+      },
+      {
+        id: "approval",
+        kind: "pending_confirm",
+        turnId: "turn-approval",
+        pendingTool: "ado_create_pr",
+        pendingDescription: "Create pull request",
+        pendingStatus: "waiting",
+        riskLevel: "high",
+      },
+    ]);
+
+    expect(html).toContain("Waiting for approval");
+    expect(html).not.toContain("Working for");
+  });
+
+  it("renders context-derived welcome actions for an active Project Link empty chat", () => {
     const html = renderMessages([], {
       activeProjectLinkId: "pl-1",
       availableProjectLinks: [{
@@ -360,10 +390,13 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Understand this project");
+    expect(html).toContain("Review Repo changes");
     expect(html).toContain("Suggested prompt drafts");
     expect(html).toContain("prompt-particle-deck");
-    expect(html).not.toContain("animate-pulse");
+    expect(html).toContain('aria-roledescription="prompt carousel"');
+    expect(html).toContain('data-interaction="direct"');
+    expect(html).not.toContain("prompt-particle-deck__insert");
+    expect(html).not.toContain("Scroll or use arrow keys to browse");
   });
 
   it("keeps the New Chat home visible but disabled while Project Links are resolving", () => {
@@ -374,10 +407,9 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Understand this project");
+    expect(html).toContain("Connect or select a Project Link");
     expect(html).toContain("Checking Project Links...");
-    expect(html).toContain("Create a Project Link first");
-    expect(html).toContain("disabled=\"\"");
+    expect(html).not.toContain("Suggested prompt drafts");
     expect(html).not.toContain("Loading Project Links");
     expect(html).not.toContain("Connect a Project Link to run workspace actions");
   });
@@ -391,10 +423,9 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Understand this project");
+    expect(html).toContain("Connect or select a Project Link");
     expect(html).toContain("Checking Project Links...");
-    expect(html).toContain("Create a Project Link first");
-    expect(html).toContain("disabled=\"\"");
+    expect(html).not.toContain("Suggested prompt drafts");
     expect(html).not.toContain("Loading Project Links");
     expect(html).not.toContain("Connect a Project Link to run workspace actions");
   });
@@ -444,7 +475,7 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Understand this project");
+    expect(html).toContain("Review Repo changes");
     expect(html).not.toContain("Approved action finished");
     expect(html).not.toContain("Action not run");
   });
@@ -488,7 +519,7 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Understand this project");
+    expect(html).toContain("Review Repo changes");
     expect(html).not.toContain("Session restored");
   });
 
@@ -531,7 +562,7 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Understand this project");
+    expect(html).toContain("Review Repo changes");
   });
 
   it("shows the New Chat welcome when restored assistant metadata has no visible transcript content", () => {
@@ -574,7 +605,7 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Understand this project");
+    expect(html).toContain("Review Repo changes");
     expect(html).not.toContain("Run unit tests to verify error handling changes.");
     expect(html).not.toContain("Repository context: semantic index used.");
   });
@@ -621,7 +652,7 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Understand this project");
+    expect(html).toContain("Review Repo changes");
     expect(html).not.toContain("Run tests");
   });
 
@@ -663,7 +694,7 @@ describe("ChatMessageList", () => {
     });
 
     expect(html).toContain("Start with a focused prompt");
-    expect(html).toContain("Understand this project");
+    expect(html).toContain("Review Repo changes");
     expect(html).not.toContain("Would you like me to stage");
     expect(html).not.toContain("Run unit tests");
   });

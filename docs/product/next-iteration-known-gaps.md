@@ -10,6 +10,47 @@ claiming a cycle or the product complete. Test failures are not automatically
 bugs in the desired product: obsolete tests must be corrected to the canonical
 product semantics before they are made green.
 
+## v0.5.29 release handoff — 2026-08-10
+
+This release consolidates the desktop workflow surface without declaring the
+product or its verification program complete. It includes the Context and
+Project Link controls, chat-session preservation and prompt deck recovery,
+guided pull-request preparation, clearer empty and error states for Work and
+Changes, and the Settings navigation and disclosure refinements.
+
+### Next iteration priorities
+
+1. **Make Work inspectable before it is actionable.** Selecting a work item
+   must reveal its Azure Boards description, acceptance criteria, links and
+   evidence before Comment or Start can propose a governed action.
+2. **Make PR creation a guided investigation.** Create PR should first bring
+   local changes, source/target branch divergence and remote policy into the
+   chat workflow; it must not surface a pre-filled approval card before that
+   analysis is visible and editable.
+3. **Prove a fresh vertical release loop.** Run the source-live and installed
+   MSI acceptance gates against the final tagged HEAD, record the immutable
+   source/build/MSI/install evidence, and do not let historical PASS records
+   satisfy this release's gates.
+4. **Finish responsive consistency.** Exercise every Context popover and the
+   Settings sections at desktop, narrow desktop and overflow lengths; content
+   must wrap or scroll deliberately, with keyboard navigation and focus order
+   intact.
+5. **Tighten approval-card hierarchy.** Keep cards proportional to risk,
+   present a short purpose and expandable evidence first, and use one visual
+   grammar across Work, Changes, Delivery and chat.
+
+### Release acceptance boundary
+
+- A user can retain an in-progress chat while changing Context, start a new
+  chat from the primary navigation, and manage Project Links from both Context
+  and the dedicated route.
+- Context controls and their popovers align to a shared left edge, preserve
+  keyboard access and handle long lists without clipping the active control.
+- Empty remote data is an informative state, not a placeholder record; a
+  failed request identifies the action to retry.
+- Release readiness still requires the separate live-source and installed-MSI
+  evidence described in the historical audit below.
+
 ## Continuation audit — 2026-08-08 (Phase 4 readiness, HEAD `971ee1d`)
 
 - Git state is clean and both non-main development refs are aligned:

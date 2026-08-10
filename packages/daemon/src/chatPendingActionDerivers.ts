@@ -72,7 +72,7 @@ const ACTION_DERIVERS: Array<{
     tool: "git_merge",
     description: "Merge branch or revision",
     nextHint: "continue workflow",
-    buildArgs: (response) => ({ ref: extractGitRef(response) ?? "main" }),
+    buildArgs: (response) => ({ ref: extractGitRef(response) ?? "" }),
   },
   {
     tool: "git_rebase",
@@ -83,7 +83,7 @@ const ACTION_DERIVERS: Array<{
       if (/rebase\b.{0,40}\bcontinue\b|\bcontinue\b.{0,40}\brebase\b/.test(lower)) return { action: "continue" };
       if (/rebase\b.{0,40}\babort\b|\babort\b.{0,40}\brebase\b/.test(lower)) return { action: "abort" };
       if (/rebase\b.{0,40}\bskip\b|\bskip\b.{0,40}\brebase\b/.test(lower)) return { action: "skip" };
-      return { onto: extractGitRef(response) ?? "main", autostash: lower.includes("autostash") };
+      return { onto: extractGitRef(response) ?? "", autostash: lower.includes("autostash") };
     },
   },
   {
@@ -134,9 +134,10 @@ const ACTION_DERIVERS: Array<{
     nextHint: "done",
     buildArgs: (response, bubbles) => {
       const source_branch = currentBranchFromBubbles(bubbles);
+      const target_branch = extractPullRequestTarget(response) ?? "";
       const titleMatch = response.match(/(?:title|PR title|pull request title)[:\s]+["']?([^\n"']{5,100})["']?/i);
       const title = titleMatch?.[1] ?? `Update from ${source_branch}`;
-      return { source_branch, title, description: response.slice(0, 300) };
+      return { source_branch, target_branch, title, description: response.slice(0, 300) };
     },
   },
 ];
@@ -159,12 +160,12 @@ export function buildPendingAction(
 }
 
 export function inferWriteToolFromResponse(response: string): string | undefined {
-  if (/\b(create|open|raise).{0,20}\b(pull request|pr)\b/.test(response)) return "ado_create_pr";
+  if (/\b(create|open|raise).{0,20}\b(pull request|pr)\b/.test(response) && extractPullRequestTarget(response)) return "ado_create_pr";
   if (isGitTagPushRequest(response)) return "git_push_tag";
   if (isGitTagRequest(response)) return "git_tag";
   if (/\bpull\b/.test(response) && !/\bpull request\b/.test(response)) return "git_pull";
-  if (/\b(rebase)\b/.test(response)) return "git_rebase";
-  if (/\bmerge\b/.test(response)) return "git_merge";
+  if (/\b(rebase)\b/.test(response) && (isRebaseLifecycleRequest(response) || extractGitRef(response))) return "git_rebase";
+  if (/\bmerge\b/.test(response) && extractGitRef(response)) return "git_merge";
   if (/\b(restore|discard|revert file|unstage)\b/.test(response) && extractMentionedPaths(response).length > 0) return "git_restore";
   if (/\b(stash|shelve)\b/.test(response)) return "git_stash";
   if (/\b(create).{0,20}\bbranch\b|\bnew branch\b/.test(response)) return "git_create_branch";
@@ -225,9 +226,33 @@ function extractGitRef(response: string): string | undefined {
   ];
   for (const pattern of patterns) {
     const match = response.match(pattern)?.[1];
-    if (match) return match.replace(/[.,;:)]+$/, "");
+    if (match) {
+      const ref = match.replace(/[.,;:)]+$/, "");
+      if (isUsableGitRef(ref)) return ref;
+    }
   }
   return undefined;
+}
+
+function extractPullRequestTarget(response: string): string | undefined {
+  const patterns = [
+    /\btargeting\s+(?:the\s+)?["'`]?([A-Za-z0-9._/-]{2,100})["'`]?(?:\s+branch)?/i,
+    /\b(?:into|target(?:\s+branch)?|base(?:\s+branch)?|to)\s+(?:the\s+)?["'`]?([A-Za-z0-9._/-]{2,100})["'`]?/i,
+    /(?:->|→)\s*([A-Za-z0-9._/-]{2,100})/i,
+  ];
+  for (const pattern of patterns) {
+    const match = response.match(pattern)?.[1];
+    if (match && isUsableGitRef(match)) return cleanGitRef(match);
+  }
+  return undefined;
+}
+
+function isRebaseLifecycleRequest(response: string): boolean {
+  return /rebase\b.{0,40}\b(?:continue|abort|skip)\b|\b(?:continue|abort|skip)\b.{0,40}\brebase\b/i.test(response);
+}
+
+function isUsableGitRef(ref: string): boolean {
+  return !new Set(["branch", "changes", "change", "current", "latest", "the", "them", "it", "before", "now", "rebase", "merge", "create"]).has(ref.toLowerCase());
 }
 
 function extractPullBranch(response: string, bubbles: StoredBubble[]): string | undefined {

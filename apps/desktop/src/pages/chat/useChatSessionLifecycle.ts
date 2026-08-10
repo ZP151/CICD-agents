@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   type Dispatch,
   type RefObject,
   type SetStateAction,
@@ -45,6 +46,7 @@ interface UseChatSessionLifecycleArgs {
   setCustomTitle: (title: string | null) => void;
   setHistoryOpen: (open: boolean) => void;
   setInput: (value: string) => void;
+  setPendingAutoSubmitMessage: (value: string | null) => void;
   setRepoPath: (value: string) => void;
   setSessionId: (id: string | null) => void;
   setStatusText: (text: string | null) => void;
@@ -55,6 +57,11 @@ interface UseChatSessionLifecycleArgs {
 
 export interface ChatSessionLifecycle {
   loadSession: (sessionId: string) => Promise<void>;
+}
+
+/** Only the latest sidebar selection may replace the visible conversation. */
+export function shouldApplyChatSessionLoad(requestId: number, latestRequestId: number): boolean {
+  return requestId === latestRequestId;
 }
 
 export function useChatSessionLifecycle({
@@ -78,6 +85,7 @@ export function useChatSessionLifecycle({
   setCustomTitle,
   setHistoryOpen,
   setInput,
+  setPendingAutoSubmitMessage,
   setRepoPath,
   setSessionId,
   setStatusText,
@@ -85,6 +93,7 @@ export function useChatSessionLifecycle({
   setWorkflowState,
   showApprovalRequest,
 }: UseChatSessionLifecycleArgs): ChatSessionLifecycle {
+  const latestSessionLoadRequest = useRef(0);
   useEffect(() => {
     // MP-006: a Pipelines page trigger hands off its live approval session.
     // Consume it before the generic chat handoff so the pending card (and its
@@ -102,6 +111,7 @@ export function useChatSessionLifecycle({
       }
       setCustomTitle(null);
       setInput("");
+      setPendingAutoSubmitMessage(null);
       if (approvalHandoff.repoPath) setRepoPath(approvalHandoff.repoPath);
       if (approvalHandoff.activeProjectLinkId) {
         setActiveProjectLinkId(approvalHandoff.activeProjectLinkId);
@@ -117,6 +127,7 @@ export function useChatSessionLifecycle({
     setWorkflowState(null);
     setCustomTitle(null);
     setInput(handoff.input);
+    setPendingAutoSubmitMessage(handoff.autoSubmit ? handoff.input : null);
     if (handoff.repoPath) setRepoPath(handoff.repoPath);
     if (handoff.activeProjectLinkId) setActiveProjectLinkId(handoff.activeProjectLinkId);
     setStatusText(handoff.statusText);
@@ -126,6 +137,7 @@ export function useChatSessionLifecycle({
     setBubbles,
     setCustomTitle,
     setInput,
+    setPendingAutoSubmitMessage,
     setRepoPath,
     setSessionId,
     setStatusText,
@@ -161,12 +173,14 @@ export function useChatSessionLifecycle({
   }, [locationSearch, mini, navigateToChat, newChat]);
 
   const loadSession = useCallback(async (targetSessionId: string) => {
+    const requestId = ++latestSessionLoadRequest.current;
     const historyEntry = history.find((item) => item.sessionId === targetSessionId);
     try {
       const [stored, state] = await Promise.all([
         fetchChatMessages(targetSessionId),
         fetchChatState(targetSessionId).catch(() => ({ workflowState: undefined })),
       ]);
+      if (!shouldApplyChatSessionLoad(requestId, latestSessionLoadRequest.current)) return;
       setSessionId(targetSessionId);
       setCustomTitle(historyEntry?.title ?? null);
       setTitleEditing(false);
@@ -178,7 +192,9 @@ export function useChatSessionLifecycle({
       }
       setHistoryOpen(false);
     } catch {
-      /* ignore */
+      if (shouldApplyChatSessionLoad(requestId, latestSessionLoadRequest.current)) {
+        setStatusText("Could not load this conversation. Try again.");
+      }
     }
   }, [
     forceNextScrollToBottom,
@@ -187,6 +203,7 @@ export function useChatSessionLifecycle({
     setCustomTitle,
     setHistoryOpen,
     setSessionId,
+    setStatusText,
     setTitleEditing,
     setWorkflowState,
     showApprovalRequest,

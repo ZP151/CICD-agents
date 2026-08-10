@@ -17,7 +17,7 @@ describe("settings controls stylesheet", () => {
     expect(css).toContain(".settings-account");
     expect(css).toContain(".settings-account-summary");
     expect(css).toContain(".settings-account-summary-chips");
-    expect(css).toContain(".settings-advanced-meta");
+    expect(css).toContain("justify-content: flex-start");
     expect(css).toContain(".settings-action-stack");
     expect(css).toContain(".settings-action-row");
     expect(css).toContain(".settings-feedback-line");
@@ -31,6 +31,7 @@ describe("settings controls stylesheet", () => {
     expect(css).not.toContain(".settings-input");
     expect(css).not.toContain(".settings-toggle");
     expect(css).not.toContain(".settings-runtime-summary");
+    expect(css).not.toContain(".settings-advanced-meta");
     expect(css).not.toContain("min-width: 12rem;");
   });
 });
