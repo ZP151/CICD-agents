@@ -534,34 +534,45 @@ export async function queryAzureWorkItems(args: {
   };
   const ids = (queryBody.workItems ?? []).map((entry) => Number(entry.id ?? 0)).filter((id) => id > 0);
   if (ids.length === 0) return [];
-  const detailsUrl =
-    `${adoBase(org)}/${encodeURIComponent(project)}/_apis/wit/workitems` +
-    `?ids=${ids.join(",")}&$expand=Relations&api-version=${API_VERSION_WI}`;
-  const detailsResp = await adoFetch(detailsUrl, auth);
-  if (!detailsResp.ok) return [];
-  const details = await parseAdoJson(detailsResp, "get work item details") as {
-    value?: Array<{
-      id?: number;
-      rev?: number;
-      fields?: Record<string, unknown>;
-      relations?: Array<{ rel?: string; url?: string }>;
-    }>;
-  };
+  // ADO caps batch work-item reads at 200 ids per request (VS403474) and can
+  // return more rows than the WIQL `top` hint for complex queries, so chunk
+  // the ids instead of trusting either limit. A failed batch is a real read
+  // failure — surface it rather than letting an empty list masquerade as
+  // "no results".
+  const chunkSize = 200;
   const entries: AzureWorkItemSummaryEntry[] = [];
-  for (const item of details.value ?? []) {
-    const id = Number(item.id ?? 0);
-    if (!id) continue;
-    entries.push({
-      id,
-      type: String(item.fields?.["System.WorkItemType"] ?? ""),
-      title: String(item.fields?.["System.Title"] ?? ""),
-      state: String(item.fields?.["System.State"] ?? ""),
-      revision: Number(item.rev ?? 0),
-      iterationPath: item.fields?.["System.IterationPath"] ? String(item.fields["System.IterationPath"]) : undefined,
-      fields: item.fields ?? {},
-      relations: (item.relations ?? []).map((relation) => String(relation.url ?? "")),
-      comments: await readWorkItemCommentTexts({ organization: org, project, workItemId: id, auth }),
-    });
+  for (let start = 0; start < ids.length; start += chunkSize) {
+    const chunk = ids.slice(start, start + chunkSize);
+    const detailsUrl =
+      `${adoBase(org)}/${encodeURIComponent(project)}/_apis/wit/workitems` +
+      `?ids=${chunk.join(",")}&$expand=Relations&api-version=${API_VERSION_WI}`;
+    const detailsResp = await adoFetch(detailsUrl, auth);
+    if (!detailsResp.ok) {
+      throw new ToolError(`Work item details read failed (${detailsResp.status}): ${(await detailsResp.text()).slice(0, 400)}`);
+    }
+    const details = await parseAdoJson(detailsResp, "get work item details") as {
+      value?: Array<{
+        id?: number;
+        rev?: number;
+        fields?: Record<string, unknown>;
+        relations?: Array<{ rel?: string; url?: string }>;
+      }>;
+    };
+    for (const item of details.value ?? []) {
+      const id = Number(item.id ?? 0);
+      if (!id) continue;
+      entries.push({
+        id,
+        type: String(item.fields?.["System.WorkItemType"] ?? ""),
+        title: String(item.fields?.["System.Title"] ?? ""),
+        state: String(item.fields?.["System.State"] ?? ""),
+        revision: Number(item.rev ?? 0),
+        iterationPath: item.fields?.["System.IterationPath"] ? String(item.fields["System.IterationPath"]) : undefined,
+        fields: item.fields ?? {},
+        relations: (item.relations ?? []).map((relation) => String(relation.url ?? "")),
+        comments: await readWorkItemCommentTexts({ organization: org, project, workItemId: id, auth }),
+      });
+    }
   }
   return entries;
 }

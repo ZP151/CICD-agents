@@ -12,8 +12,10 @@ import {
  * Read-only acceptance for the Work Inspector read path against real Azure
  * DevOps. Proves the authoritative detail read (fields, typed relation
  * edges, resolved PR/build artifacts, test evidence, full comments) on a
- * task assigned to the signed-in account. Never writes: no comments, no
- * state changes, no fixtures.
+ * real task: the signed-in account's own tasks first, and when the account
+ * has no assignments in the project, the most recently changed task
+ * instead — the read path is identical either way. Never writes: no
+ * comments, no state changes, no fixtures.
  *
  * Gate: MERGEPILOT_E2E_LIVE_ADO=1 (skipped otherwise).
  */
@@ -37,9 +39,19 @@ describe("live Azure DevOps work inspector read", () => {
       auth,
       top: 5,
     });
-    expect(candidates.length, `Expected at least one task assigned to the signed-in account in ${ORG}/${PROJECT}.`).toBeGreaterThan(0);
+    const pool = candidates.length > 0 ? candidates : await queryAzureWorkItems({
+      organization: ORG,
+      project: PROJECT,
+      query:
+        "SELECT [System.Id], [System.Title] FROM WorkItems " +
+        "WHERE [System.WorkItemType] = 'Task' " +
+        "ORDER BY [System.ChangedDate] DESC",
+      auth,
+      top: 5,
+    });
+    expect(pool.length, `Expected at least one task in ${ORG}/${PROJECT} (the signed-in account has no @me assignments there).`).toBeGreaterThan(0);
 
-    const first = candidates[0]!;
+    const first = pool[0]!;
     const detail = await readAzureWorkItemDetail({
       organization: ORG,
       project: PROJECT,
