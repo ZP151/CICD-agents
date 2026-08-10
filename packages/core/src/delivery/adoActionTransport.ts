@@ -255,14 +255,14 @@ export class AdoActionTransport implements ActionTransport {
       workItemId?: unknown;
     };
     const sourceBranch = String(payload.sourceBranch ?? "");
-    const targetBranch = String(payload.targetBranch ?? "main");
+    const targetBranch = String(payload.targetBranch ?? "");
     const repositoryId = String(payload.repositoryId ?? "");
     const title = String(payload.title ?? "");
-    if (!sourceBranch || !title || !repositoryId) {
+    if (!sourceBranch || !targetBranch || !title || !repositoryId) {
       return {
         ok: false,
         result: undefined,
-        summary: "pull_request.create payload must include sourceBranch, repositoryId, and title",
+        summary: "pull_request.create payload must include sourceBranch, targetBranch, repositoryId, and title",
       };
     }
     const target = record.target as Extract<ArtifactRef, { kind: "pull_request" }>;

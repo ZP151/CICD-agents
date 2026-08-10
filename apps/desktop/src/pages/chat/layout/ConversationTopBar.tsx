@@ -61,7 +61,7 @@ export function ConversationTopBar({
 }: ConversationTopBarProps) {
   const summaryVisible = summaryPinnedAvailable && summaryPinnedOpen;
   const panelToggleClass = (active: boolean) =>
-    `rounded p-1.5 transition-colors ${
+    `inline-flex min-h-9 min-w-9 items-center justify-center rounded p-1.5 transition-colors ${
       active
         ? "bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text))]"
         : "text-[rgb(var(--app-text-subtle))] hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))]"
@@ -91,9 +91,12 @@ export function ConversationTopBar({
         style={{ width: historyOpen ? historyWidth : 40 }}
       >
         <button
+          type="button"
           onClick={onToggleHistory}
           className={`ml-1.5 ${panelToggleClass(historyOpen)}`}
           title={historyOpen ? "Collapse history" : "Expand history"}
+          aria-label={historyOpen ? "Collapse history" : "Expand history"}
+          aria-pressed={historyOpen}
         >
           <ToggleLeftPanelIcon active={historyOpen} />
         </button>
@@ -113,22 +116,20 @@ export function ConversationTopBar({
               }}
               autoFocus
             />
-          ) : (
+          ) : customTitle || conversationTitle ? (
             <button
               className="group flex max-w-full items-center gap-1.5"
               title="Click to rename"
               onClick={onStartTitleEdit}
             >
               <span className="truncate text-sm text-[rgb(var(--app-text-muted))] transition-colors group-hover:text-[rgb(var(--app-text))]">
-                {customTitle ?? conversationTitle ?? (
-                  <span className="text-[rgb(var(--app-text-subtle))]">New conversation</span>
-                )}
+                {customTitle ?? conversationTitle}
               </span>
               <svg className="h-3 w-3 shrink-0 text-[rgb(var(--app-text-subtle))] opacity-0 transition-opacity group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -148,6 +149,7 @@ export function ConversationTopBar({
           onClick={onToggleRight}
           className={`mr-1.5 ${panelToggleClass(rightPanelOpen)}`}
           title={rightPanelOpen ? "Collapse code panel" : "Expand code panel"}
+          aria-label={rightPanelOpen ? "Collapse code panel" : "Expand code panel"}
           aria-pressed={rightPanelOpen}
         >
           <ToggleRightPanelIcon active={rightPanelOpen} />

@@ -8,6 +8,7 @@ import {
   isTemporaryProjectLink,
   loadStoredActiveProjectLinkId,
   pickRecommendedPipeline,
+  resolveActiveProjectLink,
   resolveActiveProjectLinkId,
   saveStoredActiveProjectLinkId,
   shouldRefreshGeneratedProjectLinkName,
@@ -220,6 +221,15 @@ describe("active Project Link persistence", () => {
     expect(resolved).toBe("project-link-2");
   });
 
+  it("returns the Context-selected Project Link for every workspace", () => {
+    const links = [
+      { id: "project-link-1", name: "Outdated link" },
+      { id: "project-link-2", name: "ClaimBot API" },
+    ] as ProjectLink[];
+
+    expect(resolveActiveProjectLink(links, "project-link-2")?.name).toBe("ClaimBot API");
+  });
+
   it("defaults to the most complete saved Azure DevOps link instead of a newer local-only link", () => {
     localStorage.clear();
 
@@ -294,5 +304,36 @@ describe("active Project Link persistence", () => {
     ] as ProjectLink[];
 
     expect(resolveActiveProjectLinkId(links, "mp-live-link")).toBe("mp-live-link");
+  });
+
+  it("treats generated ClaimBot end-to-end links as temporary configuration", () => {
+    const links = [
+      {
+        id: "e2e-link",
+        name: "e2e-claimbot-pipeline-20260806163009",
+        repoPath: "C:\\work\\ClaimBot_API",
+        adoOrgUrl: "https://tebssg.visualstudio.com/",
+        adoProject: "TeBS-ClaimBot",
+        adoRepoName: "ClaimBot_API",
+      },
+      {
+        id: "saved-link",
+        name: "ClaimBot_API link",
+        repoPath: "C:\\work\\ClaimBot_API",
+        adoOrgUrl: "https://tebssg.visualstudio.com/",
+        adoProject: "TeBS-ClaimBot",
+        adoRepoName: "ClaimBot_API",
+      },
+    ] as ProjectLink[];
+
+    expect(isTemporaryProjectLink(links[0]!)).toBe(true);
+    expect(resolveActiveProjectLinkId(links, "e2e-link")).toBe("saved-link");
+  });
+
+  it("treats local mp-probe repositories as temporary validation links", () => {
+    expect(isTemporaryProjectLink({
+      name: "probe2 link",
+      repoPath: "C:\\Users\\me\\AppData\\Local\\Temp\\mp-probe2-20260809-012125",
+    })).toBe(true);
   });
 });

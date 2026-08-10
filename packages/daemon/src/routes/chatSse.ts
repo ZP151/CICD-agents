@@ -13,7 +13,7 @@ export interface ChatSseWriter {
   startTurn(turnId: string, openingStatement?: string, clientTurnId?: string, requestReceivedAt?: number): void;
   resumeTurn(turnId: string, options: { startedAt?: number; lastSequence?: number; statement?: string }): void;
   /** A network/model diagnostic, intentionally not a persisted narrative part. */
-  sendWaitingForModel(): void;
+  sendWaitingForModel(message?: string): void;
   sendChatEvent(event: ChatEvent): void;
   /** True once startTurn/resumeTurn set an active turn envelope. */
   hasActiveTurn(): boolean;
@@ -119,13 +119,13 @@ export function createChatSseWriter(
         });
       }
     },
-    sendWaitingForModel() {
-      if (!activeTurn || activeTurn.hasNarrative) return;
+    sendWaitingForModel(message) {
+      if (!activeTurn) return;
       const base = nextTimelineBase(activeTurn);
       // This is an explicit transport state, not a fabricated agent thought.
       // It is deliberately sent directly instead of through sendTimeline so
       // reconnect/history playback cannot turn it into transcript content.
-      send("turn.waiting", { type: "turn.waiting", ...base, message: "Waiting for model response…" });
+      send("turn.waiting", { type: "turn.waiting", ...base, message: message ?? "Waiting for model response…" });
     },
     sendChatEvent(event) {
       const enriched = enrichTurnEvent(event, activeTurn);

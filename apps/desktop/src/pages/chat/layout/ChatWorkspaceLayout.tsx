@@ -214,7 +214,6 @@ export function ChatWorkspaceLayout({
       {!mini && summaryVisible && (
         <PinnedSummaryPanel
           repoPath={repoPath}
-          setRepoPath={setRepoPath}
           currentBranch={currentBranch}
           branchList={branchList}
           taskState={taskState}
@@ -222,6 +221,7 @@ export function ChatWorkspaceLayout({
           busy={busy}
           projectLinks={availableProjectLinks}
           activeProjectLinkId={activeProjectLinkId}
+          selectProjectLink={selectProjectLink}
           codePanelOpen={rightPanelOpen}
           codePanelWidth={codePanelWidth}
           onAction={runWorkspaceAction}

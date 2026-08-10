@@ -41,7 +41,8 @@ export function duration(task: TaskView): string {
 
 export function taskTitle(task: TaskView): string {
   const payload = task.payload ?? {};
-  const repo = String(payload["repoPath"] ?? "").trim();
+  const repoValue = payload["repoPath"];
+  const repo = typeof repoValue === "string" ? repoValue.trim() : "";
   if (task.kind === "submit-pipeline") {
     return repo ? `Pipeline submission: ${repo}` : "Pipeline submission";
   }

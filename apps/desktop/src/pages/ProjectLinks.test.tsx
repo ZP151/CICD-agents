@@ -4,6 +4,7 @@ import {
   ProjectLinksEmpty,
   ProjectLinksLoading,
   ProjectLinksList,
+  TEMPORARY_PROJECT_LINK_PAGE_SIZE,
   partitionProjectLinks,
   projectLinkFormShellClass,
   projectLinksHeaderClass,
@@ -183,8 +184,8 @@ describe("ProjectLinks layout", () => {
       },
       {
         id: "temporary-link",
-        name: "mp-live-claimbot-pipeline-20260716181319",
-        repoPath: "C:\\Users\\me\\AppData\\Local\\Temp\\mergepilot-live\\ClaimBot_API",
+        name: "e2e-claimbot-pipeline-20260716181319",
+        repoPath: "C:\\work\\ClaimBot_API",
         defaultBranch: "main",
         targetBranch: "main",
         adoOrgUrl: "https://tebssg.visualstudio.com/",
@@ -206,7 +207,38 @@ describe("ProjectLinks layout", () => {
     expect(projectLinksTemporarySectionClass()).toContain("border-t");
   });
 
-  it("keeps only the stable identity mapping and clears every legacy field", () => {
+  it("paginates long temporary-link collections instead of rendering every card at once", () => {
+    const links = Array.from({ length: TEMPORARY_PROJECT_LINK_PAGE_SIZE + 1 }, (_, index) => ({
+      id: `temporary-${index}`,
+      name: `mp-live-check-${index}`,
+      repoPath: "C:\\temp",
+      defaultBranch: "main",
+      targetBranch: "main",
+      adoOrgUrl: "",
+      adoProject: "",
+      adoRepoName: "",
+      adoPat: "",
+      adoPipelineId: "",
+      adoPipelineName: "",
+      adoMcpEnabled: false,
+      adoMcpCommand: "",
+      adoMcpAuthentication: "",
+      adoMcpDomains: "",
+      projectTemplate: "",
+      buildCommand: "",
+      testCommand: "",
+      createdAt: 0,
+      updatedAt: 0,
+    })) as ProjectLink[];
+    const html = renderToStaticMarkup(<ProjectLinksList projectLinks={links} onEdit={() => undefined} onDelete={() => undefined} />);
+
+    expect(html).toContain("Showing");
+    expect(html).toContain("temporary links");
+    expect(html).toContain("mp-live-check-11");
+    expect(html).not.toContain("mp-live-check-12");
+  });
+
+  it("keeps branch policy with the stable identity mapping and clears deprecated fields", () => {
     const safe = withoutProjectLinkFallbacks({
       name: "ADO",
       repoPath: "C:\\repo",
@@ -230,6 +262,8 @@ describe("ProjectLinks layout", () => {
     expect(safe).toEqual({
       name: "ADO",
       repoPath: "C:\\repo",
+      defaultBranch: "main",
+      targetBranch: "main",
       adoOrgUrl: "https://dev.azure.com/demo",
       adoProject: "Demo",
       adoRepoName: "repo",

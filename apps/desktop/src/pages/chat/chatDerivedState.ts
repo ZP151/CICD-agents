@@ -14,6 +14,7 @@ import type { DiffStats } from "./layout/workspacePanel.types.js";
 import { parseGitDiff, parseGitStatus, type GitStatusData } from "./toolOutputRenderers.js";
 import type { ApprovalRequest, Bubble, WorkflowEventState } from "./chat.types.js";
 import { taskStateFromWorkflow, type TaskState } from "./workflowTaskState.js";
+import type { WorkspaceContextSnapshot } from "./workspaceContextSnapshot.js";
 
 export type ComposerPendingApproval = ApprovalRequest | Bubble | null;
 
@@ -179,6 +180,7 @@ export function useChatDerivedState({
   queuedSuggestionLabel,
   statusText,
   workflowState,
+  workspaceContext,
 }: {
   activeProjectLink: ProjectLink | null;
   bubbles: Bubble[];
@@ -187,6 +189,7 @@ export function useChatDerivedState({
   queuedSuggestionLabel?: string;
   statusText: string | null;
   workflowState: WorkflowEventState | null;
+  workspaceContext: WorkspaceContextSnapshot | null;
 }): ChatDerivedState {
   return useMemo(() => {
     const lastAssistant = [...bubbles].reverse().find((bubble) => bubble.kind === "assistant");
@@ -208,8 +211,8 @@ export function useChatDerivedState({
     const conversationTitle = conversationTitleFromBubbles(bubbles);
 
     return {
-      currentBranch: currentBranchFromBubbles(bubbles),
-      gitStatus: gitStatusFromBubbles(bubbles),
+      currentBranch: workspaceContext?.currentBranch ?? currentBranchFromBubbles(bubbles),
+      gitStatus: workspaceContext?.gitStatus ?? gitStatusFromBubbles(bubbles),
       renderItems: groupChatRenderItems(
         bubblesWithWorkflowApprovalFallback(bubbles, workflowState),
       ),
@@ -252,8 +255,8 @@ export function useChatDerivedState({
         inputValue: input,
       }),
       conversationTitle,
-      branchList: branchListFromBubbles(bubbles),
-      diffStats: diffStatsFromBubbles(bubbles),
+      branchList: workspaceContext?.branchList ?? branchListFromBubbles(bubbles),
+      diffStats: workspaceContext?.diffStats ?? diffStatsFromBubbles(bubbles),
       taskState: taskStateFromWorkflow(workflowState, conversationTitle),
     };
   }, [
@@ -264,6 +267,7 @@ export function useChatDerivedState({
     queuedSuggestionLabel,
     statusText,
     workflowState,
+    workspaceContext,
   ]);
 }
 

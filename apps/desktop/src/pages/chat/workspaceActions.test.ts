@@ -4,8 +4,12 @@ import {
   workspaceActionMatchesApproval,
   workspaceActionToolCandidates,
 } from "./workspaceActionTools.js";
-import { workspaceActionToDirectWorkflow } from "./workspaceActionWorkflow.js";
+import { pullRequestPlanningPrompt, workspaceActionToDirectWorkflow } from "./workspaceActionWorkflow.js";
 import { workspaceActionFromSuggestion } from "./workspaceActionSuggestions.js";
+import {
+  mergeWorkspaceContextSnapshot,
+  workspaceContextSnapshotFromResult,
+} from "./workspaceContextSnapshot.js";
 
 describe("workspace action Modules", () => {
   it("maps workspace actions to candidate tools and approval matches", () => {
@@ -193,6 +197,21 @@ describe("workspace action Modules", () => {
     });
   });
 
+  it("starts a pull-request request as a read-only planning conversation", () => {
+    const prompt = pullRequestPlanningPrompt({
+      type: "create_pr",
+      branch: "feature/refactor",
+      targetBranch: "main",
+      title: "Refactor workspace actions",
+      draft: false,
+    });
+
+    expect(prompt).toContain("feature/refactor");
+    expect(prompt).toContain("main");
+    expect(prompt).toContain("local working tree, branch tracking, remote target, latest commit");
+    expect(prompt).toContain("wait for my confirmation before creating anything");
+  });
+
   it("adapts quick replies and welcome suggestions to workspace actions", () => {
     expect(workspaceActionFromSuggestion({
       id: "run-tests",
@@ -313,5 +332,23 @@ describe("workspace action Modules", () => {
       action: { kind: "fill_composer" },
     })).toBeNull();
 
+  });
+
+  it("keeps branch probe data in Context rather than needing chat tool bubbles", () => {
+    const snapshot = workspaceContextSnapshotFromResult({
+      tools: [
+        { name: "git_current_branch", command: "git branch --show-current", ok: true, stdout: "feature/context\n", stderr: "", returncode: 0 },
+        { name: "git_status", command: "git status --short --branch", ok: true, stdout: "## feature/context...origin/feature/context [ahead 1]\n M src/context.ts\n", stderr: "", returncode: 0 },
+        { name: "git_branch_list", command: "git branch --all", ok: true, stdout: "* feature/context\n  main\n", stderr: "", returncode: 0 },
+      ],
+    });
+
+    expect(snapshot.currentBranch).toBe("feature/context");
+    expect(snapshot.gitStatus).toMatchObject({ branch: "feature/context", ahead: 1, modified: ["src/context.ts"] });
+    expect(snapshot.branchList).toEqual(["feature/context", "main"]);
+    expect(mergeWorkspaceContextSnapshot({ branchList: ["old"] }, snapshot)).toMatchObject({
+      currentBranch: "feature/context",
+      branchList: ["feature/context", "main"],
+    });
   });
 });

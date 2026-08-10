@@ -76,7 +76,19 @@ describe("chat panel layout", () => {
 
     expect(css).toContain(`flex: 1 1 ${CHAT_PANEL_LAYOUT.middleMin}px`);
     expect(css).toContain(`min-width: ${CHAT_PANEL_LAYOUT.middleMin}px`);
+    expect(css).toMatch(/@media \(max-width: 900px\) \{\s*\.middle-panel \{[^}]*min-width: 0;/s);
     expect(css).toContain(".right-panel--overlay");
     expect(css).not.toContain("min-width: 420px");
+  });
+
+  it("disables decorative New Chat motion when the operating system requests it", () => {
+    const css = readFileSync(
+      new URL("../../../styles/chat-workspace.css", import.meta.url),
+      "utf8",
+    );
+
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.prompt-particle-deck__particles i \{[\s\S]*animation: none;/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.prompt-particle-deck__card \{[\s\S]*transition: none;/);
+    expect(css).not.toContain("prompt-particle-deck__insert");
   });
 });

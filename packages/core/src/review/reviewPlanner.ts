@@ -67,7 +67,7 @@ export async function runReviewPlanner(args: {
   const parsed = parseReviewResponse(resp.content);
   const processedFindings = postProcessReviewFindings(parsed?.findings ?? [], bundle);
   return {
-    summary: parsed?.summary ?? "(model did not return a structured response)",
+    summary: parsed?.summary ?? "The review response could not be structured. Refresh insight to retry; no conclusions were inferred.",
     findings: processedFindings.findings,
     discardedFindings: processedFindings.discardedFindings,
     metadata: parsed?.metadata ?? DEFAULT_REVIEW_METADATA,

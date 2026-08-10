@@ -1,114 +1,114 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppData } from "../App.js";
-import {
-  approveDeliveryAction,
-  proposeDeliveryAction,
-  type DeliveryActionRecord,
-} from "../api/delivery.js";
+import { CHAT_HANDOFF_KEY } from "../checkpointHandoff.js";
+import { resolveActiveProjectLink } from "../projectLinks.js";
 import {
   ActionButton,
   InlineNotice,
   WorkbenchPage,
 } from "../components/workbench/WorkbenchPrimitives.js";
 import { TextInput } from "./settings/SettingsControls.js";
+import { pullRequestPlanningPrompt } from "./chat/workspaceActionWorkflow.js";
+
+export interface PullRequestPlanningHandoffInput {
+  projectLinkId: string;
+  repoPath?: string;
+  sourceBranch: string;
+  targetBranch: string;
+  title: string;
+  description: string;
+  workItemId: string;
+}
+
+export const DEFAULT_PULL_REQUEST_PLANNING_PREFERENCES: Readonly<{
+  sourceBranch: string;
+  targetBranch: string;
+  title: string;
+  description: string;
+  workItemId: string;
+}> = {
+  sourceBranch: "",
+  targetBranch: "",
+  title: "",
+  description: "",
+  workItemId: "",
+};
 
 /**
- * Create PR (Cycle 02 Changes flow). Builds the exact pull_request.create
- * proposal and runs it through the verified action runtime: propose ->
- * approval card -> execute -> re-read -> verify. The page never auto-pushes
- * a branch or creates a PR without approval.
+ * Creating a PR begins with read-only evidence gathering. Branch and title
+ * fields are optional preferences, because the first useful step is to inspect
+ * the checked-out branch, its upstream, the remote target, and local changes.
+ */
+export function buildPullRequestPlanningHandoff({
+  projectLinkId,
+  repoPath,
+  sourceBranch,
+  targetBranch,
+  title,
+  description,
+  workItemId,
+}: PullRequestPlanningHandoffInput): {
+  message: string;
+  repoPath?: string;
+  projectLinkId: string;
+  source: "pull-request-planning";
+  statusText: "Starting pull request readiness review";
+  autoSubmit: true;
+} {
+  const action = {
+    type: "create_pr" as const,
+    branch: sourceBranch.trim(),
+    targetBranch: targetBranch.trim(),
+    title: title.trim(),
+    description: description.trim() || undefined,
+    draft: false,
+  };
+  const workItemHint = workItemId.trim() ? ` Link work item #${workItemId.trim()} if it is valid.` : "";
+  return {
+    message: `${pullRequestPlanningPrompt(action)}${workItemHint}`,
+    repoPath,
+    projectLinkId,
+    source: "pull-request-planning",
+    statusText: "Starting pull request readiness review",
+    autoSubmit: true,
+  };
+}
+
+/**
+ * Changes begins a PR as a planning conversation. The agent first checks the
+ * local and remote branch state, then proposes the eventual write action only
+ * after the user has reviewed the evidence and asked to create it.
  */
 export default function CreatePullRequest(): JSX.Element {
   const navigate = useNavigate();
   const { projectLinks, projectLinksLoading } = useAppData();
-  const projectLink = projectLinks[0] ?? null;
+  const projectLink = resolveActiveProjectLink(projectLinks);
   const projectLinkId = projectLink?.id ?? "";
-  const [sourceBranch, setSourceBranch] = useState("");
-  const [targetBranch, setTargetBranch] = useState("main");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [workItemId, setWorkItemId] = useState("");
-  const [proposal, setProposal] = useState<DeliveryActionRecord | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [sourceBranch, setSourceBranch] = useState(DEFAULT_PULL_REQUEST_PLANNING_PREFERENCES.sourceBranch);
+  const [targetBranch, setTargetBranch] = useState(DEFAULT_PULL_REQUEST_PLANNING_PREFERENCES.targetBranch);
+  const [title, setTitle] = useState(DEFAULT_PULL_REQUEST_PLANNING_PREFERENCES.title);
+  const [description, setDescription] = useState(DEFAULT_PULL_REQUEST_PLANNING_PREFERENCES.description);
+  const [workItemId, setWorkItemId] = useState(DEFAULT_PULL_REQUEST_PLANNING_PREFERENCES.workItemId);
   const [error, setError] = useState<string | null>(null);
-  const [verification, setVerification] = useState<string[]>([]);
 
-  const submit = useCallback(async () => {
+  const submit = useCallback(() => {
     setError(null);
-    if (!projectLinkId || !sourceBranch.trim() || !title.trim()) {
-      setError("Project Link, source branch, and title are required.");
+    if (!projectLinkId) {
+      setError("Select a Project Link in Context before starting the readiness review.");
       return;
     }
-    setBusy(true);
-    try {
-      const idempotencyKey = `create-pr-${Date.now().toString(36)}`;
-      const wiId = Number(workItemId);
-      const record = await proposeDeliveryAction({
-        turnId: "changes-create-pr",
-        projectLinkId,
-        kind: "pull_request.create",
-        target: {
-          kind: "pull_request",
-          projectLinkId,
-          repositoryId: projectLink?.adoRepoName ?? "",
-          id: 0,
-          sourceCommit: "",
-          iterationId: 1,
-        },
-        basedOn: [{ kind: "branch", projectLinkId, repositoryId: projectLink?.adoRepoName ?? "", name: sourceBranch.trim(), objectId: "" }],
-        payload: {
-          repositoryId: projectLink?.adoRepoName ?? "",
-          sourceBranch: sourceBranch.trim(),
-          targetBranch: targetBranch.trim() || "main",
-          title: title.trim(),
-          description: description.trim(),
-          workItemId: wiId > 0 ? wiId : undefined,
-        },
-        risk: "high",
-        reason: "Create the pull request from the Changes workspace",
-        expectedResult: [
-          { artifact: { kind: "pull_request", projectLinkId, repositoryId: projectLink?.adoRepoName ?? "", id: 0, sourceCommit: "", iterationId: 1 }, condition: "exists" },
-          { artifact: { kind: "pull_request", projectLinkId, repositoryId: projectLink?.adoRepoName ?? "", id: 0, sourceCommit: "", iterationId: 1 }, condition: "field_eq", field: "title", expected: title.trim() },
-          ...(wiId > 0
-            ? [{ artifact: { kind: "pull_request", projectLinkId, repositoryId: projectLink?.adoRepoName ?? "", id: 0, sourceCommit: "", iterationId: 1 }, condition: "relation_present", expected: String(wiId) }]
-            : []),
-        ],
-        idempotencyKey,
-        expiresAt: Date.now() + 3_600_000,
-      });
-      setProposal(record);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  }, [description, projectLink, projectLinkId, sourceBranch, targetBranch, title, workItemId]);
-
-  const approve = useCallback(async () => {
-    if (!proposal) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const record = await approveDeliveryAction(proposal.id);
-      setProposal(record);
-      if (record.status === "verified") {
-        const target = record.target as { id?: number };
-        setVerification([
-          `PR #${target.id ?? "?"} created and verified against Azure DevOps.`,
-          ...(record.payload["sourceBranch"] ? [`Source: ${String(record.payload["sourceBranch"])}`] : []),
-        ]);
-      } else if (record.failure) {
-        setError(record.failure.message);
-      } else {
-        setError(`Action ended in status ${record.status}.`);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  }, [proposal]);
+    sessionStorage.setItem(CHAT_HANDOFF_KEY, JSON.stringify(buildPullRequestPlanningHandoff({
+      projectLinkId,
+      repoPath: projectLink?.repoPath,
+      sourceBranch,
+      targetBranch,
+      title,
+      description,
+      workItemId,
+    })));
+    navigate("/chat");
+  }, [description, navigate, projectLink?.repoPath, projectLinkId, sourceBranch, targetBranch, title, workItemId]);
 
   return (
     <WorkbenchPage className="mx-auto w-full max-w-3xl px-4 pb-16 pt-4 sm:px-6 sm:pt-6">
@@ -116,7 +116,7 @@ export default function CreatePullRequest(): JSX.Element {
         <div>
           <h1 className="text-lg font-semibold text-[rgb(var(--app-text))]">Create pull request</h1>
           <p className="mt-1 text-xs text-[rgb(var(--app-text-muted))]">
-            The exact proposal is stored and verified; nothing is created without approval.
+            Start with a readiness review of the current local and remote branches. Creation is proposed only after you review the evidence.
           </p>
         </div>
         <ActionButton type="button" tone="quiet" onClick={() => navigate("/pulls")}>Back to Changes</ActionButton>
@@ -134,11 +134,14 @@ export default function CreatePullRequest(): JSX.Element {
         ) : (
           <p className="text-xs text-[rgb(var(--app-text-subtle))]">Select a Project Link in Context</p>
         )}
+        <p className="text-xs leading-5 text-[rgb(var(--app-text-muted))]">
+          You can start without filling anything. MergePilot will inspect the checked-out branch, upstream, remote target, local changes, and existing pull requests first. These fields only provide preferences for the review.
+        </p>
         <div className="grid gap-3.5 sm:grid-cols-2">
-          <TextInput label="Source branch" placeholder="feature/my-change" value={sourceBranch} onChange={setSourceBranch} />
-          <TextInput label="Target branch" placeholder="main" value={targetBranch} onChange={setTargetBranch} />
+          <TextInput label="Source branch (optional)" placeholder="Use checked-out branch" value={sourceBranch} onChange={setSourceBranch} />
+          <TextInput label="Target branch (optional)" placeholder="Use configured target" value={targetBranch} onChange={setTargetBranch} />
         </div>
-        <TextInput label="Title" placeholder="Describe the change" value={title} onChange={setTitle} />
+        <TextInput label="Title (optional)" placeholder="Let MergePilot propose a title" value={title} onChange={setTitle} />
         <label className="block">
           <span className="text-xs font-medium text-[rgb(var(--app-text))]">Description</span>
           <textarea
@@ -152,33 +155,10 @@ export default function CreatePullRequest(): JSX.Element {
         <TextInput label="Work item ID (optional)" placeholder="7913" value={workItemId} onChange={setWorkItemId} />
 
         {error && <InlineNotice tone="danger" title="Could not complete the action">{error}</InlineNotice>}
-        {verification.length > 0 && (
-          <InlineNotice tone="success" title="Verified">
-            <ul className="mt-1 list-disc space-y-1 pl-4 text-xs leading-relaxed">
-              {verification.map((line) => <li key={line}>{line}</li>)}
-            </ul>
-          </InlineNotice>
-        )}
-
-        {proposal && proposal.status !== "verified" && (
-          <div className="rounded-md border border-[rgb(var(--app-warning-border))] bg-[rgb(var(--app-warning-soft))] px-3 py-2">
-            <p className="text-xs font-medium text-[rgb(var(--app-warning))]">
-              Approval needed: {String(proposal.payload["title"] ?? "")} ({String(proposal.payload["sourceBranch"] ?? "")} → {String(proposal.payload["targetBranch"] ?? "")})
-            </p>
-          </div>
-        )}
-
         <div className="flex justify-end gap-2">
-          {proposal && proposal.status === "awaiting_approval" && (
-            <ActionButton type="button" tone="primary" onClick={() => void approve()} disabled={busy}>
-              Approve and create PR
-            </ActionButton>
-          )}
-          {!proposal && (
-            <ActionButton type="button" tone="primary" onClick={() => void submit()} disabled={busy || !projectLinkId}>
-              Prepare PR proposal
-            </ActionButton>
-          )}
+          <ActionButton type="button" tone="primary" onClick={submit} disabled={!projectLinkId}>
+            Analyze current workspace
+          </ActionButton>
         </div>
       </div>
     </WorkbenchPage>

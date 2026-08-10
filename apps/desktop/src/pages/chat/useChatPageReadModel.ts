@@ -7,6 +7,7 @@ import type {
 import {
   useChatModelRuntime,
 } from "./useChatModelRuntime.js";
+import type { WorkspaceContextSnapshot } from "./workspaceContextSnapshot.js";
 
 interface UseChatPageReadModelOptions {
   activeProjectLink: ProjectLink | null;
@@ -16,6 +17,7 @@ interface UseChatPageReadModelOptions {
   queuedSuggestionLabel?: string;
   statusText: string | null;
   workflowState: WorkflowEventState | null;
+  workspaceContext: WorkspaceContextSnapshot | null;
 }
 
 export function useChatPageReadModel({
@@ -26,6 +28,7 @@ export function useChatPageReadModel({
   queuedSuggestionLabel,
   statusText,
   workflowState,
+  workspaceContext,
 }: UseChatPageReadModelOptions) {
   const derivedState = useChatDerivedState({
     activeProjectLink,
@@ -35,6 +38,7 @@ export function useChatPageReadModel({
     queuedSuggestionLabel,
     statusText,
     workflowState,
+    workspaceContext,
   });
 
   const modelRuntime = useChatModelRuntime({

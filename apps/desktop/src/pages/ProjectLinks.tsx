@@ -9,10 +9,13 @@ import {
   WorkbenchHeader,
   WorkbenchPage,
 } from "../components/workbench/WorkbenchPrimitives.js";
+import { PaginationControls, paginateItems } from "../components/PaginationControls.js";
 import { ProjectLinkCard } from "./projectLinks/ProjectLinkCard.js";
 import { BLANK_PROJECT_LINK, ProjectLinkForm } from "./projectLinks/ProjectLinkForm.js";
 
 type Mode = "list" | "new" | { editing: ProjectLink };
+
+export const TEMPORARY_PROJECT_LINK_PAGE_SIZE = 12;
 
 export default function ProjectLinks(): JSX.Element {
   const {
@@ -166,19 +169,53 @@ export function ProjectLinksList({
             <span>Temporary links</span>
             <span>{temporary.length}</span>
           </summary>
-          <div className={`${projectLinksGridClass()} mt-3`}>
-            {temporary.map((projectLink) => (
-              <ProjectLinkCard
-                key={projectLink.id}
-                projectLink={projectLink}
-                onEdit={() => onEdit(projectLink)}
-                onDelete={() => onDelete(projectLink.id)}
-              />
-            ))}
-          </div>
+          <TemporaryProjectLinksList projectLinks={temporary} onEdit={onEdit} onDelete={onDelete} />
         </details>
       )}
     </>
+  );
+}
+
+function TemporaryProjectLinksList({
+  projectLinks,
+  onEdit,
+  onDelete,
+}: {
+  projectLinks: ProjectLink[];
+  onEdit: (projectLink: ProjectLink) => void;
+  onDelete: (id: string) => void;
+}): JSX.Element {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(TEMPORARY_PROJECT_LINK_PAGE_SIZE);
+  const { pageItems, pageCount } = paginateItems(projectLinks, page, pageSize);
+
+  return (
+    <div className="mt-3">
+      <div className={projectLinksGridClass()}>
+        {pageItems.map((projectLink) => (
+          <ProjectLinkCard
+            key={projectLink.id}
+            projectLink={projectLink}
+            onEdit={() => onEdit(projectLink)}
+            onDelete={() => onDelete(projectLink.id)}
+          />
+        ))}
+      </div>
+      <PaginationControls
+        page={page}
+        pageCount={pageCount}
+        pageSize={pageSize}
+        totalItems={projectLinks.length}
+        visibleItems={pageItems.length}
+        itemLabel="temporary links"
+        onPageChange={setPage}
+        onPageSizeChange={(nextPageSize) => {
+          setPageSize(nextPageSize);
+          setPage(1);
+        }}
+        pageSizeOptions={[12, 24, 48]}
+      />
+    </div>
   );
 }
 

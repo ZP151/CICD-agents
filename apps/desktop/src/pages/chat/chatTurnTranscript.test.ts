@@ -121,6 +121,21 @@ describe("Turn transcript reducer", () => {
     ] });
   });
 
+  it("clears the continuation wait when the next evidence group starts", () => {
+    const started = upsertTurnStartedTranscript([
+      createOptimisticTurnTranscriptBubble("local", "Review the branch", 1_000),
+    ], { type: "turn.started", turnId: "turn-1", sequence: 0, emittedAt: 1_000 }, () => "unused");
+    const waiting = applyTurnTimelineEvent(started, {
+      type: "turn.waiting", turnId: "turn-1", sequence: 1,
+      message: "Synthesizing the completed checks into the next decision…",
+    });
+    const nextGroup = applyTurnTimelineEvent(waiting, {
+      type: "turn.tool_group.started", turnId: "turn-1", sequence: 2, groupId: "follow-up",
+    });
+
+    expect(nextGroup[0]?.turnTranscript?.waitingForModel).toBe(false);
+  });
+
   it("preserves a complete multi-sentence public narrative instead of UI-ellipsizing it", () => {
     const fullNarrative = "Check the Project Link’s active branch name, whether the working tree has staged or unstaged changes or untracked files, and the most recent commit hash with its author and commit timestamp. This will establish the exact branch and commit the project is on and whether there are any local changes that could affect decisions about building, testing, or committing.";
     const started = upsertTurnStartedTranscript([

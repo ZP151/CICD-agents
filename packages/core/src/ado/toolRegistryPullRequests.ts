@@ -75,13 +75,13 @@ function createPullRequestTool(): Tool {
     description: "Create an Azure DevOps pull request.",
     parameters: {
       type: "object",
-      required: ["source_branch", "title"],
+      required: ["source_branch", "target_branch", "title"],
       properties: {
         organization: { type: "string" },
         project: { type: "string" },
         repository: { type: "string" },
         source_branch: { type: "string" },
-        target_branch: { type: "string", default: "main" },
+        target_branch: { type: "string" },
         title: { type: "string" },
         description: { type: "string" },
         draft: { type: "boolean", default: false },
@@ -91,7 +91,7 @@ function createPullRequestTool(): Tool {
       const { org, project } = resolveOrgProject(ctx, payload);
       const repository = resolveRepository(ctx, payload);
       const sourceBranch = String(payload["source_branch"] ?? "");
-      const targetBranch = String(payload["target_branch"] ?? "main");
+      const targetBranch = String(payload["target_branch"] ?? "");
       const title = String(payload["title"] ?? "");
       const auth = await resolveAdoAuth(ctx);
       return { ...(await createAzurePullRequest({

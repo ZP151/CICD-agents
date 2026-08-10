@@ -79,6 +79,7 @@ describe("WorkbenchPrimitives", () => {
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain(">Failed</span><span");
     expect(html).toContain("focus-visible:ring");
+    expect(html).toContain("max-[900px]:min-h-9");
   });
 
   it("uses a shared selected-list treatment for drill-in worklists", () => {
@@ -135,6 +136,7 @@ describe("WorkbenchPrimitives", () => {
     expect(html).toContain("focus:ring");
     expect(html).toContain("disabled");
     expect(html).toContain("min-h-9");
+    expect(html).toContain("max-[900px]:min-h-9");
   });
 
   it("provides responsive setting rows without a page-specific form vocabulary", () => {

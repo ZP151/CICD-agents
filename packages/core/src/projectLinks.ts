@@ -44,10 +44,9 @@ export type ProjectLinkInput = Omit<ProjectLink, "id" | "createdAt" | "updatedAt
 
 type ProjectLinkStore = Record<string, ProjectLink>;
 
-// Legacy workflow fields are read-only compatibility: V2 Project Links never
-// persist them (the daemon API strips them at the boundary, the stores strip
-// them on write, and the UI never sends them). Reads still surface them so
-// historical records and migration consumers keep working.
+// Branch policy is first-class Project Link configuration: it scopes local
+// comparison and every proposed PR. The remaining workflow fields below are
+// read-only compatibility values; writes do not persist them.
 const LEGACY_READ_DEFAULTS = {
   defaultBranch: "",
   targetBranch: "",
@@ -68,18 +67,13 @@ function withLegacyReadDefaults(projectLink: ProjectLink): ProjectLink {
 }
 
 /**
- * V2 canonical write guard (GAP-01 + ADR-0005): drops every legacy workflow
- * field AND the credential value from a create/update payload, so no store
- * write can persist them. The stable identity
- * (name/repoPath/adoOrgUrl/adoProject/adoRepoName) passes through; adoPat is
- * persisted as the empty placeholder and injected at runtime only.
+ * Canonical write guard (ADR-0005): preserves the stable identity and branch
+ * policy, drops deprecated workflow fields, and always clears credentials.
  */
 export function legacyFreeProjectLinkInput(
   data: ProjectLinkInput | Partial<ProjectLinkInput>,
 ): Partial<ProjectLinkInput> {
   const {
-    defaultBranch: _defaultBranch,
-    targetBranch: _targetBranch,
     adoPipelineId: _adoPipelineId,
     adoPipelineName: _adoPipelineName,
     adoPat: _adoPat,
@@ -90,10 +84,10 @@ export function legacyFreeProjectLinkInput(
     projectTemplate: _projectTemplate,
     buildCommand: _buildCommand,
     testCommand: _testCommand,
-    ...stable
+    ...persisted
   } = data;
   // Credential placeholder only — the value never reaches a store.
-  return { ...stable, adoPat: "" };
+  return { ...persisted, adoPat: "" };
 }
 
 function normalizeProjectLink(projectLink: ProjectLink): ProjectLink {
@@ -137,7 +131,7 @@ export function getProjectLink(dataDir: string, id: string): ProjectLink | null 
   return projectLink ? normalizeProjectLink(projectLink) : null;
 }
 
-/** Create a new Project Link and persist it (V2: legacy fields are never stored). */
+/** Create a new Project Link and persist its identity and branch policy. */
 export function createProjectLink(dataDir: string, data: ProjectLinkInput): ProjectLink {
   const store = loadProjectLinkStore(dataDir);
   const id = crypto.randomBytes(8).toString("hex");
@@ -154,9 +148,8 @@ export function createProjectLink(dataDir: string, data: ProjectLinkInput): Proj
 }
 
 /**
- * Update an existing Project Link. Returns null if not found. Legacy fields
- * in the input are dropped (V2 canonical); values already persisted on an
- * old record survive until the migration clears them.
+ * Update an existing Project Link. Branch policy is editable; deprecated
+ * workflow fields in the input remain ignored.
  */
 export function updateProjectLink(
   dataDir: string,

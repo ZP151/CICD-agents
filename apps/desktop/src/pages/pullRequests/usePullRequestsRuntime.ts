@@ -42,10 +42,6 @@ interface PullRequestsQueryData {
   warnings: string[];
 }
 
-type PullRequestsAggregateResult =
-  | { ok: true; prs: DisplayPullRequest[] }
-  | { ok: false; projectLinkName: string; message: string };
-
 export function usePullRequestsRuntime() {
   const { projectLinks, projectLinksLoading } = useAppData();
   const [projectLinkId, setProjectLinkId] = useState(() => loadStoredActiveProjectLinkId());
@@ -80,11 +76,9 @@ export function usePullRequestsRuntime() {
   const projectLinksKey = useMemo(
     () =>
       projectLinkPullRequestCacheKey(
-        projectLinkId
-          ? projectLinks.filter((item) => item.id === projectLinkId)
-          : projectLinks,
+        selectedProjectLink ? [selectedProjectLink] : [],
       ),
-    [projectLinkId, projectLinks],
+    [selectedProjectLink],
   );
   const insightArtifactsQueryKey = useMemo(
     () => prInsightArtifactsCacheKey(projectLinkId, projectLinksKey),
@@ -95,58 +89,34 @@ export function usePullRequestsRuntime() {
   }, [projectLinkId]);
 
   const pullRequestsQuery = useQuery<PullRequestsQueryData>({
-    queryKey: ["pullRequests", projectLinkId || "all", status, projectLinksKey],
-    enabled: Boolean(projectLinkId || projectLinks.length > 0),
+    queryKey: ["pullRequests", projectLinkId || "none", status, projectLinksKey],
+    // Changes is scoped to the Project Link selected in Context. Querying every
+    // historical link here caused request storms and surfaced unrelated mapping
+    // failures as if they belonged to the current workspace.
+    enabled: Boolean(selectedProjectLink),
     staleTime: 45_000,
     gcTime: 10 * 60_000,
     placeholderData: (previous, previousQuery) => {
       const previousKey = previousQuery?.queryKey;
       if (!Array.isArray(previousKey)) return undefined;
-      return previousKey[1] === (projectLinkId || "all") && previousKey[3] === projectLinksKey
+      return previousKey[1] === (projectLinkId || "none") && previousKey[3] === projectLinksKey
         ? previous
         : undefined;
     },
     retry: false,
     retryOnMount: false,
     queryFn: async () => {
-      if (projectLinkId) {
-        const nextPrs = (await fetchProjectLinkPullRequests(projectLinkId, status))
-          .filter((pr) => matchesProjectLinkBranch(pr, selectedProjectLink))
-          .map((pr) => ({
-            ...pr,
-            sourceProjectLinkId: projectLinkId,
-            sourceProjectLinkName: selectedProjectLink?.name,
-          }));
-        return { prs: nextPrs, warnings: [] };
-      }
-
-    const results = await Promise.all(projectLinks.map(async (projectLink): Promise<PullRequestsAggregateResult> => {
-      try {
-          const items = await fetchProjectLinkPullRequests(projectLink.id, status);
-          return {
-            ok: true,
-            prs: items.map((pr) => ({
-              ...pr,
-              sourceProjectLinkId: projectLink.id,
-              sourceProjectLinkName: projectLink.name,
-            })),
-          };
-        } catch (error) {
-          return {
-            ok: false,
-            projectLinkName: projectLink.name,
-            message: error instanceof Error ? error.message : String(error),
-          };
-        }
-      }));
-
-      const successful = results.filter((item): item is Extract<PullRequestsAggregateResult, { ok: true }> => item.ok);
-      const warnings = results
-        .filter((item): item is Extract<PullRequestsAggregateResult, { ok: false }> => !item.ok)
-        .map((item) => `${item.projectLinkName}: ${item.message}`);
+      if (!selectedProjectLink || !projectLinkId) return { prs: [], warnings: [] };
+      const nextPrs = (await fetchProjectLinkPullRequests(projectLinkId, status))
+        .filter((pr) => matchesProjectLinkBranch(pr, selectedProjectLink))
+        .map((pr) => ({
+          ...pr,
+          sourceProjectLinkId: projectLinkId,
+          sourceProjectLinkName: selectedProjectLink.name,
+        }));
       return {
-        prs: dedupePullRequests(successful.flatMap((item) => item.prs)),
-        warnings,
+        prs: dedupePullRequests(nextPrs),
+        warnings: [],
       };
     },
   });
@@ -164,7 +134,7 @@ export function usePullRequestsRuntime() {
     placeholderData: (previous, previousQuery) => {
       const previousKey = previousQuery?.queryKey;
       if (!Array.isArray(previousKey)) return undefined;
-      return previousKey[1] === (projectLinkId || "all") && previousKey[2] === projectLinksKey
+      return previousKey[1] === (projectLinkId || "none") && previousKey[2] === projectLinksKey
         ? previous
         : undefined;
     },

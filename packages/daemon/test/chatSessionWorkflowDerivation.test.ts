@@ -203,6 +203,22 @@ describe("chat session workflow action derivation", () => {
     expect(derived.approvalProposal?.args).toEqual({ onto: "origin/main", autostash: true });
   });
 
+  it("does not create a merge or rebase approval when no target ref was stated", () => {
+    const rebase = deriveWorkflowPendingAction(
+      "s1",
+      plannerResult("Do you want me to rebase the current branch before pushing?"),
+      [{ role: "user", content: "rebase the current branch", timestamp: 0 }],
+    );
+    const merge = deriveWorkflowPendingAction(
+      "s1",
+      plannerResult("Should I merge the latest changes now?"),
+      [{ role: "user", content: "merge the latest changes", timestamp: 0 }],
+    );
+
+    expect(rebase.approvalProposal).toBeUndefined();
+    expect(merge.approvalProposal).toBeUndefined();
+  });
+
   it("derives restore requests only when a path is present", () => {
     const derived = deriveWorkflowPendingAction(
       "s1",
@@ -409,6 +425,25 @@ describe("chat session workflow action derivation", () => {
       ],
     );
     expect(derived.approvalProposal?.tool).toBe("ado_create_pr");
+    expect(derived.approvalProposal?.args).toMatchObject({ target_branch: "main" });
+  });
+
+  it("rejects an in-scope PR proposal whose target branch is not explicit", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      {
+        ...plannerResult("The branch is pushed. Shall I create a pull request?"),
+        approvalProposal: {
+          tool: "ado_create_pr",
+          args: { source_branch: "feature/x", title: "Update" },
+          description: "Create pull request",
+          nextHint: "done",
+        },
+      },
+      [{ role: "user", content: "create a PR", timestamp: 0 }],
+    );
+
+    expect(derived.approvalProposal).toBeUndefined();
   });
 
   it("strips out-of-scope Azure DevOps approval proposals", () => {

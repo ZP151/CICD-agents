@@ -9,13 +9,14 @@ const cssPath = resolve(
 );
 
 describe("settings layout stylesheet", () => {
-  it("keeps the Settings page bounded while its rows come from shared workbench primitives", () => {
+  it("uses a compact in-page navigation alongside one readable settings column", () => {
     const css = readFileSync(cssPath, "utf8");
 
     expect(css).toContain("width: min(100%, 88rem)");
-    expect(css).toContain("grid-template-columns: repeat(auto-fit, minmax(min(100%, 34rem), 1fr))");
-    expect(css).not.toContain("width: min(100%, 72rem)");
-    expect(css).not.toContain("width: min(100%, 64rem)");
+    expect(css).toContain("grid-template-columns: 10.5rem minmax(0, 1fr)");
+    expect(css).toContain("width: min(100%, 68rem)");
+    expect(css).toContain("position: sticky");
+    expect(css).toContain("overflow-x: auto");
     expect(css).not.toContain(".settings-row");
     expect(css).not.toContain(".settings-list");
   });

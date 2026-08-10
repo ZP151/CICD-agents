@@ -36,8 +36,8 @@ const legacyInput = {
   testCommand: "npm test",
 } satisfies ProjectLinkInput;
 
-describe("Project Link V2 stable identity (GAP-01/02)", () => {
-  it("legacyFreeProjectLinkInput drops every legacy field and the PAT value from an input", () => {
+describe("Project Link persistence and credentials", () => {
+  it("preserves branch policy while dropping deprecated workflow fields and the PAT value", () => {
     const stripped = legacyFreeProjectLinkInput(legacyInput);
 
     expect(stripped).toMatchObject({
@@ -46,13 +46,13 @@ describe("Project Link V2 stable identity (GAP-01/02)", () => {
       adoOrgUrl: "https://tebssg.visualstudio.com/",
       adoProject: "TeBS-ClaimBot",
       adoRepoName: "ClaimBot_API",
+      defaultBranch: "main",
+      targetBranch: "main",
       // Credential placeholder only (ADR-0005): the value never enters a store.
       adoPat: "",
     });
     expect(JSON.stringify(stripped)).not.toContain("secret-pat-123");
     for (const legacy of [
-      "defaultBranch",
-      "targetBranch",
       "adoPipelineId",
       "adoPipelineName",
       "adoMcpEnabled",
@@ -67,13 +67,14 @@ describe("Project Link V2 stable identity (GAP-01/02)", () => {
     }
   });
 
-  it("createProjectLink never persists legacy fields even when they are provided", () => {
+  it("persists configured branch policy without persisting deprecated fields or credentials", () => {
     const dataDir = tempDataDir();
     const created = createProjectLink(dataDir, legacyInput);
 
     expect(created.adoPipelineId).toBe("");
     expect(created.adoPipelineName).toBe("");
-    expect(created.defaultBranch).toBe("");
+    expect(created.defaultBranch).toBe("main");
+    expect(created.targetBranch).toBe("main");
     expect(created.adoMcpEnabled).toBe(false);
     expect(created.adoMcpDomains).toBe("");
 
@@ -83,13 +84,14 @@ describe("Project Link V2 stable identity (GAP-01/02)", () => {
     expect(raw).not.toContain("117");
     expect(raw).not.toContain("adoMcpEnabled");
     expect(raw).not.toContain("secret-pat-123");
+    expect(raw).toContain('"targetBranch": "main"');
 
     const reread = getProjectLink(dataDir, created.id);
     expect(reread?.adoPipelineId).toBe("");
     expect(reread?.adoPipelineName).toBe("");
   });
 
-  it("updateProjectLink drops legacy fields from the input but keeps persisted ones read-only", () => {
+  it("updates configured branches but continues to drop deprecated fields", () => {
     const dataDir = tempDataDir();
     const created = createProjectLink(dataDir, legacyInput);
 
@@ -99,9 +101,16 @@ describe("Project Link V2 stable identity (GAP-01/02)", () => {
     expect(updated?.repoPath).toBe("C:/repo-v2");
     expect(updated?.adoPipelineId).toBe("");
 
-    // Updating with legacy fields must not re-write them.
-    const again = updateProjectLink(dataDir, created.id, { adoPipelineId: "999", name: "Renamed" });
+    // Branch policy is editable; deprecated workflow fields still are not.
+    const again = updateProjectLink(dataDir, created.id, {
+      adoPipelineId: "999",
+      name: "Renamed",
+      defaultBranch: "develop",
+      targetBranch: "release",
+    });
     expect(again?.name).toBe("Renamed");
+    expect(again?.defaultBranch).toBe("develop");
+    expect(again?.targetBranch).toBe("release");
     expect(again?.adoPipelineId).toBe("");
     const raw = fs.readFileSync(path.join(dataDir, "project-links.json"), "utf8");
     expect(raw).not.toContain("999");

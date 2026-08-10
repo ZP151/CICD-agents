@@ -57,11 +57,22 @@ describe("offline Git intent coverage", () => {
     expect(plan.steps.find((step) => step.tool === "git_diff")?.args).toMatchObject({ target_branch: "origin/main", stat: true });
   });
 
-  it("routes push plus PR requests to the PR workflow instead of plain push", () => {
+  it("requires an explicit PR target instead of assuming main", () => {
     const plan = translateIntent("push and create PR for branch feature/chat-agent");
 
     expect(plan.intent).toBe("create-pr");
-    expect(plan.steps.map((step) => step.tool)).toContain("ado_create_pr");
+    expect(plan.steps.map((step) => step.tool)).not.toContain("ado_create_pr");
+    expect(plan.notes).toContain("target branch");
+  });
+
+  it("keeps explicit PR source and target branches", () => {
+    const plan = translateIntent("push and create a PR from feature/chat-agent into develop");
+
+    expect(plan.intent).toBe("create-pr");
+    expect(plan.steps.find((step) => step.tool === "ado_create_pr")?.args).toMatchObject({
+      source_branch: "feature/chat-agent",
+      target_branch: "develop",
+    });
   });
 
   it("plans restore only when a concrete path is present", () => {
@@ -82,6 +93,16 @@ describe("offline Git intent coverage", () => {
       onto: "origin/main",
       autostash: true,
     });
+  });
+
+  it("does not infer a merge or rebase target when none was requested", () => {
+    const rebase = translateIntent("rebase the current branch");
+    const merge = translateIntent("merge the latest changes");
+
+    expect(rebase.steps.map((step) => step.tool)).toEqual(["git_status"]);
+    expect(merge.steps.map((step) => step.tool)).toEqual(["git_status"]);
+    expect(rebase.notes).toContain("target branch");
+    expect(merge.notes).toContain("target branch");
   });
 
   it("plans ordinary push without inventing PR creation", () => {

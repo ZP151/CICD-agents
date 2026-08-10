@@ -17,7 +17,9 @@ export function prPreflightFromPayload(
   const project = String(projectLink?.adoProject ?? "").trim();
   const repository = String(projectLink?.adoRepoName ?? "").trim();
   const sourceBranch = normalizeBranchName(String(payload.branch ?? currentBranch ?? "").trim());
-  const targetBranch = normalizeBranchName(String(payload.targetBranch ?? projectLink?.targetBranch ?? projectLink?.defaultBranch ?? "main").trim()) || "main";
+  const targetBranch = normalizeBranchName(
+    String(payload.targetBranch ?? projectLink?.targetBranch ?? "").trim(),
+  );
   const explicitTitle = String(payload.title ?? payload.message ?? "").trim();
   const title = explicitTitle || latestSubject || `Update from ${sourceBranch || "current branch"}`;
   const missing = [
@@ -48,6 +50,18 @@ export function prPreflightFromPayload(
       organization,
       title,
       summary: "Current source branch could not be detected before creating a pull request.",
+    };
+  }
+  if (!targetBranch) {
+    return {
+      kind: "pr",
+      status: "missing_target_branch",
+      sourceBranch,
+      repository,
+      project,
+      organization,
+      title,
+      summary: "Project Link is missing a PR target branch. Configure the target branch before creating a pull request.",
     };
   }
   const dirtySummary = dirtyWorkingTreeSummary(statusText);

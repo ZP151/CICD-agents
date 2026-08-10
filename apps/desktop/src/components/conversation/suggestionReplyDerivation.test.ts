@@ -5,6 +5,20 @@ import {
 } from "./SuggestionReplyBar.js";
 
 describe("deriveSuggestionReplies", () => {
+  it("prioritizes structured next-step predictions over keyword templates", () => {
+    const suggestions = deriveSuggestionReplies({
+      metadataSuggestions: ["Compare the failing endpoints", "Inspect the validation contract", "Draft the smallest fix"],
+      lastAssistantText: "The architecture request flow is available.",
+    });
+
+    expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
+      "Compare the failing endpoints",
+      "Inspect the validation contract",
+      "Draft the smallest fix",
+    ]);
+    expect(suggestions.every((suggestion) => suggestion.id.startsWith("predicted-"))).toBe(true);
+  });
+
   it("suggests diff-aware follow-ups for review contexts", () => {
     const suggestions = deriveSuggestionReplies({
       lastUserText: "Review my changes",
@@ -21,22 +35,13 @@ describe("deriveSuggestionReplies", () => {
     expect(suggestions[2]?.action).toEqual({ kind: "workspace_action", action: "draft_commit_message" });
   });
 
-  it("suggests architecture follow-ups for project understanding contexts", () => {
+  it("does not invent architecture follow-ups from generic wording", () => {
     const suggestions = deriveSuggestionReplies({
       lastUserText: "Explain this project architecture",
       lastAssistantText: "The daemon API and controller entry points handle the request flow.",
     });
 
-    expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
-      "Trace request flow",
-      "List entry points",
-      "Explain data model",
-    ]);
-    expect(suggestions.map((suggestion) => suggestion.action)).toEqual([
-      { kind: "workspace_action", action: "inspect_architecture_context" },
-      { kind: "workspace_action", action: "inspect_architecture_context" },
-      { kind: "workspace_action", action: "inspect_architecture_context" },
-    ]);
+    expect(suggestions).toEqual([]);
   });
 
   it("suggests auth recovery without showing generic actions", () => {
@@ -344,13 +349,15 @@ describe("deriveSuggestionReplies", () => {
     });
 
     expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
-      "Analyze failure",
-      "Rerun tests",
-      "Review changes",
+      "Inspect failing output",
+      "Review changed files",
+      "Rerun validation",
     ]);
-    expect(suggestions[0]?.action).toEqual({ kind: "workspace_action", action: "inspect_validation_failure" });
-    expect(suggestions[1]?.action).toEqual({ kind: "workspace_action", action: "run_tests" });
-    expect(suggestions[2]?.action).toEqual({ kind: "workspace_action", action: "inspect_changes" });
+    expect(suggestions.map((suggestion) => suggestion.action)).toEqual([
+      { kind: "fill_composer" },
+      { kind: "fill_composer" },
+      { kind: "fill_composer" },
+    ]);
   });
 
   it("suggests build rerun after a failed build workflow", () => {
@@ -439,7 +446,7 @@ describe("deriveSuggestionReplies", () => {
     ]);
   });
 
-  it("predicts natural architecture follow-ups after an architecture answer", () => {
+  it("uses source evidence instead of generic architecture templates", () => {
     const suggestions = deriveSuggestionReplies({
       lastUserText: "Explain this project architecture",
       lastAssistantText: "The project has controllers, models, and SharePoint integration.",
@@ -447,14 +454,12 @@ describe("deriveSuggestionReplies", () => {
     });
 
     expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
-      "Trace request flow",
-      "List entry points",
-      "Explain data model",
+      "List key files",
+      "Trace source flow",
     ]);
     expect(suggestions.map((suggestion) => suggestion.action)).toEqual([
-      { kind: "workspace_action", action: "inspect_architecture_context" },
-      { kind: "workspace_action", action: "inspect_architecture_context" },
-      { kind: "workspace_action", action: "inspect_architecture_context" },
+      { kind: "workspace_action", action: "inspect_source_context" },
+      { kind: "workspace_action", action: "inspect_source_context" },
     ]);
   });
 

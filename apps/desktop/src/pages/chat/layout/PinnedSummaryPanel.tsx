@@ -7,11 +7,11 @@ import { gitRecoveryPanelState } from "../workflowTaskState.js";
 import { WorkspaceBranchMenu } from "./WorkspaceBranchMenu.js";
 import { WorkspaceCommitMenu } from "./WorkspaceCommitMenu.js";
 import { WorkspaceGitRecoveryPanel } from "./WorkspaceGitRecoveryPanel.js";
+import { WorkspaceProjectLinkPanel } from "./WorkspaceProjectLinkPanel.js";
 import { WorkflowProgressList } from "./WorkflowProgressList.js";
 
 interface PinnedSummaryPanelProps {
   repoPath: string;
-  setRepoPath: (value: string) => void;
   currentBranch: string | null;
   branchList: string[];
   taskState: TaskState | null;
@@ -19,6 +19,7 @@ interface PinnedSummaryPanelProps {
   busy: boolean;
   projectLinks: ProjectLink[];
   activeProjectLinkId: string | null;
+  selectProjectLink: (id: string) => void;
   codePanelOpen: boolean;
   codePanelWidth: number;
   onAction: (action: WorkspaceAction) => void;
@@ -31,7 +32,6 @@ interface PinnedSummaryPanelProps {
  */
 export function PinnedSummaryPanel({
   repoPath,
-  setRepoPath,
   currentBranch,
   branchList,
   taskState,
@@ -39,6 +39,7 @@ export function PinnedSummaryPanel({
   busy,
   projectLinks,
   activeProjectLinkId,
+  selectProjectLink,
   codePanelOpen,
   codePanelWidth,
   onAction,
@@ -47,6 +48,7 @@ export function PinnedSummaryPanel({
   const [activeMenu, setActiveMenu] = useState<"branch" | "commit" | null>(null);
   const repoName = repoPath ? repoPath.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? "" : "";
   const activeProjectLink = projectLinks.find((projectLink) => projectLink.id === activeProjectLinkId) ?? null;
+  const adoReady = Boolean(activeProjectLink?.adoOrgUrl && activeProjectLink.adoProject && activeProjectLink.adoRepoName);
   const branchName = currentBranch ?? activeProjectLink?.defaultBranch ?? "";
   const branchLabel = branchName || "not checked";
   const hasRepoPath = Boolean(repoPath.trim());
@@ -84,17 +86,25 @@ export function PinnedSummaryPanel({
       style={{ right: codePanelOpen ? codePanelWidth + 20 : 20 }}
       aria-label="Workspace summary"
     >
-      <div className="pointer-events-auto rounded-2xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4 text-[rgb(var(--app-text))] shadow-lg">
+      <div className="pointer-events-auto rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4 text-[rgb(var(--app-text))] shadow-sm">
         <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-sm text-[rgb(var(--app-text-muted))]">Context</p>
+          <p className="min-w-0 truncate text-sm font-semibold text-[rgb(var(--app-text))]">Context</p>
         </div>
 
-        <div className="mt-1 flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1.5 text-sm text-[rgb(var(--app-text-muted))]">
-          <svg aria-hidden="true" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 19h16M7 16V7h10v9M9 16V9h6v7" />
-          </svg>
-          <span className="min-w-0 truncate">{repoName || "Local"}</span>
-        </div>
+        <WorkspaceProjectLinkPanel
+          repoName={repoName}
+          repoPath={repoPath}
+          projectLinks={projectLinks}
+          activeProjectLink={activeProjectLink}
+          activeProjectLinkId={activeProjectLinkId}
+          adoReady={adoReady}
+          branchName={branchName}
+          busy={busy}
+          projectLinkSelectionLocked={Boolean(workflowState?.pendingApproval)}
+          onProjectLinkSelect={selectProjectLink}
+          runAction={runAction}
+          showActions={false}
+        />
 
         <div ref={menuRootRef}>
           <WorkspaceBranchMenu
@@ -106,7 +116,7 @@ export function PinnedSummaryPanel({
             open={activeMenu === "branch"}
             onOpenChange={(open) => setActiveMenu(open ? "branch" : null)}
             runAction={runAction}
-            menuPositionClassName="right-full top-0 mr-2 w-72"
+            menuPositionClassName={pinnedSummaryMenuPositionClass()}
           />
           <WorkspaceCommitMenu
             hasRepoPath={hasRepoPath}
@@ -117,7 +127,7 @@ export function PinnedSummaryPanel({
             open={activeMenu === "commit"}
             onOpenChange={(open) => setActiveMenu(open ? "commit" : null)}
             runAction={runAction}
-            menuPositionClassName="right-full top-0 mr-2 w-80"
+            menuPositionClassName={pinnedSummaryMenuPositionClass()}
           />
         </div>
 
@@ -144,6 +154,10 @@ export function PinnedSummaryPanel({
 
 export function pinnedSummaryPanelShellClass(): string {
   return "pointer-events-none absolute top-12 z-40 hidden w-[min(20rem,calc(100vw-2rem))] max-w-[calc(100%-24px)] lg:block";
+}
+
+export function pinnedSummaryMenuPositionClass(): string {
+  return "right-full top-0 mr-2 w-72";
 }
 
 function withDefaultBranch(action: WorkspaceAction, branchName: string): WorkspaceAction {

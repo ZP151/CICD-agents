@@ -157,6 +157,6 @@ Pushing a semantic tag triggers the Windows installer build and GitHub Release
 workflow:
 
 ```powershell
-git tag v0.5.28
-git push origin v0.5.28
+git tag v0.5.29
+git push origin v0.5.29
 ```

@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import {
   registerDeliveryRoutes,
   type DeliveryWritesState,
+  WORK_ITEMS_QUERY,
 } from "../src/routes/delivery.routes.js";
 import type { ProjectLinkStoreAdapter } from "../src/projectLinkStore.js";
 
@@ -17,10 +18,10 @@ function makeWrites(enabled = true): DeliveryWritesState & { state: { enabled: b
   };
 }
 
-async function buildApp(writes: DeliveryWritesState) {
+async function buildApp(writes: DeliveryWritesState, projectLink: unknown = null) {
   const app = Fastify();
   const projectLinkStore = {
-    getProjectLink: vi.fn(async () => null),
+    getProjectLink: vi.fn(async () => projectLink),
   } as unknown as ProjectLinkStoreAdapter;
   registerDeliveryRoutes(app, { projectLinkStore, writes });
   await app.ready();
@@ -32,6 +33,11 @@ describe("delivery routes", () => {
 
   beforeEach(() => {
     writes = makeWrites();
+  });
+
+  it("limits Work to tasks assigned to the signed-in user, not test fixtures", () => {
+    expect(WORK_ITEMS_QUERY).toContain("[System.AssignedTo] = @me");
+    expect(WORK_ITEMS_QUERY).not.toContain("MergePilot Fixture");
   });
 
   it("exposes the global writes kill switch", async () => {
@@ -55,6 +61,24 @@ describe("delivery routes", () => {
     const app = await buildApp(writes);
     const response = await app.inject({ method: "GET", url: "/delivery/actions" });
     expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("reports an incomplete Azure DevOps mapping as a recoverable Work setup error", async () => {
+    const app = await buildApp(writes, {
+      id: "incomplete-link",
+      adoOrgUrl: "",
+      adoProject: "",
+      adoPat: "",
+    });
+
+    const response = await app.inject({ method: "GET", url: "/delivery/work-items?projectLinkId=incomplete-link" });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({
+      error: "project_link_ado_mapping_incomplete",
+      message: expect.stringContaining("Azure DevOps organization and project"),
+    });
     await app.close();
   });
 

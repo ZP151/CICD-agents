@@ -1,43 +1,34 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import {
-  promptDeckContinuationOffset,
-  promptDeckInertiaDuration,
-  promptDeckKeyboardAction,
-  resolvePromptDeckRelease,
-} from "./PromptParticleDeck.js";
+import { PromptParticleDeck } from "./PromptParticleDeck.js";
 
-describe("PromptParticleDeck gestures", () => {
-  it("keeps a short, slow drag on the current card", () => {
-    expect(resolvePromptDeckRelease(44, 0.18, 7)).toMatchObject({ indexDelta: 0, steps: 0 });
-  });
+const suggestions = [
+  { id: "changes", label: "Review local changes", message: "Review changes", action: { kind: "fill_composer" as const } },
+  { id: "branch", label: "Check branch readiness", message: "Check branch", action: { kind: "fill_composer" as const } },
+];
 
-  it("uses distance to move across multiple prompt cards", () => {
-    expect(resolvePromptDeckRelease(-316, 0.12, 7)).toMatchObject({ indexDelta: 3, steps: 3 });
-  });
+describe("PromptParticleDeck", () => {
+  it("renders a visible, keyboard-operable contextual prompt deck", () => {
+    const html = renderToStaticMarkup(createElement(PromptParticleDeck, {
+      suggestions,
+      onPick: () => undefined,
+    }));
 
-  it("uses release velocity as momentum for a quick flick", () => {
-    expect(resolvePromptDeckRelease(26, 1.12, 7)).toMatchObject({ indexDelta: -2, steps: 2 });
-  });
-
-  it("keeps a short drag local but lets a long drag glide across every selected card", () => {
-    expect(promptDeckContinuationOffset(-40, 0, 205)).toBe(-40);
-    expect(promptDeckContinuationOffset(-100, 1, 205)).toBe(105);
-    expect(promptDeckContinuationOffset(-300, 3, 205)).toBe(315);
-    expect(promptDeckContinuationOffset(40, -2, 146)).toBe(-252);
-  });
-
-  it("uses a longer non-bouncy coast for a larger continuation distance", () => {
-    expect(promptDeckInertiaDuration(40, 0.12)).toBeGreaterThanOrEqual(0.28);
-    expect(promptDeckInertiaDuration(340, 1.2)).toBeGreaterThan(promptDeckInertiaDuration(40, 0.12));
-    expect(promptDeckInertiaDuration(4000, 8)).toBe(0.72);
-  });
-
-  it("maps left and right keys to browsing while retaining home and end", () => {
-    expect(promptDeckKeyboardAction("ArrowLeft", 7)).toBe(-1);
-    expect(promptDeckKeyboardAction("ArrowRight", 7)).toBe(1);
-    expect(promptDeckKeyboardAction("Left", 7)).toBe(-1);
-    expect(promptDeckKeyboardAction("Right", 7)).toBe(1);
-    expect(promptDeckKeyboardAction("Home", 7)).toBe("start");
-    expect(promptDeckKeyboardAction("End", 7)).toBe("end");
+    expect(html).toContain("prompt-particle-deck");
+    expect(html).toContain('aria-label="Suggested prompt drafts"');
+    expect(html).toContain('aria-roledescription="prompt carousel"');
+    expect(html).toContain("prompt-particle-deck__stage");
+    expect(html).toContain("prompt-particle-deck__ring");
+    expect(html).toContain('data-interaction="direct"');
+    expect(html).toContain('tabindex="0"');
+    expect(html).not.toContain("Scroll or use arrow keys to browse");
+    expect(html).not.toContain("Enter fills the draft");
+    expect(html).not.toContain("Fill draft");
+    expect(html).not.toContain("prompt-particle-deck__insert");
+    expect(html).toContain('aria-label="Use prompt: Review local changes"');
+    expect(html).toContain('aria-label="Use prompt: Check branch readiness"');
+    expect(html).toContain('data-active="true"');
+    expect(html).toContain('data-active="false"');
   });
 });

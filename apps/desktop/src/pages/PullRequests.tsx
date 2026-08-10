@@ -293,7 +293,7 @@ export function PullRequestEmptyState({
   mode,
   hasProjectLinks,
   message,
-  onRefresh,
+  onRefresh: _onRefresh,
 }: {
   mode: "empty" | "error";
   hasProjectLinks: boolean;
@@ -312,6 +312,15 @@ export function PullRequestEmptyState({
     : hasProjectLinks
       ? "Try another Project Link or status filter, or refresh after creating a pull request."
       : "Create a Project Link with Azure DevOps mapping before reviewing pull requests or generating PR insight.";
+  if (!isError && hasProjectLinks) {
+    return (
+      <div className="w-full max-w-3xl py-2 text-sm text-[rgb(var(--app-text-muted))]" role="status">
+        <p className="font-medium text-[rgb(var(--app-text))]">No pull requests found</p>
+        <p className="mt-1 leading-relaxed">Change the Project Link or status filter, or use Refresh above after creating a pull request.</p>
+      </div>
+    );
+  }
+
   return (
     <section
       className={`w-full max-w-3xl rounded-lg border px-4 py-3 ${
@@ -347,7 +356,7 @@ export function PullRequestEmptyState({
             Open Project Links
           </ActionLink>
         ) : (
-          <ActionButton onClick={() => void onRefresh()}>{isError ? recovery.primaryAction : "Refresh"}</ActionButton>
+          <ActionButton onClick={() => void _onRefresh()}>{recovery.primaryAction}</ActionButton>
         )}
       </div>
     </section>

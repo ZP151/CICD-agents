@@ -49,7 +49,6 @@ export function RuntimeSettingsSection({ health }: { health: HealthStatus | null
       <details className="settings-advanced">
         <summary>
           <span>Runtime details</span>
-          <span className="settings-advanced-meta">{health?.runtimeMode || "Unknown"}</span>
         </summary>
         <div className="settings-advanced-list">
           <WorkbenchSettingsRow title="Desktop build">

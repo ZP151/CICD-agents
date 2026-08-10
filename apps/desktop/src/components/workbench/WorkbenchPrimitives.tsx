@@ -111,7 +111,7 @@ export function WorkbenchFilterTabs<T extends string>({
             disabled={option.disabled}
             title={option.title}
             onClick={() => onValueChange(option.value)}
-            className={`inline-flex min-h-7 items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-[background-color,border-color,color,box-shadow] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/35 disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`inline-flex min-h-8 max-[900px]:min-h-9 items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-[background-color,border-color,color,box-shadow] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/35 disabled:cursor-not-allowed disabled:opacity-50 ${
               selected
                 ? "border-[rgb(var(--app-accent))] bg-[rgb(var(--app-accent-soft))] text-[rgb(var(--app-text))]"
                 : "border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text-muted))] hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-control-hover))] hover:text-[rgb(var(--app-text))]"
@@ -150,7 +150,7 @@ export function ActionButton({
     <button
       {...props}
       disabled={disabled || loading}
-      className={`inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-[background-color,border-color,color,transform] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 ${actionToneClass[tone]} ${className}`.trim()}
+      className={`inline-flex min-h-8 max-[900px]:min-h-9 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-[background-color,border-color,color,transform] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 ${actionToneClass[tone]} ${className}`.trim()}
     >
       {loading && <span aria-hidden="true" className="workbench-loading-indicator" />}
       {children}
@@ -172,7 +172,7 @@ export function ActionLink({
   return (
     <a
       {...props}
-      className={`inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-[background-color,border-color,color,transform] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45 active:translate-y-px ${actionToneClass[tone]} ${className}`.trim()}
+      className={`inline-flex min-h-8 max-[900px]:min-h-9 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-[background-color,border-color,color,transform] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45 active:translate-y-px ${actionToneClass[tone]} ${className}`.trim()}
     >
       {children}
     </a>
@@ -210,7 +210,7 @@ export function WorkbenchTextInput({ className = "", ...props }: InputHTMLAttrib
   return (
     <input
       {...props}
-      className={`w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text))] outline-none transition-[background-color,border-color,box-shadow] duration-[var(--app-motion-fast)] placeholder:text-[rgb(var(--app-text-subtle))] hover:border-[rgb(var(--app-border-strong))] focus:border-[rgb(var(--app-accent))] focus:ring-2 focus:ring-[rgb(var(--app-focus))]/35 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
+      className={`min-h-9 w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text))] outline-none transition-[background-color,border-color,box-shadow] duration-[var(--app-motion-fast)] placeholder:text-[rgb(var(--app-text-subtle))] hover:border-[rgb(var(--app-border-strong))] focus:border-[rgb(var(--app-accent))] focus:ring-2 focus:ring-[rgb(var(--app-focus))]/35 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
     />
   );
 }
@@ -233,7 +233,7 @@ export function WorkbenchTextArea({ className = "", ...props }: TextareaHTMLAttr
   return (
     <textarea
       {...props}
-      className={`w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text))] outline-none transition-[background-color,border-color,box-shadow] duration-[var(--app-motion-fast)] placeholder:text-[rgb(var(--app-text-subtle))] hover:border-[rgb(var(--app-border-strong))] focus:border-[rgb(var(--app-accent))] focus:ring-2 focus:ring-[rgb(var(--app-focus))]/35 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
+      className={`min-h-9 w-full min-w-0 rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text))] outline-none transition-[background-color,border-color,box-shadow] duration-[var(--app-motion-fast)] placeholder:text-[rgb(var(--app-text-subtle))] hover:border-[rgb(var(--app-border-strong))] focus:border-[rgb(var(--app-accent))] focus:ring-2 focus:ring-[rgb(var(--app-focus))]/35 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
     />
   );
 }
@@ -260,7 +260,7 @@ export function WorkbenchSegmentedControl<T extends string>({
             aria-pressed={selected}
             disabled={option.disabled}
             onClick={() => onValueChange(option.value)}
-            className={`min-h-7 rounded px-3 text-xs font-medium transition-[background-color,color,box-shadow,transform] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45 disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`min-h-8 max-[900px]:min-h-9 rounded px-3 text-xs font-medium transition-[background-color,color,box-shadow,transform] duration-[var(--app-motion-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45 disabled:cursor-not-allowed disabled:opacity-50 ${
               selected
                 ? "bg-[rgb(var(--app-surface))] text-[rgb(var(--app-text))] shadow-sm"
                 : "text-[rgb(var(--app-text-muted))] hover:bg-[rgb(var(--app-control-hover))] hover:text-[rgb(var(--app-text))]"

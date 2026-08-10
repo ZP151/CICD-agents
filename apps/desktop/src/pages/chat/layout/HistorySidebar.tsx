@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { ChatHistoryEntry } from "../../../api.js";
+import { chatHistoryTitle } from "../chatHistory.js";
 import { HistorySidebarItem } from "./HistorySidebarItem.js";
 import { HistorySidebarMenu } from "./HistorySidebarMenu.js";
 import { HistorySidebarPagination } from "./HistorySidebarPagination.js";
@@ -59,6 +61,7 @@ export function HistorySidebar({
   onCommitRename,
   onDeleteEntry,
 }: HistorySidebarProps) {
+  const [pendingDeleteEntry, setPendingDeleteEntry] = useState<ChatHistoryEntry | null>(null);
   const menuEntry = menu ? history.find((item) => item.sessionId === menu.sessionId) ?? null : null;
   const pageCount = Math.max(1, Math.ceil(history.length / HISTORY_PAGE_SIZE));
   const normalizedPage = Math.min(Math.max(1, page), pageCount);
@@ -83,6 +86,16 @@ export function HistorySidebar({
       <p className="shrink-0 px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-[rgb(var(--app-text-subtle))]">
         History
       </p>
+      {pendingDeleteEntry && (
+        <HistoryDeleteConfirmation
+          entry={pendingDeleteEntry}
+          onCancel={() => setPendingDeleteEntry(null)}
+          onConfirm={() => {
+            onDeleteEntry(pendingDeleteEntry);
+            setPendingDeleteEntry(null);
+          }}
+        />
+      )}
       {loading && history.length === 0 ? (
         <div className="space-y-2 px-3 py-2" aria-label="Loading chat history">
           {Array.from({ length: 5 }).map((_, index) => (
@@ -131,10 +144,51 @@ export function HistorySidebar({
         menu={menu}
         menuEntry={menuEntry}
         onBeginRename={onBeginRename}
-        onDeleteEntry={onDeleteEntry}
+        onDeleteEntry={(entry) => {
+          onMenuChange(null);
+          setPendingDeleteEntry(entry);
+        }}
         onMenuChange={onMenuChange}
         onTogglePin={onTogglePin}
       />
     </aside>
+  );
+}
+
+export function HistoryDeleteConfirmation({
+  entry,
+  onCancel,
+  onConfirm,
+}: {
+  entry: ChatHistoryEntry;
+  onCancel: () => void;
+  onConfirm: () => void;
+}): JSX.Element {
+  const title = chatHistoryTitle(entry);
+  return (
+    <section
+      role="alert"
+      aria-label={`Delete chat ${title}`}
+      className="mx-3 mb-2 rounded-md border border-[rgb(var(--app-danger-border))] bg-[rgb(var(--app-danger-soft))] p-2.5"
+    >
+      <p className="break-words text-xs font-semibold text-[rgb(var(--app-text))]">Delete “{title}”?</p>
+      <p className="mt-1 text-[11px] leading-4 text-[rgb(var(--app-text-muted))]">This removes the saved conversation from this workspace. It cannot be undone.</p>
+      <div className="mt-2 flex flex-wrap justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded px-2 py-1 text-xs text-[rgb(var(--app-text-muted))] transition hover:bg-[rgb(var(--app-surface))] hover:text-[rgb(var(--app-text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/60"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          className="rounded bg-[rgb(var(--app-danger))] px-2 py-1 text-xs font-medium text-white transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/60"
+        >
+          Delete chat
+        </button>
+      </div>
+    </section>
   );
 }

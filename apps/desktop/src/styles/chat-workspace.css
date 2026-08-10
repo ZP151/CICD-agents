@@ -58,6 +58,17 @@
   height: 100%;
 }
 
+/* Below the compact-navigation breakpoint the application rail already
+   consumes 72px. Keep the desktop floor for panel-resize math, but allow the
+   actual conversation column to shrink instead of clipping the whole chat at
+   360px logical width (the root intentionally has no horizontal scroll). */
+@media (max-width: 900px) {
+  .middle-panel {
+    flex-basis: 0;
+    min-width: 0;
+  }
+}
+
 .chat-shell-right-resize-handle {
   position: absolute;
   top: 0;
@@ -163,35 +174,163 @@
   background: rgba(var(--app-accent), 0.72);
 }
 
-/* Isolated 3D prompt deck: wheel rotates a compact, visible arc of drafts. */
-.prompt-particle-deck { width: min(100%, 60rem); outline: none; }
-.prompt-particle-deck__stage { position: relative; display: grid; height: 13.2rem; place-items: center; isolation: isolate; perspective: 1650px; perspective-origin: 50% 44%; contain: layout; cursor: grab; touch-action: pan-y; user-select: none; }
-.prompt-particle-deck__stage:active { cursor: grabbing; }
-.prompt-particle-deck__stage::before { position: absolute; inset: 1.7rem 6%; z-index: -2; border-radius: 50%; background: radial-gradient(ellipse at center, rgb(var(--app-accent-soft) / 0.74), rgb(var(--app-info-soft) / 0.16) 45%, transparent 76%); content: ""; filter: blur(7px); opacity: 0.24; transform: scale(0.92); transition: opacity 180ms var(--app-ease-out), transform 280ms var(--app-ease-out); }
-.prompt-particle-deck.is-exploring .prompt-particle-deck__stage::before { opacity: 1; transform: scale(1); }
-.prompt-particle-deck__particles { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.prompt-particle-deck__ring { position: absolute; inset: 0; transform-style: preserve-3d; will-change: transform; }
-.prompt-particle-deck__particle { position: absolute; display: block; border-radius: 999px; background: rgb(var(--app-accent)); box-shadow: 0 0 8px rgb(var(--app-accent) / 0.42); will-change: transform, opacity; }
-.prompt-particle-deck__particle:nth-child(3n) { background: rgb(var(--app-info)); }
-.prompt-particle-deck__particle:nth-child(4n) { background: rgb(var(--app-success)); }
-.prompt-particle-deck__card { position: absolute; left: calc(50% - 5.3rem); top: calc(50% - 2.7rem); display: grid; width: clamp(9.6rem, 12.5vw, 10.6rem); min-height: 5.4rem; place-items: center; padding: 0.86rem 1rem; overflow: hidden; border: 1px solid rgb(var(--app-border)); border-radius: 0.8rem; background: rgb(var(--app-surface-raised)); box-shadow: 0 10px 22px rgb(var(--app-overlay) / 0.1), inset 0 1px 0 rgb(255 255 255 / 0.56); color: rgb(var(--app-text)); cursor: inherit; text-align: center; transform-style: preserve-3d; will-change: transform; }
-.prompt-particle-deck__card::before { position: absolute; inset: 0; content: ""; opacity: 0.68; pointer-events: none; background: linear-gradient(138deg, rgb(255 255 255 / 0.46), transparent 43%, rgb(var(--app-accent) / 0.07)); transform: translateZ(1px); }
-.prompt-particle-deck__card[data-tone="violet"] { background: color-mix(in srgb, rgb(var(--app-surface)) 62%, rgb(var(--app-info-soft))); }
-.prompt-particle-deck__card[data-tone="mint"] { background: color-mix(in srgb, rgb(var(--app-surface)) 62%, rgb(var(--app-success-soft))); }
-.prompt-particle-deck__card[data-tone="blue"] { background: color-mix(in srgb, rgb(var(--app-surface)) 62%, rgb(var(--app-accent-soft))); }
-.prompt-particle-deck__card[data-active="true"][data-tone="blue"] { background: color-mix(in srgb, rgb(var(--app-surface-raised)) 30%, rgb(var(--app-accent-soft))); }
-.prompt-particle-deck__card[data-active="true"][data-tone="violet"] { background: color-mix(in srgb, rgb(var(--app-surface-raised)) 30%, rgb(var(--app-info-soft))); }
-.prompt-particle-deck__card[data-active="true"][data-tone="mint"] { background: color-mix(in srgb, rgb(var(--app-surface-raised)) 30%, rgb(var(--app-success-soft))); }
-.prompt-particle-deck__card[data-active="true"] { border-color: rgb(var(--app-border-strong)); box-shadow: 0 18px 30px rgb(var(--app-overlay) / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.72); }
-.prompt-particle-deck__card[data-depth="3"] { pointer-events: none; }
-.prompt-particle-deck.is-exploring .prompt-particle-deck__card[data-active="true"] { border-color: rgb(var(--app-accent)); box-shadow: 0 19px 32px rgb(var(--app-accent) / 0.2), inset 0 1px 0 rgb(255 255 255 / 0.76); }
-.prompt-particle-deck__card:hover:not(:disabled) { border-color: rgb(var(--app-accent)); }
-.prompt-particle-deck__card:focus-visible { outline: 2px solid rgb(var(--app-focus) / 0.7); outline-offset: 3px; }
-.prompt-particle-deck__card:disabled { cursor: not-allowed; opacity: 0.55; }
-.prompt-particle-deck__label { position: relative; max-width: 22ch; font-size: 0.92rem; font-weight: 650; line-height: 1.35; text-wrap: balance; transform: translateZ(18px); }
-.prompt-particle-deck__steps { display: flex; justify-content: center; gap: 0.28rem; margin-top: 0.2rem; }
-.prompt-particle-deck__steps i { display: block; width: 0.27rem; height: 0.27rem; border-radius: 999px; background: rgb(var(--app-border-strong)); transition: transform var(--app-motion-fast) var(--app-ease-standard), background-color var(--app-motion-fast) var(--app-ease-standard); }
-.prompt-particle-deck__steps i[data-active="true"] { background: rgb(var(--app-accent)); transform: scale(1.5); }
+/* Contextual suggestions keep the original sense of movement without hiding
+   alternatives in a carousel. Focus progresses across the whole card group. */
+.prompt-particle-deck {
+  width: min(100%, 60rem);
+  outline: none;
+}
+
+.prompt-particle-deck__stage {
+  position: relative;
+  display: grid;
+  height: 13.2rem;
+  place-items: center;
+  isolation: isolate;
+  perspective: 1650px;
+  perspective-origin: 50% 44%;
+  overflow: hidden;
+  cursor: default;
+  touch-action: pan-y;
+}
+
+.prompt-particle-deck__stage::before {
+  position: absolute;
+  inset: 1.7rem 6%;
+  z-index: -2;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgb(var(--app-accent-soft) / 0.72), rgb(var(--app-info-soft) / 0.16) 45%, transparent 76%);
+  content: "";
+  filter: blur(7px);
+  opacity: 0.48;
+}
+
+.prompt-particle-deck__particles {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.prompt-particle-deck__particles i {
+  position: absolute;
+  display: block;
+  border-radius: 999px;
+  background: rgb(var(--app-accent));
+  box-shadow: 0 0 8px rgb(var(--app-accent) / 0.42);
+  animation: prompt-deck-particle 2.8s var(--app-ease-standard) infinite;
+}
+
+.prompt-particle-deck__particles i:nth-child(3n) { background: rgb(var(--app-info)); }
+.prompt-particle-deck__particles i:nth-child(4n) { background: rgb(var(--app-success)); }
+
+.prompt-particle-deck__ring {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+.prompt-particle-deck__card {
+  position: absolute;
+  top: calc(50% - 2.7rem);
+  left: calc(50% - 5.3rem);
+  display: grid;
+  width: clamp(9.6rem, 12.5vw, 10.6rem);
+  min-height: 5.4rem;
+  place-items: center;
+  padding: 0.86rem 1rem;
+  border: 1px solid rgb(var(--app-border));
+  border-radius: 0.8rem;
+  background: rgb(var(--app-surface-raised));
+  color: rgb(var(--app-text));
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 220ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 150ms ease-out, background-color 150ms ease-out;
+}
+
+.prompt-particle-deck__card::before {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(138deg, rgb(255 255 255 / 0.46), transparent 43%, rgb(var(--app-accent) / 0.07));
+  content: "";
+  pointer-events: none;
+}
+
+.prompt-particle-deck__card[data-active="true"] {
+  border-color: rgb(var(--app-accent));
+  background: color-mix(in srgb, rgb(var(--app-surface-raised)) 35%, rgb(var(--app-accent-soft)));
+}
+
+.prompt-particle-deck__card:hover:not(:disabled) {
+  border-color: rgb(var(--app-accent));
+  background: color-mix(in srgb, rgb(var(--app-surface-raised)) 58%, rgb(var(--app-accent-soft)));
+}
+
+.prompt-particle-deck__card:active:not(:disabled) {
+  filter: brightness(0.98);
+}
+
+.prompt-particle-deck__card:focus-visible {
+  outline: 2px solid rgb(var(--app-focus) / 0.72);
+  outline-offset: 3px;
+}
+
+.prompt-particle-deck__card:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.prompt-particle-deck__label {
+  position: relative;
+  min-width: 0;
+  max-width: 21ch;
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  transform: translateZ(18px);
+}
+
+.prompt-particle-deck__steps {
+  display: flex;
+  justify-content: center;
+  gap: 0.3rem;
+  margin-top: 0.625rem;
+}
+
+.prompt-particle-deck__steps i {
+  display: block;
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 999px;
+  background: rgb(var(--app-border-strong));
+  transition: transform var(--app-motion-fast) var(--app-ease-standard), background-color var(--app-motion-fast) var(--app-ease-standard);
+}
+
+.prompt-particle-deck__steps i[data-active="true"] {
+  background: rgb(var(--app-accent));
+  transform: scale(1.35);
+}
+
+@keyframes prompt-deck-particle {
+  0%, 100% { opacity: 0.25; transform: translate3d(0, 0, 0) scale(0.84); }
+  50% { opacity: 0.86; transform: translate3d(10px, -6px, 0) scale(1.16); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prompt-particle-deck__particles i {
+    animation: none;
+  }
+
+  .prompt-particle-deck__card {
+    transition: none;
+  }
+
+}
 
 @media (max-width: 700px) {
   .prompt-particle-deck { width: min(100%, 32rem); }

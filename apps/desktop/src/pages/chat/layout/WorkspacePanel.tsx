@@ -59,8 +59,8 @@ export function WorkspacePanel({
   onAction,
 }: WorkspacePanelProps) {
   return (
-    <div className="flex h-full w-full min-w-0 flex-col bg-transparent px-3 py-6">
-      <div className="relative min-w-0 rounded-2xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4 text-[rgb(var(--app-text))] shadow-lg">
+    <div className="flex h-full w-full min-w-0 flex-col overflow-y-auto overscroll-contain bg-transparent px-3 py-4">
+      <div className="relative min-w-0 rounded-xl border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4 text-[rgb(var(--app-text))] shadow-sm">
         <WorkspaceEnvironmentCard
           repoPath={repoPath}
           setRepoPath={setRepoPath}

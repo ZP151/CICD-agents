@@ -33,7 +33,7 @@ describe("PendingActionCard", () => {
       />,
     );
 
-    expect(html).toContain("Approval required");
+    expect(html).toContain("Review before running");
     expect(html).toContain("MEDIUM risk");
     expect(html).toContain("Stage selected files for commit");
     expect(html).toContain("git_add");
@@ -41,12 +41,14 @@ describe("PendingActionCard", () => {
     expect(html).toContain("Nothing runs until you approve.");
     expect(html).toContain("Command to execute");
     expect(html).not.toContain("Continue to commit after staging.");
-    expect(html).toContain("Change request");
+    expect(html).toContain("Request changes");
     expect(html).toContain("Tell MergePilot what to do differently...");
     expect(html).toContain("Approve and run");
     expect(html).toContain("Skip action");
     expect(html).toContain('data-testid="pending-action-card"');
     expect(html).toContain('data-risk-level="medium"');
+    expect(html).toContain('data-approval-style="compact"');
+    expect(html).not.toContain("shadow-[0_3px_8px");
     expect(html).toContain("git add --dry-run --");
     expect(html).toContain("apps/desktop/src/pages/Chat.tsx");
     expect(html).toContain("focus-visible:ring-[rgb(var(--app-focus))]/45");

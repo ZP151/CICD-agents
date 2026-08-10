@@ -48,4 +48,13 @@ describe("ProjectLinkContextHint", () => {
       "Connection needs setup · feature/review-flow -> main",
     );
   });
+
+  it("labels an unconfigured PR target instead of implying main", () => {
+    const unconfigured = { ...projectLink, defaultBranch: "", targetBranch: "" };
+
+    expect(projectLinkContextText(unconfigured)).toBe(
+      "TeBS-ClaimBot / ClaimBot_API · target: not set",
+    );
+    expect(projectLinkContextTitle(unconfigured)).toContain("PR target: not set");
+  });
 });

@@ -20,6 +20,11 @@ import {
   workspaceActionToolCandidates,
 } from "./workspaceActionTools.js";
 import { workspaceActionToDirectWorkflow } from "./workspaceActionWorkflow.js";
+import {
+  mergeWorkspaceContextSnapshot,
+  workspaceContextSnapshotFromResult,
+  type WorkspaceContextSnapshot,
+} from "./workspaceContextSnapshot.js";
 
 export interface UseWorkspaceActionRuntimeArgs {
   activeProjectLinkId: string | null;
@@ -37,6 +42,8 @@ export interface UseWorkspaceActionRuntimeArgs {
   setSessionId: Dispatch<SetStateAction<string | null>>;
   setStatusText: Dispatch<SetStateAction<string | null>>;
   setWorkflowState: Dispatch<SetStateAction<WorkflowEventState | null>>;
+  setWorkspaceContext: Dispatch<SetStateAction<WorkspaceContextSnapshot | null>>;
+  preparePullRequest: (action: Extract<WorkspaceAction, { type: "create_pr" }>) => void;
 }
 
 export interface WorkspaceActionRuntime {
@@ -85,6 +92,11 @@ export function useWorkspaceActionRuntime(args: UseWorkspaceActionRuntimeArgs): 
 
     if (!args.repoPath.trim()) return;
 
+    if (action.type === "create_pr") {
+      args.preparePullRequest(action);
+      return;
+    }
+
     const directWorkflow = workspaceActionToDirectWorkflow(action);
     args.setBusy(true);
     args.setStatusText("Inspecting workspace");
@@ -93,8 +105,16 @@ export function useWorkspaceActionRuntime(args: UseWorkspaceActionRuntimeArgs): 
         sessionId: args.sessionId,
         ...directWorkflow.input,
       });
-      if (result.sessionId) args.setSessionId(result.sessionId);
+      args.setWorkspaceContext((current) => mergeWorkspaceContextSnapshot(
+        current,
+        workspaceContextSnapshotFromResult(result),
+      ));
+      // Context probes belong to the workspace, not the conversation. Only a
+      // pending approval needs a backing session for its confirm/decline step.
+      if (result.workflowState?.pendingApproval && result.sessionId) args.setSessionId(result.sessionId);
       args.setWorkflowState(workflowStateWithActionSummary(result.workflowState ?? null, result.summary));
+
+      if (isContextOnlyResult(action, result.workflowState?.pendingApproval)) return;
 
       const workflowArtifacts = workflowActionArtifactsFromResult(result.artifacts);
       const resultBubbleMeta: AssistantBubbleMeta | undefined = workflowArtifacts.length
@@ -172,12 +192,23 @@ export function useWorkspaceActionRuntime(args: UseWorkspaceActionRuntimeArgs): 
     args.setSessionId,
     args.setStatusText,
     args.setWorkflowState,
+    args.setWorkspaceContext,
+    args.preparePullRequest,
     args.showApprovalRequest,
     args.statusText,
     args.workflowState,
   ]);
 
   return useMemo(() => ({ runWorkspaceAction }), [runWorkspaceAction]);
+}
+
+
+export function isContextOnlyResult(
+  action: WorkspaceAction,
+  pendingApproval: ApprovalRequest | undefined,
+): boolean {
+  if (pendingApproval) return false;
+  return action.type === "refresh_branch" || action.type === "checkout_branch";
 }
 
 function isGitRecoveryWorkspaceAction(type: WorkspaceAction["type"]): boolean {

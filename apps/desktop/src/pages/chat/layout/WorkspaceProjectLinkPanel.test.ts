@@ -57,10 +57,34 @@ describe("WorkspaceProjectLinkPanel layout", () => {
     );
 
     expect(html).toContain('aria-label="Workspace Project Link"');
+    expect(html).toContain("Manage Project Links");
+    expect(html).toContain('href="#/project-links"');
     expect(html).toContain('aria-label="Check pull request policy evaluations"');
     expect(html).toContain('aria-label="Prepare approval before triggering the configured Azure DevOps pipeline"');
     expect(html).toContain("focus-visible:ring-2");
     expect(html).not.toContain("Inspect the latest active pull request insight");
     expect(html).not.toContain("Inspect Azure DevOps pipeline readiness for this project link");
+  });
+
+  it("locks Project Link selection while an approval is pending", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkspaceProjectLinkPanel, {
+        repoName: "claimbot",
+        repoPath: projectLink.repoPath,
+        projectLinks: [projectLink],
+        activeProjectLink: projectLink,
+        activeProjectLinkId: projectLink.id,
+        adoReady: true,
+        branchName: "main",
+        busy: false,
+        projectLinkSelectionLocked: true,
+        onProjectLinkSelect: () => undefined,
+        runAction: () => undefined,
+      }),
+    );
+
+    expect(html).toContain('aria-label="Workspace Project Link"');
+    expect(html).toContain("disabled");
+    expect(html).toContain("Finish the current approval before switching Project Link.");
   });
 });

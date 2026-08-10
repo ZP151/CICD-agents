@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { taskViewerProjectLinksCacheKey } from "./taskViewerActivityLoaders.js";
+import {
+  shouldFetchRemotePrInsightActivity,
+  taskViewerProjectLinksCacheKey,
+} from "./taskViewerActivityLoaders.js";
 
 describe("taskViewerActivityLoaders", () => {
   it("keys Activity Project Link data by mapping fields, not only id", () => {
@@ -24,5 +27,23 @@ describe("taskViewerActivityLoaders", () => {
     expect(taskViewerProjectLinksCacheKey([base, { ...base, id: "pl-2" }])).toBe(
       taskViewerProjectLinksCacheKey([{ ...base, id: "pl-2" }, base]),
     );
+  });
+
+  it("keeps temporary-link evidence local instead of fanning out remote requests", () => {
+    expect(shouldFetchRemotePrInsightActivity({
+      name: "mp-live-pr-review-20260810",
+      repoPath: "C:\\Users\\me\\AppData\\Local\\Temp\\MergePilot-run",
+      adoRepoName: "ClaimBot_API",
+    })).toBe(false);
+    expect(shouldFetchRemotePrInsightActivity({
+      name: "ClaimBot_API link",
+      repoPath: "C:\\repos\\ClaimBot_API",
+      adoRepoName: "ClaimBot_API",
+    })).toBe(true);
+    expect(shouldFetchRemotePrInsightActivity({
+      name: "Local-only link",
+      repoPath: "C:\\repos\\local-only",
+      adoRepoName: "",
+    })).toBe(false);
   });
 });

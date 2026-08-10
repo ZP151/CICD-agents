@@ -23,6 +23,9 @@ export function ProjectLinkWorkspaceSection({
   onReloadBranches,
 }: ProjectLinkWorkspaceSectionProps): JSX.Element {
   const repoPathId = useId();
+  const branchOptionsId = useId();
+  const defaultBranchId = useId();
+  const targetBranchId = useId();
 
   return (
     <section className="space-y-3.5 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4">
@@ -87,6 +90,60 @@ export function ProjectLinkWorkspaceSection({
           </p>
         )}
       </div>
+      <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+        <BranchPolicyField
+          id={defaultBranchId}
+          listId={branchOptionsId}
+          label="Default branch"
+          hint="Used for local comparison when no PR target is configured."
+          value={form.defaultBranch}
+          onChange={set("defaultBranch")}
+        />
+        <BranchPolicyField
+          id={targetBranchId}
+          listId={branchOptionsId}
+          label="PR target branch"
+          hint="Required before MergePilot can propose creating a pull request."
+          value={form.targetBranch}
+          onChange={set("targetBranch")}
+        />
+      </div>
+      <datalist id={branchOptionsId}>
+        {branches.map((branch) => <option key={branch} value={branch} />)}
+      </datalist>
     </section>
+  );
+}
+
+function BranchPolicyField({
+  id,
+  listId,
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  id: string;
+  listId: string;
+  label: string;
+  hint: string;
+  value: string;
+  onChange: (value: string) => void;
+}): JSX.Element {
+  return (
+    <div className="min-w-0">
+      <label htmlFor={id} className="text-xs font-medium text-[rgb(var(--app-text-muted))]">
+        {label}
+      </label>
+      <WorkbenchTextInput
+        id={id}
+        list={listId}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Select or type a branch"
+        className="mt-1 text-sm"
+      />
+      <p className="mt-1 text-[10px] leading-snug text-[rgb(var(--app-text-subtle))]">{hint}</p>
+    </div>
   );
 }

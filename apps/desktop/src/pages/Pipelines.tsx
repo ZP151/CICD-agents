@@ -15,6 +15,7 @@ import {
 import { PipelineRowCard } from "./pipelines/PipelineRowCard.js";
 import { DeliveryRunInspector } from "./pipelines/DeliveryRunInspector.js";
 import { PipelineStatusFilters } from "./pipelines/PipelineStatusFilters.js";
+import { ProjectLinkPicker } from "./chat/layout/ProjectLinkPicker.js";
 import { runTone } from "./pipelines/pipelineModel.js";
 import type { PipelineInspectState, PipelineRow } from "./pipelines/pipelineTypes.js";
 import { rowKey, usePipelinesRuntime } from "./pipelines/usePipelinesRuntime.js";
@@ -56,28 +57,31 @@ export default function Pipelines(): JSX.Element {
         description="Pipeline discovery, recent run state, controlled triggers, and AI-assisted run analysis."
         descriptionClassName={pipelineHeaderDescriptionClass()}
         actions={<div className={pipelineHeaderControlsClass()}>
-          <WorkbenchSelect
-            aria-label="Pipelines project filter"
-            className="text-sm"
-            value={runtime.projectFilter}
-            disabled={projectLinksLoading || runtime.projectOptions.length === 0}
-            onChange={(event) => runtime.setProjectFilter(event.target.value)}
-          >
-            {runtime.projectOptions.length === 0 && (
+          {runtime.projectOptions.length > 0 ? (
+            <div className="min-w-[min(16rem,100%)]">
+              <ProjectLinkPicker
+                projectLinks={runtime.projectOptions}
+                value={runtime.projectFilter || null}
+                onChange={runtime.selectProjectLink}
+                allowEmpty={false}
+              />
+            </div>
+          ) : (
+            <WorkbenchSelect
+              aria-label="Pipelines Project Link filter"
+              className="text-sm"
+              value=""
+              disabled
+              onChange={() => undefined}
+            >
               <option value="">
                 {pipelineProjectFilterFallbackLabel({
                   projectLinksLoading,
                   hasProjectLinks: projectLinks.length > 0,
                 })}
               </option>
-            )}
-            {runtime.projectOptions.length > 0 && <option value="">All projects</option>}
-            {runtime.projectOptions.map((project) => (
-              <option key={project} value={project}>
-                {project}
-              </option>
-            ))}
-          </WorkbenchSelect>
+            </WorkbenchSelect>
+          )}
           <ActionButton
             onClick={() => {
               void runtime.loadConnections();
@@ -484,12 +488,15 @@ export function PipelineDetailPanel({
 
       {isApproval && (
         <div className="mb-4">
-          <InlineNotice tone="info" title="Approval required">
+          <div data-approval-style="compact">
+          <InlineNotice tone="info" title="Review before running">
+            <span className="sr-only">Approval required</span>
             <p>{state.result.summary}. Review and confirm the proposal in Chat.</p>
             <ActionLink href="#/chat" tone="secondary" className="mt-2 w-fit">
               Open Chat approval
             </ActionLink>
           </InlineNotice>
+          </div>
         </div>
       )}
 

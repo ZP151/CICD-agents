@@ -15,6 +15,7 @@ import { useChatScrollFollow } from "./useChatScrollFollow.js";
 import { useChatSuggestionRuntime } from "./useChatSuggestionRuntime.js";
 import { useChatTurnRuntime } from "./useChatTurnRuntime.js";
 import { useWorkspaceActionRuntime } from "./useWorkspaceActionRuntime.js";
+import { pullRequestPlanningPrompt } from "./workspaceActionWorkflow.js";
 import { HISTORY_PAGE_SIZE } from "./layout/HistorySidebar.js";
 import type { ChatShellProps } from "./layout/ChatShell.js";
 import { useResizableChatPanels } from "./layout/useResizableChatPanels.js";
@@ -82,6 +83,7 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
     queuedSuggestionLabel: pageState.queuedSuggestion?.label,
     statusText: pageState.statusText,
     workflowState: pageState.workflowState,
+    workspaceContext: pageState.workspaceContext,
   });
 
   const turnRuntime = useChatTurnRuntime({
@@ -97,6 +99,7 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
     forceNextScrollToBottom: scrollRuntime.forceNextScrollToBottom,
     history: historyRuntime.history,
     input: pageState.input,
+    pendingAutoSubmitMessage: pageState.pendingAutoSubmitMessage,
     locationSearch: location.search,
     markIncomingContentScrollIntent: scrollRuntime.markIncomingContentScrollIntent,
     mini,
@@ -114,6 +117,7 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
     setHistory: historyRuntime.setHistory,
     setHistoryOpen: panelRuntime.setHistoryOpen,
     setInput: pageState.setInput,
+    setPendingAutoSubmitMessage: pageState.setPendingAutoSubmitMessage,
     setRepoPath: pageState.setRepoPath,
     setSessionId: pageState.setSessionId,
     setStatusText: pageState.setStatusText,
@@ -137,6 +141,8 @@ export function useChatPageRuntime(mini: boolean): ChatShellProps {
     setSessionId: pageState.setSessionId,
     setStatusText: pageState.setStatusText,
     setWorkflowState: pageState.setWorkflowState,
+    setWorkspaceContext: pageState.setWorkspaceContext,
+    preparePullRequest: (action) => turnRuntime.send({ message: pullRequestPlanningPrompt(action) }),
   });
 
   const suggestionRuntime = useChatSuggestionRuntime({

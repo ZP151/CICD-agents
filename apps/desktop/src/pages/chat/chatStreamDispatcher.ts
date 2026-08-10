@@ -149,7 +149,21 @@ function dispatchCanonicalTurnTimelineEvent(
     return;
   }
   if (ev.type === "turn.workflow.updated") {
-    adapter.setWorkflowState((ev.workflow ?? ev.state ?? null) as WorkflowStateUpdate);
+    const workflow = (ev.workflow ?? ev.state ?? null) as WorkflowStateUpdate;
+    adapter.setWorkflowState(workflow);
+    // The server persists pending approval in workflow state before it emits
+    // the dedicated Timeline event. Treat that state as authoritative so a
+    // reconnect or a dropped trailing SSE frame cannot leave the composer
+    // disabled without a visible approve/cancel card.
+    const pendingApproval = workflow
+      && typeof workflow === "object"
+      && "pendingApproval" in workflow
+      ? workflow.pendingApproval
+      : undefined;
+    if (pendingApproval) {
+      adapter.showApprovalRequest(pendingApproval, ev.turnId);
+      pauseForApproval(adapter);
+    }
     return;
   }
   if (ev.type === "turn.final.delta") {

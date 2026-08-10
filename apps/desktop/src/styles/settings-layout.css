@@ -39,9 +39,98 @@
   text-transform: uppercase;
 }
 
-.settings-grid {
+.settings-shell {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 34rem), 1fr));
+  grid-template-columns: 10.5rem minmax(0, 1fr);
   align-items: start;
-  gap: 1.25rem;
+  gap: clamp(1.5rem, 3vw, 3.5rem);
+}
+
+.settings-section-nav {
+  position: sticky;
+  top: 1rem;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem 0.25rem 0;
+  border-right: 1px solid rgb(var(--app-border) / 0.7);
+}
+
+.settings-section-nav-button {
+  min-height: 2rem;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  padding: 0.375rem 0.625rem;
+  color: rgb(var(--app-text-muted));
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--app-motion-fast), color var(--app-motion-fast);
+}
+
+.settings-section-nav-button:hover {
+  background: rgb(var(--app-control-hover));
+  color: rgb(var(--app-text));
+}
+
+.settings-section-nav-button[data-active="true"] {
+  background: rgb(var(--app-accent-soft));
+  color: rgb(var(--app-text));
+  font-weight: 600;
+}
+
+.settings-section-nav-button:focus-visible {
+  outline: 2px solid rgb(var(--app-focus) / 0.45);
+  outline-offset: 2px;
+}
+
+.settings-content,
+.settings-group {
+  display: grid;
+  min-width: 0;
+}
+
+.settings-content {
+  width: min(100%, 68rem);
+  gap: 2.75rem;
+}
+
+.settings-group {
+  gap: 1.5rem;
+  scroll-margin-top: 1rem;
+}
+
+@media (max-width: 900px) {
+  .settings-shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+
+  .settings-section-nav {
+    position: static;
+    display: flex;
+    gap: 0.375rem;
+    overflow-x: auto;
+    padding: 0 0 0.75rem;
+    border-right: 0;
+    border-bottom: 1px solid rgb(var(--app-border) / 0.7);
+    scrollbar-width: thin;
+  }
+
+  .settings-section-nav-button {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 2.25rem;
+  }
+
+  .settings-content {
+    width: 100%;
+    gap: 2rem;
+  }
 }

@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { ImageEditUnavailableError, cropImageFromDataUrl } from "./imageEditCanvas.js";
 
 describe("cropImageFromDataUrl (MP-013/RA-063)", () => {
-  it("fails typed when canvas is unavailable instead of crashing the composer", () => {
+  it("fails typed when canvas is unavailable instead of crashing the composer", async () => {
     // Node has no canvas; the util must fail recoverably so the composer
     // keeps the original attachment and shows an error.
-    void expect(
+    await expect(
       cropImageFromDataUrl("data:image/png;base64,abc", { x: 10, y: 10 }, 0, 1),
     ).rejects.toBeInstanceOf(ImageEditUnavailableError);
   });

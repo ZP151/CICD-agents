@@ -5,6 +5,7 @@ import type {
 import type { SuggestionReply } from "../../../components/conversation/SuggestionReplyBar.js";
 import { ProjectLinkSetupCard } from "../projectLinkOnboarding/ProjectLinkSetupCard.js";
 import { PromptParticleDeck } from "./PromptParticleDeck.js";
+import { ProjectLinkPicker } from "./ProjectLinkPicker.js";
 
 interface ChatEmptyStateProps {
   repoPath: string;
@@ -25,18 +26,17 @@ export function ChatEmptyState({
   selectProjectLink,
   onWelcomeSuggestion,
 }: ChatEmptyStateProps) {
-  const compactReadyWelcome =
-    !projectLinksLoading && availableProjectLinks.length > 0 && Boolean(activeProjectLinkId);
+  const activeProjectLink = availableProjectLinks.find((projectLink) => projectLink.id === activeProjectLinkId) ?? null;
+  const compactReadyWelcome = !projectLinksLoading && Boolean(activeProjectLink);
   return (
     <div className={chatEmptyStateShellClass(compactReadyWelcome)}>
       {projectLinksLoading && availableProjectLinks.length === 0 ? (
-        <ProjectLinkLoadingHomeState onWelcomeSuggestion={onWelcomeSuggestion} />
+        <ProjectLinkLoadingHomeState />
       ) : availableProjectLinks.length === 0 ? (
         <ProjectLinkFirstRunState
           repoPath={repoPath}
           createProjectLink={createProjectLink}
           selectProjectLink={selectProjectLink}
-          onWelcomeSuggestion={onWelcomeSuggestion}
         />
       ) : !activeProjectLinkId ? (
         <ProjectLinkChooser
@@ -46,7 +46,7 @@ export function ChatEmptyState({
           selectProjectLink={selectProjectLink}
         />
       ) : (
-        <WelcomePanel onPick={onWelcomeSuggestion} />
+        <WelcomePanel projectLink={activeProjectLink} onPick={onWelcomeSuggestion} />
       )}
     </div>
   );
@@ -63,16 +63,14 @@ function ProjectLinkFirstRunState({
   repoPath,
   createProjectLink,
   selectProjectLink,
-  onWelcomeSuggestion,
 }: {
   repoPath: string;
   createProjectLink: (data: ProjectLinkInput) => Promise<ProjectLink>;
   selectProjectLink: (projectLink: ProjectLink) => void;
-  onWelcomeSuggestion: (suggestion: SuggestionReply) => void;
 }) {
   return (
     <div className="flex w-full max-w-3xl flex-col items-center gap-6">
-      <WelcomePanel onPick={onWelcomeSuggestion} disabled />
+      <WelcomePanel projectLink={null} onPick={() => undefined} />
       <details className="w-full max-w-xl overflow-hidden rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] text-left shadow-sm">
         <summary
           aria-label="Connect a Project Link"
@@ -101,14 +99,10 @@ function ProjectLinkFirstRunState({
   );
 }
 
-function ProjectLinkLoadingHomeState({
-  onWelcomeSuggestion,
-}: {
-  onWelcomeSuggestion: (suggestion: SuggestionReply) => void;
-}) {
+function ProjectLinkLoadingHomeState() {
   return (
     <div className="flex w-full max-w-3xl flex-col items-center gap-3">
-      <WelcomePanel onPick={onWelcomeSuggestion} disabled />
+      <WelcomePanel projectLink={null} onPick={() => undefined} />
       <p
         className="text-xs text-[rgb(var(--app-text-subtle))]"
         role="status"
@@ -151,77 +145,91 @@ export function ProjectLinkLoadingState(): JSX.Element {
  * The planner receives the same text once the user sends it and then exposes
  * any commands as an ordered execution group.
  */
-export const welcomeSuggestions: SuggestionReply[] = [
-  {
-    id: "welcome-understand",
-    label: "Understand this project",
-    message: "Understand this project",
-    action: { kind: "fill_composer" },
-  },
-  {
-    id: "welcome-review",
-    label: "Review my changes",
-    message: "Review my changes",
-    action: { kind: "fill_composer" },
-  },
-  {
-    id: "welcome-branch",
-    label: "What's on this branch?",
-    message: "What's on this branch?",
-    action: { kind: "fill_composer" },
-  },
-  {
-    id: "welcome-pr-insight",
-    label: "Analyze PR insight for this repo",
-    message: "Analyze PR insight for this repo",
-    action: { kind: "fill_composer" },
-  },
-  {
-    id: "welcome-pipelines",
-    label: "Open Pipelines workspace",
-    message: "Open Pipelines workspace",
-    action: { kind: "fill_composer" },
-  },
-  {
-    id: "welcome-stage-commit",
-    label: "Stage and commit",
-    message: "Stage and commit",
-    action: { kind: "fill_composer" },
-  },
-  {
-    id: "welcome-pr-plan",
-    label: "Push and create PR",
-    message: "Push and create PR",
-    action: { kind: "fill_composer" },
-  },
-];
+export function welcomeSuggestionsForProjectLink(projectLink: ProjectLink | null): SuggestionReply[] {
+  if (!projectLink) return [];
+  const repository = projectLink.adoRepoName.trim()
+    || projectLink.repoPath.replace(/\\/g, "/").split("/").filter(Boolean).pop()
+    || projectLink.name;
+  const targetBranch = projectLink.targetBranch.trim() || projectLink.defaultBranch.trim() || "the default branch";
+  const hasAdoProject = Boolean(projectLink.adoOrgUrl.trim() && projectLink.adoProject.trim() && projectLink.adoRepoName.trim());
+
+  return [
+    {
+      id: "welcome-contextual-changes",
+      label: `Review ${repository} changes`,
+      message: `Review the current local changes in ${repository} and explain their impact before proposing any write action.`,
+      action: { kind: "fill_composer" },
+    },
+    {
+      id: "welcome-contextual-branch",
+      label: `Check ${targetBranch} readiness`,
+      message: `Compare the current branch with ${targetBranch}, including local status, tracking, and remote divergence.`,
+      action: { kind: "fill_composer" },
+    },
+    {
+      id: "welcome-contextual-entry-points",
+      label: `Map ${repository} entry points`,
+      message: `Map the main entry points and request flow in ${repository}, then explain where a safe change should start.`,
+      action: { kind: "fill_composer" },
+    },
+    {
+      id: "welcome-contextual-tests",
+      label: `Inspect ${repository} test surface`,
+      message: `Inspect the available test commands and relevant test coverage in ${repository}; summarize the fastest trustworthy validation path.`,
+      action: { kind: "fill_composer" },
+    },
+    {
+      id: "welcome-contextual-next-step",
+      label: `Plan ${repository} delivery step`,
+      message: `Review the current local delivery context for ${repository} and propose the smallest useful next step, without making changes.`,
+      action: { kind: "fill_composer" },
+    },
+    ...(hasAdoProject ? [{
+      id: "welcome-contextual-prs",
+      label: `Review ${projectLink.adoProject} pull requests`,
+      message: `Review active pull requests in ${projectLink.adoProject} for ${repository} and summarize the next review decision.`,
+      action: { kind: "fill_composer" as const },
+    }, {
+      id: "welcome-contextual-work",
+      label: `Review ${projectLink.adoProject} work`,
+      message: `Review the assigned Azure Boards work for ${projectLink.adoProject} and connect each item to the current ${repository} delivery context.`,
+      action: { kind: "fill_composer" as const },
+    }, {
+      id: "welcome-contextual-delivery",
+      label: `Check ${projectLink.adoProject} delivery`,
+      message: `Inspect the latest delivery signals for ${projectLink.adoProject} and ${repository}; identify any release blocker before proposing action.`,
+      action: { kind: "fill_composer" as const },
+    }] : []),
+  ];
+}
 
 function WelcomePanel({
+  projectLink,
   onPick,
-  disabled = false,
 }: {
+  projectLink: ProjectLink | null;
   onPick: (suggestion: SuggestionReply) => void;
-  disabled?: boolean;
 }) {
+  const suggestions = welcomeSuggestionsForProjectLink(projectLink);
   return (
     <section
-      className="flex w-full max-w-[58rem] flex-col items-center gap-5 rounded-lg border border-transparent px-2 text-center"
+      className="flex w-full max-w-[58rem] flex-col items-center px-2 text-center"
       aria-label="New conversation welcome"
     >
-      <div className="flex min-w-0 flex-col items-center gap-3 text-center">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgb(var(--app-surface-raised))] text-[rgb(var(--app-text-muted))] ring-1 ring-[rgb(var(--app-border))]">
-          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M7.5 18.25 4 20l.75-3.25A7.25 7.25 0 0 1 3 12c0-4.14 4.03-7.5 9-7.5s9 3.36 9 7.5-4.03 7.5-9 7.5a10.5 10.5 0 0 1-4.5-1.25Z" />
+      <div className="mb-4 flex max-w-xl flex-col items-center">
+        <span className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[rgb(var(--app-accent))]/30 bg-[rgb(var(--app-surface))] text-[rgb(var(--app-accent-readable))]" aria-hidden="true">
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h8M8 14h5m6.5-8.5A3.5 3.5 0 0 0 16 2H8a3.5 3.5 0 0 0-3.5 3.5v7A3.5 3.5 0 0 0 8 16h1.4l2.4 2.4a.85.85 0 0 0 1.2 0l2.4-2.4H16a3.5 3.5 0 0 0 3.5-3.5v-7Z" />
           </svg>
-        </div>
-        <div className="max-w-[42rem] space-y-1.5">
-          <h2 className="text-base font-semibold text-[rgb(var(--app-text))]">Start with a focused prompt</h2>
-          <p className="text-xs leading-relaxed text-[rgb(var(--app-text-muted))]">
-            Choose a starting point, then edit the prompt before MergePilot does any work.
-          </p>
-        </div>
+        </span>
+        <h2 className="text-base font-semibold text-[rgb(var(--app-text))]">Start with a focused prompt</h2>
+        <p className="mt-1.5 text-xs leading-5 text-[rgb(var(--app-text-muted))]">
+          {projectLink
+            ? `Suggestions use the selected ${projectLink.name} context. Edit the prompt before MergePilot does any work.`
+            : "Connect or select a Project Link, then describe the outcome you need."}
+        </p>
       </div>
-      <PromptParticleDeck suggestions={welcomeSuggestions} disabled={disabled} onPick={onPick} />
+      {suggestions.length > 0 && <PromptParticleDeck suggestions={suggestions} onPick={onPick} />}
     </section>
   );
 }
@@ -245,25 +253,15 @@ function ProjectLinkChooser({
         </svg>
         <p className="text-xs font-semibold text-[rgb(var(--app-text-muted))]">Choose a Project Link for this chat</p>
       </div>
-      <div className="flex flex-col gap-1.5">
-        {projectLinks.map((projectLink) => (
-          <button
-            key={projectLink.id}
-            onClick={() => selectProjectLink(projectLink)}
-            className="group flex items-center justify-between rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2.5 text-left transition hover:border-[rgb(var(--app-border-strong))] hover:bg-[rgb(var(--app-bg-muted))]"
-          >
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-[rgb(var(--app-text))]">{projectLink.name}</p>
-              {projectLink.repoPath && (
-                <p className="truncate font-mono text-xs text-[rgb(var(--app-text-subtle))]">{projectLink.repoPath}</p>
-              )}
-            </div>
-            <svg className="ml-2 h-3.5 w-3.5 shrink-0 text-[rgb(var(--app-text-subtle))] transition group-hover:text-[rgb(var(--app-text))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        ))}
-      </div>
+      <ProjectLinkPicker
+        projectLinks={projectLinks}
+        value={null}
+        allowEmpty={false}
+        onChange={(id) => {
+          const projectLink = projectLinks.find((candidate) => candidate.id === id);
+          if (projectLink) selectProjectLink(projectLink);
+        }}
+      />
       <details className="pt-0.5">
         <summary className="cursor-pointer text-xs text-[rgb(var(--app-text-muted))] transition hover:text-[rgb(var(--app-text))]">
           + New Project Link

@@ -176,6 +176,19 @@ function IconSettings() {
   );
 }
 
+function IconProjectLinks() {
+  return (
+    <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.8}
+        d="M10 13a5 5 0 007.1.1l2-2a5 5 0 00-7.1-7.1l-1.1 1.1M14 11a5 5 0 00-7.1-.1l-2 2a5 5 0 007.1 7.1l1.1-1.1"
+      />
+    </svg>
+  );
+}
+
 function IconPipeline() {
   return (
     <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -191,7 +204,7 @@ function IconPipeline() {
 
 /**
  * Target navigation (Cycle 00 product simplification). Navigation is
- * organized by user outcomes: Agent, Work, Changes, Delivery, Settings.
+ * organized by workspace tools: New chat, Work, Changes, Delivery, Settings.
  * Work stays disabled until Cycle 04 — no fake page is shipped. Pull
  * Requests → Changes and Pipelines → Delivery are temporary compatibility
  * routes until the new workspaces land.
@@ -202,9 +215,9 @@ type NavItem =
 
 const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
   {
-    label: "Outcomes",
+    label: "Workspace",
     items: [
-      { kind: "link", to: "/chat", match: "/chat", label: "Agent", Icon: IconChat },
+      { kind: "link", to: "/chat?new=1", match: "/chat", label: "New chat", Icon: IconChat },
       { kind: "link", to: "/work", match: "/work", label: "Work", Icon: IconWork },
       { kind: "link", to: "/pulls", match: "/pulls", label: "Changes", Icon: IconPR },
       { kind: "link", to: "/pipelines", match: "/pipelines", label: "Delivery", Icon: IconPipeline },
@@ -213,10 +226,15 @@ const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
   {
     label: "System",
     items: [
+      { kind: "link", to: "/project-links", match: "/project-links", label: "Project Links", Icon: IconProjectLinks },
       { kind: "link", to: "/settings", match: "/settings", label: "Settings", Icon: IconSettings },
     ],
   },
 ];
+
+export function primaryNavigationGroupLabel(): string {
+  return NAV_GROUPS[0]?.label ?? "";
+}
 
 export function MiniLayout() {
   return (

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { AuthUser, HealthStatus } from "../../api.js";
-import { AccountSettingsSection } from "./AccountSettingsSection.js";
+import { AccountSettingsSection, BuiltInCapabilitiesSettingsSection } from "./AccountSettingsSection.js";
 import type { AppSettings } from "./settingsTypes.js";
 
 const authUser: AuthUser = {
@@ -79,6 +79,7 @@ describe("AccountSettingsSection", () => {
     expect(html).toContain("Application client ID for Azure DevOps delegated access.");
     expect(html).toContain('value="tenant-1"');
     expect(html).toContain('value="client-1"');
+    expect(html).not.toContain("settings-advanced-meta");
   });
 
   it("summarizes managed storage in the compact identity strip", () => {
@@ -88,5 +89,20 @@ describe("AccountSettingsSection", () => {
     expect(html).not.toContain("Managed storage");
     expect(html).not.toContain("Project Link storage");
     expect(html).not.toContain("Session storage");
+  });
+
+  it("keeps delivery capabilities out of the account group", () => {
+    const html = renderAccountSection();
+
+    expect(html).not.toContain("Capabilities");
+    expect(html).not.toContain("Allow approved remote writes");
+  });
+
+  it("keeps delivery permissions in their own section", () => {
+    const html = renderToStaticMarkup(<BuiltInCapabilitiesSettingsSection authUser={authUser} />);
+
+    expect(html).toContain("Capabilities");
+    expect(html).toContain("Connected as Zhou Ping.");
+    expect(html).toContain("Allow approved remote writes");
   });
 });

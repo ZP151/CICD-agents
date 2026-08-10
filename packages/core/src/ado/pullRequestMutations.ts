@@ -50,7 +50,7 @@ export async function createAzurePullRequest(args: {
   project: string;
   repository: string;
   sourceBranch: string;
-  targetBranch?: string;
+  targetBranch: string;
   title: string;
   description?: string;
   draft?: boolean;
@@ -61,13 +61,13 @@ export async function createAzurePullRequest(args: {
   const project = args.project.trim();
   const repository = args.repository.trim();
   const source = args.sourceBranch.trim();
-  const target = (args.targetBranch ?? "main").trim();
+  const target = String(args.targetBranch ?? "").trim();
   const title = args.title.trim();
   if (!org || !project || !repository) {
     throw new ToolError("ADO organization, project, and repository are required to create a pull request.");
   }
-  if (!source || !title) {
-    throw new ToolError("create_pull_request requires 'source_branch' and 'title'.");
+  if (!source || !target || !title) {
+    throw new ToolError("create_pull_request requires 'source_branch', 'target_branch', and 'title'.");
   }
   const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
   const url =

@@ -79,7 +79,7 @@ export function projectLinkToIndexerProjectTemplate(
       organization: "",
       project: "",
       repository: "",
-      default_target_branch: projectLink.targetBranch ?? "main",
+      default_target_branch: projectLink.targetBranch ?? "",
       pipeline_id: null,
     },
     ignored_globs: projectLink.ignoredGlobs ?? [],

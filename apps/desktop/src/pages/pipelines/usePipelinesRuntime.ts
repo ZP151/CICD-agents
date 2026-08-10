@@ -23,6 +23,10 @@ import {
 } from "../../api.js";
 import { CHAT_HANDOFF_KEY } from "../../checkpointHandoff.js";
 import { buildPipelineChatHandoffDraft } from "../../checkpointHandoff.js";
+import {
+  resolveActiveProjectLinkId,
+  saveStoredActiveProjectLinkId,
+} from "../../projectLinks.js";
 import { saveApprovalHandoff } from "../chat/approvalHandoff.js";
 import { paginateItems } from "../../components/PaginationControls.js";
 import { extractPipelineRuns } from "./pipelineActions.js";
@@ -34,11 +38,9 @@ import {
 } from "./pipelineModel.js";
 import type { PipelineInspectState, PipelineRow, PipelineStatusFilter } from "./pipelineTypes.js";
 
-const ALL_PROJECTS = "";
-
 export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
   const navigate = useNavigate();
-  const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS);
+  const [projectFilter, setProjectFilter] = useState(() => resolveActiveProjectLinkId(projectLinks));
   const [filter, setFilter] = useState<PipelineStatusFilter>("all");
   const [inspectorRun, setInspectorRun] = useState<{
     buildId: number;
@@ -53,20 +55,23 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
   const [inspectState, setInspectState] = useState<Record<string, PipelineInspectState>>({});
   const queryClient = useQueryClient();
 
-  const projectOptions = useMemo(() => {
-    const names = projectLinks.map((projectLink) => projectLink.adoProject.trim()).filter(Boolean);
-    return [...new Set(names)].sort((a, b) => a.localeCompare(b));
-  }, [projectLinks]);
+  const projectOptions = useMemo(
+    () => [...projectLinks].sort((a, b) => a.name.localeCompare(b.name)),
+    [projectLinks],
+  );
 
   useEffect(() => {
-    if (projectFilter && !projectOptions.includes(projectFilter)) setProjectFilter(ALL_PROJECTS);
-  }, [projectFilter, projectOptions]);
+    const resolved = resolveActiveProjectLinkId(projectLinks, projectFilter);
+    if (resolved && resolved !== projectFilter) setProjectFilter(resolved);
+  }, [projectFilter, projectLinks]);
+
+  const selectProjectLink = useCallback((projectLinkId: string) => {
+    setProjectFilter(projectLinkId);
+    saveStoredActiveProjectLinkId(projectLinkId);
+  }, []);
 
   const selectedProjectLinks = useMemo(
-    () =>
-      projectFilter
-        ? projectLinks.filter((projectLink) => projectLink.adoProject === projectFilter)
-        : projectLinks,
+    () => projectLinks.filter((projectLink) => projectLink.id === projectFilter),
     [projectFilter, projectLinks],
   );
 
@@ -194,6 +199,13 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
   useEffect(() => {
     setPage(1);
   }, [filter, projectFilter]);
+
+  // A run inspector is scoped to its Project Link. Keeping it open while the
+  // selection changes would make evidence from the previous project look
+  // current, even though the list itself has already switched projects.
+  useEffect(() => {
+    setInspectorRun(null);
+  }, [projectFilter]);
 
   useEffect(() => {
     if (page > paginatedRows.pageCount) setPage(paginatedRows.pageCount);
@@ -358,6 +370,7 @@ export function usePipelinesRuntime(projectLinks: ProjectLink[]) {
   return {
     projectFilter,
     setProjectFilter,
+    selectProjectLink,
     projectOptions,
     filter,
     setFilter,

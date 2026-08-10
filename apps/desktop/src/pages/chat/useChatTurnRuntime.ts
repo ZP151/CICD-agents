@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   type Dispatch,
   type MutableRefObject,
   type RefObject,
@@ -39,6 +40,7 @@ interface UseChatTurnRuntimeArgs {
   forceNextScrollToBottom: () => void;
   history: ChatHistoryEntry[];
   input: string;
+  pendingAutoSubmitMessage: string | null;
   locationSearch: string;
   markIncomingContentScrollIntent: () => void;
   mini: boolean;
@@ -56,6 +58,7 @@ interface UseChatTurnRuntimeArgs {
   setHistory: Dispatch<SetStateAction<ChatHistoryEntry[]>>;
   setHistoryOpen: (open: boolean) => void;
   setInput: (value: string) => void;
+  setPendingAutoSubmitMessage: (value: string | null) => void;
   setRepoPath: (value: string) => void;
   setSessionId: Dispatch<SetStateAction<string | null>>;
   setStatusText: Dispatch<SetStateAction<string | null>>;
@@ -88,6 +91,7 @@ export function useChatTurnRuntime({
   forceNextScrollToBottom,
   history,
   input,
+  pendingAutoSubmitMessage,
   locationSearch,
   markIncomingContentScrollIntent,
   mini,
@@ -105,6 +109,7 @@ export function useChatTurnRuntime({
   setHistory,
   setHistoryOpen,
   setInput,
+  setPendingAutoSubmitMessage,
   setRepoPath,
   setSessionId,
   setStatusText,
@@ -158,6 +163,7 @@ export function useChatTurnRuntime({
     setCustomTitle,
     setHistoryOpen,
     setInput,
+    setPendingAutoSubmitMessage,
     setRepoPath,
     setSessionId,
     setStatusText,
@@ -222,6 +228,15 @@ export function useChatTurnRuntime({
 
     sendMessage(msg, { imageAttachments });
   }, [composerInputState.controlsDisabled, composerInputState.sendDisabled, input, sendMessage, setInput, textareaRef]);
+
+  // A source control labelled “Analyze” has already requested a read-only
+  // inspection. Wait until its Project Link context is committed, then send
+  // exactly one streamed turn instead of leaving a second Send click behind.
+  useEffect(() => {
+    if (!pendingAutoSubmitMessage || !activeProjectLinkId) return;
+    setPendingAutoSubmitMessage(null);
+    send({ message: pendingAutoSubmitMessage });
+  }, [activeProjectLinkId, pendingAutoSubmitMessage, send, setPendingAutoSubmitMessage]);
 
   return {
     addBubble,

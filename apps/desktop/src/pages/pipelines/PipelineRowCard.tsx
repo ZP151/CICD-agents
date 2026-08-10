@@ -34,6 +34,7 @@ export function PipelineRowCard({
 }: PipelineRowCardProps): JSX.Element {
   const tone = runTone(row.latestRun);
   const dateLabel = formatDate(row.latestRun?.finishedDate || row.latestRun?.createdDate);
+  const triggerDisabled = !canTriggerPipeline(state);
   const inspectedRuns =
     state.phase === "done" ||
     state.phase === "analyzing" ||
@@ -57,10 +58,13 @@ export function PipelineRowCard({
               {tone.label}
             </StatusBadge>
           </div>
-          <h3 className="truncate text-sm font-medium text-[rgb(var(--app-text))]">
+          <h3 className="break-words text-sm font-medium leading-5 text-[rgb(var(--app-text))]">
             {row.pipelineName || row.pipelineId}
           </h3>
-          <p className="mt-1 truncate font-mono text-xs text-[rgb(var(--app-text-muted))]">
+          <p
+            className="mt-1 break-words font-mono text-xs leading-5 text-[rgb(var(--app-text-muted))]"
+            title={`${row.project || "No project"} / ${row.repository || "No repository"} · ${row.projectLinkName} · ${row.source}`}
+          >
             {row.project || "No project"} / {row.repository || "No repository"}
             <span className="font-sans text-[rgb(var(--app-text-subtle))]"> · {row.projectLinkName} · {row.source}</span>
           </p>
@@ -69,8 +73,8 @@ export function PipelineRowCard({
       </div>
 
       <div className={pipelineFieldGridClass()} aria-label="Pipeline summary">
-        <span title={`Default branch: ${row.defaultBranch || "not set"}; Target branch: ${row.targetBranch || "main"}`}>
-          {row.defaultBranch || "not set"} → {row.targetBranch || "main"}
+        <span title={`Default branch: ${row.defaultBranch || "not set"}; Target branch: ${row.targetBranch || "not set"}`}>
+          {row.defaultBranch || "not set"} → {row.targetBranch || "not set"}
         </span>
         <span aria-hidden="true">·</span>
         <span title={`${row.relatedPullRequests.length} linked pull request${row.relatedPullRequests.length === 1 ? "" : "s"}`}>
@@ -152,12 +156,15 @@ export function PipelineRowCard({
       )}
 
       {state.phase === "approval" && (
-        <InlineNotice tone="info" title="Approval required">
+        <div data-approval-style="compact">
+        <InlineNotice tone="info" title="Review before running">
+          <span className="sr-only">Approval required</span>
           <p>{state.result.summary}. Review and confirm the proposal in Chat.</p>
           <ActionLink href="#/chat" tone="secondary" className="mt-2 w-fit">
             Open Chat approval
           </ActionLink>
         </InlineNotice>
+        </div>
       )}
 
       {state.phase === "target_failure" && (
@@ -217,10 +224,10 @@ export function PipelineRowCard({
         <ActionButton
           tone="primary"
           type="button"
-          disabled={state.phase === "loading" || state.phase === "analyzing"}
+          disabled={triggerDisabled}
           onClick={() => onTrigger(row)}
         >
-          Trigger pipeline
+          {state.phase === "approval" ? "Approval pending" : "Trigger pipeline"}
         </ActionButton>
       </div>
     </article>
@@ -229,6 +236,11 @@ export function PipelineRowCard({
 
 export function pipelineActionRowClass(): string {
   return "mt-3 flex flex-wrap justify-start gap-2 border-t border-[rgb(var(--app-border))] pt-3 sm:justify-end";
+}
+
+/** A pending proposal owns this mutation until it is approved, skipped, or resolved in Chat. */
+export function canTriggerPipeline(state: PipelineInspectState): boolean {
+  return state.phase !== "loading" && state.phase !== "analyzing" && state.phase !== "approval";
 }
 
 export function pipelineAnalysisPreviewClass(): string {

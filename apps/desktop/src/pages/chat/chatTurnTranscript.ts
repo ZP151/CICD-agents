@@ -163,6 +163,7 @@ function reduceTurnTranscript(transcript: TurnTranscript, event: ChatEventPayloa
     case "turn.tool_group.started":
       return {
         ...next,
+        waitingForModel: false,
         pendingGroups: {
           ...next.pendingGroups,
           [event.groupId ?? event.blockId ?? fallbackGroupId(event)]: { connector: event.connector },

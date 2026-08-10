@@ -115,7 +115,7 @@ export function inlineProjectLinkToChatContextProjectLink(
   return {
     buildCommand: projectLink.buildCommand,
     testCommand: projectLink.testCommand,
-    targetBranch: projectLink.targetBranch || projectLink.defaultBranch || "main",
+    targetBranch: projectLink.targetBranch || undefined,
   };
 }
 
@@ -131,13 +131,14 @@ async function currentBranchContext(
     });
     const currentBranch = branchResult.stdout.trim();
     if (!currentBranch || currentBranch === "HEAD") return "";
-    const targetBranch =
-      inlineProjectLink?.targetBranch || inlineProjectLink?.defaultBranch || "main";
+    const targetBranch = inlineProjectLink?.targetBranch;
     return [
       "\n## Current Git State",
       `- Current branch: ${currentBranch}`,
-      `- PR target branch: ${targetBranch}`,
-      currentBranch === targetBranch
+      targetBranch
+        ? `- PR target branch: ${targetBranch}`
+        : "- PR target branch: not configured; do not infer one before proposing a pull request.",
+      targetBranch && currentBranch === targetBranch
         ? "- WARNING: You are on the PR target branch. Create a feature branch before committing and pushing."
         : "",
     ]
