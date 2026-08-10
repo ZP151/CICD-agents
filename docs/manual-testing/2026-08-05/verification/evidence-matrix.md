@@ -512,21 +512,34 @@ avoid this.
   approval, no-data). These are implementation-slice evidence; no release
   candidate exists yet, and per goal item 6 no historical PASS satisfies a
   future SHA.
-- Real-ADO acceptance: read-only live test
-  `packages/core/test/liveAdoWorkInspector.test.ts` committed in this slice
-  and gated on `MERGEPILOT_E2E_LIVE_ADO=1`. **Blocked externally**: the az
-  session is signed in but the Azure DevOps resource token requires an
-  interactive re-auth (`az login --tenant 1f432b2e-9e7a-4aa0-ace2-53af62d309f6
-  --scope 499b84ac-1321-427f-aa17-267ca6975798/.default`). The daemon/desktop
-  vertical remains pending until the user completes that login; the test
-  asserts an assigned task's detail round-trips with per-PR id/status/url,
-  test-evidence sums, and the typed not-found mapping for id 999999999.
+- Real-ADO acceptance: **COMPLETE (2026-08-11)**. Read-only live test
+  `packages/core/test/liveAdoWorkInspector.test.ts` (gated on
+  `MERGEPILOT_E2E_LIVE_ADO=1`) passed 2/2 against real ADO
+  (tebssg/TeBS-ClaimBot): a real task's detail round-trips with typed
+  relation edges, per-PR id/status/url, per-build test evidence, and the
+  full comment thread; id 999999999 maps to the typed `work_item_not_found`.
+  Unblocked after the user completed the interactive
+  `az login --tenant 1f432b2e-… --scope 499b84ac-…/.default`.
+- The live acceptance exposed a real read-path defect (fixed in `82c2e09`):
+  `queryAzureWorkItems` trusted the WIQL `top` hint, but ADO returned all
+  394 tasks in the project for `top 5`; the follow-up `GET workitems?ids=`
+  then exceeded ADO's 200-id cap (VS403474) and 500'd — and the old code
+  silently converted that 500 into an empty list. The query now chunks ids
+  into 200-id detail reads (merged results) and a failed batch throws a
+  typed `ToolError` instead of hiding the failure. New unit coverage:
+  250-id chunking into 200+50 requests, failure surfacing, empty-query path.
+  Full regression at `82c2e09`: core **493 passed** (80 files), daemon
+  **352 passed** (54 files), desktop unchanged at 735 passed.
+- The live test also made its fixture robust: it prefers the signed-in
+  account's own tasks (`@me`), and falls back to the most recently changed
+  task in the project — the signed-in account has zero `@me` assignments in
+  this project, and the read path is identical either way.
 - Goal-conformance status for this slice: implementation, unit/daemon/desktop
-  tests, mocked E2E, evidence update, and independent commit+push on a named
-  non-main branch are complete; real-ADO acceptance is the one open item,
-  blocked on the interactive login, and the installed-desktop acceptance is
-  deferred to the release candidate (Slice 5/6) when provenance binds the
-  same SHA across MSI, installed binaries, and remote ADO artifacts.
+  tests, mocked E2E (4/4), real-ADO read acceptance (2/2 live), evidence
+  update, and independent commit+push on a named non-main branch are all
+  complete. Installed-desktop acceptance is deferred to the release candidate
+  (Slice 5/6) when provenance binds the same SHA across MSI, installed
+  binaries, and remote ADO artifacts.
 - Verification-run JSONs (`goal-verification.json`, `verification-state*.json`)
   intentionally not re-projected for this slice: per goal item 6 they are
   projected only by the Verification Run manifest at release time against the
