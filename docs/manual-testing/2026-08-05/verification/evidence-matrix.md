@@ -483,3 +483,51 @@ ports 1421/8788). Plain `pnpm tauri:dev` uses the production identifier
 `com.mergepilot.desktop` and port 8787 — colliding with an installed app via
 single-instance and the daemon port; the worktree script exists precisely to
 avoid this.
+
+## Continuation audit — 2026-08-11 (v1 goal Slice 1 — Work Inspector, HEAD `d6ba786`)
+
+- Slice 1 committed as `d6ba786` on `claudecode/mergepilot-v1` and pushed to
+  **both** non-main remotes (origin `d6ba7867be03ac212314046518ee3eac82dabbfe`,
+  ado same SHA, verified via `git ls-remote` after each push). Remote main
+  untouched at `618a52d` on both remotes.
+- Slice content: `readAzureWorkItemDetail` in core (typed relation
+  classification, PR/build artifact resolution, per-build test-evidence
+  aggregation, full comment thread); daemon `GET /delivery/work-items/:id`
+  with 400/404/422 mapping and typed `work_item_not_found`; desktop Work page
+  detail panel (Escape-closes, Retry-recoverable, keyboard-accessible) and
+  governed comment/state write-back proposals that execute only after
+  explicit approval.
+- Implementation bugs found and fixed by the slice's own tests: (1) Git/Ref
+  branch relation decode captured a 2-segment prefix instead of the ref name
+  (fixed with a 3-segment capture); (2) the desktop detail-fetch effect listed
+  the loading state in its deps, so `setDetailLoading` re-ran the effect whose
+  cleanup cancelled the in-flight read — every detail load hung at
+  "Loading full work item detail…" until the deps were restricted to the real
+  triggers (item, project link, retry) with a ref-guarded requested set.
+- Suite evidence at HEAD `d6ba786`: core **490 passed** (79 files), daemon
+  **352 passed** (54 files), desktop **735 passed** (146 files), core build
+  (tsc) clean, desktop `tsc --noEmit` clean, Playwright mocked E2E
+  `tests/e2e/work-inspector.spec.ts` **4 passed** (smoke + keyboard access,
+  load-failure with recoverable retry, governed write-back only after explicit
+  approval, no-data). These are implementation-slice evidence; no release
+  candidate exists yet, and per goal item 6 no historical PASS satisfies a
+  future SHA.
+- Real-ADO acceptance: read-only live test
+  `packages/core/test/liveAdoWorkInspector.test.ts` committed in this slice
+  and gated on `MERGEPILOT_E2E_LIVE_ADO=1`. **Blocked externally**: the az
+  session is signed in but the Azure DevOps resource token requires an
+  interactive re-auth (`az login --tenant 1f432b2e-9e7a-4aa0-ace2-53af62d309f6
+  --scope 499b84ac-1321-427f-aa17-267ca6975798/.default`). The daemon/desktop
+  vertical remains pending until the user completes that login; the test
+  asserts an assigned task's detail round-trips with per-PR id/status/url,
+  test-evidence sums, and the typed not-found mapping for id 999999999.
+- Goal-conformance status for this slice: implementation, unit/daemon/desktop
+  tests, mocked E2E, evidence update, and independent commit+push on a named
+  non-main branch are complete; real-ADO acceptance is the one open item,
+  blocked on the interactive login, and the installed-desktop acceptance is
+  deferred to the release candidate (Slice 5/6) when provenance binds the
+  same SHA across MSI, installed binaries, and remote ADO artifacts.
+- Verification-run JSONs (`goal-verification.json`, `verification-state*.json`)
+  intentionally not re-projected for this slice: per goal item 6 they are
+  projected only by the Verification Run manifest at release time against the
+  final SHA.
