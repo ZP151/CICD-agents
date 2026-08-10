@@ -69,6 +69,80 @@ export async function rejectDeliveryAction(id: string, feedback?: string): Promi
   return body as DeliveryActionRecord;
 }
 
+export interface WorkItemRelationLink {
+  rel: string;
+  url: string;
+  kind: string;
+  id?: number;
+  label?: string;
+}
+
+export interface WorkItemLinkedPullRequest {
+  id: number;
+  title: string;
+  status: string;
+  sourceBranch?: string;
+  targetBranch?: string;
+  url?: string;
+}
+
+export interface WorkItemLinkedBuild {
+  id: number;
+  buildNumber: string;
+  status: string;
+  result: string;
+  definitionName: string;
+  url?: string;
+}
+
+export interface WorkItemTestEvidence {
+  buildId: number;
+  runCount: number;
+  totalTests: number;
+  passedTests: number;
+  failedTests: number;
+}
+
+/**
+ * Full inspector read of one Azure Boards work item: typed relation edges,
+ * resolved pull request / build artifacts, test evidence for linked builds,
+ * and the complete comment thread. The feed keeps only the last few updates;
+ * this endpoint is the authoritative read for a single item.
+ */
+export interface WorkItemDetail {
+  id: number;
+  revision: number;
+  type: string;
+  title: string;
+  state: string;
+  description?: string;
+  acceptanceCriteria?: string;
+  iterationPath?: string;
+  tags: string[];
+  assignedTo?: string;
+  createdDate?: string;
+  changedDate?: string;
+  relations: WorkItemRelationLink[];
+  linkedPullRequests: WorkItemLinkedPullRequest[];
+  linkedBuilds: WorkItemLinkedBuild[];
+  testEvidence: WorkItemTestEvidence[];
+  comments: string[];
+}
+
+export async function fetchWorkItemDetail(
+  projectLinkId: string,
+  workItemId: number,
+): Promise<WorkItemDetail> {
+  const query = new URLSearchParams({ projectLinkId });
+  const r = await fetch(`${RUNTIME_URL}/delivery/work-items/${workItemId}?${query.toString()}`);
+  if (!r.ok) {
+    const body = (await r.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? `Work item detail HTTP ${r.status}`);
+  }
+  const data = (await r.json()) as { workItem: WorkItemDetail };
+  return data.workItem;
+}
+
 export interface DeliveryEvidenceBundle {
   build: {
     id: number;

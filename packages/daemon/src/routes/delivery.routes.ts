@@ -10,6 +10,7 @@ import {
   listAzureEnvironmentApprovals,
   listAzureEnvironments,
   queryAzureWorkItems,
+  readAzureWorkItemDetail,
   classifyFailure,
   DeliveryActionExecutor,
   DeliveryActionPolicy,
@@ -324,7 +325,7 @@ export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRo
           linkedPullRequests: [],
           buildResults: [],
           comments: item.comments,
-          acceptanceCriteria: item.fields["System.AcceptanceCriteria"] ? String(item.fields["System.AcceptanceCriteria"]) : undefined,
+          acceptanceCriteria: item.fields["Microsoft.VSTS.Common.AcceptanceCriteria"] ? String(item.fields["Microsoft.VSTS.Common.AcceptanceCriteria"]) : undefined,
           changedFiles: [],
           children: [],
           evidenceAgeMs: 86_400_000 * 7,
@@ -349,6 +350,61 @@ export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRo
       });
       return { workItems };
     } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.get("/delivery/work-items/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const projectLinkId = String((request.query as Record<string, string | undefined>)["projectLinkId"] ?? "");
+    if (!projectLinkId) {
+      return reply.code(400).send({ error: "projectLinkId query parameter is required" });
+    }
+    const numericId = Number(id);
+    if (!Number.isInteger(numericId) || numericId <= 0) {
+      return reply.code(400).send({ error: "id must be a positive integer" });
+    }
+    try {
+      const projectLink = await projectLinkStore.getProjectLink(projectLinkId);
+      if (!projectLink) return reply.code(404).send({ error: "project_link_not_found" });
+      if (!projectLink.adoOrgUrl.trim() || !projectLink.adoProject.trim()) {
+        return reply.code(422).send({
+          error: "project_link_ado_mapping_incomplete",
+          message: "This Project Link needs an Azure DevOps organization and project before Work can load.",
+        });
+      }
+      const auth = await getAzureDevOpsAuth(projectLink.adoPat);
+      const detail = await readAzureWorkItemDetail({
+        organization: projectLink.adoOrgUrl,
+        project: projectLink.adoProject,
+        workItemId: numericId,
+        auth,
+      });
+      return {
+        workItem: {
+          id: detail.id,
+          revision: detail.revision,
+          type: detail.type,
+          title: detail.title,
+          state: detail.state,
+          description: detail.description,
+          acceptanceCriteria: detail.acceptanceCriteria,
+          iterationPath: detail.iterationPath,
+          tags: detail.tags,
+          assignedTo: detail.assignedTo,
+          createdDate: detail.createdDate,
+          changedDate: detail.changedDate,
+          relations: detail.relations,
+          linkedPullRequests: detail.linkedPullRequests,
+          linkedBuilds: detail.linkedBuilds,
+          testEvidence: detail.testEvidence,
+          comments: detail.comments,
+        },
+      };
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("work_item_not_found:")) {
+        return reply.code(404).send({ error: "work_item_not_found" });
+      }
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });
