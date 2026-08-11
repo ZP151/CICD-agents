@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "productSourceSha": "706724056c9e11230efac67c5613a36f5c4f9cf8",
+  "appVersion": "0.5.32",
+  "runtime": "source daemon built from the product source SHA",
+  "fixture": "ClaimBot_API",
+  "prompt": "What is the current git branch?",
+  "language": "English",
+  "turns": 15,
+  "successfulTurns": 15,
+  "noTerminalTurns": 0,
+  "model": {
+    "provider": "azure",
+    "mainDeployment": "gpt-5-mini",
+    "narratorDeployment": "gpt-5-mini-2"
+  },
+  "metricsMs": {
+    "appHealthz": {
+      "count": 30,
+      "p50": 1.0697,
+      "p95": 2.8969,
+      "min": 0.8136,
+      "max": 4.7824
+    },
+    "appProjectLinks": {
+      "count": 10,
+      "p50": 200.0602,
+      "p95": 281.4719,
+      "min": 129.9184,
+      "max": 281.4719
+    },
+    "ttftFirstEvent": {
+      "count": 15,
+      "p50": 3336.2408,
+      "p95": 3756.0475,
+      "min": 646.9823,
+      "max": 3771.312
+    },
+    "ttftNarrative": {
+      "count": 15,
+      "p50": 9904.2732,
+      "p95": 10988.8539,
+      "min": 7027.0603,
+      "max": 17362.7974
+    },
+    "turnE2e": {
+      "count": 15,
+      "p50": 20711.0934,
+      "p95": 23152.1434,
+      "min": 17495.2007,
+      "max": 29078.5624
+    }
+  },
+  "interpretation": {
+    "applicationEndpoints": "Local health and Project Link endpoints are measured separately from the LLM path.",
+    "providerTarget": "Sub-500 ms visible narrator latency is an optimization objective, not an Azure release acceptance gate."
+  },
+  "sourceArtifact": "output/performance-baseline-2026-08-11T15-31-02-724Z.json"
+}

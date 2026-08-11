@@ -1,6 +1,6 @@
 # Goal Verification Evidence Matrix (2026-08-05 reopen)
 
-HEAD baseline: `68a673adb83aeab925fc1217ee3bf3526b72fcff` (phase-1 slice; earlier baseline dddf818 superseded)
+HEAD baseline: `706724056c9e11230efac67c5613a36f5c4f9cf8` (v1 product source candidate)
 Machine-readable result: `goal-verification.json` (repo root) and
 `verification/goal-verification.json`.
 
@@ -14,41 +14,40 @@ this reopen does not count for the current HEAD. Tiers:
 - ID = installed Tauri desktop E2E
 - RA = ClaimBot_API + real Azure DevOps
 
-## Current v1 candidate audit — 2026-08-11 (HEAD `24b150c`)
+## Final v1 candidate audit — 2026-08-11 (HEAD `7067240`)
 
-- Branch `claudecode/mergepilot-v1` is aligned at `24b150c` on both named
-  non-main remotes. The worktree contains one intentional generated evidence
-  update: `real-ado-evidence.json` from the latest successful deterministic
-  real-ADO run.
-- Guided PR Preparation is implemented and phase-accepted through `1fda4a6`:
-  typed editable evidence binds Work Item, exact refs/commit, diff, validation
-  and ADO policy before a governed `pull_request.create`; mocked approval and
-  rejection and source-live ClaimBot evidence passed. See
-  `docs/manual-testing/2026-08-11/guided-pr-source-live-evidence.json`.
-- Source-live candidate result: **PASS, 30/30**, zero required skips, at product
-  SHA `200df75` after the explicit staging-prohibition fix `8b6d443`.
-  The canonical fresh verifier must repeat this at the selected clean final
-  validation SHA; this entry is not a substitute for that run.
-- Installed provenance: **PASS** for MSI 0.5.30 at evidence anchor `176dadc`.
-  Source/MSI/sidecar/Program Files payload, installed smoke, runtime takeover
-  and packaged-runtime checks are bound in
-  `output/live-e2e/installed-provenance-20260811-161737.json`. The installed UI
-  Work Item → PR → CI → approved write-back loop is still **NOT_RUN**.
-- Real ADO: **PASS** at `24b150c`. The deterministic driver pinned daemon
-  version/build SHA, created a scoped fixture Work Item, re-read it, added a
-  comment, re-read and verified the comment, then deleted only that recorded
-  fixture. See `real-ado-evidence.json`.
-- Security: credential persistence count audit passed with zero non-empty PAT
-  values in the inspected Project Link and chat-history stores.
-- Performance: 15/15 English ClaimBot_API turns completed. App health P50/P95
-  was 1/5 ms; Project Link 272/368 ms; first event 2729/3059 ms; first public
-  narrative 8024/9518 ms; total turn 18887/21197 ms. The evidence separates
-  application/transport timing from provider-visible narrative timing;
-  sub-500 ms provider TTFT remains an optimization target, not a release gate.
-- Release status: **NOT COMPLETE**. Build a deterministic text-observable
-  installed UI acceptance path, execute its scoped approved write-back with
-  authoritative ADO re-read, then run `verify-run.mjs --fresh` on a clean final
-  candidate and let the runner project the generated gate files.
+- Both named non-main remotes resolve `claudecode/mergepilot-v1` to the exact
+  product SHA. Remote `main` was not modified.
+- Canonical run `verify-msorfadi`: **PASS, 14/14 required gates**, zero failed,
+  skipped, did-not-run, interrupted or running gates. Source-live is 30/30;
+  mocked browser is 85/85. Core 500, daemon 374 and desktop 745 tests passed
+  on each final repetition required by the contract.
+- Installed provenance: **PASS** for 0.5.32. Source SHA, MSI SHA-256
+  `af8a7f4fbf69580cf90ab5b0b82544f4051be175c248b639f963fbcb5446f613`,
+  daemon payload SHA-256
+  `ce13683d2deb93b962429b32a6285321dba7d430d575931f6ca3019bb70d6c1a`,
+  Program Files payload, persistence, safety, fresh-user, desktop runtime and
+  vision are bound in
+  `output/live-e2e/installed-provenance-20260811-233249.json`.
+- Installed UI vertical loop: **PASS**. ClaimBot_API Work Item `7919`, PR
+  `2807` and build `4850` were re-read in the desktop. A comment proposal left
+  ADO unchanged before approval, executed after explicit UI approval and was
+  visible at revision 12 on authoritative re-read. Evidence:
+  `output/live-e2e/installed-vertical-loop-installed-loop-msoszb3p.json`.
+- Deterministic real ADO: **PASS**. Fixture Work Item `7926` followed create →
+  re-read → comment → re-read → scoped delete. Evidence SHA-256 is recorded in
+  the canonical state.
+- Security: credential persistence audit reports zero non-empty `adoPat`
+  values in Project Link and chat-history stores.
+- Performance: 15/15 English ClaimBot_API turns completed on exact SHA.
+  App health P50/P95 1.1/2.9 ms; Project Link 200/281 ms; first event
+  3336/3756 ms; first narrative 9904/10989 ms; total turn 20711/23152 ms.
+  Azure/model TTFT is an optimization target, not an external hard gate.
+- Artifact integrity: `node scripts/verification/verify-run.mjs
+  --verify-artifacts` passed with seven hashes checked.
+- Release status: **v1 candidate accepted for this Goal**. Remaining work is
+  provider-latency optimization, pristine-evidence packaging and external
+  pilot/deployment research, tracked in `docs/product/next-iteration-known-gaps.md`.
 
 ## Continuation audit — 2026-08-08 (Phase 4 readiness, HEAD `971ee1d`)
 

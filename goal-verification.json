@@ -1,27 +1,36 @@
 {
  "schemaVersion": 1,
- "runId": "verify-msoha3ku",
- "status": "INCOMPLETE",
+ "runId": "verify-msorfadi",
+ "status": "PASS",
  "commit": {
-  "sha": "579ec46e80d03b65dba66756984321c3f0f2d00e",
+  "sha": "706724056c9e11230efac67c5613a36f5c4f9cf8",
   "ref": "claudecode/mergepilot-v1",
-  "message": "chore(release): prepare 0.5.31 SHA-bound candidate"
+  "message": "fix(chat): keep push target questions read-only"
  },
- "docSha": "579ec46e80d03b65dba66756984321c3f0f2d00e",
- "remotes": {},
- "appVersion": "0.5.26",
- "productModel": "unknown",
- "startedAt": "2026-08-11T09:48:48.414Z",
- "updatedAt": "2026-08-11T10:21:27.954Z",
+ "docSha": "706724056c9e11230efac67c5613a36f5c4f9cf8",
+ "remotes": {
+  "origin": "706724056c9e11230efac67c5613a36f5c4f9cf8",
+  "ado": "706724056c9e11230efac67c5613a36f5c4f9cf8",
+  "verifiedAt": "2026-08-11T23:28:00+08:00",
+  "verifiedVia": "git ls-remote origin/ado refs/heads/claudecode/mergepilot-v1"
+ },
+ "codeEquivalence": {
+  "productSourceSha": "706724056c9e11230efac67c5613a36f5c4f9cf8",
+  "scope": "Generated evidence and product documentation may be committed after the tested product-code SHA; no package, app, core, daemon, desktop, or E2E test source changed."
+ },
+ "appVersion": "0.5.32",
+ "productModel": "azure:gpt-5-mini; narrator:gpt-5-mini-2",
+ "startedAt": "2026-08-11T14:32:46.662Z",
+ "updatedAt": "2026-08-11T15:35:11.219Z",
  "repeat": 1,
  "summary": {
   "required": 14,
-  "passed": 13,
-  "failed": 1,
+  "passed": 14,
+  "failed": 0,
   "notRun": 0,
   "interrupted": 0,
   "running": 0,
-  "status": "INCOMPLETE"
+  "status": "PASS"
  },
  "gates": [
   {
@@ -37,10 +46,30 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 34441,
+     "durationMs": 3457,
      "status": "PASS",
      "setupFailure": false,
-     "runId": "verify-msoha3ku",
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 43517,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 3,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 3482,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msorfadi",
      "artifacts": []
     }
    ],
@@ -59,13 +88,48 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 32209,
+     "durationMs": 19041,
      "status": "PASS",
      "setupFailure": false,
-     "passed": 499,
+     "passed": 500,
+     "failed": 0,
      "skipped": 0,
-     "total": 499,
-     "runId": "verify-msoha3ku",
+     "didNotRun": 0,
+     "total": 500,
+     "stderrTail": "2) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:41588) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\n(node:98316) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:97404) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:96824) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\n",
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 38251,
+     "status": "PASS",
+     "setupFailure": false,
+     "passed": 500,
+     "failed": 0,
+     "skipped": 0,
+     "didNotRun": 0,
+     "total": 500,
+     "stderrTail": "e instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:93884) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:96136) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:95656) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:30528) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\n",
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 3,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 20080,
+     "status": "PASS",
+     "setupFailure": false,
+     "passed": 500,
+     "failed": 0,
+     "skipped": 0,
+     "didNotRun": 0,
+     "total": 500,
+     "stderrTail": ") [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:78696) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\n(node:100500) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\n(node:79088) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:61920) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'notes.txt', LF will be replaced by CRLF the next time Git touches it\n",
+     "runId": "verify-msorfadi",
      "artifacts": []
     }
    ],
@@ -84,10 +148,30 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 8851,
+     "durationMs": 2784,
      "status": "PASS",
      "setupFailure": false,
-     "runId": "verify-msoha3ku",
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 12389,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 3,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 3324,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msorfadi",
      "artifacts": []
     }
    ],
@@ -106,13 +190,48 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 49367,
+     "durationMs": 43923,
      "status": "PASS",
      "setupFailure": false,
-     "passed": 372,
+     "passed": 374,
+     "failed": 0,
      "skipped": 0,
-     "total": 372,
-     "runId": "verify-msoha3ku",
+     "didNotRun": 0,
+     "total": 374,
+     "stderrTail": "arning was created)\n(node:95480) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:80712) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:93600) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:15484) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:98984) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:93008) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:63820) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:31552) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:98636) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:45092) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n",
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 47883,
+     "status": "PASS",
+     "setupFailure": false,
+     "passed": 374,
+     "failed": 0,
+     "skipped": 0,
+     "didNotRun": 0,
+     "total": 374,
+     "stderrTail": "rning was created)\n(node:95836) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:80308) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:77132) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:56388) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:68264) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:85512) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:101124) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:63296) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:55024) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:50392) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n",
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 3,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 43614,
+     "status": "PASS",
+     "setupFailure": false,
+     "passed": 374,
+     "failed": 0,
+     "skipped": 0,
+     "didNotRun": 0,
+     "total": 374,
+     "stderrTail": "arning was created)\n(node:60384) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:92756) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:21752) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:89492) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:67228) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:74788) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:100564) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:5828) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:79420) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:93560) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n",
+     "runId": "verify-msorfadi",
      "artifacts": []
     }
    ],
@@ -131,10 +250,30 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 37049,
+     "durationMs": 4459,
      "status": "PASS",
      "setupFailure": false,
-     "runId": "verify-msoha3ku",
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 51328,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 3,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 4987,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msorfadi",
      "artifacts": []
     }
    ],
@@ -153,13 +292,45 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 27575,
+     "durationMs": 18857,
      "status": "PASS",
      "setupFailure": false,
-     "passed": 741,
+     "passed": 745,
+     "failed": 0,
      "skipped": 0,
-     "total": 741,
-     "runId": "verify-msoha3ku",
+     "didNotRun": 0,
+     "total": 745,
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 41435,
+     "status": "PASS",
+     "setupFailure": false,
+     "passed": 745,
+     "failed": 0,
+     "skipped": 0,
+     "didNotRun": 0,
+     "total": 745,
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 3,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 21286,
+     "status": "PASS",
+     "setupFailure": false,
+     "passed": 745,
+     "failed": 0,
+     "skipped": 0,
+     "didNotRun": 0,
+     "total": 745,
+     "runId": "verify-msorfadi",
      "artifacts": []
     }
    ],
@@ -178,13 +349,16 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 9048,
+     "durationMs": 9129,
      "status": "PASS",
      "setupFailure": false,
      "passed": 14,
+     "failed": 0,
      "skipped": 0,
+     "didNotRun": 0,
      "total": 14,
-     "runId": "verify-msoha3ku",
+     "stderrTail": "(node:94108) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n",
+     "runId": "verify-msorfadi",
      "artifacts": []
     }
    ],
@@ -203,13 +377,16 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 10307,
+     "durationMs": 9029,
      "status": "PASS",
      "setupFailure": false,
      "passed": 44,
+     "failed": 0,
      "skipped": 0,
+     "didNotRun": 0,
      "total": 44,
-     "runId": "verify-msoha3ku",
+     "stderrTail": "(node:82896) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:73040) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:89092) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:95128) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:12180) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n(node:95556) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n",
+     "runId": "verify-msorfadi",
      "artifacts": []
     }
    ],
@@ -228,10 +405,30 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 6860,
+     "durationMs": 6193,
      "status": "PASS",
      "setupFailure": false,
-     "runId": "verify-msoha3ku",
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 14312,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 3,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 6826,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msorfadi",
      "artifacts": []
     }
    ],
@@ -243,24 +440,27 @@
    "required": true,
    "requireNoSkips": true,
    "timeoutMs": 2700000,
-   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/warmup.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/chat-layout.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/settings-permissions.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/route-cache.spec.ts -Workers 1",
-   "description": "mocked browser E2E (warmup, chat-layout, settings-permissions, route-cache)",
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath \"tests/e2e/chat-layout.spec.ts;tests/e2e/settings-permissions.spec.ts;tests/e2e/route-cache.spec.ts\" -Workers 1",
+   "description": "mocked browser E2E (same-process route warmup, chat-layout, settings-permissions, route-cache)",
    "runs": [
     {
      "attempt": 1,
-     "exitCode": 1,
+     "exitCode": 0,
      "timedOut": false,
-     "durationMs": 276379,
-     "status": "FAIL",
+     "durationMs": 183790,
+     "status": "PASS",
      "setupFailure": false,
-     "passed": 42,
+     "passed": 85,
+     "failed": 0,
      "skipped": 0,
-     "total": 42,
-     "runId": "verify-msoha3ku",
+     "didNotRun": 0,
+     "total": 85,
+     "stderrTail": "[WebServer] (node:90124) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.\n[WebServer] (Use `pnpm --trace-warnings ...` to show where the warning was created)\n[WebServer] (node:68320) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.\n[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)\n(node:79920) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.\n(Use `node --trace-warnings ...` to show where the warning was created)\n",
+     "runId": "verify-msorfadi",
      "artifacts": []
     }
    ],
-   "status": "FAIL"
+   "status": "PASS"
   },
   {
    "id": "browser-e2e-source-live",
@@ -275,22 +475,31 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 1283743,
+     "durationMs": 1301937,
      "status": "PASS",
      "setupFailure": false,
-     "runId": "verify-msoha3ku",
+     "passed": 30,
+     "failed": 0,
+     "skipped": 0,
+     "didNotRun": 0,
+     "total": 30,
+     "runId": "verify-msorfadi",
      "artifacts": [
       {
-       "path": "output\\live-e2e\\live-app-e2e-20260811-175712.log",
-       "sha256": "4e0764c228b4e7cffa7b42766b5de28beca9316458043e0be4b4b80f239d6503"
+       "path": "output\\live-e2e\\live-app-e2e-20260811-223802.log",
+       "sha256": "33dff35447af0020611a1ac4bbe19e1063c3f80124fe9760aabed8d29072ea5c"
       },
       {
-       "path": "output\\live-e2e\\live-app-source-daemon-20260811-175712.err.log",
-       "sha256": "6d352db92def24b2691d82c905703cb70e7cf7b233d238c0d0ad02a96f84593c"
+       "path": "output\\live-e2e\\live-app-source-daemon-20260811-223802.err.log",
+       "sha256": "0043a8f06a1e3ca436687b75aeeccaafdd1a443a1f1cb72b3a2fe5e286d45ca5"
       },
       {
-       "path": "output\\live-e2e\\live-app-source-daemon-20260811-175712.log",
-       "sha256": "ce9fa2251199d58c1fcf34cbfae9edf6627ffe5bc170040bac1150341321c311"
+       "path": "output\\live-e2e\\live-app-source-daemon-20260811-223802.log",
+       "sha256": "eab6315c8dfe9072ad3d497d78fa8bc9bf80d93aa55e790ba179dc7c3cf73afe"
+      },
+      {
+       "path": "output\\live-e2e\\runner-20260811-223802.json",
+       "sha256": "a9f15ea5d9c657276809a1efa6805ac0f227d09fbdb5ce88f26f4c71bc808c4a"
       }
      ]
     }
@@ -303,18 +512,33 @@
    "required": true,
    "requireNoSkips": true,
    "timeoutMs": 1800000,
-   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\verify-installed-provenance.ps1\" -ExpectedVersion 0.5.31 -SkipBuild -MsiPath \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\apps\\desktop\\src-tauri\\target\\release\\bundle\\msi\\MergePilot_0.5.31_x64_en-US.msi\"",
-   "description": "installed provenance for the 0.5.31 candidate: source HEAD -> locally built MSI/sidecar hashes -> install -> Program Files payload match -> installed E2E smoke + vision (exit 2 = elevation handoff printed; timeout 30m for full smoke+vision)",
+   "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\verify-installed-provenance.ps1\" -ExpectedVersion 0.5.32 -SkipBuild -MsiPath \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\apps\\desktop\\src-tauri\\target\\release\\bundle\\msi\\MergePilot_0.5.32_x64_en-US.msi\"",
+   "description": "installed provenance for the 0.5.32 candidate: source HEAD -> locally built MSI/sidecar hashes -> install -> Program Files payload match -> installed E2E smoke + vision (exit 2 = elevation handoff printed; timeout 30m for full smoke+vision)",
    "runs": [
     {
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 129077,
+     "durationMs": 110757,
      "status": "PASS",
      "setupFailure": false,
-     "runId": "verify-msoha3ku",
+     "runId": "verify-msorfadi",
      "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 128648,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msorfadi",
+     "artifacts": [
+      {
+       "path": "output\\live-e2e\\installed-provenance-20260811-233249.json",
+       "sha256": "56c6479509ca981d7a565b63ec5803251f715fe1de769a50a4bfaeee1ddbe4df"
+      }
+     ]
     }
    ],
    "status": "PASS"
@@ -330,16 +554,40 @@
    "runs": [
     {
      "attempt": 1,
+     "exitCode": 1,
+     "timedOut": false,
+     "durationMs": 49679,
+     "status": "FAIL",
+     "setupFailure": false,
+     "stdoutTail": "TAP version 13\n# Subtest: selects ClaimBot_API by portable repository basename\nok 1 - selects ClaimBot_API by portable repository basename\n  ---\n  duration_ms: 1.7459\n  ...\n# Subtest: rejects ambiguous ClaimBot_API Project Links\nok 2 - rejects ambiguous ClaimBot_API Project Links\n  ---\n  duration_ms: 0.9202\n  ...\n# Subtest: uses the installed UI Context id to disambiguate duplicate fixture links\nok 3 - uses the installed UI Context id to disambiguate duplicate fixture links\n  ---\n  duration_ms: 0.307\n  ...\n# Subtest: rejects an active Context id that is not a ClaimBot_API link\nok 4 - rejects an active Context id that is not a ClaimBot_API link\n  ---\n  duration_ms: 0.3121\n  ...\n# Subtest: requires the recorded Work Item, PR and build fixture chain\nok 5 - requires the recorded Work Item, PR and build fixture chain\n  ---\n  duration_ms: 1.6052\n  ...\n# Subtest: rejects a non-fixture target before any mutation\nok 6 - rejects a non-fixture target before any mutation\n  ---\n  duration_ms: 0.2998\n  ...\n# Subtest: redacts payload, identity and verification text from action evidence\nok 7 - redacts payload, identity and verification text from action evidence\n  ---\n  duration_ms: 0.5167\n  ...\n1..7\n# tests 7\n# suites 0\n# pass 7\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 3396.3658\n",
+     "stderrTail": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: /^Account:/ }) to be visible\n\n    at main (C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\verify-installed-vertical-loop.mjs:310:59)\n",
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 1,
+     "timedOut": false,
+     "durationMs": 1797,
+     "status": "FAIL",
+     "setupFailure": false,
+     "stdoutTail": "TAP version 13\n# Subtest: selects ClaimBot_API by portable repository basename\nok 1 - selects ClaimBot_API by portable repository basename\n  ---\n  duration_ms: 1.5776\n  ...\n# Subtest: rejects ambiguous ClaimBot_API Project Links\nok 2 - rejects ambiguous ClaimBot_API Project Links\n  ---\n  duration_ms: 0.6157\n  ...\n# Subtest: uses the installed UI Context id to disambiguate duplicate fixture links\nok 3 - uses the installed UI Context id to disambiguate duplicate fixture links\n  ---\n  duration_ms: 0.2296\n  ...\n# Subtest: rejects an active Context id that is not a ClaimBot_API link\nok 4 - rejects an active Context id that is not a ClaimBot_API link\n  ---\n  duration_ms: 0.1922\n  ...\n# Subtest: requires the recorded Work Item, PR and build fixture chain\nok 5 - requires the recorded Work Item, PR and build fixture chain\n  ---\n  duration_ms: 1.1885\n  ...\n# Subtest: rejects a non-fixture target before any mutation\nok 6 - rejects a non-fixture target before any mutation\n  ---\n  duration_ms: 0.4161\n  ...\n# Subtest: redacts payload, identity and verification text from action evidence\nok 7 - redacts payload, identity and verification text from action evidence\n  ---\n  duration_ms: 0.7563\n  ...\n1..7\n# tests 7\n# suites 0\n# pass 7\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 697.3038\n",
+     "stderrTail": "Error: ASSERT FAILED: runtime http://127.0.0.1:8787 is already in use; refusing ambiguous installed evidence\n    at assert (file:///C:/Users/15492/Develop/Agents/CICD-agents/scripts/verify-installed-vertical-loop.mjs:40:25)\n    at main (file:///C:/Users/15492/Develop/Agents/CICD-agents/scripts/verify-installed-vertical-loop.mjs:249:3)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n",
+     "runId": "verify-msorfadi",
+     "artifacts": []
+    },
+    {
+     "attempt": 3,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 30843,
+     "durationMs": 30410,
      "status": "PASS",
      "setupFailure": false,
-     "runId": "verify-msoha3ku",
+     "runId": "verify-msorfadi",
      "artifacts": [
       {
-       "path": "output\\live-e2e\\installed-vertical-loop-installed-loop-msoif75r.json",
-       "sha256": "b6d4f3003fff3c34ed79f24f85959ac0a4b27bce30ccd8c14eb52288c6b1b52b"
+       "path": "output\\live-e2e\\installed-vertical-loop-installed-loop-msoszb3p.json",
+       "sha256": "5af2225b7400adf7ab643b21b589255c3e431ae60251aaa78c3315e034b1fc52"
       }
      ]
     }
@@ -359,11 +607,26 @@
      "attempt": 1,
      "exitCode": 0,
      "timedOut": false,
-     "durationMs": 12537,
+     "durationMs": 14997,
      "status": "PASS",
      "setupFailure": false,
-     "runId": "verify-msoha3ku",
+     "runId": "verify-msorfadi",
      "artifacts": []
+    },
+    {
+     "attempt": 2,
+     "exitCode": 0,
+     "timedOut": false,
+     "durationMs": 13267,
+     "status": "PASS",
+     "setupFailure": false,
+     "runId": "verify-msorfadi",
+     "artifacts": [
+      {
+       "path": "docs\\manual-testing\\2026-08-05\\verification\\real-ado-evidence.json",
+       "sha256": "631a8bb62b0db2333433d41f83d1292a0e8384fd7da955966942ee3738dd4cd9"
+      }
+     ]
     }
    ],
    "status": "PASS"

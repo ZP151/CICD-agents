@@ -1,8 +1,8 @@
 # MergePilot v1 Productization Iteration
 
-Status: **Active execution plan for the MergePilot v1 Goal**
+Status: **Completed release-candidate execution for the MergePilot v1 Goal**
 Created: **2026-08-07**
-Current product-code/evidence baseline: **2026-08-11 / `5f14a64` on
+Current product-code/evidence baseline: **2026-08-11 / `7067240` on
 `claudecode/mergepilot-v1`**
 Required starting documents: `README.md`, `next-iteration-known-gaps.md`, and
 the Cycle 00–06 documents
@@ -19,45 +19,46 @@ The Goal is product completion, not merely making the current test suite green.
 
 ## Current execution state
 
-- The active Goal branch is `claudecode/mergepilot-v1`. Product-code and
-  verification-driver commits through `5f14a64` are present on both
-  `origin/claudecode/mergepilot-v1` and `ado/claudecode/mergepilot-v1`. No
-  remote `main` operation is part of this Goal.
-- Slice 1, **Work Inspector**, is complete as an implementation slice. It reads
-  the selected Azure Boards item with description, acceptance criteria,
-  relations, linked PR/build/test evidence and comments before allowing a
-  governed comment or state proposal. Current real-ADO read acceptance passed
-  on `82c2e09`; the evidence refresh is `a0196cc`.
-- Slice 2, **Guided PR Preparation**, is complete as an implementation and
-  source-live vertical slice through `1fda4a6`. It owns a typed, editable PR
-  suggestion assembled from authoritative Work Item, exact branch/commit,
-  diff, validation and ADO policy evidence. The existing
-  `pull_request.create` ActionRecord follows Preview → Approval → Execution →
-  ADO re-read → Verification; mocked acceptance covers approval and rejection.
-- The source-live suite reached **30/30** twice on the 0.5.31 candidate at
-  `579ec46`. Deterministic real-ADO verification and the installed ClaimBot_API
-  Work Item → PR → CI → explicitly approved write-back loop also passed with
-  authoritative re-read on that candidate.
-- MSI 0.5.31 was built and installed from `579ec46`; Program Files payload,
-  installed executable/sidecar identity, runtime takeover, persistence and
-  packaged checks passed. That installed payload became historical as soon as
-  the browser and verification fixes landed at `5f14a64` and cannot satisfy the
-  next candidate.
-- Canonical run `verify-msoha3ku` recorded 13 required gates PASS and the
-  mocked browser gate FAIL on `579ec46`. Diagnosis found stale UI assertions
-  plus prompt-deck accessibility overflow, partial Project Link handling and
-  suggestion/action semantics. The corrected pre-release gate passes 86/86
-  Playwright scenarios at `5f14a64`.
-- The verification runner itself was repaired at `5f14a64`: direct and merged
-  Playwright runs now preserve failed, passed, skipped and did-not-run counts,
-  aggregate chained suites, and retain a bounded redacted failure tail. The old
-  projection that displayed only `42 passed` remains historical evidence, not
-  proof that the failed tests did not exist.
-- The remaining product gap is final **release convergence**: select a clean
-  0.5.32 candidate, repeat the entire canonical manifest, build/install the MSI
-  from that SHA, repeat the installed vertical loop and real-ADO re-read, then
-  refresh credential and split-latency evidence and reconcile both non-main
-  remotes with the tested artifact identities.
+- Product source candidate `706724056c9e11230efac67c5613a36f5c4f9cf8`
+  is present on both `origin/claudecode/mergepilot-v1` and
+  `ado/claudecode/mergepilot-v1`, verified with `git ls-remote`. No remote
+  `main` operation was performed.
+- Work Inspector and Guided PR Preparation are complete. The installed
+  ClaimBot_API loop selected the real Project Link, re-read Work Item `7919`,
+  linked PR `2807` and successful build `4850`, produced a governed comment
+  proposal, proved ADO unchanged before approval, executed after explicit UI
+  approval, and verified the comment on authoritative re-read.
+- Canonical run `verify-msorfadi` is **PASS: 14/14 required gates**, with no
+  failed, skipped, did-not-run, interrupted or running gate. The source-live
+  desktop suite is **30/30** and mocked browser acceptance is **85/85**.
+  Relevant core, daemon and desktop typecheck/test/build gates passed three
+  consecutive attempts on the product SHA (core 500, daemon 374, desktop 745).
+- Real ADO was re-run against the same SHA and 0.5.32 daemon: scoped fixture
+  Work Item `7926` was created, re-read, commented, re-read and deleted through
+  the verified action runtime. The latest evidence JSON is hash-bound in the
+  canonical run.
+- MSI 0.5.32 was built and installed from the candidate. MSI SHA-256 is
+  `af8a7f4fbf69580cf90ab5b0b82544f4051be175c248b639f963fbcb5446f613`;
+  the packaged and installed daemon both hash to
+  `ce13683d2deb93b962429b32a6285321dba7d430d575931f6ca3019bb70d6c1a`.
+  Program Files payload matching, restart persistence, safety, fresh-user,
+  desktop-sidecar takeover and packaged vision checks passed. The provenance
+  record is `output/live-e2e/installed-provenance-20260811-233249.json`.
+- Credential persistence audit found **0** non-empty `adoPat` values in both
+  `project-links.json` and `chat-history.json`. Committed evidence:
+  `docs/manual-testing/2026-08-05/verification/credential-persistence-audit-2026-08-11.json`.
+- Exact-SHA English ClaimBot_API latency baseline completed 15/15 turns. App
+  health P50/P95 is 1.1/2.9 ms and Project Link reads 200/281 ms; first SSE
+  event is 3.34/3.76 s, first real narrative 9.90/10.99 s and total turn
+  20.71/23.15 s. Azure/model latency remains an optimization target rather
+  than a release gate. Committed evidence:
+  `docs/manual-testing/2026-08-05/verification/performance-baseline-2026-08-11.json`
+  (raw local artifact:
+  `output/performance-baseline-2026-08-11T15-31-02-724Z.json`).
+- The candidate's runtime evidence was generated while canonical verifier
+  projections were dirty. The dirt is confined to generated evidence and
+  documentation; no package, core, daemon, desktop or E2E source differed from
+  `7067240`. The canonical state records this code-equivalence boundary.
 
 ## Historical starting point and protected work
 

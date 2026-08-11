@@ -1,12 +1,12 @@
 {
   "schemaVersion": 2,
-  "runId": "real-ado-msoifu02",
+  "runId": "real-ado-msotn9ii",
   "mergePilot": {
-    "sha": "579ec46e80d03b65dba66756984321c3f0f2d00e",
+    "sha": "706724056c9e11230efac67c5613a36f5c4f9cf8",
     "branch": "claudecode/mergepilot-v1",
-    "version": "0.5.31",
-    "daemonBuildSha": "579ec46e80d03b65dba66756984321c3f0f2d00e",
-    "daemonVersion": "0.5.31",
+    "version": "0.5.32",
+    "daemonBuildSha": "706724056c9e11230efac67c5613a36f5c4f9cf8",
+    "daemonVersion": "0.5.32",
     "modelProvider": "azure",
     "modelDeployment": "gpt-5-mini"
   },
@@ -16,23 +16,23 @@
   },
   "projectLinkId": "eb2f6c876f53b33d",
   "adoResources": {
-    "workItemId": 7923
+    "workItemId": 7926
   },
-  "startedAt": "2026-08-11T10:21:15.553Z",
-  "finishedAt": "2026-08-11T10:21:27.935Z",
+  "startedAt": "2026-08-11T15:34:58.025Z",
+  "finishedAt": "2026-08-11T15:35:11.190Z",
   "steps": [
     {
       "step": "daemon-health",
       "ok": true,
       "daemonStarted": true,
-      "version": "0.5.31",
-      "buildSha": "579ec46e80d03b65dba66756984321c3f0f2d00e"
+      "version": "0.5.32",
+      "buildSha": "706724056c9e11230efac67c5613a36f5c4f9cf8"
     },
     {
       "step": "work_item.create",
       "ok": true,
-      "actionId": "act-1d763g8",
-      "workItemId": 7923
+      "actionId": "act-169kok5",
+      "workItemId": 7926
     },
     {
       "step": "post-create-re-read",
@@ -42,7 +42,7 @@
     {
       "step": "work_item.comment",
       "ok": true,
-      "actionId": "act-1fpx0qx"
+      "actionId": "act-ugyeme"
     },
     {
       "step": "artifact-re-read",
@@ -53,7 +53,7 @@
     {
       "step": "work_item.delete",
       "ok": true,
-      "actionId": "act-1u3nfl3"
+      "actionId": "act-19dmno2"
     }
   ],
   "status": "PASS"

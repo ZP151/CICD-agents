@@ -35,10 +35,13 @@ unchanged and covered by the daemon auth routes.
 
 ## Performance and resilience (baselines recorded)
 
-- Product-added route/SSE path: request_received → sse_flushed 246 ms on
-  the real run; 2026-08-04 baseline P50 143 ms / P95 309 ms (target
-  ≤100 ms remains an optimization objective; the local-visible mark is
-  browser-side and reported via `[turn-metrics]`).
+- Exact product-SHA 15-turn ClaimBot_API baseline:
+  `verification/performance-baseline-2026-08-11.json` (raw local output:
+  `output/performance-baseline-2026-08-11T15-31-02-724Z.json`). Application
+  health P50/P95 is 1.1/2.9 ms and Project Link API 200/281 ms. First SSE
+  event is 3.34/3.76 s, first real narrative 9.90/10.99 s and total turn
+  20.71/23.15 s. Application endpoints and Azure/model TTFT are reported
+  separately; `<500 ms` is an optimization objective, not a release gate.
 - Restart recovery: `resumeVerification` never re-executes a write; the
   interrupted-execution path fails with re-propose guidance (unit-tested).
 - Slow-model truthfulness: `turn.waiting` is an explicit transport
@@ -58,13 +61,14 @@ unchanged and covered by the daemon auth routes.
    environment stage; the environments/deployments/approvals APIs and the
    readiness bundle are validated against the real org (2 environments read,
    readiness computed conservatively).
-2. Installer packaging and clean-machine pilot run remain for the pilot
-   program (windows-code-signing doc exists).
-3. UI-driven desktop E2E of every demo step (vs daemon-API-driven) is
-   partially covered; the 2026-08-03/04 ledger recorded browser-turn
-   acceptance on the same runtime.
-4. Evaluation fixture sets (12 PRs, 20 WIs) and role-based pilot tasks are
-   the next pilot iteration's input (fixtures seeded in ClaimBot_API).
+2. The 0.5.32 MSI and installed desktop loop are verified on this Windows
+   machine; independent clean-machine and code-signing pilot evidence remains
+   a distribution-program task.
+3. The installed UI covers the primary Work Item → PR/build → approved
+   write-back path. Exhaustive visual acceptance still needs a human or
+   multimodal checkpoint.
+4. Evaluation fixture sets and role-based external pilot tasks remain the next
+   product-research iteration's input.
 
 ## Test matrix summary
 
