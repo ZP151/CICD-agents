@@ -346,9 +346,11 @@ async function main() {
     assert(detailResponse.ok(), `installed UI detail read failed (${detailResponse.status()})`);
     const uiDetailPayload = await detailResponse.json();
     const uiCoverage = fixtureCoverage(uiDetailPayload.workItem);
-    await page.getByText("Linked pull requests", { exact: true }).waitFor({ state: "visible" });
+    const pullRequestSection = page.getByText("Linked pull requests", { exact: true }).locator("..");
+    await pullRequestSection.waitFor({ state: "visible" });
     await page.getByText("Builds", { exact: true }).waitFor({ state: "visible" });
-    await page.getByText(new RegExp(`#${fixturePullRequestId}\\b`)).waitFor({ state: "visible" });
+    await pullRequestSection.getByText(new RegExp(`#${fixturePullRequestId}\\b`))
+      .waitFor({ state: "visible" });
     steps.push({
       step: "installed-ui-read",
       ok: true,
