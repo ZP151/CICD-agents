@@ -695,7 +695,9 @@ async function openEnvironmentPanel(page: Page): Promise<void> {
   // summary is open (it starts closed). Pin it on demand, mirroring the
   // chat-layout spec, instead of relying on the pre-v0.5.24 default-open
   // behaviour.
-  const environment = page.getByText("Context").first();
+  const environment = page
+    .getByRole("complementary", { name: "Workspace summary" })
+    .getByText("Context", { exact: true });
   if (!(await environment.isVisible().catch(() => false))) {
     await page.getByTitle("Show pinned summary").click();
   }
