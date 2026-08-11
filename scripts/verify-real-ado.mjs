@@ -83,7 +83,11 @@ async function ensureDaemon(expectedSha, expectedVersion) {
       cwd: repoRoot,
       stdio: "ignore",
       detached: true,
-      env: { ...process.env, MERGEPILOT_BUILD_SHA: expectedSha },
+      env: {
+        ...process.env,
+        MERGEPILOT_BUILD_SHA: expectedSha,
+        MERGEPILOT_DAEMON_VERSION: expectedVersion,
+      },
     },
   );
   child.unref();
