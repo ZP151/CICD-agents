@@ -45,11 +45,16 @@ function basenamePortable(value) {
   return normalized.slice(normalized.lastIndexOf("/") + 1);
 }
 
-export function selectClaimBotProjectLink(links) {
+export function selectClaimBotProjectLink(links, activeProjectLinkId = "") {
   const matches = links.filter((link) =>
     basenamePortable(link.repoPath).toLowerCase() === "claimbot_api"
     || String(link.name ?? "").toLowerCase().includes("claimbot_api"),
   );
+  if (activeProjectLinkId) {
+    const selected = matches.filter((link) => String(link.id ?? "") === activeProjectLinkId);
+    assert(selected.length === 1, "the installed UI Context does not select a ClaimBot_API Project Link");
+    return selected[0];
+  }
   assert(matches.length === 1, `expected one ClaimBot_API Project Link, found ${matches.length}`);
   return matches[0];
 }
@@ -304,8 +309,12 @@ async function main() {
     await page.getByRole("button", { name: /^Account:/ }).waitFor({ state: "visible", timeout: 30_000 });
     steps.push({ step: "auth", ok: true, authenticated: true, accountRendered: true });
 
+    const activeProjectLinkId = await page.evaluate(() =>
+      window.localStorage.getItem("mergepilot_active_project_link_id") ?? "",
+    );
+    assert(activeProjectLinkId, "installed UI Context has no selected Project Link");
     const projectLinks = await jsonRequest("GET", "/project-links");
-    const projectLink = selectClaimBotProjectLink(projectLinks);
+    const projectLink = selectClaimBotProjectLink(projectLinks, activeProjectLinkId);
     const projectLinkId = String(projectLink.id ?? "");
     assert(projectLinkId, "ClaimBot_API Project Link has no id");
 

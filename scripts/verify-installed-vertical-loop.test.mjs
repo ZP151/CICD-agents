@@ -21,6 +21,21 @@ test("rejects ambiguous ClaimBot_API Project Links", () => {
   ]), /expected one ClaimBot_API Project Link, found 2/);
 });
 
+test("uses the installed UI Context id to disambiguate duplicate fixture links", () => {
+  const selected = selectClaimBotProjectLink([
+    { id: "old", name: "ClaimBot_API old", repoPath: "C:\\fixtures\\ClaimBot_API" },
+    { id: "active", name: "ClaimBot_API selected", repoPath: "C:\\fixtures\\ClaimBot_API" },
+  ], "active");
+  assert.equal(selected.id, "active");
+});
+
+test("rejects an active Context id that is not a ClaimBot_API link", () => {
+  assert.throws(() => selectClaimBotProjectLink([
+    { id: "other", name: "Other", repoPath: "C:\\fixtures\\Other" },
+    { id: "claimbot", name: "ClaimBot_API", repoPath: "C:\\fixtures\\ClaimBot_API" },
+  ], "other"), /Context does not select a ClaimBot_API/);
+});
+
 test("requires the recorded Work Item, PR and build fixture chain", () => {
   const result = fixtureCoverage({
     id: 10,
