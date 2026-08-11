@@ -239,6 +239,28 @@ describe("chat session workflow action derivation", () => {
     expect(derived.approvalProposal).toBeUndefined();
   });
 
+  it("rejects a write proposal when push appears only in a read-only target question", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      {
+        ...plannerResult("I found the configured remote. Shall I create a new branch before pushing?"),
+        approvalProposal: {
+          tool: "git_create_branch",
+          args: { name: "feature/ai-change" },
+          description: "Create branch",
+          nextHint: "continue workflow",
+        },
+      },
+      [{
+        role: "user",
+        content: "Where will this push go? Read-only only. Do not fetch, push, stage, or commit.",
+        timestamp: 0,
+      }],
+    );
+
+    expect(derived.approvalProposal).toBeUndefined();
+  });
+
   it("derives branch switching requests without treating them as branch creation", () => {
     const derived = deriveWorkflowPendingAction(
       "s1",
