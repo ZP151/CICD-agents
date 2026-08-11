@@ -8,6 +8,64 @@ import {
 import { plannerResult } from "./chatSessionWorkflowTestDoubles.js";
 
 describe("chat session workflow action derivation", () => {
+  it("does not re-infer staging from a safe no-staged-changes conclusion", () => {
+    const response =
+      "No staged changes were found, so I did not create a commit. " +
+      "If you want me to create the commit anyway, ask me to stage all changes.";
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      plannerResult(response),
+      [{
+        role: "user",
+        content:
+          "Commit staged changes with message \"chore: should not happen\". " +
+          "Do not stage anything. If nothing is staged, explain and stop.",
+        timestamp: 0,
+      }],
+    );
+
+    expect(derived.response).toBe(response);
+    expect(derived.approvalProposal).toBeUndefined();
+  });
+
+  it("rejects a provided staging proposal when the latest user turn forbids staging", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      {
+        ...plannerResult("Shall I stage all changes?"),
+        approvalProposal: {
+          tool: "git_add",
+          args: {},
+          description: "Stage all changes",
+          nextHint: "commit staged changes",
+        },
+      },
+      [{ role: "user", content: "Commit what is staged. Do not stage anything.", timestamp: 0 }],
+    );
+
+    expect(derived.approvalProposal).toBeUndefined();
+    expect(derived.response).toMatch(/outside this turn's explicit scope/i);
+  });
+
+  it("keeps path-scoped staging distinct from a prohibition on another path", () => {
+    const derived = deriveWorkflowPendingAction(
+      "s1",
+      {
+        ...plannerResult("Shall I stage README.md?"),
+        approvalProposal: {
+          tool: "git_add",
+          args: { paths: ["README.md"] },
+          description: "Stage README.md",
+          nextHint: "done",
+        },
+      },
+      [{ role: "user", content: "Stage only README.md. Do not stage notes.txt.", timestamp: 0 }],
+    );
+
+    expect(derived.approvalProposal?.tool).toBe("git_add");
+    expect(derived.approvalProposal?.args).toEqual({ paths: ["README.md"] });
+  });
+
   it("derives explicit stash requests instead of defaulting to stage", () => {
     const derived = deriveWorkflowPendingAction(
       "s1",

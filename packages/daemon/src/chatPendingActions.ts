@@ -12,6 +12,7 @@ import {
 import {
   isProposalWithinUserScope,
   isToolWithinChatMessageScope,
+  latestUserProhibitsStaging,
 } from "./chatPendingActionScope.js";
 import { approvalProposalFromResult } from "./chatWorkflowState.js";
 
@@ -27,9 +28,23 @@ export function deriveWorkflowPendingAction(
   const providedProposal = approvalProposalFromResult(result);
   if (providedProposal?.tool) {
     const scopedProposal = adjustProposalForUserIntent(providedProposal, bubbles);
-    return isProposalWithinUserScope(scopedProposal.tool, bubbles, scopedProposal.args)
-      ? { ...result, approvalProposal: scopedProposal }
-      : { ...result, approvalProposal: undefined };
+    if (isProposalWithinUserScope(scopedProposal.tool, bubbles, scopedProposal.args)) {
+      return { ...result, approvalProposal: scopedProposal };
+    }
+    const proposalStages = scopedProposal.tool === "git_add" ||
+      (scopedProposal.tool === "git_commit" && scopedProposal.args.all === true);
+    return {
+      ...result,
+      ...(proposalStages && latestUserProhibitsStaging(bubbles)
+        ? {
+            response:
+              "Staging is outside this turn's explicit scope, so I will not create a staging approval or stage any files.",
+            riskLevel: "low" as const,
+            suggestions: [],
+          }
+        : {}),
+      approvalProposal: undefined,
+    };
   }
 
   const response = result.response.toLowerCase();

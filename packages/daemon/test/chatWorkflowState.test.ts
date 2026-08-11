@@ -36,6 +36,12 @@ function proposal(): PendingToolAction {
 }
 
 describe("workflowStateForSession", () => {
+  const stagingForbiddenBubble = {
+    role: "user" as const,
+    content: "Commit what is staged. Do not stage anything. If nothing is staged, stop.",
+    timestamp: 0,
+  };
+
   it("returns undefined for a session with no proposal and no ledger transitions", () => {
     expect(workflowStateForSession(session())).toBeUndefined();
     expect(workflowStateForSession(session({ timelineEvents: [{ type: "turn.started", turnId: "t1", sequence: 0, emittedAt: 1 }] }))).toBeUndefined();
@@ -112,5 +118,67 @@ describe("workflowStateForSession", () => {
     }));
     expect(derived?.status).toBe("done");
     expect(derived?.currentStep).toBe("cancelled");
+  });
+
+  it("does not restore a persisted staging approval that violates the latest user scope", () => {
+    const derived = workflowStateForSession(session({
+      bubbles: [stagingForbiddenBubble],
+      approvalProposal: {
+        tool: "git_add",
+        args: {},
+        description: "Stage all changes",
+      },
+      timelineEvents: [ledgerWorkflow({ status: "done", currentStep: "done", completedTools: [] })],
+    }));
+
+    expect(derived?.status).toBe("done");
+    expect(derived?.pendingApproval).toBeUndefined();
+  });
+
+  it("suppresses a legacy waiting ledger approval that violates the latest user scope", () => {
+    const invalidApproval: PendingToolAction = {
+      tool: "git_add",
+      args: {},
+      description: "Stage all changes",
+    };
+    const derived = workflowStateForSession(session({
+      bubbles: [stagingForbiddenBubble],
+      approvalProposal: invalidApproval,
+      timelineEvents: [ledgerWorkflow({
+        status: "waiting_for_approval",
+        currentStep: "git_add",
+        completedTools: ["git_status", "git_diff"],
+        pendingApproval: {
+          id: "approval_git_add_legacy",
+          action: invalidApproval,
+          riskLevel: "low",
+        },
+      })],
+    }));
+
+    expect(derived?.status).toBe("done");
+    expect(derived?.currentStep).toBe("done");
+    expect(derived?.pendingApproval).toBeUndefined();
+  });
+
+  it("keeps an explicit structured workspace approval separate from chat-text scope", () => {
+    const structuredStage: PendingToolAction = {
+      tool: "git_add",
+      args: { paths: ["README.md"] },
+      description: "Stage README.md",
+      workflow: {
+        kind: "commit",
+        phase: "stage",
+        message: "docs: update readme",
+      },
+    };
+    const derived = workflowStateForSession(session({
+      bubbles: [stagingForbiddenBubble],
+      approvalProposal: structuredStage,
+      timelineEvents: [ledgerWorkflow({ status: "done", currentStep: "done", completedTools: [] })],
+    }));
+
+    expect(derived?.status).toBe("waiting_for_approval");
+    expect(derived?.pendingApproval?.action).toEqual(structuredStage);
   });
 });

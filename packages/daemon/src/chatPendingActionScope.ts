@@ -1,4 +1,5 @@
 import {
+  prohibitsStaging,
   type ChatMessage,
 } from "@mergepilot/core";
 import type { StoredBubble } from "./chatHistoryStore.js";
@@ -8,6 +9,7 @@ export function isProposalWithinUserScope(
   bubbles: StoredBubble[],
   args: Record<string, unknown> = {},
 ): boolean {
+  if (isStagingProposalProhibitedByLatestUser(tool, args, bubbles)) return false;
   if (isGitWriteBlockedByConflict(tool, args, bubbles)) return false;
   if (tool === "git_merge" && !hasStringArg(args, "ref")) return false;
   if (tool === "git_rebase" && !hasStringArg(args, "onto") && !hasStringArg(args, "action")) return false;
@@ -19,6 +21,23 @@ export function isProposalWithinUserScope(
   if (/work_item|workitem/.test(tool)) return userScopeAllowsAdoStep(bubbles, "work_item");
   if (tool === "ado_trigger_pipeline") return userScopeAllowsAdoStep(bubbles, "pipeline");
   return true;
+}
+
+export function latestUserProhibitsStaging(bubbles: StoredBubble[]): boolean {
+  const latestUser = [...bubbles].reverse().find((bubble) => bubble.role === "user")?.content ?? "";
+  // The most recent user turn owns the current action scope. Earlier turns may
+  // legitimately have prohibited staging before the user later requested a
+  // path-scoped stage, so do not combine every historical user message here.
+  return prohibitsStaging(latestUser, []);
+}
+
+export function isStagingProposalProhibitedByLatestUser(
+  tool: string,
+  args: Record<string, unknown>,
+  bubbles: StoredBubble[],
+): boolean {
+  const proposalStages = tool === "git_add" || (tool === "git_commit" && args["all"] === true);
+  return proposalStages && latestUserProhibitsStaging(bubbles);
 }
 
 function hasStringArg(args: Record<string, unknown>, key: string): boolean {
