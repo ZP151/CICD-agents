@@ -189,6 +189,19 @@ function parseTestSummary(output) {
   };
 }
 
+function parseJsonObjectFromOutput(output) {
+  const trimmed = output.trim();
+  for (let index = trimmed.lastIndexOf("{"); index >= 0; index = trimmed.lastIndexOf("{", index - 1)) {
+    try {
+      const value = JSON.parse(trimmed.slice(index));
+      if (value && typeof value === "object" && !Array.isArray(value)) return value;
+    } catch {
+      // PowerShell or a child process may write text before the final JSON.
+    }
+  }
+  return null;
+}
+
 function stripTerminalCodes(output) {
   return output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, "");
 }
@@ -264,7 +277,15 @@ async function runGates(state, manifest, opts) {
     }
     process.stdout.write(`[${gate.id}] attempt ${attempt}/${opts.repeat ?? 1}: ${gate.cmd}\n`);
     const r = await runCommand(m.cmd, m.timeoutMs);
-    const summary = parseTestSummary(r.stdout + r.stderr);
+    const adapterResult = m.resultAdapter === "live-app-runner"
+      ? parseJsonObjectFromOutput(r.stdout)
+      : null;
+    const adapterPlaywrightLog = adapterResult?.playwrightLog
+      ? path.resolve(repoRoot, adapterResult.playwrightLog)
+      : null;
+    const summary = adapterPlaywrightLog && fs.existsSync(adapterPlaywrightLog)
+      ? parseTestSummary(decodeLog(adapterPlaywrightLog))
+      : parseTestSummary(r.stdout + r.stderr);
     const startedAt = new Date(Date.now() - r.durationMs).toISOString();
     const finishedAt = new Date().toISOString();
     let status = r.timedOut ? "INTERRUPTED" : r.code === 0 ? "PASS" : "FAIL";

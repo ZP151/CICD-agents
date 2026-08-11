@@ -61,6 +61,7 @@ $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $daemonOut = Join-Path $LogDir "live-app-source-daemon-$stamp.log"
 $daemonErr = Join-Path $LogDir "live-app-source-daemon-$stamp.err.log"
 $playwrightLog = Join-Path $LogDir "live-app-e2e-$stamp.log"
+$runnerJson = Join-Path $LogDir "runner-$stamp.json"
 
 function Get-DaemonHealth {
   try {
@@ -376,7 +377,9 @@ try {
     viteLog = $viteLog
     viteErrorLog = $viteErrLog
     prewarmLog = $prewarmLog
+    runnerPath = $runnerJson
   } | ConvertTo-Json -Depth 6
+  $resultJson | Set-Content -LiteralPath $runnerJson -Encoding utf8
   Write-Output $resultJson
 
   exit $exitCode

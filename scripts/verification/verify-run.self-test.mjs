@@ -196,6 +196,35 @@ check("chained Playwright summaries are aggregated",
   chainedPlaywrightRun.status === "PASS" && chainedPlaywrightRun.passed === 6 && chainedPlaywrightRun.total === 6,
   JSON.stringify(chainedPlaywrightRun));
 
+const adapterDir = path.join(sandbox, "adapter");
+fs.mkdirSync(adapterDir, { recursive: true });
+const adapterScript = path.join(adapterDir, "run.mjs");
+fs.writeFileSync(adapterScript, `
+  import fs from "node:fs";
+  import path from "node:path";
+  const dir = path.dirname(new URL(import.meta.url).pathname.replace(/^\\/(?:[A-Za-z]:)/, (value) => value.slice(1)));
+  const playwrightLog = path.join(dir, "playwright.log");
+  const runnerPath = path.join(dir, "runner-current.json");
+  fs.writeFileSync(playwrightLog, "30 passed (20.8m)\\n");
+  const result = { ok: true, exitCode: 0, playwrightLog, runnerPath };
+  fs.writeFileSync(runnerPath, JSON.stringify(result));
+  console.log(JSON.stringify(result));
+`);
+writeManifest([{
+  id: "gate-live-adapter", tier: "source-live-e2e", required: true, requireNoSkips: true,
+  timeoutMs: 10000, cmd: `node "${adapterScript.replace(/\\\\/g, "/")}"`,
+  description: "live adapter", artifacts: ["adapter/runner-*.json"], resultAdapter: "live-app-runner",
+}]);
+r = run([]);
+const liveAdapterRun = stateGate("gate-live-adapter", readState()).runs[0];
+check("normal gate execution consumes the live-app runner summary",
+  liveAdapterRun.status === "PASS" && liveAdapterRun.passed === 30 &&
+  liveAdapterRun.failed === 0 && liveAdapterRun.total === 30,
+  JSON.stringify(liveAdapterRun));
+check("normal live-app gate records the persisted runner artifact",
+  liveAdapterRun.artifacts.some((artifact) => artifact.path.endsWith("runner-current.json")),
+  JSON.stringify(liveAdapterRun.artifacts));
+
 // 8: merge an external runner JSON with a UTF-16LE playwright log
 const runnerDir = path.join(sandbox, "out");
 fs.mkdirSync(runnerDir, { recursive: true });
