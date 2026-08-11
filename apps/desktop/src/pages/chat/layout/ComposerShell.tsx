@@ -286,6 +286,7 @@ export function ComposerShell({
       >
         <textarea
           ref={textareaRef}
+          data-testid="chat-composer-input"
           className="w-full resize-none bg-transparent text-sm text-[rgb(var(--app-text))] placeholder:text-[rgb(var(--app-text-subtle))] transition disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none"
           placeholder={effectiveComposerInputState.placeholder}
           title={effectiveComposerInputState.inputTitle}

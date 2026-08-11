@@ -1313,7 +1313,10 @@ test.describe("Live app business workflows", () => {
       // request (a pending-action card keeps the composer disabled), so wait
       // for whichever comes first and decline a stray card — declining only
       // closes the turn, which is exactly what a read-only turn should do.
-      const composer = page.getByPlaceholder(/Ask MergePilot/);
+      // The placeholder intentionally changes while an approval is pending.
+      // Use the stable composer identity so isEnabled() returns false instead
+      // of waiting for the old placeholder until the whole poll times out.
+      const composer = page.getByTestId("chat-composer-input");
       await expect
         .poll(
           async () => {
