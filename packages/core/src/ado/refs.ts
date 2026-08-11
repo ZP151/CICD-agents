@@ -36,9 +36,14 @@ export async function readAzureBranchObjectId(args: {
     throw new ToolError("ADO organization, project, repository, and branch are required.");
   }
   const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  // Azure DevOps returns canonical names with the `refs/` prefix, but its
+  // Refs List `filter` query is relative to that namespace (`heads/main`,
+  // not `refs/heads/main`). Supplying the canonical name yields a successful
+  // empty response, which previously made every real branch look missing.
+  const apiFilter = branchRef.replace(/^refs\//, "");
   const url =
     `${adoBase(org)}/${encodeURIComponent(project)}/_apis/git/repositories/` +
-    `${encodeURIComponent(repository)}/refs?filterContains=${encodeURIComponent(branchRef)}` +
+    `${encodeURIComponent(repository)}/refs?filter=${encodeURIComponent(apiFilter)}` +
     `&api-version=${API_VERSION_GIT}`;
   const resp = await adoFetch(url, auth);
   if (!resp.ok) return undefined;
