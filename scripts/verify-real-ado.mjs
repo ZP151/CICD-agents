@@ -16,7 +16,7 @@
  *
  * Evidence: docs/manual-testing/2026-08-05/verification/real-ado-evidence.json
  */
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,12 +28,20 @@ const PROJECT_LINK_ID = "eb2f6c876f53b33d";
 const REPO_PATH = "C:\\Users\\15492\\Develop\\ClaimBot_API";
 const EVIDENCE_PATH = path.join(repoRoot, "docs", "manual-testing", "2026-08-05", "verification", "real-ado-evidence.json");
 
-function sha() {
+function gitValue(cwd, args) {
   try {
-    return fs.readFileSync(path.join(repoRoot, ".git", "refs", "heads", "claudecode", "optimize-bugfix"), "utf8").trim();
+    return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
   } catch {
     return "unknown";
   }
+}
+
+function gitSha(cwd) {
+  return gitValue(cwd, ["rev-parse", "HEAD"]);
+}
+
+function gitBranch(cwd) {
+  return gitValue(cwd, ["branch", "--show-current"]);
 }
 
 async function fetchJson(method, url, body) {
@@ -48,28 +56,61 @@ async function fetchJson(method, url, body) {
   return { ok: response.ok, status: response.status, body: parsed };
 }
 
-async function healthOk() {
+async function readHealth() {
   try {
     const r = await fetchJson("GET", `${RUNTIME}/healthz`);
-    return r.ok;
+    return r.ok ? r.body : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-async function ensureDaemon() {
-  if (await healthOk()) return { started: false, pid: undefined };
+async function ensureDaemon(expectedSha, expectedVersion) {
+  const existing = await readHealth();
+  if (existing) {
+    if (existing.version !== expectedVersion || existing.buildSha !== expectedSha) {
+      throw new Error(
+        `daemon mismatch: expected ${expectedVersion} @ ${expectedSha}, ` +
+        `got ${existing.version ?? "unknown"} @ ${existing.buildSha ?? "unknown"}`,
+      );
+    }
+    return { started: false, pid: undefined, health: existing };
+  }
   const child = spawn(
     path.join(repoRoot, ".tools", "node-v22.11.0-win-x64", "node.exe"),
     ["packages/daemon/dist/bin.js", "--port", "8787"],
-    { cwd: repoRoot, stdio: "ignore", detached: true },
+    {
+      cwd: repoRoot,
+      stdio: "ignore",
+      detached: true,
+      env: { ...process.env, MERGEPILOT_BUILD_SHA: expectedSha },
+    },
   );
   child.unref();
   for (let i = 0; i < 30; i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
-    if (await healthOk()) return { started: true, pid: child.pid };
+    const health = await readHealth();
+    if (health) {
+      if (health.version !== expectedVersion || health.buildSha !== expectedSha) {
+        try { process.kill(child.pid); } catch {}
+        throw new Error(
+          `started daemon mismatch: expected ${expectedVersion} @ ${expectedSha}, ` +
+          `got ${health.version ?? "unknown"} @ ${health.buildSha ?? "unknown"}`,
+        );
+      }
+      return { started: true, pid: child.pid, health };
+    }
   }
   return { started: true, pid: child.pid, error: "daemon did not become healthy in 30s" };
+}
+
+async function stopStartedDaemon(daemon) {
+  if (!daemon?.started || !daemon.pid) return;
+  try { process.kill(daemon.pid); } catch {}
+  for (let i = 0; i < 20; i += 1) {
+    if (!(await readHealth())) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
 }
 
 async function proposeAndApprove(label, proposal) {
@@ -91,10 +132,22 @@ async function main() {
   const startedAt = new Date().toISOString();
   const runId = `real-ado-${Date.now().toString(36)}`;
   const steps = [];
+  const mergePilotSha = gitSha(repoRoot);
+  const mergePilotBranch = gitBranch(repoRoot);
+  const claimBotSha = gitSha(REPO_PATH);
+  const expectedVersion = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8")).version;
+  let daemon;
 
-  const daemon = await ensureDaemon();
-  if (daemon.error) throw new Error(daemon.error);
-  steps.push({ step: "daemon-health", ok: true, daemonStarted: daemon.started });
+  try {
+    daemon = await ensureDaemon(mergePilotSha, expectedVersion);
+    if (daemon.error) throw new Error(daemon.error);
+    steps.push({
+      step: "daemon-health",
+      ok: true,
+      daemonStarted: daemon.started,
+      version: daemon.health.version,
+      buildSha: daemon.health.buildSha,
+    });
 
   // 2. create fixture WI
   const created = await proposeAndApprove("create", {
@@ -174,25 +227,34 @@ async function main() {
   });
   steps.push({ step: "work_item.delete", ok: true, actionId: deleted.actionId });
 
-  const finishedAt = new Date().toISOString();
-  const evidence = {
-    schemaVersion: 1,
-    runId,
-    commit: { sha: sha() },
-    appVersion: JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8")).version,
-    productModel: process.env.AZURE_OPENAI_CHAT_DEPLOYMENT ?? "unknown",
-    projectLinkId: PROJECT_LINK_ID,
-    repoPath: REPO_PATH,
-    adoResources: { workItemId: wiId },
-    startedAt,
-    finishedAt,
-    steps,
-    status: steps.every((s) => s.ok) ? "PASS" : "FAIL",
-  };
-  fs.mkdirSync(path.dirname(EVIDENCE_PATH), { recursive: true });
-  fs.writeFileSync(EVIDENCE_PATH, JSON.stringify(evidence, null, 2));
-  process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`);
-  process.exit(evidence.status === "PASS" ? 0 : 1);
+    const finishedAt = new Date().toISOString();
+    const evidence = {
+      schemaVersion: 2,
+      runId,
+      mergePilot: {
+        sha: mergePilotSha,
+        branch: mergePilotBranch,
+        version: expectedVersion,
+        daemonBuildSha: daemon.health.buildSha,
+        daemonVersion: daemon.health.version,
+        modelProvider: daemon.health.llmProvider ?? "unknown",
+        modelDeployment: daemon.health.azureDeployment ?? "unknown",
+      },
+      claimBotFixture: { repoPath: REPO_PATH, sha: claimBotSha },
+      projectLinkId: PROJECT_LINK_ID,
+      adoResources: { workItemId: wiId },
+      startedAt,
+      finishedAt,
+      steps,
+      status: steps.every((s) => s.ok) ? "PASS" : "FAIL",
+    };
+    fs.mkdirSync(path.dirname(EVIDENCE_PATH), { recursive: true });
+    fs.writeFileSync(EVIDENCE_PATH, JSON.stringify(evidence, null, 2));
+    process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`);
+    process.exitCode = evidence.status === "PASS" ? 0 : 1;
+  } finally {
+    await stopStartedDaemon(daemon);
+  }
 }
 
 main().catch((err) => {
