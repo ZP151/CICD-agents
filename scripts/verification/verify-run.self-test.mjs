@@ -7,11 +7,12 @@
 //      PASS beats an earlier FAIL)
 //   5. artifacts are attempt-scoped by mtime window (stale files never bind)
 //   6. requireNoSkips is enforced generically (skipped tests -> FAIL + note)
-//   7. --merge ingests an external live-app runner JSON (+ UTF-16LE playwright log)
-//   8. runs auto-project goal-verification.json + current-gates.md (no staleness)
-//   9. artifact sha256 recording + --verify-artifacts detects tampering
-//  10. HEAD mismatch blocks --resume (exit 2)
-//  11. --fresh archives the prior state and starts a clean run on current HEAD
+//   7. failed Playwright summaries retain failed/passed counts + bounded stdout
+//   8. --merge ingests an external live-app runner JSON (+ UTF-16LE playwright log)
+//   9. runs auto-project goal-verification.json + current-gates.md (no staleness)
+//  10. artifact sha256 recording + --verify-artifacts detects tampering
+//  11. HEAD mismatch blocks --resume (exit 2)
+//  12. --fresh archives the prior state and starts a clean run on current HEAD
 // Run: node scripts/verification/verify-run.self-test.mjs
 // Exit 0 = all assertions held. No network, no repo writes (temp dir only).
 
@@ -152,6 +153,45 @@ check("requireNoSkips turns skipped PASS into FAIL", violation.status === "FAIL"
   `status=${violation.status} note=${violation.runs[0].note}`);
 check("skips tolerated without requireNoSkips", stateGate("gate-skip-tolerated", stateSkip).status === "PASS");
 
+// 7: a failed Playwright command commonly prints failed and passed counts on
+// separate lines. The canonical evidence must not hide the failed count just
+// because the last summary line contains only "passed".
+writeManifest([
+  { id: "gate-playwright-failure", tier: "mocked-browser-e2e", required: true, requireNoSkips: true, timeoutMs: 10000,
+    cmd: `node -e "console.log('9 failed\\n42 passed (4m)');process.exit(1)"`, description: "playwright failure summary" },
+]);
+r = run([]);
+const statePlaywrightFailure = readState();
+const playwrightFailureRun = stateGate("gate-playwright-failure", statePlaywrightFailure).runs[0];
+check("failed Playwright summary records every result count",
+  playwrightFailureRun.status === "FAIL" && playwrightFailureRun.passed === 42 &&
+  playwrightFailureRun.failed === 9 && playwrightFailureRun.total === 51,
+  JSON.stringify(playwrightFailureRun));
+check("failed command retains bounded diagnostic stdout",
+  playwrightFailureRun.stdoutTail?.includes("9 failed") && playwrightFailureRun.stdoutTail?.includes("42 passed"),
+  JSON.stringify(playwrightFailureRun));
+const projectedPlaywrightFailure = JSON.parse(fs.readFileSync(path.join(sandbox, "goal-verification.json"), "utf8"));
+const projectedPlaywrightRun = projectedPlaywrightFailure.gates
+  .find((g) => g.id === "gate-playwright-failure").runs[0];
+check("projected evidence preserves Playwright failures",
+  projectedPlaywrightRun.failed === 9 && projectedPlaywrightRun.total === 51 &&
+  projectedPlaywrightRun.stdoutTail?.includes("9 failed"),
+  JSON.stringify(projectedPlaywrightRun));
+const mdPlaywrightFailure = fs.readFileSync(path.join(path.dirname(statePath), "current-gates.md"), "utf8");
+check("projected markdown shows passed and failed test counts",
+  mdPlaywrightFailure.includes("42 passed, 9 failed"),
+  mdPlaywrightFailure.split("\n").find((line) => line.includes("gate-playwright-failure")));
+
+writeManifest([
+  { id: "gate-playwright-chain", tier: "mocked-browser-e2e", required: true, requireNoSkips: true, timeoutMs: 10000,
+    cmd: `node -e "console.log('1 passed (1s)\\n2 passed (2s)\\n3 passed (3s)');process.exit(0)"`, description: "chained playwright summaries" },
+]);
+r = run([]);
+const chainedPlaywrightRun = stateGate("gate-playwright-chain", readState()).runs[0];
+check("chained Playwright summaries are aggregated",
+  chainedPlaywrightRun.status === "PASS" && chainedPlaywrightRun.passed === 6 && chainedPlaywrightRun.total === 6,
+  JSON.stringify(chainedPlaywrightRun));
+
 // 8: merge an external runner JSON with a UTF-16LE playwright log
 const runnerDir = path.join(sandbox, "out");
 fs.mkdirSync(runnerDir, { recursive: true });
@@ -172,6 +212,20 @@ check("merge classifies PASS + parses UTF-16LE summary", sl.status === "PASS" &&
   sl.runs[0].note.includes("passed") && sl.runs[0].note.includes("30"),
   `note=${sl.runs[0].note}`);
 check("merge records artifact hashes", sl.runs[0].artifacts.length >= 2 && sl.runs[0].artifacts.every((a) => a.sha256));
+
+const failedPwLog = path.join(runnerDir, "playwright-failed.log");
+const failedLogText = "\r\nRunning 30 tests using 1 worker\r\n\r\n  2 failed\r\n  28 passed (4m)\r\n";
+fs.writeFileSync(failedPwLog, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(failedLogText, "utf16le")]));
+const failedRunnerJson = path.join(runnerDir, "runner-failed.json");
+fs.writeFileSync(failedRunnerJson, JSON.stringify({
+  ok: false, exitCode: 1, playwrightLog: "out/playwright-failed.log",
+}));
+r = run(["--merge", failedRunnerJson, "--gate", "source-live"]);
+const mergedFailure = stateGate("source-live", readState()).runs.at(-1);
+check("merge preserves separate-line Playwright failure counts",
+  mergedFailure.status === "FAIL" && mergedFailure.passed === 28 &&
+  mergedFailure.failed === 2 && mergedFailure.total === 30,
+  JSON.stringify(mergedFailure));
 
 // 9: project regenerates goal-verification.json + current-gates.md from state
 r = run(["--project"]);
