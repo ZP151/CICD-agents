@@ -10,6 +10,7 @@ const DAEMON_URL = "http://127.0.0.1:8787";
 const liveAppEnabled = process.env.MERGEPILOT_E2E_LIVE_APP === "1";
 const liveAdoEnabled = process.env.MERGEPILOT_E2E_LIVE_ADO === "1";
 const destructiveEnabled = process.env.MERGEPILOT_E2E_DESTRUCTIVE === "1";
+const workedTurnLabel = /^Worked for (?:(?:\d+h )?(?:\d+m )?)\d+s$/;
 const claimBotRepoPath =
   process.env.MERGEPILOT_E2E_CLAIMBOT_REPO_PATH ||
   "C:\\Users\\15492\\Develop\\ClaimBot_API";
@@ -645,7 +646,7 @@ async function pendingActionCardOrTurnEnded(
     .poll(
       async () => {
         if (await card.isVisible().catch(() => false)) return "card";
-        const chipCount = await page.getByRole("button", { name: /^Worked for \d+s$/ }).count();
+        const chipCount = await page.getByRole("button", { name: workedTurnLabel }).count();
         if (chipCount > chipCountBefore) return "ended";
         return "running";
       },
@@ -675,6 +676,18 @@ async function approvalCommandEvidence(card: Locator): Promise<Locator> {
   const command = disclosure.locator("code").first();
   await expect(command).toBeVisible();
   return command;
+}
+
+async function fillApprovalChangeRequest(card: Locator, feedback: string): Promise<void> {
+  const disclosure = card.locator("details").filter({ hasText: "Request changes" }).first();
+  const summary = disclosure.getByText("Request changes", { exact: true });
+  await expect(summary).toBeVisible();
+  if ((await disclosure.getAttribute("open")) === null) {
+    await summary.click();
+  }
+  const input = disclosure.getByPlaceholder("Tell MergePilot what to do differently...");
+  await expect(input).toBeVisible();
+  await input.fill(feedback);
 }
 
 async function openEnvironmentPanel(page: Page): Promise<void> {
@@ -834,7 +847,7 @@ test.describe("Live app business workflows", () => {
       // the 90s card wait could not recover from). Wait for either the card
       // or a finished turn, then re-prompt once naming git_add explicitly
       // (same recovery pattern as the tag test).
-      const chipCountBefore = await page.getByRole("button", { name: /^Worked for \d+s$/ }).count();
+      const chipCountBefore = await page.getByRole("button", { name: workedTurnLabel }).count();
       const cardShown = await pendingActionCardOrTurnEnded(page, approvalCard, chipCountBefore, 150_000);
       if (!cardShown) {
         await page.getByPlaceholder(/Ask MergePilot/).fill(
@@ -962,15 +975,18 @@ test.describe("Live app business workflows", () => {
         .filter({ hasText: "README.md" })
         .first();
       await expect(firstApproval).toBeVisible({ timeout: 90_000 });
+      await expect(page.getByTestId("pending-action-card")).toHaveCount(1);
       // The working-turn prose and the LLM-written card description may
       // mention notes.txt; the staged scope that matters is the command
       // preview.
-      await expect(firstApproval.locator("code").first()).toContainText("README.md");
-      await expect(firstApproval.locator("code").first()).not.toContainText("notes.txt");
+      const firstCommand = await approvalCommandEvidence(firstApproval);
+      await expect(firstCommand).toContainText("README.md");
+      await expect(firstCommand).not.toContainText("notes.txt");
 
-      await firstApproval
-        .getByPlaceholder("Tell MergePilot what to do differently...")
-        .fill("Actually stage only notes.txt instead. Do not stage README.md. Do not commit or push.");
+      await fillApprovalChangeRequest(
+        firstApproval,
+        "Actually stage only notes.txt instead. Do not stage README.md. Do not commit or push.",
+      );
       await firstApproval.getByRole("button", { name: "Skip action" }).click();
 
       await expect.poll(() => git(repoPath, ["diff", "--cached", "--name-only"]), { timeout: 30_000 }).toBe("");
@@ -991,7 +1007,7 @@ test.describe("Live app business workflows", () => {
       // measured 84s with a completion-claiming final narrative). Wait for
       // either the revised card or a finished turn, then re-prompt once
       // forbidding completion claims (same recovery pattern as the tag test).
-      const chipCountBefore = await page.getByRole("button", { name: /^Worked for \d+s$/ }).count();
+      const chipCountBefore = await page.getByRole("button", { name: workedTurnLabel }).count();
       const cardShown = await pendingActionCardOrTurnEnded(page, revisedApproval, chipCountBefore, 120_000);
       if (!cardShown) {
         await page.getByPlaceholder(/Ask MergePilot/).fill(
@@ -1010,8 +1026,9 @@ test.describe("Live app business workflows", () => {
       }
       // The revised card's description may mention README.md; the staged
       // scope that matters is the command preview.
-      await expect(revisedApproval.locator("code").first()).toContainText("notes.txt");
-      await expect(revisedApproval.locator("code").first()).not.toContainText("README.md");
+      const revisedCommand = await approvalCommandEvidence(revisedApproval);
+      await expect(revisedCommand).toContainText("notes.txt");
+      await expect(revisedCommand).not.toContainText("README.md");
       await revisedApproval.getByRole("button", { name: "Approve and run" }).click();
 
       await expect.poll(() => git(repoPath, ["diff", "--cached", "--name-only"]), { timeout: 30_000 }).toBe(
@@ -2119,7 +2136,7 @@ test.describe("Live app business workflows", () => {
         .filter({ hasText: /git[_ ]tag/i })
         .filter({ hasText: tagName })
         .first();
-      const chipCountBefore = await page.getByRole("button", { name: /^Worked for \d+s$/ }).count();
+      const chipCountBefore = await page.getByRole("button", { name: workedTurnLabel }).count();
       const cardShown = await pendingActionCardOrTurnEnded(page, tagApproval, chipCountBefore, 150_000);
       if (!cardShown) {
         await page.getByPlaceholder(/Ask MergePilot/).fill(
