@@ -1,6 +1,6 @@
 {
   "name": "@mergepilot/cli",
-  "version": "0.5.31",
+  "version": "0.5.32",
   "description": "MergePilot command-line entry points.",
   "private": true,
   "author": "ZP151 <zhouping151140@gmail.com>",
