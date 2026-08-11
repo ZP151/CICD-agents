@@ -87,6 +87,24 @@ describe("delivery routes", () => {
     await app.close();
   });
 
+  it("validates and resolves the current-SHA validation target before executing", async () => {
+    const app = await buildApp(writes);
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/delivery/pull-request-validation",
+      payload: { projectLinkId: "claimbot", expectedHeadSha: "not-a-sha" },
+    });
+    expect(invalid.statusCode).toBe(400);
+
+    const missing = await app.inject({
+      method: "POST",
+      url: "/delivery/pull-request-validation",
+      payload: { projectLinkId: "missing", expectedHeadSha: "abc1234" },
+    });
+    expect(missing.statusCode).toBe(404);
+    await app.close();
+  });
+
   it("reports an incomplete Azure DevOps mapping as a recoverable Work setup error", async () => {
     const app = await buildApp(writes, {
       id: "incomplete-link",

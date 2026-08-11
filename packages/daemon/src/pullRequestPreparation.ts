@@ -14,6 +14,7 @@ import {
   type PullRequestGitEvidence,
   type PullRequestPreparation,
   type PullRequestSuggestionPreferences,
+  type PullRequestValidationEvidence,
 } from "@mergepilot/core";
 
 interface GitCommandResult {
@@ -74,6 +75,7 @@ const DEFAULT_DEPENDENCIES: PullRequestPreparationDependencies = {
 export async function preparePullRequest(args: {
   projectLink: ProjectLink;
   preferences?: PullRequestSuggestionPreferences;
+  validation?: PullRequestValidationEvidence;
   dependencies?: Partial<PullRequestPreparationDependencies>;
 }): Promise<PullRequestPreparation> {
   const dependencies = { ...DEFAULT_DEPENDENCIES, ...args.dependencies };
@@ -179,11 +181,13 @@ export async function preparePullRequest(args: {
     projectLinkId: args.projectLink.id,
     repositoryId,
     git,
-    validation: {
-      status: "not_run",
-      summary: "No current-SHA validation has been run for this preparation.",
-      sourceSha: git.headSha || undefined,
-    },
+    validation: args.validation?.sourceSha === git.headSha
+      ? args.validation
+      : {
+        status: "not_run",
+        summary: "No current-SHA validation has been run for this preparation.",
+        sourceSha: git.headSha || undefined,
+      },
     workItem,
     policies,
     preferences,

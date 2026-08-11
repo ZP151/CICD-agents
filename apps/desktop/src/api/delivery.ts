@@ -95,6 +95,8 @@ export interface PullRequestPreparation {
     command?: string;
     summary: string;
     sourceSha?: string;
+    durationMs?: number;
+    outputExcerpt?: string;
   };
   workItem: {
     status: "available" | "missing" | "unavailable" | "failed";
@@ -126,6 +128,28 @@ export interface PullRequestPreparation {
     missingEvidence: string[];
     readiness: "ready" | "needs_attention" | "blocked" | "insufficient_evidence";
   };
+}
+
+export type PullRequestValidationResult = PullRequestPreparation["validation"] & {
+  projectLinkId: string;
+  repoPath: string;
+  completedAt: number;
+};
+
+export async function runPullRequestValidation(input: {
+  projectLinkId: string;
+  expectedHeadSha: string;
+}): Promise<PullRequestValidationResult> {
+  const r = await fetch(`${RUNTIME_URL}/delivery/pull-request-validation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!r.ok) {
+    const body = (await r.json().catch(() => null)) as { error?: string; message?: string } | null;
+    throw new Error(body?.message ?? body?.error ?? `Pull request validation HTTP ${r.status}`);
+  }
+  return r.json() as Promise<PullRequestValidationResult>;
 }
 
 export async function fetchPullRequestPreparation(input: {

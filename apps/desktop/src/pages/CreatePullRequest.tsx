@@ -6,6 +6,7 @@ import {
   fetchPullRequestPreparation,
   proposeDeliveryAction,
   rejectDeliveryAction,
+  runPullRequestValidation,
   type DeliveryActionRecord,
   type PullRequestPreparation,
 } from "../api/delivery.js";
@@ -189,6 +190,36 @@ export default function CreatePullRequest(): JSX.Element {
     }
   }, [description, preparation, sourceBranch, targetBranch, title, workItemId]);
 
+  const validateCurrentSha = useCallback(async () => {
+    if (!preparation) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await runPullRequestValidation({
+        projectLinkId: preparation.projectLinkId,
+        expectedHeadSha: preparation.git.headSha,
+      });
+      const numericWorkItemId = workItemId.trim() ? Number(workItemId) : undefined;
+      const next = await fetchPullRequestPreparation({
+        projectLinkId: preparation.projectLinkId,
+        sourceBranch: sourceBranch.trim(),
+        targetBranch: targetBranch.trim(),
+        title: title.trim(),
+        description: description.trim(),
+        ...(numericWorkItemId ? { workItemId: numericWorkItemId } : {}),
+      });
+      setPreparation(next);
+      setSourceBranch(next.suggestion.sourceBranch);
+      setTargetBranch(next.suggestion.targetBranch);
+      setTitle(next.suggestion.title);
+      setDescription(next.suggestion.description);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [description, preparation, sourceBranch, targetBranch, title, workItemId]);
+
   const approve = useCallback(async () => {
     if (!action) return;
     setBusy(true);
@@ -252,6 +283,11 @@ export default function CreatePullRequest(): JSX.Element {
       {preparation && (
         <>
           <EvidencePanel preparation={preparation} />
+          <div className="flex justify-end">
+            <ActionButton type="button" loading={busy} onClick={() => void validateCurrentSha()}>
+              {preparation.validation.status === "passed" ? "Re-run current-SHA validation" : "Run current-SHA validation"}
+            </ActionButton>
+          </div>
           <section className="space-y-3 rounded-lg border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface))] p-4">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-[rgb(var(--app-text))]">Editable pull request suggestion</h2>
@@ -314,6 +350,12 @@ function EvidencePanel({ preparation }: { preparation: PullRequestPreparation })
           <EvidenceList title="Missing evidence" items={preparation.suggestion.missingEvidence} />
           <EvidenceList title="Risks and policy requirements" items={preparation.suggestion.risks} />
         </div>
+      )}
+      {preparation.validation.outputExcerpt && (
+        <details className="rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs">
+          <summary className="cursor-pointer text-[rgb(var(--app-text-muted))]">Validation output excerpt</summary>
+          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-5 text-[rgb(var(--app-text-subtle))]">{preparation.validation.outputExcerpt}</pre>
+        </details>
       )}
     </section>
   );

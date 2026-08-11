@@ -28,6 +28,7 @@ import {
 import { z } from "zod";
 import type { ProjectLinkStoreAdapter } from "../projectLinkStore.js";
 import { preparePullRequest } from "../pullRequestPreparation.js";
+import { PullRequestValidationCache, runPullRequestValidation } from "../pullRequestValidation.js";
 
 const ArtifactRefSchema = z.custom<ArtifactRef>(isArtifactRef, {
   message: "invalid ArtifactRef: must include a known kind and projectLinkId",
@@ -85,6 +86,11 @@ const PullRequestPreparationSchema = z.object({
   workItemId: z.number().int().positive().optional(),
 });
 
+const PullRequestValidationSchema = z.object({
+  projectLinkId: z.string().min(1),
+  expectedHeadSha: z.string().regex(/^[0-9a-f]{7,64}$/i),
+});
+
 export interface DeliveryWritesState {
   isEnabled: () => boolean;
   setEnabled: (enabled: boolean) => void;
@@ -98,6 +104,7 @@ export interface DeliveryRoutesOptions {
 
 export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRoutesOptions): void {
   const { projectLinkStore, writes } = options;
+  const pullRequestValidationCache = new PullRequestValidationCache();
 
   function createTransport(): AdoActionTransport {
     return new AdoActionTransport({
@@ -139,10 +146,35 @@ export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRo
           message: "This Project Link needs a local repository before a pull request can be prepared.",
         });
       }
-      return await preparePullRequest({ projectLink, preferences });
+      return await preparePullRequest({
+        projectLink,
+        preferences,
+        validation: pullRequestValidationCache.latest(projectLinkId),
+      });
     } catch (error) {
       return reply.code(500).send({
         error: "pull_request_preparation_failed",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.post("/delivery/pull-request-validation", async (request, reply) => {
+    const parsed = PullRequestValidationSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
+    const { projectLinkId, expectedHeadSha } = parsed.data;
+    try {
+      const projectLink = await projectLinkStore.getProjectLink(projectLinkId);
+      if (!projectLink) return reply.code(404).send({ error: "project_link_not_found" });
+      if (!projectLink.repoPath.trim()) {
+        return reply.code(422).send({ error: "project_link_repository_missing" });
+      }
+      const result = await runPullRequestValidation({ projectLink, expectedHeadSha });
+      pullRequestValidationCache.set(result);
+      return result;
+    } catch (error) {
+      return reply.code(500).send({
+        error: "pull_request_validation_failed",
         message: error instanceof Error ? error.message : String(error),
       });
     }

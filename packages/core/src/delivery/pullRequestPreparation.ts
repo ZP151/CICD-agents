@@ -32,6 +32,8 @@ export interface PullRequestValidationEvidence {
   command?: string;
   summary: string;
   sourceSha?: string;
+  durationMs?: number;
+  outputExcerpt?: string;
 }
 
 export interface PullRequestPolicyEvidence {

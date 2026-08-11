@@ -125,6 +125,23 @@ describe("preparePullRequest", () => {
     expect(preparation.policies).toMatchObject({ status: "failed" });
     expect(preparation.policies.message).toContain("authorization rejected");
     expect(preparation.workItem.status).toBe("failed");
-    expect(preparation.suggestion.readiness).toBe("insufficient_evidence");
+    expect(preparation.suggestion.readiness).toBe("blocked");
+  });
+
+  it("accepts only a validation record bound to the observed HEAD", async () => {
+    const deps = dependencies();
+    const accepted = await preparePullRequest({
+      projectLink,
+      dependencies: deps,
+      validation: { status: "passed", sourceSha: "abc123", summary: "current SHA passed" },
+    });
+    expect(accepted.validation.status).toBe("passed");
+
+    const stale = await preparePullRequest({
+      projectLink,
+      dependencies: deps,
+      validation: { status: "passed", sourceSha: "old-sha", summary: "stale result" },
+    });
+    expect(stale.validation).toMatchObject({ status: "not_run", sourceSha: "abc123" });
   });
 });

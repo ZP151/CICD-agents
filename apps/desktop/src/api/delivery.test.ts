@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchPullRequestPreparation, rejectDeliveryAction } from "./delivery.js";
+import { fetchPullRequestPreparation, rejectDeliveryAction, runPullRequestValidation } from "./delivery.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -78,5 +78,27 @@ describe("fetchPullRequestPreparation", () => {
       workItemId: 7913,
     });
     expect(result.repositoryId).toBe("repo-guid");
+  });
+});
+
+describe("runPullRequestValidation", () => {
+  it("binds the explicit validation request to the prepared HEAD", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      projectLinkId: "claimbot",
+      repoPath: "C:/repo",
+      status: "passed",
+      sourceSha: "abc1234",
+      summary: "passed",
+      completedAt: 1,
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+
+    await expect(runPullRequestValidation({
+      projectLinkId: "claimbot",
+      expectedHeadSha: "abc1234",
+    })).resolves.toMatchObject({ status: "passed", sourceSha: "abc1234" });
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      projectLinkId: "claimbot",
+      expectedHeadSha: "abc1234",
+    });
   });
 });
