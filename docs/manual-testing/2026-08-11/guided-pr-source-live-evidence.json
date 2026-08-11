@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "phase_evidence_not_final_release_gate",
+  "generatedAt": "2026-08-11T04:49:15Z",
+  "mergePilotImplementationSha": "83386aa872cb4faece45f9a0be5f42e81f1360c7",
+  "mergePilotBranch": "claudecode/mergepilot-v1",
+  "mergePilotRefsAtRun": {
+    "local": "83386aa872cb4faece45f9a0be5f42e81f1360c7",
+    "origin": "83386aa872cb4faece45f9a0be5f42e81f1360c7",
+    "ado": "83386aa872cb4faece45f9a0be5f42e81f1360c7"
+  },
+  "claimBotFixture": {
+    "branch": "mergepilot-e2e/guided-pr-v1",
+    "localSha": "02f9f7c44100844bbfca860005a5b3c6ef53aec8",
+    "remoteSha": "02f9f7c44100844bbfca860005a5b3c6ef53aec8",
+    "targetBranch": "main",
+    "targetSha": "dffeecd534790c4446a29208674f2b6021640a63",
+    "changedFiles": [
+      ".mergepilot-e2e/guided-pr-v1.md"
+    ],
+    "dirty": false
+  },
+  "sourceLive": {
+    "command": ".\\scripts\\windows\\pnpm-project.ps1 --filter @mergepilot/daemon test -- test/livePullRequestPreparation.test.ts",
+    "result": "passed",
+    "tests": 1,
+    "repositoryIdentity": "2e209da7-5290-42bc-affe-d0f9530360bd",
+    "workItemRead": "available",
+    "targetPolicyRead": "available",
+    "enabledTargetPolicies": 0,
+    "validation": {
+      "status": "unavailable",
+      "sourceSha": "02f9f7c44100844bbfca860005a5b3c6ef53aec8",
+      "reason": "The local MSBuild installation lacks Microsoft.WebApplication.targets. The result was classified as toolchain unavailable, not product-code failure."
+    }
+  },
+  "desktopMockedE2e": {
+    "command": ".\\scripts\\windows\\pnpm-project.ps1 exec playwright test tests/e2e/guided-pr-preparation.spec.ts",
+    "result": "passed",
+    "tests": 2,
+    "covered": [
+      "read evidence",
+      "exact-SHA validation request",
+      "editable title and description",
+      "branch and Work Item identity invalidation",
+      "typed ActionRecord preview",
+      "explicit approval and verification",
+      "explicit rejection without execution"
+    ]
+  },
+  "governedActions": [
+    {
+      "id": "act-10v5kk4",
+      "kind": "work_item.create",
+      "status": "verified",
+      "remoteTarget": "Work Item 7919",
+      "verification": [
+        "exists at revision 1",
+        "System.Title equals the reviewed fixture title"
+      ]
+    },
+    {
+      "id": "act-bfvxyw",
+      "kind": "pull_request.create",
+      "status": "verified",
+      "remoteTarget": "Pull Request 2807",
+      "verification": [
+        "source commit equals 02f9f7c44100844bbfca860005a5b3c6ef53aec8",
+        "workItemIds contains 7919"
+      ]
+    },
+    {
+      "id": "act-wk8z9l",
+      "kind": "pipeline.trigger",
+      "status": "verified",
+      "remoteTarget": "Pipeline 117 build 4850",
+      "verification": [
+        "run is visible",
+        "sourceVersion equals 02f9f7c44100844bbfca860005a5b3c6ef53aec8"
+      ]
+    },
+    {
+      "id": "act-14iul8f",
+      "kind": "work_item.comment",
+      "status": "verified",
+      "remoteTarget": "Work Item 7919 revision 3",
+      "verification": [
+        "revision is greater than 2",
+        "delivery verification comment is present"
+      ]
+    }
+  ],
+  "adoReread": {
+    "workItem": {
+      "id": 7919,
+      "revision": 3,
+      "state": "To Do",
+      "title": "[MergePilot Fixture] Guided PR v1 acceptance 2026-08-11"
+    },
+    "pullRequest": {
+      "id": 2807,
+      "status": "active",
+      "sourceBranch": "mergepilot-e2e/guided-pr-v1",
+      "targetBranch": "main"
+    },
+    "build": {
+      "id": 4850,
+      "buildNumber": "20260811.1",
+      "definitionId": 117,
+      "status": "completed",
+      "result": "succeeded",
+      "sourceVersion": "02f9f7c44100844bbfca860005a5b3c6ef53aec8"
+    },
+    "writeBackCommentPresent": true
+  },
+  "openReleaseGates": [
+    "This evidence file changes the repository SHA and is therefore phase evidence, not final-SHA evidence.",
+    "Full final-SHA core, daemon, and desktop suites and builds have not run yet.",
+    "A fresh MSI and installed desktop E2E have not run yet.",
+    "Final security and split application-versus-Azure latency evidence have not run yet."
+  ],
+  "credentialHandling": "No token, PAT, API key, tenant/client identity, Key Vault address, or model endpoint is present in this artifact."
+}
