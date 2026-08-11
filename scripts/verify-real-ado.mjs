@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const RUNTIME = "http://localhost:8787";
+const DAEMON_START_TIMEOUT_MS = Number(process.env.MERGEPILOT_REAL_ADO_DAEMON_START_TIMEOUT_MS ?? 90_000);
 const PROJECT_LINK_ID = "eb2f6c876f53b33d";
 const REPO_PATH = process.env.MERGEPILOT_CLAIMBOT_REPO
   ? path.resolve(process.env.MERGEPILOT_CLAIMBOT_REPO)
@@ -93,7 +94,8 @@ async function ensureDaemon(expectedSha, expectedVersion) {
     },
   );
   child.unref();
-  for (let i = 0; i < 30; i += 1) {
+  const deadline = Date.now() + DAEMON_START_TIMEOUT_MS;
+  while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
     const health = await readHealth();
     if (health) {
@@ -107,7 +109,11 @@ async function ensureDaemon(expectedSha, expectedVersion) {
       return { started: true, pid: child.pid, health };
     }
   }
-  return { started: true, pid: child.pid, error: "daemon did not become healthy in 30s" };
+  return {
+    started: true,
+    pid: child.pid,
+    error: `daemon did not become healthy in ${Math.round(DAEMON_START_TIMEOUT_MS / 1000)}s`,
+  };
 }
 
 async function stopStartedDaemon(daemon) {
