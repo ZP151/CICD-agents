@@ -102,6 +102,10 @@ state1 = readState();
 check("resume skipped gate-a/d (no extra attempt)", stateGate("gate-a", state1).runs.length === 1 && stateGate("gate-d", state1).runs.length === 1);
 check("resume re-ran b and c", stateGate("gate-b", state1).runs.length === 2 &&
   stateGate("gate-c", state1).runs.length === 2);
+check("state gate metadata follows the authoritative manifest",
+  stateGate("gate-b", state1).cmd === gates[1].cmd &&
+  stateGate("gate-c", state1).cmd === gates[2].cmd,
+  `gate-b=${stateGate("gate-b", state1).cmd} gate-c=${stateGate("gate-c", state1).cmd}`);
 check("state PASS after resume", state1.summary.status === "PASS");
 
 // 4: latest attempt wins — a later PASS overrides an earlier FAIL, then a later

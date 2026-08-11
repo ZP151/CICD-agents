@@ -224,9 +224,16 @@ function runCommand(cmd, timeoutMs) {
 function ensureStateForManifest(state, manifest) {
   const byId = new Map(state.gates.map((g) => [g.id, g]));
   for (const m of manifest.gates) {
-    if (byId.has(m.id)) continue;
+    const existing = byId.get(m.id);
+    if (existing) {
+      const runs = existing.runs ?? [];
+      Object.assign(existing, m);
+      existing.runs = runs;
+      existing.status = gateStatusOf(existing);
+      continue;
+    }
     state.gates.push({ ...m, runs: [], status: "NOT_RUN" });
-    byId.set(m.id, true);
+    byId.set(m.id, state.gates.at(-1));
   }
   return state;
 }

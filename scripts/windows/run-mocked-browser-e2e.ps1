@@ -54,7 +54,10 @@ try {
 
   $args = @("exec", "playwright", "test")
   if (-not [string]::IsNullOrWhiteSpace($TestPath)) {
-    $args += $TestPath.Replace("\", "/")
+    $testPaths = @($TestPath.Split(";", [System.StringSplitOptions]::RemoveEmptyEntries) |
+      ForEach-Object { $_.Trim().Replace("\", "/") } |
+      Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    $args += $testPaths
   }
   $args += "--project=$Project"
   if ($Workers -gt 0) {

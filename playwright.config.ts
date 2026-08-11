@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  globalSetup: "./tests/e2e/global-setup.ts",
   // Vite compiles app chunks on demand in dev; a fresh change set can take
   // longer than 30s to become interactive on a loaded machine. The timeouts
   // are budget for first-load compilation, not assertion relaxation.

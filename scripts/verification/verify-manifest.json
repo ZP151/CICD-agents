@@ -99,8 +99,8 @@
       "required": true,
       "requireNoSkips": true,
       "timeoutMs": 2700000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/warmup.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/chat-layout.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/settings-permissions.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/route-cache.spec.ts -Workers 1",
-      "description": "mocked browser E2E (warmup, chat-layout, settings-permissions, route-cache)"
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath \"tests/e2e/chat-layout.spec.ts;tests/e2e/settings-permissions.spec.ts;tests/e2e/route-cache.spec.ts\" -Workers 1",
+      "description": "mocked browser E2E (same-process route warmup, chat-layout, settings-permissions, route-cache)"
     },
     {
       "id": "browser-e2e-source-live",
