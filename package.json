@@ -1,6 +1,6 @@
 {
   "name": "mergepilot-monorepo",
-  "version": "0.5.30",
+  "version": "0.5.31",
   "description": "Local-first Azure DevOps delivery copilot for approved, verified work-item, pull-request, CI, and workflow actions.",
   "private": true,
   "author": "ZP151 <zhouping151140@gmail.com>",
