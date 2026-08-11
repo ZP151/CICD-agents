@@ -25,7 +25,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const RUNTIME = "http://localhost:8787";
 const PROJECT_LINK_ID = "eb2f6c876f53b33d";
-const REPO_PATH = "C:\\Users\\15492\\Develop\\ClaimBot_API";
+const REPO_PATH = process.env.MERGEPILOT_CLAIMBOT_REPO
+  ? path.resolve(process.env.MERGEPILOT_CLAIMBOT_REPO)
+  : path.resolve(repoRoot, "..", "..", "ClaimBot_API");
 const EVIDENCE_PATH = path.join(repoRoot, "docs", "manual-testing", "2026-08-05", "verification", "real-ado-evidence.json");
 
 function gitValue(cwd, args) {
@@ -244,7 +246,7 @@ async function main() {
         modelProvider: daemon.health.llmProvider ?? "unknown",
         modelDeployment: daemon.health.azureDeployment ?? "unknown",
       },
-      claimBotFixture: { repoPath: REPO_PATH, sha: claimBotSha },
+      claimBotFixture: { name: "ClaimBot_API", sha: claimBotSha },
       projectLinkId: PROJECT_LINK_ID,
       adoResources: { workItemId: wiId },
       startedAt,

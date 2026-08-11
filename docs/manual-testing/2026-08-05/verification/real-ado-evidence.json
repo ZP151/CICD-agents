@@ -1,29 +1,38 @@
 {
-  "schemaVersion": 1,
-  "runId": "real-ado-mslltyoz",
-  "commit": {
-    "sha": "642ddaa5249bc292382febf4b6c8bc3ba06bc7ec"
+  "schemaVersion": 2,
+  "runId": "real-ado-msoeb4qn",
+  "mergePilot": {
+    "sha": "24b150c3bc07fe32bffc9fa843d3af3e9287aa62",
+    "branch": "claudecode/mergepilot-v1",
+    "version": "0.5.30",
+    "daemonBuildSha": "24b150c3bc07fe32bffc9fa843d3af3e9287aa62",
+    "daemonVersion": "0.5.30",
+    "modelProvider": "azure",
+    "modelDeployment": "gpt-5-mini"
   },
-  "appVersion": "0.5.27",
-  "productModel": "unknown",
+  "claimBotFixture": {
+    "name": "ClaimBot_API",
+    "sha": "dffeecd534790c4446a29208674f2b6021640a63"
+  },
   "projectLinkId": "eb2f6c876f53b33d",
-  "repoPath": "C:\\Users\\15492\\Develop\\ClaimBot_API",
   "adoResources": {
-    "workItemId": 7918
+    "workItemId": 7921
   },
-  "startedAt": "2026-08-09T09:32:55.138Z",
-  "finishedAt": "2026-08-09T09:33:02.430Z",
+  "startedAt": "2026-08-11T08:25:37.726Z",
+  "finishedAt": "2026-08-11T08:25:49.300Z",
   "steps": [
     {
       "step": "daemon-health",
       "ok": true,
-      "daemonStarted": false
+      "daemonStarted": true,
+      "version": "0.5.30",
+      "buildSha": "24b150c3bc07fe32bffc9fa843d3af3e9287aa62"
     },
     {
       "step": "work_item.create",
       "ok": true,
-      "actionId": "act-1367x3b",
-      "workItemId": 7918
+      "actionId": "act-lb5a6i",
+      "workItemId": 7921
     },
     {
       "step": "post-create-re-read",
@@ -33,7 +42,7 @@
     {
       "step": "work_item.comment",
       "ok": true,
-      "actionId": "act-i4fkyw"
+      "actionId": "act-1sz1urn"
     },
     {
       "step": "artifact-re-read",
@@ -44,7 +53,7 @@
     {
       "step": "work_item.delete",
       "ok": true,
-      "actionId": "act-1a905bw"
+      "actionId": "act-9zmc3d"
     }
   ],
   "status": "PASS"

@@ -14,6 +14,42 @@ this reopen does not count for the current HEAD. Tiers:
 - ID = installed Tauri desktop E2E
 - RA = ClaimBot_API + real Azure DevOps
 
+## Current v1 candidate audit — 2026-08-11 (HEAD `24b150c`)
+
+- Branch `claudecode/mergepilot-v1` is aligned at `24b150c` on both named
+  non-main remotes. The worktree contains one intentional generated evidence
+  update: `real-ado-evidence.json` from the latest successful deterministic
+  real-ADO run.
+- Guided PR Preparation is implemented and phase-accepted through `1fda4a6`:
+  typed editable evidence binds Work Item, exact refs/commit, diff, validation
+  and ADO policy before a governed `pull_request.create`; mocked approval and
+  rejection and source-live ClaimBot evidence passed. See
+  `docs/manual-testing/2026-08-11/guided-pr-source-live-evidence.json`.
+- Source-live candidate result: **PASS, 30/30**, zero required skips, at product
+  SHA `200df75` after the explicit staging-prohibition fix `8b6d443`.
+  The canonical fresh verifier must repeat this at the selected clean final
+  validation SHA; this entry is not a substitute for that run.
+- Installed provenance: **PASS** for MSI 0.5.30 at evidence anchor `176dadc`.
+  Source/MSI/sidecar/Program Files payload, installed smoke, runtime takeover
+  and packaged-runtime checks are bound in
+  `output/live-e2e/installed-provenance-20260811-161737.json`. The installed UI
+  Work Item → PR → CI → approved write-back loop is still **NOT_RUN**.
+- Real ADO: **PASS** at `24b150c`. The deterministic driver pinned daemon
+  version/build SHA, created a scoped fixture Work Item, re-read it, added a
+  comment, re-read and verified the comment, then deleted only that recorded
+  fixture. See `real-ado-evidence.json`.
+- Security: credential persistence count audit passed with zero non-empty PAT
+  values in the inspected Project Link and chat-history stores.
+- Performance: 15/15 English ClaimBot_API turns completed. App health P50/P95
+  was 1/5 ms; Project Link 272/368 ms; first event 2729/3059 ms; first public
+  narrative 8024/9518 ms; total turn 18887/21197 ms. The evidence separates
+  application/transport timing from provider-visible narrative timing;
+  sub-500 ms provider TTFT remains an optimization target, not a release gate.
+- Release status: **NOT COMPLETE**. Build a deterministic text-observable
+  installed UI acceptance path, execute its scoped approved write-back with
+  authoritative ADO re-read, then run `verify-run.mjs --fresh` on a clean final
+  candidate and let the runner project the generated gate files.
+
 ## Continuation audit — 2026-08-08 (Phase 4 readiness, HEAD `971ee1d`)
 
 - Repository and both non-main remotes are aligned at `971ee1d`; worktree was

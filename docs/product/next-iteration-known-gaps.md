@@ -3,7 +3,7 @@
 Status: **Active gap register for the MergePilot v1 Goal**
 Audit date: **2026-08-11**
 Current product-code/evidence baseline: `claudecode/mergepilot-v1` /
-`a0196cc`
+`24b150c`
 
 This document records verified gaps between the canonical product direction and
 the current implementation. A future Goal must read this document before
@@ -14,19 +14,25 @@ product semantics before they are made green.
 ## Current v1 execution delta — 2026-08-11
 
 - Priority 1, Work inspectability, is closed as an implementation slice at
-  `d6ba786`, with the ADO >200-id query defect fixed at `82c2e09` and current
-  real-ADO evidence recorded at `a0196cc`.
-- Priority 2, Guided PR Preparation, is active. `CreatePullRequest.tsx` starts
-  a read-only Chat handoff, but the product still lacks a canonical editable
-  suggestion that binds Work Item, branch, commits, diff, tests and ADO policy
-  observations before `pull_request.create` is proposed.
-- Priority 3, the final vertical release loop, remains open. Historical
-  source-live, real-ADO, MSI and installed PASS records do not satisfy the v1
-  Goal after subsequent product-code changes.
-- The next implementation checkpoint is therefore Guided PR Preparation,
-  followed by a current-HEAD ClaimBot_API source-live read/proposal check. The
-  fresh MSI and installed mutation loop remain release-candidate gates, not
-  evidence for an intermediate slice.
+  `d6ba786`, with the ADO >200-id query defect fixed at `82c2e09` and live
+  read evidence recorded at `a0196cc`.
+- Priority 2, Guided PR Preparation, is closed as an implementation and
+  source-live slice through `1fda4a6`. It binds the exact Work Item, source and
+  target refs, commit, diff, validation result and ADO policy evidence into an
+  editable typed suggestion before `pull_request.create` is proposed.
+- The source-live suite passed **30/30** on the 0.5.30 product candidate after
+  `8b6d443` enforced explicit staging prohibitions. This must still be repeated
+  by the canonical fresh verifier on the selected final candidate.
+- Fresh MSI 0.5.30 provenance and installed runtime checks passed at evidence
+  anchor `176dadc`; deterministic real-ADO create/comment/re-read/delete passed
+  at current HEAD `24b150c`; the credential persistence audit and 15-turn
+  application/provider latency baseline also passed. These records do not
+  prove the remaining installed **UI** mutation workflow.
+- Priority 3 therefore remains open only at the full installed desktop vertical
+  loop and final evidence convergence boundary: ClaimBot_API Work Item → PR →
+  CI → explicit approval → write-back → ADO re-read must be exercised through
+  the installed UI, then every manifest gate must run from a fresh state on a
+  clean selected candidate SHA.
 - `docs/manual-testing/2026-08-05/verification/current-gates.md` is a generated
   historical projection and must not be hand-edited. It will be regenerated
   only by the verification runner against the eventual final SHA.

@@ -1,125 +1,125 @@
 # MergePilot Working Rules
 
-Companion to `AGENTS.md` (toolchain, sandbox policy). These are standing rules
-agreed with the maintainer; the 2026-08-03 iteration goal references them so
-the goal text can stay short.
+Companion to `AGENTS.md`. These are the standing rules for Claude Code and
+other terminal-based executors working on the active MergePilot v1 Goal.
 
-## Standing mandate
+## Product authority
 
-- Continue the 2026-08-03 manual-testing iteration plan until every slice is
-  implemented, verified, committed and pushed; do not stop after a single
-  slice or at analysis.
-- Authoritative docs:
-  - `docs/manual-testing/2026-08-03/manual-test-findings.md` (problems MP-001..MP-016)
-  - `docs/manual-testing/2026-08-03/iteration-plan.md` (slices P0-A..P2-C)
-  - `docs/manual-testing/2026-08-03/regression-acceptance-matrix.md` (RA-001..RA-086)
-  - `docs/manual-testing/2026-08-03/agent-mcp-reuse-architecture.md` (deep modules, MCP spec baseline)
-  - `docs/third-party-source-reuse.md` (reuse registry; must be updated before adopting/porting any source)
-- Slice order: P0-A → P1-A → P1-B → P1-C → P1-D → P2-A → P2-B → P2-C,
-  then full RA regression, then real-ADO canary + controlled writeback.
-- Each slice is one vertical cut: domain/interface, daemon/runtime, typed
-  events, persistence, desktop UI, normal/failure/recovery tests, docs,
-  migration, and a commit whose message carries the MP id (e.g.
-  `fix(auth): add recoverable ADO OAuth flow (MP-001)`).
+- Start at `docs/product/README.md`. It and the documents it references are the
+  only authoritative product route.
+- Execute Cycle 00–06 in the order and with the completion evidence defined by
+  those documents. Historical manual-test plans are evidence, not scope.
+- The active execution plan is
+  `docs/product/v1-productization-iteration.md`; current drift and open gates
+  are recorded in `docs/product/next-iteration-known-gaps.md`.
+- Azure DevOps is the remote source of truth. MergePilot is a local-first
+  reasoning, governance and verified-action layer, not an ADO portal clone or
+  a general coding agent.
 
-## Permission baseline (approved by maintainer)
+## Active branch and fixture
 
-Work freely, without asking, on anything in-scope:
+- Work only on `claudecode/mergepilot-v1` unless the maintainer explicitly
+  changes the Goal.
+- Push verified checkpoints to both
+  `origin/claudecode/mergepilot-v1` and
+  `ado/claudecode/mergepilot-v1`, then prove both remote SHAs match local HEAD.
+- Never delete, rename, rewrite, force-push, merge, or directly push any remote
+  `main` branch.
+- ClaimBot_API is the isolated mutable product fixture. Test branches use the
+  `mergepilot-e2e/` prefix and test resources use the
+  `[MergePilot Fixture]` marker.
+- Only touch fixture resources created or explicitly selected by the active
+  Goal. Record their IDs before mutation; never use wildcard cleanup.
 
-- Read/create/modify/delete repo files in-scope; refactor code, schemas,
-  configs, scripts, tests; delete superseded code that tests cover.
-- Install/upgrade/remove dependencies after license/security review.
-- Consult official docs, open-source repos, releases, licenses, advisories.
-- Adopt/Port/vendor reviewed open-source code (update the reuse registry).
-- Start daemon, desktop, mock servers, MCP servers, local services.
-- Run unit/integration/E2E/typecheck/lint/build/package tests.
-- Use the real Azure DevOps connector/OAuth/REST/MCP for reads and for
-  controlled writes described below.
-- Create test fixtures, databases, artifacts, branches, commits, PRs,
-  Review Runs, Work Items.
-- `git add/commit/fetch/rebase/push` on `claudecode/optimize-bugfix`;
-  create and update Draft PRs; fix CI/review feedback/merge conflicts.
+## Execution discipline
 
-## Controlled production writes
+- Work in reversible vertical slices. Each completed slice includes source,
+  focused tests, evidence, a meaningful commit and both non-main pushes.
+- Preserve existing and uncommitted user work. Never use `git reset --hard`,
+  `git clean`, checkout-based discard, or history rewriting.
+- Use the repository-local Node/pnpm toolchain exactly as described in
+  `AGENTS.md`.
+- Fix root causes. Do not delete tests, weaken acceptance assertions, add
+  arbitrary sleeps, ignore type errors, or count a skip as a pass.
+- Model prose and screenshots are never execution evidence. Structured events,
+  ActionRecords, persisted state, process/artifact identity and authoritative
+  ADO re-read are evidence.
+- Do not promote historical PASS records to the current SHA. Generated gate
+  projections are written only by the verification runner.
 
-Real ADO writes are allowed only for the workspace uniquely identified by the
-current Git remote AND a matching Project Link. Every write must:
+## Text-only model verification
 
-1. Resolve and record organisation/project/repository/resource ID.
-2. Confirm target matches the current Project Link and Git remote.
-3. Confirm no name ambiguity.
-4. Pass schema validation.
-5. Pass CapabilityRegistry and ActionPolicy.
-6. Carry a stable callId and idempotency key.
-7. Record a redacted summary in UI, event store and audit.
-8. Read remote state after writing to verify.
-9. Recover by type on failure; never blind-retry a mutation.
-10. Only clean up temporary resources this goal created and recorded.
+The active Claude Code model may be non-multimodal.
 
-Allowed write types: OAuth login/refresh/re-auth; temp test branches;
-Draft PRs, review threads, review votes; trigger/rerun/cancel of test
-Pipeline runs created or explicitly selected by this goal; test Work Items;
-Review Run / Review Queue / Project Link / session metadata; native ADO or
-MCP equivalent operations; real integration tests of failure, timeout,
-auth-expiry, duplicate and recovery paths.
+- Do not require it to interpret screenshots or judge visual similarity.
+- Drive source UI with Playwright role/label/test-id locators and assert DOM,
+  accessibility state, event order, network requests and persisted records.
+- Installed-desktop acceptance must exercise the installed executable and its
+  installed sidecar through a deterministic text-observable UI or accessibility
+  harness. A daemon-only REST test does not prove the installed UI path.
+- Screenshots may be captured for later human review, but PASS must come from
+  deterministic assertions. Record irreducibly aesthetic checks as human
+  review items instead of fabricating a result.
+- Accept English input and output by default. Test typed semantics and event
+  structure, not exact language-specific model wording.
 
-## Preflight rule
+## Canonical action boundary
 
-Before any production write, check: Git remote; current Project Link; ADO
-org/project/repo; connector type; OAuth identity validity; Pipeline/PR/WI
-targets; write types planned. Report one short line in progress notes.
+Every real mutation must follow:
 
-STOP that write (continue other local work) when: org/project/repo cannot be
-resolved uniquely; OAuth identity mismatches the target; same-name resources
-cannot be disambiguated; the target is another org or not part of the current
-workspace; the operation touches existing user resources not selected by this
-goal; idempotency cannot be confirmed; no audit/recovery path exists.
+`Typed ActionRecord → Preview → Approval → Execution → ADO Re-read → Verification`
 
-## Test resource naming (for real verification)
+Before a real ADO write:
 
-- Branch: `claudecode/test-<issue-id>-<short-id>`
-- Draft PR: `[MergePilot E2E] <issue-id> <short-id>`
-- Work Item: `[MergePilot E2E] <issue-id> <short-id>`
-- Pipeline run comment/tag: `mergepilot-e2e:<issue-id>:<short-id>`
-- Ledger: `docs/manual-testing/2026-08-03/production-verification-ledger.md`
-  (redacted; never store tokens, emails, internal URLs, full payloads, PII).
-- Only delete resources recorded in the ledger with IDs; no wildcard cleanup.
+1. Resolve and record organisation, project, repository and resource ID.
+2. Prove the target matches both the active Project Link and Git remote.
+3. Reject ambiguous names or identities.
+4. Validate the typed payload and ActionPolicy decision.
+5. Use a stable call ID and idempotency key.
+6. Ensure the UI/event/audit path stores only a redacted summary.
+7. Execute only after explicit approval.
+8. Re-read ADO and verify the intended state.
+9. Recover by typed failure; never blindly retry a mutation.
+10. Clean up only Goal-created resources whose IDs were recorded.
 
-## Never do
+Allowed scoped writes include fixture branches, Draft PRs, review threads or
+votes, test Work Items, explicitly selected test pipeline runs, and the
+Project Link/session metadata needed for the acceptance path.
 
-- Delete ADO org/project/repository; delete or rewrite long-lived branches;
-  force push; modify branch protection/required reviewers/security policy;
-  modify users/teams/permissions/service connections/billing.
-- Create/export/rotate/delete production secrets, PATs, OAuth client secrets;
-  read or print real tokens, passwords, cookies, private keys.
-- Delete existing Pipeline definitions; delete WIs/PRs/comments/artifacts/runs
-  not owned by this goal; complete/merge/abandon business PRs; approve or
-  request changes on non-test PRs.
-- Modify production deployment variables, environment approvals, release
-  gates; deploy to production services; `git reset --hard`, `git clean -fd`,
-  discard user modifications, rewrite history.
-- If a real blocker appears (external permission, target ambiguity, safety
-  boundary, product decision), stop that item, report target/impact/rollback/
-  needed authorization, and continue unaffected work.
+Stop only the affected write when identity, permission, ownership,
+idempotency, audit or recovery cannot be proved. Continue safe local work.
 
-## Quality rules
+## Credentials and security
 
-- One vertical slice at a time; verify before moving on.
-- Fix test failures at the root; never delete tests, relax key assertions,
-  add arbitrary sleeps, or skip typecheck to force green.
-- Reuse before building: MCP SDK v1.x, Azure DevOps MCP, OpenHarness patterns,
-  PR-Agent logic, assistant-ui, Radix, Tiptap, CodeMirror; check license,
-  version/commit, maintenance, compatibility, security, adapter boundary,
-  contract tests, rollback path; update `docs/third-party-source-reuse.md`.
-- No string matching on error messages as a source of truth; typed failures
-  with recovery actions; distinct types for Stop/timeout/authorization/
-  ambiguity/connector failure/internal abort.
-- All tool calls carry a stable callId; Chat, step panel, Activity and
-  persistence read the same typed execution event source.
-- Never use or copy credentials, accounts, internal addresses, UUIDs,
-  avatars, or local paths from the original test material; use placeholder
-  values (`example-org`, `***REDACTED***`).
-- No production ADO mutation without mock/fixture isolation first.
-- Docs must match the final implementation; do not fabricate completion.
-- Report short progress only: issue ID, current slice, verification result,
-  canary status, commit/PR, next step.
+- Never read, print, persist, commit or ask the user to paste real tokens,
+  passwords, cookies, client secrets, private keys or credential-cache payloads.
+- Use the existing local OAuth/configuration boundary. Evidence may record
+  provider/deployment labels, status and counts, but not secrets, identities or
+  internal credential references.
+- Never modify organisation permissions, branch protections, users, teams,
+  service connections, variable groups, billing, Key Vault contents or
+  production deployment controls.
+- Never approve, merge, abandon, comment on, or otherwise mutate a non-fixture
+  business resource.
+
+## Verification and completion
+
+- Final verification is defined by
+  `scripts/verification/verify-manifest.json` and a fresh run of
+  `scripts/verification/verify-run.mjs`; ad hoc subsets are slice evidence only.
+- Required final evidence includes current-SHA unit/typecheck/build gates,
+  mocked browser E2E, source-live with no required skips, deterministic real
+  ADO, fresh MSI provenance, installed-desktop E2E, credential audit and split
+  application/provider latency.
+- Provider TTFT below 500 ms is an optimization target, not a hard Azure
+  acceptance gate. Report application-added latency separately from provider
+  latency.
+- The Goal is complete only when source, both non-main remotes, installed
+  artifacts, ADO re-read and generated evidence are reconciled and no required
+  item remains open.
+
+## Progress reporting
+
+Report compactly: current slice, deterministic result, real-ADO/installed
+status, commit/push state, and the next action. Do not stop after analysis or a
+single commit while safe in-scope work remains.

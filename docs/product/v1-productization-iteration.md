@@ -2,7 +2,7 @@
 
 Status: **Active execution plan for the MergePilot v1 Goal**
 Created: **2026-08-07**
-Current product-code/evidence baseline: **2026-08-11 / `a0196cc` on
+Current product-code/evidence baseline: **2026-08-11 / `24b150c` on
 `claudecode/mergepilot-v1`**
 Required starting documents: `README.md`, `next-iteration-known-gaps.md`, and
 the Cycle 00–06 documents
@@ -20,7 +20,7 @@ The Goal is product completion, not merely making the current test suite green.
 ## Current execution state
 
 - The active Goal branch is `claudecode/mergepilot-v1`. Product-code and
-  evidence commits through `a0196cc` are present on both
+  verification-driver commits through `24b150c` are present on both
   `origin/claudecode/mergepilot-v1` and `ado/claudecode/mergepilot-v1`; both
   remote `main` refs remain at the `v0.5.29` release baseline.
 - Slice 1, **Work Inspector**, is complete as an implementation slice. It reads
@@ -28,18 +28,32 @@ The Goal is product completion, not merely making the current test suite green.
   relations, linked PR/build/test evidence and comments before allowing a
   governed comment or state proposal. Current real-ADO read acceptance passed
   on `82c2e09`; the evidence refresh is `a0196cc`.
-- Slice 2, **Guided PR Preparation**, is the active slice. The current Changes
-  entry only hands a prompt to Chat. It does not yet own a typed, editable PR
-  suggestion assembled from authoritative Work Item, branch, commit, diff,
-  validation and ADO policy evidence.
-- Slice 2 must end with a typed suggestion/read model and the existing
-  `pull_request.create` ActionRecord lifecycle: Preview → Approval → Execution
-  → ADO re-read → Verification. No direct or model-only PR mutation is allowed.
+- Slice 2, **Guided PR Preparation**, is complete as an implementation and
+  source-live vertical slice through `1fda4a6`. It owns a typed, editable PR
+  suggestion assembled from authoritative Work Item, exact branch/commit,
+  diff, validation and ADO policy evidence. The existing
+  `pull_request.create` ActionRecord follows Preview → Approval → Execution →
+  ADO re-read → Verification; mocked acceptance covers approval and rejection.
+- The source-live suite reached **30/30** on the 0.5.30 candidate after the
+  explicit staging-prohibition defect was fixed at `8b6d443`. This remains
+  product-candidate evidence; the canonical fresh verifier must repeat it on
+  the selected clean final SHA.
+- MSI 0.5.30 was built and installed from the candidate, with Program Files
+  payload matching, installed smoke, runtime takeover and packaged-runtime
+  checks passing at evidence anchor `176dadc`. This proves provenance and
+  packaged operation, but not yet the full installed UI mutation loop.
+- The deterministic real-ADO driver passed at `24b150c` and records its own
+  exact daemon version/build SHA, fixture SHA and authoritative Work Item
+  create/comment/re-read/delete lifecycle. Credential persistence audit and a
+  15-turn split latency baseline also pass for the candidate.
 - The machine-projected release gates still describe an older SHA. They remain
   historical evidence only; they must not be re-projected as current until the
   release-candidate SHA is selected and all required gates run on that SHA.
-- The final installed Work Item → PR → CI → approved write-back loop, fresh
-  MSI provenance, installed E2E, security and latency evidence remain open.
+- The remaining product gap is the **installed desktop UI** Work Item → PR →
+  CI → approved write-back loop with deterministic UI/action evidence and ADO
+  re-read. After that slice, a clean final candidate must repeat the canonical
+  gates and reconcile generated evidence, MSI/install identity, security and
+  split latency on the final validation SHA.
 
 ## Historical starting point and protected work
 
