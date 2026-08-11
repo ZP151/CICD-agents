@@ -3,7 +3,7 @@
 Status: **Active gap register for the MergePilot v1 Goal**
 Audit date: **2026-08-11**
 Current product-code/evidence baseline: `claudecode/mergepilot-v1` /
-`24b150c`
+`5f14a64`
 
 This document records verified gaps between the canonical product direction and
 the current implementation. A future Goal must read this document before
@@ -20,19 +20,21 @@ product semantics before they are made green.
   source-live slice through `1fda4a6`. It binds the exact Work Item, source and
   target refs, commit, diff, validation result and ADO policy evidence into an
   editable typed suggestion before `pull_request.create` is proposed.
-- The source-live suite passed **30/30** on the 0.5.30 product candidate after
-  `8b6d443` enforced explicit staging prohibitions. This must still be repeated
-  by the canonical fresh verifier on the selected final candidate.
-- Fresh MSI 0.5.30 provenance and installed runtime checks passed at evidence
-  anchor `176dadc`; deterministic real-ADO create/comment/re-read/delete passed
-  at current HEAD `24b150c`; the credential persistence audit and 15-turn
-  application/provider latency baseline also passed. These records do not
-  prove the remaining installed **UI** mutation workflow.
-- Priority 3 therefore remains open only at the full installed desktop vertical
-  loop and final evidence convergence boundary: ClaimBot_API Work Item → PR →
-  CI → explicit approval → write-back → ADO re-read must be exercised through
-  the installed UI, then every manifest gate must run from a fresh state on a
-  clean selected candidate SHA.
+- Source-live passed **30/30** twice on the 0.5.31 candidate `579ec46`.
+  Deterministic real-ADO verification, MSI/install provenance and the installed
+  ClaimBot_API Work Item → PR → CI → explicit approval → write-back → ADO
+  re-read loop also passed on that exact candidate.
+- Canonical run `verify-msoha3ku` then exposed a mocked-browser regression. The
+  product/accessibility defects and obsolete acceptance assumptions were fixed
+  at `5f14a64`; the full pre-release mocked gate now passes 86/86 with no skip.
+  The same slice repairs the verification parser so failed counts cannot be
+  hidden by a later `passed` summary line and chained Playwright suites are
+  aggregated.
+- The installed 0.5.31 payload is now stale relative to `5f14a64`. Priority 3
+  remains open only at final 0.5.32 convergence: every manifest gate must run
+  fresh on a clean candidate, whose MSI and installed payload must match that
+  SHA before installed vertical-loop, real-ADO, credential and split-latency
+  evidence are refreshed.
 - `docs/manual-testing/2026-08-05/verification/current-gates.md` is a generated
   historical projection and must not be hand-edited. It will be regenerated
   only by the verification runner against the eventual final SHA.

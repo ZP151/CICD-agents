@@ -595,3 +595,29 @@ avoid this.
 - No release gate is promoted by this documentation calibration. Source-live,
   final-SHA real ADO, fresh MSI, installed desktop, security and latency gates
   remain required on the eventual release-candidate SHA.
+
+## Release-convergence checkpoint — 2026-08-11 (`5f14a64` baseline)
+
+- Candidate `579ec46` / 0.5.31 proved source-live 30/30, deterministic real
+  ADO, MSI/install provenance and the installed ClaimBot_API Work Item → PR →
+  CI → approved write-back loop. Canonical run `verify-msoha3ku` recorded 13
+  PASS / 1 FAIL: only the mocked-browser gate failed.
+- Diagnosis reproduced the mocked failure as nine chat/settings/route
+  acceptance defects. Product repairs cover off-ring prompt-card accessibility,
+  partial Project Link records, visible approval status and metadata follow-up
+  semantics; obsolete selectors now assert the current Context, Settings,
+  Changes and Delivery contracts.
+- Pre-release verification at `5f14a64`: desktop typecheck PASS, desktop unit
+  **744/744**, verification-run self-test PASS, and the full manifest-equivalent
+  mocked browser chain PASS with **86/86** scenarios and no skips (warmup 1,
+  chat 51, settings permission 1, route cache 33).
+- The verification runner now stores direct and merged Playwright
+  `passed/failed/skipped/didNotRun` counts, aggregates chained summaries,
+  includes failed tests in `total`, and projects a bounded redacted failure
+  stdout tail. This closes the evidence defect where the failed gate showed
+  `42 passed` but omitted its nine failed tests.
+- No final gate is promoted by this checkpoint. The 0.5.31 installed payload is
+  tied to `579ec46` and is stale after `5f14a64`. The next acceptance candidate
+  must be versioned 0.5.32, clean, pushed to both non-main remotes and retested
+  through the full fresh canonical manifest and installed/ADO/security/latency
+  chain.

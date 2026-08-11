@@ -2,7 +2,7 @@
 
 Status: **Active execution plan for the MergePilot v1 Goal**
 Created: **2026-08-07**
-Current product-code/evidence baseline: **2026-08-11 / `24b150c` on
+Current product-code/evidence baseline: **2026-08-11 / `5f14a64` on
 `claudecode/mergepilot-v1`**
 Required starting documents: `README.md`, `next-iteration-known-gaps.md`, and
 the Cycle 00–06 documents
@@ -20,9 +20,9 @@ The Goal is product completion, not merely making the current test suite green.
 ## Current execution state
 
 - The active Goal branch is `claudecode/mergepilot-v1`. Product-code and
-  verification-driver commits through `24b150c` are present on both
-  `origin/claudecode/mergepilot-v1` and `ado/claudecode/mergepilot-v1`; both
-  remote `main` refs remain at the `v0.5.29` release baseline.
+  verification-driver commits through `5f14a64` are present on both
+  `origin/claudecode/mergepilot-v1` and `ado/claudecode/mergepilot-v1`. No
+  remote `main` operation is part of this Goal.
 - Slice 1, **Work Inspector**, is complete as an implementation slice. It reads
   the selected Azure Boards item with description, acceptance criteria,
   relations, linked PR/build/test evidence and comments before allowing a
@@ -34,26 +34,30 @@ The Goal is product completion, not merely making the current test suite green.
   diff, validation and ADO policy evidence. The existing
   `pull_request.create` ActionRecord follows Preview → Approval → Execution →
   ADO re-read → Verification; mocked acceptance covers approval and rejection.
-- The source-live suite reached **30/30** on the 0.5.30 candidate after the
-  explicit staging-prohibition defect was fixed at `8b6d443`. This remains
-  product-candidate evidence; the canonical fresh verifier must repeat it on
-  the selected clean final SHA.
-- MSI 0.5.30 was built and installed from the candidate, with Program Files
-  payload matching, installed smoke, runtime takeover and packaged-runtime
-  checks passing at evidence anchor `176dadc`. This proves provenance and
-  packaged operation, but not yet the full installed UI mutation loop.
-- The deterministic real-ADO driver passed at `24b150c` and records its own
-  exact daemon version/build SHA, fixture SHA and authoritative Work Item
-  create/comment/re-read/delete lifecycle. Credential persistence audit and a
-  15-turn split latency baseline also pass for the candidate.
-- The machine-projected release gates still describe an older SHA. They remain
-  historical evidence only; they must not be re-projected as current until the
-  release-candidate SHA is selected and all required gates run on that SHA.
-- The remaining product gap is the **installed desktop UI** Work Item → PR →
-  CI → approved write-back loop with deterministic UI/action evidence and ADO
-  re-read. After that slice, a clean final candidate must repeat the canonical
-  gates and reconcile generated evidence, MSI/install identity, security and
-  split latency on the final validation SHA.
+- The source-live suite reached **30/30** twice on the 0.5.31 candidate at
+  `579ec46`. Deterministic real-ADO verification and the installed ClaimBot_API
+  Work Item → PR → CI → explicitly approved write-back loop also passed with
+  authoritative re-read on that candidate.
+- MSI 0.5.31 was built and installed from `579ec46`; Program Files payload,
+  installed executable/sidecar identity, runtime takeover, persistence and
+  packaged checks passed. That installed payload became historical as soon as
+  the browser and verification fixes landed at `5f14a64` and cannot satisfy the
+  next candidate.
+- Canonical run `verify-msoha3ku` recorded 13 required gates PASS and the
+  mocked browser gate FAIL on `579ec46`. Diagnosis found stale UI assertions
+  plus prompt-deck accessibility overflow, partial Project Link handling and
+  suggestion/action semantics. The corrected pre-release gate passes 86/86
+  Playwright scenarios at `5f14a64`.
+- The verification runner itself was repaired at `5f14a64`: direct and merged
+  Playwright runs now preserve failed, passed, skipped and did-not-run counts,
+  aggregate chained suites, and retain a bounded redacted failure tail. The old
+  projection that displayed only `42 passed` remains historical evidence, not
+  proof that the failed tests did not exist.
+- The remaining product gap is final **release convergence**: select a clean
+  0.5.32 candidate, repeat the entire canonical manifest, build/install the MSI
+  from that SHA, repeat the installed vertical loop and real-ADO re-read, then
+  refresh credential and split-latency evidence and reconcile both non-main
+  remotes with the tested artifact identities.
 
 ## Historical starting point and protected work
 
