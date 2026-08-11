@@ -69,6 +69,184 @@ export async function rejectDeliveryAction(id: string, feedback?: string): Promi
   return body as DeliveryActionRecord;
 }
 
+export interface PullRequestPreparation {
+  projectLinkId: string;
+  repositoryId: string;
+  generatedAt: number;
+  git: {
+    repoPath: string;
+    sourceBranch: string;
+    targetBranch: string;
+    headSha: string;
+    targetSha?: string;
+    remoteSourceSha?: string;
+    remoteTargetSha?: string;
+    upstream?: string;
+    ahead?: number;
+    behind?: number;
+    dirty: boolean;
+    changedFiles: string[];
+    diffStat: string;
+    commits: Array<{ sha: string; subject: string }>;
+    targetAvailability: "available" | "missing" | "unavailable" | "failed";
+  };
+  validation: {
+    status: "passed" | "failed" | "not_run" | "unavailable";
+    command?: string;
+    summary: string;
+    sourceSha?: string;
+    durationMs?: number;
+    outputExcerpt?: string;
+  };
+  workItem: {
+    status: "available" | "missing" | "unavailable" | "failed";
+    item?: WorkItemDetail;
+    message?: string;
+  };
+  policies: {
+    status: "available" | "missing" | "unavailable" | "failed";
+    targetRef: string;
+    configurations: Array<{
+      id: number;
+      revision: number;
+      typeId: string;
+      displayName: string;
+      isEnabled: boolean;
+      isBlocking: boolean;
+    }>;
+    message?: string;
+  };
+  suggestion: {
+    sourceBranch: string;
+    targetBranch: string;
+    title: string;
+    description: string;
+    draft: boolean;
+    workItemId?: number;
+    reviewerFocus: string[];
+    risks: string[];
+    missingEvidence: string[];
+    readiness: "ready" | "needs_attention" | "blocked" | "insufficient_evidence";
+  };
+}
+
+export type PullRequestValidationResult = PullRequestPreparation["validation"] & {
+  projectLinkId: string;
+  repoPath: string;
+  completedAt: number;
+};
+
+export async function runPullRequestValidation(input: {
+  projectLinkId: string;
+  expectedHeadSha: string;
+}): Promise<PullRequestValidationResult> {
+  const r = await fetch(`${RUNTIME_URL}/delivery/pull-request-validation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!r.ok) {
+    const body = (await r.json().catch(() => null)) as { error?: string; message?: string } | null;
+    throw new Error(body?.message ?? body?.error ?? `Pull request validation HTTP ${r.status}`);
+  }
+  return r.json() as Promise<PullRequestValidationResult>;
+}
+
+export async function fetchPullRequestPreparation(input: {
+  projectLinkId: string;
+  sourceBranch?: string;
+  targetBranch?: string;
+  title?: string;
+  description?: string;
+  draft?: boolean;
+  workItemId?: number;
+}): Promise<PullRequestPreparation> {
+  const r = await fetch(`${RUNTIME_URL}/delivery/pull-request-preparation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!r.ok) {
+    const body = (await r.json().catch(() => null)) as { error?: string; message?: string } | null;
+    throw new Error(body?.message ?? body?.error ?? `Pull request preparation HTTP ${r.status}`);
+  }
+  return r.json() as Promise<PullRequestPreparation>;
+}
+
+export interface WorkItemRelationLink {
+  rel: string;
+  url: string;
+  kind: string;
+  id?: number;
+  label?: string;
+}
+
+export interface WorkItemLinkedPullRequest {
+  id: number;
+  title: string;
+  status: string;
+  sourceBranch?: string;
+  targetBranch?: string;
+  url?: string;
+}
+
+export interface WorkItemLinkedBuild {
+  id: number;
+  buildNumber: string;
+  status: string;
+  result: string;
+  definitionName: string;
+  url?: string;
+}
+
+export interface WorkItemTestEvidence {
+  buildId: number;
+  runCount: number;
+  totalTests: number;
+  passedTests: number;
+  failedTests: number;
+}
+
+/**
+ * Full inspector read of one Azure Boards work item: typed relation edges,
+ * resolved pull request / build artifacts, test evidence for linked builds,
+ * and the complete comment thread. The feed keeps only the last few updates;
+ * this endpoint is the authoritative read for a single item.
+ */
+export interface WorkItemDetail {
+  id: number;
+  revision: number;
+  type: string;
+  title: string;
+  state: string;
+  description?: string;
+  acceptanceCriteria?: string;
+  iterationPath?: string;
+  tags: string[];
+  assignedTo?: string;
+  createdDate?: string;
+  changedDate?: string;
+  relations: WorkItemRelationLink[];
+  linkedPullRequests: WorkItemLinkedPullRequest[];
+  linkedBuilds: WorkItemLinkedBuild[];
+  testEvidence: WorkItemTestEvidence[];
+  comments: string[];
+}
+
+export async function fetchWorkItemDetail(
+  projectLinkId: string,
+  workItemId: number,
+): Promise<WorkItemDetail> {
+  const query = new URLSearchParams({ projectLinkId });
+  const r = await fetch(`${RUNTIME_URL}/delivery/work-items/${workItemId}?${query.toString()}`);
+  if (!r.ok) {
+    const body = (await r.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? `Work item detail HTTP ${r.status}`);
+  }
+  const data = (await r.json()) as { workItem: WorkItemDetail };
+  return data.workItem;
+}
+
 export interface DeliveryEvidenceBundle {
   build: {
     id: number;

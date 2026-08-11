@@ -32,7 +32,7 @@ export * from "./telemetry.js";
 export * from "./safeDate.js";
 export * from "./chatPlanner.js";
 export * from "./chatPlannerControl.js";
-export { isReviewOnlyChangeRequest } from "./chatPlannerGuards.js";
+export { isReviewOnlyChangeRequest, prohibitsStaging } from "./chatPlannerGuards.js";
 export * from "./aiInsightQuality.js";
 export * from "./chatUseCases.js";
 export * from "./chatUiStream.js";

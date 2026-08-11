@@ -89,9 +89,9 @@ describe("dispatchChatStreamEvent", () => {
     expect(adapter.calls).toContain("busy:false");
   });
 
-  it("recovers the approval card from workflow state when the dedicated approval event is unavailable", () => {
+  it("updates redacted workflow state without rendering a duplicate approval", () => {
     const adapter = makeAdapter();
-    const approval = {
+    const canonicalApproval = {
       id: "approval-recovered",
       riskLevel: "high" as const,
       explanation: "Review the planned pull request before creating it.",
@@ -106,10 +106,38 @@ describe("dispatchChatStreamEvent", () => {
       type: "turn.workflow.updated",
       turnId: "turn-1",
       sequence: 1,
-      workflow: { status: "waiting_for_approval", currentStep: "ado_create_pr", completedTools: [], pendingApproval: approval },
+      workflow: {
+        status: "waiting_for_approval",
+        currentStep: "ado_create_pr",
+        completedTools: [],
+        pendingApproval: {
+          ...canonicalApproval,
+          action: {
+            ...canonicalApproval.action,
+            args: "[omitted]" as unknown as Record<string, unknown>,
+          },
+        },
+      },
     }, adapter);
 
-    expect(adapter.showApprovalRequest).toHaveBeenCalledWith(approval, "turn-1");
+    expect(adapter.workflowState).toEqual(expect.objectContaining({
+      status: "waiting_for_approval",
+      pendingApproval: expect.objectContaining({
+        action: expect.objectContaining({ args: "[omitted]" }),
+      }),
+    }));
+    expect(adapter.showApprovalRequest).not.toHaveBeenCalled();
+    expect(adapter.calls).not.toContain("busy:false");
+
+    dispatchChatStreamEvent({
+      type: "turn.approval.requested",
+      turnId: "turn-1",
+      sequence: 2,
+      approval: canonicalApproval,
+    }, adapter);
+
+    expect(adapter.showApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(adapter.showApprovalRequest).toHaveBeenCalledWith(canonicalApproval, "turn-1");
     expect(adapter.calls).toContain("busy:false");
   });
 

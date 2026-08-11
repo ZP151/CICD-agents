@@ -197,13 +197,26 @@ export function isExplicitReadOnlyRequest(message: string): boolean {
   // main with rebase; do not push" must allow the approval-gated pull while
   // still preventing the later push. Remove the negated operations first,
   // then see whether a positive mutable action remains in scope.
-  const requestedChanges = stripNegatedWriteIntents(lower).replace(/\bpull\s+request\b/g, "");
-  return !/\b(?:stage|git add|commit|push|publish|create pr|open pull request|pull\b(?!\s+request)|rebase|merge|checkout|switch|stash|restore|delete|tag|discard|revert|reset|clean|remove|cherry[ -]?pick)\b/.test(requestedChanges);
+  const requestedChanges = stripInformationalGitActionReferences(
+    stripNegatedWriteIntents(lower).replace(/\bpull\s+request\b/g, ""),
+  );
+  return !/\b(?:stage|git add|commit|fetch|push|publish|create pr|open pull request|pull\b(?!\s+request)|rebase|merge|checkout|switch|stash|restore|delete|tag|discard|revert|reset|clean|remove|cherry[ -]?pick)\b/.test(requestedChanges);
+}
+
+function stripInformationalGitActionReferences(text: string): string {
+  return text
+    // A user asking where a hypothetical push would go is requesting remote
+    // evidence, not authorizing the push. Keep this distinction inside the
+    // explicit read-only boundary so an imperative "push this branch" still
+    // remains a write request.
+    .replace(/\bwhere\s+(?:will|would)\s+(?:this|the|a)\s+push\s+go\b/gi, "")
+    .replace(/\b(?:what|which)\s+(?:remote|branch|ref|target|destination)\s+(?:will|would)\s+(?:this|the|a)?\s*push\s+(?:use|update|target)\b/gi, "")
+    .replace(/\b(?:inspect|check|show|explain|identify|report|determine)\b[^.!?\n]{0,80}\b(?:push|pull|merge|rebase)\s+(?:target|destination|remote|source)\b/gi, "");
 }
 
 function stripNegatedWriteIntents(text: string): string {
   const writePhrase =
-    "(?:stage|staging|stage all|stage selected|git add|commit|committing|commit these|commit all|commit my|make a commit|prepare commit|push|pushing|publish|publishing|create pr|create a pr|open pull request|pull request|pull|rebase|merge|checkout|switch|stash|restore|delete|tag|discard|revert|reset|clean|remove|cherry[ -]?pick|run tests?|build)";
+    "(?:stage|staging|stage all|stage selected|git add|commit|committing|commit these|commit all|commit my|make a commit|prepare commit|fetch|fetching|push|pushing|publish|publishing|create pr|create a pr|open pull request|pull request|pull|rebase|merge|checkout|switch|stash|restore|delete|tag|discard|revert|reset|clean|remove|cherry[ -]?pick|run tests?|build)";
   const negatedWriteList = new RegExp(
     `\\b(?:do not|don't|dont|without|no)\\s+${writePhrase}(?:\\s*,\\s*${writePhrase})*(?:\\s*,?\\s*(?:or|and)\\s*${writePhrase})?`,
     "gi",

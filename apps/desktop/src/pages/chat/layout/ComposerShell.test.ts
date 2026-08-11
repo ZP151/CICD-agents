@@ -76,4 +76,44 @@ describe("ComposerShell layout classes", () => {
     expect(html).toContain('role="menuitemradio"');
     expect(html).toContain('aria-checked="true"');
   });
+
+  it("keeps a stable composer identifier while approval state changes its placeholder", () => {
+    const html = renderToStaticMarkup(
+      createElement(ComposerShell, {
+        mini: true,
+        input: "",
+        textareaRef: createRef<HTMLTextAreaElement>(),
+        modelMenuRef: createRef<HTMLDivElement>(),
+        modelMenuOpen: false,
+        activeModel: "gpt-5-mini",
+        activeCustomModel: null,
+        customModels: [],
+        availableProjectLinks: [],
+        projectLinksLoading: false,
+        activeProjectLinkId: null,
+        composerStateNotice: null,
+        composerInputState: {
+          inputDisabled: true,
+          sendDisabled: true,
+          controlsDisabled: true,
+          placeholder: "Approve or cancel the pending action before starting another request.",
+          inputTitle: "Finish the current approval first.",
+        },
+        suggestionReplies: [],
+        busy: false,
+        workflowState: null,
+        queuedSuggestionId: null,
+        onInputChange: () => undefined,
+        onSend: () => undefined,
+        onStop: () => undefined,
+        onCancelQueuedSuggestion: () => undefined,
+        onSuggestionPick: () => undefined,
+        onModelMenuOpenChange: () => undefined,
+        onActiveModelChange: () => undefined,
+      }),
+    );
+
+    expect(html).toContain('data-testid="chat-composer-input"');
+    expect(html).toContain('placeholder="Approve or cancel the pending action before starting another request."');
+  });
 });

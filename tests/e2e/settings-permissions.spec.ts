@@ -128,6 +128,7 @@ test("@smoke @mocked settings explains missing Key Vault permission and can swit
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   await expect(page.getByText("Azure Key Vault permission is missing")).toBeVisible();
   await expect(page.getByText("secrets/get access to https://devagentkv001.vault.azure.net/")).toBeVisible();
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await expect(page.getByRole("button", { name: "Key Vault" })).toHaveAttribute("aria-pressed", "true");
 
   await page.getByRole("button", { name: "Local .env" }).click();

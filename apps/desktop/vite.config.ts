@@ -7,12 +7,16 @@ const desktopPackage = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8"),
 ) as { version: string };
 
-function buildSha(): string {
-  if (process.env["GITHUB_SHA"]) return process.env["GITHUB_SHA"];
+export function resolveBuildSha(
+  env: NodeJS.ProcessEnv = process.env,
+  gitHead: () => string = () => execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+    .toString()
+    .trim(),
+): string {
+  if (env["MERGEPILOT_BUILD_SHA"]?.trim()) return env["MERGEPILOT_BUILD_SHA"]!.trim();
+  if (env["GITHUB_SHA"]?.trim()) return env["GITHUB_SHA"]!.trim();
   try {
-    return execSync("git rev-parse --short=12 HEAD", { stdio: ["ignore", "pipe", "ignore"] })
-      .toString()
-      .trim();
+    return gitHead();
   } catch {
     return "";
   }
@@ -118,7 +122,7 @@ export default defineConfig(() => {
       // right port regardless of how the app was built.
       "import.meta.env.VITE_RUNTIME_URL": JSON.stringify(runtimeUrl),
       __MERGEPILOT_DESKTOP_VERSION__: JSON.stringify(desktopPackage.version),
-      __MERGEPILOT_BUILD_SHA__: JSON.stringify(buildSha()),
+      __MERGEPILOT_BUILD_SHA__: JSON.stringify(resolveBuildSha()),
     },
   };
 });

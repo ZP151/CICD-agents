@@ -83,6 +83,26 @@ describe("ChatEmptyState", () => {
     expect(welcomeSuggestionsForProjectLink(null)).toEqual([]);
   });
 
+  it("keeps V2 welcome prompts usable for partial or migrated Project Link records", () => {
+    const partialProjectLink = {
+      id: "partial-link",
+      name: "ClaimBot_API link",
+      repoPath: "C:\\repos\\ClaimBot_API",
+      createdAt: 1,
+      updatedAt: 1,
+    } as ProjectLink;
+
+    const suggestions = welcomeSuggestionsForProjectLink(partialProjectLink);
+
+    expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
+      "Review ClaimBot_API changes",
+      "Check the default branch readiness",
+      "Map ClaimBot_API entry points",
+      "Inspect ClaimBot_API test surface",
+      "Plan ClaimBot_API delivery step",
+    ]);
+  });
+
   it("keeps the home welcome stable while Project Links are loading", () => {
     const html = renderToStaticMarkup(
       <ChatEmptyState

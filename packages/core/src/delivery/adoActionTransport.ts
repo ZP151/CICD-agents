@@ -202,6 +202,7 @@ export class AdoActionTransport implements ActionTransport {
           isDraft: pr.isDraft,
           sourceBranch: pr.sourceBranch,
           targetBranch: pr.targetBranch,
+          workItemIds: pr.workItemRefs.map((workItem) => workItem.id),
           ...(myVote !== undefined ? { myVote } : {}),
         },
         relations: pr.workItemRefs.map((workItem) => workItem.url),

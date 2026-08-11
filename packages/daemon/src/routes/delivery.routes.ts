@@ -10,6 +10,7 @@ import {
   listAzureEnvironmentApprovals,
   listAzureEnvironments,
   queryAzureWorkItems,
+  readAzureWorkItemDetail,
   classifyFailure,
   DeliveryActionExecutor,
   DeliveryActionPolicy,
@@ -26,6 +27,8 @@ import {
 } from "@mergepilot/core";
 import { z } from "zod";
 import type { ProjectLinkStoreAdapter } from "../projectLinkStore.js";
+import { preparePullRequest } from "../pullRequestPreparation.js";
+import { PullRequestValidationCache, runPullRequestValidation } from "../pullRequestValidation.js";
 
 const ArtifactRefSchema = z.custom<ArtifactRef>(isArtifactRef, {
   message: "invalid ArtifactRef: must include a known kind and projectLinkId",
@@ -51,7 +54,7 @@ export const WORK_ITEMS_QUERY =
 
 const VerificationPredicateSchema = z.object({
   artifact: ArtifactRefSchema,
-  condition: z.enum(["exists", "not_exists", "field_eq", "relation_present", "revision_gt", "run_visible", "comment_contains"]),
+  condition: z.enum(["exists", "not_exists", "field_eq", "field_ne", "field_contains", "relation_present", "revision_gt", "run_visible", "comment_contains"]),
   field: z.string().optional(),
   expected: z.unknown().optional(),
   correlation: z.string().optional(),
@@ -73,6 +76,21 @@ const ProposeActionSchema = z.object({
   forceApproval: z.boolean().optional(),
 });
 
+const PullRequestPreparationSchema = z.object({
+  projectLinkId: z.string().min(1),
+  sourceBranch: z.string().optional(),
+  targetBranch: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  draft: z.boolean().optional(),
+  workItemId: z.number().int().positive().optional(),
+});
+
+const PullRequestValidationSchema = z.object({
+  projectLinkId: z.string().min(1),
+  expectedHeadSha: z.string().regex(/^[0-9a-f]{7,64}$/i),
+});
+
 export interface DeliveryWritesState {
   isEnabled: () => boolean;
   setEnabled: (enabled: boolean) => void;
@@ -86,6 +104,7 @@ export interface DeliveryRoutesOptions {
 
 export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRoutesOptions): void {
   const { projectLinkStore, writes } = options;
+  const pullRequestValidationCache = new PullRequestValidationCache();
 
   function createTransport(): AdoActionTransport {
     return new AdoActionTransport({
@@ -113,6 +132,53 @@ export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRo
       { writesEnabled: () => writes.isEnabled() },
     );
   }
+
+  app.post("/delivery/pull-request-preparation", async (request, reply) => {
+    const parsed = PullRequestPreparationSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
+    const { projectLinkId, ...preferences } = parsed.data;
+    try {
+      const projectLink = await projectLinkStore.getProjectLink(projectLinkId);
+      if (!projectLink) return reply.code(404).send({ error: "project_link_not_found" });
+      if (!projectLink.repoPath.trim()) {
+        return reply.code(422).send({
+          error: "project_link_repository_missing",
+          message: "This Project Link needs a local repository before a pull request can be prepared.",
+        });
+      }
+      return await preparePullRequest({
+        projectLink,
+        preferences,
+        validation: pullRequestValidationCache.latest(projectLinkId),
+      });
+    } catch (error) {
+      return reply.code(500).send({
+        error: "pull_request_preparation_failed",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.post("/delivery/pull-request-validation", async (request, reply) => {
+    const parsed = PullRequestValidationSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
+    const { projectLinkId, expectedHeadSha } = parsed.data;
+    try {
+      const projectLink = await projectLinkStore.getProjectLink(projectLinkId);
+      if (!projectLink) return reply.code(404).send({ error: "project_link_not_found" });
+      if (!projectLink.repoPath.trim()) {
+        return reply.code(422).send({ error: "project_link_repository_missing" });
+      }
+      const result = await runPullRequestValidation({ projectLink, expectedHeadSha });
+      pullRequestValidationCache.set(result);
+      return result;
+    } catch (error) {
+      return reply.code(500).send({
+        error: "pull_request_validation_failed",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
 
   app.get("/delivery/actions/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
@@ -324,7 +390,7 @@ export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRo
           linkedPullRequests: [],
           buildResults: [],
           comments: item.comments,
-          acceptanceCriteria: item.fields["System.AcceptanceCriteria"] ? String(item.fields["System.AcceptanceCriteria"]) : undefined,
+          acceptanceCriteria: item.fields["Microsoft.VSTS.Common.AcceptanceCriteria"] ? String(item.fields["Microsoft.VSTS.Common.AcceptanceCriteria"]) : undefined,
           changedFiles: [],
           children: [],
           evidenceAgeMs: 86_400_000 * 7,
@@ -349,6 +415,61 @@ export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRo
       });
       return { workItems };
     } catch (err) {
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.get("/delivery/work-items/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const projectLinkId = String((request.query as Record<string, string | undefined>)["projectLinkId"] ?? "");
+    if (!projectLinkId) {
+      return reply.code(400).send({ error: "projectLinkId query parameter is required" });
+    }
+    const numericId = Number(id);
+    if (!Number.isInteger(numericId) || numericId <= 0) {
+      return reply.code(400).send({ error: "id must be a positive integer" });
+    }
+    try {
+      const projectLink = await projectLinkStore.getProjectLink(projectLinkId);
+      if (!projectLink) return reply.code(404).send({ error: "project_link_not_found" });
+      if (!projectLink.adoOrgUrl.trim() || !projectLink.adoProject.trim()) {
+        return reply.code(422).send({
+          error: "project_link_ado_mapping_incomplete",
+          message: "This Project Link needs an Azure DevOps organization and project before Work can load.",
+        });
+      }
+      const auth = await getAzureDevOpsAuth(projectLink.adoPat);
+      const detail = await readAzureWorkItemDetail({
+        organization: projectLink.adoOrgUrl,
+        project: projectLink.adoProject,
+        workItemId: numericId,
+        auth,
+      });
+      return {
+        workItem: {
+          id: detail.id,
+          revision: detail.revision,
+          type: detail.type,
+          title: detail.title,
+          state: detail.state,
+          description: detail.description,
+          acceptanceCriteria: detail.acceptanceCriteria,
+          iterationPath: detail.iterationPath,
+          tags: detail.tags,
+          assignedTo: detail.assignedTo,
+          createdDate: detail.createdDate,
+          changedDate: detail.changedDate,
+          relations: detail.relations,
+          linkedPullRequests: detail.linkedPullRequests,
+          linkedBuilds: detail.linkedBuilds,
+          testEvidence: detail.testEvidence,
+          comments: detail.comments,
+        },
+      };
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("work_item_not_found:")) {
+        return reply.code(404).send({ error: "work_item_not_found" });
+      }
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) });
     }
   });

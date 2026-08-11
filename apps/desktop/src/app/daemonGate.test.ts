@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DESKTOP_VERSION } from "../buildInfo.js";
+import { DESKTOP_BUILD_SHA, DESKTOP_VERSION } from "../buildInfo.js";
 import {
   canAttemptDaemonRecovery,
   daemonInfoWithRuntimeOwner,
@@ -15,8 +15,33 @@ describe("daemonTrustProblem", () => {
         version: DESKTOP_VERSION,
         runtimeMode: "desktop-sidecar",
         desktopVersion: DESKTOP_VERSION,
+        buildSha: DESKTOP_BUILD_SHA,
       }),
     ).toBeNull();
+  });
+
+  it("rejects a sidecar without final-SHA provenance", () => {
+    expect(
+      daemonTrustProblem({
+        ok: true,
+        version: DESKTOP_VERSION,
+        runtimeMode: "desktop-sidecar",
+        desktopVersion: DESKTOP_VERSION,
+        buildSha: "",
+      }),
+    ).toContain("empty build SHA");
+  });
+
+  it("rejects a sidecar built from another source revision", () => {
+    expect(
+      daemonTrustProblem({
+        ok: true,
+        version: DESKTOP_VERSION,
+        runtimeMode: "desktop-sidecar",
+        desktopVersion: DESKTOP_VERSION,
+        buildSha: "different-sha",
+      }),
+    ).toContain(`Expected daemon build ${DESKTOP_BUILD_SHA}, got different-sha.`);
   });
 
   it("rejects a stale daemon version on the shared runtime port", () => {

@@ -119,6 +119,7 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
           {suggestions.map((suggestion, index) => {
             const offset = deckOffset(index, activeIndex, suggestions.length);
             const isActive = offset === 0;
+            const isVisible = Math.abs(offset) <= 2;
             return (
               <button
                 key={suggestion.id}
@@ -131,6 +132,8 @@ export function PromptParticleDeck({ suggestions, disabled = false, onPick }: Pr
                 data-active={isActive ? "true" : "false"}
                 data-depth={Math.abs(offset)}
                 aria-current={isActive ? "true" : undefined}
+                aria-hidden={isVisible ? undefined : true}
+                tabIndex={isVisible ? undefined : -1}
                 style={cardTransform(offset, compact)}
                 onFocus={() => setActiveIndex(index)}
                 onPointerDown={() => setActiveIndex(index)}
@@ -172,6 +175,14 @@ function deckOffset(index: number, activeIndex: number, count: number): number {
 
 function cardTransform(offset: number, compact: boolean): CSSProperties {
   const depth = Math.abs(offset);
+  if (depth > 2) {
+    return {
+      opacity: 0,
+      pointerEvents: "none",
+      visibility: "hidden",
+      zIndex: 0,
+    };
+  }
   const x = offset * (compact ? 142 : 205);
   const y = depth * (compact ? 8 : 14);
   const z = -depth * (compact ? 40 : 68);

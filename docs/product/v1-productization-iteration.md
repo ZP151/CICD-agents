@@ -1,7 +1,9 @@
 # MergePilot v1 Productization Iteration
 
-Status: **Execution plan for the next macro Goal**  
-Created: **2026-08-07**  
+Status: **Completed release-candidate execution for the MergePilot v1 Goal**
+Created: **2026-08-07**
+Current product-code/evidence baseline: **2026-08-11 / `7067240` on
+`claudecode/mergepilot-v1`**
 Required starting documents: `README.md`, `next-iteration-known-gaps.md`, and
 the Cycle 00–06 documents
 
@@ -15,7 +17,53 @@ ADO re-read, and a verifiable final result.
 
 The Goal is product completion, not merely making the current test suite green.
 
-## Verified starting point and protected work
+## Current execution state
+
+- Product source candidate `706724056c9e11230efac67c5613a36f5c4f9cf8`
+  is present on both `origin/claudecode/mergepilot-v1` and
+  `ado/claudecode/mergepilot-v1`, verified with `git ls-remote`. No remote
+  `main` operation was performed.
+- Work Inspector and Guided PR Preparation are complete. The installed
+  ClaimBot_API loop selected the real Project Link, re-read Work Item `7919`,
+  linked PR `2807` and successful build `4850`, produced a governed comment
+  proposal, proved ADO unchanged before approval, executed after explicit UI
+  approval, and verified the comment on authoritative re-read.
+- Canonical run `verify-msorfadi` is **PASS: 14/14 required gates**, with no
+  failed, skipped, did-not-run, interrupted or running gate. The source-live
+  desktop suite is **30/30** and mocked browser acceptance is **85/85**.
+  Relevant core, daemon and desktop typecheck/test/build gates passed three
+  consecutive attempts on the product SHA (core 500, daemon 374, desktop 745).
+- Real ADO was re-run against the same SHA and 0.5.32 daemon: scoped fixture
+  Work Item `7926` was created, re-read, commented, re-read and deleted through
+  the verified action runtime. The latest evidence JSON is hash-bound in the
+  canonical run.
+- MSI 0.5.32 was built and installed from the candidate. MSI SHA-256 is
+  `af8a7f4fbf69580cf90ab5b0b82544f4051be175c248b639f963fbcb5446f613`;
+  the packaged and installed daemon both hash to
+  `ce13683d2deb93b962429b32a6285321dba7d430d575931f6ca3019bb70d6c1a`.
+  Program Files payload matching, restart persistence, safety, fresh-user,
+  desktop-sidecar takeover and packaged vision checks passed. The provenance
+  record is `output/live-e2e/installed-provenance-20260811-233249.json`.
+- Credential persistence audit found **0** non-empty `adoPat` values in both
+  `project-links.json` and `chat-history.json`. Committed evidence:
+  `docs/manual-testing/2026-08-05/verification/credential-persistence-audit-2026-08-11.json`.
+- Exact-SHA English ClaimBot_API latency baseline completed 15/15 turns. App
+  health P50/P95 is 1.1/2.9 ms and Project Link reads 200/281 ms; first SSE
+  event is 3.34/3.76 s, first real narrative 9.90/10.99 s and total turn
+  20.71/23.15 s. Azure/model latency remains an optimization target rather
+  than a release gate. Committed evidence:
+  `docs/manual-testing/2026-08-05/verification/performance-baseline-2026-08-11.json`
+  (raw local artifact:
+  `output/performance-baseline-2026-08-11T15-31-02-724Z.json`).
+- The candidate's runtime evidence was generated while canonical verifier
+  projections were dirty. The dirt is confined to generated evidence and
+  documentation; no package, core, daemon, desktop or E2E source differed from
+  `7067240`. The canonical state records this code-equivalence boundary.
+
+## Historical starting point and protected work
+
+The following bullets describe the state when this macro plan was created.
+They are retained as provenance and are not the current execution state.
 
 - Foundation commits through `26fd4d7` exist on both
   `ado/claudecode/optimize-bugfix` and

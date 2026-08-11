@@ -95,7 +95,7 @@ function gateStatusOf(gate) {
   // Latest attempt wins: a later FAIL/INTERRUPTED must beat any historical PASS.
   // requireNoSkips is enforced at record time (runGates/mergeRunner); this
   // defensive check downgrades legacy PASS-with-skips records on read.
-  if (gate.requireNoSkips && last.status === "PASS" && (last.skipped ?? 0) > 0) return "FAIL";
+  if (gate.requireNoSkips && last.status === "PASS" && ((last.skipped ?? 0) > 0 || (last.didNotRun ?? 0) > 0)) return "FAIL";
   return last.status;
 }
 
@@ -157,23 +157,60 @@ function simpleGlobMatch(pattern, name) {
 }
 
 // Parse the test runner summary from combined command output. Vitest prints
-// "Tests  N passed | M skipped (T)"; Playwright prints a final line like
-// "29 passed (4m), 1 skipped (5s)". Returns undefined when no runner summary
-// is present (typecheck/build gates).
+// "Tests  F failed | P passed | S skipped (T)"; Playwright may print each
+// count on a separate line (for example "9 failed" then "42 passed (4m)").
+// Returns undefined when no runner summary is present (typecheck/build gates).
 function parseTestSummary(output) {
-  const vitest = output.match(/Tests\s+(\d+)\s+passed(?:\s*\|\s*(\d+)\s+skipped)?\s*\((\d+)\)/);
+  const vitest = output.match(/Tests\s+(?:(\d+)\s+failed\s*\|\s*)?(\d+)\s+passed(?:\s*\|\s*(\d+)\s+skipped)?\s*\((\d+)\)/);
   if (vitest) {
-    return { passed: Number(vitest[1]), skipped: Number(vitest[2] ?? 0), total: Number(vitest[3]) };
+    return {
+      passed: Number(vitest[2]),
+      failed: Number(vitest[1] ?? 0),
+      skipped: Number(vitest[3] ?? 0),
+      didNotRun: 0,
+      total: Number(vitest[4]),
+    };
   }
-  const lines = output.split(/\r?\n/).filter((l) => /\d+\s+passed/.test(l));
-  const line = lines.at(-1) ?? "";
-  const passed = line.match(/(\d+)\s+passed/);
-  if (!passed) return undefined;
-  const skipped = line.match(/(\d+)\s+skipped/);
-  const didNotRun = line.match(/(\d+)\s+did not run/);
-  const s = Number(skipped?.[1] ?? 0);
-  const d = Number(didNotRun?.[1] ?? 0);
-  return { passed: Number(passed[1]), skipped: s, total: Number(passed[1]) + s + d, didNotRun: d };
+  const counts = { passed: 0, failed: 0, skipped: 0, didNotRun: 0 };
+  let found = false;
+  for (const rawLine of stripTerminalCodes(output).split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!/^(?:\d+\s+(?:passed|failed|skipped|did not run)(?:\s+\([^)]+\))?)(?:\s*,\s*\d+\s+(?:passed|failed|skipped|did not run)(?:\s+\([^)]+\))?)*$/.test(line)) continue;
+    for (const match of line.matchAll(/(\d+)\s+(passed|failed|skipped|did not run)\b/g)) {
+      found = true;
+      const key = match[2] === "did not run" ? "didNotRun" : match[2];
+      counts[key] += Number(match[1]);
+    }
+  }
+  if (!found || counts.passed === 0 && counts.failed === 0) return undefined;
+  return {
+    ...counts,
+    total: counts.passed + counts.failed + counts.skipped + counts.didNotRun,
+  };
+}
+
+function parseJsonObjectFromOutput(output) {
+  const trimmed = output.trim();
+  for (let index = trimmed.lastIndexOf("{"); index >= 0; index = trimmed.lastIndexOf("{", index - 1)) {
+    try {
+      const value = JSON.parse(trimmed.slice(index));
+      if (value && typeof value === "object" && !Array.isArray(value)) return value;
+    } catch {
+      // PowerShell or a child process may write text before the final JSON.
+    }
+  }
+  return null;
+}
+
+function stripTerminalCodes(output) {
+  return output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, "");
+}
+
+function diagnosticTail(output, limit = 8000) {
+  return stripTerminalCodes(output)
+    .replace(/(authorization\s*:\s*bearer)\s+[^\s]+/gi, "$1 [REDACTED]")
+    .replace(/((?:api[_ -]?key|access[_ -]?token|password|client[_ -]?secret)\s*[=:]\s*)[^\s,;]+/gi, "$1[REDACTED]")
+    .slice(-limit);
 }
 
 function runCommand(cmd, timeoutMs) {
@@ -200,9 +237,16 @@ function runCommand(cmd, timeoutMs) {
 function ensureStateForManifest(state, manifest) {
   const byId = new Map(state.gates.map((g) => [g.id, g]));
   for (const m of manifest.gates) {
-    if (byId.has(m.id)) continue;
+    const existing = byId.get(m.id);
+    if (existing) {
+      const runs = existing.runs ?? [];
+      Object.assign(existing, m);
+      existing.runs = runs;
+      existing.status = gateStatusOf(existing);
+      continue;
+    }
     state.gates.push({ ...m, runs: [], status: "NOT_RUN" });
-    byId.set(m.id, true);
+    byId.set(m.id, state.gates.at(-1));
   }
   return state;
 }
@@ -233,7 +277,15 @@ async function runGates(state, manifest, opts) {
     }
     process.stdout.write(`[${gate.id}] attempt ${attempt}/${opts.repeat ?? 1}: ${gate.cmd}\n`);
     const r = await runCommand(m.cmd, m.timeoutMs);
-    const summary = parseTestSummary(r.stdout + r.stderr);
+    const adapterResult = m.resultAdapter === "live-app-runner"
+      ? parseJsonObjectFromOutput(r.stdout)
+      : null;
+    const adapterPlaywrightLog = adapterResult?.playwrightLog
+      ? path.resolve(repoRoot, adapterResult.playwrightLog)
+      : null;
+    const summary = adapterPlaywrightLog && fs.existsSync(adapterPlaywrightLog)
+      ? parseTestSummary(decodeLog(adapterPlaywrightLog))
+      : parseTestSummary(r.stdout + r.stderr);
     const startedAt = new Date(Date.now() - r.durationMs).toISOString();
     const finishedAt = new Date().toISOString();
     let status = r.timedOut ? "INTERRUPTED" : r.code === 0 ? "PASS" : "FAIL";
@@ -252,10 +304,17 @@ async function runGates(state, manifest, opts) {
       startedAt,
       finishedAt,
       runId: state.runId,
-      ...(summary ? { passed: summary.passed, skipped, total: summary.total } : {}),
+      ...(summary ? {
+        passed: summary.passed,
+        failed: summary.failed ?? 0,
+        skipped,
+        didNotRun: summary.didNotRun ?? 0,
+        total: summary.total,
+      } : {}),
     };
     if (note) run.note = note;
-    if (r.stderr) run.stderrTail = r.stderr.slice(-2000);
+    if (status !== "PASS" && r.stdout) run.stdoutTail = diagnosticTail(r.stdout);
+    if (r.stderr) run.stderrTail = diagnosticTail(r.stderr, 2000);
     run.artifacts = resolveArtifacts(m.artifacts, repoRoot, startedAt, finishedAt).map((p) => {
       try { return { path: path.relative(repoRoot, p), sha256: sha256File(p) }; }
       catch { return { path: path.relative(repoRoot, p), sha256: null }; }
@@ -279,14 +338,13 @@ function decodeLog(p) {
 }
 
 function parsePlaywrightSummary(logText) {
-  const m = logText.match(/(\d+)\s+passed(?:\s*,\s*(\d+)\s+failed)?(?:\s*,\s*(\d+)\s+did not run)?/);
-  if (!m) return null;
-  const skipped = logText.match(/(\d+)\s+skipped/);
+  const summary = parseTestSummary(logText);
+  if (!summary) return null;
   return {
-    passed: Number(m[1]),
-    failed: Number(m[2] ?? 0),
-    didNotRun: Number(m[3] ?? 0),
-    skipped: skipped ? Number(skipped[1]) : 0,
+    passed: summary.passed,
+    failed: summary.failed ?? 0,
+    didNotRun: summary.didNotRun ?? 0,
+    skipped: summary.skipped ?? 0,
   };
 }
 
@@ -320,8 +378,10 @@ function mergeRunner(state, runnerPath, gateId, manifest) {
     if (summary) {
       run.note += ` playwright ${JSON.stringify(summary)}`;
       run.passed = summary.passed;
+      run.failed = summary.failed;
       run.skipped = summary.skipped;
-      run.total = summary.passed + summary.skipped + summary.didNotRun;
+      run.didNotRun = summary.didNotRun;
+      run.total = summary.passed + summary.failed + summary.skipped + summary.didNotRun;
       if (gate.requireNoSkips && run.status === "PASS" && (summary.skipped > 0 || summary.didNotRun > 0)) {
         run.status = "FAIL";
         run.note += ` requireNoSkips violated (${summary.skipped} skipped, ${summary.didNotRun} did not run)`;
@@ -372,8 +432,12 @@ function projectGoalJson(state, manifest) {
       setupFailure: r.setupFailure ?? false,
       note: r.note ?? undefined,
       passed: r.passed ?? undefined,
+      failed: r.failed ?? undefined,
       skipped: r.skipped ?? undefined,
+      didNotRun: r.didNotRun ?? undefined,
       total: r.total ?? undefined,
+      stdoutTail: r.stdoutTail ?? undefined,
+      stderrTail: r.stderrTail ?? undefined,
       runId: r.runId ?? undefined,
       artifacts: r.artifacts ?? undefined,
     })),
@@ -414,7 +478,12 @@ function projectMarkdown(state) {
     const last = (g.runs ?? []).at(-1);
     const counts = last?.note?.match(/\{"passed":\d+,"failed":\d+,"didNotRun":\d+\}/);
     let detail = last ? `exit ${last.exitCode ?? "-"} / ${last.durationMs ?? "-"}ms` : "-";
-    if (last?.passed != null) detail += ` / ${last.passed} passed${last.skipped ? `, ${last.skipped} skipped` : ""}`;
+    if (last?.passed != null) {
+      detail += ` / ${last.passed} passed`;
+      if (last.failed) detail += `, ${last.failed} failed`;
+      if (last.skipped) detail += `, ${last.skipped} skipped`;
+      if (last.didNotRun) detail += `, ${last.didNotRun} did not run`;
+    }
     else if (counts) { try { const c = JSON.parse(counts[0]); detail += ` / ${c.passed} passed, ${c.failed} failed`; } catch {} }
     const arts = (g.runs ?? []).flatMap((r) => r.artifacts ?? []).map((a) => path.basename(a.path)).join(", ");
     return `| ${g.id} | ${g.tier} | ${g.status} | ${detail} | ${arts || "-"} |`;

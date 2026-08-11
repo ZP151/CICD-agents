@@ -34,6 +34,7 @@ describe("PendingActionCard", () => {
     );
 
     expect(html).toContain("Review before running");
+    expect(html).toContain("Approval required");
     expect(html).toContain("MEDIUM risk");
     expect(html).toContain("Stage selected files for commit");
     expect(html).toContain("git_add");

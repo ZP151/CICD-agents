@@ -1,14 +1,55 @@
 # Next Iteration Known Gaps
 
-Status: **Required input for the next product Goal**
-Audit date: **2026-08-08**
-Audited branch/HEAD: `claudecode/optimize-bugfix` / `971ee1d`
+Status: **Post-v1 optimization and pilot gap register**
+Audit date: **2026-08-11**
+Current product-code/evidence baseline: `claudecode/mergepilot-v1` /
+`7067240`
 
 This document records verified gaps between the canonical product direction and
 the current implementation. A future Goal must read this document before
 claiming a cycle or the product complete. Test failures are not automatically
 bugs in the desired product: obsolete tests must be corrected to the canonical
 product semantics before they are made green.
+
+## Current v1 execution delta — 2026-08-11
+
+- Priorities 1–3 are closed on product source SHA `7067240`: Work Inspector,
+  Guided PR Preparation and the fresh installed 0.5.32 vertical release loop
+  all have current-SHA evidence.
+- Canonical run `verify-msorfadi` is **14/14 PASS**. Source-live is 30/30,
+  mocked browser is 85/85 and the relevant unit/typecheck/build gates passed
+  three consecutive attempts. The two generated `goal-verification.json`
+  files and `current-gates.md` are projections of that run.
+- Installed provenance binds source SHA → MSI
+  `af8a7f4fbf69580cf90ab5b0b82544f4051be175c248b639f963fbcb5446f613`
+  → daemon payload
+  `ce13683d2deb93b962429b32a6285321dba7d430d575931f6ca3019bb70d6c1a`
+  → Program Files payload → installed smoke/vision. The installed UI loop then
+  proved Work Item → linked PR/build → proposal → explicit approval → ADO
+  write-back → authoritative re-read on ClaimBot_API.
+- Deterministic real-ADO evidence and installed provenance are now artifact-
+  hash bound in the canonical state. `verify-run.mjs --verify-artifacts`
+  validates seven recorded hashes.
+- Credential persistence audit is clean (zero non-empty `adoPat` values).
+  Exact-SHA latency measurement separates app endpoints (health P95 2.9 ms,
+  Project Link P95 281 ms) from first real model narrative (P95 10.99 s).
+
+## Next Goal candidates
+
+1. Reduce narrator/model TTFT and first-event planning overhead without making
+   an external Azure latency threshold a release blocker. Preserve the split
+   app/provider measurements and 15-turn English ClaimBot_API fixture.
+2. Move version/model/remote metadata and credential-audit output into explicit
+   verifier inputs so a fresh run never needs evidence-state enrichment.
+3. Make release packaging reproducible from a pristine evidence worktree or
+   record product-source and evidence-closure commits as first-class separate
+   identities in the provenance schema.
+4. Run external pilot/user-research tasks and a governed non-production
+   deployment fixture. These are product-learning inputs, not regressions in
+   the accepted v1 developer loop.
+5. Continue accessibility and narrow-window visual regression coverage. A
+   non-multimodal coding model may own code and text tests, but visual desktop
+   acceptance must remain a human or multimodal checkpoint.
 
 ## v0.5.29 release handoff — 2026-08-10
 

@@ -1432,7 +1432,7 @@ test.describe("Chat layout", () => {
     if (await collapseCodePanel.count()) await collapseCodePanel.click();
     await openPinnedSummary(page);
 
-    await page.getByRole("button", { name: "main" }).click();
+    await page.getByRole("button", { name: "main", exact: true }).click();
     await expect(page.getByText("Refresh branch state")).toBeVisible();
     await expect(page.getByText("Fetch remotes")).toBeVisible();
     await page.getByText("Fetch remotes").click();
@@ -1480,24 +1480,30 @@ test.describe("Chat layout", () => {
   test("infers Azure DevOps fields while creating a Project Link from a local repo", async ({ page }) => {
     const repoPath = "C:\\work\\ClaimBot_API";
     const createPayloads: Array<Record<string, unknown>> = [];
+    let createdProjectLink: Record<string, unknown> | null = null;
 
     await page.route("http://127.0.0.1:8787/project-links", async (route) => {
       if (route.request().method() === "POST") {
         const payload = route.request().postDataJSON() as Record<string, unknown>;
         createPayloads.push(payload);
+        createdProjectLink = {
+          ...payload,
+          id: "created-claimbot-link",
+          createdAt: 1,
+          updatedAt: 1,
+        };
         await route.fulfill({
           status: 201,
           contentType: "application/json",
-          body: JSON.stringify({
-            ...payload,
-            id: "created-claimbot-link",
-            createdAt: 1,
-            updatedAt: 1,
-          }),
+          body: JSON.stringify(createdProjectLink),
         });
         return;
       }
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(createdProjectLink ? [createdProjectLink] : []),
+      });
     });
     await page.route(/http:\/\/127\.0\.0\.1:8787\/git\/branches.*/, async (route) => {
       await route.fulfill({
@@ -1552,7 +1558,10 @@ test.describe("Chat layout", () => {
     expect(createPayloads[0]).not.toHaveProperty("adoPipelineId");
     expect(createPayloads[0]).not.toHaveProperty("adoPipelineName");
     expect(createPayloads[0]).not.toHaveProperty("adoMcpEnabled");
-    await expect(page.getByTitle("Context manages the Project Link")).toHaveText("ClaimBot_API link");
+    await expect(page.getByText(
+      "Suggestions use the selected ClaimBot_API link context. Edit the prompt before MergePilot does any work.",
+      { exact: true },
+    )).toBeVisible();
     await expect(page.locator('select[aria-label="Composer Project Link"]')).toHaveCount(0);
     await expect(page.getByPlaceholder("Ask MergePilot...")).toBeEnabled();
     await expectNoVisibleHorizontalOverflow(page);
@@ -1562,24 +1571,30 @@ test.describe("Chat layout", () => {
     const repoPath = "C:\\work\\ClaimBot_API";
     const createPayloads: Array<Record<string, unknown>> = [];
     const discoveryPayloads: Array<Record<string, unknown>> = [];
+    let createdProjectLink: Record<string, unknown> | null = null;
 
     await page.route("http://127.0.0.1:8787/project-links", async (route) => {
       if (route.request().method() === "POST") {
         const payload = route.request().postDataJSON() as Record<string, unknown>;
         createPayloads.push(payload);
+        createdProjectLink = {
+          ...payload,
+          id: "created-claimbot-pipeline-link",
+          createdAt: 1,
+          updatedAt: 1,
+        };
         await route.fulfill({
           status: 201,
           contentType: "application/json",
-          body: JSON.stringify({
-            ...payload,
-            id: "created-claimbot-pipeline-link",
-            createdAt: 1,
-            updatedAt: 1,
-          }),
+          body: JSON.stringify(createdProjectLink),
         });
         return;
       }
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(createdProjectLink ? [createdProjectLink] : []),
+      });
     });
     await page.route("http://127.0.0.1:8787/project-links/discover", async (route) => {
       const payload = route.request().postDataJSON() as Record<string, unknown>;
@@ -1665,7 +1680,10 @@ test.describe("Chat layout", () => {
       expect.arrayContaining(["projects", "repositories"]),
     );
     expect(discoveryPayloads.map((payload) => payload.kind)).not.toContain("pipelines");
-    await expect(page.getByTitle("Context manages the Project Link")).toHaveText("ClaimBot_API link");
+    await expect(page.getByText(
+      "Suggestions use the selected ClaimBot_API link context. Edit the prompt before MergePilot does any work.",
+      { exact: true },
+    )).toBeVisible();
     await expect(page.locator('select[aria-label="Composer Project Link"]')).toHaveCount(0);
     await expectNoVisibleHorizontalOverflow(page);
   });
@@ -2428,7 +2446,7 @@ test.describe("Chat layout", () => {
     await openPinnedSummary(page);
 
     const transcriptColumn = page.locator(".middle-panel-inner");
-    const environmentCard = page.locator(".pointer-events-auto.rounded-2xl").filter({ hasText: "Context" }).first();
+    const environmentCard = page.getByLabel("Workspace summary");
     const approvalCard = page.locator('[data-testid="pending-action-card"]');
 
     await expect(page.getByText("Review my changes and stage the safe files")).toBeVisible();
@@ -2436,10 +2454,11 @@ test.describe("Chat layout", () => {
     // (the old "Waiting for approval N commands" notice button is gone).
     await expect(page.getByPlaceholder(/Approve or cancel the pending action/)).toBeDisabled();
     await expect(page.getByText("The diff is focused on local API wiring")).toBeVisible();
+    await approvalCard.getByText("Review command").click();
     await expect(page.getByText("git add -- src/app.ts src/api.ts")).toBeVisible();
     await expect(page.getByRole("button", { name: "Approve and run" })).toBeVisible();
     await expect(environmentCard).toBeVisible();
-    await expect(page.getByTitle("Context manages the Project Link")).toHaveText(profile.name);
+    await expect(page.getByRole("button", { name: "Workspace Project Link" })).toHaveText(profile.name);
     await expect(page.getByLabel("Pinned Summary Project Link")).toHaveCount(0);
     await expect(transcriptColumn).toBeVisible();
     await expect(approvalCard).toBeVisible();
@@ -2497,16 +2516,14 @@ test.describe("Chat layout", () => {
     await page.setViewportSize({ width: 1100, height: 780 });
     await page.goto("/chat");
 
-    const pushFollowUp = page
-      .locator('button[data-action-kind="workspace_action"]')
-      .filter({ hasText: "Push branch" });
+    const pushFollowUp = page.getByRole("button", { name: "Push branch", exact: true });
     await expect(pushFollowUp).toBeVisible();
     await pushFollowUp.click();
 
     // Suggestion chips are composer prompts, not hidden workflow executions:
     // the click fills the composer and never fires a workflow-action request.
     await expect(page.getByPlaceholder(/Ask MergePilot/)).toHaveValue(
-      "Prepare a push approval after checking branch readiness.",
+      "Push branch",
     );
     expect(workflowPayloads).toHaveLength(0);
     expect(chatRequestCount).toBe(0);
@@ -3123,7 +3140,9 @@ test.describe("Chat layout", () => {
     await page.getByPlaceholder(/Ask (MergePilot|MergePilot)/).fill("Prepare a staged commit");
     await page.getByRole("button", { name: /Send/ }).click();
 
-    await expect(page.getByText("Approval required")).toBeVisible();
+    await expect(page.getByText("Review before running")).toBeVisible();
+    await expect(page.getByText("Approval required")).toHaveCount(1);
+    await page.getByText("Review command").click();
     await expect(page.getByText("git add -- apps/desktop/src/pages/Chat.tsx")).toBeVisible();
     await expect(page.getByRole("button", { name: "Approve and run" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Skip action" })).toBeVisible();

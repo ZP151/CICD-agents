@@ -8,6 +8,13 @@ const suggestions = [
   { id: "branch", label: "Check branch readiness", message: "Check branch", action: { kind: "fill_composer" as const } },
 ];
 
+const fullDeckSuggestions = Array.from({ length: 8 }, (_, index) => ({
+  id: `suggestion-${index}`,
+  label: `Suggestion ${index}`,
+  message: `Use suggestion ${index}`,
+  action: { kind: "fill_composer" as const },
+}));
+
 describe("PromptParticleDeck", () => {
   it("renders a visible, keyboard-operable contextual prompt deck", () => {
     const html = renderToStaticMarkup(createElement(PromptParticleDeck, {
@@ -30,5 +37,16 @@ describe("PromptParticleDeck", () => {
     expect(html).toContain('aria-label="Use prompt: Check branch readiness"');
     expect(html).toContain('data-active="true"');
     expect(html).toContain('data-active="false"');
+  });
+
+  it("keeps off-ring cards out of layout and keyboard navigation", () => {
+    const html = renderToStaticMarkup(createElement(PromptParticleDeck, {
+      suggestions: fullDeckSuggestions,
+      onPick: () => undefined,
+    }));
+
+    expect((html.match(/<button[^>]*aria-hidden="true"[^>]*>/g) ?? [])).toHaveLength(3);
+    expect((html.match(/tabindex="-1"/g) ?? [])).toHaveLength(3);
+    expect((html.match(/visibility:hidden/g) ?? [])).toHaveLength(3);
   });
 });

@@ -34,6 +34,7 @@ $env:PATH = "$(Join-Path $workspaceRoot '.tools\node-v22.11.0-win-x64');$(Join-P
 $env:VITE_DEV_SERVER_PORT = "$DevPort"
 $env:VITE_RUNTIME_URL = "http://127.0.0.1:$DaemonPort"
 $env:MERGEPILOT_RUNTIME_PORT = "$DaemonPort"
+$env:MERGEPILOT_BUILD_SHA = (git -C $workspaceRoot rev-parse HEAD).Trim()
 
 & $node 'apps/desktop/scripts/ensure-sidecar.mjs'
 if ($LASTEXITCODE -ne 0) { throw "Sidecar preparation failed with exit code $LASTEXITCODE." }

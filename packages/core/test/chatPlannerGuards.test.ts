@@ -116,6 +116,12 @@ describe("chatPlannerGuards", () => {
     expect(guarded.suggestions).toEqual(["Inspect the diff"]);
   });
 
+  it("keeps a question about a hypothetical push target read-only", () => {
+    const request = "Where will this push go? Read-only only. Do not fetch, push, stage, or commit.";
+
+    expect(isExplicitReadOnlyRequest(request)).toBe(true);
+  });
+
   it("keeps an explicitly requested pull in scope when a negative clause only forbids later actions", () => {
     const request = "Pull latest from origin main with rebase. Do not push, stage, commit, or create a PR.";
 

@@ -12,6 +12,7 @@ import {
 import type { StoredBubble, StoredSession } from "./chatHistoryStore.js";
 export { structuredDoneAfterConfirmedAction } from "./chatStructuredDone.js";
 import { workflowStateMetadata } from "./chatWorkflowMetadata.js";
+import { isStagingProposalProhibitedByLatestUser } from "./chatPendingActionScope.js";
 
 export function approvalIdFor(action: PendingToolAction): string {
   return `approval_${action.tool}_${hashShort(JSON.stringify(action.args ?? {}))}`;
@@ -26,7 +27,7 @@ export function storedApprovalProposal(session: StoredSession): PendingToolActio
 }
 
 export function setStoredApprovalProposal(session: StoredSession, proposal: PendingToolAction | undefined): void {
-  session.approvalProposal = proposal;
+  session.approvalProposal = acceptedApprovalProposal(session.bubbles, proposal);
 }
 
 export function clearStoredApprovalProposal(session: StoredSession): void {
@@ -43,8 +44,15 @@ export function clearStoredApprovalProposal(session: StoredSession): void {
  * from the persisted approval proposal so the desktop still sees it.
  */
 export function workflowStateForSession(session: StoredSession): ChatWorkflowState | undefined {
-  const lastLedgerState = lastLedgerWorkflowState(session);
-  const proposal = storedApprovalProposal(session);
+  const rawLedgerState = lastLedgerWorkflowState(session);
+  const ledgerProposal = rawLedgerState?.pendingApproval?.action;
+  const ledgerProposalAllowed = !ledgerProposal || Boolean(acceptedApprovalProposal(session.bubbles, ledgerProposal));
+  const lastLedgerState = ledgerProposalAllowed
+    ? rawLedgerState
+    : rawLedgerState
+      ? { ...rawLedgerState, status: "done" as const, currentStep: "done", pendingApproval: undefined }
+      : undefined;
+  const proposal = acceptedApprovalProposal(session.bubbles, storedApprovalProposal(session));
   if (proposal && lastLedgerState?.status !== "waiting_for_approval") {
     return buildWorkflowState(
       session.bubbles,
@@ -79,25 +87,42 @@ export function buildWorkflowState(
   metadata: Pick<ChatWorkflowState, "workflowKind" | "workflowPhase"> = {},
   verifiedActions: ChatVerifiedAction[] = [],
 ): ChatWorkflowState {
+  const acceptedProposal = acceptedApprovalProposal(bubbles, approvalProposal);
+  const proposalRejected = Boolean(approvalProposal && !acceptedProposal);
   const completedTools = bubbles
     .filter((b) => b.role === "tool" && b.toolName && b.toolOk !== false)
     .map((b) => b.toolName as string);
   return {
-    status,
-    currentStep,
+    status: proposalRejected && status === "waiting_for_approval" ? "done" : status,
+    currentStep: proposalRejected && status === "waiting_for_approval" ? "done" : currentStep,
     completedTools,
     ...(verifiedActions.length > 0 ? { verifiedActions } : {}),
-    ...workflowStateMetadata(approvalProposal, status),
+    ...workflowStateMetadata(acceptedProposal, proposalRejected ? "done" : status),
     ...metadata,
-    pendingApproval: approvalProposal
+    pendingApproval: acceptedProposal
       ? {
-          id: approvalIdFor(approvalProposal),
-          action: approvalProposal,
+          id: approvalIdFor(acceptedProposal),
+          action: acceptedProposal,
           riskLevel,
           explanation,
         }
       : undefined,
   };
+}
+
+function acceptedApprovalProposal(
+  bubbles: StoredBubble[],
+  proposal: PendingToolAction | undefined,
+): PendingToolAction | undefined {
+  if (!proposal) return undefined;
+  // Structured workspace actions carry their own typed workflow intent and do
+  // not originate from the latest chat bubble. Only quarantine legacy/model
+  // proposals that have no structured origin and directly contradict the
+  // latest user's explicit staging boundary.
+  if (!proposal.workflow && isStagingProposalProhibitedByLatestUser(proposal.tool, proposal.args, bubbles)) {
+    return undefined;
+  }
+  return proposal;
 }
 
 export function mergePlannerSources(

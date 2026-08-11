@@ -46,6 +46,10 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $pnpmProject = Join-Path $PSScriptRoot "pnpm-project.ps1"
 $daemonPackageJson = Join-Path $repoRoot "packages\daemon\package.json"
 $expectedVersion = (Get-Content -LiteralPath $daemonPackageJson -Raw | ConvertFrom-Json).version
+$expectedBuildSha = (& git -C $repoRoot rev-parse HEAD 2>$null).Trim()
+if ([string]::IsNullOrWhiteSpace($expectedBuildSha)) {
+  throw "Unable to resolve the workspace Git HEAD for source-live provenance."
+}
 $daemonUrl = "http://127.0.0.1:8787"
 
 if ([string]::IsNullOrWhiteSpace($LogDir)) {
@@ -57,6 +61,7 @@ $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $daemonOut = Join-Path $LogDir "live-app-source-daemon-$stamp.log"
 $daemonErr = Join-Path $LogDir "live-app-source-daemon-$stamp.err.log"
 $playwrightLog = Join-Path $LogDir "live-app-e2e-$stamp.log"
+$runnerJson = Join-Path $LogDir "runner-$stamp.json"
 
 function Get-DaemonHealth {
   try {
@@ -108,16 +113,29 @@ function Start-SourceDaemon {
     throw "Rebuild of @mergepilot/core failed with exit code $LASTEXITCODE"
   }
 
-  $process = Start-Process -FilePath "powershell.exe" -ArgumentList @(
-    "-NoProfile",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-File",
-    $pnpmProject,
-    "--filter",
-    "@mergepilot/daemon",
-    "dev"
-  ) -WorkingDirectory $repoRoot -RedirectStandardOutput $daemonOut -RedirectStandardError $daemonErr -WindowStyle Hidden -PassThru
+  $previousBuildSha = $env:MERGEPILOT_BUILD_SHA
+  try {
+    # The source daemon must identify the exact Git revision under test. Version
+    # equality is insufficient because an installed sidecar can share the same
+    # package version while containing older code.
+    $env:MERGEPILOT_BUILD_SHA = $expectedBuildSha
+    $process = Start-Process -FilePath "powershell.exe" -ArgumentList @(
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      $pnpmProject,
+      "--filter",
+      "@mergepilot/daemon",
+      "dev"
+    ) -WorkingDirectory $repoRoot -RedirectStandardOutput $daemonOut -RedirectStandardError $daemonErr -WindowStyle Hidden -PassThru
+  } finally {
+    if ($null -eq $previousBuildSha) {
+      Remove-Item Env:\MERGEPILOT_BUILD_SHA -ErrorAction SilentlyContinue
+    } else {
+      $env:MERGEPILOT_BUILD_SHA = $previousBuildSha
+    }
+  }
 
   for ($i = 0; $i -lt 60; $i++) {
     $health = Get-DaemonHealth
@@ -146,14 +164,16 @@ try {
   $existingHealth = Get-DaemonHealth
 
   if ($existingHealth) {
-    if ($existingHealth.version -ne $expectedVersion) {
+    $versionMatches = $existingHealth.version -eq $expectedVersion
+    $buildShaMatches = $existingHealth.buildSha -eq $expectedBuildSha
+    if (-not $versionMatches -or -not $buildShaMatches) {
       if ($RestartMismatchedDaemon) {
         Stop-PortOwner -Port 8787
         Start-Sleep -Milliseconds 500
         $startedDaemon = Start-SourceDaemon
         $existingHealth = $startedDaemon.health
       } elseif (-not $AllowExistingMismatchedDaemon) {
-        throw "Daemon on $daemonUrl is version $($existingHealth.version), but this workspace expects $expectedVersion. Rerun with -RestartMismatchedDaemon to replace it for this test, or -AllowExistingMismatchedDaemon if that is intentional."
+        throw "Daemon on $daemonUrl is version $($existingHealth.version) at build $($existingHealth.buildSha), but this workspace expects version $expectedVersion at build $expectedBuildSha. Rerun with -RestartMismatchedDaemon to replace it for this test, or -AllowExistingMismatchedDaemon if that is intentional."
       }
     }
   } else {
@@ -165,8 +185,8 @@ try {
     throw "Daemon health check failed on $daemonUrl."
   }
 
-  if ($existingHealth.version -ne $expectedVersion -and -not $AllowExistingMismatchedDaemon) {
-    throw "Daemon on $daemonUrl is version $($existingHealth.version), but this workspace expects $expectedVersion."
+  if (($existingHealth.version -ne $expectedVersion -or $existingHealth.buildSha -ne $expectedBuildSha) -and -not $AllowExistingMismatchedDaemon) {
+    throw "Daemon on $daemonUrl is version $($existingHealth.version) at build $($existingHealth.buildSha), but this workspace expects version $expectedVersion at build $expectedBuildSha."
   }
 } catch {
   $setupError = $_.Exception.Message
@@ -182,7 +202,9 @@ try {
     error = $setupError
     daemonUrl = $daemonUrl
     daemonVersion = if ($existingHealth) { $existingHealth.version } else { $null }
+    daemonBuildSha = if ($existingHealth) { $existingHealth.buildSha } else { $null }
     expectedVersion = $expectedVersion
+    expectedBuildSha = $expectedBuildSha
     startedDaemon = ($null -ne $startedDaemon)
     liveAdo = [bool]$LiveAdo
     destructive = [bool]$Destructive
@@ -284,7 +306,9 @@ try {
     error = $prewarmError
     daemonUrl = $daemonUrl
     daemonVersion = if ($existingHealth) { $existingHealth.version } else { $null }
+    daemonBuildSha = if ($existingHealth) { $existingHealth.buildSha } else { $null }
     expectedVersion = $expectedVersion
+    expectedBuildSha = $expectedBuildSha
     startedDaemon = ($null -ne $startedDaemon)
     liveAdo = [bool]$LiveAdo
     destructive = [bool]$Destructive
@@ -338,7 +362,9 @@ try {
     exitCode = $exitCode
     daemonUrl = $daemonUrl
     daemonVersion = $existingHealth.version
+    daemonBuildSha = $existingHealth.buildSha
     expectedVersion = $expectedVersion
+    expectedBuildSha = $expectedBuildSha
     startedDaemon = ($null -ne $startedDaemon)
     liveAdo = [bool]$LiveAdo
     destructive = [bool]$Destructive
@@ -351,7 +377,9 @@ try {
     viteLog = $viteLog
     viteErrorLog = $viteErrLog
     prewarmLog = $prewarmLog
+    runnerPath = $runnerJson
   } | ConvertTo-Json -Depth 6
+  $resultJson | Set-Content -LiteralPath $runnerJson -Encoding utf8
   Write-Output $resultJson
 
   exit $exitCode

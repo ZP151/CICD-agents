@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAppData } from "../App.js";
 import { RUNTIME_URL, messageFromErrorResponse } from "../api/runtime.js";
 import { resolveActiveProjectLink } from "../projectLinks.js";
 import {
   approveDeliveryAction,
+  fetchWorkItemDetail,
   proposeDeliveryAction,
   rejectDeliveryAction,
   type DeliveryActionRecord,
+  type WorkItemDetail,
+  type WorkItemRelationLink,
 } from "../api/delivery.js";
 import {
   ActionButton,
@@ -89,6 +92,224 @@ export function deliveryActionTargetWorkItemId(action: Pick<DeliveryActionRecord
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
+// ── Work Inspector (full detail read for one viewed work item) ──────────────
+
+export const RELATION_GROUP_LABELS: Record<string, string> = {
+  parent: "Parent",
+  child: "Children",
+  dependency: "Dependencies",
+  depended_on_by: "Depended on by",
+  related: "Related",
+  duplicate: "Duplicates",
+  branch: "Branches",
+  unknown: "Other links",
+};
+
+export interface InspectedRelationGroup {
+  label: string;
+  links: Array<{ key: string; text: string; id?: number }>;
+}
+
+/**
+ * Group typed relation edges for the inspector. Pull request and build
+ * artifacts are omitted here: they get their own resolved sections with
+ * titles and status, which is more useful than the raw vstfs link.
+ */
+export function groupRelationsForInspector(relations: WorkItemRelationLink[]): InspectedRelationGroup[] {
+  const groups: InspectedRelationGroup[] = [];
+  for (const relation of relations) {
+    if (relation.kind === "pull_request" || relation.kind === "build") continue;
+    const label = RELATION_GROUP_LABELS[relation.kind] ?? "Other links";
+    const text = relation.kind === "branch" && relation.label
+      ? relation.label
+      : relation.id
+        ? `#${relation.id}`
+        : relation.url;
+    const existing = groups.find((group) => group.label === label);
+    const link = { key: `${label}-${relation.url || relation.id || groups.length}`, text, id: relation.id };
+    if (existing) existing.links.push(link);
+    else groups.push({ label, links: [link] });
+  }
+  return groups;
+}
+
+/** Escape closes the inspector without running any proposal. */
+export function handleDetailKeyDown(
+  event: { key: string; preventDefault: () => void },
+  onClose: () => void,
+): void {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    onClose();
+  }
+}
+
+/** ADO API pull request url -> browsable web url; null when not derivable. */
+export function adoPullRequestWebUrl(apiUrl: string | undefined): string | null {
+  if (!apiUrl) return null;
+  const match = apiUrl.match(/(https?:\/\/[^/]+)\/([^/]+)\/([^/]+)\/_apis\/git\/repositories\/([^/]+)\/pullrequests\/(\d+)/);
+  if (!match) return null;
+  return `${match[1]}/${match[2]}/${match[3]}/_git/${match[4]}/pullrequest/${match[5]}`;
+}
+
+/** ADO API build url -> browsable web url; null when not derivable. */
+export function adoBuildWebUrl(apiUrl: string | undefined): string | null {
+  if (!apiUrl) return null;
+  const match = apiUrl.match(/\/_apis\/build\/builds?\/(\d+)/i);
+  if (!match) return null;
+  const base = apiUrl.slice(0, apiUrl.indexOf("/_apis/"));
+  return `${base}/_build/results?buildId=${match[1]}`;
+}
+
+/** Deterministic date rendering: ISO date part only, never a raw Date toString. */
+export function formatAdoDate(value: string | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toISOString().slice(0, 10);
+}
+
+function DetailRow({ label, children }: { label: string; children: ReactNode }): JSX.Element {
+  return (
+    <div>
+      <dt className="text-[rgb(var(--app-text-subtle))]">{label}</dt>
+      <dd className="mt-0.5 leading-relaxed text-[rgb(var(--app-text-muted))]">{children}</dd>
+    </div>
+  );
+}
+
+function RelationList({ groups, projectLink }: { groups: InspectedRelationGroup[]; projectLink: { adoOrgUrl?: string; adoProject?: string } | null | undefined }): JSX.Element {
+  return (
+    <div className="space-y-2">
+      {groups.map((group) => (
+        <div key={group.label}>
+          <p className="text-[rgb(var(--app-text-subtle))]">{group.label}</p>
+          <ul className="mt-0.5 space-y-0.5 leading-relaxed">
+            {group.links.map((link) => {
+              const href = link.id ? azureWorkItemUrl(projectLink, link.id) : null;
+              return (
+                <li key={link.key}>
+                  {href ? (
+                    <a href={href} target="_blank" rel="noreferrer" className="font-medium text-[rgb(var(--app-accent-readable))] hover:underline">{link.text}</a>
+                  ) : (
+                    <span>{link.text}</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The inspector's detail read: field rows, typed dependency/link edges,
+ * resolved pull requests and builds, test evidence, and the full comment
+ * thread. Purely presentational so it renders identically in unit tests and
+ * in the desktop — all data comes from the verified /delivery/work-items/:id
+ * endpoint.
+ */
+export function WorkItemDetailSections({ detail, projectLink }: { detail: WorkItemDetail; projectLink: { adoOrgUrl?: string; adoProject?: string } | null | undefined }): JSX.Element {
+  const relationGroups = groupRelationsForInspector(detail.relations);
+  return (
+    <div className="space-y-3 text-xs text-[rgb(var(--app-text-muted))]">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <p className="font-medium text-[rgb(var(--app-text))]">Task detail</p>
+          <p className="mt-1 leading-relaxed">{detail.description?.trim() || "No description is available from Azure Boards for this work item."}</p>
+        </div>
+        <div>
+          <p className="font-medium text-[rgb(var(--app-text))]">Acceptance criteria</p>
+          <p className="mt-1 leading-relaxed">{detail.acceptanceCriteria?.trim() || "No acceptance criteria are available."}</p>
+        </div>
+      </div>
+      <div>
+        <p className="font-medium text-[rgb(var(--app-text))]">Details</p>
+        <dl className="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-2">
+          <DetailRow label="Type">{detail.type}</DetailRow>
+          <DetailRow label="State">{detail.state}</DetailRow>
+          <DetailRow label="Revision">{detail.revision}</DetailRow>
+          <DetailRow label="Iteration path">{detail.iterationPath || "—"}</DetailRow>
+          <DetailRow label="Assigned to">{detail.assignedTo || "—"}</DetailRow>
+          <DetailRow label="Tags">{detail.tags.length > 0 ? detail.tags.join(", ") : "—"}</DetailRow>
+          <DetailRow label="Created">{formatAdoDate(detail.createdDate)}</DetailRow>
+          <DetailRow label="Changed">{formatAdoDate(detail.changedDate)}</DetailRow>
+        </dl>
+      </div>
+      {relationGroups.length > 0 && (
+        <div>
+          <p className="font-medium text-[rgb(var(--app-text))]">Dependencies & links</p>
+          <div className="mt-1"><RelationList groups={relationGroups} projectLink={projectLink} /></div>
+        </div>
+      )}
+      {detail.linkedPullRequests.length > 0 && (
+        <div>
+          <p className="font-medium text-[rgb(var(--app-text))]">Linked pull requests</p>
+          <ul className="mt-1 space-y-1 leading-relaxed">
+            {detail.linkedPullRequests.map((pr) => {
+              const href = adoPullRequestWebUrl(pr.url);
+              const label = `${pr.title} (#${pr.id} · ${pr.status}${pr.sourceBranch ? ` · ${pr.sourceBranch} → ${pr.targetBranch ?? "?"}` : ""})`;
+              return (
+                <li key={pr.id}>
+                  {href ? <a href={href} target="_blank" rel="noreferrer" className="font-medium text-[rgb(var(--app-accent-readable))] hover:underline">{label}</a> : <span>{label}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+      {detail.linkedBuilds.length > 0 && (
+        <div>
+          <p className="font-medium text-[rgb(var(--app-text))]">Builds</p>
+          <ul className="mt-1 space-y-1 leading-relaxed">
+            {detail.linkedBuilds.map((build) => {
+              const href = adoBuildWebUrl(build.url);
+              const label = `${build.buildNumber || `Build ${build.id}`} · ${build.status}${build.result ? ` / ${build.result}` : ""} · ${build.definitionName}`;
+              return (
+                <li key={build.id}>
+                  {href ? <a href={href} target="_blank" rel="noreferrer" className="font-medium text-[rgb(var(--app-accent-readable))] hover:underline">{label}</a> : <span>{label}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+      {detail.testEvidence.length > 0 && (
+        <div>
+          <p className="font-medium text-[rgb(var(--app-text))]">Test evidence</p>
+          <ul className="mt-1 space-y-1 leading-relaxed">
+            {detail.testEvidence.map((evidence) => (
+              <li key={evidence.buildId}>
+                Build {evidence.buildId}: {evidence.runCount} run{evidence.runCount === 1 ? "" : "s"}, {evidence.passedTests}/{evidence.totalTests} passed{evidence.failedTests > 0 ? `, ${evidence.failedTests} failed` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div>
+        <p className="font-medium text-[rgb(var(--app-text))]">All comments</p>
+        {detail.comments.length > 0 ? (
+          <ul className="mt-1 space-y-1 leading-relaxed">
+            {detail.comments.map((comment, index) => <li key={`${detail.id}-comment-${index}`}>• {comment}</li>)}
+          </ul>
+        ) : (
+          <p className="mt-1">No comments on this work item.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function WorkItemDetailLoading(): JSX.Element {
+  return (
+    <div className="space-y-2" role="status">
+      <p className="text-xs text-[rgb(var(--app-text-subtle))]">Loading full work item detail…</p>
+      <WorkbenchSkeleton rows={4} />
+    </div>
+  );
+}
+
 export function WorkItemLoadingState(): JSX.Element {
   return (
     <div className="space-y-2" role="status">
@@ -118,6 +339,15 @@ export default function Work(): JSX.Element {
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [pendingIntent, setPendingIntent] = useState<"comment" | "state" | null>(null);
+  const [details, setDetails] = useState<Record<number, WorkItemDetail>>({});
+  const [detailLoading, setDetailLoading] = useState<Record<number, boolean>>({});
+  const [detailError, setDetailError] = useState<Record<number, string>>({});
+  const [detailReloadKey, setDetailReloadKey] = useState(0);
+  const detailPanelRef = useRef<HTMLDivElement | null>(null);
+  // One authoritative fetch per item per workspace session; the loading state
+  // must not be in the effect deps or the setDetailLoading re-render would
+  // cancel the very request it just started.
+  const requestedDetailIds = useRef<Set<number>>(new Set());
 
   // A work-item approval is scoped to the Project Link used to prepare it.
   // Context may change without unmounting this route, so discard projected
@@ -130,7 +360,62 @@ export default function Work(): JSX.Element {
     setSelectedItemId(null);
     setCommentDraft("");
     setPendingIntent(null);
+    setDetails({});
+    setDetailLoading({});
+    setDetailError({});
+    requestedDetailIds.current.clear();
   }, [projectLinkId]);
+
+  // The inspector reads the authoritative single-item detail once per open
+  // and caches it for the item's lifetime in this workspace session. A load
+  // failure is recoverable: Retry clears the error and refetches.
+  useEffect(() => {
+    if (selectedItemId === null || !projectLinkId) return;
+    if (details[selectedItemId] || detailError[selectedItemId] || requestedDetailIds.current.has(selectedItemId)) return;
+    let cancelled = false;
+    requestedDetailIds.current.add(selectedItemId);
+    setDetailLoading((prev) => ({ ...prev, [selectedItemId]: true }));
+    fetchWorkItemDetail(projectLinkId, selectedItemId)
+      .then((detail) => {
+        if (!cancelled) {
+          setDetails((prev) => ({ ...prev, [selectedItemId]: detail }));
+          setDetailError((prev) => {
+            if (!(selectedItemId in prev)) return prev;
+            const next = { ...prev };
+            delete next[selectedItemId];
+            return next;
+          });
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setDetailError((prev) => ({ ...prev, [selectedItemId]: err instanceof Error ? err.message : String(err) }));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDetailLoading((prev) => {
+            if (!(selectedItemId in prev)) return prev;
+            const next = { ...prev };
+            delete next[selectedItemId];
+            return next;
+          });
+        }
+      });
+    return () => {
+      // Only a real trigger change (item, project link, retry) cancels an
+      // in-flight read — never a loading-state re-render.
+      cancelled = true;
+    };
+  }, [selectedItemId, projectLinkId, detailReloadKey]);
+
+  // Focus follows the inspector: opening moves focus into the panel, closing
+  // is a deliberate Escape/Close action rather than a focus reset.
+  useEffect(() => {
+    if (selectedItemId !== null && detailPanelRef.current) {
+      detailPanelRef.current.focus();
+    }
+  }, [selectedItemId]);
 
   useEffect(() => {
     if (!projectLinkId) return;
@@ -257,6 +542,17 @@ export default function Work(): JSX.Element {
       setActionBusy(false);
     }
   }, [action]);
+
+  const retryDetail = useCallback((workItemId: number) => {
+    requestedDetailIds.current.delete(workItemId);
+    setDetailError((prev) => {
+      if (!(workItemId in prev)) return prev;
+      const next = { ...prev };
+      delete next[workItemId];
+      return next;
+    });
+    setDetailReloadKey((value) => value + 1);
+  }, []);
 
   const reject = useCallback(async () => {
     if (!action) return;
@@ -385,59 +681,83 @@ export default function Work(): JSX.Element {
                   </ul>
                 )}
                 {selectedItemId === item.id && (
-                  <div className="mt-3 border-t border-[rgb(var(--app-border))] pt-3">
-                    {azureWorkItemUrl(activeProjectLink, item.id) && (
-                      <a
-                        href={azureWorkItemUrl(activeProjectLink, item.id) ?? undefined}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mb-3 inline-flex text-xs font-medium text-[rgb(var(--app-accent-readable))] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45"
-                      >
-                        Open source task in Azure DevOps
-                      </a>
-                    )}
-                    <div className="grid gap-3 text-xs text-[rgb(var(--app-text-muted))] sm:grid-cols-2">
-                      <div>
-                        <p className="font-medium text-[rgb(var(--app-text))]">Task detail</p>
-                        <p className="mt-1 leading-relaxed">{item.description?.trim() || "No description is available from Azure Boards for this work item."}</p>
-                      </div>
-                      <div>
-                        <p className="font-medium text-[rgb(var(--app-text))]">Acceptance criteria</p>
-                        <p className="mt-1 leading-relaxed">{item.acceptanceCriteria?.trim() || "No acceptance criteria are available."}</p>
-                      </div>
+                  <div
+                    ref={detailPanelRef}
+                    tabIndex={-1}
+                    aria-label={`Work item #${item.id} detail`}
+                    onKeyDown={(event) => handleDetailKeyDown(event, () => setSelectedItemId(null))}
+                    className="mt-3 border-t border-[rgb(var(--app-border))] pt-3 outline-none"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      {azureWorkItemUrl(activeProjectLink, item.id) && (
+                        <a
+                          href={azureWorkItemUrl(activeProjectLink, item.id) ?? undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-medium text-[rgb(var(--app-accent-readable))] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--app-focus))]/45"
+                        >
+                          Open source task in Azure DevOps
+                        </a>
+                      )}
+                      <p className="text-xs text-[rgb(var(--app-text-subtle))]">Press Escape to close.</p>
                     </div>
-                    <div className="mt-3 grid gap-3 text-xs text-[rgb(var(--app-text-muted))] sm:grid-cols-2">
-                      <div>
-                        <p className="font-medium text-[rgb(var(--app-text))]">Recent updates</p>
-                        {item.comments.length > 0 ? (
-                          <ul className="mt-1 space-y-1 leading-relaxed">
-                            {item.comments.map((comment, index) => <li key={`${item.id}-comment-${index}`}>• {comment}</li>)}
-                          </ul>
-                        ) : <p className="mt-1">No recent comments.</p>}
+                    <div className="mt-3">
+                      {detailLoading[item.id] ? (
+                        <WorkItemDetailLoading />
+                      ) : detailError[item.id] ? (
+                        <InlineNotice tone="danger" title="Work item detail failed">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span>{detailError[item.id]}</span>
+                            <ActionButton type="button" tone="quiet" onClick={() => retryDetail(item.id)}>Retry</ActionButton>
+                          </div>
+                        </InlineNotice>
+                      ) : details[item.id] ? (
+                        <WorkItemDetailSections detail={details[item.id]!} projectLink={activeProjectLink} />
+                      ) : (
+                        <>
+                          <div className="grid gap-3 text-xs text-[rgb(var(--app-text-muted))] sm:grid-cols-2">
+                            <div>
+                              <p className="font-medium text-[rgb(var(--app-text))]">Task detail</p>
+                              <p className="mt-1 leading-relaxed">{item.description?.trim() || "No description is available from Azure Boards for this work item."}</p>
+                            </div>
+                            <div>
+                              <p className="font-medium text-[rgb(var(--app-text))]">Acceptance criteria</p>
+                              <p className="mt-1 leading-relaxed">{item.acceptanceCriteria?.trim() || "No acceptance criteria are available."}</p>
+                            </div>
+                          </div>
+                          <div className="mt-3">
+                            <p className="font-medium text-[rgb(var(--app-text))]">Recent updates</p>
+                            {item.comments.length > 0 ? (
+                              <ul className="mt-1 space-y-1 leading-relaxed">
+                                {item.comments.map((comment, index) => <li key={`${item.id}-comment-${index}`}>• {comment}</li>)}
+                              </ul>
+                            ) : <p className="mt-1 text-xs text-[rgb(var(--app-text-muted))]">No recent comments.</p>}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <div className="mt-3 border-t border-[rgb(var(--app-border))] pt-3">
+                      <p className="font-medium text-[rgb(var(--app-text))]">Propose a change</p>
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        <ActionButton type="button" tone="secondary" onClick={() => setPendingIntent("comment")} disabled={actionBusy}>Add update</ActionButton>
+                        <ActionButton type="button" tone="secondary" onClick={() => setPendingIntent("state")} disabled={actionBusy || item.state === "In Progress"}>Move to In Progress</ActionButton>
                       </div>
-                      <div>
-                        <p className="font-medium text-[rgb(var(--app-text))]">Propose a change</p>
-                        <div className="mt-1 flex flex-wrap gap-2">
-                          <ActionButton type="button" tone="secondary" onClick={() => setPendingIntent("comment")} disabled={actionBusy}>Add update</ActionButton>
-                          <ActionButton type="button" tone="secondary" onClick={() => setPendingIntent("state")} disabled={actionBusy || item.state === "In Progress"}>Move to In Progress</ActionButton>
+                      {pendingIntent === "comment" && (
+                        <div className="mt-3 flex flex-wrap items-end gap-2">
+                          <label className="min-w-[min(16rem,100%)] flex-1 text-xs text-[rgb(var(--app-text-muted))]">
+                            Verified update
+                            <textarea value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} rows={2} className="mt-1 w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-sm text-[rgb(var(--app-text))]" placeholder="What changed, and what evidence supports it?" />
+                          </label>
+                          <ActionButton type="button" tone="primary" onClick={() => void writeBack(item, "comment", commentDraft)} disabled={actionBusy || !commentDraft.trim()}>Request approval</ActionButton>
                         </div>
-                      </div>
+                      )}
+                      {pendingIntent === "state" && (
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text-muted))]">
+                          <span>This will propose changing the state to In Progress. Nothing changes until approval.</span>
+                          <ActionButton type="button" tone="primary" onClick={() => void writeBack(item, "state")} disabled={actionBusy}>Request approval</ActionButton>
+                        </div>
+                      )}
                     </div>
-                    {pendingIntent === "comment" && (
-                      <div className="mt-3 flex flex-wrap items-end gap-2">
-                        <label className="min-w-[min(16rem,100%)] flex-1 text-xs text-[rgb(var(--app-text-muted))]">
-                          Verified update
-                          <textarea value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} rows={2} className="mt-1 w-full rounded-md border border-[rgb(var(--app-border))] bg-[rgb(var(--app-surface-raised))] px-2 py-1.5 text-sm text-[rgb(var(--app-text))]" placeholder="What changed, and what evidence supports it?" />
-                        </label>
-                        <ActionButton type="button" tone="primary" onClick={() => void writeBack(item, "comment", commentDraft)} disabled={actionBusy || !commentDraft.trim()}>Request approval</ActionButton>
-                      </div>
-                    )}
-                    {pendingIntent === "state" && (
-                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-[rgb(var(--app-surface-raised))] px-3 py-2 text-xs text-[rgb(var(--app-text-muted))]">
-                        <span>This will propose changing the state to In Progress. Nothing changes until approval.</span>
-                        <ActionButton type="button" tone="primary" onClick={() => void writeBack(item, "state")} disabled={actionBusy}>Request approval</ActionButton>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>

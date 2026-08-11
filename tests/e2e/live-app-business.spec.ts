@@ -10,6 +10,7 @@ const DAEMON_URL = "http://127.0.0.1:8787";
 const liveAppEnabled = process.env.MERGEPILOT_E2E_LIVE_APP === "1";
 const liveAdoEnabled = process.env.MERGEPILOT_E2E_LIVE_ADO === "1";
 const destructiveEnabled = process.env.MERGEPILOT_E2E_DESTRUCTIVE === "1";
+const workedTurnLabel = /^Worked for (?:(?:\d+h )?(?:\d+m )?)\d+s$/;
 const claimBotRepoPath =
   process.env.MERGEPILOT_E2E_CLAIMBOT_REPO_PATH ||
   "C:\\Users\\15492\\Develop\\ClaimBot_API";
@@ -645,7 +646,7 @@ async function pendingActionCardOrTurnEnded(
     .poll(
       async () => {
         if (await card.isVisible().catch(() => false)) return "card";
-        const chipCount = await page.getByRole("button", { name: /^Worked for \d+s$/ }).count();
+        const chipCount = await page.getByRole("button", { name: workedTurnLabel }).count();
         if (chipCount > chipCountBefore) return "ended";
         return "running";
       },
@@ -657,12 +658,46 @@ async function pendingActionCardOrTurnEnded(
   return (await card.isVisible().catch(() => false)) === true;
 }
 
+async function singlePendingApprovalCard(page: Page, timeoutMs: number): Promise<Locator> {
+  const cards = page.getByTestId("pending-action-card");
+  await expect(cards).toHaveCount(1, { timeout: timeoutMs });
+  const card = cards.first();
+  await expect(card).toBeVisible();
+  return card;
+}
+
+async function approvalCommandEvidence(card: Locator): Promise<Locator> {
+  const disclosure = card.locator("details").filter({ hasText: "Review command" }).first();
+  const summary = disclosure.getByText("Review command", { exact: true });
+  await expect(summary).toBeVisible();
+  if ((await disclosure.getAttribute("open")) === null) {
+    await summary.click();
+  }
+  const command = disclosure.locator("code").first();
+  await expect(command).toBeVisible();
+  return command;
+}
+
+async function fillApprovalChangeRequest(card: Locator, feedback: string): Promise<void> {
+  const disclosure = card.locator("details").filter({ hasText: "Request changes" }).first();
+  const summary = disclosure.getByText("Request changes", { exact: true });
+  await expect(summary).toBeVisible();
+  if ((await disclosure.getAttribute("open")) === null) {
+    await summary.click();
+  }
+  const input = disclosure.getByPlaceholder("Tell MergePilot what to do differently...");
+  await expect(input).toBeVisible();
+  await input.fill(feedback);
+}
+
 async function openEnvironmentPanel(page: Page): Promise<void> {
   // Since v0.5.24 the Context summary is only rendered while the pinned
   // summary is open (it starts closed). Pin it on demand, mirroring the
   // chat-layout spec, instead of relying on the pre-v0.5.24 default-open
   // behaviour.
-  const environment = page.getByText("Context").first();
+  const environment = page
+    .getByRole("complementary", { name: "Workspace summary" })
+    .getByText("Context", { exact: true });
   if (!(await environment.isVisible().catch(() => false))) {
     await page.getByTitle("Show pinned summary").click();
   }
@@ -673,17 +708,22 @@ async function refreshEnvironmentPanelBranch(
   page: Page,
   environmentPanel: ReturnType<typeof liveEnvironmentPanel>,
 ): Promise<void> {
-  // A fresh session has no branch evidence — Project Link V2 does not persist
-  // a default branch, and no tool bubble has reported one yet — so the branch
-  // menu button reads "not checked" until the refresh_branch workspace action
-  // resolves the live branch. Run that refresh before callers assert on
-  // branch-labelled buttons.
-  await environmentPanel.getByRole("button", { name: /not checked/i }).click();
+  // Project Link or a previous read can already provide the branch label, so
+  // do not depend on the historical "not checked" placeholder. The branch
+  // control owns the Branch operations dialog and is the only dialog-trigger
+  // button in the compact Context panel.
+  const branchControl = environmentPanel.locator('button[aria-haspopup="dialog"]').first();
+  await expect(branchControl).toBeVisible();
+  await branchControl.click();
+  const refreshResponse = page.waitForResponse(
+    (response) => response.url().endsWith("/chat/workflow-action")
+      && response.request().method() === "POST"
+      && response.ok(),
+    { timeout: 90_000 },
+  );
   await environmentPanel.getByRole("button", { name: "Refresh branch state" }).click();
-  await expect(page.locator("main").getByRole("button", { name: /Ran|Worked/i }).first()).toBeVisible({
-    timeout: 90_000,
-  });
-  await expect(environmentPanel.getByRole("button", { name: /not checked/i })).toHaveCount(0);
+  await refreshResponse;
+  await expect(branchControl).not.toContainText(/not checked/i);
 }
 
 /**
@@ -760,12 +800,13 @@ test.describe("Live app business workflows", () => {
       // host load, so the window is 150s with the post-conditions asserting
       // the staged scope.
       await expect(approvalCard).toBeVisible({ timeout: 150_000 });
-      await expect(approvalCard.getByText(/git add/i).first()).toBeVisible();
-      await expect(approvalCard.getByText("README.md").first()).toBeVisible();
+      await expect(page.getByTestId("pending-action-card")).toHaveCount(1);
+      const command = await approvalCommandEvidence(approvalCard);
+      await expect(command).toContainText(/git add/i);
       // The LLM-written card description may mention notes.txt; the staged
       // scope that matters is the command preview.
-      await expect(approvalCard.locator("code").first()).toContainText("README.md");
-      await expect(approvalCard.locator("code").first()).not.toContainText("notes.txt");
+      await expect(command).toContainText("README.md");
+      await expect(command).not.toContainText("notes.txt");
       await approvalCard.getByRole("button", { name: "Approve and run" }).click();
 
       await expect.poll(() => git(repoPath, ["status", "--short"]), { timeout: 30_000 }).toBe(
@@ -813,7 +854,7 @@ test.describe("Live app business workflows", () => {
       // the 90s card wait could not recover from). Wait for either the card
       // or a finished turn, then re-prompt once naming git_add explicitly
       // (same recovery pattern as the tag test).
-      const chipCountBefore = await page.getByRole("button", { name: /^Worked for \d+s$/ }).count();
+      const chipCountBefore = await page.getByRole("button", { name: workedTurnLabel }).count();
       const cardShown = await pendingActionCardOrTurnEnded(page, approvalCard, chipCountBefore, 150_000);
       if (!cardShown) {
         await page.getByPlaceholder(/Ask MergePilot/).fill(
@@ -830,12 +871,13 @@ test.describe("Live app business workflows", () => {
         );
         expect(cardShownAfterRePrompt, "approval card after the corrective re-prompt").toBeTruthy();
       }
-      await expect(approvalCard.getByText(/git add/i).first()).toBeVisible();
-      await expect(approvalCard.getByText("README.md").first()).toBeVisible();
+      await expect(page.getByTestId("pending-action-card")).toHaveCount(1);
+      const command = await approvalCommandEvidence(approvalCard);
+      await expect(command).toContainText(/git add/i);
       // The LLM-written card description may mention notes.txt; the staged
       // scope that matters is the command preview.
-      await expect(approvalCard.locator("code").first()).toContainText("README.md");
-      await expect(approvalCard.locator("code").first()).not.toContainText("notes.txt");
+      await expect(command).toContainText("README.md");
+      await expect(command).not.toContainText("notes.txt");
       expect(git(repoPath, ["diff", "--cached", "--name-only"])).toBe("");
 
       const draftSessionId = await page.evaluate(() => {
@@ -849,14 +891,13 @@ test.describe("Live app business workflows", () => {
       expect(state.workflowState?.pendingApproval?.action?.tool).toBe("git_add");
 
       await page.reload({ waitUntil: "domcontentloaded" });
-      const restoredApprovalCard = page.getByTestId("pending-action-card").first();
-      await expect(restoredApprovalCard).toBeVisible({ timeout: 30_000 });
-      await expect(restoredApprovalCard.getByText(/git add/i).first()).toBeVisible();
-      await expect(restoredApprovalCard.getByText("README.md").first()).toBeVisible();
+      const restoredApprovalCard = await singlePendingApprovalCard(page, 30_000);
+      const restoredCommand = await approvalCommandEvidence(restoredApprovalCard);
+      await expect(restoredCommand).toContainText(/git add/i);
       // The LLM-written card description may mention notes.txt; the staged
       // scope that matters is the command preview.
-      await expect(restoredApprovalCard.locator("code").first()).toContainText("README.md");
-      await expect(restoredApprovalCard.locator("code").first()).not.toContainText("notes.txt");
+      await expect(restoredCommand).toContainText("README.md");
+      await expect(restoredCommand).not.toContainText("notes.txt");
       expect(git(repoPath, ["diff", "--cached", "--name-only"])).toBe("");
 
       await restoredApprovalCard.getByRole("button", { name: "Approve and run" }).click();
@@ -893,9 +934,9 @@ test.describe("Live app business workflows", () => {
       );
       await page.getByRole("button", { name: "Send" }).click();
 
-      const approvalCard = page.getByTestId("pending-action-card").first();
-      await expect(approvalCard).toBeVisible({ timeout: 90_000 });
-      await expect(approvalCard.getByText(/git add/i).first()).toBeVisible();
+      const approvalCard = await singlePendingApprovalCard(page, 90_000);
+      const command = await approvalCommandEvidence(approvalCard);
+      await expect(command).toContainText(/git add/i);
       await approvalCard.getByRole("button", { name: "Skip action" }).click();
 
       await expect.poll(() => git(repoPath, ["diff", "--cached", "--name-only"]), { timeout: 30_000 }).toBe("");
@@ -941,15 +982,18 @@ test.describe("Live app business workflows", () => {
         .filter({ hasText: "README.md" })
         .first();
       await expect(firstApproval).toBeVisible({ timeout: 90_000 });
+      await expect(page.getByTestId("pending-action-card")).toHaveCount(1);
       // The working-turn prose and the LLM-written card description may
       // mention notes.txt; the staged scope that matters is the command
       // preview.
-      await expect(firstApproval.locator("code").first()).toContainText("README.md");
-      await expect(firstApproval.locator("code").first()).not.toContainText("notes.txt");
+      const firstCommand = await approvalCommandEvidence(firstApproval);
+      await expect(firstCommand).toContainText("README.md");
+      await expect(firstCommand).not.toContainText("notes.txt");
 
-      await firstApproval
-        .getByPlaceholder("Tell MergePilot what to do differently...")
-        .fill("Actually stage only notes.txt instead. Do not stage README.md. Do not commit or push.");
+      await fillApprovalChangeRequest(
+        firstApproval,
+        "Actually stage only notes.txt instead. Do not stage README.md. Do not commit or push.",
+      );
       await firstApproval.getByRole("button", { name: "Skip action" }).click();
 
       await expect.poll(() => git(repoPath, ["diff", "--cached", "--name-only"]), { timeout: 30_000 }).toBe("");
@@ -970,7 +1014,7 @@ test.describe("Live app business workflows", () => {
       // measured 84s with a completion-claiming final narrative). Wait for
       // either the revised card or a finished turn, then re-prompt once
       // forbidding completion claims (same recovery pattern as the tag test).
-      const chipCountBefore = await page.getByRole("button", { name: /^Worked for \d+s$/ }).count();
+      const chipCountBefore = await page.getByRole("button", { name: workedTurnLabel }).count();
       const cardShown = await pendingActionCardOrTurnEnded(page, revisedApproval, chipCountBefore, 120_000);
       if (!cardShown) {
         await page.getByPlaceholder(/Ask MergePilot/).fill(
@@ -989,8 +1033,9 @@ test.describe("Live app business workflows", () => {
       }
       // The revised card's description may mention README.md; the staged
       // scope that matters is the command preview.
-      await expect(revisedApproval.locator("code").first()).toContainText("notes.txt");
-      await expect(revisedApproval.locator("code").first()).not.toContainText("README.md");
+      const revisedCommand = await approvalCommandEvidence(revisedApproval);
+      await expect(revisedCommand).toContainText("notes.txt");
+      await expect(revisedCommand).not.toContainText("README.md");
       await revisedApproval.getByRole("button", { name: "Approve and run" }).click();
 
       await expect.poll(() => git(repoPath, ["diff", "--cached", "--name-only"]), { timeout: 30_000 }).toBe(
@@ -1048,7 +1093,8 @@ test.describe("Live app business workflows", () => {
         .filter({ hasText: /git commit/i })
         .first();
       await expect(commitApproval).toBeVisible({ timeout: 90_000 });
-      await expect(commitApproval.getByText(commitMessage).first()).toBeVisible();
+      const commitCommand = await approvalCommandEvidence(commitApproval);
+      await expect(commitCommand).toContainText(commitMessage);
       await commitApproval.getByRole("button", { name: "Approve and run" }).click();
 
       await expect.poll(() => Number(git(repoPath, ["rev-list", "--count", "HEAD"])), { timeout: 45_000 }).toBe(
@@ -1093,7 +1139,8 @@ test.describe("Live app business workflows", () => {
         .filter({ hasText: /git commit/i })
         .first();
       await expect(commitApproval).toBeVisible({ timeout: 90_000 });
-      await expect(commitApproval.getByText(commitMessage).first()).toBeVisible();
+      const commitCommand = await approvalCommandEvidence(commitApproval);
+      await expect(commitCommand).toContainText(commitMessage);
       await commitApproval.getByRole("button", { name: "Approve and run" }).click();
 
       // The failure narrative is the surfaced evidence; the old "Stopped
@@ -1266,7 +1313,10 @@ test.describe("Live app business workflows", () => {
       // request (a pending-action card keeps the composer disabled), so wait
       // for whichever comes first and decline a stray card — declining only
       // closes the turn, which is exactly what a read-only turn should do.
-      const composer = page.getByPlaceholder(/Ask MergePilot/);
+      // The placeholder intentionally changes while an approval is pending.
+      // Use the stable composer identity so isEnabled() returns false instead
+      // of waiting for the old placeholder until the whole poll times out.
+      const composer = page.getByTestId("chat-composer-input");
       await expect
         .poll(
           async () => {
@@ -1444,7 +1494,8 @@ test.describe("Live app business workflows", () => {
         .first();
       await expect(approvalCard).toBeVisible({ timeout: 90_000 });
       await expect(approvalCard.getByText("HIGH risk")).toBeVisible();
-      await expect(approvalCard.getByText(switchRepo.targetBranch).first()).toBeVisible();
+      const switchCommand = await approvalCommandEvidence(approvalCard);
+      await expect(switchCommand).toContainText(switchRepo.targetBranch);
       expect(git(switchRepo.repoPath, ["branch", "--show-current"])).toBe(switchRepo.currentBranch);
       expect(git(switchRepo.repoPath, ["diff", "--name-only"])).toBe("README.md");
 
@@ -1495,7 +1546,8 @@ test.describe("Live app business workflows", () => {
         .filter({ hasText: /git merge --ff-only main|git_merge/i })
         .first();
       await expect(mergeApproval).toBeVisible({ timeout: 90_000 });
-      await expect(mergeApproval.getByText(/main/i).first()).toBeVisible();
+      const mergeCommand = await approvalCommandEvidence(mergeApproval);
+      await expect(mergeCommand).toContainText(/main/i);
       expect(git(mergeRepo.repoPath, ["rev-parse", "HEAD"])).not.toBe(mergeRepo.targetHead);
 
       await mergeApproval.getByRole("button", { name: "Approve and run" }).click();
@@ -1550,7 +1602,8 @@ test.describe("Live app business workflows", () => {
         .filter({ hasText: /git merge main|git_merge/i })
         .first();
       await expect(mergeApproval).toBeVisible({ timeout: 90_000 });
-      await expect(mergeApproval.getByText(/main/i).first()).toBeVisible();
+      const mergeCommand = await approvalCommandEvidence(mergeApproval);
+      await expect(mergeCommand).toContainText(/main/i);
       expect(git(mergeRepo.repoPath, ["status", "--short"])).toBe("");
 
       await mergeApproval.getByRole("button", { name: "Approve and run" }).click();
@@ -1598,8 +1651,9 @@ test.describe("Live app business workflows", () => {
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
       await openLiveChat(page);
       await openEnvironmentPanel(page);
-      await refreshEnvironmentPanelBranch(page, liveEnvironmentPanel(page));
-      await expect(page.getByRole("button", { name: "main" })).toBeVisible();
+      const environmentPanel = liveEnvironmentPanel(page);
+      await refreshEnvironmentPanelBranch(page, environmentPanel);
+      await expect(environmentPanel.getByRole("button", { name: "main", exact: true })).toBeVisible();
 
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         `Create and switch to a new branch named ${branchName}. Do not stage, commit, push, or create a PR.`,
@@ -1611,7 +1665,8 @@ test.describe("Live app business workflows", () => {
         .filter({ hasText: /git switch -c|git checkout -b|git_create_branch|git_switch/i })
         .first();
       await expect(branchApproval).toBeVisible({ timeout: 90_000 });
-      await expect(branchApproval.getByText(branchName).first()).toBeVisible();
+      const branchCommand = await approvalCommandEvidence(branchApproval);
+      await expect(branchCommand).toContainText(branchName);
       expect(git(repoPath, ["branch", "--show-current"])).toBe("main");
 
       await branchApproval.getByRole("button", { name: "Approve and run" }).click();
@@ -1648,9 +1703,10 @@ test.describe("Live app business workflows", () => {
       await selectProjectLinkInBrowser(page, projectLinkId, pushRepo.repoPath);
       await openLiveChat(page);
       await openEnvironmentPanel(page);
-      await refreshEnvironmentPanelBranch(page, liveEnvironmentPanel(page));
-      await expect(page.getByRole("button", { name: pushRepo.branchName })).toBeVisible();
-      await expect(page.getByTitle("Context manages the Project Link")).toHaveText(projectLink.name);
+      const environmentPanel = liveEnvironmentPanel(page);
+      await refreshEnvironmentPanelBranch(page, environmentPanel);
+      await expect(environmentPanel.getByRole("button", { name: pushRepo.branchName, exact: true })).toBeVisible();
+      await expect(environmentPanel.getByRole("button", { name: "Workspace Project Link" })).toHaveText(projectLink.name);
       await expect(page.getByLabel("Pinned Summary Project Link")).toHaveCount(0);
       await page.getByRole("button", { name: "Commit or push", exact: true }).click();
       await page.getByRole("button", { name: "Push branch", exact: true }).click();
@@ -1660,7 +1716,8 @@ test.describe("Live app business workflows", () => {
         .filter({ hasText: /git push/i })
         .first();
       await expect(pushApproval).toBeVisible({ timeout: 90_000 });
-      await expect(pushApproval.getByText(/origin/i).first()).toBeVisible();
+      const pushCommand = await approvalCommandEvidence(pushApproval);
+      await expect(pushCommand).toContainText(/origin/i);
       await pushApproval.getByRole("button", { name: "Approve and run" }).click();
 
       await expect
@@ -1827,7 +1884,8 @@ test.describe("Live app business workflows", () => {
         .filter({ hasText: /git[_ ]stash/i })
         .first();
       await expect(stashApproval).toBeVisible({ timeout: 90_000 });
-      await expect(stashApproval.getByText(stashMessage).first()).toBeVisible();
+      const stashCommand = await approvalCommandEvidence(stashApproval);
+      await expect(stashCommand).toContainText(stashMessage);
       await stashApproval.getByRole("button", { name: "Approve and run" }).click();
 
       await expect.poll(() => git(repoPath, ["status", "--short"]), { timeout: 45_000 }).toBe("");
@@ -1865,7 +1923,8 @@ test.describe("Live app business workflows", () => {
         .filter({ hasText: /git stash apply|git_stash/i })
         .first();
       await expect(stashApproval).toBeVisible({ timeout: 90_000 });
-      await expect(stashApproval.getByText("git stash apply").first()).toBeVisible();
+      const stashCommand = await approvalCommandEvidence(stashApproval);
+      await expect(stashCommand).toContainText("git stash apply");
       await stashApproval.getByRole("button", { name: "Approve and run" }).click();
 
       await expect.poll(() => readFileSync(path.join(repoPath, "README.md"), "utf8"), { timeout: 45_000 }).toBe(
@@ -1906,7 +1965,8 @@ test.describe("Live app business workflows", () => {
         .filter({ hasText: /git stash pop|git_stash/i })
         .first();
       await expect(stashApproval).toBeVisible({ timeout: 90_000 });
-      await expect(stashApproval.getByText("git stash pop").first()).toBeVisible();
+      const stashCommand = await approvalCommandEvidence(stashApproval);
+      await expect(stashCommand).toContainText("git stash pop");
       await stashApproval.getByRole("button", { name: "Approve and run" }).click();
 
       await expect.poll(() => readFileSync(path.join(repoPath, "README.md"), "utf8"), { timeout: 45_000 }).toBe(
@@ -1954,7 +2014,8 @@ test.describe("Live app business workflows", () => {
       // 96.3s. 180s covers the slower conflict-planning path with the same
       // event budget the other conflict tests use.
       await expect(stashApproval).toBeVisible({ timeout: 180_000 });
-      await expect(stashApproval.getByText("git stash pop").first()).toBeVisible();
+      const stashCommand = await approvalCommandEvidence(stashApproval);
+      await expect(stashCommand).toContainText("git stash pop");
       await stashApproval.getByRole("button", { name: "Approve and run" }).click();
 
       await expect.poll(() => gitOrEmpty(repoPath, ["status", "--short"]), { timeout: 45_000 })
@@ -2007,8 +2068,9 @@ test.describe("Live app business workflows", () => {
       await expect(restoreApproval).toBeVisible({ timeout: 90_000 });
       // The LLM-written card description may mention notes.txt; the restore
       // scope that matters is the command preview.
-      await expect(restoreApproval.locator("code").first()).toContainText("README.md");
-      await expect(restoreApproval.locator("code").first()).not.toContainText("notes.txt");
+      const restoreCommand = await approvalCommandEvidence(restoreApproval);
+      await expect(restoreCommand).toContainText("README.md");
+      await expect(restoreCommand).not.toContainText("notes.txt");
       await restoreApproval.getByRole("button", { name: "Approve and run" }).click();
 
       await expect.poll(() => git(repoPath, ["diff", "--name-only"]), { timeout: 45_000 }).toBe("notes.txt");
@@ -2047,7 +2109,8 @@ test.describe("Live app business workflows", () => {
         .filter({ hasText: /git[_ ]revert/i })
         .first();
       await expect(revertApproval).toBeVisible({ timeout: 120_000 });
-      await expect(revertApproval.getByText(/HEAD|docs: bad release note/i).first()).toBeVisible();
+      const revertCommand = await approvalCommandEvidence(revertApproval);
+      await expect(revertCommand).toContainText(/HEAD|docs: bad release note/i);
       await revertApproval.getByRole("button", { name: "Approve and run" }).click();
 
       await expect.poll(() => git(repoPath, ["rev-list", "--count", "HEAD"]), { timeout: 60_000 }).toBe("3");
@@ -2098,7 +2161,7 @@ test.describe("Live app business workflows", () => {
         .filter({ hasText: /git[_ ]tag/i })
         .filter({ hasText: tagName })
         .first();
-      const chipCountBefore = await page.getByRole("button", { name: /^Worked for \d+s$/ }).count();
+      const chipCountBefore = await page.getByRole("button", { name: workedTurnLabel }).count();
       const cardShown = await pendingActionCardOrTurnEnded(page, tagApproval, chipCountBefore, 150_000);
       if (!cardShown) {
         await page.getByPlaceholder(/Ask MergePilot/).fill(
@@ -2115,7 +2178,8 @@ test.describe("Live app business workflows", () => {
         expect(cardShownAfterRePrompt, "tag approval card after the corrective re-prompt").toBeTruthy();
       }
       await expect(tagApproval.getByText("HIGH risk")).toBeVisible();
-      await expect(tagApproval.locator("code").first()).not.toContainText("push");
+      const tagCommand = await approvalCommandEvidence(tagApproval);
+      await expect(tagCommand).not.toContainText("push");
       await tagApproval.getByRole("button", { name: "Approve and run" }).click();
 
       await expect.poll(() => git(repoPath, ["tag", "--list", tagName]), { timeout: 45_000 }).toBe(tagName);
@@ -2167,7 +2231,8 @@ test.describe("Live app business workflows", () => {
         .first();
       await expect(tagPushApproval).toBeVisible({ timeout: 90_000 });
       await expect(tagPushApproval.getByText("HIGH risk")).toBeVisible();
-      await expect(tagPushApproval.getByText(`refs/tags/${tagName}:refs/tags/${tagName}`).first()).toBeVisible();
+      const tagPushCommand = await approvalCommandEvidence(tagPushApproval);
+      await expect(tagPushCommand).toContainText(`refs/tags/${tagName}:refs/tags/${tagName}`);
       await tagPushApproval.getByRole("button", { name: "Approve and run" }).click();
 
       await expect
@@ -2344,8 +2409,9 @@ test.describe("Live app business workflows", () => {
         .first();
       await expect(approvalCard).toBeVisible({ timeout: 60_000 });
       await expect(approvalCard.getByText("HIGH risk")).toBeVisible();
-      await expect(approvalCard.locator("code").first()).toContainText("ado_trigger_pipeline");
-      await expect(approvalCard.locator("code").first()).toContainText("pipeline_id=117");
+      const pipelineCommand = await approvalCommandEvidence(approvalCard);
+      await expect(pipelineCommand).toContainText("ado_trigger_pipeline");
+      await expect(pipelineCommand).toContainText("pipeline_id=117");
 
       if (destructiveEnabled) {
         await approvalCard.getByRole("button", { name: "Approve and run" }).click();
@@ -2415,8 +2481,9 @@ test.describe("Live app business workflows", () => {
         .first();
       await expect(approvalCard).toBeVisible({ timeout: 60_000 });
       await expect(approvalCard.getByText("HIGH risk")).toBeVisible();
-      await expect(approvalCard.locator("code").first()).toContainText("ado_trigger_pipeline");
-      await expect(approvalCard.locator("code").first()).toContainText("pipeline_id=117");
+      const pipelineCommand = await approvalCommandEvidence(approvalCard);
+      await expect(pipelineCommand).toContainText("ado_trigger_pipeline");
+      await expect(pipelineCommand).toContainText("pipeline_id=117");
 
       if (destructiveEnabled) {
         await approvalCard.getByRole("button", { name: "Approve and run" }).click();

@@ -1,6 +1,6 @@
 # Goal Verification Evidence Matrix (2026-08-05 reopen)
 
-HEAD baseline: `68a673adb83aeab925fc1217ee3bf3526b72fcff` (phase-1 slice; earlier baseline dddf818 superseded)
+HEAD baseline: `706724056c9e11230efac67c5613a36f5c4f9cf8` (v1 product source candidate)
 Machine-readable result: `goal-verification.json` (repo root) and
 `verification/goal-verification.json`.
 
@@ -13,6 +13,41 @@ this reopen does not count for the current HEAD. Tiers:
 - SL = source Vite + daemon live E2E (Playwright, real daemon)
 - ID = installed Tauri desktop E2E
 - RA = ClaimBot_API + real Azure DevOps
+
+## Final v1 candidate audit — 2026-08-11 (HEAD `7067240`)
+
+- Both named non-main remotes resolve `claudecode/mergepilot-v1` to the exact
+  product SHA. Remote `main` was not modified.
+- Canonical run `verify-msorfadi`: **PASS, 14/14 required gates**, zero failed,
+  skipped, did-not-run, interrupted or running gates. Source-live is 30/30;
+  mocked browser is 85/85. Core 500, daemon 374 and desktop 745 tests passed
+  on each final repetition required by the contract.
+- Installed provenance: **PASS** for 0.5.32. Source SHA, MSI SHA-256
+  `af8a7f4fbf69580cf90ab5b0b82544f4051be175c248b639f963fbcb5446f613`,
+  daemon payload SHA-256
+  `ce13683d2deb93b962429b32a6285321dba7d430d575931f6ca3019bb70d6c1a`,
+  Program Files payload, persistence, safety, fresh-user, desktop runtime and
+  vision are bound in
+  `output/live-e2e/installed-provenance-20260811-233249.json`.
+- Installed UI vertical loop: **PASS**. ClaimBot_API Work Item `7919`, PR
+  `2807` and build `4850` were re-read in the desktop. A comment proposal left
+  ADO unchanged before approval, executed after explicit UI approval and was
+  visible at revision 12 on authoritative re-read. Evidence:
+  `output/live-e2e/installed-vertical-loop-installed-loop-msoszb3p.json`.
+- Deterministic real ADO: **PASS**. Fixture Work Item `7926` followed create →
+  re-read → comment → re-read → scoped delete. Evidence SHA-256 is recorded in
+  the canonical state.
+- Security: credential persistence audit reports zero non-empty `adoPat`
+  values in Project Link and chat-history stores.
+- Performance: 15/15 English ClaimBot_API turns completed on exact SHA.
+  App health P50/P95 1.1/2.9 ms; Project Link 200/281 ms; first event
+  3336/3756 ms; first narrative 9904/10989 ms; total turn 20711/23152 ms.
+  Azure/model TTFT is an optimization target, not an external hard gate.
+- Artifact integrity: `node scripts/verification/verify-run.mjs
+  --verify-artifacts` passed with seven hashes checked.
+- Release status: **v1 candidate accepted for this Goal**. Remaining work is
+  provider-latency optimization, pristine-evidence packaging and external
+  pilot/deployment research, tracked in `docs/product/next-iteration-known-gaps.md`.
 
 ## Continuation audit — 2026-08-08 (Phase 4 readiness, HEAD `971ee1d`)
 
@@ -483,3 +518,105 @@ ports 1421/8788). Plain `pnpm tauri:dev` uses the production identifier
 `com.mergepilot.desktop` and port 8787 — colliding with an installed app via
 single-instance and the daemon port; the worktree script exists precisely to
 avoid this.
+
+## Continuation audit — 2026-08-11 (v1 goal Slice 1 — Work Inspector, HEAD `d6ba786`)
+
+- Slice 1 committed as `d6ba786` on `claudecode/mergepilot-v1` and pushed to
+  **both** non-main remotes (origin `d6ba7867be03ac212314046518ee3eac82dabbfe`,
+  ado same SHA, verified via `git ls-remote` after each push). Remote main
+  untouched at `618a52d` on both remotes.
+- Slice content: `readAzureWorkItemDetail` in core (typed relation
+  classification, PR/build artifact resolution, per-build test-evidence
+  aggregation, full comment thread); daemon `GET /delivery/work-items/:id`
+  with 400/404/422 mapping and typed `work_item_not_found`; desktop Work page
+  detail panel (Escape-closes, Retry-recoverable, keyboard-accessible) and
+  governed comment/state write-back proposals that execute only after
+  explicit approval.
+- Implementation bugs found and fixed by the slice's own tests: (1) Git/Ref
+  branch relation decode captured a 2-segment prefix instead of the ref name
+  (fixed with a 3-segment capture); (2) the desktop detail-fetch effect listed
+  the loading state in its deps, so `setDetailLoading` re-ran the effect whose
+  cleanup cancelled the in-flight read — every detail load hung at
+  "Loading full work item detail…" until the deps were restricted to the real
+  triggers (item, project link, retry) with a ref-guarded requested set.
+- Suite evidence at HEAD `d6ba786`: core **490 passed** (79 files), daemon
+  **352 passed** (54 files), desktop **735 passed** (146 files), core build
+  (tsc) clean, desktop `tsc --noEmit` clean, Playwright mocked E2E
+  `tests/e2e/work-inspector.spec.ts` **4 passed** (smoke + keyboard access,
+  load-failure with recoverable retry, governed write-back only after explicit
+  approval, no-data). These are implementation-slice evidence; no release
+  candidate exists yet, and per goal item 6 no historical PASS satisfies a
+  future SHA.
+- Real-ADO acceptance: **COMPLETE (2026-08-11)**. Read-only live test
+  `packages/core/test/liveAdoWorkInspector.test.ts` (gated on
+  `MERGEPILOT_E2E_LIVE_ADO=1`) passed 2/2 against real ADO
+  (tebssg/TeBS-ClaimBot): a real task's detail round-trips with typed
+  relation edges, per-PR id/status/url, per-build test evidence, and the
+  full comment thread; id 999999999 maps to the typed `work_item_not_found`.
+  Unblocked after the user completed the interactive
+  `az login --tenant 1f432b2e-… --scope 499b84ac-…/.default`.
+- The live acceptance exposed a real read-path defect (fixed in `82c2e09`):
+  `queryAzureWorkItems` trusted the WIQL `top` hint, but ADO returned all
+  394 tasks in the project for `top 5`; the follow-up `GET workitems?ids=`
+  then exceeded ADO's 200-id cap (VS403474) and 500'd — and the old code
+  silently converted that 500 into an empty list. The query now chunks ids
+  into 200-id detail reads (merged results) and a failed batch throws a
+  typed `ToolError` instead of hiding the failure. New unit coverage:
+  250-id chunking into 200+50 requests, failure surfacing, empty-query path.
+  Full regression at `82c2e09`: core **493 passed** (80 files), daemon
+  **352 passed** (54 files), desktop unchanged at 735 passed.
+- The live test also made its fixture robust: it prefers the signed-in
+  account's own tasks (`@me`), and falls back to the most recently changed
+  task in the project — the signed-in account has zero `@me` assignments in
+  this project, and the read path is identical either way.
+- Goal-conformance status for this slice: implementation, unit/daemon/desktop
+  tests, mocked E2E (4/4), real-ADO read acceptance (2/2 live), evidence
+  update, and independent commit+push on a named non-main branch are all
+  complete. Installed-desktop acceptance is deferred to the release candidate
+  (Slice 5/6) when provenance binds the same SHA across MSI, installed
+  binaries, and remote ADO artifacts.
+- Verification-run JSONs (`goal-verification.json`, `verification-state*.json`)
+  intentionally not re-projected for this slice: per goal item 6 they are
+  projected only by the Verification Run manifest at release time against the
+  final SHA.
+
+## Current v1 checkpoint — 2026-08-11 (`a0196cc` baseline)
+
+- The active branch is `claudecode/mergepilot-v1`; `a0196cc` is aligned on
+  both named non-main remotes. The local branch now tracks the matching origin
+  branch rather than `origin/main`.
+- Slice 1 evidence is current through `a0196cc`: implementation and mocked
+  acceptance are recorded, and the live ADO Work Inspector read passed after
+  the 200-id batching fix at `82c2e09`.
+- Guided PR Preparation is not yet accepted. The current page creates a Chat
+  planning handoff, but there is no typed editable suggestion record proving
+  Work Item + branch + commit + diff + validation + ADO policy coverage.
+- No release gate is promoted by this documentation calibration. Source-live,
+  final-SHA real ADO, fresh MSI, installed desktop, security and latency gates
+  remain required on the eventual release-candidate SHA.
+
+## Release-convergence checkpoint — 2026-08-11 (`5f14a64` baseline)
+
+- Candidate `579ec46` / 0.5.31 proved source-live 30/30, deterministic real
+  ADO, MSI/install provenance and the installed ClaimBot_API Work Item → PR →
+  CI → approved write-back loop. Canonical run `verify-msoha3ku` recorded 13
+  PASS / 1 FAIL: only the mocked-browser gate failed.
+- Diagnosis reproduced the mocked failure as nine chat/settings/route
+  acceptance defects. Product repairs cover off-ring prompt-card accessibility,
+  partial Project Link records, visible approval status and metadata follow-up
+  semantics; obsolete selectors now assert the current Context, Settings,
+  Changes and Delivery contracts.
+- Pre-release verification at `5f14a64`: desktop typecheck PASS, desktop unit
+  **744/744**, verification-run self-test PASS, and the full manifest-equivalent
+  mocked browser chain PASS with **86/86** scenarios and no skips (warmup 1,
+  chat 51, settings permission 1, route cache 33).
+- The verification runner now stores direct and merged Playwright
+  `passed/failed/skipped/didNotRun` counts, aggregates chained summaries,
+  includes failed tests in `total`, and projects a bounded redacted failure
+  stdout tail. This closes the evidence defect where the failed gate showed
+  `42 passed` but omitted its nine failed tests.
+- No final gate is promoted by this checkpoint. The 0.5.31 installed payload is
+  tied to `579ec46` and is stale after `5f14a64`. The next acceptance candidate
+  must be versioned 0.5.32, clean, pushed to both non-main remotes and retested
+  through the full fresh canonical manifest and installed/ADO/security/latency
+  chain.

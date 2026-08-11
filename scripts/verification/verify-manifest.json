@@ -99,8 +99,8 @@
       "required": true,
       "requireNoSkips": true,
       "timeoutMs": 2700000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/warmup.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/chat-layout.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/settings-permissions.spec.ts -Workers 1 && powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath tests/e2e/route-cache.spec.ts -Workers 1",
-      "description": "mocked browser E2E (warmup, chat-layout, settings-permissions, route-cache)"
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-mocked-browser-e2e.ps1\" -TestPath \"tests/e2e/chat-layout.spec.ts;tests/e2e/settings-permissions.spec.ts;tests/e2e/route-cache.spec.ts\" -Workers 1",
+      "description": "mocked browser E2E (same-process route warmup, chat-layout, settings-permissions, route-cache)"
     },
     {
       "id": "browser-e2e-source-live",
@@ -124,8 +124,23 @@
       "required": true,
       "requireNoSkips": true,
       "timeoutMs": 1800000,
-      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\verify-installed-provenance.ps1\" -ExpectedVersion 0.5.28 -SkipBuild -MsiPath \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\output\\live-e2e\\release-assets\\MergePilot_0.5.28_x64_en-US.msi\"",
-      "description": "installed provenance: source HEAD -> MSI/sidecar hashes -> install -> Program Files payload match -> installed E2E smoke + vision (exit 2 = elevation handoff printed) (4a-3: -SkipBuild against the GitHub Actions release MSI; timeout 30m for full smoke+vision)"
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\verify-installed-provenance.ps1\" -ExpectedVersion 0.5.32 -SkipBuild -MsiPath \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\apps\\desktop\\src-tauri\\target\\release\\bundle\\msi\\MergePilot_0.5.32_x64_en-US.msi\"",
+      "description": "installed provenance for the 0.5.32 candidate: source HEAD -> locally built MSI/sidecar hashes -> install -> Program Files payload match -> installed E2E smoke + vision (exit 2 = elevation handoff printed; timeout 30m for full smoke+vision)",
+      "artifacts": [
+        "output/live-e2e/installed-provenance-*.json"
+      ]
+    },
+    {
+      "id": "installed-desktop-vertical-loop",
+      "tier": "installed-desktop",
+      "required": true,
+      "requireNoSkips": true,
+      "timeoutMs": 1800000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-installed-vertical-loop.ps1\" -AllowFixtureWrites",
+      "description": "installed Tauri/WebView2 Work Item -> linked PR -> CI evidence -> UI proposal -> explicit UI approval -> verified ADO write-back and re-read against the recorded ClaimBot_API fixture",
+      "artifacts": [
+        "output/live-e2e/installed-vertical-loop-*.json"
+      ]
     },
     {
       "id": "real-ado-e2e",
@@ -134,7 +149,10 @@
       "requireNoSkips": true,
       "timeoutMs": 1800000,
       "cmd": "\"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\.tools\\node-v22.11.0-win-x64\\node.exe\" \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\verify-real-ado.mjs\"",
-      "description": "ClaimBot_API real ADO E2E (deterministic driver)"
+      "description": "ClaimBot_API real ADO E2E (deterministic driver)",
+      "artifacts": [
+        "docs/manual-testing/2026-08-05/verification/real-ado-evidence.json"
+      ]
     }
   ]
 }
