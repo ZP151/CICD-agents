@@ -715,10 +715,14 @@ async function refreshEnvironmentPanelBranch(
   const branchControl = environmentPanel.locator('button[aria-haspopup="dialog"]').first();
   await expect(branchControl).toBeVisible();
   await branchControl.click();
+  const refreshResponse = page.waitForResponse(
+    (response) => response.url().endsWith("/chat/workflow-action")
+      && response.request().method() === "POST"
+      && response.ok(),
+    { timeout: 90_000 },
+  );
   await environmentPanel.getByRole("button", { name: "Refresh branch state" }).click();
-  await expect(page.locator("main").getByRole("button", { name: /Ran|Worked/i }).first()).toBeVisible({
-    timeout: 90_000,
-  });
+  await refreshResponse;
   await expect(branchControl).not.toContainText(/not checked/i);
 }
 
