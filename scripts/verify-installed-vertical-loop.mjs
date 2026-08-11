@@ -277,6 +277,7 @@ async function main() {
     ]);
     assert(health.version === expectedVersion, `expected installed daemon ${expectedVersion}, got ${health.version}`);
     assert(health.runtimeMode === "desktop-sidecar", `expected desktop-sidecar runtime, got ${health.runtimeMode}`);
+    assert(health.buildSha === source.sha, `expected installed build ${source.sha}, got ${health.buildSha || "empty"}`);
     steps.push({
       step: "installed-runtime",
       ok: true,

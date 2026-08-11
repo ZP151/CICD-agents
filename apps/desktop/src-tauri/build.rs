@@ -1,4 +1,6 @@
 fn main() {
+    println!("cargo:rerun-if-env-changed=MERGEPILOT_BUILD_SHA");
+    println!("cargo:rerun-if-env-changed=GITHUB_SHA");
     // Native shell icons are embedded during the Rust build. Keep their change
     // tracking explicit so `cargo build` cannot reuse a binary with stale icon
     // resources after the icon-generation script has run.

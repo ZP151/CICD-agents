@@ -494,7 +494,12 @@ fn start_daemon_sidecar(app: &AppHandle, port: u16) -> Result<(), String> {
         .env("MERGEPILOT_RETURN_URI", "mergepilot://auth/complete")
         .env("MERGEPILOT_DESKTOP_VERSION", env!("CARGO_PKG_VERSION"))
         .env("MERGEPILOT_DAEMON_VERSION", env!("CARGO_PKG_VERSION"))
-        .env("MERGEPILOT_BUILD_SHA", option_env!("GITHUB_SHA").unwrap_or(""))
+        .env(
+            "MERGEPILOT_BUILD_SHA",
+            option_env!("MERGEPILOT_BUILD_SHA")
+                .or(option_env!("GITHUB_SHA"))
+                .unwrap_or(""),
+        )
         .spawn()
         .map_err(|err| format!("Failed to spawn mergepilot-daemon: {err}"))?;
 

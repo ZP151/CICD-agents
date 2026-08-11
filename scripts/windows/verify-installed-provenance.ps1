@@ -200,8 +200,14 @@ $head = Get-GitHead
 $build = $null
 if (-not $SkipBuild) {
   Write-Host "[provenance] building desktop bundle from HEAD $($head.sha) ..."
-  $build = Invoke-ChildPowershell -ScriptPath (Join-Path $PSScriptRoot "pnpm-project.ps1") `
-    -Arguments @("--filter", "@mergepilot/desktop", "run", "tauri:build") -LogPath $buildLog
+  $previousBuildSha = $env:MERGEPILOT_BUILD_SHA
+  try {
+    $env:MERGEPILOT_BUILD_SHA = $head.sha
+    $build = Invoke-ChildPowershell -ScriptPath (Join-Path $PSScriptRoot "pnpm-project.ps1") `
+      -Arguments @("--filter", "@mergepilot/desktop", "run", "tauri:build") -LogPath $buildLog
+  } finally {
+    $env:MERGEPILOT_BUILD_SHA = $previousBuildSha
+  }
   if ($build.exitCode -ne 0) {
     $record = [pscustomobject]@{
       ok = $false

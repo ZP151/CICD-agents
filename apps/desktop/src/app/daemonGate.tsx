@@ -45,6 +45,15 @@ export function daemonTrustProblem(health: HealthStatus): string | null {
   if (health.desktopVersion !== DESKTOP_VERSION) {
     return `Expected sidecar desktop ${DESKTOP_VERSION}, got ${health.desktopVersion ?? "unknown"}.`;
   }
+  if (!DESKTOP_BUILD_SHA) {
+    return "The desktop build does not declare a source SHA.";
+  }
+  if (!health.buildSha) {
+    return `Expected daemon build ${DESKTOP_BUILD_SHA}, got an empty build SHA.`;
+  }
+  if (health.buildSha !== DESKTOP_BUILD_SHA) {
+    return `Expected daemon build ${DESKTOP_BUILD_SHA}, got ${health.buildSha}.`;
+  }
   return null;
 }
 
