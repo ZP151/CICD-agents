@@ -457,7 +457,8 @@ test.describe("workspace route caching", () => {
 
     await page.goto("/#/chat", { waitUntil: "domcontentloaded" });
     await expect(page.getByText("Start with a focused prompt")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
+    const reviewPrompt = page.getByRole("button", { name: "Use prompt: Review ClaimBot_API changes" });
+    await expect(reviewPrompt).toBeVisible();
     const welcomePanel = page.locator('[aria-label="New conversation welcome"]');
     await expect(welcomePanel).toBeVisible();
     await expect.poll(async () => {
@@ -470,10 +471,10 @@ test.describe("workspace route caching", () => {
     await expect(page.locator(".animate-pulse")).toHaveCount(0);
     await page.waitForTimeout(120);
     expect(indexStatusRequests).toBe(0);
-    await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
+    await expect(reviewPrompt).toBeVisible();
     await expect(page.getByText("Start with a focused prompt")).toBeVisible();
     await page.setViewportSize({ width: 760, height: 760 });
-    await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
+    await expect(reviewPrompt).toBeVisible();
     await expect(page.getByText("Start with a focused prompt")).toBeVisible();
     await expect.poll(async () =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
@@ -534,14 +535,18 @@ test.describe("workspace route caching", () => {
     });
 
     await page.goto("/#/chat");
-    await expect(page.getByRole("button", { name: "Understand this project" })).toBeVisible();
-    await expect(page.getByTitle("Context manages the Project Link")).toHaveText(projectLink.name);
+    const mapPrompt = page.getByRole("button", { name: "Use prompt: Map ClaimBot_API entry points" });
+    await expect(mapPrompt).toBeVisible();
+    await expect(page.getByText(
+      `Suggestions use the selected ${projectLink.name} context. Edit the prompt before MergePilot does any work.`,
+      { exact: true },
+    )).toBeVisible();
     await expect(page.locator('select[aria-label="Composer Project Link"]')).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Understand this project" })).toBeVisible();
+    await expect(mapPrompt).toBeVisible();
     await expect(page.locator(".animate-pulse")).toHaveCount(0);
     await page.waitForTimeout(120);
     expect(secondaryIndexRequests).toBe(0);
-    await expect(page.getByRole("button", { name: "Understand this project" })).toBeVisible();
+    await expect(mapPrompt).toBeVisible();
   });
 
   test("@smoke @mocked keeps New Chat warm return free of skeleton pulses", async ({ page }) => {
@@ -567,15 +572,15 @@ test.describe("workspace route caching", () => {
     });
 
     await page.goto("/#/chat", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Use prompt: Review ClaimBot_API changes" })).toBeVisible();
     await expect(page.locator(".animate-pulse")).toHaveCount(0);
 
     await page.goto("/#/activity");
     await expect(page.getByRole("heading", { name: "Activity" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Agent" }).click();
+    await page.getByRole("link", { name: "New chat" }).click();
     await page.waitForTimeout(80);
-    await expect(page.getByRole("button", { name: "Review my changes" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Use prompt: Review ClaimBot_API changes" })).toBeVisible();
     await expect(page.locator(".animate-pulse")).toHaveCount(0);
   });
 
@@ -595,8 +600,12 @@ test.describe("workspace route caching", () => {
     await page.goto("/#/settings", { waitUntil: "domcontentloaded" });
 
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Built-in capabilities" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Appearance" })).toBeVisible();
+    await page.getByRole("button", { name: "Capabilities", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Capabilities" })).toBeVisible();
+    await page.getByRole("button", { name: "Additional Models", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Additional Models" })).toBeVisible();
+    await page.getByRole("button", { name: "System", exact: true }).click();
     await expect(page.getByRole("heading", { name: "System" })).toBeVisible();
     // Runtime details live in a collapsed disclosure; open it before reading rows.
     await page.getByText("Runtime details").click();
@@ -616,21 +625,9 @@ test.describe("workspace route caching", () => {
     ).toBeGreaterThan(1030);
     await expect.poll(async () =>
       page.evaluate(() => {
-        const sections = Array.from(document.querySelectorAll(".settings-grid > section")).map(
-          (section) => {
-            const title = section.querySelector("h3")?.textContent?.trim();
-            const rect = section.getBoundingClientRect();
-            return { title, x: rect.x, y: rect.y, width: rect.width };
-          },
-        );
-        const appearance = sections.find((section) => section.title === "Appearance");
-        const system = sections.find((section) => section.title === "System");
-        return Boolean(
-          appearance &&
-            system &&
-            Math.abs(appearance.y - system.y) <= 12 &&
-            system.x > appearance.x + appearance.width - 8,
-        );
+        const shell = document.querySelector(".settings-shell")?.getBoundingClientRect();
+        const content = document.querySelector(".settings-content")?.getBoundingClientRect();
+        return Boolean(shell && content && content.width > shell.width * 0.6);
       }),
     ).toBe(true);
     await expect.poll(async () =>
@@ -651,6 +648,7 @@ test.describe("workspace route caching", () => {
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
 
+    await page.getByRole("button", { name: "Additional Models", exact: true }).click();
     await page.getByRole("button", { name: "Add model" }).click();
     await expect(page.getByText("Azure OpenAI")).toBeVisible();
     await expect(page.getByRole("button", { name: "Test connection" })).toBeVisible();
@@ -997,7 +995,7 @@ test.describe("workspace route caching", () => {
 
     await expect(page.getByText("No pull requests found")).toBeVisible();
     await expect(
-      page.getByText("Try another Project Link or status filter, or refresh after creating a pull request."),
+      page.getByText("Change the Project Link or status filter, or use Refresh above after creating a pull request."),
     ).toBeVisible();
     await expect.poll(async () =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
@@ -1139,7 +1137,7 @@ test.describe("workspace route caching", () => {
     await expect(page.getByText("Azure DevOps sign-in needs attention")).toBeVisible();
     await expect(page.getByText("/project-links/")).toBeHidden();
     await expect(page.getByText("HTTP 401")).toBeHidden();
-    await page.getByRole("link", { name: "Agent" }).click();
+    await page.getByRole("link", { name: "New chat" }).click();
     await page.getByRole("link", { name: "Changes" }).click();
     await expect(page.getByText("Loading pull requests...")).toBeHidden();
     await expect(page.getByText("Azure DevOps sign-in needs attention")).toBeVisible();
@@ -1578,7 +1576,7 @@ test.describe("workspace route caching", () => {
     await page.goto("/#/findings");
     await expect(page).toHaveURL(/#\/pulls/);
     await expect(page.getByText("Azure DevOps sign-in needs attention")).toBeVisible();
-    await page.getByRole("link", { name: "Agent" }).click();
+    await page.getByRole("link", { name: "New chat" }).click();
     await page.getByRole("link", { name: "Changes" }).click();
     await expect(page.getByText("Loading pull requests...")).toBeHidden();
     await expect(page.getByText("Azure DevOps sign-in needs attention")).toBeVisible();
@@ -1736,7 +1734,7 @@ test.describe("workspace route caching", () => {
 
     await page.goto("/#/pipelines");
     await expect(page.getByRole("heading", { name: "ClaimBot_API", exact: true })).toBeVisible();
-    await expect(page.getByLabel("Pipelines project filter")).toBeVisible();
+    await expect(page.getByRole("toolbar", { name: "Pipeline status filters" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Discovered\s+2/ })).toBeVisible();
     await expect.poll(async () =>
@@ -1754,7 +1752,7 @@ test.describe("workspace route caching", () => {
       )
       .toBe(true);
     await page.setViewportSize({ width: 760, height: 760 });
-    await expect(page.getByLabel("Pipelines project filter")).toBeVisible();
+    await expect(page.getByRole("toolbar", { name: "Pipeline status filters" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Discovered\s+2/ })).toBeVisible();
     await expect
@@ -2343,4 +2341,3 @@ test.describe("workspace route caching", () => {
   });
 
 });
-

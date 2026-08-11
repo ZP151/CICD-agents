@@ -70,7 +70,12 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
     message: string,
     action: SuggestionReplyAction = { kind: "fill_composer" },
   ): void => {
-    if (suggestions.some((suggestion) => suggestion.id === id || suggestion.message === message)) return;
+    const normalizedLabel = label.trim().toLowerCase();
+    if (suggestions.some((suggestion) => (
+      suggestion.id === id
+      || suggestion.message === message
+      || suggestion.label.trim().toLowerCase() === normalizedLabel
+    ))) return;
     suggestions.push({ id, label, message, action });
   };
   const addMetadataSuggestions = (): void => {
@@ -189,5 +194,5 @@ export function deriveSuggestionReplies(context: SuggestionReplyContext): Sugges
 
 function isActionableNextStep(value: string): boolean {
   if (!value || value.startsWith("Repository context:") || value.length > 90) return false;
-  return /^(analyze|check|compare|continue|create|draft|explain|fetch|find|fix|inspect|list|open|prepare|refresh|rerun|resolve|review|run|show|stage|summarize|trace|validate)\b/i.test(value);
+  return /^(analyze|check|compare|continue|create|draft|explain|fetch|find|fix|inspect|list|open|prepare|publish|pull|push|refresh|rerun|resolve|review|run|show|stage|summarize|trace|validate)\b/i.test(value);
 }

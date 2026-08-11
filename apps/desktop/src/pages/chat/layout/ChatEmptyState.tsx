@@ -147,11 +147,17 @@ export function ProjectLinkLoadingState(): JSX.Element {
  */
 export function welcomeSuggestionsForProjectLink(projectLink: ProjectLink | null): SuggestionReply[] {
   if (!projectLink) return [];
-  const repository = projectLink.adoRepoName.trim()
-    || projectLink.repoPath.replace(/\\/g, "/").split("/").filter(Boolean).pop()
-    || projectLink.name;
-  const targetBranch = projectLink.targetBranch.trim() || projectLink.defaultBranch.trim() || "the default branch";
-  const hasAdoProject = Boolean(projectLink.adoOrgUrl.trim() && projectLink.adoProject.trim() && projectLink.adoRepoName.trim());
+  const adoRepoName = (projectLink.adoRepoName ?? "").trim();
+  const adoOrgUrl = (projectLink.adoOrgUrl ?? "").trim();
+  const adoProject = (projectLink.adoProject ?? "").trim();
+  const repository = adoRepoName
+    || (projectLink.repoPath ?? "").replace(/\\/g, "/").split("/").filter(Boolean).pop()
+    || projectLink.name
+    || "the repository";
+  const targetBranch = (projectLink.targetBranch ?? "").trim()
+    || (projectLink.defaultBranch ?? "").trim()
+    || "the default branch";
+  const hasAdoProject = Boolean(adoOrgUrl && adoProject && adoRepoName);
 
   return [
     {

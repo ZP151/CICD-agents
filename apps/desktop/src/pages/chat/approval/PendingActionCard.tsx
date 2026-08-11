@@ -39,6 +39,7 @@ export function PendingActionCard({ bubble, onConfirm, onCancel }: PendingAction
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2 px-3 pt-3">
           <span className="font-semibold text-[rgb(var(--app-text))]">Review before running</span>
+          <span className="sr-only">Approval required</span>
         </div>
         <StatusBadge className={`mr-3 mt-3 uppercase tracking-wide ${approvalRiskClass(riskLevel)}`} tone={approvalRiskTone(riskLevel)}>
           {riskLevel.toUpperCase()} risk

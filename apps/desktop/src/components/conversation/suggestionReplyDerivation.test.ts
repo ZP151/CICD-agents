@@ -191,6 +191,23 @@ describe("deriveSuggestionReplies", () => {
     ]);
   });
 
+  it("keeps model-provided Git follow-ups complete, ordered, and non-duplicated", () => {
+    const suggestions = deriveSuggestionReplies({
+      workflowKind: "git",
+      workflowPhase: "fetched",
+      workflowStatus: "done",
+      lastAssistantText: "Fetched latest refs from origin. Refresh branch status next.",
+      metadataSuggestions: ["Refresh branch status", "Pull/rebase first", "Push branch"],
+    });
+
+    expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
+      "Refresh branch status",
+      "Pull/rebase first",
+      "Push branch",
+    ]);
+    expect(suggestions.every((suggestion) => suggestion.action.kind === "fill_composer")).toBe(true);
+  });
+
   it("routes synced Git workflow follow-ups as structured workspace actions", () => {
     const suggestions = deriveSuggestionReplies({
       workflowKind: "git",
