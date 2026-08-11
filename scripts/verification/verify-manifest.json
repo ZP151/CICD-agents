@@ -128,6 +128,18 @@
       "description": "installed provenance for the 0.5.30 candidate: source HEAD -> locally built MSI/sidecar hashes -> install -> Program Files payload match -> installed E2E smoke + vision (exit 2 = elevation handoff printed; timeout 30m for full smoke+vision)"
     },
     {
+      "id": "installed-desktop-vertical-loop",
+      "tier": "installed-desktop",
+      "required": true,
+      "requireNoSkips": true,
+      "timeoutMs": 1800000,
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\15492\\Develop\\Agents\\CICD-agents\\scripts\\windows\\run-installed-vertical-loop.ps1\" -AllowFixtureWrites",
+      "description": "installed Tauri/WebView2 Work Item -> linked PR -> CI evidence -> UI proposal -> explicit UI approval -> verified ADO write-back and re-read against the recorded ClaimBot_API fixture",
+      "artifacts": [
+        "output/live-e2e/installed-vertical-loop-*.json"
+      ]
+    },
+    {
       "id": "real-ado-e2e",
       "tier": "real-ado",
       "required": true,
