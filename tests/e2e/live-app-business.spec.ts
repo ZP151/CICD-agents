@@ -1648,8 +1648,9 @@ test.describe("Live app business workflows", () => {
       await selectProjectLinkInBrowser(page, projectLinkId, repoPath);
       await openLiveChat(page);
       await openEnvironmentPanel(page);
-      await refreshEnvironmentPanelBranch(page, liveEnvironmentPanel(page));
-      await expect(page.getByRole("button", { name: "main" })).toBeVisible();
+      const environmentPanel = liveEnvironmentPanel(page);
+      await refreshEnvironmentPanelBranch(page, environmentPanel);
+      await expect(environmentPanel.getByRole("button", { name: "main", exact: true })).toBeVisible();
 
       await page.getByPlaceholder(/Ask MergePilot/).fill(
         `Create and switch to a new branch named ${branchName}. Do not stage, commit, push, or create a PR.`,
@@ -1699,9 +1700,10 @@ test.describe("Live app business workflows", () => {
       await selectProjectLinkInBrowser(page, projectLinkId, pushRepo.repoPath);
       await openLiveChat(page);
       await openEnvironmentPanel(page);
-      await refreshEnvironmentPanelBranch(page, liveEnvironmentPanel(page));
-      await expect(page.getByRole("button", { name: pushRepo.branchName })).toBeVisible();
-      await expect(page.getByTitle("Context manages the Project Link")).toHaveText(projectLink.name);
+      const environmentPanel = liveEnvironmentPanel(page);
+      await refreshEnvironmentPanelBranch(page, environmentPanel);
+      await expect(environmentPanel.getByRole("button", { name: pushRepo.branchName, exact: true })).toBeVisible();
+      await expect(environmentPanel.getByRole("button", { name: "Workspace Project Link" })).toHaveText(projectLink.name);
       await expect(page.getByLabel("Pinned Summary Project Link")).toHaveCount(0);
       await page.getByRole("button", { name: "Commit or push", exact: true }).click();
       await page.getByRole("button", { name: "Push branch", exact: true }).click();
