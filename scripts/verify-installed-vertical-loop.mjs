@@ -169,6 +169,22 @@ async function stopProcess(child) {
   }
 }
 
+async function stopOwnedInstalledSidecar() {
+  const health = await runtimeHealth();
+  if (!health) return;
+  const actualPath = path.resolve(String(health.execPath ?? "")).toLowerCase();
+  const expectedPath = path.resolve(installedDaemon).toLowerCase();
+  assert(actualPath === expectedPath, `refusing to stop unexpected runtime owner: ${actualPath}`);
+  const pid = Number(health.pid ?? 0);
+  assert(Number.isSafeInteger(pid) && pid > 0, "installed sidecar health has no valid pid");
+  try {
+    process.kill(pid);
+  } catch {
+    // It may have exited after the health read.
+  }
+  await waitFor(async () => (await runtimeHealth()) ? null : true, "installed sidecar shutdown", 10_000);
+}
+
 async function readWorkItemDetail(projectLinkId) {
   const result = await jsonRequest(
     "GET",
@@ -425,6 +441,7 @@ async function main() {
   } finally {
     if (browser) await browser.close().catch(() => undefined);
     await stopProcess(child);
+    await stopOwnedInstalledSidecar();
   }
 }
 
