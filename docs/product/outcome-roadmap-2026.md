@@ -144,6 +144,74 @@ Dependencies: successful completion of at least two domain outcomes.
 
 Cycle: [Cycle 06](cycles/cycle-06-product-hardening.md)
 
+### Outcome 7: Fast feedback is truthful and attributable
+
+Enable developers to see prompt-specific, model-authored action narration
+quickly while operators can distinguish application delay from Azure/model
+delay, so performance work improves the product without hiding provider
+behavior behind canned text.
+
+Measures:
+
+- Local Working state remains visible within 100 ms.
+- First SSE, narrator-request start, first provider token, first public
+  narrative, first tool start, and terminal timestamps are present for every
+  measured Turn.
+- Application-owned P50/P95 and provider-owned P50/P95 are reported separately.
+- The 15-turn English ClaimBot_API fixture completes without fixed openings,
+  empty narratives, truncated public notes, or duplicate action narration.
+- Release verification accepts no manually enriched runtime metadata.
+
+Dependencies: released v0.5.32 canonical Turn/Action runtime and evidence
+ledger.
+
+Cycle: [Cycle 07](cycles/cycle-07-truthful-latency-and-evidence.md)
+
+### Outcome 8: Governed value survives real pilot variation
+
+Enable pilot developers, reviewers, and delivery owners to complete supported
+Git, Azure DevOps, built-in MCP, and web-research tasks against isolated
+fixtures so that the product can be evaluated outside the development team's
+happy path without creating another business-state model.
+
+Measures:
+
+- At least two external pilot users complete the primary read and governed
+  write loops with no operator intervention beyond documented approval.
+- A non-production deployment fixture proves readiness, approval, retry, and
+  verification while production-like destructive actions remain disabled.
+- Verified-loop completion, abandonment, correction, reversal, and support
+  incidents are observable by workflow and role.
+- Every remote write follows Proposal → Approval → Execution → Re-read →
+  Verification and remains idempotent under reconnect/retry.
+
+Dependencies: Outcome 7 measurement and evidence contracts.
+
+Cycle: [Cycle 08](cycles/cycle-08-governed-pilot-expansion.md)
+
+### Outcome 9: Release and adoption decisions are repeatable
+
+Enable release owners and pilot sponsors to install, verify, support, and
+evaluate MergePilot from signed, accessible artifacts so that continued
+investment is based on reproducible operational and product evidence.
+
+Measures:
+
+- Windows release assets are signed and signature-verified, or the release is
+  explicitly blocked rather than silently published unsigned.
+- CI and release workflows run on supported action runtimes without deprecation
+  annotations.
+- Clean install, upgrade, rollback guidance, diagnostics export, and artifact
+  provenance pass from a pristine worktree.
+- Keyboard, screen-reader, narrow-window, and visual acceptance checkpoints
+  pass; visual acceptance is performed by a human or multimodal reviewer.
+- Pilot retention and validated-value-proposition evidence supports an explicit
+  continue/change/stop decision.
+
+Dependencies: Outcomes 7 and 8.
+
+Cycle: [Cycle 09](cycles/cycle-09-release-confidence-and-adoption.md)
+
 ## Sequencing Rules
 
 - Do not build broad Boards or CD UI before the minimal artifact graph and
@@ -160,6 +228,11 @@ Cycle: [Cycle 06](cycles/cycle-06-product-hardening.md)
 - Changes and CI/test product wedge: following two cycles.
 - Work and deployment expansion: next two cycles.
 - Pilot hardening: after at least two end-to-end loops are reliable.
+- Truthful latency and deterministic evidence: immediately after v0.5.32.
+- Governed external pilot expansion: after the Cycle 07 trace and verifier
+  contracts are stable.
+- Signed release confidence and adoption decision: after pilot tasks produce
+  enough evidence to make the decision meaningful.
 
 No date-based GA commitment is made until Cycle 01 proves verified write-back
 and Cycle 03 proves useful CI classification on target-team failures.

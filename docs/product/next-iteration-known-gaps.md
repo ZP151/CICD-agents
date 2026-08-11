@@ -1,9 +1,11 @@
 # Next Iteration Known Gaps
 
 Status: **Post-v1 optimization and pilot gap register**
-Audit date: **2026-08-11**
-Current product-code/evidence baseline: `claudecode/mergepilot-v1` /
-`7067240`
+Audit date: **2026-08-12**
+Current released baseline: `v0.5.32`; GitHub `main` / tag
+`b46ece039f34b9afd41492f1f45b59d618a422e9`; Azure DevOps `main`
+`c2e607b4605d72279aa391cbce9bc357bd4f40e4`; common tree
+`1ae01f68cc65c544f50e808bc8db8a1f40e947c0`
 
 This document records verified gaps between the canonical product direction and
 the current implementation. A future Goal must read this document before
@@ -34,22 +36,27 @@ product semantics before they are made green.
   Exact-SHA latency measurement separates app endpoints (health P95 2.9 ms,
   Project Link P95 281 ms) from first real model narrative (P95 10.99 s).
 
-## Next Goal candidates
+## Selected next Goal and ordered follow-ups
 
-1. Reduce narrator/model TTFT and first-event planning overhead without making
-   an external Azure latency threshold a release blocker. Preserve the split
-   app/provider measurements and 15-turn English ClaimBot_API fixture.
-2. Move version/model/remote metadata and credential-audit output into explicit
-   verifier inputs so a fresh run never needs evidence-state enrichment.
-3. Make release packaging reproducible from a pristine evidence worktree or
-   record product-source and evidence-closure commits as first-class separate
-   identities in the provenance schema.
-4. Run external pilot/user-research tasks and a governed non-production
-   deployment fixture. These are product-learning inputs, not regressions in
-   the accepted v1 developer loop.
-5. Continue accessibility and narrow-window visual regression coverage. A
-   non-multimodal coding model may own code and text tests, but visual desktop
-   acceptance must remain a human or multimodal checkpoint.
+1. **Cycle 07 — truthful latency and deterministic release evidence.** Reduce
+   app-owned first-event overhead, measure provider TTFT separately, retain
+   prompt-specific model-authored narration, make verifier metadata explicit,
+   and represent product-source/evidence-closure/release identities without
+   manual enrichment. Azure TTFT below 500 ms is an optimization target, not a
+   release gate.
+2. **Cycle 08 — governed pilot expansion.** Run external pilot tasks and an
+   isolated non-production deployment fixture across Git, Azure DevOps,
+   built-in MCP and web research. These are product-learning inputs, not
+   regressions in the accepted v1 developer loop.
+3. **Cycle 09 — release confidence and adoption.** Configure and verify Windows
+   signing, remove action-runtime deprecation warnings, expand accessibility
+   and narrow-window regression coverage, and make the pilot investment
+   decision from measured outcomes. A non-multimodal coding model may own code
+   and text tests, but visual desktop acceptance remains a human or multimodal
+   checkpoint.
+
+The executable Cycle 07 plan is
+`docs/superpowers/plans/2026-08-12-cycle-07-truthful-latency-release-evidence.md`.
 
 ## v0.5.29 release handoff — 2026-08-10
 

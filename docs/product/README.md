@@ -1,7 +1,7 @@
 # MergePilot Product And Delivery Plan
 
 Status: **Canonical**
-Effective date: **2026-08-05**
+Effective date: **2026-08-12**
 Owners: Product, Engineering, Design
 Review cadence: At the end of every development cycle
 
@@ -65,6 +65,9 @@ advance that objective is deferred, even if it is useful.
 | [Cycle 04](cycles/cycle-04-work-intelligence.md) | Keep work items aligned with actual delivery state | 3 weeks |
 | [Cycle 05](cycles/cycle-05-deployment-readiness.md) | Make deployment approval evidence complete and current | 4 weeks |
 | [Cycle 06](cycles/cycle-06-product-hardening.md) | Prove repeatable value, safety, and operability for pilot teams | 3 weeks |
+| [Cycle 07](cycles/cycle-07-truthful-latency-and-evidence.md) | Make first feedback truthful, measurable, and release evidence deterministic | 2 weeks |
+| [Cycle 08](cycles/cycle-08-governed-pilot-expansion.md) | Prove governed value with external users and a non-production deployment fixture | 3 weeks |
+| [Cycle 09](cycles/cycle-09-release-confidence-and-adoption.md) | Make signed, accessible releases and the adoption decision repeatable | 3 weeks |
 
 Cycle length is a planning constraint, not a promise. A cycle closes only when
 its outcome gate is proven in a real Project Link fixture. Unfinished scope does

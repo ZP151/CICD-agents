@@ -1,9 +1,9 @@
 # MergePilot v1 Productization Iteration
 
-Status: **Completed release-candidate execution for the MergePilot v1 Goal**
+Status: **Released as MergePilot v0.5.32**
 Created: **2026-08-07**
-Current product-code/evidence baseline: **2026-08-11 / `7067240` on
-`claudecode/mergepilot-v1`**
+Current release baseline: **2026-08-12 / `v0.5.32`; GitHub main
+`b46ece0`; Azure DevOps main `c2e607b`; common tree `1ae01f6`**
 Required starting documents: `README.md`, `next-iteration-known-gaps.md`, and
 the Cycle 00–06 documents
 
@@ -19,10 +19,22 @@ The Goal is product completion, not merely making the current test suite green.
 
 ## Current execution state
 
-- Product source candidate `706724056c9e11230efac67c5613a36f5c4f9cf8`
-  is present on both `origin/claudecode/mergepilot-v1` and
-  `ado/claudecode/mergepilot-v1`, verified with `git ls-remote`. No remote
-  `main` operation was performed.
+- GitHub PR [#16](https://github.com/ZP151/mergepilot/pull/16) and Azure
+  DevOps PR 2808 merged the verified Goal to their protected `main` branches.
+  The merge commits differ because each remote records its own parents, while
+  both resolve to tree `1ae01f68cc65c544f50e808bc8db8a1f40e947c0`.
+- Tag `v0.5.32` resolves to GitHub main `b46ece0`. CI run `31510593261` and
+  Release run `31511474787` passed. The published release contains MSI
+  SHA-256 `34d5c138789eacab0a962fadfcc95562796fdee71c8f9b31ad1aafc67529b2a5`
+  and EXE SHA-256
+  `bc88f3b98dfbad0ba5feb8ccfe59146759295cb83848b6c5cb9ca55f91971f52`.
+  The artifacts are currently unsigned because Windows signing secrets are not
+  configured; that is an explicit Cycle 09 gate.
+- The pre-merge product source candidate
+  `706724056c9e11230efac67c5613a36f5c4f9cf8` and evidence closure
+  `9c807544bff5a7729b3cf719069434be898fc5c2` remain on both
+  `origin/claudecode/mergepilot-v1` and `ado/claudecode/mergepilot-v1` as the
+  immutable verification provenance behind the main merges above.
 - Work Inspector and Guided PR Preparation are complete. The installed
   ClaimBot_API loop selected the real Project Link, re-read Work Item `7919`,
   linked PR `2807` and successful build `4850`, produced a governed comment
