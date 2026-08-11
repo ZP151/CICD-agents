@@ -64,6 +64,29 @@ describe("delivery routes", () => {
     await app.close();
   });
 
+  it("validates the guided pull request preparation request", async () => {
+    const app = await buildApp(writes);
+    const response = await app.inject({
+      method: "POST",
+      url: "/delivery/pull-request-preparation",
+      payload: { projectLinkId: "", workItemId: -1 },
+    });
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("returns 404 when guided pull request preparation cannot resolve the Project Link", async () => {
+    const app = await buildApp(writes);
+    const response = await app.inject({
+      method: "POST",
+      url: "/delivery/pull-request-preparation",
+      payload: { projectLinkId: "missing" },
+    });
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "project_link_not_found" });
+    await app.close();
+  });
+
   it("reports an incomplete Azure DevOps mapping as a recoverable Work setup error", async () => {
     const app = await buildApp(writes, {
       id: "incomplete-link",

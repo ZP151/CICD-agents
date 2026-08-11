@@ -8,6 +8,7 @@ export * from "./failureEvidence.js";
 export * from "./failureClassification.js";
 export * from "./workItemDrift.js";
 export * from "./deploymentReadiness.js";
+export * from "./pullRequestPreparation.js";
 export * from "./adoActionTransport.js";
 export * from "./actions/actionTypes.js";
 export * from "./actions/actionPolicy.js";

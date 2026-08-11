@@ -27,6 +27,7 @@ import {
 } from "@mergepilot/core";
 import { z } from "zod";
 import type { ProjectLinkStoreAdapter } from "../projectLinkStore.js";
+import { preparePullRequest } from "../pullRequestPreparation.js";
 
 const ArtifactRefSchema = z.custom<ArtifactRef>(isArtifactRef, {
   message: "invalid ArtifactRef: must include a known kind and projectLinkId",
@@ -52,7 +53,7 @@ export const WORK_ITEMS_QUERY =
 
 const VerificationPredicateSchema = z.object({
   artifact: ArtifactRefSchema,
-  condition: z.enum(["exists", "not_exists", "field_eq", "relation_present", "revision_gt", "run_visible", "comment_contains"]),
+  condition: z.enum(["exists", "not_exists", "field_eq", "field_ne", "field_contains", "relation_present", "revision_gt", "run_visible", "comment_contains"]),
   field: z.string().optional(),
   expected: z.unknown().optional(),
   correlation: z.string().optional(),
@@ -72,6 +73,16 @@ const ProposeActionSchema = z.object({
   idempotencyKey: z.string().min(1),
   expiresAt: z.number().int().positive(),
   forceApproval: z.boolean().optional(),
+});
+
+const PullRequestPreparationSchema = z.object({
+  projectLinkId: z.string().min(1),
+  sourceBranch: z.string().optional(),
+  targetBranch: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  draft: z.boolean().optional(),
+  workItemId: z.number().int().positive().optional(),
 });
 
 export interface DeliveryWritesState {
@@ -114,6 +125,28 @@ export function registerDeliveryRoutes(app: FastifyInstance, options: DeliveryRo
       { writesEnabled: () => writes.isEnabled() },
     );
   }
+
+  app.post("/delivery/pull-request-preparation", async (request, reply) => {
+    const parsed = PullRequestPreparationSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
+    const { projectLinkId, ...preferences } = parsed.data;
+    try {
+      const projectLink = await projectLinkStore.getProjectLink(projectLinkId);
+      if (!projectLink) return reply.code(404).send({ error: "project_link_not_found" });
+      if (!projectLink.repoPath.trim()) {
+        return reply.code(422).send({
+          error: "project_link_repository_missing",
+          message: "This Project Link needs a local repository before a pull request can be prepared.",
+        });
+      }
+      return await preparePullRequest({ projectLink, preferences });
+    } catch (error) {
+      return reply.code(500).send({
+        error: "pull_request_preparation_failed",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
 
   app.get("/delivery/actions/:id", async (request, reply) => {
     const { id } = request.params as { id: string };

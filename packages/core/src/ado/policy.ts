@@ -16,6 +16,59 @@ export interface AzurePullRequestPolicyEvaluation {
   isBlocking: boolean;
 }
 
+export interface AzureBranchPolicyConfiguration {
+  id: number;
+  revision: number;
+  typeId: string;
+  displayName: string;
+  isEnabled: boolean;
+  isBlocking: boolean;
+}
+
+/**
+ * Read the policy configurations that ADO says apply to one repository ref.
+ * This is the pre-PR branch-policy read. It deliberately uses the Git-scoped
+ * endpoint rather than the legacy project policy list, whose `scope` filter
+ * does not understand hierarchical repository/ref matching.
+ */
+export async function listAzureBranchPolicyConfigurations(args: {
+  organization: string;
+  project: string;
+  repositoryId: string;
+  refName: string;
+  pat?: string;
+  auth?: AdoAuth;
+}): Promise<AzureBranchPolicyConfiguration[]> {
+  const organization = args.organization.trim();
+  const project = args.project.trim();
+  const repositoryId = args.repositoryId.trim();
+  const refName = normalizeBranchRef(args.refName);
+  if (!organization || !project || !repositoryId || !refName) {
+    throw new ToolError("ADO organization, project, repository ID, and target ref are required to read branch policies.");
+  }
+  const auth = args.auth ?? await getAzureDevOpsAuth(args.pat);
+  const params = new URLSearchParams({
+    repositoryId,
+    refName,
+    "api-version": "7.1",
+  });
+  const url = `${adoBase(organization)}/${encodeURIComponent(project)}/_apis/git/policy/configurations?${params.toString()}`;
+  const response = await adoFetch(url, auth);
+  const data = await parseAdoJson(response, "list branch policy configurations") as {
+    value?: BranchPolicyConfigurationPayload[];
+  };
+  return (data.value ?? [])
+    .filter((policy) => !policy.isDeleted)
+    .map((policy) => ({
+      id: Number(policy.id ?? 0),
+      revision: Number(policy.revision ?? 0),
+      typeId: policy.type?.id ?? "",
+      displayName: policy.type?.displayName ?? "Unnamed policy",
+      isEnabled: Boolean(policy.isEnabled),
+      isBlocking: Boolean(policy.isBlocking),
+    }));
+}
+
 export async function listAzurePullRequestPolicyEvaluations(args: {
   organization: string;
   project: string;
@@ -66,6 +119,21 @@ interface PolicyEvaluationPayload {
     settings?: { displayName?: string };
     type?: { displayName?: string };
   };
+}
+
+interface BranchPolicyConfigurationPayload {
+  id?: number;
+  revision?: number;
+  isEnabled?: boolean;
+  isBlocking?: boolean;
+  isDeleted?: boolean;
+  type?: { id?: string; displayName?: string };
+}
+
+function normalizeBranchRef(branch: string): string {
+  const trimmed = branch.trim();
+  if (!trimmed) return "";
+  return trimmed.startsWith("refs/") ? trimmed : `refs/heads/${trimmed}`;
 }
 
 function toPolicyEvaluation(policy: PolicyEvaluationPayload): AzurePullRequestPolicyEvaluation {

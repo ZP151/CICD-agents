@@ -69,6 +69,86 @@ export async function rejectDeliveryAction(id: string, feedback?: string): Promi
   return body as DeliveryActionRecord;
 }
 
+export interface PullRequestPreparation {
+  projectLinkId: string;
+  repositoryId: string;
+  generatedAt: number;
+  git: {
+    repoPath: string;
+    sourceBranch: string;
+    targetBranch: string;
+    headSha: string;
+    targetSha?: string;
+    remoteSourceSha?: string;
+    remoteTargetSha?: string;
+    upstream?: string;
+    ahead?: number;
+    behind?: number;
+    dirty: boolean;
+    changedFiles: string[];
+    diffStat: string;
+    commits: Array<{ sha: string; subject: string }>;
+    targetAvailability: "available" | "missing" | "unavailable" | "failed";
+  };
+  validation: {
+    status: "passed" | "failed" | "not_run" | "unavailable";
+    command?: string;
+    summary: string;
+    sourceSha?: string;
+  };
+  workItem: {
+    status: "available" | "missing" | "unavailable" | "failed";
+    item?: WorkItemDetail;
+    message?: string;
+  };
+  policies: {
+    status: "available" | "missing" | "unavailable" | "failed";
+    targetRef: string;
+    configurations: Array<{
+      id: number;
+      revision: number;
+      typeId: string;
+      displayName: string;
+      isEnabled: boolean;
+      isBlocking: boolean;
+    }>;
+    message?: string;
+  };
+  suggestion: {
+    sourceBranch: string;
+    targetBranch: string;
+    title: string;
+    description: string;
+    draft: boolean;
+    workItemId?: number;
+    reviewerFocus: string[];
+    risks: string[];
+    missingEvidence: string[];
+    readiness: "ready" | "needs_attention" | "blocked" | "insufficient_evidence";
+  };
+}
+
+export async function fetchPullRequestPreparation(input: {
+  projectLinkId: string;
+  sourceBranch?: string;
+  targetBranch?: string;
+  title?: string;
+  description?: string;
+  draft?: boolean;
+  workItemId?: number;
+}): Promise<PullRequestPreparation> {
+  const r = await fetch(`${RUNTIME_URL}/delivery/pull-request-preparation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!r.ok) {
+    const body = (await r.json().catch(() => null)) as { error?: string; message?: string } | null;
+    throw new Error(body?.message ?? body?.error ?? `Pull request preparation HTTP ${r.status}`);
+  }
+  return r.json() as Promise<PullRequestPreparation>;
+}
+
 export interface WorkItemRelationLink {
   rel: string;
   url: string;
