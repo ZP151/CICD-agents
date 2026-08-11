@@ -708,17 +708,18 @@ async function refreshEnvironmentPanelBranch(
   page: Page,
   environmentPanel: ReturnType<typeof liveEnvironmentPanel>,
 ): Promise<void> {
-  // A fresh session has no branch evidence — Project Link V2 does not persist
-  // a default branch, and no tool bubble has reported one yet — so the branch
-  // menu button reads "not checked" until the refresh_branch workspace action
-  // resolves the live branch. Run that refresh before callers assert on
-  // branch-labelled buttons.
-  await environmentPanel.getByRole("button", { name: /not checked/i }).click();
+  // Project Link or a previous read can already provide the branch label, so
+  // do not depend on the historical "not checked" placeholder. The branch
+  // control owns the Branch operations dialog and is the only dialog-trigger
+  // button in the compact Context panel.
+  const branchControl = environmentPanel.locator('button[aria-haspopup="dialog"]').first();
+  await expect(branchControl).toBeVisible();
+  await branchControl.click();
   await environmentPanel.getByRole("button", { name: "Refresh branch state" }).click();
   await expect(page.locator("main").getByRole("button", { name: /Ran|Worked/i }).first()).toBeVisible({
     timeout: 90_000,
   });
-  await expect(environmentPanel.getByRole("button", { name: /not checked/i })).toHaveCount(0);
+  await expect(branchControl).not.toContainText(/not checked/i);
 }
 
 /**
