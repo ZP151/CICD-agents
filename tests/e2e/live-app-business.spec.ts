@@ -657,6 +657,26 @@ async function pendingActionCardOrTurnEnded(
   return (await card.isVisible().catch(() => false)) === true;
 }
 
+async function singlePendingApprovalCard(page: Page, timeoutMs: number): Promise<Locator> {
+  const cards = page.getByTestId("pending-action-card");
+  await expect(cards).toHaveCount(1, { timeout: timeoutMs });
+  const card = cards.first();
+  await expect(card).toBeVisible();
+  return card;
+}
+
+async function approvalCommandEvidence(card: Locator): Promise<Locator> {
+  const disclosure = card.locator("details").filter({ hasText: "Review command" }).first();
+  const summary = disclosure.getByText("Review command", { exact: true });
+  await expect(summary).toBeVisible();
+  if ((await disclosure.getAttribute("open")) === null) {
+    await summary.click();
+  }
+  const command = disclosure.locator("code").first();
+  await expect(command).toBeVisible();
+  return command;
+}
+
 async function openEnvironmentPanel(page: Page): Promise<void> {
   // Since v0.5.24 the Context summary is only rendered while the pinned
   // summary is open (it starts closed). Pin it on demand, mirroring the
@@ -760,12 +780,13 @@ test.describe("Live app business workflows", () => {
       // host load, so the window is 150s with the post-conditions asserting
       // the staged scope.
       await expect(approvalCard).toBeVisible({ timeout: 150_000 });
-      await expect(approvalCard.getByText(/git add/i).first()).toBeVisible();
-      await expect(approvalCard.getByText("README.md").first()).toBeVisible();
+      await expect(page.getByTestId("pending-action-card")).toHaveCount(1);
+      const command = await approvalCommandEvidence(approvalCard);
+      await expect(command).toContainText(/git add/i);
       // The LLM-written card description may mention notes.txt; the staged
       // scope that matters is the command preview.
-      await expect(approvalCard.locator("code").first()).toContainText("README.md");
-      await expect(approvalCard.locator("code").first()).not.toContainText("notes.txt");
+      await expect(command).toContainText("README.md");
+      await expect(command).not.toContainText("notes.txt");
       await approvalCard.getByRole("button", { name: "Approve and run" }).click();
 
       await expect.poll(() => git(repoPath, ["status", "--short"]), { timeout: 30_000 }).toBe(
@@ -830,12 +851,13 @@ test.describe("Live app business workflows", () => {
         );
         expect(cardShownAfterRePrompt, "approval card after the corrective re-prompt").toBeTruthy();
       }
-      await expect(approvalCard.getByText(/git add/i).first()).toBeVisible();
-      await expect(approvalCard.getByText("README.md").first()).toBeVisible();
+      await expect(page.getByTestId("pending-action-card")).toHaveCount(1);
+      const command = await approvalCommandEvidence(approvalCard);
+      await expect(command).toContainText(/git add/i);
       // The LLM-written card description may mention notes.txt; the staged
       // scope that matters is the command preview.
-      await expect(approvalCard.locator("code").first()).toContainText("README.md");
-      await expect(approvalCard.locator("code").first()).not.toContainText("notes.txt");
+      await expect(command).toContainText("README.md");
+      await expect(command).not.toContainText("notes.txt");
       expect(git(repoPath, ["diff", "--cached", "--name-only"])).toBe("");
 
       const draftSessionId = await page.evaluate(() => {
@@ -849,14 +871,13 @@ test.describe("Live app business workflows", () => {
       expect(state.workflowState?.pendingApproval?.action?.tool).toBe("git_add");
 
       await page.reload({ waitUntil: "domcontentloaded" });
-      const restoredApprovalCard = page.getByTestId("pending-action-card").first();
-      await expect(restoredApprovalCard).toBeVisible({ timeout: 30_000 });
-      await expect(restoredApprovalCard.getByText(/git add/i).first()).toBeVisible();
-      await expect(restoredApprovalCard.getByText("README.md").first()).toBeVisible();
+      const restoredApprovalCard = await singlePendingApprovalCard(page, 30_000);
+      const restoredCommand = await approvalCommandEvidence(restoredApprovalCard);
+      await expect(restoredCommand).toContainText(/git add/i);
       // The LLM-written card description may mention notes.txt; the staged
       // scope that matters is the command preview.
-      await expect(restoredApprovalCard.locator("code").first()).toContainText("README.md");
-      await expect(restoredApprovalCard.locator("code").first()).not.toContainText("notes.txt");
+      await expect(restoredCommand).toContainText("README.md");
+      await expect(restoredCommand).not.toContainText("notes.txt");
       expect(git(repoPath, ["diff", "--cached", "--name-only"])).toBe("");
 
       await restoredApprovalCard.getByRole("button", { name: "Approve and run" }).click();
@@ -893,9 +914,9 @@ test.describe("Live app business workflows", () => {
       );
       await page.getByRole("button", { name: "Send" }).click();
 
-      const approvalCard = page.getByTestId("pending-action-card").first();
-      await expect(approvalCard).toBeVisible({ timeout: 90_000 });
-      await expect(approvalCard.getByText(/git add/i).first()).toBeVisible();
+      const approvalCard = await singlePendingApprovalCard(page, 90_000);
+      const command = await approvalCommandEvidence(approvalCard);
+      await expect(command).toContainText(/git add/i);
       await approvalCard.getByRole("button", { name: "Skip action" }).click();
 
       await expect.poll(() => git(repoPath, ["diff", "--cached", "--name-only"]), { timeout: 30_000 }).toBe("");
