@@ -544,3 +544,18 @@ avoid this.
   intentionally not re-projected for this slice: per goal item 6 they are
   projected only by the Verification Run manifest at release time against the
   final SHA.
+
+## Current v1 checkpoint — 2026-08-11 (`a0196cc` baseline)
+
+- The active branch is `claudecode/mergepilot-v1`; `a0196cc` is aligned on
+  both named non-main remotes. The local branch now tracks the matching origin
+  branch rather than `origin/main`.
+- Slice 1 evidence is current through `a0196cc`: implementation and mocked
+  acceptance are recorded, and the live ADO Work Inspector read passed after
+  the 200-id batching fix at `82c2e09`.
+- Guided PR Preparation is not yet accepted. The current page creates a Chat
+  planning handoff, but there is no typed editable suggestion record proving
+  Work Item + branch + commit + diff + validation + ADO policy coverage.
+- No release gate is promoted by this documentation calibration. Source-live,
+  final-SHA real ADO, fresh MSI, installed desktop, security and latency gates
+  remain required on the eventual release-candidate SHA.

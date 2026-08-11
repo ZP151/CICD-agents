@@ -1,7 +1,9 @@
 # MergePilot v1 Productization Iteration
 
-Status: **Execution plan for the next macro Goal**  
-Created: **2026-08-07**  
+Status: **Active execution plan for the MergePilot v1 Goal**
+Created: **2026-08-07**
+Current product-code/evidence baseline: **2026-08-11 / `a0196cc` on
+`claudecode/mergepilot-v1`**
 Required starting documents: `README.md`, `next-iteration-known-gaps.md`, and
 the Cycle 00–06 documents
 
@@ -15,7 +17,34 @@ ADO re-read, and a verifiable final result.
 
 The Goal is product completion, not merely making the current test suite green.
 
-## Verified starting point and protected work
+## Current execution state
+
+- The active Goal branch is `claudecode/mergepilot-v1`. Product-code and
+  evidence commits through `a0196cc` are present on both
+  `origin/claudecode/mergepilot-v1` and `ado/claudecode/mergepilot-v1`; both
+  remote `main` refs remain at the `v0.5.29` release baseline.
+- Slice 1, **Work Inspector**, is complete as an implementation slice. It reads
+  the selected Azure Boards item with description, acceptance criteria,
+  relations, linked PR/build/test evidence and comments before allowing a
+  governed comment or state proposal. Current real-ADO read acceptance passed
+  on `82c2e09`; the evidence refresh is `a0196cc`.
+- Slice 2, **Guided PR Preparation**, is the active slice. The current Changes
+  entry only hands a prompt to Chat. It does not yet own a typed, editable PR
+  suggestion assembled from authoritative Work Item, branch, commit, diff,
+  validation and ADO policy evidence.
+- Slice 2 must end with a typed suggestion/read model and the existing
+  `pull_request.create` ActionRecord lifecycle: Preview → Approval → Execution
+  → ADO re-read → Verification. No direct or model-only PR mutation is allowed.
+- The machine-projected release gates still describe an older SHA. They remain
+  historical evidence only; they must not be re-projected as current until the
+  release-candidate SHA is selected and all required gates run on that SHA.
+- The final installed Work Item → PR → CI → approved write-back loop, fresh
+  MSI provenance, installed E2E, security and latency evidence remain open.
+
+## Historical starting point and protected work
+
+The following bullets describe the state when this macro plan was created.
+They are retained as provenance and are not the current execution state.
 
 - Foundation commits through `26fd4d7` exist on both
   `ado/claudecode/optimize-bugfix` and

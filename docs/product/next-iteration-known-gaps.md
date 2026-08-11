@@ -1,14 +1,35 @@
 # Next Iteration Known Gaps
 
-Status: **Required input for the next product Goal**
-Audit date: **2026-08-08**
-Audited branch/HEAD: `claudecode/optimize-bugfix` / `971ee1d`
+Status: **Active gap register for the MergePilot v1 Goal**
+Audit date: **2026-08-11**
+Current product-code/evidence baseline: `claudecode/mergepilot-v1` /
+`a0196cc`
 
 This document records verified gaps between the canonical product direction and
 the current implementation. A future Goal must read this document before
 claiming a cycle or the product complete. Test failures are not automatically
 bugs in the desired product: obsolete tests must be corrected to the canonical
 product semantics before they are made green.
+
+## Current v1 execution delta — 2026-08-11
+
+- Priority 1, Work inspectability, is closed as an implementation slice at
+  `d6ba786`, with the ADO >200-id query defect fixed at `82c2e09` and current
+  real-ADO evidence recorded at `a0196cc`.
+- Priority 2, Guided PR Preparation, is active. `CreatePullRequest.tsx` starts
+  a read-only Chat handoff, but the product still lacks a canonical editable
+  suggestion that binds Work Item, branch, commits, diff, tests and ADO policy
+  observations before `pull_request.create` is proposed.
+- Priority 3, the final vertical release loop, remains open. Historical
+  source-live, real-ADO, MSI and installed PASS records do not satisfy the v1
+  Goal after subsequent product-code changes.
+- The next implementation checkpoint is therefore Guided PR Preparation,
+  followed by a current-HEAD ClaimBot_API source-live read/proposal check. The
+  fresh MSI and installed mutation loop remain release-candidate gates, not
+  evidence for an intermediate slice.
+- `docs/manual-testing/2026-08-05/verification/current-gates.md` is a generated
+  historical projection and must not be hand-edited. It will be regenerated
+  only by the verification runner against the eventual final SHA.
 
 ## v0.5.29 release handoff — 2026-08-10
 
